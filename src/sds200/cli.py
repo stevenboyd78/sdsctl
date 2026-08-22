@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import signal
 import sys
 import threading
@@ -14,6 +15,7 @@ from pathlib import Path
 from time import sleep
 from types import FrameType
 from typing import Any, BinaryIO, Protocol, cast
+from urllib.parse import urlsplit
 
 from . import __version__
 from .asterisk_moh import AsteriskMohSignalController, PcmStreamSink
@@ -188,6 +190,8 @@ from .web_server import (
     WEB_DASHBOARD_DEFAULT_PORT,
     WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST,
     WEB_DASHBOARD_INSTALL_ERROR,
+    normalize_authenticated_lan_host,
+    normalize_authenticated_lan_tls_files,
     normalize_web_dashboard_host,
     run_web_dashboard_server,
 )
@@ -358,6 +362,28 @@ def _web_listen_address(value: str) -> str:
         return normalize_web_dashboard_host(value)
     except (TypeError, ValueError) as error:
         raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _authenticated_lan_listen_address(value: str) -> str:
+    try:
+        return normalize_authenticated_lan_host(value)
+    except (TypeError, ValueError) as error:
+        raise argparse.ArgumentTypeError(str(error)) from error
+
+
+def _environment_variable_name(value: str) -> str:
+    if (
+        not value
+        or value.strip() != value
+        or not value.isascii()
+        or not (value[0].isalpha() or value[0] == "_")
+        or not all(character.isalnum() or character == "_" for character in value)
+    ):
+        raise argparse.ArgumentTypeError(
+            "environment-variable name must use ASCII letters, digits, and "
+            "underscores and must not start with a digit"
+        )
+    return value
 
 
 def _audio_device(value: str) -> str | int:
@@ -1367,6 +1393,43 @@ def build_parser(
             f"{WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST}; Docker must constrain "
             "host publication to loopback"
         ),
+    )
+    web.add_argument(
+        "--authenticated-lan",
+        action="store_true",
+        help=(
+            "Enable the explicit password-authenticated native-TLS LAN mode; "
+            "all --lan-* options are required"
+        ),
+    )
+    web.add_argument(
+        "--lan-listen-address",
+        type=_authenticated_lan_listen_address,
+        metavar="ADDRESS",
+        help="Explicit private, unique-local, or link-local LAN interface address",
+    )
+    web.add_argument(
+        "--lan-origin",
+        metavar="HTTPS_ORIGIN",
+        help="Canonical HTTPS browser origin, including the nondefault port",
+    )
+    web.add_argument(
+        "--lan-password-env",
+        type=_environment_variable_name,
+        metavar="NAME",
+        help="Environment-variable name containing the dashboard password",
+    )
+    web.add_argument(
+        "--lan-tls-certfile",
+        type=Path,
+        metavar="PATH",
+        help="Absolute PEM certificate-chain path for native TLS",
+    )
+    web.add_argument(
+        "--lan-tls-keyfile",
+        type=Path,
+        metavar="PATH",
+        help="Absolute PEM private-key path for native TLS",
     )
     web.add_argument(
         "--daemon-socket-path",
@@ -3747,6 +3810,42 @@ def _run_web(
 ) -> int:
     _reject_daemon_client_scanner_options(args)
 
+    lan_values = (
+        args.lan_listen_address,
+        args.lan_origin,
+        args.lan_password_env,
+        args.lan_tls_certfile,
+        args.lan_tls_keyfile,
+    )
+    if not args.authenticated_lan and any(value is not None for value in lan_values):
+        raise ValueError("--lan-* options require --authenticated-lan.")
+
+    if args.authenticated_lan:
+        if args.home_assistant_ingress or args.container_exposure:
+            raise ValueError(
+                "--authenticated-lan cannot be used with "
+                "--home-assistant-ingress or --container-exposure."
+            )
+        if args.listen_address is not None:
+            raise ValueError(
+                "--listen-address cannot be used with --authenticated-lan; "
+                "use --lan-listen-address."
+            )
+        required_lan_options = {
+            "--lan-listen-address": args.lan_listen_address,
+            "--lan-origin": args.lan_origin,
+            "--lan-password-env": args.lan_password_env,
+            "--lan-tls-certfile": args.lan_tls_certfile,
+            "--lan-tls-keyfile": args.lan_tls_keyfile,
+        }
+        missing_lan_options = [
+            name for name, value in required_lan_options.items() if value is None
+        ]
+        if missing_lan_options:
+            raise ValueError(
+                "--authenticated-lan requires: " + ", ".join(missing_lan_options) + "."
+            )
+
     if (
         args.home_assistant_ingress
         and args.listen_address is not None
@@ -3771,6 +3870,7 @@ def _run_web(
         )
 
     try:
+        from .web_auth import WebDashboardAuthentication
         from .web_dashboard import create_web_dashboard_app
     except ModuleNotFoundError as error:
         if error.name == "fastapi":
@@ -3778,6 +3878,34 @@ def _run_web(
                 WEB_DASHBOARD_INSTALL_ERROR
             ) from error
         raise
+
+    if args.authenticated_lan:
+        environment = os.environ if environ is None else environ
+        assert args.lan_password_env is not None
+        password = environment.get(args.lan_password_env)
+        if not password:
+            raise ValueError(
+                "Authenticated LAN password environment variable "
+                f"{args.lan_password_env!r} is not set."
+            )
+        assert args.lan_origin is not None
+        lan_authentication = WebDashboardAuthentication(
+            password,
+            args.lan_origin,
+        )
+        del password
+        parsed_origin = urlsplit(lan_authentication.origin)
+        origin_port = parsed_origin.port or 443
+        if origin_port != args.listen_port:
+            raise ValueError("Authenticated LAN origin port must match --listen-port.")
+        certificate_path, private_key_path = normalize_authenticated_lan_tls_files(
+            args.lan_tls_certfile,
+            args.lan_tls_keyfile,
+        )
+    else:
+        lan_authentication = None
+        certificate_path = None
+        private_key_path = None
 
     api_location = resolve_daemon_socket_location(
         args.daemon_socket_path,
@@ -3871,16 +3999,22 @@ def _run_web(
         pcmu_client_factory,
         recording_file_client_factory,
         home_assistant_ingress=args.home_assistant_ingress,
+        lan_authentication=lan_authentication,
     )
     server_host = (
-        WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST
-        if args.home_assistant_ingress
+        args.lan_listen_address
+        if args.authenticated_lan
         else (
-            WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST
-            if args.container_exposure
-            else (args.listen_address or WEB_DASHBOARD_DEFAULT_HOST)
+            WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST
+            if args.home_assistant_ingress
+            else (
+                WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST
+                if args.container_exposure
+                else (args.listen_address or WEB_DASHBOARD_DEFAULT_HOST)
+            )
         )
     )
+    assert server_host is not None
 
     return run_web_dashboard_server(
         app,
@@ -3889,6 +4023,9 @@ def _run_web(
         access_log=args.access_log,
         home_assistant_ingress=args.home_assistant_ingress,
         container_exposure=args.container_exposure,
+        authenticated_lan=args.authenticated_lan,
+        ssl_certfile=certificate_path,
+        ssl_keyfile=private_key_path,
     )
 
 

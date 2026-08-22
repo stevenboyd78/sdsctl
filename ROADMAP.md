@@ -157,10 +157,11 @@ begins.
 - v0.20.2 completed Milestone 20 release closure with reviewed wiki publication,
   PyPI publication, amd64/aarch64 Home Assistant image publication,
   repository-managed HAOS acceptance, and a normal GitHub Release.
-- Keep authenticated/TLS LAN access, a network transport for remote daemon-backed
-  CLI/TUI/GUI clients, and any optional host-network App variant as a separate
-  later security boundary. The current daemon client interfaces remain private
-  Unix-domain sockets, so host networking alone would not expose them remotely.
+- Milestone 26.1 owns the separate authenticated/TLS LAN web-access boundary.
+  Keep a network transport for remote daemon-backed CLI/TUI/GUI clients and any
+  optional host-network App variant as later security boundaries. The current
+  daemon client interfaces remain private Unix-domain sockets, so host networking
+  alone would not expose them remotely.
 - Add a later renderer-parity follow-up for scanner modes whose authoritative
   state is already modeled but not fully presented in every interface. Tone-Out
   is one known example: shared scanner state already carries the active

@@ -116,6 +116,8 @@ is disabled so an untrusted forwarded address cannot replace the real ASGI peer.
 
 Home Assistant performs user authentication before forwarding the request. The
 App does not publish the dashboard port directly to the LAN.
+The standalone authenticated LAN mode is mutually exclusive with Ingress and is
+not layered onto the App's Supervisor-authenticated request path.
 
 Dashboard assets, API requests, Server-Sent Events, browser audio, scanner
 controls, Swagger/ReDoc assets, saved recording playback, and recording downloads

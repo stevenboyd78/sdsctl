@@ -84,10 +84,11 @@ information in this image represents a real system.*
 - Explicit `sdsctl daemon-client` workflows for negotiated status and snapshot
   reads, safe typed scanner controls, validated gap-detecting event watches, and
   daemon-owned PCMU playback or WAV recording
-- Optional loopback-only daemon-backed HTTP foundation with versioned health,
-  status, snapshot, typed scanner-control, and OpenAPI endpoints, self-hosted
-  Swagger UI and ReDoc, and redacted daemon failures without third-party browser
-  asset requests
+- Optional default-loopback daemon-backed HTTP service with a separate explicit
+  password-authenticated native-TLS LAN mode, versioned health, status,
+  snapshot, typed scanner-control, and OpenAPI endpoints, self-hosted Swagger UI
+  and ReDoc, and redacted daemon failures without third-party browser asset
+  requests
 - Home Assistant App packaging that supervises the existing daemon and dashboard,
   uses Supervisor MQTT service discovery and authenticated Ingress, stores
   recordings in configurable Home Assistant media storage, and publishes a fixed
@@ -135,7 +136,7 @@ Install the optional full-screen TUI:
 python -m pip install "sds200[tui]"
 ```
 
-Install the optional loopback-only web service:
+Install the optional web service (loopback-only by default):
 
 ```bash
 python -m pip install "sds200[web]"
@@ -490,10 +491,11 @@ bridge network, while Compose publishes only
 different Docker-host loopback port; the container listener remains fixed at
 8000. LAN and public clients cannot reach this host-loopback publication by
 default. The internal wildcard is safe only with that constraint: do not copy
-`--container-exposure` into arbitrary LAN/public publication without a separate
-authentication and TLS design. The localhost `/healthz` probe checks only the
-web process. Do not use host networking or Home Assistant Ingress mode for this
-generic Compose service; Ingress remains a separate guarded security mode.
+`--container-exposure` into arbitrary LAN/public publication. The native
+authenticated LAN mode is a separate host-process contract documented in the
+web guide. The localhost `/healthz` probe checks only the web process. Do not use
+host networking or Home Assistant Ingress mode for this generic Compose service;
+Ingress remains a separate guarded security mode.
 
 On native Linux Docker Engine, an opt-in standalone Compose file supports
 one-shot USB serial scanner commands without privileged mode or networking:
@@ -529,7 +531,7 @@ boundaries, and additional one-shot and persistent-daemon commands.
 Serial-only profiles, replay captures, and non-SDS200 network-audio selections
 are rejected.
 
-### Loopback web dashboard
+### Web dashboard
 
 Milestone 20.6 adds daemon-backed browser scanner controls for semantic
 System, Department, Site, and Channel Hold/release, previous/next channel
@@ -591,12 +593,30 @@ captures of every theme using deterministic fictional demo data.
 
 Install it with `python -m pip install "sds200[web]"`. The service listens on
 `127.0.0.1:8000` by default and accepts only `localhost` or explicit loopback IP
-addresses. Wildcard, LAN, public, and non-local hostname bindings are rejected.
+addresses. In default mode, wildcard, LAN, public, and non-local hostname
+bindings are rejected.
 
-Authentication, TLS, browser logs, and additional shared branding assets
-remain deferred for standalone remote web exposure. The standalone `sdsctl web`
-listener remains intentionally loopback-only. Home Assistant uses a separate
-explicit Ingress mode instead of weakening that default.
+An explicit direct-TLS mode supports password-authenticated access on one
+specific private, unique-local, or link-local interface:
+
+```bash
+export SDSCTL_WEB_PASSWORD='replace-with-at-least-16-characters'
+sdsctl web \
+  --authenticated-lan \
+  --lan-listen-address 192.168.1.25 \
+  --listen-port 8443 \
+  --lan-origin https://scanner.example:8443 \
+  --lan-password-env SDSCTL_WEB_PASSWORD \
+  --lan-tls-certfile /etc/sdsctl/dashboard-fullchain.pem \
+  --lan-tls-keyfile /etc/sdsctl/dashboard.key
+```
+
+The mode rejects wildcard and public/global binds, requires a browser-trusted
+certificate for the exact HTTPS origin, protects every dashboard route, and
+does not trust proxy headers. Generic Compose and Home Assistant Ingress remain
+separate mutually exclusive security modes. Reverse-proxy and public/Internet
+exposure remain unsupported.
+
 See the [web dashboard guide](docs/web-dashboard.md).
 
 ### Home Assistant App

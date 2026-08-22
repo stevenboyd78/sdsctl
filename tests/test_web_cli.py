@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 
 from sds200 import DaemonSocketLocation, cli, web_dashboard
+from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_server import (
     WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST,
     WEB_DASHBOARD_DEFAULT_PORT,
@@ -102,6 +103,12 @@ def test_web_parser_uses_loopback_defaults() -> None:
     assert args.action == "web"
     assert args.home_assistant_ingress is False
     assert args.container_exposure is False
+    assert args.authenticated_lan is False
+    assert args.lan_listen_address is None
+    assert args.lan_origin is None
+    assert args.lan_password_env is None
+    assert args.lan_tls_certfile is None
+    assert args.lan_tls_keyfile is None
     assert args.daemon_socket_path is None
     assert args.daemon_event_socket_path is None
     assert args.daemon_pcmu_socket_path is None
@@ -132,6 +139,46 @@ def test_web_parser_accepts_container_exposure() -> None:
     assert args.container_exposure is True
     assert args.home_assistant_ingress is False
     assert args.listen_address is None
+
+
+def test_web_parser_accepts_authenticated_lan_options() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "192.168.0.25",
+            "--lan-origin",
+            "https://scanner.example:8443",
+            "--lan-password-env",
+            "SDSCTL_WEB_PASSWORD",
+            "--lan-tls-certfile",
+            "/run/secrets/dashboard.crt",
+            "--lan-tls-keyfile",
+            "/run/secrets/dashboard.key",
+            "--listen-port",
+            "8443",
+        ]
+    )
+
+    assert args.authenticated_lan is True
+    assert args.lan_listen_address == "192.168.0.25"
+    assert args.lan_origin == "https://scanner.example:8443"
+    assert args.lan_password_env == "SDSCTL_WEB_PASSWORD"
+    assert args.lan_tls_certfile == Path("/run/secrets/dashboard.crt")
+    assert args.lan_tls_keyfile == Path("/run/secrets/dashboard.key")
+    assert args.listen_port == 8443
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["9PASSWORD", "DASHBOARD-PASSWORD", " DBOARD_PASSWORD", "PÁSSWORD"],
+)
+def test_web_parser_rejects_invalid_password_environment_names(name: str) -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.build_parser().parse_args(["web", "--lan-password-env", name])
+
+    assert error.value.code == 2
 
 
 def test_web_parser_accepts_explicit_local_options() -> None:
@@ -242,7 +289,9 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         recording_file_client_factory: Callable[[], object],
         *,
         home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
     ) -> object:
+        assert lan_authentication is None
         captured_api_factories.append(api_client_factory)
         captured_event_factories.append(event_client_factory)
         captured_pcmu_factories.append(pcmu_client_factory)
@@ -260,8 +309,14 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         access_log: bool,
         home_assistant_ingress: bool = False,
         container_exposure: bool = False,
+        authenticated_lan: bool = False,
+        ssl_certfile: Path | None = None,
+        ssl_keyfile: Path | None = None,
     ) -> int:
         assert container_exposure is False
+        assert authenticated_lan is False
+        assert ssl_certfile is None
+        assert ssl_keyfile is None
         server_calls.append(
             (
                 selected_app,
@@ -381,6 +436,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
         recording_file_client_factory: Callable[[], object],
         *,
         home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
     ) -> object:
         del (
             api_client_factory,
@@ -388,6 +444,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
             pcmu_client_factory,
             recording_file_client_factory,
         )
+        assert lan_authentication is None
         create_calls.append(home_assistant_ingress)
         return app
 
@@ -399,8 +456,14 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
         access_log: bool,
         home_assistant_ingress: bool = False,
         container_exposure: bool = False,
+        authenticated_lan: bool = False,
+        ssl_certfile: Path | None = None,
+        ssl_keyfile: Path | None = None,
     ) -> int:
         assert container_exposure is False
+        assert authenticated_lan is False
+        assert ssl_certfile is None
+        assert ssl_keyfile is None
         server_calls.append(
             (
                 selected_app,
@@ -485,8 +548,10 @@ def test_web_cli_container_exposure_uses_wildcard_without_ingress(
     def fake_create_app(
         *args: object,
         home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
     ) -> object:
         del args
+        assert lan_authentication is None
         create_calls.append(home_assistant_ingress)
         return object()
 
@@ -498,8 +563,14 @@ def test_web_cli_container_exposure_uses_wildcard_without_ingress(
         access_log: bool,
         home_assistant_ingress: bool = False,
         container_exposure: bool = False,
+        authenticated_lan: bool = False,
+        ssl_certfile: Path | None = None,
+        ssl_keyfile: Path | None = None,
     ) -> int:
         del app, port, access_log
+        assert authenticated_lan is False
+        assert ssl_certfile is None
+        assert ssl_keyfile is None
         server_calls.append((host, home_assistant_ingress, container_exposure))
         return 0
 
@@ -528,6 +599,232 @@ def test_web_cli_container_exposure_uses_wildcard_without_ingress(
     assert result == 0
     assert create_calls == [False]
     assert server_calls == [(WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST, False, True)]
+
+
+def test_web_cli_authenticated_lan_resolves_secret_and_configures_tls(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    app = object()
+    authentications: list[WebDashboardAuthentication] = []
+    server_calls: list[
+        tuple[object, str, int, bool, bool, Path | None, Path | None]
+    ] = []
+
+    def fake_create_app(
+        *args: object,
+        home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
+    ) -> object:
+        del args
+        assert home_assistant_ingress is False
+        assert lan_authentication is not None
+        authentications.append(lan_authentication)
+        return app
+
+    def fake_run_server(
+        selected_app: object,
+        *,
+        host: str,
+        port: int,
+        access_log: bool,
+        home_assistant_ingress: bool = False,
+        container_exposure: bool = False,
+        authenticated_lan: bool = False,
+        ssl_certfile: Path | None = None,
+        ssl_keyfile: Path | None = None,
+    ) -> int:
+        assert home_assistant_ingress is False
+        assert container_exposure is False
+        server_calls.append(
+            (
+                selected_app,
+                host,
+                port,
+                authenticated_lan,
+                access_log,
+                ssl_certfile,
+                ssl_keyfile,
+            )
+        )
+        return 0
+
+    monkeypatch.setattr(
+        web_dashboard,
+        "create_web_dashboard_app",
+        fake_create_app,
+    )
+    monkeypatch.setattr(cli, "run_web_dashboard_server", fake_run_server)
+    certificate = tmp_path / "dashboard.crt"
+    private_key = tmp_path / "dashboard.key"
+    certificate.write_text("certificate", encoding="utf-8")
+    private_key.write_text("private key", encoding="utf-8")
+    private_key.chmod(0o600)
+    result = cli.main(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "192.168.0.25",
+            "--lan-origin",
+            "https://scanner.example:8443",
+            "--lan-password-env",
+            "SDSCTL_WEB_PASSWORD",
+            "--lan-tls-certfile",
+            str(certificate),
+            "--lan-tls-keyfile",
+            str(private_key),
+            "--listen-port",
+            "8443",
+            "--no-access-log",
+        ],
+        environ={"SDSCTL_WEB_PASSWORD": "correct horse battery staple"},
+    )
+
+    assert result == 0
+    assert len(authentications) == 1
+    authentication = authentications[0]
+    assert authentication.origin == "https://scanner.example:8443"
+    assert authentication.password_matches("correct horse battery staple")
+    assert "correct horse battery staple" not in repr(authentication)
+    assert server_calls == [
+        (
+            app,
+            "192.168.0.25",
+            8443,
+            True,
+            False,
+            certificate,
+            private_key,
+        )
+    ]
+
+
+def test_web_cli_authenticated_lan_requires_secret_and_matching_origin_port(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    arguments = [
+        "web",
+        "--authenticated-lan",
+        "--lan-listen-address",
+        "192.168.0.25",
+        "--lan-origin",
+        "https://scanner.example:8443",
+        "--lan-password-env",
+        "SDSCTL_WEB_PASSWORD",
+        "--lan-tls-certfile",
+        str(tmp_path / "dashboard.crt"),
+        "--lan-tls-keyfile",
+        str(tmp_path / "dashboard.key"),
+    ]
+
+    assert cli.main([*arguments, "--listen-port", "8443"], environ={}) == 2
+    missing_error = capsys.readouterr().err
+    assert "SDSCTL_WEB_PASSWORD" in missing_error
+    assert "correct horse" not in missing_error
+
+    assert (
+        cli.main(
+            [*arguments, "--listen-port", "8443"],
+            environ={"SDSCTL_WEB_PASSWORD": "short"},
+        )
+        == 2
+    )
+    short_error = capsys.readouterr().err
+    assert "at least 16 characters" in short_error
+    assert "short" not in short_error
+
+    assert (
+        cli.main(
+            [*arguments, "--listen-port", "9443"],
+            environ={"SDSCTL_WEB_PASSWORD": "correct horse battery staple"},
+        )
+        == 2
+    )
+    assert "origin port must match --listen-port" in capsys.readouterr().err
+
+
+def test_web_cli_validates_tls_before_constructing_app_or_server(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_key = tmp_path / "dashboard.key"
+    private_key.write_text("private key", encoding="utf-8")
+    private_key.chmod(0o600)
+
+    def forbidden_create_app(*args: object, **kwargs: object) -> object:
+        del args, kwargs
+        raise AssertionError("app must not be constructed")
+
+    def forbidden_run_server(*args: object, **kwargs: object) -> int:
+        del args, kwargs
+        raise AssertionError("server must not be constructed")
+
+    monkeypatch.setattr(
+        web_dashboard,
+        "create_web_dashboard_app",
+        forbidden_create_app,
+    )
+    monkeypatch.setattr(cli, "run_web_dashboard_server", forbidden_run_server)
+
+    result = cli.main(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "192.168.0.25",
+            "--lan-origin",
+            "https://scanner.example:8443",
+            "--lan-password-env",
+            "SDSCTL_WEB_PASSWORD",
+            "--lan-tls-certfile",
+            str(tmp_path / "missing.crt"),
+            "--lan-tls-keyfile",
+            str(private_key),
+            "--listen-port",
+            "8443",
+        ],
+        environ={"SDSCTL_WEB_PASSWORD": "correct horse battery staple"},
+    )
+
+    assert result == 2
+    assert "TLS certificate file is unavailable" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (
+            ["--lan-listen-address", "192.168.0.25"],
+            "--lan-* options require --authenticated-lan",
+        ),
+        (
+            ["--authenticated-lan"],
+            "--authenticated-lan requires:",
+        ),
+        (
+            ["--authenticated-lan", "--container-exposure"],
+            "--authenticated-lan cannot be used",
+        ),
+        (
+            [
+                "--authenticated-lan",
+                "--listen-address",
+                "127.0.0.1",
+            ],
+            "--listen-address cannot be used with --authenticated-lan",
+        ),
+    ],
+)
+def test_web_cli_rejects_incomplete_or_conflicting_authenticated_lan_options(
+    arguments: list[str],
+    message: str,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert cli.main(["web", *arguments], environ={}) == 2
+    assert message in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

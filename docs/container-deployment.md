@@ -87,8 +87,8 @@ image without an explicit scanner command therefore does not acquire scanner
 ownership.
 
 No TCP port is exposed by the image metadata. The standalone web dashboard
-invoked by `sdsctl web` remains loopback-only; Compose publication is an
-explicit service-level contract.
+invoked by `sdsctl web` remains loopback-only by default; Compose publication is
+an explicit service-level contract.
 
 ## Docker Compose contract
 
@@ -209,9 +209,10 @@ peer-guarded mode.
 
 The internal `0.0.0.0` wildcard is safe only because Compose constrains
 publication to `127.0.0.1` on the Docker host. Do not copy
-`--container-exposure` into arbitrary LAN/public publication without a separate
-authentication and TLS design. Standalone arbitrary remote/LAN exposure remains
-unsupported and deferred.
+`--container-exposure` into arbitrary LAN/public publication. The native
+authenticated LAN mode in the [web dashboard guide](web-dashboard.md) is a
+separate direct-TLS host-process contract and does not alter this Compose
+service.
 
 ## Native Linux USB scanner CLI
 
@@ -442,9 +443,10 @@ a separate operator workaround, not as part of the `sdsctl` USB contract.
 
 The web-dashboard container remains on ordinary bridge networking with explicit
 host-loopback publication. Do not move it onto host networking to expose the
-dashboard remotely; its existing standalone exposure and security boundary is
+dashboard remotely; its generic-container exposure and security boundary are
 unchanged. Generic LAN/public authentication and TLS termination remain
-unsupported and deferred.
+unsupported and deferred for this container path. Native authenticated LAN
+access is a separate direct-TLS host-process mode.
 
 ## Rootless Podman network daemon
 
@@ -1186,8 +1188,8 @@ The resulting compatibility matrix is:
 
 Native systemd remains preferred when direct host-device access, local audio, or
 other operating-system integration is important. None of these matrix entries
-changes the existing single scanner-owner, private daemon IPC, loopback web
-publication, authentication/TLS, or RTSP/RTP boundaries.
+changes the existing single scanner-owner, private daemon IPC, generic-container
+loopback publication, container authentication/TLS, or RTSP/RTP boundaries.
 
 
 ## Health and status
@@ -1293,7 +1295,8 @@ Podman Compose providers, daemon-client/web sidecars under Podman, USB
 unplug/replug or re-enumeration behavior, SELinux device-policy acceptance,
 Windows/macOS remote Podman USB, Docker Desktop USB/IP, physical Windows/macOS
 Docker validation, daemon-backed TUI sidecars, arbitrary remote/LAN standalone
-web exposure, generic LAN/public web publication, and authentication/TLS
-termination remain outside this slice. Native systemd remains preferred when
+web exposure, generic LAN/public web publication, and container
+authentication/TLS termination remain outside this slice. Native systemd
+remains preferred when
 broader direct host-device, local-audio, or operating-system integration
 matters.

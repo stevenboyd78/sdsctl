@@ -15,6 +15,9 @@ responsive fallbacks for the four custom environments. Milestone 20.11 adds an
 explicit Home Assistant Ingress mode, prefixed-path-safe assets and API requests,
 Ingress framing policy, and browser-audio compatibility for non-secure Home
 Assistant browser contexts without changing standalone loopback defaults.
+Milestone 26.1 adds a separate password-authenticated native-TLS mode for one
+explicit LAN interface while preserving the default, generic-container, and
+Home Assistant security boundaries.
 
 ## Architecture
 
@@ -110,11 +113,85 @@ The command accepts `localhost`, IPv4 loopback addresses, and IPv6 loopback
 addresses. It rejects wildcard addresses, LAN addresses, public addresses, and
 hostnames other than literal `localhost`.
 
-The current web dashboard intentionally provides no authentication, TLS
-termination, trusted-proxy handling, or supported arbitrary remote/LAN exposure.
-Do not expose this standalone service through a public listener or reverse
-proxy. Authentication and transport-security design must be completed before
-remote access becomes a supported workflow.
+Default loopback mode does not enable the application login or TLS. Do not
+publish or proxy that listener to another host.
+
+### Authenticated LAN mode
+
+Authenticated LAN access is a separate all-or-nothing mode. It requires a
+specific LAN interface address, one canonical HTTPS browser origin, a password
+environment-variable reference, and native TLS certificate and private-key
+files:
+
+```bash
+export SDSCTL_WEB_PASSWORD='replace-with-at-least-16-characters'
+chmod 600 /etc/sdsctl/dashboard.key
+
+sdsctl web \
+  --authenticated-lan \
+  --lan-listen-address 192.168.1.25 \
+  --listen-port 8443 \
+  --lan-origin https://scanner.example:8443 \
+  --lan-password-env SDSCTL_WEB_PASSWORD \
+  --lan-tls-certfile /etc/sdsctl/dashboard-fullchain.pem \
+  --lan-tls-keyfile /etc/sdsctl/dashboard.key
+```
+
+Open `https://scanner.example:8443/`. The unauthenticated root redirects to the
+password form at `/auth/login`. The DNS name must resolve to the selected
+interface, the certificate must contain the origin hostname (or literal IP) in
+its Subject Alternative Name, and the browser must trust its issuer. The
+origin's effective port must equal `--listen-port`; port 443 may be omitted from
+both the origin and browser URL. The origin cannot contain credentials, a path,
+a query, or a fragment.
+
+`--lan-listen-address` accepts only one literal RFC 1918 IPv4, IPv4 link-local,
+IPv6 unique-local, or IPv6 link-local address. It rejects wildcard, loopback,
+public/global, and hostname binds. Selecting a specific interface is
+intentional: this mode does not listen on every current or future interface.
+IPv6 link-local addresses may include a platform scope identifier, while the
+browser origin should normally use a certificate-covered DNS name.
+
+The password value is never accepted as a command-line argument. The CLI
+resolves only the name supplied to `--lan-password-env`, requires at least 16
+characters, and does not include the value in errors or authentication object
+representations. Restart the web process after rotating the environment value.
+A restart also invalidates every process-local browser session.
+
+The certificate and key paths must be absolute readable regular files no larger
+than 1 MiB. Only an unencrypted PEM service key is supported; an encrypted PEM
+key is rejected instead of allowing an interactive startup prompt. On POSIX,
+the key must grant no permissions to the POSIX `other` class (`chmod 600` is the
+simplest setting; a deliberately service-group-readable `0640` key is also
+accepted).
+Malformed or mismatched certificate material fails during native Uvicorn TLS
+startup before the listener is used.
+
+The application permits one exact HTTPS `Host` and requires that exact
+`Origin` on login and every state-changing request. Every application route
+other than the login form, including health, static assets, APIs,
+documentation, SSE, live audio, recordings, and downloads, is authenticated
+before a private daemon client is created. WebSocket requests fail closed.
+Sessions use an opaque 256-bit
+server-side token in the `__Host-sdsctl-session` cookie with `Secure`,
+`HttpOnly`, `SameSite=Strict`, and `Path=/`; only a token digest is retained.
+Sessions have a 30-minute idle lifetime, an eight-hour absolute lifetime, a
+64-session process limit, and a 16-request per-session concurrency limit.
+Re-login rotates the current cookie, while logout, replacement, eviction, or
+absolute expiry terminates associated long-lived responses without affecting
+other sessions.
+
+Failed-login accounting uses a one-minute window bounded per peer, across the
+process, and to at most 256 tracked peers. Login bodies are limited to 4 KiB and
+five seconds. Authentication responses and protected content use
+`Cache-Control: no-store`, HSTS, and `nosniff` protections.
+
+Native TLS terminates directly in Uvicorn. Proxy-header trust remains disabled;
+a reverse proxy is not part of this mode. Wildcard binding, public/global
+binding, port forwarding from the public Internet, generic-container LAN
+publication, and trusted-reverse-proxy deployment remain unsupported. The
+authenticated LAN, Home Assistant Ingress, and generic container modes are
+mutually exclusive.
 
 Generic Compose deployment has one separate explicit container mode:
 `sdsctl web --container-exposure`. It binds exactly `0.0.0.0:8000` inside the
@@ -124,10 +201,11 @@ only on Docker-host loopback. The default browser URL is
 port, not the fixed container port 8000. LAN and public clients cannot reach the
 Compose publication by default. The internal wildcard is safe only because the
 publication is constrained to `127.0.0.1`; never copy `--container-exposure`
-into arbitrary public or LAN publication without a separate authentication and
-TLS design. Do not use host networking for the web container. Home Assistant
-Ingress remains a distinct mode with its Supervisor peer guard and is not
-enabled by generic container exposure.
+into arbitrary public or LAN publication. The native authenticated LAN mode
+above is a separate host-process contract and does not change generic Compose.
+Do not use host networking for the web container. Home Assistant Ingress remains
+a distinct mode with its Supervisor peer guard and is not enabled by generic
+container exposure.
 
 Uvicorn proxy-header trust and its identifying server header are disabled.
 Graceful shutdown is bounded to two seconds so an intentionally long-lived SSE
@@ -489,6 +567,14 @@ and `X-Content-Type-Options: nosniff`.
 ## Command options
 
 ```text
+--home-assistant-ingress
+--container-exposure
+--authenticated-lan
+--lan-listen-address ADDRESS
+--lan-origin HTTPS_ORIGIN
+--lan-password-env NAME
+--lan-tls-certfile PATH
+--lan-tls-keyfile PATH
 --daemon-socket-path PATH
 --daemon-event-socket-path PATH
 --daemon-pcmu-socket-path PATH
@@ -518,7 +604,7 @@ sdsctl web --no-access-log
 
 ## Current scope
 
-Milestones 20.1 through 20.7 include:
+The dashboard now includes:
 
 - the optional `web` package extra;
 - a host-independent FastAPI application factory;
@@ -527,7 +613,12 @@ Milestones 20.1 through 20.7 include:
 - capability-negotiated browser scanner hold, previous/next channel navigation,
   and bounded reconnect controls with authoritative selection resolution,
   mutation serialization, completion reconciliation, and stable redacted errors;
-- a loopback-only Uvicorn adapter with bounded graceful shutdown;
+- a default-loopback Uvicorn adapter with bounded graceful shutdown;
+- explicit password-authenticated direct-TLS LAN activation on one private,
+  unique-local, or link-local interface, with exact HTTPS origin enforcement,
+  bounded server-side sessions, guarded login input and failures,
+  secret-by-environment reference, and revocation of active long-lived
+  responses;
 - the `sdsctl web` command;
 - a packaged accessible responsive browser shell;
 - snapshot-first same-origin Server-Sent Events;
@@ -561,7 +652,7 @@ Milestones 20.1 through 20.7 include:
   packaging, and regression tests.
 
 Later work remains responsible for browser logs, additional shared branding
-assets, and authentication and secure remote-access planning for standalone
-network exposure. Home Assistant App operation is documented separately in
-[Home Assistant App](home-assistant-app.md); it uses Supervisor Ingress rather
-than exposing the standalone web listener to the LAN.
+assets, trusted-reverse-proxy deployment, and any public/Internet remote-access
+design. Home Assistant App operation is documented separately in [Home
+Assistant App](home-assistant-app.md); it uses Supervisor Ingress rather than
+the standalone authenticated LAN flow.
