@@ -157,6 +157,14 @@ begins.
   CLI/TUI/GUI clients, and any optional host-network App variant as a separate
   later security boundary. The current daemon client interfaces remain private
   Unix-domain sockets, so host networking alone would not expose them remotely.
+- Add a later renderer-parity follow-up for scanner modes whose authoritative
+  state is already modeled but not fully presented in every interface. Tone-Out
+  is one known example: shared scanner state already carries the active
+  `ToneOutChannel` name, frequency, modulation, and Tone A/Tone B values, while
+  the current web dashboard does not display the mode-specific tone fields.
+  Treat similar Weather, Close Call, Search, discovery, analysis, and other
+  mode-specific omissions as evidence-led presentation gaps rather than
+  inventing renderer-local scanner semantics.
 
 ### Milestone 21 — Favorites Workspace foundation
 
@@ -247,6 +255,14 @@ begins.
   separate read-only and explicitly resolved writable credential roles.
 - Keep every write operation deterministic, recoverable, auditable, and free of
   silent last-writer-wins behavior.
+- Add a later interactive Favorites Workspace editor over the existing
+  renderer-neutral foundation. The user-facing workflow should expose hierarchy
+  browsing, search/filtering, diagnostics, comparison/preview, supported record
+  edits, additions and deletions, exact write planning, backup and rollback
+  evidence, and explicit execution without bypassing the verified copied-tree
+  and USB storage safety boundaries. Broader arbitrary-field editing and FTP
+  writes remain separate evidence-backed capabilities rather than assumptions of
+  the initial editor UI.
 
 ### Milestone 23 — External Favorites data and synchronization
 
@@ -477,6 +493,42 @@ is collected.
 - Consider a future desktop GUI over the same renderer-neutral services.
 - Treat the Raspberry Pi 7-inch 800 by 480 display as a compact reference layout,
   not a universal fixed resolution.
+
+## Future capability and interface parity audit
+
+Before treating application coverage as complete, perform a deliberate
+physical-scanner-to-application capability and field-parity audit across the
+supported SDS models and every implemented interface.
+
+The audit should maintain an evidence-backed matrix covering, where applicable:
+
+- the corresponding physical-scanner function, mode, menu, or display screen;
+- documented or physically observed protocol evidence and fixture coverage;
+- parser/model support and preservation of raw scanner values;
+- renderer-neutral shared-state or service support;
+- CLI, TUI, web-dashboard, Home Assistant, and other renderer presentation;
+- available semantic controls and intentionally unsupported operations; and
+- model/firmware/transport-specific physical validation evidence.
+
+Audit mode-specific fields as well as coarse feature names. For example,
+classifying Tone-Out as supported is insufficient if a renderer omits the
+scanner-reported Tone A and Tone B values. Apply the same field-level review to
+Weather/SAME, Close Call, search and discovery modes, analysis screens,
+system-status/RF details, recording, Favorites, quick keys, menu operations, and
+other scanner capabilities discovered through protocol research or hardware use.
+
+Classify findings so follow-up work distinguishes:
+
+1. scanner data that is already modeled but missing from one or more renderers;
+2. modeled or parsed capabilities that do not yet expose a safe user control;
+3. physical-scanner capabilities that still lack sufficient protocol evidence or
+   application modeling; and
+4. application-only capabilities such as daemon fanout, browser recording,
+   assisted Favorites synchronization, and Home Assistant integration that have
+   no direct physical-scanner UI equivalent.
+
+The audit is an inventory and planning boundary, not permission to infer unknown
+protocol semantics or broaden physical-support claims without evidence.
 
 ## Completed milestone groups
 
