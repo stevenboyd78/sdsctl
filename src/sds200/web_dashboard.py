@@ -28,6 +28,10 @@ from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
 from .state import RadioStateSnapshot
 from .tui_controls import channel_navigation
+from .web_auth import (
+    WebDashboardAuthentication,
+    WebDashboardAuthenticationMiddleware,
+)
 
 WEB_DASHBOARD_API_PROTOCOL = "sdsctl.web"
 WEB_DASHBOARD_API_VERSION = 1
@@ -308,6 +312,7 @@ def create_web_dashboard_app(
     ) = None,
     *,
     home_assistant_ingress: bool = False,
+    lan_authentication: WebDashboardAuthentication | None = None,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
 
@@ -328,6 +333,17 @@ def create_web_dashboard_app(
         raise TypeError(
             "Home Assistant Ingress setting must be boolean."
         )
+    if lan_authentication is not None and not isinstance(
+        lan_authentication,
+        WebDashboardAuthentication,
+    ):
+        raise TypeError(
+            "LAN authentication must be WebDashboardAuthentication or None."
+        )
+    if home_assistant_ingress and lan_authentication is not None:
+        raise ValueError(
+            "Home Assistant Ingress and LAN authentication are mutually exclusive."
+        )
 
     app = FastAPI(
         title="sdsctl web dashboard",
@@ -338,6 +354,11 @@ def create_web_dashboard_app(
     )
     if home_assistant_ingress:
         app.add_middleware(_HomeAssistantIngressMiddleware)
+    if lan_authentication is not None:
+        app.add_middleware(
+            WebDashboardAuthenticationMiddleware,
+            authentication=lan_authentication,
+        )
 
     @app.get(
         "/",
