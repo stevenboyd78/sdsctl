@@ -13,6 +13,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   White, and White on Black palettes; and Card or viewport-bounded 4:3 fit. The
   original compact card is unchanged, both cards remain read-only over the same
   fourteen entities, and no Uniden artwork, branding, or fonts are copied.
+- Physical development acceptance on amd64 Home Assistant OS 18.2, Core
+  2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and SDS200 firmware 1.26.01
+  confirmed separate delivery of the unchanged compact and responsive display
+  cards, all thirty live editor layout/palette/fit combinations, fully visible
+  viewport fit at 390x844, 800x480, and 1920x1080, twenty-one discovered
+  components, live Ingress state, and recording and card persistence across a
+  Local App restart. Tagged repository-managed release acceptance remains a
+  separate release gate.
 - Add four fixed read-only Home Assistant MQTT Discovery sensors and matching
   optional Lovelace card fields for Site, Frequency, Modulation, and Service
   Type. Existing component identities and controls remain unchanged; each new
