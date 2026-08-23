@@ -11,55 +11,69 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.6 — Stable Home Assistant entity and card expansion
+### Milestone 26.7 — Responsive scanner-display Home Assistant card themes
 
-Milestone 26.5 is closed with optional finite SDS100 battery telemetry on the
-existing authoritative PSI/GSI shared-state lifecycle and explicit fail-closed
-decisions for request-driven SDS150 charge status and session-oriented System
-Status analysis. Audit finding `A02` is complete without automatic polling,
-invented units, flattened analysis records, or expanded hardware claims.
+Milestone 26.6 is closed with fourteen fixed state/diagnostic components, seven
+unchanged bounded controls, four compatibility-reviewed Site/RF/service sensors,
+and matching optional fields in the existing compact Lovelace card. Audit
+finding `A04` is complete without dynamic discovery or expanded scanner
+ownership.
 
-Milestone 26.6 addresses audit finding `A04` through one compatibility-reviewed,
-fixed Home Assistant presentation slice. Extend the existing MQTT Device
-Discovery document with exactly four read-only sensors: Site, Frequency,
-Modulation, and Service Type. These fields already exist in the canonical
-35-field `RadioStateSnapshot` and generic MQTT `state/radio` publication; this
-milestone must not add scanner commands, polling, state, topics, or owners.
+Milestone 26.7 adds one separate first-party `SDS200 Display` Lovelace card
+inspired by the information hierarchy and proportions documented in the Uniden
+SDS200 Owner's Manual, pages 38-39. Preserve the existing `sds200-card.js` asset,
+card type, configuration, rendering, resource URL, and installer behavior. The
+new asset must not copy manual artwork, branding, or fonts; it implements an
+original accessible table/grid presentation over existing Home Assistant state.
 
-Preserve every existing discovery component key, unique ID, state topic,
-control topic, and device identity. New component keys and unique-ID suffixes
-must be deterministic. Because the four added fields are nullable and
-mode-dependent, each new sensor must combine daemon availability with explicit
-field availability from the radio-state topic. Omission, null, and empty text
-must make only that sensor unavailable rather than publishing a misleading
-string or retaining an apparently current value.
+One shared renderer must provide five selectable layout presets: Simple,
+Detail, Search/Close Call, Weather, and Tone-Out. Simple and Detail adapt the
+manual's common conventional/trunk hierarchy; the final three share the manual's
+special-mode structure while retaining distinct user-facing presets. Provide
+three selectable palettes matching the scanner's documented color choices:
+Color, Black on White, and White on Black.
 
-Expand the bundled read-only Lovelace card with the same four optional entity
-selectors. Preserve all existing card configuration keys and transport-free
-operation. Site joins the hierarchy when configured and available; Frequency,
-Modulation, and Service Type join the details grid. Existing configurations
-that do not select the new entities must retain their current rendering and
-validation behavior.
+Use only the existing fourteen Home Assistant state/diagnostic entities. The
+new card remains read-only and transport-free, subscribes through Home
+Assistant's supported `states` context, and must not add MQTT discovery
+components, topics, scanner commands, service calls, API calls, or another state
+owner. Its built-in graphical editor must validate the layout, palette, fit
+mode, title, and entity domains.
 
-Host-independent acceptance must lock the complete fixed component inventory,
-unchanged existing identities and topics, exact optional-field availability,
-read-only card field coverage, backward-compatible configuration, package
-delivery, and responsive rendered behavior. Update the Home Assistant App guide
-and parity audit to state the new bounded inventory and close `A04`.
+The renderer uses one bounded 4:3 display surface with CSS grid/table semantics,
+fluid typography, text truncation, and no internal scrolling. Normal Card fit
+must remain responsive inside Lovelace sections. Viewport fit must grow only to
+the smaller width- or height-constrained dimension, stay within the dynamic
+viewport, center unused space, and remain fully visible from a 390-pixel phone
+viewport through 800x480 and 1920x1080 full-screen references.
 
-Milestone 26.6 implementation and host-independent acceptance are complete. The
-discovered device now has fourteen fixed state/diagnostic components and seven
-unchanged bounded controls. Exact tests lock all original state-component IDs
-and topics, the four deterministic additions, fixed discovery under absent
-mode-specific state, and per-field availability. The bundled card preserves old
-configuration rendering and presents the selected additions without horizontal
-overflow at desktop or the 390-pixel phone viewport. Audit finding `A04` is
-complete without expanding scanner ownership, state, polling, controls, or
-physical-support claims.
+Package and atomically install `sds200-display-card.js` beside the existing
+compact asset under `/homeassistant/www/sds200`. Installation of both optional
+assets remains isolated from daemon/App startup, refuses symlink paths, verifies
+bytes and modes, preserves unrelated files, and requires explicit one-time
+registration of both `/local` JavaScript module resources.
 
-Do not add battery, raw screen text, screen classification, identifiers,
-receiver levels, scanner-native recording, P25, special-mode-only fields, new
-controls, dynamic discovery components, or inferred units in this slice. Rich
+Host-independent acceptance must lock additive package delivery, old-card
+compatibility, all five layouts, all three palettes, exact configuration
+validation, entity-domain constraints, context subscription, transport-free
+operation, semantic document structure, bounded text, and zero horizontal or
+vertical display overflow across the reference viewports. Update App, release,
+wiki, and changelog documentation with configuration examples and the manual as
+design provenance.
+
+Milestone 26.7 implementation and host-independent acceptance are complete. The
+unchanged compact card and the separately registered display card are packaged
+in both distribution artifacts; atomic dual-asset installation remains isolated
+from App startup. Browser acceptance covered all forty-five viewport-fit
+layout/palette/reference-viewport combinations plus all fifteen Card-fit
+layout/palette combinations with a strict 4:3 surface, bounded text, zero display
+overflow, and no browser warnings or errors. The final invalid-configuration and
+accessibility pass rejected non-text titles, unknown fields, and malformed entity
+IDs while confirming every rendered field has an accessible label.
+
+Do not add Home Assistant entities, scanner display customization writes,
+fullscreen browser permissions, copied Uniden assets, dynamic card code loading,
+new runtime dependencies, or Internet access in this slice. Rich
 CLI/monitor/Textual parity, semantic-control finding `A05`, advanced protocol
 controls, System Status, RF Power Plot, and physical SDS150 validation remain
 separate work.
@@ -562,6 +576,11 @@ is collected.
   matching optional card fields reuse the canonical radio-state topic, preserve
   every existing identity and control, and fail unavailable when their current
   mode-dependent values are absent.
+- Milestone 26.7 completed one additive responsive SDS200 Display Lovelace card
+  with five selectable scanner-style layouts, three palettes, Card and bounded
+  viewport fit, strict configuration validation, and the same fourteen read-only
+  entities. The existing compact card and all Home Assistant component and
+  scanner-ownership boundaries remain unchanged.
 
 ## Completed milestone groups
 

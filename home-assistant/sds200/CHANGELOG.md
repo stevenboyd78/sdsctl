@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the separately registered `/local/sds200/sds200-display-card.js` resource
+  with five scanner-style layouts, three palettes, a viewport-bounded 4:3 mode,
+  and a graphical editor over the existing fourteen read-only entities. The
+  existing `/local/sds200/sds200-card.js` resource remains unchanged.
 - Add fixed read-only Site, Frequency, Modulation, and Service Type MQTT
   Discovery sensors plus matching optional bundled Lovelace card selectors.
   Existing entity identities and controls remain unchanged, and a nullable

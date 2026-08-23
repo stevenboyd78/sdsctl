@@ -203,6 +203,24 @@ def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:
     assert "innerHTML" not in text
     assert "callService" not in text
 
+    display_card = card.parent / "sds200-display-card.js"
+    assert display_card.is_file()
+    display_text = display_card.read_text(encoding="utf-8")
+    assert (
+        'const SDS200_DISPLAY_CARD_TYPE = "sds200-display-card";'
+        in display_text
+    )
+    assert "window.customCards" in display_text
+    assert "customElements.define" in display_text
+    assert "new CustomEvent(" in display_text
+    assert 'event.context = "states";' in display_text
+    assert "static getConfigForm()" in display_text
+    assert "aspect-ratio: 4 / 3;" in display_text
+    assert "fetch(" not in display_text
+    assert "WebSocket" not in display_text
+    assert "innerHTML" not in display_text
+    assert "callService" not in display_text
+
 
 def test_home_assistant_app_outer_timeout_covers_ordered_child_shutdown() -> None:
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")

@@ -294,13 +294,14 @@ subject to the daemon's transport capability check.
 ### SDS200 Lovelace card is missing
 
 Confirm the App log did not report a card-installation warning and verify
-`/local/sds200/sds200-card.js` is registered under
+`/local/sds200/sds200-card.js` is registered for **SDS200 Scanner**, or
+`/local/sds200/sds200-display-card.js` is registered for **SDS200 Display**, under
 **Settings > Dashboards > Resources** as a JavaScript Module. If the App created
 Home Assistant's `www` directory for the first time, restart Home Assistant Core
 once before registering the resource.
 
-After registration, **SDS200 Scanner** should appear in the card picker. The card
-is intentionally read-only; scanner controls are separate standard Home
+After registration, the matching card should appear in the card picker. Both
+cards are intentionally read-only; scanner controls are separate standard Home
 Assistant switch and button entities.
 
 ## Capture detailed diagnostics

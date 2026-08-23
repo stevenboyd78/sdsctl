@@ -13,27 +13,35 @@ HOME_ASSISTANT_LOVELACE_CARD_PATH = (
     HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / HOME_ASSISTANT_LOVELACE_CARD_FILENAME
 )
 HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = "/local/sds200/sds200-card.js"
+HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"
+HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH = (
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
+    / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
+)
+HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL = (
+    "/local/sds200/sds200-display-card.js"
+)
 _HOME_ASSISTANT_LOVELACE_CARD_MODE = 0o644
 _WEB_ASSET_PACKAGE = "sds200.web_assets"
 
 
-def _card_bytes() -> bytes:
-    return files(_WEB_ASSET_PACKAGE).joinpath(HOME_ASSISTANT_LOVELACE_CARD_FILENAME).read_bytes()
+def _asset_bytes(filename: str) -> bytes:
+    return files(_WEB_ASSET_PACKAGE).joinpath(filename).read_bytes()
 
 
-def install_home_assistant_lovelace_card(
-    destination: str | Path = HOME_ASSISTANT_LOVELACE_CARD_PATH,
+def _install_home_assistant_lovelace_asset(
+    destination: str | Path,
+    *,
+    filename: str,
 ) -> Path:
-    """Atomically install the packaged read-only card into Home Assistant www."""
-
     target = Path(destination)
 
     if not target.is_absolute():
         raise ValueError("Home Assistant Lovelace card destination must be absolute.")
-    if target.name != HOME_ASSISTANT_LOVELACE_CARD_FILENAME:
+    if target.name != filename:
         raise ValueError(
             "Home Assistant Lovelace card destination must use "
-            f"{HOME_ASSISTANT_LOVELACE_CARD_FILENAME!r}."
+            f"{filename!r}."
         )
 
     parent = target.parent
@@ -52,7 +60,7 @@ def install_home_assistant_lovelace_card(
 
     parent.mkdir(parents=True, exist_ok=True)
 
-    payload = _card_bytes()
+    payload = _asset_bytes(filename)
 
     if target.exists() and target.read_bytes() == payload:
         target.chmod(_HOME_ASSISTANT_LOVELACE_CARD_MODE)
@@ -89,10 +97,43 @@ def install_home_assistant_lovelace_card(
     return target
 
 
+def install_home_assistant_lovelace_card(
+    destination: str | Path = HOME_ASSISTANT_LOVELACE_CARD_PATH,
+) -> Path:
+    """Atomically install the packaged read-only card into Home Assistant www."""
+    return _install_home_assistant_lovelace_asset(
+        destination,
+        filename=HOME_ASSISTANT_LOVELACE_CARD_FILENAME,
+    )
+
+
+def install_home_assistant_lovelace_display_card(
+    destination: str | Path = HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH,
+) -> Path:
+    """Atomically install the packaged scanner-display card asset."""
+    return _install_home_assistant_lovelace_asset(
+        destination,
+        filename=HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME,
+    )
+
+
+def install_home_assistant_lovelace_cards() -> tuple[Path, Path]:
+    """Install both first-party Home Assistant Lovelace card assets."""
+    return (
+        install_home_assistant_lovelace_card(),
+        install_home_assistant_lovelace_display_card(),
+    )
+
+
 __all__ = [
     "HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY",
     "HOME_ASSISTANT_LOVELACE_CARD_FILENAME",
     "HOME_ASSISTANT_LOVELACE_CARD_PATH",
     "HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL",
+    "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME",
+    "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH",
+    "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL",
     "install_home_assistant_lovelace_card",
+    "install_home_assistant_lovelace_cards",
+    "install_home_assistant_lovelace_display_card",
 ]

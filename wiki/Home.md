@@ -124,12 +124,14 @@ seven bounded scanner controls: System, Department, Site, and Channel Hold
 switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
 App keeps the generic daemon MQTT request-envelope command input disabled.
 
-The App also installs the first-party read-only SDS200 Lovelace card as
-`/local/sds200/sds200-card.js`. Register it once under
-**Settings > Dashboards > Resources** as a JavaScript Module, then add
-**SDS200 Scanner** from the card picker and select the Discovery state entities
-through the graphical editor. Scanner controls remain standard Home Assistant
-entities rather than a transport inside the card.
+The App installs two first-party read-only Lovelace resources:
+`/local/sds200/sds200-card.js` for the unchanged compact **SDS200 Scanner** card
+and `/local/sds200/sds200-display-card.js` for **SDS200 Display**. Register each
+desired resource once under **Settings > Dashboards > Resources** as a JavaScript
+Module. The display card provides five scanner-style layouts, three palettes,
+and a viewport-bounded 4:3 fit over the same fourteen Discovery entities.
+Scanner controls remain standard Home Assistant entities rather than a
+transport inside either card.
 
 See the canonical
 [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
