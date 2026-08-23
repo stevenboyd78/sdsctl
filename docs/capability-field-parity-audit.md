@@ -101,8 +101,9 @@ matrix:
 The Rich column means `sdsctl scanner-info`; `sdsctl info` separately reports
 volume and squelch. The terminal-monitor column means the continuously updating
 `sdsctl monitor` surface. An asterisk means conditional or mode-specific
-presentation. The normal web path renders `screen_kind`; raw `screen` is only a
-compatibility fallback. In the Home Assistant column, `R+C* / —` means an
+presentation. Milestone 26.4 makes raw `screen` and `screen_kind` separate web
+values so unknown scanner screens remain visible without inferred semantics. In
+the Home Assistant column, `R+C* / —` means an
 optional discovered switch presents and controls the value while the first-party
 Lovelace card remains read-only. `R+C†` means the standalone TUI can mutate the
 value while the daemon-backed TUI presents it but rejects mutation.
@@ -110,48 +111,47 @@ value while the daemon-backed TUI presents it but rejects mutation.
 | Field | Source/evidence | Rich | Monitor | Textual TUI | Web UI | API/SSE/MQTT | HA discovery/card | Finding |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
-| `screen` | GSI/PSI; `P200`, `F` | R | — | U/R* | R* | J | — | R1: monitor, normal web, and Home Assistant |
+| `screen` | GSI/PSI; `P200`, `F` | R | — | U/R* | R | J | — | R1: monitor and Home Assistant |
 | `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | — | R1: CLI and Home Assistant |
 | `system` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
-| `department` | GSI/PSI; `P200`, `F` | R | R | R* | — | J | R | R1: web |
-| `site` | GSI/PSI; `P200`, `F` | R | R | R* | — | J | — | R1: web and Home Assistant |
-| `system_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `department` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
+| `site` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `system_index` | Node attribute; `F` | — | — | U | R | J | — | Context |
 | `system_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
-| `department_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `department_index` | Node attribute; `F` | — | — | U | R | J | — | Context |
 | `department_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
-| `site_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `site_index` | Node attribute; `F` | — | — | U | R | J | — | Context |
 | `site_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
 | `channel` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R | Covered |
-| `channel_index` | Node attribute; `F` | — | — | U | U | J | U | Context |
-| `channel_number` | Mode-selected node; `F` | — | — | R* | — | J | — | R1: special-mode identity |
-| `channel_kind` | Source node tag; `F`, `I` | — | — | U/R* | U | J | U | Context |
+| `channel_index` | Node attribute; `F` | — | — | U | R | J | U | Context |
+| `channel_number` | Mode-selected node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `channel_kind` | Source node tag; `F`, `I` | — | — | U/R* | R | J | U | Context |
 | `channel_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
-| `frequency` | Mode-selected node; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
-| `modulation` | Mode-selected node; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
-| `sub_audio_detected` | Search/Close Call SAD; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
-| `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
-| `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
-| `weather_mode` | Weather node; `P200`, `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
-| `weather_same` | Weather node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
-| `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | — | J | — | R1: web and Home Assistant |
-| `talkgroup_id` | GSI/PSI; `F` | — | R | — | — | J | — | R1: Rich, TUI, web, and Home Assistant |
-| `unit_id` | GSI/PSI; `F` | — | R | — | — | J | — | R1: Rich, TUI, web, and Home Assistant |
-| `volume` | GSI/PSI; `P200`, `F` | — | R | R+C† | — | J | — | R1/R2: daemon-backed and browser surfaces |
-| `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C† | — | J | — | R1/R2: daemon-backed and browser surfaces |
+| `frequency` | Mode-selected node; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
+| `modulation` | Mode-selected node; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
+| `sub_audio_detected` | Search/Close Call SAD; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `talkgroup_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
+| `unit_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
+| `volume` | GSI/PSI; `P200`, `F` | — | R | R+C† | R | J | — | R1/R2: daemon-backed CLI/TUI mutation and Home Assistant |
+| `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C† | R | J | — | R1/R2: daemon-backed CLI/TUI mutation and Home Assistant |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
-| `p25_status` | GSI/PSI; `F` | — | — | — | — | J | — | R1: no human renderer |
-| `mute` | GSI/PSI; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
-| `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | — | J | — | R1: distinct from application recording |
+| `p25_status` | GSI/PSI; `F` | — | — | — | R | J | — | R1: CLI/TUI and Home Assistant |
+| `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
+| `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
 
 The matrix exposes three high-confidence presentation findings without requiring
 new protocol semantics:
 
-- the TUI already proves that Search, Close Call, Weather, and Tone-Out fields
-  can be rendered from shared state, while the web and Home Assistant surfaces
-  omit them;
-- the web omits already-modeled department, site, RF, service, identifier,
-  level, mute, scanner-recording, and P25 fields; and
+- Milestone 26.4 closes the web half of the Search, Close Call, Weather, and
+  Tone-Out presentation gap through the existing complete shared state;
+- Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
+  than losses from the shared state; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
   the generic MQTT topic carries the complete snapshot.
 
@@ -270,16 +270,16 @@ absence from the scanner itself is expected.
 
 | ID | Follow-up | Class | Scheduling decision |
 | --- | --- | --- | --- |
-| `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Scheduled next as Milestone 26.3; it does not depend on closing unrelated parity gaps |
+| `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Completed in Milestone 26.3 without absorbing unrelated parity gaps |
 | `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Later evidence-led slice; define update/lifecycle semantics first |
-| `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Safe renderer-parity candidate because no new scanner semantics are required |
+| `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Completed in Milestone 26.4 without new scanner semantics |
 | `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Later compatibility-reviewed slice; avoid entity churn and unbounded discovery growth |
 | `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2 | Later semantic-control slice with command and physical acceptance |
 | `A06` | Expose richer audio, recording, inventory, and sidecar diagnostics where operationally useful | R1/R4 | Later application-observability slice |
 | `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |
 | `A08` | Expand per-mode SDS100 validation and perform first SDS150 physical validation | R3 | Hardware-dependent; SDS150 remains deferred |
 
-Only `A01` is scheduled by this audit. The ordering avoids turning a broad
+`A01` and `A03` are complete. The remaining ordering avoids turning a broad
 inventory into silent authorization for unrelated runtime or protocol work.
 
 ## Milestone 26.3 handoff
@@ -310,5 +310,5 @@ writes; RadioReference synchronization UI; GLT/FQK/live-scanner mutation;
 daemon/web/Ingress exposure; and background synchronization remain outside the
 initial editor. Supported Name Tag replacement may target existing catalog and
 hierarchy records without broadening those structural operations. Milestone 26.3
-consumes the released Milestones 21–22 safety contracts and does not absorb the
+consumed the released Milestones 21–22 safety contracts and did not absorb the
 unrelated findings above.

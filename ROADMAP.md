@@ -11,32 +11,53 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.3 — Interactive Favorites Workspace editor
+### Milestone 26.4 — Web-dashboard shared-state field parity
 
-Milestone 26.2 is closed with the evidence-backed physical-scanner capability and
-interface field-parity audit. Its exact shared-state matrix, evidence classes,
-categorized gaps, and bounded editor handoff remain in the durable
-[audit artifact](docs/capability-field-parity-audit.md).
+Milestone 26.3 is closed with the first local interactive Favorites Workspace
+editor over the released Milestones 21–22 safety contracts. Its explicit source,
+immutable edit, exact review/confirmation, verified executor, private USB host
+state, durable recovery-evidence, and post-write reload boundaries remain in the
+[Favorites Workspace editor guide](docs/favorites-workspace-editor.md).
 
-Milestone 26.3 adds the first local interactive Favorites Workspace editor over
-the released Milestones 21–22 contracts. One explicit copied-tree or freshly
-qualified mounted Linux USB source supplies immutable baseline and intended
-snapshots. Hierarchy and exact-record browsing, search, schema diagnostics,
-provenance, and raw detail remain read-only. The only mutations are existing
-evidence-backed Name Tag replacement, supported HPD leaf deletion, and
-exact-template leaf creation, with in-memory undo/reset/discard and no autosave.
+Milestone 26.4 addresses audit finding `A03` by presenting already-modeled shared
+scanner state in the existing web dashboard. The daemon API, SSE, and generic
+MQTT paths already preserve all 34 `RadioStateSnapshot` fields; this slice is a
+browser presentation and reconciliation boundary, not a new scanner protocol,
+state-lifecycle, or control contract.
 
-Exact `plan_favorites_write()` review and its blockers precede a separate token
-confirmation bound to the source and snapshot bytes. Execution delegates only to
-the verified copied-tree or USB executor, repeats stale-target preflight, retains
-USB artifacts in canonical private host state outside scanner media, and surfaces
-operation, backup, rollback-manifest, report, recovery, and fresh exact-reload
-evidence. The renderer never replaces storage itself and never opens scanner,
-daemon, web, Ingress, FTP-write, synchronization, or background ownership.
+Add accessible responsive presentation for the currently omitted hierarchy,
+RF, service, identifier, receiver-level, mute, scanner-recording, P25, and
+special-mode fields. This includes department, site, frequency, modulation,
+service type, talkgroup and unit identifiers, volume, squelch, mute, scanner
+recording, P25 status, channel identity context, detected sub-audio, Weather mode
+and SAME, and Tone-Out Tone A/Tone B. Preserve existing system/channel, mode,
+screen-kind, signal/RSSI, hold-control, audio, recording, theme, and responsive
+behavior.
 
-Milestone 26.3 implementation and host-independent acceptance are complete. The
-[Favorites Workspace editor guide](docs/favorites-workspace-editor.md) records
-its source selection, workflow, safety boundary, and deliberate non-goals.
+The dashboard must render scanner-provided values without guessing semantics,
+must distinguish absent values from literal zero or false-like scanner text,
+must retain the unknown/future-screen fallback, and must update every added field
+through authoritative initial snapshot, ordered SSE events, polling fallback,
+and periodic reconciliation. Stable HTML hooks and a contract test must keep the
+documented browser field inventory synchronized with the 34-field
+renderer-neutral dataclass. Conventional/trunk, Quick Search, Close Call, Weather,
+Tone-Out, and unknown-screen fixtures must cover mode transitions, stale-value
+clearing, accessible labels, compact layouts, all existing browser-local themes,
+and reduced-motion behavior.
+
+Milestone 26.4 implementation and host-independent acceptance are complete.
+The browser field inventory is mechanically tied to the 34-field dataclass, the
+existing full suite passes, and deterministic rendered checks cover the System,
+LCARS-inspired, Matrix-inspired, First Responder, and Amateur Radio themes plus
+the phone breakpoint. The audit now records `A03` as complete. This fixture-led
+acceptance does not expand model, firmware, transport, or physical-scanner
+support claims.
+
+Home Assistant entity/card expansion; Rich CLI, monitor, or Textual TUI parity;
+battery or System Status shared-state decisions from audit finding `A02`; new
+scanner controls; daemon API/SSE/MQTT schema changes; GLT/FQK or other advanced
+protocol work; authentication or deployment changes; and physical support-claim
+expansion remain separate evidence-led slices.
 
 ## Deferred hardware validation
 
@@ -520,6 +541,11 @@ is collected.
 - Milestone 26.3 completed the local interactive Favorites Workspace editor
   constrained to the already verified Milestones 21–22 model, planner,
   copied-tree executor, and qualified USB executor boundaries.
+- Milestone 26.4 completed the browser-renderer parity slice. It presents
+  already-modeled shared hierarchy, RF, service, identifier, receiver-level,
+  mute, scanner-recording, P25, and special-mode fields without changing scanner
+  protocols, shared-state lifecycle, semantic controls, daemon schemas, Home
+  Assistant, authentication, or deployment boundaries.
 
 ## Completed milestone groups
 

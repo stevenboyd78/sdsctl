@@ -378,6 +378,35 @@ Later messages retain the existing daemon event kinds and payloads:
 - `recording.state`; and
 - `destination.health`.
 
+### Shared scanner-state fields
+
+The **Now scanning** panel renders every field in the 34-field
+`RadioStateSnapshot` contract. Its stable labeled groups cover:
+
+- hierarchy names, indexes, and hold state for system, department, site, and
+  channel;
+- raw scanner screen, renderer-neutral screen kind, channel number and source
+  kind;
+- frequency, modulation, service type, and detected subaudio;
+- talkgroup and unit identifiers, volume, squelch, P25 status, mute, and the
+  scanner's native recording flag; and
+- Weather mode/SAME and Tone-Out A/B values.
+
+These values are read-only browser presentation. Browser audio and daemon WAV
+recording remain separate application workflows, and the scanner-native
+recording field does not control either one. The page renders scanner-provided
+values as text without inferring unknown semantics. Integer zero and false-like
+text such as `Off` are retained; null, missing, and empty fields render as
+**Unavailable**.
+
+Initial status, the ordered SSE checkpoint and radio/PSI events, fallback
+polling, and periodic reconciliation all pass complete authoritative snapshots
+through the same field renderer. Consequently, changing among conventional or
+trunk scanning, Quick Search, Close Call, Weather, Tone-Out, and unknown future
+screens clears values that are no longer present rather than retaining stale
+mode-specific details. Raw `screen` and classified `screen_kind` remain separate
+so an unknown future screen is still visible without being misclassified.
+
 The browser directly applies complete runtime snapshots, scanner connection
 changes, PSI and radio-state updates, audio snapshots, and recording snapshots.
 `recording.state` updates the recording panel directly and is also committed into

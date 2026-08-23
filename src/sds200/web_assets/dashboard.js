@@ -105,6 +105,62 @@ function setText(id, value, fallback = "Unavailable") {
   element(id).textContent = displayValue(value, fallback);
 }
 
+const RADIO_STATE_FIELD_TARGETS = Object.freeze({
+  mode: "radio-mode",
+  screen: "radio-screen-raw",
+  screen_kind: "radio-screen",
+  system: "radio-system",
+  department: "radio-department",
+  site: "radio-site",
+  system_index: "radio-system-index",
+  system_hold: "radio-system-hold",
+  department_index: "radio-department-index",
+  department_hold: "radio-department-hold",
+  site_index: "radio-site-index",
+  site_hold: "radio-site-hold",
+  channel: "radio-channel",
+  channel_index: "radio-channel-index",
+  channel_number: "radio-channel-number",
+  channel_kind: "radio-channel-kind",
+  channel_hold: "radio-channel-hold",
+  frequency: "radio-frequency",
+  modulation: "radio-modulation",
+  sub_audio_detected: "radio-sub-audio-detected",
+  tone_out_tone_a: "radio-tone-out-tone-a",
+  tone_out_tone_b: "radio-tone-out-tone-b",
+  weather_mode: "radio-weather-mode",
+  weather_same: "radio-weather-same",
+  service_type: "radio-service-type",
+  talkgroup_id: "radio-talkgroup-id",
+  unit_id: "radio-unit-id",
+  volume: "radio-volume",
+  squelch: "radio-squelch",
+  signal: "radio-signal",
+  rssi: "radio-rssi",
+  p25_status: "radio-p25-status",
+  mute: "radio-mute",
+  recording: "radio-recording",
+});
+
+function renderRadioState(radio) {
+  for (const [field, target] of Object.entries(RADIO_STATE_FIELD_TARGETS)) {
+    let value = radio[field];
+    let fallback = "Unavailable";
+
+    if (field === "system") {
+      fallback = "No active system";
+    } else if (field === "channel") {
+      fallback = "No active channel";
+    } else if (field === "signal") {
+      value = signalLabel(value);
+    } else if (field === "rssi") {
+      value = rssiLabel(value);
+    }
+
+    setText(target, value, fallback);
+  }
+}
+
 function booleanLabel(value, trueLabel, falseLabel) {
   if (value === true) {
     return trueLabel;
@@ -709,12 +765,7 @@ function renderSnapshot(snapshot, message = null) {
   setText("scanner-firmware", snapshot.scanner_firmware, "Unknown firmware");
   setText("scanner-endpoint", snapshot.scanner_endpoint);
 
-  setText("radio-system", radio.system, "No active system");
-  setText("radio-channel", radio.channel, "No active channel");
-  setText("radio-mode", radio.mode);
-  setText("radio-screen", radio.screen_kind ?? radio.screen);
-  setText("radio-signal", signalLabel(radio.signal));
-  setText("radio-rssi", rssiLabel(radio.rssi));
+  renderRadioState(radio);
 
   setText("daemon-state", snapshot.state);
   setText("psi-state", psiLabel(snapshot));

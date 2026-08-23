@@ -152,14 +152,18 @@
         <p id="radio-system" class="primary-value">No active system</p>
         <p id="radio-channel" class="secondary-value">No active channel</p>
 
-        <dl class="status-list status-list-compact">
+        <dl class="status-list status-list-compact radio-summary">
           <div>
             <dt>Mode</dt>
             <dd id="radio-mode">Unavailable</dd>
           </div>
           <div>
-            <dt>Screen</dt>
+            <dt>Screen kind</dt>
             <dd id="radio-screen">Unavailable</dd>
+          </div>
+          <div>
+            <dt>Scanner screen</dt>
+            <dd id="radio-screen-raw">Unavailable</dd>
           </div>
           <div>
             <dt>Signal</dt>
@@ -170,6 +174,59 @@
             <dd id="radio-rssi">Unavailable</dd>
           </div>
         </dl>
+
+        <div class="radio-field-groups">
+          <section class="radio-field-group" aria-labelledby="radio-hierarchy-title">
+            <h3 id="radio-hierarchy-title">Hierarchy</h3>
+            <dl class="radio-field-list">
+              <div><dt>Department</dt><dd id="radio-department">Unavailable</dd></div>
+              <div><dt>Site</dt><dd id="radio-site">Unavailable</dd></div>
+              <div><dt>System index</dt><dd id="radio-system-index">Unavailable</dd></div>
+              <div><dt>System hold</dt><dd id="radio-system-hold">Unavailable</dd></div>
+              <div><dt>Department index</dt><dd id="radio-department-index">Unavailable</dd></div>
+              <div><dt>Department hold</dt><dd id="radio-department-hold">Unavailable</dd></div>
+              <div><dt>Site index</dt><dd id="radio-site-index">Unavailable</dd></div>
+              <div><dt>Site hold</dt><dd id="radio-site-hold">Unavailable</dd></div>
+              <div><dt>Channel index</dt><dd id="radio-channel-index">Unavailable</dd></div>
+              <div><dt>Channel number</dt><dd id="radio-channel-number">Unavailable</dd></div>
+              <div><dt>Channel kind</dt><dd id="radio-channel-kind">Unavailable</dd></div>
+              <div><dt>Channel hold</dt><dd id="radio-channel-hold">Unavailable</dd></div>
+            </dl>
+          </section>
+
+          <section class="radio-field-group" aria-labelledby="radio-rf-title">
+            <h3 id="radio-rf-title">RF and service</h3>
+            <dl class="radio-field-list">
+              <div><dt>Frequency</dt><dd id="radio-frequency">Unavailable</dd></div>
+              <div><dt>Modulation</dt><dd id="radio-modulation">Unavailable</dd></div>
+              <div><dt>Service type</dt><dd id="radio-service-type">Unavailable</dd></div>
+              <div><dt>Detected subaudio</dt><dd id="radio-sub-audio-detected">Unavailable</dd></div>
+            </dl>
+          </section>
+
+          <section class="radio-field-group" aria-labelledby="radio-identity-title">
+            <h3 id="radio-identity-title">Identity and receiver</h3>
+            <dl class="radio-field-list">
+              <div><dt>Talkgroup ID</dt><dd id="radio-talkgroup-id">Unavailable</dd></div>
+              <div><dt>Unit ID</dt><dd id="radio-unit-id">Unavailable</dd></div>
+              <div><dt>Volume</dt><dd id="radio-volume">Unavailable</dd></div>
+              <div><dt>Squelch</dt><dd id="radio-squelch">Unavailable</dd></div>
+              <div><dt>Mute</dt><dd id="radio-mute">Unavailable</dd></div>
+              <div><dt>Scanner recording</dt><dd id="radio-recording">Unavailable</dd></div>
+              <div><dt>P25 status</dt><dd id="radio-p25-status">Unavailable</dd></div>
+            </dl>
+          </section>
+
+          <section class="radio-field-group" aria-labelledby="radio-special-title">
+            <h3 id="radio-special-title">Special mode</h3>
+            <dl class="radio-field-list">
+              <div><dt>Weather mode</dt><dd id="radio-weather-mode">Unavailable</dd></div>
+              <div><dt>Weather SAME</dt><dd id="radio-weather-same">Unavailable</dd></div>
+              <div><dt>Tone-Out A</dt><dd id="radio-tone-out-tone-a">Unavailable</dd></div>
+              <div><dt>Tone-Out B</dt><dd id="radio-tone-out-tone-b">Unavailable</dd></div>
+            </dl>
+          </section>
+        </div>
       </section>
 
       <section class="panel scanner-controls-panel" aria-labelledby="scanner-controls-title">

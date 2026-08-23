@@ -276,6 +276,59 @@ select:focus-visible,
   margin-top: var(--space-5);
 }
 
+.radio-field-groups {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  margin-top: var(--space-5);
+}
+
+.radio-field-group {
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+}
+
+.radio-field-group h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.radio-field-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  column-gap: var(--space-4);
+  margin: var(--space-2) 0 0;
+}
+
+.radio-field-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding-block: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.radio-field-list dt {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.radio-field-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.82rem;
+  font-weight: 750;
+  text-align: left;
+}
+
 .primary-value {
   margin: var(--space-5) 0 var(--space-2);
   font-size: clamp(1.35rem, 3vw, 2.25rem);
@@ -563,6 +616,14 @@ select:focus-visible,
 
   .status-list dd {
     text-align: left;
+  }
+
+  .radio-field-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .radio-field-list {
+    grid-template-columns: 1fr;
   }
 }
 

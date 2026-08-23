@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_3_favorites_editor() -> None:
+def test_roadmap_records_milestone_26_4_web_dashboard_field_parity() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,28 +123,34 @@ def test_roadmap_records_milestone_26_3_favorites_editor() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.3 — Interactive Favorites Workspace editor",
-        "Milestone 26.2 is closed",
-        "docs/capability-field-parity-audit.md",
-        "One explicit copied-tree or freshly qualified mounted Linux USB source",
-        "immutable baseline and intended snapshots",
-        "Hierarchy and exact-record browsing",
-        "schema diagnostics",
-        "raw detail remain read-only",
-        "Name Tag replacement",
-        "supported HPD leaf deletion",
-        "exact-template leaf creation",
-        "in-memory undo/reset/discard",
-        "no autosave",
-        "Exact `plan_favorites_write()` review",
-        "separate token confirmation",
-        "verified copied-tree or USB executor",
-        "canonical private host state outside scanner media",
-        "rollback-manifest",
-        "fresh exact-reload evidence",
-        "never opens scanner, daemon, web, Ingress, FTP-write, synchronization",
-        "Milestone 26.3 implementation and host-independent acceptance are complete",
+        "### Milestone 26.4 — Web-dashboard shared-state field parity",
+        "Milestone 26.3 is closed",
         "docs/favorites-workspace-editor.md",
+        "audit finding `A03`",
+        "all 34 `RadioStateSnapshot` fields",
+        "browser presentation and reconciliation boundary",
+        "department, site, frequency, modulation",
+        "talkgroup and unit identifiers",
+        "volume, squelch, mute",
+        "Weather mode and SAME",
+        "Tone-Out Tone A/Tone B",
+        "without guessing semantics",
+        "literal zero or false-like scanner text",
+        "unknown/future-screen fallback",
+        "authoritative initial snapshot",
+        "ordered SSE events",
+        "polling fallback",
+        "periodic reconciliation",
+        "Stable HTML hooks and a contract test",
+        "34-field renderer-neutral dataclass",
+        "Milestone 26.4 implementation and host-independent acceptance are complete",
+        "deterministic rendered checks",
+        "phone breakpoint",
+        "audit now records `A03` as complete",
+        "does not expand model, firmware, transport, or physical-scanner support claims",
+        "Home Assistant entity/card expansion",
+        "battery or System Status",
+        "daemon API/SSE/MQTT schema changes",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
