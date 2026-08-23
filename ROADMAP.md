@@ -11,88 +11,68 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.7 — Responsive scanner-display Home Assistant card themes
+### Milestone 26.8 — Explicit semantic-control parity
 
-Milestone 26.6 is closed with fourteen fixed state/diagnostic components, seven
-unchanged bounded controls, four compatibility-reviewed Site/RF/service sensors,
-and matching optional fields in the existing compact Lovelace card. Audit
-finding `A04` is complete without dynamic discovery or expanded scanner
-ownership.
+Milestone 26.7 is closed with one additive responsive SDS200 Display Lovelace
+card, unchanged compact-card compatibility, host-independent browser acceptance,
+and physical development validation on Home Assistant OS against an SDS200
+running firmware 1.26.01. Tagged repository-managed App acceptance remains a
+release gate rather than Milestone 26.8 runtime scope.
 
-Milestone 26.7 adds one separate first-party `SDS200 Display` Lovelace card
-inspired by the information hierarchy and proportions documented in the Uniden
-SDS200 Owner's Manual, pages 38-39. Preserve the existing `sds200-card.js` asset,
-card type, configuration, rendering, resource URL, and installer behavior. The
-new asset must not copy manual artwork, branding, or fonts; it implements an
-original accessible table/grid presentation over existing Home Assistant state.
+Milestone 26.8 addresses capability-audit finding `A05`. Align explicit
+hold/release and volume/squelch mutation across the direct CLI, daemon-client
+CLI, direct Textual TUI, and daemon-backed Textual TUI without creating another
+scanner owner or exposing raw scanner commands. Terminal monitor, Rich
+scanner-information output, the web dashboard, Home Assistant, and generic MQTT
+state remain unchanged unless documentation must describe the shared boundary.
 
-One shared renderer must provide five selectable layout presets: Simple,
-Detail, Search/Close Call, Weather, and Tone-Out. Simple and Detail adapt the
-manual's common conventional/trunk hierarchy; the final three share the manual's
-special-mode structure while retaining distinct user-facing presets. Provide
-three selectable palettes matching the scanner's documented color choices:
-Color, Black on White, and White on Black.
+Provide one exact desired-state hold operation for System, Department, Site, and
+Channel. The caller selects the scope and `held` boolean; implementations must
+read authoritative scanner state, avoid a key press when the requested state is
+already current, require a valid current index before entering hold, use only the
+documented bounded hold-key sequence, and confirm the resulting state before
+reporting success. Direct and daemon-backed CLI commands must expose both hold
+and release explicitly. Direct and daemon-backed TUI actions must choose the
+desired state from the latest authoritative snapshot rather than remaining
+one-way hold shortcuts or applying optimistic local state.
 
-Use only the existing fourteen Home Assistant state/diagnostic entities. The
-new card remains read-only and transport-free, subscribes through Home
-Assistant's supported `states` context, and must not add MQTT discovery
-components, topics, scanner commands, service calls, API calls, or another state
-owner. Its built-in graphical editor must validate the layout, palette, fit
-mode, title, and entity domains.
+Provide exact bounded volume and squelch set operations. Validate integer types
+and model-specific ranges before scanner mutation, execute through the existing
+typed `VOL` and `SQL` commands, and confirm the authoritative value after the
+write. CLI surfaces accept an exact level; TUI increment/decrement actions clamp
+to the connected model's capability bounds and reuse the same operation. Do not
+infer percentage, loudness, mute, charging, or cross-model equivalence from raw
+levels.
 
-The renderer uses one bounded 4:3 display surface with CSS grid/table semantics,
-fluid typography, text truncation, and no internal scrolling. Normal Card fit
-must remain responsive inside Lovelace sections. Viewport fit must grow only to
-the smaller width- or height-constrained dimension, stay within the dynamic
-viewport, center unused space, and remain fully visible from a 390-pixel phone
-viewport through 800x480 and 1920x1080 full-screen references.
+The daemon API adds only versioned semantic operations for these controls. They
+must negotiate through hello capabilities, use the existing bounded request and
+response framing, serialize with reconnect, navigation, Home Assistant, web, and
+PSI recovery through the one daemon control lock, return an authoritative
+completion snapshot, and preserve stable unavailable, busy, timeout, rejected,
+invalid-parameter, unsupported-model, and failed error classes. The daemon event
+stream remains the authoritative asynchronous state source; no second PSI
+reader, socket, worker, or state cache is permitted.
 
-Package and atomically install `sds200-display-card.js` beside the existing
-compact asset under `/homeassistant/www/sds200`. Installation of both optional
-assets remains isolated from daemon/App startup, refuses symlink paths, verifies
-bytes and modes, preserves unrelated files, and requires explicit one-time
-registration of both `/local` JavaScript module resources.
+Compatibility acceptance must preserve existing indexed `hold`, `next`,
+`previous`, `reconnect`, web hold-state, Home Assistant control, and generic MQTT
+contracts. Add deterministic unit and integration coverage for no-op desired
+states, unavailable indexes and fields, model bounds, literal zero, upper limits,
+protocol rejection, timeouts, concurrency, reconnect, stale snapshots, event
+reconciliation, CLI output/JSON, TUI non-blocking behavior, and read-only daemon
+compatibility negotiation.
 
-Host-independent acceptance must lock additive package delivery, old-card
-compatibility, all five layouts, all three palettes, exact configuration
-validation, entity-domain constraints, context subscription, transport-free
-operation, semantic document structure, bounded text, and zero horizontal or
-vertical display overflow across the reference viewports. Update App, release,
-wiki, and changelog documentation with configuration examples and the manual as
-design provenance.
+Physical SDS200 acceptance must use reversible bounded changes: exercise enter
+and release for each meaningful hold scope, change and restore volume, change and
+restore squelch, and verify both direct and daemon-owned paths without concurrent
+scanner owners. Record firmware, starting and restored values, authoritative PSI
+confirmation, shutdown cleanup, and any mode-dependent scope that could not be
+safely exercised. SDS100 behavior remains capability-bounded; SDS150 claims
+remain fixture/specification-only until representative hardware exists.
 
-Milestone 26.7 implementation and host-independent acceptance are complete. The
-unchanged compact card and the separately registered display card are packaged
-in both distribution artifacts; atomic dual-asset installation remains isolated
-from App startup. Browser acceptance covered all forty-five viewport-fit
-layout/palette/reference-viewport combinations plus all fifteen Card-fit
-layout/palette combinations with a strict 4:3 surface, bounded text, zero display
-overflow, and no browser warnings or errors. The final invalid-configuration and
-accessibility pass rejected non-text titles, unknown fields, and malformed entity
-IDs while confirming every rendered field has an accessible label.
-
-Physical development acceptance completed on August 23, 2026, on amd64 Home
-Assistant OS 18.2 with Core 2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and a
-physical SDS200 running firmware 1.26.01. A verified archive from merged commit
-`bb2e1af` built and installed as the isolated Local App at version 0.21.0 while
-the repository-managed App remained stopped. Both Lovelace assets matched their
-source bytes, the existing compact resource remained unchanged, and the new
-display resource registered separately.
-
-The live graphical editor rendered all five layouts, all three palettes, and
-both fit modes over the twenty-one discovered SDS200 components. The saved
-Detail/Color/Viewport configuration remained fully visible without card-internal
-scrolling at 390x844, 800x480, and 1920x1080. Ingress, ordered scanner state,
-the single daemon owner, and six existing recordings recovered across a Local
-App restart. This completes Milestone 26.7 development acceptance without
-claiming the separate tagged repository-managed release acceptance.
-
-Do not add Home Assistant entities, scanner display customization writes,
-fullscreen browser permissions, copied Uniden assets, dynamic card code loading,
-new runtime dependencies, or Internet access in this slice. Rich
-CLI/monitor/Textual parity, semantic-control finding `A05`, advanced protocol
-controls, System Status, RF Power Plot, and physical SDS150 validation remain
-separate work.
+Do not add remote daemon networking, Home Assistant entities or topics, browser
+controls, raw-key passthrough, arbitrary protocol commands, advanced-protocol
+controls, System Status, RF Power Plot, audio/recording observability expansion,
+new runtime dependencies, or physical SDS150 claims in this slice.
 
 ## Deferred hardware validation
 
@@ -595,8 +575,11 @@ is collected.
 - Milestone 26.7 completed one additive responsive SDS200 Display Lovelace card
   with five selectable scanner-style layouts, three palettes, Card and bounded
   viewport fit, strict configuration validation, and the same fourteen read-only
-  entities. The existing compact card and all Home Assistant component and
-  scanner-ownership boundaries remain unchanged.
+  entities. Physical development acceptance on Home Assistant OS exercised all
+  thirty layout/palette/fit combinations, the three reference viewports, live
+  state, and restart persistence against SDS200 firmware 1.26.01. The existing
+  compact card and all Home Assistant component and scanner-ownership boundaries
+  remain unchanged.
 
 ## Completed milestone groups
 
