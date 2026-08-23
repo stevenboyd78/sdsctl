@@ -8,6 +8,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.3 local interactive Favorites Workspace editor. One
+  explicit copied-tree or freshly qualified Linux USB source can be browsed and
+  searched with schema diagnostics, exact provenance, and raw record detail;
+  supported Name Tag replacement, HPD leaf deletion, and exact-template leaf
+  creation remain immutable and in memory with undo/reset/discard. Exact write
+  plans require a separate deterministic confirmation, execute only through the
+  existing verified copied-tree or USB executor, retain USB artifacts in private
+  host state, and surface operation, backup, rollback, report, recovery, and
+  exact post-write reload evidence without adding scanner, daemon, web, FTP
+  write, synchronization, or background ownership.
 - Add the Milestone 26.2 evidence-backed physical-scanner capability and
   interface field-parity audit. It traces all 34 renderer-neutral scanner-state
   fields through Rich CLI, terminal monitor, Textual TUI, web, daemon API/SSE/

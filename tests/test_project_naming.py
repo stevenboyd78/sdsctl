@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_2_capability_parity_audit() -> None:
+def test_roadmap_records_milestone_26_3_favorites_editor() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,22 +123,28 @@ def test_roadmap_records_milestone_26_2_capability_parity_audit() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.2 — Physical-scanner capability and interface field-parity audit",
-        "Milestone 26.1 is closed",
-        "SDS100, SDS150, and SDS200 evidence",
-        "Rich CLI and terminal monitor output",
-        "standalone and daemon-backed Textual TUI",
-        "generic daemon API/SSE/MQTT",
-        "individual fields",
-        "application-only capabilities",
-        "inventory and planning boundary",
-        "Milestone 26.2 audit and acceptance are complete",
+        "### Milestone 26.3 — Interactive Favorites Workspace editor",
+        "Milestone 26.2 is closed",
         "docs/capability-field-parity-audit.md",
-        "exact 34-field `RadioStateSnapshot`",
-        "contract test",
-        "GSI battery",
-        "sixteen-field System Status projection",
-        "Milestone 26.3",
+        "One explicit copied-tree or freshly qualified mounted Linux USB source",
+        "immutable baseline and intended snapshots",
+        "Hierarchy and exact-record browsing",
+        "schema diagnostics",
+        "raw detail remain read-only",
+        "Name Tag replacement",
+        "supported HPD leaf deletion",
+        "exact-template leaf creation",
+        "in-memory undo/reset/discard",
+        "no autosave",
+        "Exact `plan_favorites_write()` review",
+        "separate token confirmation",
+        "verified copied-tree or USB executor",
+        "canonical private host state outside scanner media",
+        "rollback-manifest",
+        "fresh exact-reload evidence",
+        "never opens scanner, daemon, web, Ingress, FTP-write, synchronization",
+        "Milestone 26.3 implementation and host-independent acceptance are complete",
+        "docs/favorites-workspace-editor.md",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
