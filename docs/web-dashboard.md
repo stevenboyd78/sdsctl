@@ -380,7 +380,7 @@ Later messages retain the existing daemon event kinds and payloads:
 
 ### Shared scanner-state fields
 
-The **Now scanning** panel renders every field in the 34-field
+The **Now scanning** panel renders every field in the 35-field
 `RadioStateSnapshot` contract. Its stable labeled groups cover:
 
 - hierarchy names, indexes, and hold state for system, department, site, and
@@ -388,8 +388,8 @@ The **Now scanning** panel renders every field in the 34-field
 - raw scanner screen, renderer-neutral screen kind, channel number and source
   kind;
 - frequency, modulation, service type, and detected subaudio;
-- talkgroup and unit identifiers, volume, squelch, P25 status, mute, and the
-  scanner's native recording flag; and
+- talkgroup and unit identifiers, volume, squelch, optional raw SDS100 battery
+  telemetry, P25 status, mute, and the scanner's native recording flag; and
 - Weather mode/SAME and Tone-Out A/B values.
 
 These values are read-only browser presentation. Browser audio and daemon WAV
@@ -398,6 +398,13 @@ recording field does not control either one. The page renders scanner-provided
 values as text without inferring unknown semantics. Integer zero and false-like
 text such as `Off` are retained; null, missing, and empty fields render as
 **Unavailable**.
+
+Battery presentation follows the authoritative GSI/PSI field lifecycle: an
+omitted value clears an earlier value, while literal zero remains visible. The
+dashboard does not infer a unit, percentage, charging status, expected range, or
+applicability to SDS150/SDS200. SDS150 `GCS` charge status remains an explicit
+request/response command and is not automatically polled by the dashboard or
+daemon.
 
 Initial status, the ordered SSE checkpoint and radio/PSI events, fallback
 polling, and periodic reconciliation all pass complete authoritative snapshots

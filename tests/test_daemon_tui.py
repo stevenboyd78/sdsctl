@@ -187,6 +187,7 @@ def test_daemon_tui_radio_streams_authoritative_state_and_connection() -> None:
                         "channel": "Updated Dispatch",
                         "signal": 5,
                         "rssi": -70.5,
+                        "battery": 0,
                     }
                 },
             )
@@ -195,6 +196,7 @@ def test_daemon_tui_radio_streams_authoritative_state_and_connection() -> None:
         assert states[0].channel == "Updated Dispatch"
         assert states[0].signal == 5
         assert states[0].rssi == -70.5
+        assert states[0].battery == 0.0
 
         events.push(
             event(
@@ -283,6 +285,7 @@ def test_daemon_tui_radio_reports_event_stream_failure_as_diagnostic() -> None:
     [
         {"signal": True},
         {"rssi": "invalid"},
+        {"battery": "invalid"},
         {"screen_kind": "unsupported"},
     ],
 )
@@ -307,6 +310,17 @@ def test_daemon_tui_radio_rejects_malformed_radio_state(
 
     with pytest.raises(DaemonProtocolError), radio.radio_state_push():
         pass
+
+
+def test_daemon_tui_radio_rejects_nonfinite_battery_from_api_snapshot() -> None:
+    radio, _, _ = make_radio()
+    snapshot = runtime_snapshot()
+    radio_state = snapshot["radio_state"]
+    assert isinstance(radio_state, dict)
+    radio_state["battery"] = float("inf")
+
+    with pytest.raises(DaemonProtocolError, match="battery.*finite"):
+        radio.initialize(snapshot)
 
 
 def test_daemon_tui_radio_close_is_idempotent() -> None:

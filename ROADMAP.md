@@ -11,53 +11,62 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.4 — Web-dashboard shared-state field parity
+### Milestone 26.5 — Battery telemetry and System Status lifecycle decision
 
-Milestone 26.3 is closed with the first local interactive Favorites Workspace
-editor over the released Milestones 21–22 safety contracts. Its explicit source,
-immutable edit, exact review/confirmation, verified executor, private USB host
-state, durable recovery-evidence, and post-write reload boundaries remain in the
-[Favorites Workspace editor guide](docs/favorites-workspace-editor.md).
+Milestone 26.4 is closed with accessible responsive web presentation for every
+field in the then-current 34-field `RadioStateSnapshot`, one complete browser
+projection across initial status, SSE, polling fallback, and reconciliation, and
+deterministic rendered acceptance across all five themes and the phone
+breakpoint. Its implementation closes audit finding `A03` without expanding
+scanner protocol, model, firmware, transport, or physical-validation claims.
 
-Milestone 26.4 addresses audit finding `A03` by presenting already-modeled shared
-scanner state in the existing web dashboard. The daemon API, SSE, and generic
-MQTT paths already preserve all 34 `RadioStateSnapshot` fields; this slice is a
-browser presentation and reconciliation boundary, not a new scanner protocol,
-state-lifecycle, or control contract.
+Milestone 26.5 addresses audit finding `A02` by separating ordinary PSI/GSI
+telemetry from request-driven device telemetry and operator-started analysis
+sessions before extending shared state. This is an evidence-and-lifecycle slice,
+not blanket authorization to expose every parsed field or start a persistent
+scanner mode.
 
-Add accessible responsive presentation for the currently omitted hierarchy,
-RF, service, identifier, receiver-level, mute, scanner-recording, P25, and
-special-mode fields. This includes department, site, frequency, modulation,
-service type, talkgroup and unit identifiers, volume, squelch, mute, scanner
-recording, P25 status, channel identity context, detected sub-audio, Weather mode
-and SAME, and Tone-Out Tone A/Tone B. Preserve existing system/channel, mode,
-screen-kind, signal/RSSI, hold-control, audio, recording, theme, and responsive
-behavior.
+The optional SDS100 `Property.Battery` value arrives on the same authoritative
+GSI/PSI `ScannerInfo` cadence already owned by direct and daemon runtimes. Add it
+to `RadioStateSnapshot` as the exact optional finite float reported by the
+scanner. Absence must clear earlier state; literal zero must remain distinct from
+absence; and the host must not infer a unit, percentage, charging state, range,
+or SDS150/SDS200 applicability. Preserve complete daemon API, SSE, generic MQTT,
+and web-dashboard projection through stable field-inventory contracts. Do not
+add a Home Assistant entity or change the dedicated `sdsctl battery` behavior in
+this slice.
 
-The dashboard must render scanner-provided values without guessing semantics,
-must distinguish absent values from literal zero or false-like scanner text,
-must retain the unknown/future-screen fallback, and must update every added field
-through authoritative initial snapshot, ordered SSE events, polling fallback,
-and periodic reconciliation. Stable HTML hooks and a contract test must keep the
-documented browser field inventory synchronized with the 34-field
-renderer-neutral dataclass. Conventional/trunk, Quick Search, Close Call, Weather,
-Tone-Out, and unknown-screen fixtures must cover mode transitions, stale-value
-clearing, accessible labels, compact layouts, all existing browser-local themes,
-and reduced-motion behavior.
+SDS150 `GCS` charge status remains explicit request/response device telemetry.
+Do not poll it automatically, merge it into PSI-owned `RadioStateSnapshot`, or
+publish a cached value without an observation timestamp and staleness contract.
+Its existing typed command and dedicated CLI remain specification-backed and
+hardware-unverified until representative SDS150 validation can establish
+availability, cadence, latency, and safe polling behavior. A later on-demand
+device-telemetry service may own that request and timestamped result.
 
-Milestone 26.4 implementation and host-independent acceptance are complete.
-The browser field inventory is mechanically tied to the 34-field dataclass, the
-existing full suite passes, and deterministic rendered checks cover the System,
-LCARS-inspired, Matrix-inspired, First Responder, and Amateur Radio themes plus
-the phone breakpoint. The audit now records `A03` as complete. This fixture-led
-acceptance does not expand model, firmware, transport, or physical-scanner
-support claims.
+System Status remains a session-oriented analysis surface rather than ordinary
+live radio state. Do not automatically issue `AST,SYSTEM_STATUS`, flatten
+repeated `SystemStatus` records into the singleton radio snapshot, invent an AST
+acknowledgement-to-frame transaction, or infer pause, resume, stop, reconnect,
+or stale-data behavior. The existing lossless records and immutable
+`SystemStatusProjection` remain the supported read-only foundation. A later
+analysis-session service requires explicit single ownership, selected site,
+ordered repeated-record semantics, observation timestamps, bounded cancellation,
+APR behavior, disconnect/reconnect policy, and physical model/firmware/transport
+acceptance before renderer or daemon control exposure.
 
-Home Assistant entity/card expansion; Rich CLI, monitor, or Textual TUI parity;
-battery or System Status shared-state decisions from audit finding `A02`; new
-scanner controls; daemon API/SSE/MQTT schema changes; GLT/FQK or other advanced
-protocol work; authentication or deployment changes; and physical support-claim
-expansion remain separate evidence-led slices.
+Milestone 26.5 implementation and host-independent acceptance are complete. The
+canonical snapshot now has 35 fields, optional finite SDS100 battery telemetry
+flows through the existing authoritative state and browser projection, and the
+full suite covers value, literal-zero, omission-clearing, nonfinite rejection,
+daemon event/API decoding, audit, and field-inventory synchronization. Audit
+finding `A02` is complete through both this narrow implementation and the
+fail-closed GCS/System Status lifecycle decisions above; no physical support
+claim has expanded.
+
+`STS` display projection, RF Power Plot, Home Assistant entity/card expansion,
+Rich CLI/monitor/Textual parity, semantic-control finding `A05`, advanced
+protocol controls, and physical SDS150 validation remain separate slices.
 
 ## Deferred hardware validation
 
@@ -546,6 +555,12 @@ is collected.
   mute, scanner-recording, P25, and special-mode fields without changing scanner
   protocols, shared-state lifecycle, semantic controls, daemon schemas, Home
   Assistant, authentication, or deployment boundaries.
+- Milestone 26.5 completed the battery and System Status lifecycle decision.
+  Optional finite SDS100 battery telemetry now follows the authoritative PSI/GSI
+  shared-state lifecycle, while SDS150 GCS remains explicit request/response
+  telemetry and System Status remains a future explicitly owned analysis-session
+  service pending timestamps, staleness, cancellation, reconnect, and physical
+  acceptance evidence.
 
 ## Completed milestone groups
 

@@ -60,6 +60,7 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
         "## Semantic-control parity",
     )
     normalized_outside = outside_shared_state.casefold()
+    assert "gcs charge status" in normalized_outside
     assert "dedicated `sdsctl battery`" in normalized_outside
     assert "dedicated `sdsctl command sts`" in normalized_outside
 
@@ -85,11 +86,13 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "GSI battery",
         "System Status",
         "Unknown or deferred is deliberately different from unsupported",
-        "`A01` and `A03` are complete",
-        "## Milestone 26.3 handoff",
-        "existing copied-tree or USB verified executor",
-        "canonical private host-state directory",
-        "Supported Name Tag replacement may target existing catalog",
-        "Arbitrary positional-field editing",
+        "`A01`, `A02`, and `A03` are complete",
+        "## Milestone 26.5 lifecycle decision",
+        "optional finite SDS100 `Property.Battery`",
+        "omission clears prior state",
+        "SDS150 `GCS` stays an explicit request/response operation",
+        "ordered repeated `SystemStatus` records",
+        "a future System Status service must own",
+        "does not authorize automatic `AST,SYSTEM_STATUS`",
     ):
         assert required in document or required in normalized

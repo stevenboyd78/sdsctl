@@ -89,6 +89,7 @@ class RadioStateSnapshot:
     squelch: int | None = None
     signal: int | None = None
     rssi: float | None = None
+    battery: float | None = None
     p25_status: str | None = None
     mute: str | None = None
     recording: str | None = None
@@ -139,6 +140,7 @@ def snapshot_from_scanner_info(info: ScannerInfo) -> RadioStateSnapshot:
         squelch=info.squelch,
         signal=info.signal,
         rssi=info.rssi,
+        battery=info.battery,
         p25_status=info.p25_status,
         mute=info.mute,
         recording=info.recording,

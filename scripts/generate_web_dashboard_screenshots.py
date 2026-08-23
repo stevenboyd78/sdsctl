@@ -152,6 +152,7 @@ DEMO_SNAPSHOT: Mapping[str, object] = {
         "screen": "TGID",
         "signal": 5,
         "rssi": -67,
+        "battery": None,
         "system_index": 120,
         "department_index": 240,
         "site_index": 12,
