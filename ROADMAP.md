@@ -53,6 +53,17 @@ clients. Home Assistant Ingress behavior and its existing authenticated peer
 boundary must remain intact and must not silently inherit a second incompatible
 authentication flow.
 
+Milestone 26.1 implementation and acceptance are complete. Host-independent
+coverage exercises authentication, authorization, origin and hostile-request
+handling, bounded session lifecycle, SSE and audio revocation, recording and
+semantic controls, shutdown, and unchanged loopback, generic-container, and Home
+Assistant Ingress modes. Physical SDS200 firmware 1.26.01 validation on
+2026-08-22 used native direct TLS and two independent authenticated HTTPS
+sessions with concurrent SSE and audio streams, confirmed one daemon-owned
+scanner-control path and one RTSP/RTP audio path, kept a daemon-owned recording
+active across one session's logout, and completed isolated logout plus clean web
+and daemon shutdown without exposing the temporary credential.
+
 ## Deferred hardware validation
 
 ### SDS150 physical validation
@@ -501,29 +512,26 @@ is collected.
 
 ### Milestone 26 — Authenticated access and post-v0.21 interface work
 
-- Milestone 26.1 establishes explicit authenticated LAN access for the existing
-  web dashboard while keeping loopback-only operation as the default.
-- Preserve the daemon as sole scanner owner and keep daemon API, event, PCMU, and
-  recording services on their existing private Unix-domain socket boundary.
-- Require an explicit security contract for every supported non-loopback web
-  listener. Authentication must cover scanner state and controls, ordered events,
-  browser audio, recording operations, saved recordings, and downloads.
-- Keep credentials out of ordinary logs, traces, exported configuration, URLs,
-  and browser-visible error details; use the project's existing secret-reference
-  and redaction principles.
-- Define the supported TLS or trusted reverse-proxy deployment boundary before
-  claiming authenticated LAN deployment support. Do not treat a non-loopback
-  bind by itself as a safe remote-access feature.
-- Preserve Home Assistant Ingress behavior and its established authenticated peer
-  boundary rather than layering an incompatible dashboard login flow onto the
-  App.
-- Validate browser-session lifecycle, authorization failures, hostile requests,
-  origin/header behavior, SSE, audio, recording, semantic controls, concurrent
-  clients, graceful shutdown, and unchanged loopback defaults without requiring
-  scanner hardware.
-- Follow host-independent coverage with bounded physical SDS200 LAN validation,
-  including concurrent browser clients and confirmation that the daemon retains
-  one scanner-control and one network-audio ownership path.
+- Milestone 26.1 completed explicit authenticated direct-TLS LAN access for the
+  existing web dashboard while keeping loopback-only operation as the default.
+- The daemon remains the sole scanner owner, and daemon API, event, PCMU, and
+  recording services retain their private Unix-domain socket boundary.
+- The explicit non-loopback listener authenticates scanner state and controls,
+  ordered events, browser audio, recording operations, saved recordings, and
+  downloads while keeping credentials out of logs, configuration, URLs, and
+  browser-visible errors.
+- Native TLS, one exact HTTPS origin, bounded server-side sessions, login
+  throttling, origin enforcement, and session-scoped stream revocation establish
+  the supported security boundary. Trusted reverse-proxy deployment remains a
+  separate future design.
+- Home Assistant Ingress retains its established authenticated peer boundary and
+  does not inherit the standalone dashboard login flow.
+- Host-independent coverage completed browser-session, authorization, hostile
+  request, origin/header, SSE, audio, recording, semantic-control, concurrency,
+  shutdown, and unchanged-loopback validation.
+- Bounded physical SDS200 LAN validation completed with two authenticated
+  concurrent sessions while the daemon retained one scanner-control and one
+  network-audio ownership path.
 - Keep remote daemon-backed CLI/TUI transport, Internet-facing deployment,
   identity-provider integration, and broader authorization roles as separate
   future security boundaries unless later evidence deliberately expands this

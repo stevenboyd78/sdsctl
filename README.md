@@ -617,6 +617,14 @@ does not trust proxy headers. Generic Compose and Home Assistant Ingress remain
 separate mutually exclusive security modes. Reverse-proxy and public/Internet
 exposure remain unsupported.
 
+This mode was physically validated on August 22, 2026, against an SDS200 running
+firmware 1.26.01. Two independent authenticated HTTPS sessions consumed SSE and
+browser audio concurrently while exactly one daemon retained scanner UDP control
+and the scanner's single RTSP/RTP audio session. A temporary recording survived
+one session's logout, the other session continued receiving audio and downloaded
+the finalized WAV, and web plus daemon shutdown completed without exposing the
+temporary credential. See the guide for the complete bounded evidence.
+
 See the [web dashboard guide](docs/web-dashboard.md).
 
 ### Home Assistant App

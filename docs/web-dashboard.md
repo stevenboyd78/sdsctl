@@ -212,6 +212,45 @@ Graceful shutdown is bounded to two seconds so an intentionally long-lived SSE
 or audio response cannot make one `Ctrl+C` wait indefinitely. Requests still
 active at that deadline are cancelled by Uvicorn before application shutdown.
 
+## Milestone 26.1 physical validation
+
+Physical acceptance completed on August 22, 2026, on the native Ubuntu 26.04
+LTS host `port-a-boss` with Python 3.14.4, OpenSSL 3.5.5, and a physical SDS200
+at `192.168.0.251` running firmware Version 1.26.01. The run used a transient
+one-day local CA, an IP-SAN certificate for `192.168.0.40`, a random password
+environment value, and `https://192.168.0.40:8443`. The CA was supplied directly
+to the validation clients; no browser or operating-system trust store was
+changed. Saved decoded-audio destinations and MQTT configuration were explicitly
+disabled before the daemon connected.
+
+An unauthenticated status request returned `401`, an incorrect mutation origin
+returned `403`, and the exact-origin login issued two distinct secure,
+HTTP-only, same-site session cookies without exposing the password. The two
+independent authenticated HTTPS sessions then simultaneously held two ordered
+SSE responses and two browser-audio responses open. The first session observed
+14 SSE events plus 52 nonempty audio HTTP chunks, and the second observed 19
+events plus 65 nonempty audio chunks. Those HTTP chunk counts demonstrate live
+delivery rather than decoded PCMU frame boundaries. Live socket inspection
+confirmed exactly one daemon-owned UDP scanner-control connection to port 50536
+and one TCP RTSP session to port 554; the web process remained only a client of
+the four private Unix-domain services.
+
+A temporary daemon-owned recording started while all four streams were active.
+Logging out the first session terminated only its SSE and audio responses; the
+recording remained active, the second session remained authorized, and its audio
+byte count continued advancing. The second session stopped the recording,
+listed exactly one finalized entry, downloaded a nonempty RIFF/WAVE file through
+`recordings.sock`, and logged out independently. Web shutdown left the original
+daemon healthy. Daemon `SIGTERM` returned status zero and removed the API,
+event, PCMU, and recording-file sockets. The temporary password was absent from
+daemon and web logs, and all generated credentials, recordings, sockets, and
+other validation files were removed.
+
+This establishes the native-host direct-TLS LAN boundary with concurrent
+authenticated dashboard sessions and one daemon/scanner owner. It does not
+establish trusted-reverse-proxy, wildcard, public/Internet, generic-container
+LAN, or remote daemon-client support.
+
 ## Browser dashboard
 
 Open the local dashboard after starting the web service:
@@ -561,8 +600,13 @@ stable `recording_busy`, `recording_unavailable`, and `recording_failed` codes t
 redacted HTTP responses. The finalized-file route uses only `recordings.sock`;
 invalid identifiers return `400`, missing entries `404`, unavailable or
 non-playable entries `409`, and local service failures `503`. Successful WAV
-responses use `audio/wav`, exact `Content-Length`, `Cache-Control: no-store`,
-and `X-Content-Type-Options: nosniff`.
+responses use `audio/wav`, `Cache-Control: no-store`, and
+`X-Content-Type-Options: nosniff`. Default loopback, generic-container, and Home
+Assistant Ingress responses also advertise the exact daemon-reported
+`Content-Length`. Authenticated LAN middleware deliberately omits
+`Content-Length` from protected responses, including a finalized WAV, so
+session revocation can terminate an in-flight response without promising an
+undeliverable remainder.
 
 ## Command options
 
