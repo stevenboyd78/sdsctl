@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_5_battery_and_system_status_contract() -> None:
+def test_roadmap_records_milestone_26_6_home_assistant_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,38 +123,34 @@ def test_roadmap_records_milestone_26_5_battery_and_system_status_contract() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.5 — Battery telemetry and System Status lifecycle decision",
-        "Milestone 26.4 is closed",
-        "then-current 34-field `RadioStateSnapshot`",
-        "audit finding `A02`",
-        "ordinary PSI/GSI telemetry",
-        "request-driven device telemetry",
-        "operator-started analysis sessions",
-        "optional SDS100 `Property.Battery` value",
-        "same authoritative GSI/PSI `ScannerInfo` cadence",
-        "exact optional finite float",
-        "Absence must clear earlier state",
-        "literal zero must remain distinct from absence",
-        "must not infer a unit, percentage, charging state, range",
-        "daemon API, SSE, generic MQTT, and web-dashboard projection",
-        "Do not add a Home Assistant entity",
-        "SDS150 `GCS` charge status remains explicit request/response",
-        "Do not poll it automatically",
-        "observation timestamp and staleness contract",
-        "hardware-unverified",
-        "System Status remains a session-oriented analysis surface",
-        "Do not automatically issue `AST,SYSTEM_STATUS`",
-        "repeated `SystemStatus` records",
-        "`SystemStatusProjection`",
-        "explicit single ownership",
-        "bounded cancellation",
-        "disconnect/reconnect policy",
-        "Milestone 26.5 implementation and host-independent acceptance are complete",
-        "canonical snapshot now has 35 fields",
-        "Audit finding `A02` is complete",
-        "no physical support claim has expanded",
-        "`STS` display projection",
+        "### Milestone 26.6 — Stable Home Assistant entity and card expansion",
+        "Milestone 26.5 is closed",
+        "audit finding `A04`",
+        "exactly four read-only sensors",
+        "Site, Frequency, Modulation, and Service Type",
+        "canonical 35-field `RadioStateSnapshot`",
+        "generic MQTT `state/radio` publication",
+        "must not add scanner commands, polling, state, topics, or owners",
+        "Preserve every existing discovery component key, unique ID, state topic",
+        "New component keys and unique-ID suffixes must be deterministic",
+        "combine daemon availability with explicit field availability",
+        "Omission, null, and empty text",
+        "Expand the bundled read-only Lovelace card",
+        "Preserve all existing card configuration keys",
+        "Site joins the hierarchy",
+        "Frequency, Modulation, and Service Type join the details grid",
+        "Existing configurations",
+        "complete fixed component inventory",
+        "responsive rendered behavior",
+        "Milestone 26.6 implementation and host-independent acceptance are complete",
+        "fourteen fixed state/diagnostic components and seven unchanged bounded controls",
+        "390-pixel phone viewport",
+        "Audit finding `A04` is complete",
+        "Do not add battery, raw screen text, screen classification",
+        "special-mode-only fields",
+        "dynamic discovery components",
         "semantic-control finding `A05`",
+        "physical SDS150 validation remain separate work",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

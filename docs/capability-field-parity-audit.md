@@ -115,7 +115,7 @@ value while the daemon-backed TUI presents it but rejects mutation.
 | `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | — | R1: CLI and Home Assistant |
 | `system` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `department` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
-| `site` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `site` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `system_index` | Node attribute; `F` | — | — | U | R | J | — | Context |
 | `system_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
 | `department_index` | Node attribute; `F` | — | — | U | R | J | — | Context |
@@ -127,14 +127,14 @@ value while the daemon-backed TUI presents it but rejects mutation.
 | `channel_number` | Mode-selected node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `channel_kind` | Source node tag; `F`, `I` | — | — | U/R* | R | J | U | Context |
 | `channel_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
-| `frequency` | Mode-selected node; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
-| `modulation` | Mode-selected node; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
+| `frequency` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R* | Covered when available |
+| `modulation` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R* | Covered when available |
 | `sub_audio_detected` | Search/Close Call SAD; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
-| `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | — | R1: Home Assistant |
+| `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
 | `talkgroup_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
 | `unit_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
 | `volume` | GSI/PSI; `P200`, `F` | — | R | R+C† | R | J | — | R1/R2: daemon-backed CLI/TUI mutation and Home Assistant |
@@ -146,7 +146,7 @@ value while the daemon-backed TUI presents it but rejects mutation.
 | `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
 | `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
 
-The matrix exposes three high-confidence presentation findings without requiring
+The matrix exposes four high-confidence presentation findings without requiring
 new protocol semantics:
 
 - Milestone 26.4 closes the web half of the Search, Close Call, Weather, and
@@ -154,6 +154,9 @@ new protocol semantics:
 - Milestone 26.5 shares optional finite SDS100 battery telemetry on the existing
   PSI/GSI lifecycle without assigning unit, percentage, range, or charging
   semantics;
+- Milestone 26.6 adds a fixed compatibility-reviewed Home Assistant core of
+  Site, Frequency, Modulation, and Service Type without dynamic discovery or
+  new scanner state;
 - Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
   than losses from the shared state; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
@@ -276,13 +279,13 @@ absence from the scanner itself is expected.
 | `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Completed in Milestone 26.3 without absorbing unrelated parity gaps |
 | `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Completed in Milestone 26.5: SDS100 PSI/GSI battery joins shared state; GCS and System Status remain separate pending explicit lifecycle and physical evidence |
 | `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Completed in Milestone 26.4 without new scanner semantics |
-| `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Later compatibility-reviewed slice; avoid entity churn and unbounded discovery growth |
+| `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Completed in Milestone 26.6 with four fixed read-only sensors and matching optional card fields |
 | `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2 | Later semantic-control slice with command and physical acceptance |
 | `A06` | Expose richer audio, recording, inventory, and sidecar diagnostics where operationally useful | R1/R4 | Later application-observability slice |
 | `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |
 | `A08` | Expand per-mode SDS100 validation and perform first SDS150 physical validation | R3 | Hardware-dependent; SDS150 remains deferred |
 
-`A01`, `A02`, and `A03` are complete. The remaining ordering avoids turning a broad
+`A01` through `A04` are complete. The remaining ordering avoids turning a broad
 inventory into silent authorization for unrelated runtime or protocol work.
 
 ## Milestone 26.5 lifecycle decision
@@ -308,3 +311,25 @@ field similarity:
 This decision does not authorize automatic `AST,SYSTEM_STATUS`, an invented
 acknowledgement-to-frame transaction, flattening repeated records, SDS150 support
 expansion, Home Assistant entity growth, or `STS`/RF Power Plot work.
+
+## Milestone 26.6 Home Assistant compatibility decision
+
+The Home Assistant expansion is deliberately smaller than the remaining parity
+inventory:
+
+- Site completes the stable hierarchy already represented by System,
+  Department, and Channel;
+- Frequency, Modulation, and Service Type are the broad mode-selected RF/service
+  context already shared across direct, TUI, web, API, SSE, and generic MQTT
+  surfaces;
+- all four components have fixed deterministic IDs and reuse the existing
+  retained `state/radio` topic;
+- each nullable field combines daemon availability with field availability, so
+  omission, null, or empty text marks only that sensor unavailable; and
+- the bundled read-only card adds matching optional selectors while old card
+  configurations retain their existing rendered structure.
+
+This closes `A04` without adding dynamic components, commands, scanner polling,
+state fields, inferred units, or another scanner owner. The other Home Assistant
+gaps remain candidates for separate compatibility review rather than an implied
+entity backlog.

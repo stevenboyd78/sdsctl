@@ -258,12 +258,13 @@ components, all seven bounded scanner controls, Lovelace/configuration acceptanc
 recording and audio regression validation, and single-owner behavior physically
 validated through the repository-managed HAOS App.
 
-Current Home Assistant Discovery contains seventeen components: the original ten
-daemon/scanner/radio/audio/recording state and diagnostic components plus the
-seven bounded scanner controls. Site identity as an additional read-only state
-entity, scanner mode, destination health, richer scanner events, authenticated or
-TLS LAN gateways, remote daemon-backed CLI/TUI/GUI transports, and an optional
-host-network deployment variant remain separate future considerations.
+Current Home Assistant Discovery contains twenty-one fixed components: fourteen
+daemon/scanner/radio/audio/recording state and diagnostic components, including
+optional Site, Frequency, Modulation, and Service Type sensors, plus the seven
+bounded scanner controls. Broader mode-specific entity growth, destination
+health, richer scanner events, remote daemon-backed CLI/TUI/GUI transports, and
+an optional host-network deployment variant remain separate future
+considerations.
 
 HACS may still be evaluated later as an optional distribution channel, but it is
 not a dependency of the primary Home Assistant App repository distribution path.

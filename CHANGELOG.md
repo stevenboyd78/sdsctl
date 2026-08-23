@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add four fixed read-only Home Assistant MQTT Discovery sensors and matching
+  optional Lovelace card fields for Site, Frequency, Modulation, and Service
+  Type. Existing component identities and controls remain unchanged; each new
+  nullable mode-dependent sensor combines daemon and field availability so
+  omitted, null, or empty values cannot appear current.
 - Add optional finite SDS100 GSI/PSI battery telemetry to the complete shared
   radio snapshot, daemon API/SSE/generic MQTT payloads, and accessible web
   dashboard while preserving literal zero and clearing omitted values. Milestone

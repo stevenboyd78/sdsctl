@@ -18,8 +18,28 @@ const SDS200_ENTITY_FIELDS = Object.freeze([
     domain: "sensor",
   }),
   Object.freeze({
+    key: "site",
+    label: "Site",
+    domain: "sensor",
+  }),
+  Object.freeze({
     key: "channel",
     label: "Channel",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "frequency",
+    label: "Frequency",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "modulation",
+    label: "Modulation",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "service_type",
+    label: "Service type",
     domain: "sensor",
   }),
   Object.freeze({
@@ -525,6 +545,7 @@ class Sds200Card extends HTMLElement {
     const hierarchy = [
       this._stateText("system", ""),
       this._stateText("department", ""),
+      this._stateText("site", ""),
     ].filter(Boolean);
 
     if (hierarchy.length) {
@@ -573,9 +594,23 @@ class Sds200Card extends HTMLElement {
     for (const [field, label] of [
       ["signal", "Signal"],
       ["rssi", "RSSI"],
+      ["frequency", "Frequency"],
+      ["modulation", "Modulation"],
+      ["service_type", "Service type"],
       ["recording_status", "Recording status"],
       ["daemon_state", "Daemon"],
     ]) {
+      if (
+        [
+          "frequency",
+          "modulation",
+          "service_type",
+        ].includes(field) &&
+        !this._config.entities[field]
+      ) {
+        continue;
+      }
+
       details.append(
         this._renderRow(
           documentObject,

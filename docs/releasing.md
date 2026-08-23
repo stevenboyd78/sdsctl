@@ -256,9 +256,10 @@ distribution path on Home Assistant OS.
 7. Confirm `/local/sds200/sds200-card.js` is available, register it as a
    JavaScript Module when needed, and verify **SDS200 Scanner** appears in the
    card picker with a working graphical editor and read-only state rendering.
-8. Confirm the discovered SDS200 device exposes seventeen components: ten
+8. Confirm the discovered SDS200 device exposes twenty-one components: fourteen
    state/diagnostic components plus four Hold switches and Previous Channel,
-   Next Channel, and Reconnect Scanner buttons.
+   Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,
+   Frequency, Modulation, and Service Type sensors follow field availability.
 9. Exercise all four Hold scopes when meaningful, Previous and Next with a valid
    current channel selection, and Reconnect Scanner. Confirm Home Assistant state
    remains authoritative after each action and the App does not enable the

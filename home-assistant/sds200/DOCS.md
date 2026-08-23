@@ -93,7 +93,7 @@ inventory.
 
 ## MQTT entities
 
-The discovered SDS200 device contains seventeen components.
+The discovered SDS200 device contains twenty-one components.
 
 State and diagnostic entities:
 
@@ -101,12 +101,20 @@ State and diagnostic entities:
 - Scanner Connection
 - System
 - Department
+- Site
 - Channel
+- Frequency
+- Modulation
+- Service Type
 - Signal
 - RSSI
 - Audio
 - Recording
 - Recording Status
+
+Site, Frequency, Modulation, and Service Type are unavailable when the current
+scanner mode does not supply a non-empty value. Their fixed entities recover on
+the next applicable radio state.
 
 Scanner controls:
 

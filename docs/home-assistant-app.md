@@ -177,7 +177,7 @@ be played or downloaded through Ingress.
 
 The App enables the daemon's Home Assistant MQTT Discovery adapter plus the
 dedicated Milestone 20.12.3 Home Assistant control adapter. One SDS200 device
-contains seventeen components:
+contains twenty-one fixed components:
 
 | Component | Home Assistant platform |
 | --- | --- |
@@ -185,7 +185,11 @@ contains seventeen components:
 | Scanner Connection | binary sensor |
 | System | sensor |
 | Department | sensor |
+| Site | sensor |
 | Channel | sensor |
+| Frequency | sensor |
+| Modulation | sensor |
+| Service Type | sensor |
 | Signal | sensor |
 | RSSI | sensor |
 | Audio | binary sensor |
@@ -201,6 +205,12 @@ contains seventeen components:
 
 Device metadata includes Uniden as manufacturer plus scanner model and firmware
 when the daemon's authoritative snapshot contains them.
+
+Site, Frequency, Modulation, and Service Type use the existing generic radio
+state topic. Each sensor is unavailable when its nullable field is absent, null,
+or empty for the current scanner mode, so a prior value is not presented as
+current. The component inventory remains fixed; mode changes do not create or
+remove discovery components.
 
 The App keeps the generic daemon MQTT request-envelope command transport
 disabled. Home Assistant controls instead use seven exact dedicated QoS 0,
@@ -363,7 +373,11 @@ entities:
   scanner_connected: binary_sensor.REPLACE_ME
   system: sensor.REPLACE_ME
   department: sensor.REPLACE_ME
+  site: sensor.REPLACE_ME
   channel: sensor.REPLACE_ME
+  frequency: sensor.REPLACE_ME
+  modulation: sensor.REPLACE_ME
+  service_type: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -483,7 +497,9 @@ previous Local App installation:
   JavaScript Module;
 - confirm **SDS200 Scanner** appears in the card picker, its graphical editor
   works, and the read-only card renders the selected Discovery state entities;
-- confirm the SDS200 MQTT device exposes seventeen total components;
+- confirm the SDS200 MQTT device exposes twenty-one total components;
+- confirm Site, Frequency, Modulation, and Service Type become unavailable when
+  the current radio state omits them and recover on the next applicable state;
 - exercise System, Department, Site, and Channel Hold in both meaningful
   desired-state directions and confirm authoritative Home Assistant state;
 - exercise Previous Channel and Next Channel while a valid current TGID or

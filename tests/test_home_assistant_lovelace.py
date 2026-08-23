@@ -17,7 +17,11 @@ EXPECTED_ENTITY_FIELDS = {
     "scanner_connected",
     "system",
     "department",
+    "site",
     "channel",
+    "frequency",
+    "modulation",
+    "service_type",
     "signal",
     "rssi",
     "audio_running",
@@ -73,6 +77,18 @@ def test_lovelace_card_uses_builtin_graphical_configuration_form() -> None:
     assert "computeLabel:" in text
     assert "computeHelper:" in text
     assert "assertConfig:" in text
+
+
+def test_lovelace_card_preserves_old_layout_when_new_details_are_unselected() -> None:
+    text = card_text()
+
+    assert "!this._config.entities[field]" in text
+    for field in (
+        "frequency",
+        "modulation",
+        "service_type",
+    ):
+        assert f'"{field}",' in text
 
 
 def test_lovelace_card_uses_supported_state_context_subscription() -> None:
