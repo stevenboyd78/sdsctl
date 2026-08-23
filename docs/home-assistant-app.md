@@ -554,3 +554,32 @@ previous Local App installation:
 - confirm no second scanner, PSI, RTSP/RTP, or control owner appears; and
 - record the Home Assistant OS/Supervisor version and SDS200 firmware used for
   the acceptance evidence.
+
+### Milestone 26.7 development acceptance
+
+Milestone 26.7 development acceptance completed on August 23, 2026, using the
+merged `bb2e1af` source archive as the isolated Local App. The test host ran
+amd64 Home Assistant OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, and Docker
+29.6.2 with a physical SDS200 running firmware 1.26.01. The repository-managed
+App remained stopped so the source and runtime boundary stayed unambiguous.
+
+The acceptance run confirmed:
+
+- the Local App built, installed, and started at version 0.21.0 with the existing
+  scanner, MQTT-prefix, and media-recording options;
+- `/local/sds200/sds200-card.js` remained byte-identical to the merged source,
+  while `/local/sds200/sds200-display-card.js` installed and registered as a
+  separate JavaScript Module;
+- the physical SDS200 device exposed all twenty-one expected components and the
+  display card followed live scanner, radio, audio, recording, and daemon state;
+- the graphical editor rendered all five layouts, all three palettes, and both
+  Card and Viewport fit modes without an invalid-card placeholder;
+- the saved Detail/Color/Viewport card remained fully visible without internal
+  scrolling at 390x844 phone, 800x480 landscape, and 1920x1080 full-screen
+  reference sizes;
+- Ingress and ordered scanner updates recovered after a Local App restart; and
+- all six pre-existing finalized recordings remained available after restart.
+
+This development run does not replace the tagged repository-managed App test in
+the release checklist. Repeat that gate against the published release images
+before release completion.

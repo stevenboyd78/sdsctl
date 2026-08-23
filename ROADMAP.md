@@ -71,6 +71,22 @@ overflow, and no browser warnings or errors. The final invalid-configuration and
 accessibility pass rejected non-text titles, unknown fields, and malformed entity
 IDs while confirming every rendered field has an accessible label.
 
+Physical development acceptance completed on August 23, 2026, on amd64 Home
+Assistant OS 18.2 with Core 2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and a
+physical SDS200 running firmware 1.26.01. A verified archive from merged commit
+`bb2e1af` built and installed as the isolated Local App at version 0.21.0 while
+the repository-managed App remained stopped. Both Lovelace assets matched their
+source bytes, the existing compact resource remained unchanged, and the new
+display resource registered separately.
+
+The live graphical editor rendered all five layouts, all three palettes, and
+both fit modes over the twenty-one discovered SDS200 components. The saved
+Detail/Color/Viewport configuration remained fully visible without card-internal
+scrolling at 390x844, 800x480, and 1920x1080. Ingress, ordered scanner state,
+the single daemon owner, and six existing recordings recovered across a Local
+App restart. This completes Milestone 26.7 development acceptance without
+claiming the separate tagged repository-managed release acceptance.
+
 Do not add Home Assistant entities, scanner display customization writes,
 fullscreen browser permissions, copied Uniden assets, dynamic card code loading,
 new runtime dependencies, or Internet access in this slice. Rich
