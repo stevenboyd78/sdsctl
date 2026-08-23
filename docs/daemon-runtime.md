@@ -344,16 +344,18 @@ operation. Release is expressed idempotently as semantic
 Exact `scanner.volume_set` and `scanner.squelch_set` mutations run under the same
 daemon control lock. The connected model's typed command bounds reject invalid
 levels before mutation, including SDS200 volume above 29 or squelch above 19.
-After `VOL` or `SQL` acknowledges, the runtime reads `GSI` until its authoritative
-field matches the requested level and only then captures the completion snapshot.
-Literal zero remains a valid level; no percentage or cross-model meaning is
-inferred.
+After `VOL` or `SQL` acknowledges, the runtime reads the matching authoritative
+scalar getter until it matches the requested level and only then captures the
+completion snapshot. Literal zero remains a valid level; no percentage or
+cross-model meaning is inferred.
 
-Physical SDS200 firmware 1.26.01 UDP acceptance did not reach that acknowledgement:
-both setters timed out without changing GSI volume `0` or squelch `2` through
-direct and daemon-owned paths. The runtime correctly returned a bounded timeout
-and retained authoritative state. The level operations remain specification-backed
-and fixture-tested pending USB comparison or a transport-support decision.
+Firmware 1.26.01 acknowledges setters as `VOL,OK` and `SQL,OK`. The runtime then
+uses the matching scalar getter rather than `GSI`, because Menu-tree `GSI` may
+omit both levels, and merges the getter-confirmed value into shared state before
+capturing the completion snapshot. Physical SDS200 UDP acceptance passed through
+both direct and daemon-owned paths with reversible volume `0` to `1` to `0` and
+squelch `2` to `3` to `2` changes. A missing or mismatched getter response remains
+a bounded timeout rather than an optimistic state update.
 
 ## Dynamic PCM destinations
 

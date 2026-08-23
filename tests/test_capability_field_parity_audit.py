@@ -106,10 +106,10 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "## Milestone 26.8 physical semantic-control acceptance",
         "completed authoritative enter and release for System, Department, Site, and Channel",
         "original Utah County Simulcast site index `35297`",
-        "did not acknowledge `VOL,1`, `VOL,0`, `SQL,3`, or `SQL,2` over UDP",
-        "returned bounded timeouts",
-        "documented `V`/`Q` knob keys",
-        "No local USB scanner was available",
-        "rejects a physical UDP setter claim",
+        "volume `0` to `1` to `0` and squelch `2` to `3` to `2`",
+        "Firmware 1.26.01 returns `VOL,OK` and `SQL,OK`",
+        "Menu-tree `GSI` response may omit both levels",
+        "Daemon completion therefore uses the matching scalar getter",
+        "does not limit the accepted native UDP path",
     ):
         assert required in document or required in normalized

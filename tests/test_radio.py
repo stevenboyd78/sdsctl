@@ -510,6 +510,40 @@ def test_set_volume_range() -> None:
         raise AssertionError("Expected ValueError")
 
 
+@pytest.mark.parametrize(
+    ("setter", "level", "wire", "acknowledgement"),
+    [
+        ("set_volume", 1, "VOL,1", "VOL,OK"),
+        ("set_squelch", 3, "SQL,3", "SQL,OK"),
+    ],
+)
+def test_level_set_accepts_firmware_ok_acknowledgement(
+    setter: str,
+    level: int,
+    wire: str,
+    acknowledgement: str,
+) -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+
+    with radio:
+        def respond() -> None:
+            while transport.writes != ["MDL"]:
+                time.sleep(0.005)
+            transport.feed_line("MDL,SDS200")
+            while transport.writes != ["MDL", wire]:
+                time.sleep(0.005)
+            transport.feed_line(acknowledgement)
+
+        thread = threading.Thread(target=respond)
+        thread.start()
+        getattr(radio, setter)(level, timeout=1.0)
+        thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert transport.writes == ["MDL", wire]
+
+
 def test_health_check_returns_round_trip_metadata() -> None:
     transport = FakeTransport()
     radio = SDS200.from_transport(transport)

@@ -134,6 +134,10 @@ class _ScannerLike(Protocol):
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None: ...
 
+    def get_volume(self, *, timeout: float = 2.0) -> int: ...
+
+    def get_squelch(self, *, timeout: float = 2.0) -> int: ...
+
     def hold(
         self,
         target: str,
@@ -684,6 +688,7 @@ class DaemonRuntime:
             level,
             timeout=timeout,
             setter=self.scanner.set_volume,
+            getter=self.scanner.get_volume,
         )
 
     def set_squelch(
@@ -698,6 +703,7 @@ class DaemonRuntime:
             level,
             timeout=timeout,
             setter=self.scanner.set_squelch,
+            getter=self.scanner.get_squelch,
         )
 
     def _set_level(
@@ -708,6 +714,7 @@ class DaemonRuntime:
         *,
         timeout: float,
         setter: Callable[..., None],
+        getter: Callable[..., int],
     ) -> DaemonControlResult:
         if type(level) is not int:
             raise TypeError(f"Scanner {field} level must be an integer.")
@@ -721,8 +728,8 @@ class DaemonRuntime:
                     raise CommandTimeoutError(
                         f"Daemon {field} control timed out before state confirmation."
                     )
-                self.scanner.get_scanner_info(timeout=confirmation_timeout)
-                if getattr(self.scanner.state.snapshot, field) == level:
+                observed = getter(timeout=confirmation_timeout)
+                if observed == level:
                     return
 
         return self._execute_control(

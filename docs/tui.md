@@ -184,14 +184,15 @@ increments clamp to the connected model's capability bounds and likewise wait
 for authoritative state in direct and daemon-backed modes. Channel next/previous
 controls require a documented `TGID` or conventional-frequency index. The status
 panel reports queued, completed, unavailable, and failed controls without relying
-on color alone. SDS200 firmware 1.26.01 UDP testing found that documented
-`VOL`/`SQL` setters time out without mutation, so LAN-backed TUI users receive a
-failed control rather than an optimistic level; USB comparison remains pending.
-The connection, availability, and
-severity labels include `since HH:MM:SS` using local time; the timestamp changes only
-when the displayed state changes. Repeated unchanged PSI frames still refresh data
-freshness, preventing an active but stable channel from aging into a false stale state.
-Only an actual absence of valid PSI frames triggers automatic recovery.
+on color alone. SDS200 firmware 1.26.01 native-UDP testing physically accepted
+the shared direct and daemon-owned setter paths. The firmware returns `VOL,OK`
+and `SQL,OK`; completion uses matching scalar getters so it remains authoritative
+even when the current `GSI` screen omits the levels. The connection, availability,
+and severity labels include `since HH:MM:SS` using local time; the timestamp
+changes only when the displayed state changes. Repeated unchanged PSI frames
+still refresh data freshness, preventing an active but stable channel from aging
+into a false stale state. Only an actual absence of valid PSI frames triggers
+automatic recovery.
 
 While the full-screen TUI is active, package log records are routed to the bounded
 in-app panel instead of stderr so they cannot corrupt the Textual display. The

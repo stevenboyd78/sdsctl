@@ -57,6 +57,19 @@ def test_identical_state_does_not_emit_a_change() -> None:
     assert state.update(info) is None
 
 
+def test_authoritative_level_getter_merges_without_clearing_other_state() -> None:
+    state = RadioState()
+    state.update(ScannerInfoParser().parse("PSI", XML))
+
+    change = state.update_level("volume", 0)
+
+    assert change is not None
+    assert change.fields == frozenset(("volume",))
+    assert change.current.volume == 0
+    assert change.current.system == "Utah Communications Authority (P25)"
+    assert state.update_level("volume", 0) is None
+
+
 def test_battery_zero_is_distinct_from_absence_and_absence_clears_state() -> None:
     state = RadioState()
     with_battery = ScannerInfoParser().parse(

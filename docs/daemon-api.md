@@ -311,15 +311,16 @@ unchanged for compatibility.
 
 Exact level requests use `scanner.volume_set` and `scanner.squelch_set`. Literal
 zero is valid. The daemon executes the existing typed `VOL` or `SQL` command,
-then reads authoritative `GSI` until the requested field matches before returning
-success. These raw levels do not imply percentage, loudness, or mute state.
+accepts the firmware's `VOL,OK` or `SQL,OK` acknowledgement, and confirms the
+requested value with the matching authoritative scalar getter before returning
+success. The getter-confirmed level is merged into the shared completion snapshot
+without clearing unrelated state. These raw levels do not imply percentage,
+loudness, or mute state.
 
-This is a specification-backed and fixture-tested contract, not yet a physical
-SDS200 UDP claim. On firmware 1.26.01, both direct and daemon-owned LAN setters
-timed out before acknowledgement and authoritative GSI remained at the starting
-levels. Clients must handle `control_timeout`; no optimistic value is returned.
-Representative USB comparison or an explicit transport-support decision remains
-open.
+Physical SDS200 firmware 1.26.01 UDP acceptance passed through both direct and
+daemon-owned LAN paths. Each path changed and restored volume `0` to `1` to `0`
+and squelch `2` to `3` to `2`. No optimistic value is returned, and a missing or
+mismatched getter result still produces `control_timeout`.
 
 ### Reconnect availability
 
@@ -340,7 +341,8 @@ completed authoritatively:
 - semantic hold-state performs an authoritative `GSI` read before the gesture,
   then polls `GSI` until the requested hold field reaches the desired state;
 - exact volume and squelch controls validate the connected model's bounds and
-  poll authoritative `GSI` until the requested raw level is current;
+  poll the matching authoritative scalar getter until the requested raw level is
+  current;
 - reconnect must reopen the supported control transport and restore an active
   PSI interval before completion;
 - the runtime increments one control sequence after success; and

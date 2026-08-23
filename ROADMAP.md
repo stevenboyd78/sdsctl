@@ -69,14 +69,15 @@ release for all four hold scopes through both direct and daemon-owned paths. The
 scanner was restored to its starting hold states and Utah County site without a
 concurrent owner.
 
-The volume/squelch portion of the physical matrix did not pass on SDS200 UDP.
-Direct and daemon-owned `VOL`/`SQL` setters timed out without changing the
-authoritative starting values of volume `0` and squelch `2`. A bounded diagnostic
-of the documented `V`/`Q` knob keys plus one rotary step returned `KEY,OK` but
-also produced no state change. No local USB scanner was available for serial
-comparison. Milestone 26.8 therefore remains open pending representative USB
-acceptance or an explicit transport-support decision; the branch must not claim
-physical SDS200 UDP level mutation.
+The volume/squelch portion of the physical matrix also passes on SDS200 UDP.
+Firmware 1.26.01 acknowledges setters with `VOL,OK` and `SQL,OK`; the parser now
+preserves those acknowledgements instead of requiring a numeric getter response.
+Daemon completion uses the authoritative `VOL`/`SQL` getters because a Menu-tree
+`GSI` response may omit both levels. Direct and daemon-owned paths each changed
+and restored volume `0` to `1` to `0` and squelch `2` to `3` to `2`, with final
+getter verification after daemon shutdown. Milestone 26.8 implementation and
+physical acceptance are complete. USB setter comparison remains unperformed but
+does not limit the accepted native UDP path.
 
 Physical SDS200 acceptance must use reversible bounded changes: exercise enter
 and release for each meaningful hold scope, change and restore volume, change and

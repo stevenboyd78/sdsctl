@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
 from time import monotonic
-from typing import Self, TypeVar
+from typing import Literal, Self, TypeVar
 
 from .analysis_subscriptions import (
     AnalysisPublisher,
@@ -732,7 +732,9 @@ class SDSScanner:
         return self.execute(GetFirmware(), timeout=timeout)
 
     def get_volume(self, *, timeout: float = 2.0) -> int:
-        return self.execute(GetVolume(), timeout=timeout)
+        value = self.execute(GetVolume(), timeout=timeout)
+        self._publish_level_state("volume", value)
+        return value
 
     def _model_capabilities(self, *, timeout: float) -> ScannerCapabilities:
         model = self._model or self.get_model(timeout=timeout)
@@ -747,7 +749,9 @@ class SDSScanner:
         )
 
     def get_squelch(self, *, timeout: float = 2.0) -> int:
-        return self.execute(GetSquelch(), timeout=timeout)
+        value = self.execute(GetSquelch(), timeout=timeout)
+        self._publish_level_state("squelch", value)
+        return value
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
         SetSquelch(level)
@@ -1422,21 +1426,7 @@ class SDSScanner:
                 self._psi_active = True
             with self._health_lock:
                 self._last_state_at = info.received_at
-            change = self.state.update(info)
-            current = self.state.snapshot
-            self.events.emit("state", current)
-            if change is not None:
-                self.events.emit("state_change", change)
-                for field in change.fields:
-                    self.events.emit(f"state.{field}", getattr(change.current, field))
-                self._emit_event(
-                    "state.changed",
-                    "Scanner state changed",
-                    data={
-                        "fields": sorted(change.fields),
-                        "state": asdict(change.current),
-                    },
-                )
+            self._publish_state_change(self.state.update(info))
             self._publish(command, info)
             return
 
@@ -1454,6 +1444,30 @@ class SDSScanner:
         if packet.command in {"ERR", "NG"}:
             self._reject_pending(packet)
         self._publish(packet.command, response)
+
+    def _publish_level_state(
+        self,
+        field: Literal["volume", "squelch"],
+        value: int,
+    ) -> None:
+        self._publish_state_change(self.state.update_level(field, value))
+
+    def _publish_state_change(self, change: StateChange | None) -> None:
+        current = self.state.snapshot
+        self.events.emit("state", current)
+        if change is None:
+            return
+        self.events.emit("state_change", change)
+        for field in change.fields:
+            self.events.emit(f"state.{field}", getattr(change.current, field))
+        self._emit_event(
+            "state.changed",
+            "Scanner state changed",
+            data={
+                "fields": sorted(change.fields),
+                "state": asdict(change.current),
+            },
+        )
 
     def _reject_pending(self, packet: Packet) -> None:
         """Associate a generic ERR/NG response when exactly one command is pending."""

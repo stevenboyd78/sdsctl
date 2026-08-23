@@ -78,6 +78,9 @@ class FakeControlScanner:
         self.gsi_updates: list[tuple[str, str | None] | None] = []
         self.gsi_timeouts: list[float] = []
         self.level_calls: list[tuple[str, int, float]] = []
+        self.level_getter_calls: list[tuple[str, float]] = []
+        self.current_volume = 10
+        self.current_squelch = 2
 
     @property
     def endpoint(self) -> str:
@@ -184,11 +187,27 @@ class FakeControlScanner:
 
     def set_volume(self, level: int, *, timeout: float = 2.0) -> None:
         self.level_calls.append(("volume", level, timeout))
-        self.state._snapshot = replace(self.state.snapshot, volume=level)
+        self.current_volume = level
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
         self.level_calls.append(("squelch", level, timeout))
-        self.state._snapshot = replace(self.state.snapshot, squelch=level)
+        self.current_squelch = level
+
+    def get_volume(self, *, timeout: float = 2.0) -> int:
+        self.level_getter_calls.append(("volume", timeout))
+        self.state._snapshot = replace(
+            self.state.snapshot,
+            volume=self.current_volume,
+        )
+        return self.current_volume
+
+    def get_squelch(self, *, timeout: float = 2.0) -> int:
+        self.level_getter_calls.append(("squelch", timeout))
+        self.state._snapshot = replace(
+            self.state.snapshot,
+            squelch=self.current_squelch,
+        )
+        return self.current_squelch
 
     def hold(
         self,
@@ -346,7 +365,12 @@ def test_runtime_sets_and_confirms_exact_levels_under_control_lock() -> None:
         ("squelch", 19),
     ]
     assert all(0 < call[2] <= 0.5 for call in scanner.level_calls)
-    assert len(scanner.gsi_timeouts) == 2
+    assert [call[0] for call in scanner.level_getter_calls] == [
+        "volume",
+        "squelch",
+    ]
+    assert all(0 < call[1] <= 0.5 for call in scanner.level_getter_calls)
+    assert scanner.gsi_timeouts == []
 
     runtime.stop()
 
