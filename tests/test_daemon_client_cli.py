@@ -52,11 +52,15 @@ CONTROL_HELLO = {
     ],
     "control_operations": [
         DaemonApiOperation.SCANNER_HOLD.value,
+        DaemonApiOperation.SCANNER_HOLD_STATE.value,
+        DaemonApiOperation.SCANNER_VOLUME_SET.value,
+        DaemonApiOperation.SCANNER_SQUELCH_SET.value,
         DaemonApiOperation.SCANNER_NEXT.value,
         DaemonApiOperation.SCANNER_PREVIOUS.value,
         DaemonApiOperation.SCANNER_RECONNECT.value,
     ],
     "max_control_timeout": 2.0,
+    "max_hold_state_timeout": 4.0,
     "selected_version": DAEMON_API_VERSION,
 }
 
@@ -179,6 +183,45 @@ class FakeControlDaemonApiClient(FakeDaemonApiClient):
             )
         )
         return dict(CONTROL_RESULT)
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float,
+    ) -> dict[str, object]:
+        self.requests.append(
+            (
+                DaemonApiOperation.SCANNER_HOLD_STATE,
+                {"scope": scope, "held": held, "timeout": timeout},
+            )
+        )
+        result = dict(CONTROL_RESULT)
+        result["operation"] = DaemonApiOperation.SCANNER_HOLD_STATE.value
+        return result
+
+    def set_volume(self, level: int, *, timeout: float) -> dict[str, object]:
+        self.requests.append(
+            (
+                DaemonApiOperation.SCANNER_VOLUME_SET,
+                {"level": level, "timeout": timeout},
+            )
+        )
+        result = dict(CONTROL_RESULT)
+        result["operation"] = DaemonApiOperation.SCANNER_VOLUME_SET.value
+        return result
+
+    def set_squelch(self, level: int, *, timeout: float) -> dict[str, object]:
+        self.requests.append(
+            (
+                DaemonApiOperation.SCANNER_SQUELCH_SET,
+                {"level": level, "timeout": timeout},
+            )
+        )
+        result = dict(CONTROL_RESULT)
+        result["operation"] = DaemonApiOperation.SCANNER_SQUELCH_SET.value
+        return result
 
     def next(
         self,
@@ -370,6 +413,19 @@ def test_daemon_client_parser_accepts_safe_control_options() -> None:
     assert args.count == 3
     assert args.control_timeout == 1.5
     assert args.json is True
+
+    hold_state = cli.build_parser().parse_args(
+        ["daemon-client", "hold-state", "channel", "off", "--json"]
+    )
+    assert hold_state.scope == "channel"
+    assert hold_state.state == "off"
+    assert hold_state.control_timeout == 4.0
+
+    volume = cli.build_parser().parse_args(
+        ["daemon-client", "volume", "0", "--json"]
+    )
+    assert volume.level == 0
+    assert volume.control_timeout == 2.0
 
 
 def test_daemon_client_status_prints_human_summary(
@@ -679,6 +735,55 @@ def test_daemon_client_hold_prints_authoritative_completion(
             },
         )
     ]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "operation", "params"),
+    [
+        (
+            ["hold-state", "site", "off", "--control-timeout", "3.5"],
+            DaemonApiOperation.SCANNER_HOLD_STATE,
+            {"scope": "site", "held": False, "timeout": 3.5},
+        ),
+        (
+            ["volume", "0", "--control-timeout", "1.5"],
+            DaemonApiOperation.SCANNER_VOLUME_SET,
+            {"level": 0, "timeout": 1.5},
+        ),
+        (
+            ["squelch", "19", "--control-timeout", "1.5"],
+            DaemonApiOperation.SCANNER_SQUELCH_SET,
+            {"level": 19, "timeout": 1.5},
+        ),
+    ],
+)
+def test_daemon_client_exact_controls_print_json_completion(
+    arguments: list[str],
+    operation: DaemonApiOperation,
+    params: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    FakeControlDaemonApiClient.instances.clear()
+    monkeypatch.setattr(cli, "DaemonApiClient", FakeControlDaemonApiClient)
+
+    assert (
+        cli.main(
+            [
+                "daemon-client",
+                "--socket-path",
+                "/tmp/sdsctl-daemon.sock",
+                *arguments,
+                "--json",
+            ],
+            environ={},
+        )
+        == 0
+    )
+
+    assert json.loads(capsys.readouterr().out)["operation"] == operation.value
+    client = FakeControlDaemonApiClient.instances[0]
+    assert client.requests == [(operation, params)]
 
 
 def test_daemon_client_next_prints_json_completion(

@@ -16,6 +16,13 @@ package remains `sds200`, and applications should use the model-neutral
 Native LAN discovery, network profiles, USB/Ethernet fallback, and RTSP/RTP
 audio remain SDS200-only. The handheld models use USB serial control.
 
+The numeric Volume and Squelch columns encode model ranges. On SDS200 firmware
+1.26.01, physical native-UDP acceptance passed through direct and daemon-owned
+paths: volume changed `0` to `1` to `0`, squelch changed `2` to `3` to `2`, and
+matching scalar getters confirmed every requested and restored level. The
+firmware's setter acknowledgements are `VOL,OK` and `SQL,OK`. USB setter
+comparison remains unperformed and does not limit the accepted native UDP path.
+
 ## Model detection and selection
 
 The `MDL` command is used to verify the connected scanner. SDS150 firmware

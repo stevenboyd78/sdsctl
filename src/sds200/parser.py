@@ -73,6 +73,12 @@ class PacketParser:
             return FirmwareResponse(version=self._required(packet, 0), packet=packet)
         if packet.command == "GCS":
             return self._parse_charge_status(packet)
+        if (
+            packet.command in {"VOL", "SQL"}
+            and packet.fields
+            and packet.fields[0].strip().upper() == "OK"
+        ):
+            return packet
         if packet.command in {"VOL", "SQL"} and packet.fields:
             return ValueResponse(
                 command=packet.command,

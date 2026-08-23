@@ -53,6 +53,8 @@ class DaemonApiOperation(StrEnum):
     SCANNER_NEXT = "scanner.next"
     SCANNER_PREVIOUS = "scanner.previous"
     SCANNER_RECONNECT = "scanner.reconnect"
+    SCANNER_VOLUME_SET = "scanner.volume_set"
+    SCANNER_SQUELCH_SET = "scanner.squelch_set"
 
 
 DAEMON_API_READ_ONLY_OPERATIONS = (
@@ -77,6 +79,8 @@ DAEMON_API_CONTROL_OPERATIONS = (
     DaemonApiOperation.SCANNER_NEXT,
     DaemonApiOperation.SCANNER_PREVIOUS,
     DaemonApiOperation.SCANNER_RECONNECT,
+    DaemonApiOperation.SCANNER_VOLUME_SET,
+    DaemonApiOperation.SCANNER_SQUELCH_SET,
 )
 
 
@@ -163,6 +167,20 @@ class _ControlRuntimeLike(_RuntimeLike, Protocol):
 
     def reconnect(
         self,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> _ControlResultLike: ...
+
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> _ControlResultLike: ...
+
+    def set_squelch(
+        self,
+        level: int,
         *,
         timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
     ) -> _ControlResultLike: ...
@@ -672,6 +690,16 @@ class DaemonReadOnlyApi:
                 return runtime.reconnect(
                     timeout=_control_timeout(params)
                 ).as_dict()
+            if operation is DaemonApiOperation.SCANNER_VOLUME_SET:
+                return runtime.set_volume(
+                    _control_level(params),
+                    timeout=_control_timeout(params),
+                ).as_dict()
+            if operation is DaemonApiOperation.SCANNER_SQUELCH_SET:
+                return runtime.set_squelch(
+                    _control_level(params),
+                    timeout=_control_timeout(params),
+                ).as_dict()
         except DaemonControlBusyError:
             raise _ControlDispatchError(
                 DaemonApiErrorCode.CONTROL_BUSY,
@@ -801,6 +829,19 @@ def _validate_control_params(
         _control_timeout(params)
         return
 
+    if operation in {
+        DaemonApiOperation.SCANNER_VOLUME_SET,
+        DaemonApiOperation.SCANNER_SQUELCH_SET,
+    }:
+        unexpected = sorted(set(params) - {"level", "timeout"})
+        if unexpected:
+            raise _ControlParameterError(
+                f"{operation.value} received unexpected parameters: {unexpected!r}."
+            )
+        _control_level(params)
+        _control_timeout(params)
+        return
+
     allowed = {"target", "first", "second", "timeout"}
     if operation in {
         DaemonApiOperation.SCANNER_NEXT,
@@ -836,6 +877,15 @@ def _hold_state_scope(params: Mapping[str, object]) -> str:
             f"Scanner hold-state scope must be one of: {choices}."
         )
     return normalized
+
+
+def _control_level(params: Mapping[str, object]) -> int:
+    value = params.get("level")
+    if type(value) is not int:
+        raise _ControlParameterError("Scanner level must be an integer.")
+    if value < 0:
+        raise _ControlParameterError("Scanner level must not be negative.")
+    return value
 
 
 def _hold_state_held(params: Mapping[str, object]) -> bool:

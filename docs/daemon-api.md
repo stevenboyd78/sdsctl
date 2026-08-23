@@ -255,6 +255,8 @@ scanner command string.
 | `scanner.next` | Required `target`; optional `first`, `second`, `count`, and `timeout` |
 | `scanner.previous` | Required `target`; optional `first`, `second`, `count`, and `timeout` |
 | `scanner.reconnect` | Optional `timeout` only |
+| `scanner.volume_set` | Required non-negative integer `level`; optional `timeout` |
+| `scanner.squelch_set` | Required non-negative integer `level`; optional `timeout` |
 
 Navigation targets are limited to:
 
@@ -277,7 +279,10 @@ integers, or `null`, but may not contain commas or line breaks. Navigation
 Compatibility indexed navigation and reconnect `timeout` values default to
 `2.0` seconds and may not exceed `max_control_timeout`. Semantic
 `scanner.hold_state` defaults to `4.0` seconds and may not exceed
-`max_hold_state_timeout`.
+`max_hold_state_timeout`. Exact volume and squelch operations use the normal
+two-second control deadline. The scanner model's typed command validation
+provides the upper bound; the API does not assume that SDS100/SDS150 and SDS200
+share one range.
 
 Example indexed hold request:
 
@@ -304,6 +309,19 @@ There is no separate `scanner.resume` operation and no generic public
 `scanner.hold_state(..., held=false)`. The indexed `scanner.hold` contract remains
 unchanged for compatibility.
 
+Exact level requests use `scanner.volume_set` and `scanner.squelch_set`. Literal
+zero is valid. The daemon executes the existing typed `VOL` or `SQL` command,
+accepts the firmware's `VOL,OK` or `SQL,OK` acknowledgement, and confirms the
+requested value with the matching authoritative scalar getter before returning
+success. The getter-confirmed level is merged into the shared completion snapshot
+without clearing unrelated state. These raw levels do not imply percentage,
+loudness, or mute state.
+
+Physical SDS200 firmware 1.26.01 UDP acceptance passed through both direct and
+daemon-owned LAN paths. Each path changed and restored volume `0` to `1` to `0`
+and squelch `2` to `3` to `2`. No optimistic value is returned, and a missing or
+mismatched getter result still produces `control_timeout`.
+
 ### Reconnect availability
 
 `scanner.reconnect` is supported only when the daemon directly owns an SDS200
@@ -322,6 +340,9 @@ completed authoritatively:
 - navigation operations require the matching scanner `OK` acknowledgement;
 - semantic hold-state performs an authoritative `GSI` read before the gesture,
   then polls `GSI` until the requested hold field reaches the desired state;
+- exact volume and squelch controls validate the connected model's bounds and
+  poll the matching authoritative scalar getter until the requested raw level is
+  current;
 - reconnect must reopen the supported control transport and restore an active
   PSI interval before completion;
 - the runtime increments one control sequence after success; and
@@ -394,6 +415,9 @@ The explicit CLI client uses the daemon API without opening scanner hardware:
 sdsctl daemon-client status
 sdsctl daemon-client snapshot
 sdsctl daemon-client hold TGID 12345
+sdsctl daemon-client hold-state channel off
+sdsctl daemon-client volume 10
+sdsctl daemon-client squelch 2
 sdsctl daemon-client next TGID 12345 --count 1
 sdsctl daemon-client previous TGID 12345 --count 1
 sdsctl daemon-client reconnect

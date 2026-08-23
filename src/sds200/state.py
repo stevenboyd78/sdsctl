@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from enum import StrEnum
 from threading import RLock
+from typing import Literal
 
 from .models import ScannerInfo
 
@@ -171,3 +172,27 @@ class RadioState:
         if not changed:
             return None
         return StateChange(previous=previous, current=current, fields=changed)
+
+    def update_level(
+        self,
+        field: Literal["volume", "squelch"],
+        value: int,
+    ) -> StateChange | None:
+        """Merge one authoritative scalar getter into the shared snapshot."""
+
+        if type(value) is not int:
+            raise TypeError(f"Scanner {field} level must be an integer.")
+        with self._lock:
+            previous = self._snapshot
+            if getattr(previous, field) == value:
+                return None
+            if field == "volume":
+                current = replace(previous, volume=value)
+            else:
+                current = replace(previous, squelch=value)
+            self._snapshot = current
+        return StateChange(
+            previous=previous,
+            current=current,
+            fields=frozenset((field,)),
+        )

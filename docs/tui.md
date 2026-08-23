@@ -167,25 +167,32 @@ Keyboard shortcuts:
 - `Esc`: stop saved playback, restore enabled live playback, and close the library
 - `Ctrl+P`: open Textual's Command Palette
 - `?`: show or hide the complete keyboard reference
-- `H`: hold the current indexed channel
-- `S`: hold the current indexed system
-- `D`: hold the current indexed department
-- `I`: hold the current indexed site
+- `H`: toggle the current channel between explicit hold and release
+- `S`: toggle the current system between explicit hold and release
+- `D`: toggle the current department between explicit hold and release
+- `I`: toggle the current site between explicit hold and release
 - `N`: move to the next indexed channel
 - `P`: move to the previous indexed channel
 - `+` / `-`: raise or lower volume
 - `]` / `[`: raise or lower squelch
 
 Scanner commands execute sequentially on a background worker so a slow command
-round trip does not block the Textual event loop. Hold controls use the documented
-system, department, site, TGID, or conventional-frequency indexes from live GSI/PSI
-state. Channel next/previous controls require a documented `TGID` or conventional
-frequency index. The status panel reports queued, completed, unavailable, and
-failed controls without relying on color alone. The connection, availability, and
-severity labels include `since HH:MM:SS` using local time; the timestamp changes only
-when the displayed state changes. Repeated unchanged PSI frames still refresh data
-freshness, preventing an active but stable channel from aging into a false stale state.
-Only an actual absence of valid PSI frames triggers automatic recovery.
+round trip does not block the Textual event loop. Hold controls derive the exact
+opposite desired state from live GSI/PSI and wait for scanner-confirmed state;
+they do not optimistically rewrite the local snapshot. Volume and squelch
+increments clamp to the connected model's capability bounds and likewise wait
+for authoritative state in direct and daemon-backed modes. Channel next/previous
+controls require a documented `TGID` or conventional-frequency index. The status
+panel reports queued, completed, unavailable, and failed controls without relying
+on color alone. SDS200 firmware 1.26.01 native-UDP testing physically accepted
+the shared direct and daemon-owned setter paths. The firmware returns `VOL,OK`
+and `SQL,OK`; completion uses matching scalar getters so it remains authoritative
+even when the current `GSI` screen omits the levels. The connection, availability,
+and severity labels include `since HH:MM:SS` using local time; the timestamp
+changes only when the displayed state changes. Repeated unchanged PSI frames
+still refresh data freshness, preventing an active but stable channel from aging
+into a false stale state. Only an actual absence of valid PSI frames triggers
+automatic recovery.
 
 While the full-screen TUI is active, package log records are routed to the bounded
 in-app panel instead of stderr so they cannot corrupt the Textual display. The

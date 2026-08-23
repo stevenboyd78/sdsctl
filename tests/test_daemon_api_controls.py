@@ -150,6 +150,22 @@ class FakeControlRuntime:
             timeout=timeout,
         )
 
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> FakeControlResult:
+        return self._control("scanner.volume_set", level, timeout=timeout)
+
+    def set_squelch(
+        self,
+        level: int,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> FakeControlResult:
+        return self._control("scanner.squelch_set", level, timeout=timeout)
+
     def _control(
         self,
         operation: str,
@@ -330,6 +346,36 @@ def test_hold_state_uses_strict_semantic_parameters() -> None:
 
 
 @pytest.mark.parametrize(
+    ("operation", "expected"),
+    [
+        (
+            DaemonApiOperation.SCANNER_VOLUME_SET,
+            ("scanner.volume_set", (0,), {"timeout": 1.5}),
+        ),
+        (
+            DaemonApiOperation.SCANNER_SQUELCH_SET,
+            ("scanner.squelch_set", (19,), {"timeout": 1.5}),
+        ),
+    ],
+)
+def test_level_controls_use_exact_non_negative_integers(
+    operation: DaemonApiOperation,
+    expected: tuple[str, tuple[object, ...], dict[str, object]],
+) -> None:
+    runtime = FakeControlRuntime()
+    level = 0 if operation is DaemonApiOperation.SCANNER_VOLUME_SET else 19
+    response = DaemonReadOnlyApi(runtime).handle_payload(
+        request_payload(
+            operation.value,
+            params={"level": level, "timeout": 1.5},
+        )
+    )
+
+    assert response.error is None
+    assert runtime.calls == [expected]
+
+
+@pytest.mark.parametrize(
     ("operation", "params", "expected"),
     [
         (
@@ -492,6 +538,13 @@ def test_reconnect_accepts_only_a_bounded_timeout() -> None:
         (
             DaemonApiOperation.SCANNER_RECONNECT,
             {"unexpected": True},
+        ),
+        (DaemonApiOperation.SCANNER_VOLUME_SET, {}),
+        (DaemonApiOperation.SCANNER_VOLUME_SET, {"level": True}),
+        (DaemonApiOperation.SCANNER_VOLUME_SET, {"level": -1}),
+        (
+            DaemonApiOperation.SCANNER_SQUELCH_SET,
+            {"level": 2, "unexpected": True},
         ),
     ],
 )

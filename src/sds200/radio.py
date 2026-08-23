@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from math import isfinite
 from pathlib import Path
 from time import monotonic
-from typing import Self, TypeVar
+from typing import Literal, Self, TypeVar
 
 from .analysis_subscriptions import (
     AnalysisPublisher,
@@ -127,6 +127,26 @@ from .xml_protocol import (
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
+
+_HOLD_STATE_FIELDS = {
+    "system": "system_hold",
+    "department": "department_hold",
+    "site": "site_hold",
+    "channel": "channel_hold",
+}
+_HOLD_STATE_INDEX_FIELDS = {
+    "system": "system_index",
+    "department": "department_index",
+    "site": "site_index",
+    "channel": "channel_index",
+}
+_HOLD_STATE_KEYS = {
+    "system": ("A",),
+    "department": ("B",),
+    "site": ("F", "B"),
+    "channel": ("C",),
+}
+_SCANNER_INDEX_UNAVAILABLE = (1 << 32) - 1
 
 # Physical SDS200 1.26.01 testing observed that an otherwise healthy network PSI
 # push stops after roughly 184 seconds. Refresh the active push conservatively
@@ -712,7 +732,9 @@ class SDSScanner:
         return self.execute(GetFirmware(), timeout=timeout)
 
     def get_volume(self, *, timeout: float = 2.0) -> int:
-        return self.execute(GetVolume(), timeout=timeout)
+        value = self.execute(GetVolume(), timeout=timeout)
+        self._publish_level_state("volume", value)
+        return value
 
     def _model_capabilities(self, *, timeout: float) -> ScannerCapabilities:
         model = self._model or self.get_model(timeout=timeout)
@@ -727,7 +749,9 @@ class SDSScanner:
         )
 
     def get_squelch(self, *, timeout: float = 2.0) -> int:
-        return self.execute(GetSquelch(), timeout=timeout)
+        value = self.execute(GetSquelch(), timeout=timeout)
+        self._publish_level_state("squelch", value)
+        return value
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
         SetSquelch(level)
@@ -749,6 +773,71 @@ class SDSScanner:
                 f"{capabilities.model} does not provide hold-related key control."
             )
         self.execute(PressKey(key_code), timeout=timeout)
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> None:
+        """Set one hold scope to an exact scanner-confirmed desired state."""
+
+        if not isinstance(scope, str):
+            raise TypeError("Scanner hold scope must be a string.")
+        normalized_scope = scope.strip().lower()
+        if normalized_scope not in _HOLD_STATE_FIELDS:
+            choices = ", ".join(_HOLD_STATE_FIELDS)
+            raise ValueError(f"Scanner hold scope must be one of: {choices}.")
+        if type(held) is not bool:
+            raise TypeError("Scanner held state must be a boolean.")
+
+        field = _HOLD_STATE_FIELDS[normalized_scope]
+        index_field = _HOLD_STATE_INDEX_FIELDS[normalized_scope]
+        desired = "On" if held else "Off"
+        deadline = monotonic() + _require_positive_timeout(
+            timeout,
+            label="Scanner hold-state timeout",
+        )
+
+        def authoritative_state() -> RadioStateSnapshot:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise CommandTimeoutError(
+                    "Scanner hold-state control timed out before state confirmation."
+                )
+            self.get_scanner_info(timeout=remaining)
+            return self.state.snapshot
+
+        initial = authoritative_state()
+        current = getattr(initial, field)
+        if current not in {"On", "Off"}:
+            raise UnsupportedScannerFeatureError(
+                f"Current {normalized_scope} hold state is unavailable."
+            )
+        if current == desired:
+            return
+
+        if held:
+            index = getattr(initial, index_field)
+            if (
+                type(index) is not int
+                or not 0 <= index < _SCANNER_INDEX_UNAVAILABLE
+            ):
+                raise UnsupportedScannerFeatureError(
+                    f"Current {normalized_scope} selection is unavailable."
+                )
+
+        for key_code in _HOLD_STATE_KEYS[normalized_scope]:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise CommandTimeoutError(
+                    "Scanner hold-state control timed out before key execution."
+                )
+            self.press_hold_key(key_code, timeout=remaining)
+
+        while getattr(authoritative_state(), field) != desired:
+            pass
 
     def hold(
         self,
@@ -1337,21 +1426,7 @@ class SDSScanner:
                 self._psi_active = True
             with self._health_lock:
                 self._last_state_at = info.received_at
-            change = self.state.update(info)
-            current = self.state.snapshot
-            self.events.emit("state", current)
-            if change is not None:
-                self.events.emit("state_change", change)
-                for field in change.fields:
-                    self.events.emit(f"state.{field}", getattr(change.current, field))
-                self._emit_event(
-                    "state.changed",
-                    "Scanner state changed",
-                    data={
-                        "fields": sorted(change.fields),
-                        "state": asdict(change.current),
-                    },
-                )
+            self._publish_state_change(self.state.update(info))
             self._publish(command, info)
             return
 
@@ -1369,6 +1444,30 @@ class SDSScanner:
         if packet.command in {"ERR", "NG"}:
             self._reject_pending(packet)
         self._publish(packet.command, response)
+
+    def _publish_level_state(
+        self,
+        field: Literal["volume", "squelch"],
+        value: int,
+    ) -> None:
+        self._publish_state_change(self.state.update_level(field, value))
+
+    def _publish_state_change(self, change: StateChange | None) -> None:
+        current = self.state.snapshot
+        self.events.emit("state", current)
+        if change is None:
+            return
+        self.events.emit("state_change", change)
+        for field in change.fields:
+            self.events.emit(f"state.{field}", getattr(change.current, field))
+        self._emit_event(
+            "state.changed",
+            "Scanner state changed",
+            data={
+                "fields": sorted(change.fields),
+                "state": asdict(change.current),
+            },
+        )
 
     def _reject_pending(self, packet: Packet) -> None:
         """Associate a generic ERR/NG response when exactly one command is pending."""

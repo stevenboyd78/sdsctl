@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from threading import Event, RLock
 
 from rich.text import Text
@@ -36,6 +37,8 @@ class FakeControlRadio:
         self.calls: list[tuple[object, ...]] = []
         self.fail_hold = False
         self._lock = RLock()
+        self._snapshot = snapshot_from_scanner_info(initial)
+        self._state_callbacks: list[Callable[[RadioStateSnapshot], None]] = []
         self._connection_callbacks: list[Callable[[bool], None]] = []
 
     def reconnect(self) -> None:
@@ -55,6 +58,23 @@ class FakeControlRadio:
         if self.fail_hold:
             raise RuntimeError("hold rejected")
         self.calls.append(("hold", target, first, second))
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> None:
+        del timeout
+        if self.fail_hold:
+            raise RuntimeError("hold rejected")
+        self.calls.append(("hold-state", scope, held))
+        self._snapshot = replace(
+            self._snapshot,
+            **{f"{scope}_hold": "On" if held else "Off"},
+        )
+        self._emit_state()
 
     def next(
         self,
@@ -83,17 +103,28 @@ class FakeControlRadio:
     def set_volume(self, level: int, *, timeout: float = 2.0) -> None:
         del timeout
         self.calls.append(("volume", level))
+        self._snapshot = replace(self._snapshot, volume=level)
+        self._emit_state()
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
         del timeout
         self.calls.append(("squelch", level))
+        self._snapshot = replace(self._snapshot, squelch=level)
+        self._emit_state()
 
     def on_state(
         self,
         callback: Callable[[RadioStateSnapshot], None],
     ) -> Unsubscribe:
-        del callback
-        return lambda: None
+        with self._lock:
+            self._state_callbacks.append(callback)
+
+        def unsubscribe() -> None:
+            with self._lock:
+                if callback in self._state_callbacks:
+                    self._state_callbacks.remove(callback)
+
+        return unsubscribe
 
     def on_connection(self, callback: Callable[[bool], None]) -> Unsubscribe:
         with self._lock:
@@ -122,7 +153,13 @@ class FakeControlRadio:
     ) -> Iterator[RadioStateSnapshot]:
         del interval_ms, timeout
         self.started.set()
-        yield snapshot_from_scanner_info(self.initial)
+        yield self._snapshot
+
+    def _emit_state(self) -> None:
+        with self._lock:
+            callbacks = tuple(self._state_callbacks)
+        for callback in callbacks:
+            callback(self._snapshot)
 
     def emit_connection(self, connected: bool) -> None:
         self.connected = connected
@@ -183,10 +220,10 @@ def test_tui_controls_execute_in_order_and_update_status() -> None:
             await pilot.pause()
 
             assert radio.calls == [
-                ("hold", "TGID", 400, None),
-                ("hold", "SYS", 100, None),
-                ("hold", "DEPT", 200, 100),
-                ("hold", "SITE", 300, None),
+                ("hold-state", "channel", True),
+                ("hold-state", "system", True),
+                ("hold-state", "department", True),
+                ("hold-state", "site", True),
                 ("next", "TGID", 400, 1),
                 ("previous", "TGID", 400, 1),
                 ("volume", 11),

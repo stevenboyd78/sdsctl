@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_7_display_card_contract() -> None:
+def test_roadmap_records_milestone_26_8_semantic_control_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,37 +132,42 @@ def test_roadmap_records_milestone_26_7_display_card_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.7 — Responsive scanner-display Home Assistant card themes",
-        "Milestone 26.6 is closed",
-        "fourteen fixed state/diagnostic components",
-        "seven unchanged bounded controls",
-        "`SDS200 Display` Lovelace card",
-        "Uniden SDS200 Owner's Manual, pages 38-39",
-        "Preserve the existing `sds200-card.js` asset",
-        "must not copy manual artwork, branding, or fonts",
-        "Simple, Detail, Search/Close Call, Weather, and Tone-Out",
-        "Color, Black on White, and White on Black",
-        "Use only the existing fourteen Home Assistant state/diagnostic entities",
-        "read-only and transport-free",
-        "supported `states` context",
-        "must not add MQTT discovery components, topics, scanner commands",
-        "one bounded 4:3 display surface",
-        "fluid typography, text truncation, and no internal scrolling",
-        "Viewport fit",
-        "390-pixel phone viewport through 800x480 and 1920x1080",
-        "`sds200-display-card.js`",
-        "atomically install",
-        "registration of both `/local` JavaScript module resources",
-        "zero horizontal or vertical display overflow",
-        "Milestone 26.7 implementation and host-independent acceptance are complete",
-        "all forty-five viewport-fit layout/palette/reference-viewport combinations",
-        "all fifteen Card-fit layout/palette combinations",
-        "every rendered field has an accessible label",
-        "Do not add Home Assistant entities, scanner display customization writes",
-        "copied Uniden assets",
-        "new runtime dependencies, or Internet access",
-        "semantic-control finding `A05`",
-        "physical SDS150 validation remain separate work",
+        "### Milestone 26.8 — Explicit semantic-control parity",
+        "Milestone 26.7 is closed",
+        "capability-audit finding `A05`",
+        "direct CLI, daemon-client CLI, direct Textual TUI",
+        "daemon-backed Textual TUI",
+        "one exact desired-state hold operation",
+        "System, Department, Site, and Channel",
+        "avoid a key press when the requested state is already current",
+        "require a valid current index before entering hold",
+        "confirm the resulting state before reporting success",
+        "exact bounded volume and squelch set operations",
+        "model-specific ranges before scanner mutation",
+        "literal zero",
+        "versioned semantic operations",
+        "existing bounded request and response framing",
+        "one daemon control lock",
+        "return an authoritative completion snapshot",
+        "no second PSI reader, socket, worker, or state cache",
+        "preserve existing indexed `hold`, `next`",
+        "read-only daemon compatibility negotiation",
+        "Milestone 26.8 implementation and host-independent acceptance are complete",
+        "completed enter and release for all four hold scopes",
+        "volume/squelch portion of the physical matrix also passes on SDS200 UDP",
+        "Firmware 1.26.01 acknowledges setters with `VOL,OK` and `SQL,OK`",
+        "Daemon completion uses the authoritative `VOL`/`SQL` getters",
+        "final getter verification after daemon shutdown",
+        "does not limit the accepted native UDP path",
+        "Physical SDS200 acceptance must use reversible bounded changes",
+        "change and restore volume",
+        "change and restore squelch",
+        "without concurrent scanner owners",
+        "Do not add remote daemon networking",
+        "Home Assistant entities or topics",
+        "raw-key passthrough",
+        "new runtime dependencies",
+        "physical SDS150 claims",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

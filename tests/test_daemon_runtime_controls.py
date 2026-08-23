@@ -37,6 +37,8 @@ class FakeRadioState:
             site_hold="On",
             channel="Primary",
             channel_hold="On",
+            volume=10,
+            squelch=2,
         )
 
     @property
@@ -75,6 +77,10 @@ class FakeControlScanner:
         self.hold_key_codes: list[str] = []
         self.gsi_updates: list[tuple[str, str | None] | None] = []
         self.gsi_timeouts: list[float] = []
+        self.level_calls: list[tuple[str, int, float]] = []
+        self.level_getter_calls: list[tuple[str, float]] = []
+        self.current_volume = 10
+        self.current_squelch = 2
 
     @property
     def endpoint(self) -> str:
@@ -178,6 +184,30 @@ class FakeControlScanner:
     ) -> None:
         self.hold_key_codes.append(key_code)
         self._control("key", key_code, timeout)
+
+    def set_volume(self, level: int, *, timeout: float = 2.0) -> None:
+        self.level_calls.append(("volume", level, timeout))
+        self.current_volume = level
+
+    def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
+        self.level_calls.append(("squelch", level, timeout))
+        self.current_squelch = level
+
+    def get_volume(self, *, timeout: float = 2.0) -> int:
+        self.level_getter_calls.append(("volume", timeout))
+        self.state._snapshot = replace(
+            self.state.snapshot,
+            volume=self.current_volume,
+        )
+        return self.current_volume
+
+    def get_squelch(self, *, timeout: float = 2.0) -> int:
+        self.level_getter_calls.append(("squelch", timeout))
+        self.state._snapshot = replace(
+            self.state.snapshot,
+            squelch=self.current_squelch,
+        )
+        return self.current_squelch
 
     def hold(
         self,
@@ -314,6 +344,33 @@ def test_runtime_executes_existing_typed_controls_with_ordered_results() -> None
     ]
     assert len(scanner.reconnect_timeouts) == 1
     assert 0 < scanner.reconnect_timeouts[0] <= 1.5
+
+    runtime.stop()
+
+
+def test_runtime_sets_and_confirms_exact_levels_under_control_lock() -> None:
+    scanner = FakeControlScanner([])
+    runtime = make_runtime(scanner)
+    runtime.start()
+
+    volume = runtime.set_volume(0, timeout=0.5)
+    squelch = runtime.set_squelch(19, timeout=0.5)
+
+    assert volume.operation is DaemonControlOperation.VOLUME_SET
+    assert squelch.operation is DaemonControlOperation.SQUELCH_SET
+    assert volume.snapshot.radio_state.volume == 0
+    assert squelch.snapshot.radio_state.squelch == 19
+    assert [call[:2] for call in scanner.level_calls] == [
+        ("volume", 0),
+        ("squelch", 19),
+    ]
+    assert all(0 < call[2] <= 0.5 for call in scanner.level_calls)
+    assert [call[0] for call in scanner.level_getter_calls] == [
+        "volume",
+        "squelch",
+    ]
+    assert all(0 < call[1] <= 0.5 for call in scanner.level_getter_calls)
+    assert scanner.gsi_timeouts == []
 
     runtime.stop()
 

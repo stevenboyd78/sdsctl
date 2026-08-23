@@ -233,6 +233,21 @@ def test_navigation_cli_uses_typed_command(
     assert capsys.readouterr().out == "OK\n"
 
 
+def test_semantic_control_parser_accepts_exact_states_and_levels() -> None:
+    hold = cli.build_parser().parse_args(
+        ["hold-state", "department", "off", "--timeout", "3.5"]
+    )
+    assert hold.scope == "department"
+    assert hold.state == "off"
+    assert hold.timeout == 3.5
+
+    volume = cli.build_parser().parse_args(["volume", "0"])
+    assert volume.level == 0
+
+    squelch = cli.build_parser().parse_args(["squelch", "19"])
+    assert squelch.level == 19
+
+
 def test_redact_requires_capture(
     capsys: pytest.CaptureFixture[str],
 ) -> None:

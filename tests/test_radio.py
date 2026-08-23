@@ -510,6 +510,40 @@ def test_set_volume_range() -> None:
         raise AssertionError("Expected ValueError")
 
 
+@pytest.mark.parametrize(
+    ("setter", "level", "wire", "acknowledgement"),
+    [
+        ("set_volume", 1, "VOL,1", "VOL,OK"),
+        ("set_squelch", 3, "SQL,3", "SQL,OK"),
+    ],
+)
+def test_level_set_accepts_firmware_ok_acknowledgement(
+    setter: str,
+    level: int,
+    wire: str,
+    acknowledgement: str,
+) -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+
+    with radio:
+        def respond() -> None:
+            while transport.writes != ["MDL"]:
+                time.sleep(0.005)
+            transport.feed_line("MDL,SDS200")
+            while transport.writes != ["MDL", wire]:
+                time.sleep(0.005)
+            transport.feed_line(acknowledgement)
+
+        thread = threading.Thread(target=respond)
+        thread.start()
+        getattr(radio, setter)(level, timeout=1.0)
+        thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert transport.writes == ["MDL", wire]
+
+
 def test_health_check_returns_round_trip_metadata() -> None:
     transport = FakeTransport()
     radio = SDS200.from_transport(transport)
@@ -829,6 +863,45 @@ def test_sds200_press_hold_key_uses_typed_key_command() -> None:
 
     assert not thread.is_alive()
     assert transport.writes == ["MDL", "KEY,C,P"]
+
+
+def test_sds200_hold_state_confirms_exact_desired_state() -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport, expected_model="SDS200")
+    off = """<?xml version="1.0" encoding="utf-8"?>
+<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">
+<System Name="Metro" Index="1" Hold="Off" />
+<Property VOL="10" SQL="2" />
+</ScannerInfo>"""
+    on = off.replace('Hold="Off"', 'Hold="On"')
+
+    def feed_gsi(xml: str) -> None:
+        transport.feed_line("GSI,<XML>,")
+        for line in xml.splitlines():
+            transport.feed_line(line)
+
+    with radio:
+        def respond() -> None:
+            while transport.writes != ["GSI"]:
+                time.sleep(0.005)
+            feed_gsi(off)
+            while transport.writes != ["GSI", "MDL"]:
+                time.sleep(0.005)
+            transport.feed_line("MDL,SDS200")
+            while transport.writes != ["GSI", "MDL", "KEY,A,P"]:
+                time.sleep(0.005)
+            transport.feed_line("KEY,OK")
+            while transport.writes != ["GSI", "MDL", "KEY,A,P", "GSI"]:
+                time.sleep(0.005)
+            feed_gsi(on)
+
+        thread = threading.Thread(target=respond, daemon=True)
+        thread.start()
+        radio.hold_state("system", True, timeout=1.0)
+        thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert radio.state.snapshot.system_hold == "On"
 
 
 def test_sds150_rejects_unverified_hold_key_control_before_key_command() -> None:

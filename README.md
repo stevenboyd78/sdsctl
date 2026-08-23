@@ -367,6 +367,9 @@ Use the explicit daemon client when another process owns the scanner:
 sdsctl daemon-client status
 sdsctl daemon-client snapshot
 sdsctl daemon-client hold TGID 12345
+sdsctl daemon-client hold-state channel off
+sdsctl daemon-client volume 10
+sdsctl daemon-client squelch 2
 sdsctl daemon-client next TGID 12345 --count 1
 sdsctl daemon-client reconnect
 sdsctl daemon-client events --count 10 --json
@@ -383,7 +386,11 @@ sdsctl tui --daemon-client \
 API options such as `--socket-path` precede the client action. Event watching
 and audio use their separate `--event-socket-path` and `--pcmu-socket-path`
 options after the corresponding action. The top-level scanner commands remain
-the explicit standalone workflows.
+the explicit standalone workflows. Volume and squelch setters are
+specification-backed and fixture-tested, but physical SDS200 firmware 1.26.01
+testing found that UDP `VOL`/`SQL` writes timed out without mutation. Treat those
+two LAN controls as unaccepted until the transport boundary is resolved; hold
+state is physically accepted over the same direct and daemon-owned paths.
 
 Every event client first receives an authoritative runtime snapshot at the
 current global sequence boundary, then only later runtime, scanner, PSI,

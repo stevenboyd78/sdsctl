@@ -5,6 +5,7 @@ from sds200.models import (
     ChargeStatus,
     FirmwareResponse,
     ModelResponse,
+    Packet,
     StatusResponse,
     ValueResponse,
 )
@@ -30,6 +31,23 @@ def test_value_response() -> None:
     parsed = parser.parse_typed(parser.parse_packet("VOL,12"))
     assert isinstance(parsed, ValueResponse)
     assert parsed.value == 12
+
+
+@pytest.mark.parametrize("raw", ["VOL,OK", "SQL,OK", "VOL, ok "])
+def test_level_set_acknowledgement_remains_packet(raw: str) -> None:
+    parser = PacketParser()
+    parsed = parser.parse_typed(parser.parse_packet(raw))
+
+    assert isinstance(parsed, Packet)
+    assert parsed.raw == raw
+
+
+@pytest.mark.parametrize("raw", ["VOL,NOPE", "SQL,NG"])
+def test_invalid_level_response_is_rejected(raw: str) -> None:
+    parser = PacketParser()
+
+    with pytest.raises(ProtocolError, match="expected an integer"):
+        parser.parse_typed(parser.parse_packet(raw))
 
 
 def test_status_preserves_display_lines() -> None:

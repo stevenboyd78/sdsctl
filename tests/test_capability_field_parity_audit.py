@@ -52,7 +52,7 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
     assert rows["screen"][5] == "R"
     assert rows["system"][4] == "R*"
     assert rows["system_hold"][7] == "R+C* / —"
-    assert rows["volume"][4] == "R+C†"
+    assert rows["volume"][4] == "R+C"
     assert rows["site"][7] == "R"
     assert rows["frequency"][7] == "R*"
     assert rows["modulation"][7] == "R*"
@@ -103,5 +103,13 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "fixed deterministic IDs",
         "combines daemon availability with field availability",
         "This closes `A04`",
+        "## Milestone 26.8 physical semantic-control acceptance",
+        "completed authoritative enter and release for System, Department, Site, and Channel",
+        "original Utah County Simulcast site index `35297`",
+        "volume `0` to `1` to `0` and squelch `2` to `3` to `2`",
+        "Firmware 1.26.01 returns `VOL,OK` and `SQL,OK`",
+        "Menu-tree `GSI` response may omit both levels",
+        "Daemon completion therefore uses the matching scalar getter",
+        "does not limit the accepted native UDP path",
     ):
         assert required in document or required in normalized

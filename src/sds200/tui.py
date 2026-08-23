@@ -42,7 +42,6 @@ from .tui_controls import (
     ControlWorker,
     HoldScope,
     channel_navigation,
-    hold_selection,
 )
 from .tui_logging import TUI_LOG_VISIBLE_LINES, TuiLogBuffer
 
@@ -100,6 +99,14 @@ class ScannerTuiRadio(Protocol):
         second: str | int | None = None,
         *,
         timeout: float = 2.0,
+    ) -> None: ...
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
     ) -> None: ...
 
     def next(
@@ -829,23 +836,19 @@ class ScannerTuiApp(App[None]):
         if radio is None:
             self._control_unavailable("No live scanner connection")
             return
-        if not self._capabilities.navigation_control:
-            self._control_unavailable("Navigation is not supported by this scanner")
+        field = f"{scope}_hold"
+        current = getattr(self._snapshot, field)
+        if current not in {"On", "Off"}:
+            self._control_unavailable(
+                f"Current PSI state does not provide a {scope} hold state"
+            )
             return
-        selection = hold_selection(self._snapshot, scope)
-        if selection is None:
-            self._control_unavailable(f"Current PSI state does not provide a {scope} hold index")
-            return
-        label = f"Hold {scope}"
+        held = current != "On"
+        label = f"{'Hold' if held else 'Release'} {scope}"
         self._submit_control(
             ControlRequest(
                 label,
-                lambda: radio.hold(
-                    selection.target,
-                    selection.first,
-                    selection.second,
-                ),
-                lambda: self._set_hold_scope(scope),
+                lambda: radio.hold_state(scope, held),
             )
         )
 
@@ -883,7 +886,6 @@ class ScannerTuiApp(App[None]):
             ControlRequest(
                 f"Volume {target}",
                 lambda: radio.set_volume(target),
-                lambda: self._set_snapshot_volume(target),
             )
         )
 
@@ -904,7 +906,6 @@ class ScannerTuiApp(App[None]):
             ControlRequest(
                 f"Squelch {target}",
                 lambda: radio.set_squelch(target),
-                lambda: self._set_snapshot_squelch(target),
             )
         )
 
