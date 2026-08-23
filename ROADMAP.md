@@ -11,47 +11,32 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.2 — Physical-scanner capability and interface field-parity audit
+### Milestone 26.3 — Interactive Favorites Workspace editor
 
-Milestone 26.1 is closed after completing authenticated direct-TLS LAN access for
-the existing web dashboard while preserving default loopback, generic-container,
-Home Assistant Ingress, and private Unix-domain daemon-service behavior.
+Milestone 26.2 is closed with the evidence-backed physical-scanner capability and
+interface field-parity audit. Its exact shared-state matrix, evidence classes,
+categorized gaps, and bounded editor handoff remain in the durable
+[audit artifact](docs/capability-field-parity-audit.md).
 
-Milestone 26.2 performs a deliberate physical-scanner-to-application capability
-and field-parity audit across SDS100, SDS150, and SDS200 evidence; scanner screen
-families and advanced protocol surfaces; renderer-neutral models and services;
-Rich CLI and terminal monitor output; standalone and daemon-backed Textual TUI;
-web dashboard; generic daemon API/SSE/MQTT; and Home Assistant Discovery and the
-Lovelace card.
+Milestone 26.3 adds the first local interactive Favorites Workspace editor over
+the released Milestones 21–22 contracts. One explicit copied-tree or freshly
+qualified mounted Linux USB source supplies immutable baseline and intended
+snapshots. Hierarchy and exact-record browsing, search, schema diagnostics,
+provenance, and raw detail remain read-only. The only mutations are existing
+evidence-backed Name Tag replacement, supported HPD leaf deletion, and
+exact-template leaf creation, with in-memory undo/reset/discard and no autosave.
 
-The audit must distinguish physical observations from protocol specifications,
-sanitized fixtures, automated tests, and implementation inspection. It must
-trace individual fields rather than treating a coarse mode name as proof of
-parity, preserve unknown and raw scanner values without inventing semantics, and
-record model, firmware, transport, lifecycle, and physical-validation limits.
+Exact `plan_favorites_write()` review and its blockers precede a separate token
+confirmation bound to the source and snapshot bytes. Execution delegates only to
+the verified copied-tree or USB executor, repeats stale-target preflight, retains
+USB artifacts in canonical private host state outside scanner media, and surfaces
+operation, backup, rollback-manifest, report, recovery, and fresh exact-reload
+evidence. The renderer never replaces storage itself and never opens scanner,
+daemon, web, Ingress, FTP-write, synchronization, or background ownership.
 
-Findings must remain divided into modeled data missing from renderers, modeled
-or parsed capabilities without a safe semantic control, physical capabilities
-without sufficient protocol evidence or application modeling, and
-application-only capabilities with no direct scanner UI equivalent. The audit is
-an inventory and planning boundary rather than permission to broaden support
-claims or implement every discovered gap.
-
-Milestone 26.2 audit and acceptance are complete. The durable
-[capability and field-parity audit](docs/capability-field-parity-audit.md)
-records the exact 34-field `RadioStateSnapshot` presentation matrix, supported
-model and screen evidence, control parity, data modeled outside shared state,
-advanced protocol limits, application-only capabilities, prioritized findings,
-and a bounded handoff to Milestone 26.3. A contract test keeps the documented
-field inventory synchronized with the renderer-neutral dataclass.
-
-The audit confirms that daemon API, SSE, and generic MQTT preserve the complete
-shared snapshot while human renderers expose different subsets; the TUI has the
-strongest special-mode presentation; GSI battery and the sixteen-field System
-Status projection do not enter shared state; and advanced foundations without
-physical/lifecycle evidence remain unknown or deferred rather than unsupported.
-Only the local interactive Favorites Workspace editor is scheduled next; other
-findings remain evidence-led future slices.
+Milestone 26.3 implementation and host-independent acceptance are complete. The
+[Favorites Workspace editor guide](docs/favorites-workspace-editor.md) records
+its source selection, workflow, safety boundary, and deliberate non-goals.
 
 ## Deferred hardware validation
 
@@ -257,8 +242,8 @@ begins.
   separate read-only and explicitly resolved writable credential roles.
 - Keep every write operation deterministic, recoverable, auditable, and free of
   silent last-writer-wins behavior.
-- Milestone 26.3 will add the first local interactive Favorites Workspace editor
-  over the existing renderer-neutral foundation. It will expose hierarchy
+- Milestone 26.3 completed the first local interactive Favorites Workspace editor
+  over the existing renderer-neutral foundation. It exposes hierarchy
   browsing, search/filtering, diagnostics, comparison/preview, only the existing
   evidence-backed rename, supported leaf-delete, and exact-template leaf-create
   operations, exact write planning, a separate explicit confirmation, and
@@ -268,7 +253,7 @@ begins.
   operations; FTP writes; RadioReference synchronization UI; live-scanner
   GLT/FQK mutation, web/Ingress exposure, and background synchronization remain
   separate evidence-backed capabilities. USB backup, staging, rollback, and
-  reporting state must remain in a canonical private host-state directory
+  reporting state remains in a canonical private host-state directory
   outside scanner media. Supported Name Tag replacement may target existing
   catalog and hierarchy records without authorizing structural mutation.
 
@@ -532,9 +517,9 @@ is collected.
   interface field-parity audit. Its exact shared-state matrix and categorized
   findings are maintained in
   [the audit artifact](docs/capability-field-parity-audit.md).
-- Milestone 26.3 is the next planned slice: a local interactive Favorites
-  Workspace editor constrained to the already verified Milestones 21–22 model,
-  planner, copied-tree executor, and qualified USB executor boundaries.
+- Milestone 26.3 completed the local interactive Favorites Workspace editor
+  constrained to the already verified Milestones 21–22 model, planner,
+  copied-tree executor, and qualified USB executor boundaries.
 
 ## Completed milestone groups
 

@@ -1766,6 +1766,40 @@ def build_parser(
         metavar="SECONDS",
         help="TUI audio RTSP GET_PARAMETER interval (default: 15.0)",
     )
+    favorites = subparsers.add_parser(
+        "favorites",
+        help="Browse and safely edit a local Favorites Workspace source",
+    )
+    favorites_commands = favorites.add_subparsers(
+        dest="favorites_action",
+        required=True,
+    )
+    favorites_edit = favorites_commands.add_parser(
+        "edit",
+        help="Launch the optional local interactive Favorites editor",
+    )
+    favorites_source = favorites_edit.add_mutually_exclusive_group(required=True)
+    favorites_source.add_argument(
+        "--copied-tree",
+        type=Path,
+        metavar="DIRECTORY",
+        help="Explicit offline copied favorites_lists directory",
+    )
+    favorites_source.add_argument(
+        "--usb",
+        type=Path,
+        metavar="PATH",
+        help="Explicit mounted Linux scanner path to freshly qualify as USB",
+    )
+    favorites_edit.add_argument(
+        "--usb-host-state",
+        type=Path,
+        metavar="DIRECTORY",
+        help=(
+            "Private canonical host directory for USB backup, rollback, and "
+            "operation artifacts (default: XDG state directory)"
+        ),
+    )
     subparsers.add_parser(
         "capabilities",
         help="Show model limits, validation status, and supported control features",
@@ -4247,6 +4281,52 @@ def _run_tui(
     return 0
 
 
+def _run_favorites_editor(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    try:
+        from .favorites_editor import (
+            open_favorites_copied_tree_editor,
+            open_favorites_usb_editor,
+        )
+        from .favorites_editor_tui import run_favorites_editor
+    except ModuleNotFoundError as exc:
+        missing = exc.name.split(".", 1)[0] if exc.name is not None else ""
+        if missing == "textual":
+            raise ValueError(
+                "Textual TUI support is not installed; install it with: "
+                'python -m pip install "sds200[tui]"'
+            ) from exc
+        raise
+
+    if args.favorites_action != "edit":
+        raise ValueError(f"Unsupported Favorites action: {args.favorites_action!r}")
+
+    if args.copied_tree is not None:
+        if args.usb_host_state is not None:
+            raise ValueError("--usb-host-state is only valid with --usb.")
+        session = open_favorites_copied_tree_editor(
+            args.copied_tree.expanduser().absolute()
+        )
+    else:
+        paths = configuration_paths or resolve_configuration_paths(environ=environ)
+        host_state = (
+            args.usb_host_state.expanduser().resolve(strict=False)
+            if args.usb_host_state is not None
+            else (paths.user_state_dir / "favorites-usb-writes").resolve(strict=False)
+        )
+        session = open_favorites_usb_editor(
+            args.usb.expanduser().absolute(),
+            host_state_directory=host_state,
+        )
+
+    run_favorites_editor(session)
+    return 0
+
+
 def _run_tui_with_logging(
     args: argparse.Namespace,
     *,
@@ -4587,6 +4667,13 @@ def main(
 
         if args.action == "web":
             return _run_web(
+                args,
+                configuration_paths=configuration_paths,
+                environ=environ,
+            )
+
+        if args.action == "favorites":
+            return _run_favorites_editor(
                 args,
                 configuration_paths=configuration_paths,
                 environ=environ,

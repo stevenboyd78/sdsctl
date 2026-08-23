@@ -44,6 +44,9 @@ information in this image represents a real system.*
 - Live terminal monitoring
 - Optional responsive [Textual full-screen TUI](docs/tui.md) for Raspberry Pi and
   terminal use with non-blocking scanner and SDS200 audio-recording controls
+- Optional local [Favorites Workspace editor](docs/favorites-workspace-editor.md)
+  with immutable in-memory edits, exact review/confirmation, and verified
+  copied-tree or freshly qualified Linux USB execution
 - Exponential reconnect backoff with configurable retry limits
 - Traffic tracing, replayable JSON Lines session capture, and deterministic replay
 - Bounded health history plus failover and preferred-recovery diagnostics
@@ -261,6 +264,30 @@ operational logging, and rate-limited stale-PSI recovery through USB, network,
 profile, and replay selectors. A sustained stale PSI stream is automatically
 reconnected without stopping active network audio; see the
 [Textual TUI guide](docs/tui.md).
+
+### Favorites Workspace editor
+
+Open one explicit offline copied Favorites directory in the optional local
+Textual editor:
+
+```bash
+sdsctl favorites edit --copied-tree /absolute/path/to/favorites_lists
+```
+
+Or, on Linux, freshly qualify one explicitly mounted scanner USB target:
+
+```bash
+sdsctl favorites edit --usb /absolute/path/to/scanner-mount
+```
+
+Browsing, search, diagnostics, provenance, and raw detail are read-only. Edits
+remain immutable and in memory until the exact write plan is reviewed and its
+full token is supplied in a separate confirmation step. Execution uses only the
+existing verified copied-tree or USB executor and displays backup, rollback,
+report, recovery, and fresh-reload evidence. See the
+[Favorites Workspace editor guide](docs/favorites-workspace-editor.md) for the
+supported Name Tag and leaf operations, USB host-state boundary, and deliberate
+non-goals.
 
 With an explicit SDS200 network host, opt in to WAV recording and use `R` to start
 or stop the one-shot recording session:
@@ -1002,6 +1029,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and
 - [Project roadmap](ROADMAP.md)
 - [Supported scanner models](docs/supported-models.md)
 - [Capability and field-parity audit](docs/capability-field-parity-audit.md)
+- [Favorites Workspace editor](docs/favorites-workspace-editor.md)
 - [Control transports](docs/transports.md)
 - [LAN discovery and profiles](docs/discovery-and-profiles.md)
 - [Layered application configuration](docs/configuration.md)

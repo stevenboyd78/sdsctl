@@ -1,0 +1,434 @@
+"""Local Textual adapter for the renderer-neutral Favorites editor."""
+
+from __future__ import annotations
+
+from typing import Any, ClassVar
+
+from textual.app import App, ComposeResult
+from textual.binding import Binding, BindingType
+from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.widgets import Button, Footer, Header, Input, Static, Tree
+
+from .favorites_comparison import FavoritesComparisonAmbiguity, FavoritesComparisonSource
+from .favorites_editor import (
+    FavoritesEditorError,
+    FavoritesEditorExecution,
+    FavoritesEditorRecordReference,
+    FavoritesEditorReview,
+    FavoritesEditorSession,
+)
+from .favorites_navigation import FavoritesNavigationNode, FavoritesNavigationPath
+
+
+def _node_label(node: FavoritesNavigationNode) -> str:
+    name = node.name if node.name is not None else "<unnamed>"
+    return f"{name}  [{node.kind.value}]"
+
+
+def _plan_text(session: FavoritesEditorSession) -> str:
+    plan = session.plan
+    change_count = sum(
+        len(item.record_changes)
+        for item in plan.comparison.items
+        if isinstance(item, FavoritesComparisonSource)
+    )
+    ambiguity_count = sum(
+        isinstance(item, FavoritesComparisonAmbiguity)
+        for item in plan.comparison.items
+    )
+    blockers = ", ".join(blocker.value for blocker in plan.blockers) or "none"
+    return (
+        f"Changes: {change_count}\n"
+        f"Comparison ambiguities: {ambiguity_count}\n"
+        f"Blockers: {blockers}\n"
+        f"Undo steps: {session.undo_count}"
+    )
+
+
+def _review_text(review: FavoritesEditorReview) -> str:
+    rows = ["Exact write plan"]
+    for item in review.plan.comparison.items:
+        if isinstance(item, FavoritesComparisonAmbiguity):
+            rows.append(f"AMBIGUOUS {item.filename}")
+            continue
+        source = item.filename or "f_list.cfg"
+        for change in item.record_changes:
+            baseline = (
+                "-"
+                if change.baseline_record is None
+                else f"{change.baseline_source_index}:{change.baseline_record.raw_bytes!r}"
+            )
+            candidate = (
+                "-"
+                if change.candidate_record is None
+                else f"{change.candidate_source_index}:{change.candidate_record.raw_bytes!r}"
+            )
+            rows.append(
+                f"{source} {change.kind.value}: {baseline} -> {candidate}"
+            )
+    blockers = ", ".join(blocker.value for blocker in review.plan.blockers) or "none"
+    rows.append(f"Blockers: {blockers}")
+    return "\n".join(rows)
+
+
+class FavoritesEditorApp(App[None]):
+    """Full-screen local Favorites browser, editor, and write reviewer."""
+
+    TITLE = "sdsctl Favorites Workspace Editor"
+    CSS = """
+    #body { height: 1fr; }
+    #navigation { width: 48%; min-width: 36; border: solid $primary; }
+    #detail-column { width: 1fr; padding: 0 1; }
+    #favorites-tree, #records-tree { height: 1fr; }
+    #search-results { height: 5; border: solid $secondary; padding: 0 1; }
+    #detail, #diagnostics, #plan, #status { border: solid $secondary; padding: 0 1; }
+    #detail { min-height: 7; }
+    #diagnostics { min-height: 5; }
+    #plan { min-height: 6; }
+    #status { min-height: 4; }
+    #controls { height: auto; }
+    #edit-name, #confirmation { margin: 1 0 0 0; }
+    Button { margin: 0 1 0 0; }
+    """
+    BINDINGS: ClassVar[list[BindingType]] = [
+        Binding("q", "quit", "Quit"),
+        Binding("u", "undo", "Undo"),
+        Binding("ctrl+r", "reset_edits", "Reset"),
+        Binding("ctrl+p", "review", "Review"),
+        Binding("ctrl+x", "execute", "Execute"),
+        Binding("/", "focus_search", "Search"),
+    ]
+
+    def __init__(self, session: FavoritesEditorSession) -> None:
+        super().__init__()
+        if not isinstance(session, FavoritesEditorSession):
+            raise TypeError("Favorites editor TUI requires FavoritesEditorSession.")
+        self.session = session
+        self.selected_path: FavoritesNavigationPath | None = None
+        self.selected_record: FavoritesEditorRecordReference | None = None
+
+    def compose(self) -> ComposeResult:
+        yield Header()
+        with Horizontal(id="body"):
+            with Vertical(id="navigation"):
+                yield Input(placeholder="Search names (/)", id="search")
+                yield Static("Search results: all nodes", id="search-results")
+                yield Tree[FavoritesNavigationPath]("Favorites", id="favorites-tree")
+                yield Tree[FavoritesEditorRecordReference](
+                    "All exact source records",
+                    id="records-tree",
+                )
+            with VerticalScroll(id="detail-column"):
+                yield Static("Select a Favorites record.", id="detail")
+                yield Static("Diagnostics", id="diagnostics")
+                yield Static(_plan_text(self.session), id="plan")
+                yield Input(placeholder="New Name Tag", id="edit-name")
+                with Horizontal(id="controls"):
+                    yield Button("Rename", id="rename")
+                    yield Button("Duplicate leaf", id="duplicate")
+                    yield Button("Delete leaf", id="delete", variant="warning")
+                    yield Button("Undo", id="undo")
+                    yield Button("Reset", id="reset")
+                yield Button("Review exact plan", id="review", variant="primary")
+                yield Input(
+                    placeholder="Paste full review confirmation token",
+                    id="confirmation",
+                )
+                yield Button("Execute confirmed plan", id="execute", variant="error")
+                yield Static("No writes occur until review and confirmation.", id="status")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        self._rebuild_tree()
+        self._rebuild_record_tree()
+        self._refresh_diagnostics()
+        self._refresh_detail()
+
+    def _append_tree_node(self, tree_node: Any, node: FavoritesNavigationNode) -> None:
+        child = tree_node.add(
+            _node_label(node),
+            data=node.path,
+            expand=True,
+            allow_expand=bool(node.children),
+        )
+        for descendant in node.children:
+            self._append_tree_node(child, descendant)
+
+    def _rebuild_tree(self, preferred: FavoritesNavigationPath | None = None) -> None:
+        tree = self.query_one("#favorites-tree", Tree)
+        tree.clear()
+        tree.root.expand()
+        selected = None
+        for root in self.session.navigation.roots:
+            self._append_tree_node(tree.root, root)
+
+        def find(tree_node: Any) -> Any:
+            if tree_node.data == preferred:
+                return tree_node
+            for child in tree_node.children:
+                match = find(child)
+                if match is not None:
+                    return match
+            return None
+
+        if preferred is not None:
+            selected = find(tree.root)
+        if selected is not None:
+            tree.select_node(selected)
+            self.selected_path = preferred
+        elif self.session.navigation.roots:
+            self.selected_path = self.session.navigation.roots[0].path
+
+    def _rebuild_record_tree(self) -> None:
+        tree = self.query_one("#records-tree", Tree)
+        tree.clear()
+        tree.root.expand()
+        groups: dict[tuple[int | None, str], Any] = {}
+        for reference in self.session.records():
+            key = (reference.document_index, reference.filename)
+            group = groups.get(key)
+            if group is None:
+                group = tree.root.add(reference.filename, expand=False)
+                groups[key] = group
+            group.add(
+                f"{reference.source_index}: {reference.record.command}",
+                data=reference,
+                allow_expand=False,
+            )
+
+    def _selected(self) -> FavoritesNavigationPath:
+        if self.selected_path is None:
+            raise FavoritesEditorError("Select a Favorites record first.")
+        return self.selected_path
+
+    def _selected_reference(self) -> FavoritesEditorRecordReference | None:
+        return self.selected_record
+
+    def _set_status(self, message: str) -> None:
+        self.query_one("#status", Static).update(message)
+
+    def _refresh_detail(self) -> None:
+        if self.selected_record is not None:
+            try:
+                raw_bytes = self.session.raw_source_record(self.selected_record)
+            except (FavoritesEditorError, ValueError) as error:
+                self.query_one("#detail", Static).update(str(error))
+                return
+            raw = raw_bytes.decode("ascii", errors="backslashreplace").rstrip("\r\n")
+            self.query_one("#detail", Static).update(
+                f"Raw source: {self.selected_record.filename}:"
+                f"{self.selected_record.source_index}\n"
+                f"Command: {self.selected_record.record.command}\n"
+                f"Fields: {self.selected_record.record.field_count}\n"
+                f"Raw: {raw}"
+            )
+            return
+        if self.selected_path is None:
+            return
+        try:
+            node = self.session.node(self.selected_path)
+            target = self.session.target(self.selected_path)
+        except FavoritesEditorError as error:
+            self.query_one("#detail", Static).update(str(error))
+            return
+        raw = target.record.raw_bytes.decode("ascii", errors="backslashreplace").rstrip("\r\n")
+        document = target.filename or "f_list.cfg"
+        self.query_one("#detail", Static).update(
+            f"Name: {node.name or '<unnamed>'}\n"
+            f"Kind: {node.kind.value}\n"
+            f"Source: {document}:{target.source_index}\n"
+            f"Path: {node.path.indexes!r}\n"
+            f"Raw: {raw}"
+        )
+
+    def _refresh_diagnostics(self) -> None:
+        diagnostics = self.session.validation.diagnostics
+        if not diagnostics:
+            text = "Diagnostics: none"
+        else:
+            rows = [f"Diagnostics: {len(diagnostics)}"]
+            rows.extend(
+                f"{item.severity.value}: {item.message}"
+                for item in diagnostics[:8]
+            )
+            if len(diagnostics) > 8:
+                rows.append(f"… {len(diagnostics) - 8} more")
+            text = "\n".join(rows)
+        self.query_one("#diagnostics", Static).update(text)
+        self.query_one("#plan", Static).update(_plan_text(self.session))
+
+    def _after_edit(self, preferred: FavoritesNavigationPath | None, message: str) -> None:
+        self.query_one("#confirmation", Input).value = ""
+        self._rebuild_tree(preferred)
+        self._rebuild_record_tree()
+        self._refresh_detail()
+        self._refresh_diagnostics()
+        self._set_status(message)
+
+    def on_tree_node_selected(
+        self,
+        event: Tree.NodeSelected[Any],
+    ) -> None:
+        if event.node.data is None:
+            return
+        if event.control.id == "records-tree":
+            self.selected_record = event.node.data
+            self.selected_path = None
+        else:
+            self.selected_path = event.node.data
+            self.selected_record = None
+        self._refresh_detail()
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        if event.input.id != "search":
+            return
+        text = event.value.strip()
+        matches = self.session.nodes(text if text else None)
+        labels = tuple(node.name or "<unnamed>" for node in matches[:6])
+        suffix = "" if len(matches) <= 6 else f"\n… {len(matches) - 6} more"
+        display = "\n".join(labels) if labels else "No matches"
+        self.query_one("#search-results", Static).update(
+            f"Search results: {len(matches)}\n{display}{suffix}"
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        actions = {
+            "rename": self.action_rename,
+            "duplicate": self.action_duplicate,
+            "delete": self.action_delete,
+            "undo": self.action_undo,
+            "reset": self.action_reset_edits,
+            "review": self.action_review,
+            "execute": self.action_execute,
+        }
+        action = actions.get(event.button.id or "")
+        if action is not None:
+            action()
+
+    def action_focus_search(self) -> None:
+        self.query_one("#search", Input).focus()
+
+    def action_rename(self) -> None:
+        try:
+            name = self.query_one("#edit-name", Input).value
+            reference = self._selected_reference()
+            if reference is not None:
+                self.session.rename_record(reference, name)
+                preferred = None
+            else:
+                preferred = self._selected()
+                self.session.rename(preferred, name)
+            self._after_edit(
+                preferred,
+                "Name Tag replaced in memory. Review before writing.",
+            )
+        except (FavoritesEditorError, ValueError) as error:
+            self._set_status(f"Rename rejected: {error}")
+
+    def action_duplicate(self) -> None:
+        try:
+            value = self.query_one("#edit-name", Input).value
+            reference = self._selected_reference()
+            if reference is not None:
+                self.session.duplicate_record(reference, name=value or None)
+                preferred = None
+            else:
+                preferred = self._selected()
+                self.session.duplicate(preferred, name=value or None)
+            self._after_edit(preferred, "Exact-template leaf created in memory.")
+        except (FavoritesEditorError, ValueError) as error:
+            self._set_status(f"Create rejected: {error}")
+
+    def action_delete(self) -> None:
+        try:
+            reference = self._selected_reference()
+            if reference is not None:
+                self.session.delete_record(reference)
+                parent = None
+                self.selected_record = None
+            else:
+                path = self._selected()
+                parent = path.parent
+                self.session.delete(path)
+            self._after_edit(parent, "Supported HPD leaf deleted in memory.")
+        except (FavoritesEditorError, ValueError) as error:
+            self._set_status(f"Delete rejected: {error}")
+
+    def action_undo(self) -> None:
+        changed = self.session.undo()
+        self._after_edit(self.selected_path, "Undo applied." if changed else "Nothing to undo.")
+
+    def action_reset_edits(self) -> None:
+        changed = self.session.reset()
+        self._after_edit(
+            self.selected_path,
+            "All in-memory edits discarded." if changed else "No edits to reset.",
+        )
+
+    def action_review(self) -> None:
+        try:
+            review = self.session.review()
+        except FavoritesEditorError as error:
+            self._set_status(f"Review unavailable: {error}")
+            return
+        blockers = ", ".join(blocker.value for blocker in review.plan.blockers) or "none"
+        self.query_one("#plan", Static).update(_review_text(review))
+        self._set_status(
+            "Exact plan reviewed.\n"
+            f"Blockers: {blockers}\n"
+            f"Confirmation token: {review.confirmation_token}"
+        )
+
+    def action_execute(self) -> None:
+        token = self.query_one("#confirmation", Input).value.strip()
+        try:
+            execution = self.session.execute(token)
+        except (FavoritesEditorError, OSError, RuntimeError, ValueError) as error:
+            self._set_status(self._execution_error_text(error))
+            return
+        self.query_one("#confirmation", Input).value = ""
+        self._rebuild_tree(self.selected_path)
+        self._rebuild_record_tree()
+        self._refresh_diagnostics()
+        self._set_status(self._execution_text(execution))
+
+    @staticmethod
+    def _execution_text(execution: FavoritesEditorExecution) -> str:
+        result = execution.result
+        values = [
+            f"Execution: {result.status.value}",
+            f"Target: {result.target_directory}",
+            f"Operation ID: {result.operation_id or 'none (no-op)'}",
+            f"Backup: {result.backup_directory or 'none'}",
+            f"Rollback manifest: {result.rollback_manifest_path or 'none'}",
+            f"Operation report: {result.operation_report_path or 'none'}",
+            "Fresh reload: exact intended snapshot verified",
+        ]
+        return "\n".join(values)
+
+    @staticmethod
+    def _execution_error_text(error: BaseException) -> str:
+        result = getattr(error, "result", None)
+        operation_id = getattr(error, "operation_id", None)
+        report_path = getattr(error, "report_path", None)
+        recovery_status = getattr(error, "recovery_status", None)
+        if result is not None:
+            operation_id = result.operation_id
+            report_path = result.operation_report_path
+        return "\n".join(
+            (
+                f"Execution rejected or failed: {error}",
+                f"Operation ID: {operation_id or 'unavailable'}",
+                f"Operation report: {report_path or 'unavailable'}",
+                f"Recovery: {recovery_status or 'unavailable'}",
+            )
+        )
+
+
+def run_favorites_editor(session: FavoritesEditorSession) -> None:
+    """Run the local interactive editor without opening scanner control."""
+
+    FavoritesEditorApp(session).run()
+
+
+__all__ = ["FavoritesEditorApp", "run_favorites_editor"]
