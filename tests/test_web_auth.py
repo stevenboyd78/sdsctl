@@ -680,29 +680,42 @@ def test_password_derivation_error_releases_its_slot(
 ) -> None:
     authentication = _authentication()
     derive_password_key = web_auth._derive_password_key
+    started = threading.Event()
+    release = threading.Event()
     calls = 0
 
     def fail_once(password: bytes, salt: bytes) -> bytes:
         nonlocal calls
         calls += 1
         if calls == 1:
+            started.set()
+            if not release.wait(timeout=2):
+                raise AssertionError("password derivation release timed out")
             raise RuntimeError("worker failed")
         return derive_password_key(password, salt)
 
     monkeypatch.setattr(web_auth, "_derive_password_key", fail_once)
 
     async def exercise() -> None:
+        first = asyncio.create_task(
+            authentication.authenticate_password(PASSWORD, "192.0.2.1")
+        )
+
+        async def wait_until_started() -> None:
+            while not started.is_set():
+                await asyncio.sleep(0)
+
         try:
+            await asyncio.wait_for(wait_until_started(), timeout=1)
+            release.set()
             with pytest.raises(RuntimeError, match="worker failed"):
-                await authentication.authenticate_password(
-                    PASSWORD,
-                    "192.0.2.1",
-                )
+                await first
             assert await authentication.authenticate_password(
                 PASSWORD,
                 "192.0.2.2",
             )
         finally:
+            release.set()
             authentication.close()
 
     asyncio.run(exercise())

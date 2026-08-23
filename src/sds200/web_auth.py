@@ -200,12 +200,12 @@ class WebDashboardAuthentication:
             submitted.add_done_callback(lambda _completed: self._release_password_derivation(peer))
             raise
         cancellation: asyncio.CancelledError | None = None
-        while not verification.done():
-            try:
-                await asyncio.shield(verification)
-            except asyncio.CancelledError as error:
-                cancellation = cancellation or error
         try:
+            while not verification.done():
+                try:
+                    await asyncio.shield(verification)
+                except asyncio.CancelledError as error:
+                    cancellation = cancellation or error
             candidate_matches = verification.result()
         except BaseException:
             self._release_password_derivation(peer)
