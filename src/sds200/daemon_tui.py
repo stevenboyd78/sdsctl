@@ -10,7 +10,7 @@ from typing import Any, Protocol, Self
 from .commands import NavigationTarget
 from .daemon_events import DaemonEvent, DaemonEventKind
 from .events import EventBus
-from .exceptions import DaemonProtocolError, UnsupportedScannerFeatureError
+from .exceptions import DaemonProtocolError
 from .state import RadioStateSnapshot, ScannerScreenKind
 from .transport import TransportDiagnostic
 
@@ -25,6 +25,28 @@ class _DaemonApiClient(Protocol):
         target: str,
         first: str | int | None = None,
         second: str | int | None = None,
+        *,
+        timeout: float = 2.0,
+    ) -> Mapping[str, object]: ...
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> Mapping[str, object]: ...
+
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = 2.0,
+    ) -> Mapping[str, object]: ...
+
+    def set_squelch(
+        self,
+        level: int,
         *,
         timeout: float = 2.0,
     ) -> Mapping[str, object]: ...
@@ -145,6 +167,20 @@ class DaemonTuiRadio:
         )
         self._apply_control_result(result)
 
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> None:
+        result = self.api_client.hold_state(
+            scope,
+            held,
+            timeout=timeout,
+        )
+        self._apply_control_result(result)
+
     def next(
         self,
         target: NavigationTarget | str,
@@ -186,16 +222,12 @@ class DaemonTuiRadio:
         self._apply_control_result(result)
 
     def set_volume(self, level: int, *, timeout: float = 2.0) -> None:
-        del level, timeout
-        raise UnsupportedScannerFeatureError(
-            "Volume control is unavailable in daemon-backed TUI mode."
-        )
+        result = self.api_client.set_volume(level, timeout=timeout)
+        self._apply_control_result(result)
 
     def set_squelch(self, level: int, *, timeout: float = 2.0) -> None:
-        del level, timeout
-        raise UnsupportedScannerFeatureError(
-            "Squelch control is unavailable in daemon-backed TUI mode."
-        )
+        result = self.api_client.set_squelch(level, timeout=timeout)
+        self._apply_control_result(result)
 
     def on_state(
         self,

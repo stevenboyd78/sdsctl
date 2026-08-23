@@ -341,6 +341,14 @@ There is no separate `scanner.resume` or unrestricted public `scanner.key`
 operation. Release is expressed idempotently as semantic
 `scanner.hold_state(..., held=False)`.
 
+Exact `scanner.volume_set` and `scanner.squelch_set` mutations run under the same
+daemon control lock. The connected model's typed command bounds reject invalid
+levels before mutation, including SDS200 volume above 29 or squelch above 19.
+After `VOL` or `SQL` acknowledges, the runtime reads `GSI` until its authoritative
+field matches the requested level and only then captures the completion snapshot.
+Literal zero remains a valid level; no percentage or cross-model meaning is
+inferred.
+
 ## Dynamic PCM destinations
 
 A `PcmSink` may be attached before runtime startup or while the runtime is

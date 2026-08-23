@@ -128,6 +128,26 @@ from .xml_protocol import (
 logger = logging.getLogger(__name__)
 T = TypeVar("T")
 
+_HOLD_STATE_FIELDS = {
+    "system": "system_hold",
+    "department": "department_hold",
+    "site": "site_hold",
+    "channel": "channel_hold",
+}
+_HOLD_STATE_INDEX_FIELDS = {
+    "system": "system_index",
+    "department": "department_index",
+    "site": "site_index",
+    "channel": "channel_index",
+}
+_HOLD_STATE_KEYS = {
+    "system": ("A",),
+    "department": ("B",),
+    "site": ("F", "B"),
+    "channel": ("C",),
+}
+_SCANNER_INDEX_UNAVAILABLE = (1 << 32) - 1
+
 # Physical SDS200 1.26.01 testing observed that an otherwise healthy network PSI
 # push stops after roughly 184 seconds. Refresh the active push conservatively
 # before that observed boundary without reopening scanner control.
@@ -749,6 +769,71 @@ class SDSScanner:
                 f"{capabilities.model} does not provide hold-related key control."
             )
         self.execute(PressKey(key_code), timeout=timeout)
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> None:
+        """Set one hold scope to an exact scanner-confirmed desired state."""
+
+        if not isinstance(scope, str):
+            raise TypeError("Scanner hold scope must be a string.")
+        normalized_scope = scope.strip().lower()
+        if normalized_scope not in _HOLD_STATE_FIELDS:
+            choices = ", ".join(_HOLD_STATE_FIELDS)
+            raise ValueError(f"Scanner hold scope must be one of: {choices}.")
+        if type(held) is not bool:
+            raise TypeError("Scanner held state must be a boolean.")
+
+        field = _HOLD_STATE_FIELDS[normalized_scope]
+        index_field = _HOLD_STATE_INDEX_FIELDS[normalized_scope]
+        desired = "On" if held else "Off"
+        deadline = monotonic() + _require_positive_timeout(
+            timeout,
+            label="Scanner hold-state timeout",
+        )
+
+        def authoritative_state() -> RadioStateSnapshot:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise CommandTimeoutError(
+                    "Scanner hold-state control timed out before state confirmation."
+                )
+            self.get_scanner_info(timeout=remaining)
+            return self.state.snapshot
+
+        initial = authoritative_state()
+        current = getattr(initial, field)
+        if current not in {"On", "Off"}:
+            raise UnsupportedScannerFeatureError(
+                f"Current {normalized_scope} hold state is unavailable."
+            )
+        if current == desired:
+            return
+
+        if held:
+            index = getattr(initial, index_field)
+            if (
+                type(index) is not int
+                or not 0 <= index < _SCANNER_INDEX_UNAVAILABLE
+            ):
+                raise UnsupportedScannerFeatureError(
+                    f"Current {normalized_scope} selection is unavailable."
+                )
+
+        for key_code in _HOLD_STATE_KEYS[normalized_scope]:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise CommandTimeoutError(
+                    "Scanner hold-state control timed out before key execution."
+                )
+            self.press_hold_key(key_code, timeout=remaining)
+
+        while getattr(authoritative_state(), field) != desired:
+            pass
 
     def hold(
         self,

@@ -151,6 +151,12 @@ class FakeControlRuntime(FakeRuntime):
             timeout=timeout,
         )
 
+    def set_volume(self, level: int, *, timeout: float = 2.0) -> FakeControlResult:
+        return self._control("scanner.volume_set", level, timeout=timeout)
+
+    def set_squelch(self, level: int, *, timeout: float = 2.0) -> FakeControlResult:
+        return self._control("scanner.squelch_set", level, timeout=timeout)
+
     def _control(
         self,
         operation: str,
@@ -307,6 +313,8 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
         results = (
             client.hold("sys", 42, timeout=1.5),
             client.hold_state(" Site ", False, timeout=3.5),
+            client.set_volume(0, timeout=1.5),
+            client.set_squelch(19, timeout=1.5),
             client.next("dept", 7, 42, count=2, timeout=1.5),
             client.previous("tgid", 99, count=3, timeout=1.5),
             client.reconnect(timeout=1.5),
@@ -314,10 +322,12 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
 
         assert client.connected is True
 
-    assert [result["sequence"] for result in results] == [1, 2, 3, 4, 5]
+    assert [result["sequence"] for result in results] == [1, 2, 3, 4, 5, 6, 7]
     assert [result["operation"] for result in results] == [
         "scanner.hold",
         "scanner.hold_state",
+        "scanner.volume_set",
+        "scanner.squelch_set",
         "scanner.next",
         "scanner.previous",
         "scanner.reconnect",
@@ -333,6 +343,8 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
             ("site", False),
             {"timeout": 3.5},
         ),
+        ("scanner.volume_set", (0,), {"timeout": 1.5}),
+        ("scanner.squelch_set", (19,), {"timeout": 1.5}),
         (
             "scanner.next",
             ("DEPT", 7, 42),
@@ -351,8 +363,8 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
     ]
     server_snapshot = server.snapshot()
     assert server_snapshot.accepted_clients == 1
-    assert server_snapshot.requests == 6
-    assert server_snapshot.responses == 6
+    assert server_snapshot.requests == 8
+    assert server_snapshot.responses == 8
 
 
 @pytest.mark.parametrize(
@@ -363,6 +375,9 @@ def test_client_executes_typed_controls_on_one_negotiated_socket(
         ("hold_state", ("favorites", True), {}, ValueError),
         ("hold_state", ("system", 1), {}, TypeError),
         ("hold_state", ("system", True), {"timeout": 4.1}, ValueError),
+        ("set_volume", (True,), {}, TypeError),
+        ("set_volume", (-1,), {}, ValueError),
+        ("set_squelch", (2,), {"timeout": 2.1}, ValueError),
         ("next", ("TGID",), {"count": 0}, ValueError),
         ("next", ("TGID",), {"count": True}, TypeError),
         ("reconnect", (), {"timeout": 2.1}, ValueError),

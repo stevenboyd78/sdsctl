@@ -47,6 +47,7 @@ from .configuration import (
 )
 from .daemon_api import (
     DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    DAEMON_API_DEFAULT_HOLD_STATE_TIMEOUT,
     DaemonApiOperation,
     DaemonReadOnlyApi,
 )
@@ -129,6 +130,7 @@ from .discovery import (
     discover_network_scanners,
 )
 from .exceptions import (
+    CommandRejectedError,
     DaemonDisconnectedError,
     DaemonProtocolError,
     SDS200Error,
@@ -1352,6 +1354,37 @@ def build_parser(
             help="Print the authoritative completion result as JSON",
         )
 
+    daemon_hold_state = daemon_client_commands.add_parser(
+        "hold-state",
+        help="Set one daemon-owned hold scope to an exact desired state",
+    )
+    daemon_hold_state.add_argument(
+        "scope",
+        choices=("system", "department", "site", "channel"),
+    )
+    daemon_hold_state.add_argument("state", choices=("on", "off"))
+    daemon_hold_state.add_argument(
+        "--control-timeout",
+        type=_positive_float,
+        default=DAEMON_API_DEFAULT_HOLD_STATE_TIMEOUT,
+        metavar="SECONDS",
+    )
+    daemon_hold_state.add_argument("--json", action="store_true")
+
+    for action_name in ("volume", "squelch"):
+        daemon_level = daemon_client_commands.add_parser(
+            action_name,
+            help=f"Set one exact daemon-owned scanner {action_name} level",
+        )
+        daemon_level.add_argument("level", type=_non_negative_integer)
+        daemon_level.add_argument(
+            "--control-timeout",
+            type=_positive_float,
+            default=DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+            metavar="SECONDS",
+        )
+        daemon_level.add_argument("--json", action="store_true")
+
     daemon_reconnect = daemon_client_commands.add_parser(
         "reconnect",
         help="Request one bounded daemon-owned scanner reconnect",
@@ -2014,6 +2047,25 @@ def build_parser(
                 help="Number of selections to move (1-8)",
             )
         navigation.add_argument("--timeout", type=_positive_float, default=2.0)
+
+    hold_state = subparsers.add_parser(
+        "hold-state",
+        help="Set one hold scope to an exact scanner-confirmed state",
+    )
+    hold_state.add_argument(
+        "scope",
+        choices=("system", "department", "site", "channel"),
+    )
+    hold_state.add_argument("state", choices=("on", "off"))
+    hold_state.add_argument("--timeout", type=_positive_float, default=4.0)
+
+    for action_name in ("volume", "squelch"):
+        level_control = subparsers.add_parser(
+            action_name,
+            help=f"Set one exact scanner {action_name} level",
+        )
+        level_control.add_argument("level", type=_non_negative_integer)
+        level_control.add_argument("--timeout", type=_positive_float, default=2.0)
 
     monitor = subparsers.add_parser(
         "monitor",
@@ -3422,6 +3474,37 @@ def _run_daemon_client(
                 args.second,
                 timeout=args.control_timeout,
             )
+        elif action == "hold-state":
+            _require_daemon_client_operation(
+                hello,
+                DaemonApiOperation.SCANNER_HOLD_STATE,
+                control=True,
+            )
+            control_result = client.hold_state(
+                args.scope,
+                args.state == "on",
+                timeout=args.control_timeout,
+            )
+        elif action == "volume":
+            _require_daemon_client_operation(
+                hello,
+                DaemonApiOperation.SCANNER_VOLUME_SET,
+                control=True,
+            )
+            control_result = client.set_volume(
+                args.level,
+                timeout=args.control_timeout,
+            )
+        elif action == "squelch":
+            _require_daemon_client_operation(
+                hello,
+                DaemonApiOperation.SCANNER_SQUELCH_SET,
+                control=True,
+            )
+            control_result = client.set_squelch(
+                args.level,
+                timeout=args.control_timeout,
+            )
         elif action == "next":
             _require_daemon_client_operation(
                 hello,
@@ -4739,6 +4822,35 @@ def main(
             if args.action == "hold":
                 radio.hold(args.target, args.first, args.second, timeout=args.timeout)
                 print("OK")
+                return 0
+
+            if args.action == "hold-state":
+                radio.hold_state(
+                    args.scope,
+                    args.state == "on",
+                    timeout=args.timeout,
+                )
+                print(f"{args.scope.capitalize()} hold: {args.state}")
+                return 0
+
+            if args.action == "volume":
+                radio.set_volume(args.level, timeout=args.timeout)
+                confirmed = radio.get_volume(timeout=args.timeout)
+                if confirmed != args.level:
+                    raise CommandRejectedError(
+                        "Scanner volume did not match the requested level."
+                    )
+                print(f"Volume: {confirmed}")
+                return 0
+
+            if args.action == "squelch":
+                radio.set_squelch(args.level, timeout=args.timeout)
+                confirmed = radio.get_squelch(timeout=args.timeout)
+                if confirmed != args.level:
+                    raise CommandRejectedError(
+                        "Scanner squelch did not match the requested level."
+                    )
+                print(f"Squelch: {confirmed}")
                 return 0
 
             if args.action == "next":

@@ -367,6 +367,9 @@ Use the explicit daemon client when another process owns the scanner:
 sdsctl daemon-client status
 sdsctl daemon-client snapshot
 sdsctl daemon-client hold TGID 12345
+sdsctl daemon-client hold-state channel off
+sdsctl daemon-client volume 10
+sdsctl daemon-client squelch 2
 sdsctl daemon-client next TGID 12345 --count 1
 sdsctl daemon-client reconnect
 sdsctl daemon-client events --count 10 --json

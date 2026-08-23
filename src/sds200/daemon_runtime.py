@@ -51,6 +51,8 @@ class DaemonControlOperation(StrEnum):
     NEXT = "scanner.next"
     PREVIOUS = "scanner.previous"
     RECONNECT = "scanner.reconnect"
+    VOLUME_SET = "scanner.volume_set"
+    SQUELCH_SET = "scanner.squelch_set"
 
 
 DAEMON_HOLD_STATE_DEFAULT_TIMEOUT = 4.0
@@ -127,6 +129,10 @@ class _ScannerLike(Protocol):
         *,
         timeout: float = 2.0,
     ) -> None: ...
+
+    def set_volume(self, level: int, *, timeout: float = 2.0) -> None: ...
+
+    def set_squelch(self, level: int, *, timeout: float = 2.0) -> None: ...
 
     def hold(
         self,
@@ -664,6 +670,65 @@ class DaemonRuntime:
                 count=count,
                 timeout=remaining,
             ),
+        )
+
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = 2.0,
+    ) -> DaemonControlResult:
+        return self._set_level(
+            DaemonControlOperation.VOLUME_SET,
+            "volume",
+            level,
+            timeout=timeout,
+            setter=self.scanner.set_volume,
+        )
+
+    def set_squelch(
+        self,
+        level: int,
+        *,
+        timeout: float = 2.0,
+    ) -> DaemonControlResult:
+        return self._set_level(
+            DaemonControlOperation.SQUELCH_SET,
+            "squelch",
+            level,
+            timeout=timeout,
+            setter=self.scanner.set_squelch,
+        )
+
+    def _set_level(
+        self,
+        operation: DaemonControlOperation,
+        field: str,
+        level: int,
+        *,
+        timeout: float,
+        setter: Callable[..., None],
+    ) -> DaemonControlResult:
+        if type(level) is not int:
+            raise TypeError(f"Scanner {field} level must be an integer.")
+
+        def apply_and_confirm(remaining: float) -> None:
+            deadline = monotonic() + remaining
+            setter(level, timeout=remaining)
+            while True:
+                confirmation_timeout = deadline - monotonic()
+                if confirmation_timeout <= 0:
+                    raise CommandTimeoutError(
+                        f"Daemon {field} control timed out before state confirmation."
+                    )
+                self.scanner.get_scanner_info(timeout=confirmation_timeout)
+                if getattr(self.scanner.state.snapshot, field) == level:
+                    return
+
+        return self._execute_control(
+            operation,
+            timeout,
+            apply_and_confirm,
         )
 
     def _start_inactive_psi(self) -> None:

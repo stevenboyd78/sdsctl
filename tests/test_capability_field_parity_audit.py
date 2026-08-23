@@ -52,7 +52,7 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
     assert rows["screen"][5] == "R"
     assert rows["system"][4] == "R*"
     assert rows["system_hold"][7] == "R+C* / —"
-    assert rows["volume"][4] == "R+C†"
+    assert rows["volume"][4] == "R+C"
     assert rows["site"][7] == "R"
     assert rows["frequency"][7] == "R*"
     assert rows["modulation"][7] == "R*"

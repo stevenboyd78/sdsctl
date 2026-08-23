@@ -14,7 +14,6 @@ from sds200 import (
     DaemonTuiRadio,
     RadioStateSnapshot,
     ScannerScreenKind,
-    UnsupportedScannerFeatureError,
 )
 from sds200.transport import TransportDiagnostic
 
@@ -36,6 +35,9 @@ def runtime_snapshot(
             "system": "Example System",
             "channel": channel,
             "channel_index": 400,
+            "channel_hold": "Off",
+            "volume": 10,
+            "squelch": 2,
             "signal": 4,
             "rssi": -82,
         },
@@ -73,6 +75,34 @@ class FakeApiClient:
     ) -> Mapping[str, object]:
         self.calls.append(("hold", target, first, second, timeout))
         return self._result(channel="Held Dispatch")
+
+    def hold_state(
+        self,
+        scope: str,
+        held: bool,
+        *,
+        timeout: float = 4.0,
+    ) -> Mapping[str, object]:
+        self.calls.append(("hold_state", scope, held, timeout))
+        return self._result(channel="Desired Hold Dispatch")
+
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = 2.0,
+    ) -> Mapping[str, object]:
+        self.calls.append(("volume", level, timeout))
+        return self._result(channel="Volume Dispatch")
+
+    def set_squelch(
+        self,
+        level: int,
+        *,
+        timeout: float = 2.0,
+    ) -> Mapping[str, object]:
+        self.calls.append(("squelch", level, timeout))
+        return self._result(channel="Squelch Dispatch")
 
     def next(
         self,
@@ -226,41 +256,32 @@ def test_daemon_tui_radio_delegates_safe_controls_and_applies_snapshots() -> Non
     radio.on_connection(connections.append)
 
     radio.hold("TGID", 400)
+    radio.hold_state("channel", True)
+    radio.set_volume(11)
+    radio.set_squelch(3)
     radio.next("TGID", 400, count=2)
     radio.previous("TGID", 400)
     radio.reconnect()
 
     assert api.calls == [
         ("hold", "TGID", 400, None, 2.0),
+        ("hold_state", "channel", True, 4.0),
+        ("volume", 11, 2.0),
+        ("squelch", 3, 2.0),
         ("next", "TGID", 400, None, 2, 2.0),
         ("previous", "TGID", 400, None, 1, 2.0),
         ("reconnect", 2.0),
     ]
     assert [state.channel for state in states] == [
         "Held Dispatch",
+        "Desired Hold Dispatch",
+        "Volume Dispatch",
+        "Squelch Dispatch",
         "Next Dispatch",
         "Previous Dispatch",
         "Reconnected Dispatch",
     ]
     assert connections == [True]
-
-
-@pytest.mark.parametrize(
-    ("operation", "message"),
-    [
-        ("set_volume", "Volume control"),
-        ("set_squelch", "Squelch control"),
-    ],
-)
-def test_daemon_tui_radio_rejects_unavailable_level_controls(
-    operation: str,
-    message: str,
-) -> None:
-    radio, _, _ = make_radio()
-
-    with pytest.raises(UnsupportedScannerFeatureError, match=message):
-        getattr(radio, operation)(5)
-
 
 def test_daemon_tui_radio_reports_event_stream_failure_as_diagnostic() -> None:
     radio, _, events = make_radio()

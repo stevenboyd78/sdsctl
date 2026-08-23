@@ -61,6 +61,12 @@ protocol rejection, timeouts, concurrency, reconnect, stale snapshots, event
 reconciliation, CLI output/JSON, TUI non-blocking behavior, and read-only daemon
 compatibility negotiation.
 
+Milestone 26.8 implementation and host-independent acceptance are complete.
+Direct and daemon-backed CLI/TUI paths now share exact desired-state hold/release
+semantics and model-bounded volume/squelch mutation with authoritative completion.
+The reversible physical SDS200 command matrix remains the milestone's final
+acceptance gate.
+
 Physical SDS200 acceptance must use reversible bounded changes: exercise enter
 and release for each meaningful hold scope, change and restore volume, change and
 restore squelch, and verify both direct and daemon-owned paths without concurrent

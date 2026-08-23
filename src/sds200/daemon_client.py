@@ -243,6 +243,38 @@ class DaemonApiClient:
             },
         )
 
+    def set_volume(
+        self,
+        level: int,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> dict[str, object]:
+        """Set one exact daemon-owned scanner volume level."""
+
+        normalized_level = _scanner_level(level)
+        operation = DaemonApiOperation.SCANNER_VOLUME_SET
+        normalized_timeout = self._require_control_operation(operation, timeout)
+        return self._control(
+            operation,
+            {"level": normalized_level, "timeout": normalized_timeout},
+        )
+
+    def set_squelch(
+        self,
+        level: int,
+        *,
+        timeout: float = DAEMON_API_DEFAULT_CONTROL_TIMEOUT,
+    ) -> dict[str, object]:
+        """Set one exact daemon-owned scanner squelch level."""
+
+        normalized_level = _scanner_level(level)
+        operation = DaemonApiOperation.SCANNER_SQUELCH_SET
+        normalized_timeout = self._require_control_operation(operation, timeout)
+        return self._control(
+            operation,
+            {"level": normalized_level, "timeout": normalized_timeout},
+        )
+
     def next(
         self,
         target: str,
@@ -529,6 +561,14 @@ def _hold_state_scope(value: object) -> str:
             f"{', '.join(choices)}."
         )
     return normalized
+
+
+def _scanner_level(value: object) -> int:
+    if type(value) is not int:
+        raise TypeError("Daemon scanner level must be an integer.")
+    if value < 0:
+        raise ValueError("Daemon scanner level must not be negative.")
+    return value
 
 
 def _navigation_parameters(
