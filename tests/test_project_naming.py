@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_names_milestone_25_19_as_release_closure() -> None:
+def test_roadmap_records_milestone_26_1_authenticated_lan_boundary() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,22 +123,46 @@ def test_roadmap_names_milestone_25_19_as_release_closure() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 25.19 — v0.21.0 release and generic container "
-        "publication closure",
-        "Milestone 25.18 is closed",
-        "feature-frozen v0.21.0 release candidate",
-        "0.21.0",
-        "`v0.21.0`",
-        "`theboyd78/sdsctl:0.21.0`",
-        "`theboyd78/sdsctl:latest`",
-        "`DOCKERHUB_TOKEN`",
-        "trusted PyPI publication workflow",
-        "Home Assistant",
-        "remote client-side USB",
-        "Windows/macOS/WSL2",
-        "TCP port 554",
+        "### Milestone 26.1 — Authenticated LAN web-dashboard access foundation",
+        "Milestone 25.19 is closed",
+        "v0.21.0 Python package",
+        "Loopback-only operation remains the default",
+        "explicit operator choice",
+        "private Unix-domain daemon services",
+        "secret-reference and redaction principles",
+        "same-origin and authorization protections",
+        "TLS or trusted reverse-proxy boundary",
+        "Plain unauthenticated HTTP on a non-loopback listener",
+        "host-independent authentication",
+        "physical SDS200 LAN validation",
+        "Home Assistant Ingress behavior",
+        "remote daemon-backed CLI/TUI transport",
+        "Milestone 26.1 implementation and acceptance are complete",
+        "two independent authenticated HTTPS sessions",
+        "one daemon-owned scanner-control path and one RTSP/RTP audio path",
+        "2026-08-22",
+        "firmware 1.26.01",
+        "direct TLS",
     ):
         assert required in active_milestone or required in normalized_active_milestone
+
+
+def test_web_guide_records_milestone_26_1_physical_acceptance() -> None:
+    guide = _read("docs/web-dashboard.md")
+    normalized_guide = " ".join(guide.split())
+
+    for required in (
+        "## Milestone 26.1 physical validation",
+        "August 22, 2026",
+        "https://192.168.0.40:8443",
+        "two independent authenticated HTTPS sessions",
+        "one daemon-owned UDP scanner-control connection",
+        "one TCP RTSP session",
+        "HTTP chunk counts demonstrate live delivery",
+        "Authenticated LAN middleware deliberately omits",
+        "no browser or operating-system trust store was changed",
+    ):
+        assert required in guide or required in normalized_guide
 
 
 def test_branding_asset_paths_use_sdsctl_identity() -> None:

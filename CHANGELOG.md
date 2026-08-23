@@ -6,6 +6,29 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add the Milestone 26.1 authenticated LAN web-dashboard foundation as an
+  explicit native-TLS host mode on one private, unique-local, or link-local
+  interface. The mode requires one exact HTTPS origin, a password supplied only
+  through an environment-variable reference, a browser-trusted certificate and
+  unencrypted bounded private key, a freshly salted scrypt password verifier,
+  and bounded server-side sessions. It protects every dashboard route, enforces
+  the exact origin on login and mutations, performs one admitted password
+  derivation at a time outside the application event loop, revokes active SSE
+  and audio responses with their session, disables proxy trust, and leaves
+  default loopback, generic-container, and Home Assistant Ingress behavior
+  unchanged.
+- Physical SDS200 firmware 1.26.01 validation on 2026-08-22 exercised two
+  independent authenticated HTTPS sessions with simultaneous SSE and browser
+  audio streams through `https://192.168.0.40:8443`. Exactly one daemon-owned
+  UDP scanner-control socket and one RTSP session remained active. A temporary
+  recording survived one session's logout while that session's streams ended;
+  the other session remained authorized, continued receiving audio, stopped and
+  downloaded the finalized RIFF/WAVE file, and then logged out independently.
+  Web shutdown left the daemon healthy, daemon shutdown removed all four private
+  sockets, and neither logs nor responses exposed the temporary password.
+
 ## [0.21.0] - 2026-08-21
 
 ### Added

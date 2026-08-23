@@ -406,6 +406,7 @@ def test_generic_container_documentation_preserves_compose_security_boundary() -
     normalized_document = " ".join(document.split())
     readme = _README.read_text(encoding="utf-8")
     roadmap = _ROADMAP.read_text(encoding="utf-8")
+    normalized_roadmap = " ".join(roadmap.split())
 
     for required in (
         "Milestone 25.7",
@@ -541,12 +542,14 @@ def test_generic_container_documentation_preserves_compose_security_boundary() -
     assert "snapshot --json" not in document
     assert "physical scanner validation of the generic Compose deployment" not in document
     assert (
-        "### Milestone 25.19 — v0.21.0 release and generic container "
-        "publication closure"
+        "### Milestone 26.1 — Authenticated LAN web-dashboard access foundation"
         in roadmap
     )
-    assert "Milestone 25.18 is closed" in roadmap
-    assert "theboyd78/sdsctl:0.21.0" in roadmap
+    assert "Milestone 25.19 is closed" in roadmap
+    assert (
+        "Plain unauthenticated HTTP on a non-loopback listener"
+        in normalized_roadmap
+    )
 
 
 def test_generic_docker_hub_workflow_has_safe_trigger_and_publication_contract() -> None:

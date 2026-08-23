@@ -11,43 +11,58 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 25.19 — v0.21.0 release and generic container publication closure
+### Milestone 26.1 — Authenticated LAN web-dashboard access foundation
 
-Milestone 25.18 is closed after completing the alternate-provider and remote
-container-runtime portability boundary. Milestones 21 through 25.18 now form the
-feature-frozen v0.21.0 release candidate: Favorites Workspace and verified
-storage writes, assisted RadioReference synchronization, advanced protocol and
-analysis foundations, the `sdsctl` repository/product naming migration, and the
-generic Docker/Compose/Podman deployment work.
+Milestone 25.19 is closed with the v0.21.0 Python package, generic Docker image,
+Home Assistant App images, reviewed wiki, GitHub Release, container portability
+acceptance, and release metadata published and validated. Post-release roadmap
+work also records the future interactive Favorites Workspace editor and the
+physical-scanner-to-application capability and field-parity audit.
 
-Milestone 25.19 is release closure rather than another runtime feature slice.
-Synchronize the Python package, import version, and Home Assistant App at
-0.21.0; freeze the accumulated changelogs; audit current documentation and
-reviewed wiki source; and run the complete static, test, documentation,
-distribution, container, and release-contract validation before any release tag
-exists.
+Milestone 26.1 begins the next implementation sequence by establishing an
+explicit authenticated LAN-access boundary for the existing web dashboard.
+Loopback-only operation remains the default and must continue to work without
+requiring remote-access configuration. A supported non-loopback listener must be
+an explicit operator choice and must not expose scanner state, semantic controls,
+browser audio, recording operations, saved recordings, downloads, or ordered
+event streams without the milestone's authentication boundary.
 
-The generic Docker Hub publication path remains tag-gated. Pull requests,
-`main` pushes, and manual workflow dispatches may build and validate the generic
-multi-platform image, but only one genuine matching `v0.21.0` tag may enable
-publication as `theboyd78/sdsctl:0.21.0` and `theboyd78/sdsctl:latest`.
-`DOCKERHUB_TOKEN` remains confined to the publishing job, and no synthetic
-`v*` tag is permitted for testing.
+The milestone must preserve the existing daemon ownership architecture. The web
+process remains a client of private Unix-domain daemon services; this work does
+not convert daemon API, event, PCMU, or recording sockets into general network
+services and does not add remote daemon-backed CLI/TUI transport.
 
-The same genuine release tag must match the Python package and Home Assistant
-App versions. It is expected to start the trusted PyPI publication workflow,
-the Home Assistant amd64/aarch64 plus multi-architecture image workflow, and the
-generic Docker Hub amd64/arm64 image workflow. Public artifacts must be verified
-after those workflows succeed and before the normal GitHub v0.21.0 release is
-created.
+Authentication and browser-session behavior must be bounded, deterministic, and
+testable without physical hardware. Credential material must follow the existing
+secret-reference and redaction principles, authentication failures must not leak
+secret values, and browser-facing state-changing operations must retain explicit
+same-origin and authorization protections. Multi-client access must not allow one
+slow, failed, or unauthenticated browser to disrupt another browser or the
+daemon-owned scanner/audio session.
 
-Release closure does not broaden the physical-support claims established by the
-preceding milestones. Native-Linux Docker and rootless Podman network/USB
-acceptance remains bounded by the recorded hardware evidence; remote
-client-side USB remains unsupported by the validated Podman contract;
-Windows/macOS/WSL2 cases remain conditional or unvalidated where documented;
-and full Podman RTSP/RTP acceptance remains blocked while the physical SDS200's
-native TCP port 554 refuses connections independently of the container runtime.
+Transport security must be deliberate rather than implied by a non-loopback
+bind. Define and document the supported TLS or trusted reverse-proxy boundary
+before claiming ordinary LAN deployment support. Plain unauthenticated HTTP on a
+non-loopback listener is not an accepted deployment mode.
+
+Acceptance must include host-independent authentication, authorization,
+session/lifecycle, hostile-client, header/origin, SSE, audio, recording, control,
+and shutdown coverage; regression proof that default loopback behavior remains
+unchanged; and separate physical SDS200 LAN validation with concurrent browser
+clients. Home Assistant Ingress behavior and its existing authenticated peer
+boundary must remain intact and must not silently inherit a second incompatible
+authentication flow.
+
+Milestone 26.1 implementation and acceptance are complete. Host-independent
+coverage exercises authentication, authorization, origin and hostile-request
+handling, bounded session lifecycle, SSE and audio revocation, recording and
+semantic controls, shutdown, and unchanged loopback, generic-container, and Home
+Assistant Ingress modes. Physical SDS200 firmware 1.26.01 validation on
+2026-08-22 used native direct TLS and two independent authenticated HTTPS
+sessions with concurrent SSE and audio streams, confirmed one daemon-owned
+scanner-control path and one RTSP/RTP audio path, kept a daemon-owned recording
+active across one session's logout, and completed isolated logout plus clean web
+and daemon shutdown without exposing the temporary credential.
 
 ## Deferred hardware validation
 
@@ -153,10 +168,11 @@ begins.
 - v0.20.2 completed Milestone 20 release closure with reviewed wiki publication,
   PyPI publication, amd64/aarch64 Home Assistant image publication,
   repository-managed HAOS acceptance, and a normal GitHub Release.
-- Keep authenticated/TLS LAN access, a network transport for remote daemon-backed
-  CLI/TUI/GUI clients, and any optional host-network App variant as a separate
-  later security boundary. The current daemon client interfaces remain private
-  Unix-domain sockets, so host networking alone would not expose them remotely.
+- Milestone 26.1 owns the separate authenticated/TLS LAN web-access boundary.
+  Keep a network transport for remote daemon-backed CLI/TUI/GUI clients and any
+  optional host-network App variant as later security boundaries. The current
+  daemon client interfaces remain private Unix-domain sockets, so host networking
+  alone would not expose them remotely.
 - Add a later renderer-parity follow-up for scanner modes whose authoritative
   state is already modeled but not fully presented in every interface. Tone-Out
   is one known example: shared scanner state already carries the active
@@ -493,6 +509,33 @@ is collected.
 - Consider a future desktop GUI over the same renderer-neutral services.
 - Treat the Raspberry Pi 7-inch 800 by 480 display as a compact reference layout,
   not a universal fixed resolution.
+
+### Milestone 26 — Authenticated access and post-v0.21 interface work
+
+- Milestone 26.1 completed explicit authenticated direct-TLS LAN access for the
+  existing web dashboard while keeping loopback-only operation as the default.
+- The daemon remains the sole scanner owner, and daemon API, event, PCMU, and
+  recording services retain their private Unix-domain socket boundary.
+- The explicit non-loopback listener authenticates scanner state and controls,
+  ordered events, browser audio, recording operations, saved recordings, and
+  downloads while keeping credentials out of logs, configuration, URLs, and
+  browser-visible errors.
+- Native TLS, one exact HTTPS origin, bounded server-side sessions, login
+  throttling, origin enforcement, and session-scoped stream revocation establish
+  the supported security boundary. Trusted reverse-proxy deployment remains a
+  separate future design.
+- Home Assistant Ingress retains its established authenticated peer boundary and
+  does not inherit the standalone dashboard login flow.
+- Host-independent coverage completed browser-session, authorization, hostile
+  request, origin/header, SSE, audio, recording, semantic-control, concurrency,
+  shutdown, and unchanged-loopback validation.
+- Bounded physical SDS200 LAN validation completed with two authenticated
+  concurrent sessions while the daemon retained one scanner-control and one
+  network-audio ownership path.
+- Keep remote daemon-backed CLI/TUI transport, Internet-facing deployment,
+  identity-provider integration, and broader authorization roles as separate
+  future security boundaries unless later evidence deliberately expands this
+  milestone.
 
 ## Future capability and interface parity audit
 
