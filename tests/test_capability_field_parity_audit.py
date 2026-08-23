@@ -49,7 +49,7 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
 
     assert rows["mode"][4] == "U/R*"
     assert rows["screen"][4] == "U/R*"
-    assert rows["screen"][5] == "R*"
+    assert rows["screen"][5] == "R"
     assert rows["system"][4] == "R*"
     assert rows["system_hold"][7] == "R+C* / —"
     assert rows["volume"][4] == "R+C†"
@@ -85,7 +85,7 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "GSI battery",
         "System Status",
         "Unknown or deferred is deliberately different from unsupported",
-        "Only `A01` is scheduled by this audit",
+        "`A01` and `A03` are complete",
         "## Milestone 26.3 handoff",
         "existing copied-tree or USB verified executor",
         "canonical private host-state directory",

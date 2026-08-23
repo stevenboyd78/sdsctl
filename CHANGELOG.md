@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add complete web-dashboard presentation for all 34 renderer-neutral
+  `RadioStateSnapshot` fields. Stable accessible groups now expose hierarchy,
+  channel identity, RF/service, talkgroup and unit identifiers, receiver levels,
+  P25, mute, scanner recording, detected subaudio, Weather/SAME, and Tone-Out
+  state while preserving literal zero/false-like values and clearing stale
+  mode-specific values at every authoritative snapshot, SSE, polling, and
+  reconciliation boundary.
 - Add the Milestone 26.3 local interactive Favorites Workspace editor. One
   explicit copied-tree or freshly qualified Linux USB source can be browsed and
   searched with schema diagnostics, exact provenance, and raw record detail;
