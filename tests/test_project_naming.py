@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_1_authenticated_lan_boundary() -> None:
+def test_roadmap_records_milestone_26_2_capability_parity_audit() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,28 +123,49 @@ def test_roadmap_records_milestone_26_1_authenticated_lan_boundary() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.1 — Authenticated LAN web-dashboard access foundation",
-        "Milestone 25.19 is closed",
-        "v0.21.0 Python package",
-        "Loopback-only operation remains the default",
-        "explicit operator choice",
-        "private Unix-domain daemon services",
-        "secret-reference and redaction principles",
-        "same-origin and authorization protections",
-        "TLS or trusted reverse-proxy boundary",
-        "Plain unauthenticated HTTP on a non-loopback listener",
-        "host-independent authentication",
-        "physical SDS200 LAN validation",
-        "Home Assistant Ingress behavior",
-        "remote daemon-backed CLI/TUI transport",
-        "Milestone 26.1 implementation and acceptance are complete",
-        "two independent authenticated HTTPS sessions",
-        "one daemon-owned scanner-control path and one RTSP/RTP audio path",
-        "2026-08-22",
-        "firmware 1.26.01",
-        "direct TLS",
+        "### Milestone 26.2 — Physical-scanner capability and interface field-parity audit",
+        "Milestone 26.1 is closed",
+        "SDS100, SDS150, and SDS200 evidence",
+        "Rich CLI and terminal monitor output",
+        "standalone and daemon-backed Textual TUI",
+        "generic daemon API/SSE/MQTT",
+        "individual fields",
+        "application-only capabilities",
+        "inventory and planning boundary",
+        "Milestone 26.2 audit and acceptance are complete",
+        "docs/capability-field-parity-audit.md",
+        "exact 34-field `RadioStateSnapshot`",
+        "contract test",
+        "GSI battery",
+        "sixteen-field System Status projection",
+        "Milestone 26.3",
     ):
         assert required in active_milestone or required in normalized_active_milestone
+
+
+def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    active_milestone = roadmap.split(
+        "## Active milestone", 1
+    )[1].split(
+        "## Deferred hardware validation", 1
+    )[0]
+    milestone_group = roadmap.split(
+        "### Milestone 26 — Authenticated access and post-v0.21 interface work",
+        1,
+    )[1].split("## Completed milestone groups", 1)[0]
+    normalized_group = " ".join(milestone_group.split())
+
+    assert "### Milestone 26.1" not in active_milestone
+    for required in (
+        "Milestone 26.1 completed explicit authenticated direct-TLS LAN access",
+        "loopback-only operation as the default",
+        "private Unix-domain socket boundary",
+        "Home Assistant Ingress",
+        "two authenticated concurrent sessions",
+        "remote daemon-backed CLI/TUI transport",
+    ):
+        assert required in milestone_group or required in normalized_group
 
 
 def test_web_guide_records_milestone_26_1_physical_acceptance() -> None:

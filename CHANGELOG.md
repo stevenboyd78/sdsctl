@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.2 evidence-backed physical-scanner capability and
+  interface field-parity audit. It traces all 34 renderer-neutral scanner-state
+  fields through Rich CLI, terminal monitor, Textual TUI, web, daemon API/SSE/
+  MQTT, and Home Assistant surfaces; separates physical, specification,
+  synthetic-fixture, implementation, and application-only evidence; records
+  semantic-control and advanced-protocol gaps without expanding support claims;
+  and establishes the bounded Milestone 26.3 Favorites Workspace editor handoff.
 - Add the Milestone 26.1 authenticated LAN web-dashboard foundation as an
   explicit native-TLS host mode on one private, unique-local, or link-local
   interface. The mode requires one exact HTTPS origin, a password supplied only

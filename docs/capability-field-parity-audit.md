@@ -1,0 +1,314 @@
+# Capability and field-parity audit
+
+Milestone 26.2 records an evidence-backed physical-scanner-to-application
+capability and field-parity audit for `sdsctl`. The repository baseline is merge
+commit `eac8e8033527607789451dccf0112b240fa0222e`, and the audit was completed on
+August 22, 2026.
+
+This is an inventory and planning boundary. It does not infer undocumented
+protocol semantics or convert synthetic fixtures into physical validation. It
+does not claim that every modeled command works on every supported model,
+firmware, and transport. A field delivered in daemon JSON or MQTT is also not
+counted as human-visible unless a renderer actually presents it.
+
+## Method and evidence
+
+The audit traces each capability through the strongest available evidence:
+
+1. a scanner screen, menu, function, protocol command, or application-only
+   source;
+2. physical observations, protocol documentation, sanitized fixtures, and tests;
+3. parser/model preservation and renderer-neutral state or service projection;
+4. Rich CLI, terminal monitor, Textual TUI, web dashboard, generic daemon
+   API/MQTT, and Home Assistant presentation;
+5. semantic controls and their safety boundary; and
+6. model, firmware, and transport validation limits.
+
+The primary implementation sources are `src/sds200/models.py`,
+`src/sds200/state.py`, `src/sds200/scanner.py`, the renderer and daemon modules,
+and their corresponding tests. Physical-validation statements remain bounded by
+[supported scanner models](supported-models.md), [the Textual TUI](tui.md), and
+[advanced protocol research](advanced-protocol-research.md).
+
+### Evidence codes
+
+| Code | Meaning |
+| --- | --- |
+| `P200` | Observed during bounded physical SDS200 firmware 1.26.01 validation. |
+| `P100` | Covered only by the recorded SDS100 firmware 1.26.01 core USB/GSI validation boundary. |
+| `S` | Supported by a reviewed protocol specification or command contract. |
+| `F` | Covered by sanitized/synthetic fixtures and automated tests. |
+| `I` | Established by implementation inspection; not itself physical evidence. |
+| `A` | Application behavior with no direct physical-scanner UI equivalent. |
+| `U` | Evidence is insufficient or the relevant semantics remain unknown. |
+
+Physical validation of a screen family does not prove every value that the
+screen might emit. Field rows therefore use `F` unless the recorded physical
+acceptance explicitly supports the narrower claim.
+
+### Finding classes
+
+| Class | Meaning |
+| --- | --- |
+| `R1` | Scanner data is modeled or parsed but missing from one or more intended renderers. |
+| `R2` | A modeled or parsed capability lacks a safe user-facing semantic control. |
+| `R3` | A physical capability lacks sufficient protocol evidence, modeling, lifecycle ownership, or physical validation. |
+| `R4` | An application-only capability has no physical-scanner UI equivalent and is not a parity defect. |
+| `Covered` | No material gap was found across the currently intended surfaces. |
+| `Context` | The value is intentionally retained for routing, identity, or safe controls rather than routine display. |
+
+`R1` does not mean every renderer should display every internal index. The
+follow-up decision must still consider operator value, layout, compatibility,
+and whether a value is control context rather than presentation data.
+
+## Supported-model and transport baseline
+
+| Model | Encoded boundary | Strongest recorded validation | Audit limit |
+| --- | --- | --- | --- |
+| SDS100 | USB serial control, GSI/PSI, navigation and hold-key control, optional GSI battery, volume/squelch 0–15 | `P100`: core USB, model, firmware, and GSI on firmware 1.26.01 | No network control/audio and no mode-by-mode physical parity record. |
+| SDS150 | USB serial control, GSI/PSI, navigation, GCS charge status, no hold-key control, volume/squelch 0–15 | `S`, `F` only | The complete model remains specification-only until representative hardware is available. |
+| SDS200 | USB serial and UDP control, GSI/PSI, navigation and hold-key control, volume 0–29, squelch 0–19, RTSP/RTP audio | `P200`: core USB, Ethernet control, and audio on firmware 1.26.01 | Advanced commands are not blanket-validated by the core hardware record. |
+
+`ScannerCapabilities` is deliberately coarse. Its model validation status does
+not encode per-command, per-mode, firmware, or transport evidence, and RTSP/RTP
+audio remains a separate subsystem capability.
+
+### Scanner-screen evidence
+
+| Screen or mode family | Modeled state | Strongest evidence | Remaining limit |
+| --- | --- | --- | --- |
+| Conventional and trunk scanning | Hierarchy names, indexes and holds; channel identity; RF/service/IDs; levels, signal, P25, mute, and recording | `P200` for observed screen transitions and basic live state; `F` for exact field projection | SDS100 lacks an equivalent field-by-field record; SDS150 is specification-only. |
+| Quick Search | Search frequency, modulation, hold, and detected sub-audio | `P200` for Quick Search Hold; `F` for exact field projection | Other model/firmware parity is not established. |
+| Close Call | Searching state, receive/hold state, hit name/index/number, RF, signal/RSSI, and detected sub-audio | `P200` for searching and Hold; `F` for `CcHitsChannel` | A physical Close Call hit capture is still absent. |
+| Weather | Weather mode, channel name/index/number, RF, hold, and optional SAME value | `P200` for Weather Scan/Hold; `F` for exact fields | Physical SAME alert content is still absent. |
+| Tone-Out | Profile name/index/number, RF, hold, and Tone A/Tone B | `P200` for standby/Hold; `F` for exact fields | An actual physical Tone-Out detection remains unvalidated. |
+| Unknown/future screen | Raw mode, screen, ordered nodes, attributes, and source XML | `F`, `I` | Preservation is deliberate; semantics are not inferred. |
+| Analysis and discovery screens | Lossless or partial records for System Status, Current Activity, LCN Monitor, and some discovery nodes | `S`, `F`, `I` | Shared-state projection, lifecycle ownership, output semantics, and physical coverage remain incomplete. |
+
+## Shared live-state field inventory
+
+`RadioStateSnapshot` is the canonical 34-field renderer-neutral scanner state.
+The daemon API, SSE payloads, and generic MQTT `state/radio` publication preserve
+the complete mapping. The following presentation legend applies only to this
+matrix:
+
+- `R`: human-rendered;
+- `J`: emitted as structured JSON/API/MQTT data;
+- `U`: consumed for layout or control routing but not normally rendered;
+- `C`: a semantic control is exposed; and
+- `—`: absent from that surface.
+
+The Rich column means `sdsctl scanner-info`; `sdsctl info` separately reports
+volume and squelch. The terminal-monitor column means the continuously updating
+`sdsctl monitor` surface. An asterisk means conditional or mode-specific
+presentation. The normal web path renders `screen_kind`; raw `screen` is only a
+compatibility fallback. In the Home Assistant column, `R+C* / —` means an
+optional discovered switch presents and controls the value while the first-party
+Lovelace card remains read-only. `R+C†` means the standalone TUI can mutate the
+value while the daemon-backed TUI presents it but rejects mutation.
+
+| Field | Source/evidence | Rich | Monitor | Textual TUI | Web UI | API/SSE/MQTT | HA discovery/card | Finding |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
+| `screen` | GSI/PSI; `P200`, `F` | R | — | U/R* | R* | J | — | R1: monitor, normal web, and Home Assistant |
+| `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | — | R1: CLI and Home Assistant |
+| `system` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
+| `department` | GSI/PSI; `P200`, `F` | R | R | R* | — | J | R | R1: web |
+| `site` | GSI/PSI; `P200`, `F` | R | R | R* | — | J | — | R1: web and Home Assistant |
+| `system_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `system_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
+| `department_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `department_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
+| `site_index` | Node attribute; `F` | — | — | U | U | J | — | Context |
+| `site_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
+| `channel` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R | Covered |
+| `channel_index` | Node attribute; `F` | — | — | U | U | J | U | Context |
+| `channel_number` | Mode-selected node; `F` | — | — | R* | — | J | — | R1: special-mode identity |
+| `channel_kind` | Source node tag; `F`, `I` | — | — | U/R* | U | J | U | Context |
+| `channel_hold` | Node attribute; `P200`, `F` | — | — | R+C | R+C | J | R+C* / — | R1: CLI |
+| `frequency` | Mode-selected node; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
+| `modulation` | Mode-selected node; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
+| `sub_audio_detected` | Search/Close Call SAD; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
+| `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
+| `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
+| `weather_mode` | Weather node; `P200`, `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
+| `weather_same` | Weather node; `F` | — | — | R* | — | J | — | R1: CLI, web, and Home Assistant |
+| `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | — | J | — | R1: web and Home Assistant |
+| `talkgroup_id` | GSI/PSI; `F` | — | R | — | — | J | — | R1: Rich, TUI, web, and Home Assistant |
+| `unit_id` | GSI/PSI; `F` | — | R | — | — | J | — | R1: Rich, TUI, web, and Home Assistant |
+| `volume` | GSI/PSI; `P200`, `F` | — | R | R+C† | — | J | — | R1/R2: daemon-backed and browser surfaces |
+| `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C† | — | J | — | R1/R2: daemon-backed and browser surfaces |
+| `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
+| `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
+| `p25_status` | GSI/PSI; `F` | — | — | — | — | J | — | R1: no human renderer |
+| `mute` | GSI/PSI; `P200`, `F` | R | R | R | — | J | — | R1: web and Home Assistant |
+| `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | — | J | — | R1: distinct from application recording |
+
+The matrix exposes three high-confidence presentation findings without requiring
+new protocol semantics:
+
+- the TUI already proves that Search, Close Call, Weather, and Tone-Out fields
+  can be rendered from shared state, while the web and Home Assistant surfaces
+  omit them;
+- the web omits already-modeled department, site, RF, service, identifier,
+  level, mute, scanner-recording, and P25 fields; and
+- Home Assistant Discovery intentionally exposes a small stable core even though
+  the generic MQTT topic carries the complete snapshot.
+
+Structured CLI output is a separate data surface: daemon-client snapshot/status
+JSON and direct event JSON preserve their complete structured payloads. The `R1`
+labels above concern human renderers, not loss from those machine-readable paths.
+
+### Renderer-neutral semantic presentation
+
+| Semantic projection | Rich CLI | Textual TUI | Web | Home Assistant | Finding |
+| --- | --- | --- | --- | --- | --- |
+| Connection, activity, signal band, holds, availability, severity, service, mute, and recording from `ScannerPresentation` | Uses only activity, signal, mute, and recording roles for styling; labels and values remain raw | Renders the broader semantic labels/state | Independently derives a smaller view from raw state | Uses selected raw-state templates | R1: the shared semantic projection is not consumed consistently |
+
+## Modeled data outside shared live state
+
+| Surface | Modeled or preserved data | Current product exposure | Finding |
+| --- | --- | --- | --- |
+| GSI battery | Optional battery float on `ScannerInfo` | Rich `scanner-info` and dedicated `sdsctl battery`; absent from shared state | R1 |
+| GCS charge status | Status/code, voltage, capacity, current, temperature, and charging predicate | Dedicated `sdsctl battery`; absent from shared state and SDS150 remains specification-only | R1/R3 |
+| System Status | Sixteen exact-string fields including system/site identity, signal, quality, activity, IDs, WACN, NAC, Color, RAN, Area, attenuation, frequencies, and P25 status | Parsed projection only; absent from shared state and every renderer | R1/R3 |
+| STS display | Display form, ordered line text/mode pairs, reserved fields, and raw packet | Dedicated `sdsctl command STS` renders the display form and ordered lines; no shared-state projection and only synthetic parser/renderer evidence | R1/R3 |
+| Unknown GSI/PSI material | Raw XML, ordered/repeated nodes, attributes, `MonitorList`, `Avoid`, `RecSlot`, `LVL`, and `IFX` | Losslessly preserved but not semantically projected | R3 |
+
+Raw preservation prevents silent data loss. It does not make an unknown field
+safe for control, comparison semantics, or renderer-specific interpretation.
+
+## Semantic-control parity
+
+| Capability | Direct CLI | Standalone TUI | Daemon-client CLI | Daemon TUI | Web | Home Assistant | Finding |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Hold current system/department/site/channel | Indexed hold target | Indexed hold only | Indexed hold target | Indexed hold only | Explicit hold/release | Optional discovered hold/release | R2: deterministic release is absent from CLI/TUI adapters although the daemon API supports it |
+| Previous/next selection | Typed targets | Current channel only | Typed targets | Current channel only | Current channel | Optional current-channel controls | Covered within each renderer's advertised scope |
+| Volume/squelch mutation | — | Typed bounded control | — | Read-only; mutation rejected | — | — | R2: no daemon-owned semantic operation or broad physical acceptance |
+| Scanner reconnect | — | Restart owned transport | Request daemon reconnect | Request daemon reconnect | Request daemon reconnect | Optional discovered daemon reconnect | Covered within each renderer's ownership boundary |
+| Raw scanner command | Explicit escape hatch | — | — | — | — | — | Intentional boundary; raw access is not semantic parity |
+| Daemon WAV recording/status/inventory | Different direct-audio workflow | Client-local recording | — | Client-local PCMU recording | Status/start/stop/list | Status sensors only | R1/R2/R4: daemon-client CLI has no manager operations and TUI recordings have a different owner |
+| Scanner-native URC recording | — | — | — | — | — | — | R2/R3: typed foundation exists, physical/lifecycle evidence does not |
+| Favorites write execution | — | — | — | — | — | — | R1/R2: verified executors exist; the first interactive surface is Milestone 26.3 |
+
+Browser WAV recording and inventory are application recording, not the scanner's
+GSI `Rec` flag or scanner-native `URC` capability. Likewise, Home Assistant's
+recording entities report daemon-owned WAV recording rather than scanner-native
+recording state. A daemon-backed TUI records its own PCMU client stream; it does
+not control `DaemonRecordingManager`.
+
+## Application audio and recording detail
+
+| Application surface | Renderer-neutral detail | Human presentation gap | Class |
+| --- | --- | --- | --- |
+| Audio session | Lifecycle/timing/output, packet/sample totals, and nine reliability counters | CLI audio paths and the separate `AudioRecordingSession` TUI branch show the most detail; the normal `TuiAudioSession` panel is reduced in both standalone and daemon modes; web/HA do not expose the full set | R1/R4 |
+| Daemon recording | Paths, timestamps, timing, packet/sample/reliability/sink counters, completed count, closure, and error | Web omits metadata path, some counters, sink state, completed count, and error; HA exposes only active/status | R1/R4 |
+| Recording inventory | Compatibility, sidecar health, frames, sizes, timestamps, issue/attention state, and aggregate diagnostics | Web shows a subset; the TUI library uses a separate compatible-WAV-only `RecordingEntry` rather than this inventory model | R1/R4 |
+| Recording sidecar scanner state | Ten fields: mode, hierarchy/channel, RF/service, talkgroup, and unit context | Omits raw screen/classification, all indexes/holds, channel number/kind, special-mode fields, levels, signal/RSSI, P25, mute, and scanner recording | R1/R4 |
+| Remote stream metadata | Activity/availability plus system, department, site, channel, frequency, service, talkgroup, and unit context | The bounded published title uses only system, department, and channel-or-frequency; site, service, and IDs remain context | Context/R4 |
+
+These are legitimate application parity questions, but their lack of a scanner
+screen equivalent makes the underlying capabilities `R4`, not scanner defects.
+
+## Advanced protocol and analysis inventory
+
+| Capability | Implemented foundation | Product renderer/control | Evidence boundary | Finding |
+| --- | --- | --- | --- | --- |
+| GLT Favorites retrieval | Lossless root and record preservation | None | `S`, `F`; no semantic Favorites-list projection or physical validation | R2/R3 |
+| FQK quick keys | Exactly 100 nonexistent/disabled/enabled states and typed read/write | None | `S`, `F`; no physical write acceptance | R2/R3 |
+| URC scanner recording | Typed stopped/recording state and start/stop commands | None | `S`, `F`; no complete physical lifecycle record | R2/R3 |
+| MSI/MNU menus | Lossless menu records, selected values, inputs/locations, errors, and indexed menu open | None | `S`, `F`; MSV/MSB mutation and complete menu lifecycle are not evidenced | R2/R3 |
+| AST/APR analysis | Bounded starts, pause/resume, and ordered Current Activity/LCN records | None | `S`, `F`; ownership, stop/reconnect, correlation, and full output semantics remain incomplete | R3 |
+| PWF/GWF waterfall | Receive-only variable PWF fields and exactly 240 uninterpreted GWF values | None | `S`, `F`; start/stop semantics and physical model parity remain incomplete | R3 |
+| System Status/RF Power Plot | Typed System Status projection and bounded start parameters | None | `S`, `F`; RF output parsing and richer field semantics remain incomplete | R1/R3 |
+| QSH exact-frequency search | No implemented exact-frequency form | None | Exact `FRQ` syntax is unresolved | R3 |
+| GW2 binary waterfall | No binary framing implementation | None | Framing and semantics are unresolved | R3 |
+| Discovery, Activity Log, Raw Data Output | Sparse tokens or node lookup only | None | Insufficient fixtures, typed projection, lifecycle, and physical evidence | R3 |
+
+Unknown or deferred is deliberately different from unsupported. No renderer work
+should begin for an `R3` item by guessing fields, command syntax, lifecycle, or
+model applicability.
+
+## Favorites interface inventory
+
+Favorites has a mature renderer-neutral/Python foundation but no current Rich
+CLI, terminal monitor, Textual TUI, web, or Home Assistant workflow.
+
+| Capability | Renderer-neutral/Python foundation | CLI | TUI | Web | Home Assistant | Finding |
+| --- | --- | --- | --- | --- | --- | --- |
+| Storage binding and source provenance | Exact catalog/document snapshots, orphan and ambiguity diagnostics | — | — | — | — | R1 |
+| Hierarchy/navigation | Catalog-ordered traversal across all eight navigation kinds | — | — | — | — | R1 |
+| Search/filter | Text, kind, and inclusive-subtree query | — | — | — | — | R1 |
+| Validation/comparison | Stable schema diagnostics and exact baseline/candidate changes | — | — | — | — | R1 |
+| Supported editing | Existing Name Tag replacement, supported HPD leaf deletion, and exact-template leaf creation | — | — | — | — | R1/R2 |
+| Write planning | Exact baseline/intended plan, blockers, stale precondition, and no-op detection | — | — | — | — | R1/R2 |
+| Verified writes | Copied-tree and qualified USB backup/staging/readback/rollback/report executors | — | — | — | — | R1/R2 |
+| FTP ingestion | Bounded exact read-only retrieval on trusted networks/VPNs | — | — | — | — | R1; writable FTP remains unsupported |
+| Assisted external synchronization | Explicit provider provenance, mapping, review, conflict decisions, and accepted execution | — | — | — | — | R1/R2; excluded from the initial editor |
+
+Milestone 26.3 addresses the first seven presentation/control gaps without
+absorbing FTP writes or an assisted-synchronization UI.
+
+## Application-only capabilities
+
+The following `R4` capabilities have no direct physical-scanner UI equivalent:
+
+- daemon ownership, reconnect policy, client fanout, private API/events/PCMU
+  services, semantic MQTT, and Home Assistant Discovery;
+- browser authentication, SSE, PCM playback, daemon WAV recording, recording
+  inventory/playback/download, and multi-client session revocation;
+- Home Assistant App packaging, Ingress, Lovelace delivery, persistent media,
+  and dedicated MQTT controls; and
+- Favorites copied-tree and read-only FTP ingestion, qualified USB discovery,
+  copied-tree/USB verified backup/staging/readback/rollback execution, schema
+  diagnostics, comparison, and assisted external synchronization.
+
+These capabilities still require cross-interface quality and safety review, but
+absence from the scanner itself is expected.
+
+## Prioritized findings and scheduling
+
+| ID | Follow-up | Class | Scheduling decision |
+| --- | --- | --- | --- |
+| `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Scheduled next as Milestone 26.3; it does not depend on closing unrelated parity gaps |
+| `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Later evidence-led slice; define update/lifecycle semantics first |
+| `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Safe renderer-parity candidate because no new scanner semantics are required |
+| `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Later compatibility-reviewed slice; avoid entity churn and unbounded discovery growth |
+| `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2 | Later semantic-control slice with command and physical acceptance |
+| `A06` | Expose richer audio, recording, inventory, and sidecar diagnostics where operationally useful | R1/R4 | Later application-observability slice |
+| `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |
+| `A08` | Expand per-mode SDS100 validation and perform first SDS150 physical validation | R3 | Hardware-dependent; SDS150 remains deferred |
+
+Only `A01` is scheduled by this audit. The ordering avoids turning a broad
+inventory into silent authorization for unrelated runtime or protocol work.
+
+## Milestone 26.3 handoff
+
+The next slice is a local interactive Favorites Workspace editor. Its safety
+contract is fixed even if activation work refines the concrete UI shape:
+
+- require one explicit copied-tree source or already-mounted, freshly qualified
+  Linux USB target;
+- keep open, browse, search/filter, diagnostics, provenance, and raw detail
+  read-only;
+- permit only existing evidence-backed Name Tag rename, supported HPD leaf
+  deletion, and exact-template leaf creation operations;
+- retain immutable baseline and intended snapshots, in-memory undo/reset/discard,
+  and no autosave;
+- review the exact existing write plan and blockers before a separate explicit
+  confirmation;
+- execute only through the existing copied-tree or USB verified executor, never
+  through renderer-owned file replacement;
+- keep USB backup, staging, rollback, and report artifacts in a canonical
+  private host-state directory outside scanner media; and
+- surface operation, backup, rollback-manifest, report, recovery, and exact
+  reload evidence.
+
+Arbitrary positional-field editing; structural hierarchy/container or catalog
+creation, deletion, or reordering beyond the supported record operations; FTP
+writes; RadioReference synchronization UI; GLT/FQK/live-scanner mutation;
+daemon/web/Ingress exposure; and background synchronization remain outside the
+initial editor. Supported Name Tag replacement may target existing catalog and
+hierarchy records without broadening those structural operations. Milestone 26.3
+consumes the released Milestones 21–22 safety contracts and does not absorb the
+unrelated findings above.

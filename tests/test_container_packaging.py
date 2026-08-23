@@ -10,7 +10,6 @@ _USB_COMPOSE = _REPOSITORY_ROOT / "compose.usb.yaml"
 _ENV_EXAMPLE = _REPOSITORY_ROOT / ".env.example"
 _GITIGNORE = _REPOSITORY_ROOT / ".gitignore"
 _README = _REPOSITORY_ROOT / "README.md"
-_ROADMAP = _REPOSITORY_ROOT / "ROADMAP.md"
 _CONTAINER_DOC = _REPOSITORY_ROOT / "docs" / "container-deployment.md"
 _DOCKER_HUB_WORKFLOW = (
     _REPOSITORY_ROOT / ".github" / "workflows" / "docker-hub-image.yml"
@@ -405,8 +404,6 @@ def test_generic_container_documentation_preserves_compose_security_boundary() -
     document = _CONTAINER_DOC.read_text(encoding="utf-8")
     normalized_document = " ".join(document.split())
     readme = _README.read_text(encoding="utf-8")
-    roadmap = _ROADMAP.read_text(encoding="utf-8")
-    normalized_roadmap = " ".join(roadmap.split())
 
     for required in (
         "Milestone 25.7",
@@ -541,15 +538,6 @@ def test_generic_container_documentation_preserves_compose_security_boundary() -
     assert "docker compose -f compose.usb.yaml run --rm usb-scanner info" in readme
     assert "snapshot --json" not in document
     assert "physical scanner validation of the generic Compose deployment" not in document
-    assert (
-        "### Milestone 26.1 — Authenticated LAN web-dashboard access foundation"
-        in roadmap
-    )
-    assert "Milestone 25.19 is closed" in roadmap
-    assert (
-        "Plain unauthenticated HTTP on a non-loopback listener"
-        in normalized_roadmap
-    )
 
 
 def test_generic_docker_hub_workflow_has_safe_trigger_and_publication_contract() -> None:
