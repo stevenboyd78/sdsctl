@@ -349,6 +349,12 @@ field matches the requested level and only then captures the completion snapshot
 Literal zero remains a valid level; no percentage or cross-model meaning is
 inferred.
 
+Physical SDS200 firmware 1.26.01 UDP acceptance did not reach that acknowledgement:
+both setters timed out without changing GSI volume `0` or squelch `2` through
+direct and daemon-owned paths. The runtime correctly returned a bounded timeout
+and retained authoritative state. The level operations remain specification-backed
+and fixture-tested pending USB comparison or a transport-support decision.
+
 ## Dynamic PCM destinations
 
 A `PcmSink` may be attached before runtime startup or while the runtime is

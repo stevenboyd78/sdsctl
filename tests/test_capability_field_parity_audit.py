@@ -103,5 +103,13 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "fixed deterministic IDs",
         "combines daemon availability with field availability",
         "This closes `A04`",
+        "## Milestone 26.8 physical semantic-control acceptance",
+        "completed authoritative enter and release for System, Department, Site, and Channel",
+        "original Utah County Simulcast site index `35297`",
+        "did not acknowledge `VOL,1`, `VOL,0`, `SQL,3`, or `SQL,2` over UDP",
+        "returned bounded timeouts",
+        "documented `V`/`Q` knob keys",
+        "No local USB scanner was available",
+        "rejects a physical UDP setter claim",
     ):
         assert required in document or required in normalized

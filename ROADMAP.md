@@ -64,8 +64,19 @@ compatibility negotiation.
 Milestone 26.8 implementation and host-independent acceptance are complete.
 Direct and daemon-backed CLI/TUI paths now share exact desired-state hold/release
 semantics and model-bounded volume/squelch mutation with authoritative completion.
-The reversible physical SDS200 command matrix remains the milestone's final
-acceptance gate.
+Physical SDS200 firmware 1.26.01 acceptance on 2026-08-23 completed enter and
+release for all four hold scopes through both direct and daemon-owned paths. The
+scanner was restored to its starting hold states and Utah County site without a
+concurrent owner.
+
+The volume/squelch portion of the physical matrix did not pass on SDS200 UDP.
+Direct and daemon-owned `VOL`/`SQL` setters timed out without changing the
+authoritative starting values of volume `0` and squelch `2`. A bounded diagnostic
+of the documented `V`/`Q` knob keys plus one rotary step returned `KEY,OK` but
+also produced no state change. No local USB scanner was available for serial
+comparison. Milestone 26.8 therefore remains open pending representative USB
+acceptance or an explicit transport-support decision; the branch must not claim
+physical SDS200 UDP level mutation.
 
 Physical SDS200 acceptance must use reversible bounded changes: exercise enter
 and release for each meaningful hold scope, change and restore volume, change and

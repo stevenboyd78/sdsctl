@@ -67,7 +67,7 @@ and whether a value is control context rather than presentation data.
 | --- | --- | --- | --- |
 | SDS100 | USB serial control, GSI/PSI, navigation and hold-key control, optional GSI battery, volume/squelch 0–15 | `P100`: core USB, model, firmware, and GSI on firmware 1.26.01 | No network control/audio and no mode-by-mode physical parity record. |
 | SDS150 | USB serial control, GSI/PSI, navigation, GCS charge status, no hold-key control, volume/squelch 0–15 | `S`, `F` only | The complete model remains specification-only until representative hardware is available. |
-| SDS200 | USB serial and UDP control, GSI/PSI, navigation and hold-key control, volume 0–29, squelch 0–19, RTSP/RTP audio | `P200`: core USB, Ethernet control, and audio on firmware 1.26.01 | Advanced commands are not blanket-validated by the core hardware record. |
+| SDS200 | USB serial and UDP control, GSI/PSI, navigation and hold-key control, volume 0–29, squelch 0–19, RTSP/RTP audio | `P200`: core USB, Ethernet control, audio, and direct/daemon semantic hold on firmware 1.26.01 | UDP `VOL`/`SQL` setters timed out without mutation; USB setter comparison is absent. |
 
 `ScannerCapabilities` is deliberately coarse. Its model validation status does
 not encode per-command, per-mode, firmware, or transport evidence, and RTSP/RTP
@@ -136,8 +136,8 @@ Lovelace card remains read-only.
 | `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
 | `talkgroup_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
 | `unit_id` | GSI/PSI; `F` | — | R | — | R | J | — | R1: Rich, TUI, and Home Assistant |
-| `volume` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1/R2: mutation parity implemented; physical acceptance and Home Assistant remain |
-| `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1/R2: mutation parity implemented; physical acceptance and Home Assistant remain |
+| `volume` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1/R2/R3: interfaces implemented; firmware 1.26.01 UDP setter timed out without mutation; USB and Home Assistant remain |
+| `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C | R | J | — | R1/R2/R3: interfaces implemented; firmware 1.26.01 UDP setter timed out without mutation; USB and Home Assistant remain |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
 | `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | — | — | R | J | — | R1: monitor, TUI, and Home Assistant; raw value only |
@@ -187,9 +187,9 @@ safe for control, comparison semantics, or renderer-specific interpretation.
 
 | Capability | Direct CLI | Standalone TUI | Daemon-client CLI | Daemon TUI | Web | Home Assistant | Finding |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Hold current system/department/site/channel | Indexed hold plus explicit desired state | Explicit hold/release | Indexed hold plus explicit desired state | Explicit hold/release | Explicit hold/release | Optional discovered hold/release | R2: implementation complete in Milestone 26.8; physical acceptance pending |
+| Hold current system/department/site/channel | Indexed hold plus explicit desired state | Explicit hold/release | Indexed hold plus explicit desired state | Explicit hold/release | Explicit hold/release | Optional discovered hold/release | Covered: Milestone 26.8 direct and daemon-owned physical acceptance complete |
 | Previous/next selection | Typed targets | Current channel only | Typed targets | Current channel only | Current channel | Optional current-channel controls | Covered within each renderer's advertised scope |
-| Volume/squelch mutation | Exact typed level | Typed bounded control | Exact semantic level | Typed bounded control | — | — | R2: implementation complete in Milestone 26.8; physical acceptance pending |
+| Volume/squelch mutation | Exact typed level | Typed bounded control | Exact semantic level | Typed bounded control | — | — | R2/R3: implemented, but firmware 1.26.01 UDP setters timed out without mutation; USB comparison pending |
 | Scanner reconnect | — | Restart owned transport | Request daemon reconnect | Request daemon reconnect | Request daemon reconnect | Optional discovered daemon reconnect | Covered within each renderer's ownership boundary |
 | Raw scanner command | Explicit escape hatch | — | — | — | — | — | Intentional boundary; raw access is not semantic parity |
 | Daemon WAV recording/status/inventory | Different direct-audio workflow | Client-local recording | — | Client-local PCMU recording | Status/start/stop/list | Status sensors only | R1/R2/R4: daemon-client CLI has no manager operations and TUI recordings have a different owner |
@@ -201,6 +201,22 @@ GSI `Rec` flag or scanner-native `URC` capability. Likewise, Home Assistant's
 recording entities report daemon-owned WAV recording rather than scanner-native
 recording state. A daemon-backed TUI records its own PCMU client stream; it does
 not control `DaemonRecordingManager`.
+
+### Milestone 26.8 physical semantic-control acceptance
+
+On 2026-08-23, an SDS200 running firmware 1.26.01 completed authoritative enter
+and release for System, Department, Site, and Channel through both the direct CLI
+and a single-owner daemon runtime/API client path. The test restored System and
+Site Hold to `On`, Department and Channel Hold to `Off`, and the original Utah
+County Simulcast site index `35297`; shutdown removed the daemon socket cleanly.
+
+The same scanner did not acknowledge `VOL,1`, `VOL,0`, `SQL,3`, or `SQL,2` over
+UDP. Direct and daemon-owned calls returned bounded timeouts, while GSI and getter
+responses remained volume `0` and squelch `2`. An explicitly approved diagnostic
+using documented `V`/`Q` knob keys and one right/left rotary step returned
+`KEY,OK` for every key but also produced no state change. No local USB scanner was
+available, so this evidence rejects a physical UDP setter claim without deciding
+whether USB serial setters work.
 
 ## Application audio and recording detail
 
@@ -279,7 +295,7 @@ absence from the scanner itself is expected.
 | `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Completed in Milestone 26.5: SDS100 PSI/GSI battery joins shared state; GCS and System Status remain separate pending explicit lifecycle and physical evidence |
 | `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Completed in Milestone 26.4 without new scanner semantics |
 | `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Completed in Milestone 26.6 with four fixed read-only sensors and matching optional card fields |
-| `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2 | Milestone 26.8 implementation complete; reversible physical command acceptance pending |
+| `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2/R3 | Hold parity physically accepted in Milestone 26.8; level interfaces implemented, but UDP setters failed without mutation and USB comparison remains |
 | `A06` | Expose richer audio, recording, inventory, and sidecar diagnostics where operationally useful | R1/R4 | Later application-observability slice |
 | `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |
 | `A08` | Expand per-mode SDS100 validation and perform first SDS150 physical validation | R3 | Hardware-dependent; SDS150 remains deferred |

@@ -10,11 +10,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 - Add Milestone 26.8 exact semantic controls across direct and daemon-backed CLI
   and Textual surfaces. System, Department, Site, and Channel controls now choose
-  an explicit scanner-confirmed hold or release state; volume and squelch accept
-  model-bounded exact levels and daemon-backed TUI adjustments. New versioned
-  local daemon operations share the existing control lock and authoritative
-  completion snapshot without adding a scanner owner, raw-key passthrough,
-  Home Assistant entity, MQTT topic, or remote transport.
+  an explicit scanner-confirmed hold or release state; volume and squelch expose
+  specification-backed, model-bounded exact levels and daemon-backed TUI
+  adjustments. New versioned local daemon operations share the existing control
+  lock and authoritative completion snapshot without adding a scanner owner,
+  raw-key passthrough, Home Assistant entity, MQTT topic, or remote transport.
+  Physical SDS200 1.26.01 UDP acceptance passed all hold scopes, while documented
+  `VOL`/`SQL` setters timed out without mutation and remain unaccepted pending USB
+  comparison or a transport-support decision.
 - Add a separate responsive `SDS200 Display` Home Assistant card with Simple,
   Detail, Search/Close Call, Weather, and Tone-Out layouts; Color, Black on
   White, and White on Black palettes; and Card or viewport-bounded 4:3 fit. The

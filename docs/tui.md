@@ -184,7 +184,10 @@ increments clamp to the connected model's capability bounds and likewise wait
 for authoritative state in direct and daemon-backed modes. Channel next/previous
 controls require a documented `TGID` or conventional-frequency index. The status
 panel reports queued, completed, unavailable, and failed controls without relying
-on color alone. The connection, availability, and
+on color alone. SDS200 firmware 1.26.01 UDP testing found that documented
+`VOL`/`SQL` setters time out without mutation, so LAN-backed TUI users receive a
+failed control rather than an optimistic level; USB comparison remains pending.
+The connection, availability, and
 severity labels include `since HH:MM:SS` using local time; the timestamp changes only
 when the displayed state changes. Repeated unchanged PSI frames still refresh data
 freshness, preventing an active but stable channel from aging into a false stale state.

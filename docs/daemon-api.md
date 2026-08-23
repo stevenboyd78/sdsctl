@@ -314,6 +314,13 @@ zero is valid. The daemon executes the existing typed `VOL` or `SQL` command,
 then reads authoritative `GSI` until the requested field matches before returning
 success. These raw levels do not imply percentage, loudness, or mute state.
 
+This is a specification-backed and fixture-tested contract, not yet a physical
+SDS200 UDP claim. On firmware 1.26.01, both direct and daemon-owned LAN setters
+timed out before acknowledgement and authoritative GSI remained at the starting
+levels. Clients must handle `control_timeout`; no optimistic value is returned.
+Representative USB comparison or an explicit transport-support decision remains
+open.
+
 ### Reconnect availability
 
 `scanner.reconnect` is supported only when the daemon directly owns an SDS200
