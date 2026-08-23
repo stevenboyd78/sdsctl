@@ -695,10 +695,11 @@ private Unix-domain sockets inside the App.
 The App configuration accepts the required `scanner_host`, optional
 `mqtt_topic_prefix` defaulting to `sdsctl`, and optional media-relative
 `recording_directory` defaulting to `sdsctl/recordings`. Home Assistant MQTT
-Discovery is enabled by the App adapter and publishes twenty-one components:
-fourteen state/diagnostic entities, including the optional Site, Frequency,
-Modulation, and Service Type sensors, plus System, Department, Site, and Channel
-Hold switches and Previous Channel, Next Channel, and Reconnect Scanner buttons.
+Discovery is enabled by the App adapter and publishes twenty-three components:
+sixteen state/diagnostic entities, including optional Site, Frequency,
+Modulation, Service Type, and configured Tone-Out Tone A and Tone B sensors,
+plus System, Department, Site, and Channel Hold switches and Previous Channel,
+Next Channel, and Reconnect Scanner buttons.
 The App keeps the generic MQTT request-envelope command input disabled; the seven
 Home Assistant controls use their own bounded translation layer over the existing
 typed daemon-control boundary.
@@ -710,8 +711,10 @@ PCMU stream.
 
 The App installs the unchanged compact **SDS200 Scanner** Lovelace card plus an
 additive **SDS200 Display** card. The display card offers five scanner-style
-layouts, three palettes, and a 4:3 viewport-fit option over the same fourteen
-read-only state entities. Register both `/local/sds200/sds200-card.js` and
+layouts, three palettes, and a 4:3 viewport-fit option over the same sixteen
+read-only state entities. Numeric zero configured for a Tone-Out tone is shown
+as `Detect` while the entity retains the scanner text. Register both
+`/local/sds200/sds200-card.js` and
 `/local/sds200/sds200-display-card.js` as JavaScript Modules when using both
 cards.
 

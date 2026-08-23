@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add two fixed read-only Home Assistant MQTT Discovery sensors for configured
+  Tone-Out Tone A and Tone B values on the existing radio-state topic. Both
+  bundled Lovelace cards accept the sensors additively, the Tone-Out display
+  layout presents both values, and numeric zero with an optional `Hz` suffix is
+  shown as `Detect` without changing the raw entity state. Existing fourteen-
+  entity card configurations and all scanner-ownership boundaries remain valid.
 - Add Milestone 26.8 exact semantic controls across direct and daemon-backed CLI
   and Textual surfaces. System, Department, Site, and Channel controls now choose
   an explicit scanner-confirmed hold or release state; volume and squelch expose
@@ -15,14 +21,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   adjustments. New versioned local daemon operations share the existing control
   lock and authoritative completion snapshot without adding a scanner owner,
   raw-key passthrough, Home Assistant entity, MQTT topic, or remote transport.
-  Physical SDS200 1.26.01 UDP acceptance passed all hold scopes, while documented
-  `VOL`/`SQL` setters timed out without mutation and remain unaccepted pending USB
-  comparison or a transport-support decision.
+  Physical SDS200 1.26.01 UDP acceptance passed all hold scopes plus reversible
+  volume and squelch changes after accepting firmware `VOL,OK` and `SQL,OK`
+  acknowledgements and confirming levels with screen-independent scalar getters.
 - Add a separate responsive `SDS200 Display` Home Assistant card with Simple,
   Detail, Search/Close Call, Weather, and Tone-Out layouts; Color, Black on
   White, and White on Black palettes; and Card or viewport-bounded 4:3 fit. The
-  original compact card is unchanged, both cards remain read-only over the same
-  fourteen entities, and no Uniden artwork, branding, or fonts are copied.
+  original compact card configuration remains compatible, both cards remain
+  read-only, and no Uniden artwork, branding, or fonts are copied.
 - Physical development acceptance on amd64 Home Assistant OS 18.2, Core
   2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and SDS200 firmware 1.26.01
   confirmed separate delivery of the unchanged compact and responsive display

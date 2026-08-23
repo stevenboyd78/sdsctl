@@ -16,8 +16,9 @@ It provides:
 - daemon-owned recordings stored in Home Assistant media, defaulting to
   `/media/sdsctl/recordings`;
 - automatic use of the Supervisor-provided MQTT service;
-- Home Assistant MQTT Discovery with fourteen state/diagnostic entities,
-  including optional Site, Frequency, Modulation, and Service Type sensors, plus
+- Home Assistant MQTT Discovery with sixteen state/diagnostic entities,
+  including optional Site, Frequency, Modulation, Service Type, and configured
+  Tone-Out Tone A and Tone B sensors, plus
   seven bounded scanner-control entities: four Hold switches and Previous
   Channel, Next Channel, and Reconnect Scanner buttons; and
 - two optional read-only Lovelace presentations: the compact SDS200 Scanner card

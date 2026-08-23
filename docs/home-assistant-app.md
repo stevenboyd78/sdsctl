@@ -177,7 +177,7 @@ be played or downloaded through Ingress.
 
 The App enables the daemon's Home Assistant MQTT Discovery adapter plus the
 dedicated Milestone 20.12.3 Home Assistant control adapter. One SDS200 device
-contains twenty-one fixed components:
+contains twenty-three fixed components:
 
 | Component | Home Assistant platform |
 | --- | --- |
@@ -190,6 +190,8 @@ contains twenty-one fixed components:
 | Frequency | sensor |
 | Modulation | sensor |
 | Service Type | sensor |
+| Tone-Out Tone A | sensor |
+| Tone-Out Tone B | sensor |
 | Signal | sensor |
 | RSSI | sensor |
 | Audio | binary sensor |
@@ -206,11 +208,12 @@ contains twenty-one fixed components:
 Device metadata includes Uniden as manufacturer plus scanner model and firmware
 when the daemon's authoritative snapshot contains them.
 
-Site, Frequency, Modulation, and Service Type use the existing generic radio
-state topic. Each sensor is unavailable when its nullable field is absent, null,
-or empty for the current scanner mode, so a prior value is not presented as
-current. The component inventory remains fixed; mode changes do not create or
-remove discovery components.
+Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Tone B use the existing generic radio-state topic. Each sensor is unavailable
+when its nullable field is absent, null, or empty for the current scanner mode,
+so a prior value is not presented as current. The component inventory remains
+fixed; mode changes do not create or remove discovery components. Tone-Out
+values are scanner configuration, not detected search or Close Call `SAD`.
 
 The App keeps the generic daemon MQTT request-envelope command transport
 disabled. Home Assistant controls instead use seven exact dedicated QoS 0,
@@ -383,6 +386,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -397,7 +402,7 @@ standard Home Assistant switch and button entities, so the card does not acquire
 a scanner, daemon, MQTT, or Home Assistant service-call transport.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker and
-configure the same fourteen entities. The graphical editor selects the layout,
+configure the same sixteen entities. The graphical editor selects the layout,
 palette, and fit mode. Equivalent YAML starts with:
 
 ```yaml
@@ -415,6 +420,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -431,6 +438,12 @@ layouts are an original accessible presentation inspired by the information
 hierarchy on pages 38–39 of the
 [SDS200 Owner's Manual](https://www.uniden.info/download/ompdf/SDS200om.pdf);
 they do not copy scanner artwork, branding, or fonts.
+
+The compact card includes optional Tone A and Tone B detail rows, and the
+`tone_out` display layout presents both configured values. Numeric zero with an
+optional `Hz` suffix is displayed as `Detect`, matching the scanner's
+tone-frequency detection configuration, while nonzero or unrecognized nonempty
+scanner text is shown unchanged. The Home Assistant sensor retains the raw text.
 
 ## Security boundary
 
@@ -538,9 +551,10 @@ previous Local App installation:
   JavaScript Module;
 - confirm **SDS200 Scanner** appears in the card picker, its graphical editor
   works, and the read-only card renders the selected Discovery state entities;
-- confirm the SDS200 MQTT device exposes twenty-one total components;
-- confirm Site, Frequency, Modulation, and Service Type become unavailable when
-  the current radio state omits them and recover on the next applicable state;
+- confirm the SDS200 MQTT device exposes twenty-three total components;
+- confirm Site, Frequency, Modulation, Service Type, and Tone-Out Tone A and
+  Tone B become unavailable when the current radio state omits them and recover
+  on the next applicable state;
 - exercise System, Department, Site, and Channel Hold in both meaningful
   desired-state directions and confirm authoritative Home Assistant state;
 - exercise Previous Channel and Next Channel while a valid current TGID or

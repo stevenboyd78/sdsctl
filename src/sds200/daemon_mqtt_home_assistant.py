@@ -301,6 +301,8 @@ def build_home_assistant_device_discovery(
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),
+        ("tone_out_tone_a", "Tone-Out Tone A"),
+        ("tone_out_tone_b", "Tone-Out Tone B"),
     ):
         components[key] = {
             "platform": "sensor",

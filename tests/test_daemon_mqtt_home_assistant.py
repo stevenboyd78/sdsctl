@@ -31,6 +31,8 @@ SNAPSHOT: dict[str, object] = {
         "frequency": "155.2500 MHz",
         "modulation": "NFM",
         "service_type": "Fire Dispatch",
+        "tone_out_tone_a": "600.9Hz",
+        "tone_out_tone_b": "0.0Hz",
         "signal": 4,
         "rssi": -83.0,
     },
@@ -113,6 +115,8 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
         "signal",
         "rssi",
         "audio_running",
@@ -175,6 +179,8 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),
+        ("tone_out_tone_a", "Tone-Out Tone A"),
+        ("tone_out_tone_b", "Tone-Out Tone B"),
     ):
         assert components[key] == {
             "availability": [
@@ -216,6 +222,8 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
     } <= set(components)
     assert all(
         components[key]["availability_mode"] == "all"
@@ -224,6 +232,8 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
             "frequency",
             "modulation",
             "service_type",
+            "tone_out_tone_a",
+            "tone_out_tone_b",
         )
     )
 
@@ -274,6 +284,8 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
         "signal",
         "rssi",
         "audio_running",

@@ -93,7 +93,7 @@ inventory.
 
 ## MQTT entities
 
-The discovered SDS200 device contains twenty-one components.
+The discovered SDS200 device contains twenty-three components.
 
 State and diagnostic entities:
 
@@ -106,15 +106,19 @@ State and diagnostic entities:
 - Frequency
 - Modulation
 - Service Type
+- Tone-Out Tone A
+- Tone-Out Tone B
 - Signal
 - RSSI
 - Audio
 - Recording
 - Recording Status
 
-Site, Frequency, Modulation, and Service Type are unavailable when the current
-scanner mode does not supply a non-empty value. Their fixed entities recover on
-the next applicable radio state.
+Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Tone B are unavailable when the current scanner mode does not supply a non-empty
+value. Their fixed entities recover on the next applicable radio state. A zero
+Tone-Out value remains unchanged in the entity and appears as `Detect` in the
+bundled cards because zero configures tone-frequency detection.
 
 Scanner controls:
 
@@ -220,6 +224,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -233,7 +239,7 @@ remains deliberately read-only. Scanner controls are separate standard Home
 Assistant switch and button entities and do not add a transport to the card.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker,
-select the same fourteen entities, and choose a layout, palette, and fit mode.
+select the same sixteen entities, and choose a layout, palette, and fit mode.
 The corresponding YAML begins with:
 
 ```yaml
@@ -251,6 +257,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -267,6 +275,11 @@ scrolling. The original grid is inspired by the information hierarchy on pages
 38–39 of the
 [SDS200 Owner's Manual](https://www.uniden.info/download/ompdf/SDS200om.pdf)
 without copying scanner artwork, branding, or fonts.
+
+The compact card includes optional Tone A and Tone B detail rows, and the
+`tone_out` display layout presents both configured values. Numeric zero with an
+optional `Hz` suffix is displayed as `Detect`; the entity retains the raw
+scanner text and other nonempty values are shown unchanged.
 
 ## Troubleshooting
 

@@ -43,6 +43,16 @@ const SDS200_ENTITY_FIELDS = Object.freeze([
     domain: "sensor",
   }),
   Object.freeze({
+    key: "tone_out_tone_a",
+    label: "Tone-Out Tone A",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "tone_out_tone_b",
+    label: "Tone-Out Tone B",
+    domain: "sensor",
+  }),
+  Object.freeze({
     key: "signal",
     label: "Signal",
     domain: "sensor",
@@ -78,6 +88,13 @@ function fieldForName(name) {
   return SDS200_ENTITY_FIELDS.find(
     (field) => field.key === name,
   );
+}
+
+function toneOutDisplay(value) {
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:hz)?$/i.exec(
+    value.trim(),
+  );
+  return match !== null && Number(match[1]) === 0 ? "Detect" : value;
 }
 
 function requireCardConfig(config) {
@@ -321,7 +338,9 @@ class Sds200Card extends HTMLElement {
       return fallback;
     }
 
-    return value;
+    return ["tone_out_tone_a", "tone_out_tone_b"].includes(field)
+      ? toneOutDisplay(value)
+      : value;
   }
 
   _binaryActive(field) {
@@ -597,6 +616,8 @@ class Sds200Card extends HTMLElement {
       ["frequency", "Frequency"],
       ["modulation", "Modulation"],
       ["service_type", "Service type"],
+      ["tone_out_tone_a", "Tone A"],
+      ["tone_out_tone_b", "Tone B"],
       ["recording_status", "Recording status"],
       ["daemon_state", "Daemon"],
     ]) {
@@ -605,6 +626,8 @@ class Sds200Card extends HTMLElement {
           "frequency",
           "modulation",
           "service_type",
+          "tone_out_tone_a",
+          "tone_out_tone_b",
         ].includes(field) &&
         !this._config.entities[field]
       ) {
