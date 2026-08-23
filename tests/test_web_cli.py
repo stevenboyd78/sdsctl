@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from sds200 import DaemonSocketLocation, cli, web_dashboard
+from sds200 import DaemonSocketLocation, cli, web_auth, web_dashboard
 from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_server import (
     WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST,
@@ -743,6 +743,43 @@ def test_web_cli_authenticated_lan_requires_secret_and_matching_origin_port(
         == 2
     )
     assert "origin port must match --listen-port" in capsys.readouterr().err
+
+
+def test_web_cli_reports_unavailable_password_derivation_without_secret(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def unavailable_scrypt(*args: object, **kwargs: object) -> bytes:
+        del args, kwargs
+        raise ValueError("unsupported")
+
+    monkeypatch.setattr(web_auth.hashlib, "scrypt", unavailable_scrypt)
+    result = cli.main(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "192.168.0.25",
+            "--lan-origin",
+            "https://scanner.example:8443",
+            "--lan-password-env",
+            "SDSCTL_WEB_PASSWORD",
+            "--lan-tls-certfile",
+            str(tmp_path / "dashboard.crt"),
+            "--lan-tls-keyfile",
+            str(tmp_path / "dashboard.key"),
+            "--listen-port",
+            "8443",
+        ],
+        environ={"SDSCTL_WEB_PASSWORD": "correct horse battery staple"},
+    )
+
+    error = capsys.readouterr().err
+    assert result == 2
+    assert "password derivation is unavailable" in error
+    assert "correct horse battery staple" not in error
+    assert "Traceback" not in error
 
 
 def test_web_cli_validates_tls_before_constructing_app_or_server(

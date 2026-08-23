@@ -158,6 +158,17 @@ characters, and does not include the value in errors or authentication object
 representations. Restart the web process after rotating the environment value.
 A restart also invalidates every process-local browser session.
 
+At startup, the authentication object derives a 32-byte scrypt verifier with a
+fresh 16-byte process-local salt and the lower-memory OWASP profile
+`N=2^14`, `r=8`, `p=5`. Candidate derivation runs outside the application event
+loop in a dedicated worker, and only one derivation may be active at a time so
+login work cannot consume the worker pool used by dashboard streams. The worker
+stops accepting work during application shutdown; an already-running bounded
+derivation is allowed to finish. A new worker is created only if the
+authentication object is reused. The authentication object does not retain a
+fast SHA-256 password verifier; SHA-256 remains appropriate only for indexing
+the independently random 256-bit session tokens.
+
 The certificate and key paths must be absolute readable regular files no larger
 than 1 MiB. Only an unencrypted PEM service key is supported; an encrypted PEM
 key is rejected instead of allowing an interactive startup prompt. On POSIX,
@@ -182,9 +193,15 @@ absolute expiry terminates associated long-lived responses without affecting
 other sessions.
 
 Failed-login accounting uses a one-minute window bounded per peer, across the
-process, and to at most 256 tracked peers. Login bodies are limited to 4 KiB and
-five seconds. Authentication responses and protected content use
-`Cache-Control: no-store`, HSTS, and `nosniff` protections.
+process, and to at most 256 tracked peers. Limits and concurrent-derivation
+admission are checked before spending scrypt work, and malformed submissions
+without one password do not consume the failure budget. A peer at its limit is
+rejected until its failures expire. After the global limit, at most one recovery
+derivation is admitted every five seconds; a matching password clears the
+global failures. These login limits do not affect established sessions. Login
+bodies are limited to 4 KiB and five seconds. Authentication responses and
+protected content use `Cache-Control: no-store`, HSTS, and `nosniff`
+protections.
 
 Native TLS terminates directly in Uvicorn. Proxy-header trust remains disabled;
 a reverse proxy is not part of this mode. Wildcard binding, public/global

@@ -9,6 +9,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable
+from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import suppress
 from dataclasses import dataclass, field
 from hmac import compare_digest
@@ -18,6 +19,8 @@ from urllib.parse import parse_qs, urlsplit
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from .exceptions import ConfigurationError
 
 WEB_DASHBOARD_AUTH_COOKIE = "__Host-sdsctl-session"
 WEB_DASHBOARD_LOGIN_PATH = "/auth/login"
@@ -34,10 +37,18 @@ WEB_DASHBOARD_LOGIN_BODY_TIMEOUT_SECONDS = 5
 WEB_DASHBOARD_LOGIN_FAILURE_LIMIT = 5
 WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT = 100
 WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS = 60
+WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS = 5
 WEB_DASHBOARD_MAX_LOGIN_PEERS = 256
 WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL = "Authentication is required."
 WEB_DASHBOARD_AUTHENTICATION_FAILED_DETAIL = "Authentication failed."
 WEB_DASHBOARD_ORIGIN_REQUIRED_DETAIL = "The configured dashboard origin is required."
+
+_PASSWORD_SALT_BYTES = 16
+_PASSWORD_SCRYPT_N = 2**14
+_PASSWORD_SCRYPT_R = 8
+_PASSWORD_SCRYPT_P = 5
+_PASSWORD_SCRYPT_MAX_MEMORY_BYTES = 32 * 1024 * 1024
+_PASSWORD_DERIVED_KEY_BYTES = 32
 
 _Clock = Callable[[], float]
 _TokenFactory = Callable[[], str]
@@ -114,8 +125,12 @@ class WebDashboardAuthentication:
         if token_factory is not None and not callable(token_factory):
             raise TypeError("Web dashboard session token factory must be callable or None.")
 
-        self._password_digest = hashlib.sha256(password.encode("utf-8")).digest()
         self._origin = _normalize_origin(origin)
+        self._password_salt = _new_password_salt()
+        self._password_digest = _derive_password_key(
+            password.encode("utf-8"),
+            self._password_salt,
+        )
         self._idle_seconds = idle_seconds
         self._absolute_seconds = absolute_seconds
         self._max_sessions = max_sessions
@@ -125,6 +140,9 @@ class WebDashboardAuthentication:
         self._sessions: dict[bytes, _Session] = {}
         self._login_failures: dict[str, list[float]] = {}
         self._global_login_failures: list[float] = []
+        self._next_global_password_derivation_at = 0.0
+        self._password_derivation_peer: str | None = None
+        self._password_executor: ThreadPoolExecutor | None = None
         self._watcher_id = 0
         self._lock = threading.Lock()
 
@@ -154,40 +172,113 @@ class WebDashboardAuthentication:
 
         if not isinstance(candidate, str):
             return False
-        candidate_digest = hashlib.sha256(candidate.encode("utf-8")).digest()
+        candidate_digest = _derive_password_key(
+            candidate.encode("utf-8"),
+            self._password_salt,
+        )
         return compare_digest(self._password_digest, candidate_digest)
 
-    def authenticate_password(self, candidate: str | None, peer: str) -> bool:
-        """Apply one bounded per-peer password attempt."""
+    async def authenticate_password(self, candidate: str | None, peer: str) -> bool:
+        """Apply one bounded password attempt without blocking the event loop."""
 
         if not isinstance(peer, str) or not peer:
             peer = "unknown"
+        if not isinstance(candidate, str):
+            return False
+        if not self._reserve_password_derivation(peer):
+            return False
+
+        try:
+            submitted = self._submit_password_derivation(candidate)
+        except BaseException:
+            self.close()
+            self._release_password_derivation(peer)
+            raise
+        try:
+            verification = asyncio.wrap_future(submitted)
+        except BaseException:
+            submitted.add_done_callback(lambda _completed: self._release_password_derivation(peer))
+            raise
+        cancellation: asyncio.CancelledError | None = None
+        while not verification.done():
+            try:
+                await asyncio.shield(verification)
+            except asyncio.CancelledError as error:
+                cancellation = cancellation or error
+        try:
+            candidate_matches = verification.result()
+        except BaseException:
+            self._release_password_derivation(peer)
+            raise
+        authenticated = self._complete_password_derivation(
+            peer,
+            candidate_matches=candidate_matches,
+        )
+        if cancellation is not None:
+            raise cancellation
+        return authenticated
+
+    def _reserve_password_derivation(self, peer: str) -> bool:
         now = self._clock()
-        candidate_matches = candidate is not None and self.password_matches(candidate)
         with self._lock:
-            cutoff = now - WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS
-            failures = [
-                attempted_at
-                for attempted_at in self._login_failures.get(peer, [])
-                if attempted_at > cutoff
-            ]
-            self._global_login_failures = [
-                attempted_at
-                for attempted_at in self._global_login_failures
-                if attempted_at > cutoff
-            ]
-            if len(failures) >= WEB_DASHBOARD_LOGIN_FAILURE_LIMIT:
-                self._login_failures[peer] = failures
+            failures = self._prune_login_failures_locked(peer, now)
+            if (
+                len(failures) >= WEB_DASHBOARD_LOGIN_FAILURE_LIMIT
+                or self._password_derivation_peer is not None
+            ):
                 return False
+            if len(self._global_login_failures) >= WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT:
+                if now < self._next_global_password_derivation_at:
+                    return False
+                self._next_global_password_derivation_at = (
+                    now + WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS
+                )
+            self._password_derivation_peer = peer
+            return True
+
+    def _submit_password_derivation(self, candidate: str) -> Future[bool]:
+        with self._lock:
+            if self._password_executor is None:
+                self._password_executor = ThreadPoolExecutor(
+                    max_workers=1,
+                    thread_name_prefix="sdsctl-web-password",
+                )
+            return self._password_executor.submit(self.password_matches, candidate)
+
+    def _complete_password_derivation(
+        self,
+        peer: str,
+        *,
+        candidate_matches: bool,
+    ) -> bool:
+        now = self._clock()
+        with self._lock:
+            self._password_derivation_peer = None
+            failures = self._prune_login_failures_locked(peer, now)
             if candidate_matches:
                 self._login_failures.pop(peer, None)
+                self._global_login_failures.clear()
+                self._next_global_password_derivation_at = 0.0
                 return True
-            if len(self._global_login_failures) >= WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT:
-                self._login_failures[peer] = failures
+            if len(failures) >= WEB_DASHBOARD_LOGIN_FAILURE_LIMIT:
                 return False
             failures.append(now)
-            self._global_login_failures.append(now)
             self._login_failures[peer] = failures
+            global_was_below_limit = (
+                len(self._global_login_failures) < WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT
+            )
+            self._global_login_failures.append(now)
+            if len(self._global_login_failures) > WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT:
+                del self._global_login_failures[
+                    : len(self._global_login_failures) - WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT
+                ]
+            if (
+                global_was_below_limit
+                and len(self._global_login_failures) == WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT
+            ):
+                self._next_global_password_derivation_at = (
+                    now + WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS
+                )
             while len(self._login_failures) > WEB_DASHBOARD_MAX_LOGIN_PEERS:
                 oldest_peer = min(
                     self._login_failures,
@@ -195,6 +286,38 @@ class WebDashboardAuthentication:
                 )
                 del self._login_failures[oldest_peer]
             return False
+
+    def _release_password_derivation(self, peer: str) -> None:
+        with self._lock:
+            if self._password_derivation_peer == peer:
+                self._password_derivation_peer = None
+
+    def close(self) -> None:
+        """Stop accepting password work and let any active derivation finish."""
+
+        with self._lock:
+            executor = self._password_executor
+            self._password_executor = None
+        if executor is not None:
+            executor.shutdown(wait=False, cancel_futures=True)
+
+    def _prune_login_failures_locked(self, peer: str, now: float) -> list[float]:
+        cutoff = now - WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS
+        failures = [
+            attempted_at
+            for attempted_at in self._login_failures.get(peer, [])
+            if attempted_at > cutoff
+        ]
+        if failures:
+            self._login_failures[peer] = failures
+        else:
+            self._login_failures.pop(peer, None)
+        self._global_login_failures = [
+            attempted_at for attempted_at in self._global_login_failures if attempted_at > cutoff
+        ]
+        if len(self._global_login_failures) < WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT:
+            self._next_global_password_derivation_at = 0.0
+        return failures
 
     def issue_session(self) -> str:
         """Create one opaque session and retain only its SHA-256 digest."""
@@ -344,7 +467,10 @@ class WebDashboardAuthenticationMiddleware:
         send: Send,
     ) -> None:
         if scope["type"] == "lifespan":
-            await self._app(scope, receive, send)
+            try:
+                await self._app(scope, receive, send)
+            finally:
+                self._authentication.close()
             return
         if scope["type"] == "websocket":
             await send({"type": "websocket.close", "code": 1008})
@@ -505,7 +631,7 @@ class WebDashboardAuthenticationMiddleware:
         candidate = _submitted_password(body)
         client = scope.get("client")
         peer = "unknown" if client is None else str(client[0])
-        if not self._authentication.authenticate_password(candidate, peer):
+        if not await self._authentication.authenticate_password(candidate, peer):
             await _login_response(failed=True, status_code=401)(scope, receive, send)
             return
 
@@ -646,6 +772,27 @@ def _session_digest(token: str) -> bytes:
     return hashlib.sha256(token.encode("utf-8")).digest()
 
 
+def _new_password_salt() -> bytes:
+    return secrets.token_bytes(_PASSWORD_SALT_BYTES)
+
+
+def _derive_password_key(password: bytes, salt: bytes) -> bytes:
+    try:
+        return hashlib.scrypt(
+            password,
+            salt=salt,
+            n=_PASSWORD_SCRYPT_N,
+            r=_PASSWORD_SCRYPT_R,
+            p=_PASSWORD_SCRYPT_P,
+            maxmem=_PASSWORD_SCRYPT_MAX_MEMORY_BYTES,
+            dklen=_PASSWORD_DERIVED_KEY_BYTES,
+        )
+    except (AttributeError, MemoryError, ValueError) as error:
+        raise ConfigurationError(
+            "Secure web dashboard password derivation is unavailable."
+        ) from error
+
+
 def _valid_session_token(token: str | None) -> bool:
     return (
         isinstance(token, str)
@@ -730,6 +877,7 @@ __all__ = [
     "WEB_DASHBOARD_LOGIN_FAILURE_LIMIT",
     "WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS",
     "WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT",
+    "WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS",
     "WEB_DASHBOARD_LOGOUT_PATH",
     "WEB_DASHBOARD_MAX_LOGIN_BODY_BYTES",
     "WEB_DASHBOARD_MAXIMUM_SESSION_TOKEN_CHARACTERS",

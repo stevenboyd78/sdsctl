@@ -12,11 +12,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   explicit native-TLS host mode on one private, unique-local, or link-local
   interface. The mode requires one exact HTTPS origin, a password supplied only
   through an environment-variable reference, a browser-trusted certificate and
-  unencrypted bounded private key, and bounded server-side sessions. It protects
-  every dashboard route, enforces the exact origin on login and mutations,
-  revokes active SSE and audio responses with their session, disables proxy
-  trust, and leaves default loopback, generic-container, and Home Assistant
-  Ingress behavior unchanged.
+  unencrypted bounded private key, a freshly salted scrypt password verifier,
+  and bounded server-side sessions. It protects every dashboard route, enforces
+  the exact origin on login and mutations, performs one admitted password
+  derivation at a time outside the application event loop, revokes active SSE
+  and audio responses with their session, disables proxy trust, and leaves
+  default loopback, generic-container, and Home Assistant Ingress behavior
+  unchanged.
 - Physical SDS200 firmware 1.26.01 validation on 2026-08-22 exercised two
   independent authenticated HTTPS sessions with simultaneous SSE and browser
   audio streams through `https://192.168.0.40:8443`. Exactly one daemon-owned

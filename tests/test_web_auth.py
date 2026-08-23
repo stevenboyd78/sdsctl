@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import threading
 from collections.abc import Iterator, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import AbstractContextManager
 from typing import Self
 
@@ -9,11 +12,14 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 
+import sds200.web_auth as web_auth
+from sds200.exceptions import ConfigurationError
 from sds200.web_auth import (
     WEB_DASHBOARD_AUTH_COOKIE,
     WEB_DASHBOARD_AUTHENTICATION_FAILED_DETAIL,
     WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL,
     WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT,
+    WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS,
     WEB_DASHBOARD_LOGIN_FAILURE_LIMIT,
     WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS,
     WEB_DASHBOARD_ORIGIN_REQUIRED_DETAIL,
@@ -24,6 +30,26 @@ from sds200.web_dashboard import create_web_dashboard_app
 
 ORIGIN = "https://scanner.example:8443"
 PASSWORD = "correct horse battery staple"
+
+_REAL_DERIVE_PASSWORD_KEY = web_auth._derive_password_key
+_REAL_COMPARE_DIGEST = web_auth.compare_digest
+
+
+def _fast_password_key(password: bytes, salt: bytes) -> bytes:
+    return hashlib.scrypt(
+        password,
+        salt=salt,
+        n=2,
+        r=1,
+        p=1,
+        maxmem=1024 * 1024,
+        dklen=32,
+    )
+
+
+@pytest.fixture(autouse=True)
+def _use_fast_password_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(web_auth, "_derive_password_key", _fast_password_key)
 
 
 class FakeClock:
@@ -132,6 +158,106 @@ def test_authentication_validates_secret_origin_and_session_limits() -> None:
         "https://SCANNER.EXAMPLE:443/",
     )
     assert default_port.origin == "https://scanner.example"
+
+
+def test_password_verifier_uses_fresh_salt_and_owasp_scrypt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    salts = iter((b"a" * 16, b"b" * 16))
+    calls: list[tuple[bytes, bytes, int, int, int, int, int]] = []
+    comparisons: list[tuple[bytes, bytes]] = []
+
+    def fake_scrypt(
+        password: bytes,
+        *,
+        salt: bytes,
+        n: int,
+        r: int,
+        p: int,
+        maxmem: int,
+        dklen: int,
+    ) -> bytes:
+        calls.append((password, salt, n, r, p, maxmem, dklen))
+        return (salt + password + bytes(dklen))[:dklen]
+
+    def record_comparison(expected: bytes, supplied: bytes) -> bool:
+        comparisons.append((expected, supplied))
+        return _REAL_COMPARE_DIGEST(expected, supplied)
+
+    monkeypatch.setattr(web_auth, "_new_password_salt", lambda: next(salts))
+    monkeypatch.setattr(web_auth, "_derive_password_key", _REAL_DERIVE_PASSWORD_KEY)
+    monkeypatch.setattr(hashlib, "scrypt", fake_scrypt)
+    monkeypatch.setattr(web_auth, "compare_digest", record_comparison)
+
+    first = _authentication()
+    second = _authentication()
+
+    assert first.password_matches(PASSWORD)
+    assert calls == [
+        (
+            PASSWORD.encode(),
+            b"a" * 16,
+            2**14,
+            8,
+            5,
+            32 * 1024 * 1024,
+            32,
+        ),
+        (
+            PASSWORD.encode(),
+            b"b" * 16,
+            2**14,
+            8,
+            5,
+            32 * 1024 * 1024,
+            32,
+        ),
+        (
+            PASSWORD.encode(),
+            b"a" * 16,
+            2**14,
+            8,
+            5,
+            32 * 1024 * 1024,
+            32,
+        ),
+    ]
+    assert first._password_digest != second._password_digest
+    assert comparisons and len(comparisons[0][0]) == len(comparisons[0][1]) == 32
+
+
+def test_real_password_kdf_is_deterministic_and_salted() -> None:
+    password = PASSWORD.encode()
+    first = _REAL_DERIVE_PASSWORD_KEY(password, b"a" * 16)
+    repeated = _REAL_DERIVE_PASSWORD_KEY(password, b"a" * 16)
+    other_salt = _REAL_DERIVE_PASSWORD_KEY(password, b"b" * 16)
+
+    assert len(first) == 32
+    assert first == repeated
+    assert first != other_salt
+
+
+def test_password_derivation_fails_closed_and_follows_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    def unavailable_scrypt(*args: object, **kwargs: object) -> bytes:
+        del args, kwargs
+        nonlocal calls
+        calls += 1
+        raise ValueError("unsupported")
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", _REAL_DERIVE_PASSWORD_KEY)
+    monkeypatch.setattr(hashlib, "scrypt", unavailable_scrypt)
+
+    with pytest.raises(ValueError, match="one HTTPS origin"):
+        WebDashboardAuthentication(PASSWORD, "http://scanner.example")
+    assert calls == 0
+
+    with pytest.raises(ConfigurationError, match="password derivation is unavailable"):
+        WebDashboardAuthentication(PASSWORD, ORIGIN)
+    assert calls == 1
 
 
 def test_authentication_sessions_are_opaque_bounded_and_expiring() -> None:
@@ -310,8 +436,18 @@ def test_logout_revokes_only_current_session() -> None:
         second.close()
 
 
-def test_login_attempts_are_bounded_per_peer_without_leaking_secret() -> None:
+def test_login_attempts_are_bounded_per_peer_without_leaking_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     clock = FakeClock()
+    derivations: list[bytes] = []
+    derive_password_key = web_auth._derive_password_key
+
+    def counted_password_key(password: bytes, salt: bytes) -> bytes:
+        derivations.append(password)
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", counted_password_key)
     authentication = _authentication(clock=clock)
     with _client(authentication) as client:
         failures = [
@@ -326,18 +462,359 @@ def test_login_attempts_are_bounded_per_peer_without_leaking_secret() -> None:
         assert response.status_code == 401  # type: ignore[attr-defined]
         assert PASSWORD not in response.text  # type: ignore[attr-defined]
     assert accepted.status_code == 303  # type: ignore[attr-defined]
+    assert len(derivations) == 1 + WEB_DASHBOARD_LOGIN_FAILURE_LIMIT + 1
 
 
-def test_global_failure_limit_resists_peer_rotation_without_locking_out_password() -> None:
+def test_global_failure_limit_uses_one_bounded_recovery_derivation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    derivations: list[bytes] = []
+    derive_password_key = web_auth._derive_password_key
+
+    def counted_password_key(password: bytes, salt: bytes) -> bytes:
+        derivations.append(password)
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", counted_password_key)
+
+    async def exercise() -> None:
+        clock = FakeClock()
+        authentication = _authentication(clock=clock)
+        try:
+            for index in range(WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT):
+                assert not await authentication.authenticate_password(
+                    "wrong private password",
+                    f"192.0.2.{index}",
+                )
+
+            assert not await authentication.authenticate_password(
+                PASSWORD,
+                "198.51.100.10",
+            )
+            assert len(derivations) == 1 + WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT
+            clock.now += WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS
+            assert await authentication.authenticate_password(
+                PASSWORD,
+                "198.51.100.10",
+            )
+            assert not await authentication.authenticate_password(
+                "wrong private password",
+                "203.0.113.10",
+            )
+            assert len(derivations) == 3 + WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT
+        finally:
+            authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_failed_global_recoveries_remain_in_the_sliding_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    derivations: list[bytes] = []
+    derive_password_key = web_auth._derive_password_key
+
+    def counted_password_key(password: bytes, salt: bytes) -> bytes:
+        derivations.append(password)
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", counted_password_key)
+
+    async def exercise() -> None:
+        clock = FakeClock()
+        authentication = _authentication(clock=clock)
+        try:
+            for index in range(WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT):
+                assert not await authentication.authenticate_password(
+                    "wrong private password",
+                    f"initial-{index}",
+                )
+            for index in range(11):
+                clock.now += WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS
+                assert not await authentication.authenticate_password(
+                    "wrong private password",
+                    f"recovery-{index}",
+                )
+
+            clock.now += WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS
+            retained_recoveries = 11
+            newly_available = WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT - retained_recoveries
+            for index in range(newly_available):
+                assert not await authentication.authenticate_password(
+                    "wrong private password",
+                    f"refill-{index}",
+                )
+            derivations_after_refill = len(derivations)
+            assert not await authentication.authenticate_password(
+                "wrong private password",
+                "blocked-after-refill",
+            )
+            assert len(derivations) == derivations_after_refill
+        finally:
+            authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_malformed_password_submissions_do_not_consume_failure_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    derivations: list[bytes] = []
+    derive_password_key = web_auth._derive_password_key
+
+    def counted_password_key(password: bytes, salt: bytes) -> bytes:
+        derivations.append(password)
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", counted_password_key)
+
+    async def exercise() -> None:
+        authentication = _authentication()
+        try:
+            for index in range(WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT + 1):
+                assert not await authentication.authenticate_password(
+                    None,
+                    f"192.0.2.{index}",
+                )
+            assert len(derivations) == 1
+            assert await authentication.authenticate_password(
+                PASSWORD,
+                "198.51.100.10",
+            )
+            assert len(derivations) == 2
+        finally:
+            authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_password_derivation_runs_off_loop_and_rejects_concurrent_work(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     authentication = _authentication()
+    derive_password_key = web_auth._derive_password_key
+    started = threading.Event()
+    release = threading.Event()
+    worker_threads: list[int] = []
 
-    for index in range(WEB_DASHBOARD_GLOBAL_LOGIN_FAILURE_LIMIT):
-        assert not authentication.authenticate_password(
-            "wrong private password",
-            f"192.0.2.{index}",
+    def blocking_password_key(password: bytes, salt: bytes) -> bytes:
+        worker_threads.append(threading.get_ident())
+        started.set()
+        if not release.wait(timeout=2):
+            raise AssertionError("password derivation release timed out")
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", blocking_password_key)
+
+    async def exercise() -> None:
+        event_loop_thread = threading.get_ident()
+        first = asyncio.create_task(authentication.authenticate_password(PASSWORD, "192.0.2.1"))
+
+        async def wait_until_started() -> None:
+            while not started.is_set():
+                await asyncio.sleep(0)
+
+        try:
+            await asyncio.wait_for(wait_until_started(), timeout=1)
+            assert not await authentication.authenticate_password(
+                PASSWORD,
+                "192.0.2.2",
+            )
+        finally:
+            release.set()
+        assert await first
+        assert len(worker_threads) == 1
+        assert worker_threads[0] != event_loop_thread
+        authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_cancelled_password_derivation_keeps_then_releases_its_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authentication = _authentication()
+    derive_password_key = web_auth._derive_password_key
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_password_key(password: bytes, salt: bytes) -> bytes:
+        started.set()
+        if not release.wait(timeout=2):
+            raise AssertionError("password derivation release timed out")
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", blocking_password_key)
+
+    async def exercise() -> None:
+        first = asyncio.create_task(authentication.authenticate_password(PASSWORD, "192.0.2.1"))
+
+        async def wait_until_started() -> None:
+            while not started.is_set():
+                await asyncio.sleep(0)
+
+        try:
+            await asyncio.wait_for(wait_until_started(), timeout=1)
+            first.cancel()
+            await asyncio.sleep(0)
+            assert not first.done()
+            assert not await authentication.authenticate_password(
+                PASSWORD,
+                "192.0.2.2",
+            )
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        assert await authentication.authenticate_password(
+            PASSWORD,
+            "192.0.2.2",
+        )
+        authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_password_derivation_error_releases_its_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authentication = _authentication()
+    derive_password_key = web_auth._derive_password_key
+    calls = 0
+
+    def fail_once(password: bytes, salt: bytes) -> bytes:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("worker failed")
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", fail_once)
+
+    async def exercise() -> None:
+        try:
+            with pytest.raises(RuntimeError, match="worker failed"):
+                await authentication.authenticate_password(
+                    PASSWORD,
+                    "192.0.2.1",
+                )
+            assert await authentication.authenticate_password(
+                PASSWORD,
+                "192.0.2.2",
+            )
+        finally:
+            authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_password_executor_submission_error_releases_its_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shutdowns: list[tuple[bool, bool]] = []
+    executor_count = 0
+
+    class FailingExecutor:
+        def submit(self, *args: object, **kwargs: object) -> object:
+            del args, kwargs
+            raise RuntimeError("submit failed")
+
+        def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
+            shutdowns.append((wait, cancel_futures))
+
+    def executor_factory(
+        *,
+        max_workers: int,
+        thread_name_prefix: str,
+    ) -> object:
+        nonlocal executor_count
+        executor_count += 1
+        if executor_count == 1:
+            return FailingExecutor()
+        return ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix=thread_name_prefix,
         )
 
-    assert authentication.authenticate_password(PASSWORD, "198.51.100.10")
+    monkeypatch.setattr(web_auth, "ThreadPoolExecutor", executor_factory)
+    authentication = _authentication()
+
+    async def exercise() -> None:
+        try:
+            with pytest.raises(RuntimeError, match="submit failed"):
+                await authentication.authenticate_password(
+                    PASSWORD,
+                    "192.0.2.1",
+                )
+            assert shutdowns == [(False, True)]
+            assert await authentication.authenticate_password(
+                PASSWORD,
+                "192.0.2.2",
+            )
+        finally:
+            authentication.close()
+
+    asyncio.run(exercise())
+
+
+def test_lifespan_shutdown_does_not_wait_for_active_password_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authentication = _authentication()
+    derive_password_key = web_auth._derive_password_key
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocking_password_key(password: bytes, salt: bytes) -> bytes:
+        started.set()
+        if not release.wait(timeout=2):
+            raise AssertionError("password derivation release timed out")
+        return derive_password_key(password, salt)
+
+    monkeypatch.setattr(web_auth, "_derive_password_key", blocking_password_key)
+
+    async def exercise() -> None:
+        first = asyncio.create_task(authentication.authenticate_password(PASSWORD, "192.0.2.1"))
+
+        async def wait_until_started() -> None:
+            while not started.is_set():
+                await asyncio.sleep(0)
+
+        async def app(scope: Scope, receive: Receive, send: Send) -> None:
+            del scope, receive, send
+
+        async def receive() -> Message:
+            return {"type": "lifespan.shutdown"}
+
+        async def send(message: Message) -> None:
+            del message
+
+        middleware = WebDashboardAuthenticationMiddleware(
+            app,
+            authentication=authentication,
+        )
+        scope: Scope = {
+            "type": "lifespan",
+            "asgi": {"version": "3.0", "spec_version": "2.0"},
+            "state": {},
+        }
+        try:
+            await asyncio.wait_for(wait_until_started(), timeout=1)
+            await asyncio.wait_for(
+                middleware(scope, receive, send),
+                timeout=1,
+            )
+            assert not first.done()
+        finally:
+            release.set()
+        assert await first
+        assert await authentication.authenticate_password(
+            PASSWORD,
+            "192.0.2.2",
+        )
+        authentication.close()
+
+    asyncio.run(exercise())
 
 
 def test_hostile_mutation_does_not_refresh_session_idle_lifetime() -> None:
