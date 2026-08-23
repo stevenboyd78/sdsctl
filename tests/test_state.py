@@ -9,7 +9,8 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 <TGID Name="Patch 65132" Index="400" Hold="On" TGID="TGID:65132"
   SvcType="Interop" U_Id="UID:9190014" />
 <SiteFrequency Freq=" 769.431250MHz" />
-<Property VOL="10" SQL="2" Sig="5" Rssi="-42" P25Status="P25" Mute="Unmute" Rec="Off" />
+<Property VOL="10" SQL="2" Sig="5" Rssi="-42" Battery="2.7"
+  P25Status="P25" Mute="Unmute" Rec="Off" />
 </ScannerInfo>"""
 
 
@@ -28,6 +29,7 @@ def test_scanner_info_converts_to_shared_snapshot() -> None:
     assert snapshot.channel_hold == "On"
     assert snapshot.frequency == "769.431250MHz"
     assert snapshot.signal == 5
+    assert snapshot.battery == 2.7
     assert snapshot.recording == "Off"
 
 
@@ -53,3 +55,31 @@ def test_identical_state_does_not_emit_a_change() -> None:
 
     assert state.update(info) is not None
     assert state.update(info) is None
+
+
+def test_battery_zero_is_distinct_from_absence_and_absence_clears_state() -> None:
+    state = RadioState()
+    with_battery = ScannerInfoParser().parse(
+        "PSI",
+        '<ScannerInfo><Property Battery="2.7" /></ScannerInfo>',
+    )
+    with_zero = ScannerInfoParser().parse(
+        "PSI",
+        '<ScannerInfo><Property Battery="0" /></ScannerInfo>',
+    )
+    without_battery = ScannerInfoParser().parse(
+        "PSI",
+        "<ScannerInfo><Property /></ScannerInfo>",
+    )
+
+    initial_change = state.update(with_battery)
+    assert initial_change is not None
+    assert initial_change.current.battery == 2.7
+    zero_change = state.update(with_zero)
+    assert zero_change is not None
+    assert zero_change.current.battery == 0.0
+    assert zero_change.changed("battery")
+    absent_change = state.update(without_battery)
+    assert absent_change is not None
+    assert absent_change.current.battery is None
+    assert absent_change.changed("battery")

@@ -87,7 +87,7 @@ audio remains a separate subsystem capability.
 
 ## Shared live-state field inventory
 
-`RadioStateSnapshot` is the canonical 34-field renderer-neutral scanner state.
+`RadioStateSnapshot` is the canonical 35-field renderer-neutral scanner state.
 The daemon API, SSE payloads, and generic MQTT `state/radio` publication preserve
 the complete mapping. The following presentation legend applies only to this
 matrix:
@@ -141,6 +141,7 @@ value while the daemon-backed TUI presents it but rejects mutation.
 | `squelch` | GSI/PSI; `P200`, `F` | — | R | R+C† | R | J | — | R1/R2: daemon-backed CLI/TUI mutation and Home Assistant |
 | `signal` | GSI/PSI; `P200`, `F` | R | R | R | R | J | R | Covered |
 | `rssi` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | R1: generic TUI panel |
+| `battery` | Optional GSI/PSI Property; `S`, `F`; `P100` absence | R | — | — | R | J | — | R1: monitor, TUI, and Home Assistant; raw value only |
 | `p25_status` | GSI/PSI; `F` | — | — | — | R | J | — | R1: CLI/TUI and Home Assistant |
 | `mute` | GSI/PSI; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant |
 | `recording` | Scanner GSI/PSI flag; `P200`, `F` | R | R | R | R | J | — | R1: Home Assistant; distinct from application recording |
@@ -150,6 +151,9 @@ new protocol semantics:
 
 - Milestone 26.4 closes the web half of the Search, Close Call, Weather, and
   Tone-Out presentation gap through the existing complete shared state;
+- Milestone 26.5 shares optional finite SDS100 battery telemetry on the existing
+  PSI/GSI lifecycle without assigning unit, percentage, range, or charging
+  semantics;
 - Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
   than losses from the shared state; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
@@ -169,7 +173,6 @@ labels above concern human renderers, not loss from those machine-readable paths
 
 | Surface | Modeled or preserved data | Current product exposure | Finding |
 | --- | --- | --- | --- |
-| GSI battery | Optional battery float on `ScannerInfo` | Rich `scanner-info` and dedicated `sdsctl battery`; absent from shared state | R1 |
 | GCS charge status | Status/code, voltage, capacity, current, temperature, and charging predicate | Dedicated `sdsctl battery`; absent from shared state and SDS150 remains specification-only | R1/R3 |
 | System Status | Sixteen exact-string fields including system/site identity, signal, quality, activity, IDs, WACN, NAC, Color, RAN, Area, attenuation, frequencies, and P25 status | Parsed projection only; absent from shared state and every renderer | R1/R3 |
 | STS display | Display form, ordered line text/mode pairs, reserved fields, and raw packet | Dedicated `sdsctl command STS` renders the display form and ordered lines; no shared-state projection and only synthetic parser/renderer evidence | R1/R3 |
@@ -271,7 +274,7 @@ absence from the scanner itself is expected.
 | ID | Follow-up | Class | Scheduling decision |
 | --- | --- | --- | --- |
 | `A01` | Add the first interactive Favorites Workspace editor over existing browse, edit, plan, and verified-executor contracts | R1/R2 | Completed in Milestone 26.3 without absorbing unrelated parity gaps |
-| `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Later evidence-led slice; define update/lifecycle semantics first |
+| `A02` | Decide whether battery and System Status need renderer-neutral state/services | R1/R3 | Completed in Milestone 26.5: SDS100 PSI/GSI battery joins shared state; GCS and System Status remain separate pending explicit lifecycle and physical evidence |
 | `A03` | Present shared hierarchy, RF, identifier, P25, and special-mode fields in the web dashboard | R1 | Completed in Milestone 26.4 without new scanner semantics |
 | `A04` | Evaluate additional stable Home Assistant entities, including site and selected mode-specific values | R1 | Later compatibility-reviewed slice; avoid entity churn and unbounded discovery growth |
 | `A05` | Align explicit hold/release and volume/squelch behavior across direct and daemon-backed CLI/TUI surfaces | R2 | Later semantic-control slice with command and physical acceptance |
@@ -279,36 +282,29 @@ absence from the scanner itself is expected.
 | `A07` | Complete evidence, lifecycle, and physical validation for advanced protocol surfaces before adding controls | R3 | Blocked on protocol/hardware evidence, not on renderer construction |
 | `A08` | Expand per-mode SDS100 validation and perform first SDS150 physical validation | R3 | Hardware-dependent; SDS150 remains deferred |
 
-`A01` and `A03` are complete. The remaining ordering avoids turning a broad
+`A01`, `A02`, and `A03` are complete. The remaining ordering avoids turning a broad
 inventory into silent authorization for unrelated runtime or protocol work.
 
-## Milestone 26.3 handoff
+## Milestone 26.5 lifecycle decision
 
-The next slice is a local interactive Favorites Workspace editor. Its safety
-contract is fixed even if activation work refines the concrete UI shape:
+The shared-state decision follows the source lifecycle rather than superficial
+field similarity:
 
-- require one explicit copied-tree source or already-mounted, freshly qualified
-  Linux USB target;
-- keep open, browse, search/filter, diagnostics, provenance, and raw detail
-  read-only;
-- permit only existing evidence-backed Name Tag rename, supported HPD leaf
-  deletion, and exact-template leaf creation operations;
-- retain immutable baseline and intended snapshots, in-memory undo/reset/discard,
-  and no autosave;
-- review the exact existing write plan and blockers before a separate explicit
-  confirmation;
-- execute only through the existing copied-tree or USB verified executor, never
-  through renderer-owned file replacement;
-- keep USB backup, staging, rollback, and report artifacts in a canonical
-  private host-state directory outside scanner media; and
-- surface operation, backup, rollback-manifest, report, recovery, and exact
-  reload evidence.
+- optional finite SDS100 `Property.Battery` joins `RadioStateSnapshot` because
+  it arrives with the authoritative GSI/PSI frame; omission clears prior state
+  and literal zero remains a value;
+- the raw battery float carries no inferred unit, percentage, range, charging
+  meaning, or applicability to another model;
+- SDS150 `GCS` stays an explicit request/response operation and must not become
+  automatic polling or cached daemon state without observation-time, staleness,
+  cadence, and physical SDS150 acceptance contracts;
+- ordered repeated `SystemStatus` records stay in the lossless `ScannerInfo`
+  model and immutable `SystemStatusProjection`; and
+- a future System Status service must own the selected site, analysis session,
+  APR behavior, timestamps, cancellation, disconnect/reconnect policy, and
+  physical model/firmware/transport acceptance before it adds daemon or renderer
+  exposure.
 
-Arbitrary positional-field editing; structural hierarchy/container or catalog
-creation, deletion, or reordering beyond the supported record operations; FTP
-writes; RadioReference synchronization UI; GLT/FQK/live-scanner mutation;
-daemon/web/Ingress exposure; and background synchronization remain outside the
-initial editor. Supported Name Tag replacement may target existing catalog and
-hierarchy records without broadening those structural operations. Milestone 26.3
-consumed the released Milestones 21–22 safety contracts and did not absorb the
-unrelated findings above.
+This decision does not authorize automatic `AST,SYSTEM_STATUS`, an invented
+acknowledgement-to-frame transaction, flattening repeated records, SDS150 support
+expansion, Home Assistant entity growth, or `STS`/RF Power Plot work.

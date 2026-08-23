@@ -412,6 +412,7 @@ _INTEGER_FIELDS = frozenset(
         "signal",
     }
 )
+_FLOAT_FIELDS = frozenset({"rssi", "battery"})
 _RADIO_STATE_FIELDS = frozenset(
     field.name for field in fields(RadioStateSnapshot)
 )
@@ -443,15 +444,15 @@ def _radio_state_snapshot(
             values[name] = value
             continue
 
-        if name == "rssi":
+        if name in _FLOAT_FIELDS:
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise DaemonProtocolError(
-                    "Daemon radio-state field 'rssi' must be a number or null."
+                    f"Daemon radio-state field {name!r} must be a number or null."
                 )
             normalized = float(value)
             if not isfinite(normalized):
                 raise DaemonProtocolError(
-                    "Daemon radio-state field 'rssi' must be finite."
+                    f"Daemon radio-state field {name!r} must be finite."
                 )
             values[name] = normalized
             continue

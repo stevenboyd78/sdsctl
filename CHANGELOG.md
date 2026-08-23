@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add optional finite SDS100 GSI/PSI battery telemetry to the complete shared
+  radio snapshot, daemon API/SSE/generic MQTT payloads, and accessible web
+  dashboard while preserving literal zero and clearing omitted values. Milestone
+  26.5 deliberately keeps SDS150 GCS as unpolled request/response telemetry and
+  System Status as a deferred session-owned analysis surface until timestamp,
+  staleness, ownership, cancellation, reconnect, and physical-acceptance
+  contracts exist.
 - Add complete web-dashboard presentation for all 34 renderer-neutral
   `RadioStateSnapshot` fields. Stable accessible groups now expose hierarchy,
   channel identity, RF/service, talkgroup and unit identifiers, receiver levels,

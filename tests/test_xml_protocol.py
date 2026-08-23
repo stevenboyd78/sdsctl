@@ -45,6 +45,16 @@ def test_scanner_info_parser() -> None:
     assert info.raw_xml == XML
 
 
+@pytest.mark.parametrize("value", ["nan", "inf", "-inf", "not-a-number"])
+def test_scanner_info_battery_rejects_nonfinite_and_invalid_values(value: str) -> None:
+    info = ScannerInfoParser().parse(
+        "PSI",
+        f'<ScannerInfo><Property Battery="{value}" /></ScannerInfo>',
+    )
+
+    assert info.battery is None
+
+
 REPEATED_SCANNER_INFO_XML = """<ScannerInfo Mode="Synthetic" V_Screen="future">
 <System Name="First synthetic system" FutureSystemAttr="keep-system" />
 <FutureRecord Value="first" FutureAttr="keep-first">

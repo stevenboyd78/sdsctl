@@ -137,6 +137,7 @@ const RADIO_STATE_FIELD_TARGETS = Object.freeze({
   squelch: "radio-squelch",
   signal: "radio-signal",
   rssi: "radio-rssi",
+  battery: "radio-battery",
   p25_status: "radio-p25-status",
   mute: "radio-mute",
   recording: "radio-recording",

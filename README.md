@@ -581,14 +581,15 @@ update incrementally. Two-second status polling remains active when live events
 are unavailable, and a periodic authoritative status read reconciles the
 browser with daemon state.
 
-The activity panel presents the complete 34-field renderer-neutral radio state:
+The activity panel presents the complete 35-field renderer-neutral radio state:
 hierarchy names, indexes, and holds; channel identity; RF and service context;
-talkgroup and unit identifiers; receiver levels; signal, RSSI, P25, mute, and
-scanner-recording state; and Search, Close Call, Weather/SAME, and Tone-Out
-details. Every authoritative update replaces the complete browser projection so
-values from a previous screen are cleared instead of leaking into a new mode.
-Literal `0` and false-like scanner text remain visible; only absent values are
-shown as **Unavailable**.
+talkgroup and unit identifiers; receiver levels; optional raw SDS100 battery
+telemetry; signal, RSSI, P25, mute, and scanner-recording state; and Search,
+Close Call, Weather/SAME, and Tone-Out details. Every authoritative update
+replaces the complete browser projection so values from a previous screen are
+cleared instead of leaking into a new mode. Literal `0` and false-like scanner
+text remain visible; only absent values are shown as **Unavailable**. The raw
+battery value has no host-inferred unit, percentage, range, or charging meaning.
 
 Press **Play audio** to create one independent browser PCMU subscription. The
 browser receives the daemon's validated PCMU v1 frames unchanged, decodes G.711

@@ -29,7 +29,7 @@ def test_dashboard_field_inventory_matches_shared_radio_state_contract() -> None
     targets = _field_targets(_asset("dashboard.js"))
     shared_fields = {field.name for field in fields(RadioStateSnapshot)}
 
-    assert len(shared_fields) == 34
+    assert len(shared_fields) == 35
     assert set(targets) == shared_fields
     assert len(set(targets.values())) == len(targets)
     for target in targets.values():

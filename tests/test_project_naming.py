@@ -113,7 +113,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_4_web_dashboard_field_parity() -> None:
+def test_roadmap_records_milestone_26_5_battery_and_system_status_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,34 +123,38 @@ def test_roadmap_records_milestone_26_4_web_dashboard_field_parity() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.4 — Web-dashboard shared-state field parity",
-        "Milestone 26.3 is closed",
-        "docs/favorites-workspace-editor.md",
-        "audit finding `A03`",
-        "all 34 `RadioStateSnapshot` fields",
-        "browser presentation and reconciliation boundary",
-        "department, site, frequency, modulation",
-        "talkgroup and unit identifiers",
-        "volume, squelch, mute",
-        "Weather mode and SAME",
-        "Tone-Out Tone A/Tone B",
-        "without guessing semantics",
-        "literal zero or false-like scanner text",
-        "unknown/future-screen fallback",
-        "authoritative initial snapshot",
-        "ordered SSE events",
-        "polling fallback",
-        "periodic reconciliation",
-        "Stable HTML hooks and a contract test",
-        "34-field renderer-neutral dataclass",
-        "Milestone 26.4 implementation and host-independent acceptance are complete",
-        "deterministic rendered checks",
-        "phone breakpoint",
-        "audit now records `A03` as complete",
-        "does not expand model, firmware, transport, or physical-scanner support claims",
-        "Home Assistant entity/card expansion",
-        "battery or System Status",
-        "daemon API/SSE/MQTT schema changes",
+        "### Milestone 26.5 — Battery telemetry and System Status lifecycle decision",
+        "Milestone 26.4 is closed",
+        "then-current 34-field `RadioStateSnapshot`",
+        "audit finding `A02`",
+        "ordinary PSI/GSI telemetry",
+        "request-driven device telemetry",
+        "operator-started analysis sessions",
+        "optional SDS100 `Property.Battery` value",
+        "same authoritative GSI/PSI `ScannerInfo` cadence",
+        "exact optional finite float",
+        "Absence must clear earlier state",
+        "literal zero must remain distinct from absence",
+        "must not infer a unit, percentage, charging state, range",
+        "daemon API, SSE, generic MQTT, and web-dashboard projection",
+        "Do not add a Home Assistant entity",
+        "SDS150 `GCS` charge status remains explicit request/response",
+        "Do not poll it automatically",
+        "observation timestamp and staleness contract",
+        "hardware-unverified",
+        "System Status remains a session-oriented analysis surface",
+        "Do not automatically issue `AST,SYSTEM_STATUS`",
+        "repeated `SystemStatus` records",
+        "`SystemStatusProjection`",
+        "explicit single ownership",
+        "bounded cancellation",
+        "disconnect/reconnect policy",
+        "Milestone 26.5 implementation and host-independent acceptance are complete",
+        "canonical snapshot now has 35 fields",
+        "Audit finding `A02` is complete",
+        "no physical support claim has expanded",
+        "`STS` display projection",
+        "semantic-control finding `A05`",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import IntEnum, StrEnum
+from math import isfinite
 from types import MappingProxyType
 
 
@@ -485,7 +486,8 @@ class ScannerInfo:
     @property
     def battery(self) -> float | None:
         """Return the optional raw GSI/PSI ``Property.Battery`` value."""
-        return self._floating(self._property("Battery"))
+        value = self._floating(self._property("Battery"))
+        return value if value is not None and isfinite(value) else None
 
     @property
     def p25_status(self) -> str | None:
