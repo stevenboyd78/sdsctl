@@ -1001,6 +1001,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and
   — task-oriented installation, setup, and troubleshooting guides
 - [Project roadmap](ROADMAP.md)
 - [Supported scanner models](docs/supported-models.md)
+- [Capability and field-parity audit](docs/capability-field-parity-audit.md)
 - [Control transports](docs/transports.md)
 - [LAN discovery and profiles](docs/discovery-and-profiles.md)
 - [Layered application configuration](docs/configuration.md)

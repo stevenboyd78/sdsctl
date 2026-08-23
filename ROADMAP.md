@@ -11,58 +11,47 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.1 — Authenticated LAN web-dashboard access foundation
+### Milestone 26.2 — Physical-scanner capability and interface field-parity audit
 
-Milestone 25.19 is closed with the v0.21.0 Python package, generic Docker image,
-Home Assistant App images, reviewed wiki, GitHub Release, container portability
-acceptance, and release metadata published and validated. Post-release roadmap
-work also records the future interactive Favorites Workspace editor and the
-physical-scanner-to-application capability and field-parity audit.
+Milestone 26.1 is closed after completing authenticated direct-TLS LAN access for
+the existing web dashboard while preserving default loopback, generic-container,
+Home Assistant Ingress, and private Unix-domain daemon-service behavior.
 
-Milestone 26.1 begins the next implementation sequence by establishing an
-explicit authenticated LAN-access boundary for the existing web dashboard.
-Loopback-only operation remains the default and must continue to work without
-requiring remote-access configuration. A supported non-loopback listener must be
-an explicit operator choice and must not expose scanner state, semantic controls,
-browser audio, recording operations, saved recordings, downloads, or ordered
-event streams without the milestone's authentication boundary.
+Milestone 26.2 performs a deliberate physical-scanner-to-application capability
+and field-parity audit across SDS100, SDS150, and SDS200 evidence; scanner screen
+families and advanced protocol surfaces; renderer-neutral models and services;
+Rich CLI and terminal monitor output; standalone and daemon-backed Textual TUI;
+web dashboard; generic daemon API/SSE/MQTT; and Home Assistant Discovery and the
+Lovelace card.
 
-The milestone must preserve the existing daemon ownership architecture. The web
-process remains a client of private Unix-domain daemon services; this work does
-not convert daemon API, event, PCMU, or recording sockets into general network
-services and does not add remote daemon-backed CLI/TUI transport.
+The audit must distinguish physical observations from protocol specifications,
+sanitized fixtures, automated tests, and implementation inspection. It must
+trace individual fields rather than treating a coarse mode name as proof of
+parity, preserve unknown and raw scanner values without inventing semantics, and
+record model, firmware, transport, lifecycle, and physical-validation limits.
 
-Authentication and browser-session behavior must be bounded, deterministic, and
-testable without physical hardware. Credential material must follow the existing
-secret-reference and redaction principles, authentication failures must not leak
-secret values, and browser-facing state-changing operations must retain explicit
-same-origin and authorization protections. Multi-client access must not allow one
-slow, failed, or unauthenticated browser to disrupt another browser or the
-daemon-owned scanner/audio session.
+Findings must remain divided into modeled data missing from renderers, modeled
+or parsed capabilities without a safe semantic control, physical capabilities
+without sufficient protocol evidence or application modeling, and
+application-only capabilities with no direct scanner UI equivalent. The audit is
+an inventory and planning boundary rather than permission to broaden support
+claims or implement every discovered gap.
 
-Transport security must be deliberate rather than implied by a non-loopback
-bind. Define and document the supported TLS or trusted reverse-proxy boundary
-before claiming ordinary LAN deployment support. Plain unauthenticated HTTP on a
-non-loopback listener is not an accepted deployment mode.
+Milestone 26.2 audit and acceptance are complete. The durable
+[capability and field-parity audit](docs/capability-field-parity-audit.md)
+records the exact 34-field `RadioStateSnapshot` presentation matrix, supported
+model and screen evidence, control parity, data modeled outside shared state,
+advanced protocol limits, application-only capabilities, prioritized findings,
+and a bounded handoff to Milestone 26.3. A contract test keeps the documented
+field inventory synchronized with the renderer-neutral dataclass.
 
-Acceptance must include host-independent authentication, authorization,
-session/lifecycle, hostile-client, header/origin, SSE, audio, recording, control,
-and shutdown coverage; regression proof that default loopback behavior remains
-unchanged; and separate physical SDS200 LAN validation with concurrent browser
-clients. Home Assistant Ingress behavior and its existing authenticated peer
-boundary must remain intact and must not silently inherit a second incompatible
-authentication flow.
-
-Milestone 26.1 implementation and acceptance are complete. Host-independent
-coverage exercises authentication, authorization, origin and hostile-request
-handling, bounded session lifecycle, SSE and audio revocation, recording and
-semantic controls, shutdown, and unchanged loopback, generic-container, and Home
-Assistant Ingress modes. Physical SDS200 firmware 1.26.01 validation on
-2026-08-22 used native direct TLS and two independent authenticated HTTPS
-sessions with concurrent SSE and audio streams, confirmed one daemon-owned
-scanner-control path and one RTSP/RTP audio path, kept a daemon-owned recording
-active across one session's logout, and completed isolated logout plus clean web
-and daemon shutdown without exposing the temporary credential.
+The audit confirms that daemon API, SSE, and generic MQTT preserve the complete
+shared snapshot while human renderers expose different subsets; the TUI has the
+strongest special-mode presentation; GSI battery and the sixteen-field System
+Status projection do not enter shared state; and advanced foundations without
+physical/lifecycle evidence remain unknown or deferred rather than unsupported.
+Only the local interactive Favorites Workspace editor is scheduled next; other
+findings remain evidence-led future slices.
 
 ## Deferred hardware validation
 
@@ -173,14 +162,11 @@ begins.
   optional host-network App variant as later security boundaries. The current
   daemon client interfaces remain private Unix-domain sockets, so host networking
   alone would not expose them remotely.
-- Add a later renderer-parity follow-up for scanner modes whose authoritative
-  state is already modeled but not fully presented in every interface. Tone-Out
-  is one known example: shared scanner state already carries the active
-  `ToneOutChannel` name, frequency, modulation, and Tone A/Tone B values, while
-  the current web dashboard does not display the mode-specific tone fields.
-  Treat similar Weather, Close Call, Search, discovery, analysis, and other
-  mode-specific omissions as evidence-led presentation gaps rather than
-  inventing renderer-local scanner semantics.
+- The completed Milestone 26.2
+  [capability and field-parity audit](docs/capability-field-parity-audit.md)
+  records renderer omissions for already-modeled scanner fields, including
+  Tone-Out, Weather, Close Call, and Search. Keep later renderer work tied to
+  that evidence rather than inventing renderer-local scanner semantics.
 
 ### Milestone 21 — Favorites Workspace foundation
 
@@ -271,14 +257,20 @@ begins.
   separate read-only and explicitly resolved writable credential roles.
 - Keep every write operation deterministic, recoverable, auditable, and free of
   silent last-writer-wins behavior.
-- Add a later interactive Favorites Workspace editor over the existing
-  renderer-neutral foundation. The user-facing workflow should expose hierarchy
-  browsing, search/filtering, diagnostics, comparison/preview, supported record
-  edits, additions and deletions, exact write planning, backup and rollback
-  evidence, and explicit execution without bypassing the verified copied-tree
-  and USB storage safety boundaries. Broader arbitrary-field editing and FTP
-  writes remain separate evidence-backed capabilities rather than assumptions of
-  the initial editor UI.
+- Milestone 26.3 will add the first local interactive Favorites Workspace editor
+  over the existing renderer-neutral foundation. It will expose hierarchy
+  browsing, search/filtering, diagnostics, comparison/preview, only the existing
+  evidence-backed rename, supported leaf-delete, and exact-template leaf-create
+  operations, exact write planning, a separate explicit confirmation, and
+  backup/rollback/recovery evidence without bypassing the verified copied-tree
+  and USB executors. Arbitrary positional-field editing; structural hierarchy or
+  catalog creation, deletion, or reordering beyond the supported record
+  operations; FTP writes; RadioReference synchronization UI; live-scanner
+  GLT/FQK mutation, web/Ingress exposure, and background synchronization remain
+  separate evidence-backed capabilities. USB backup, staging, rollback, and
+  reporting state must remain in a canonical private host-state directory
+  outside scanner media. Supported Name Tag replacement may target existing
+  catalog and hierarchy records without authorizing structural mutation.
 
 ### Milestone 23 — External Favorites data and synchronization
 
@@ -536,42 +528,13 @@ is collected.
   identity-provider integration, and broader authorization roles as separate
   future security boundaries unless later evidence deliberately expands this
   milestone.
-
-## Future capability and interface parity audit
-
-Before treating application coverage as complete, perform a deliberate
-physical-scanner-to-application capability and field-parity audit across the
-supported SDS models and every implemented interface.
-
-The audit should maintain an evidence-backed matrix covering, where applicable:
-
-- the corresponding physical-scanner function, mode, menu, or display screen;
-- documented or physically observed protocol evidence and fixture coverage;
-- parser/model support and preservation of raw scanner values;
-- renderer-neutral shared-state or service support;
-- CLI, TUI, web-dashboard, Home Assistant, and other renderer presentation;
-- available semantic controls and intentionally unsupported operations; and
-- model/firmware/transport-specific physical validation evidence.
-
-Audit mode-specific fields as well as coarse feature names. For example,
-classifying Tone-Out as supported is insufficient if a renderer omits the
-scanner-reported Tone A and Tone B values. Apply the same field-level review to
-Weather/SAME, Close Call, search and discovery modes, analysis screens,
-system-status/RF details, recording, Favorites, quick keys, menu operations, and
-other scanner capabilities discovered through protocol research or hardware use.
-
-Classify findings so follow-up work distinguishes:
-
-1. scanner data that is already modeled but missing from one or more renderers;
-2. modeled or parsed capabilities that do not yet expose a safe user control;
-3. physical-scanner capabilities that still lack sufficient protocol evidence or
-   application modeling; and
-4. application-only capabilities such as daemon fanout, browser recording,
-   assisted Favorites synchronization, and Home Assistant integration that have
-   no direct physical-scanner UI equivalent.
-
-The audit is an inventory and planning boundary, not permission to infer unknown
-protocol semantics or broaden physical-support claims without evidence.
+- Milestone 26.2 completed the evidence-backed physical-scanner capability and
+  interface field-parity audit. Its exact shared-state matrix and categorized
+  findings are maintained in
+  [the audit artifact](docs/capability-field-parity-audit.md).
+- Milestone 26.3 is the next planned slice: a local interactive Favorites
+  Workspace editor constrained to the already verified Milestones 21–22 model,
+  planner, copied-tree executor, and qualified USB executor boundaries.
 
 ## Completed milestone groups
 
