@@ -208,13 +208,15 @@ directory remains media-relative and the default still resolves to:
 /media/sdsctl/recordings
 ```
 
-The App installs the bundled read-only SDS200 Lovelace card at
-`/local/sds200/sds200-card.js`. Register that path once under
+The App installs the unchanged compact card at
+`/local/sds200/sds200-card.js` and the additive responsive display card at
+`/local/sds200/sds200-display-card.js`. Register each desired path once under
 **Settings > Dashboards > Resources** as a JavaScript Module. If the App had to
 create Home Assistant's `www` directory for the first time, restart Home
-Assistant Core once before registering the `/local` resource. Then add
-**SDS200 Scanner** from the card picker and use its graphical editor to choose
-the SDS200 Discovery state entities.
+Assistant Core once before registering the `/local` resources. Add **SDS200
+Scanner** or **SDS200 Display** from the picker and use its graphical editor to
+choose the SDS200 Discovery state entities. The display card also selects one of
+five layouts, three palettes, and Card or viewport-bounded 4:3 fit.
 
 The MQTT-discovered SDS200 device now contains twenty-one components: fourteen
 state/diagnostic components, including optional Site, Frequency, Modulation, and

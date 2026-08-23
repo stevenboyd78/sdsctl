@@ -39,7 +39,7 @@ from .home_assistant_app_runtime import (
     default_home_assistant_app_runtime_paths,
 )
 from .home_assistant_lovelace import (
-    install_home_assistant_lovelace_card,
+    install_home_assistant_lovelace_cards,
 )
 
 logger = logging.getLogger(__name__)
@@ -670,8 +670,8 @@ def run_home_assistant_app(
     options_path: str | Path = HOME_ASSISTANT_APP_OPTIONS_PATH,
     paths: HomeAssistantAppRuntimePaths | None = None,
     environ: Mapping[str, str] | None = None,
-    lovelace_card_installer: Callable[[], Path] = (
-        install_home_assistant_lovelace_card
+    lovelace_card_installer: Callable[[], Path | tuple[Path, Path]] = (
+        install_home_assistant_lovelace_cards
     ),
 ) -> int:
     """Prepare and run the complete Home Assistant App process pair."""

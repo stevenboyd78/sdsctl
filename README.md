@@ -701,6 +701,13 @@ from a browser context where AudioWorklet is unavailable, the dashboard falls
 back to a compatible Web Audio processor while preserving the same daemon-owned
 PCMU stream.
 
+The App installs the unchanged compact **SDS200 Scanner** Lovelace card plus an
+additive **SDS200 Display** card. The display card offers five scanner-style
+layouts, three palettes, and a 4:3 viewport-fit option over the same fourteen
+read-only state entities. Register both `/local/sds200/sds200-card.js` and
+`/local/sds200/sds200-display-card.js` as JavaScript Modules when using both
+cards.
+
 See the [Home Assistant App guide](docs/home-assistant-app.md) for architecture,
 installation, configuration, networking, Ingress, local HAOS development,
 persistent recordings, MQTT entities, security boundaries, and troubleshooting.

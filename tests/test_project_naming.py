@@ -18,6 +18,7 @@ LIVE_REPOSITORY_OWNED_FILES = (
     "home-assistant/sds200/Dockerfile",
     "src/sds200/daemon_mqtt_home_assistant.py",
     "src/sds200/web_assets/sds200-card.js",
+    "src/sds200/web_assets/sds200-display-card.js",
     "docs/releasing.md",
     "wiki/Home.md",
     "wiki/_Sidebar.md",
@@ -88,6 +89,14 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
         'HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = "/local/sds200/sds200-card.js"'
         in lovelace_installer
     )
+    assert (
+        'HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"'
+        in lovelace_installer
+    )
+    assert (
+        '"/local/sds200/sds200-display-card.js"'
+        in lovelace_installer
+    )
 
 
 def test_generic_container_documentation_preserves_local_image_tag() -> None:
@@ -113,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_6_home_assistant_contract() -> None:
+def test_roadmap_records_milestone_26_7_display_card_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -123,32 +132,35 @@ def test_roadmap_records_milestone_26_6_home_assistant_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.6 — Stable Home Assistant entity and card expansion",
-        "Milestone 26.5 is closed",
-        "audit finding `A04`",
-        "exactly four read-only sensors",
-        "Site, Frequency, Modulation, and Service Type",
-        "canonical 35-field `RadioStateSnapshot`",
-        "generic MQTT `state/radio` publication",
-        "must not add scanner commands, polling, state, topics, or owners",
-        "Preserve every existing discovery component key, unique ID, state topic",
-        "New component keys and unique-ID suffixes must be deterministic",
-        "combine daemon availability with explicit field availability",
-        "Omission, null, and empty text",
-        "Expand the bundled read-only Lovelace card",
-        "Preserve all existing card configuration keys",
-        "Site joins the hierarchy",
-        "Frequency, Modulation, and Service Type join the details grid",
-        "Existing configurations",
-        "complete fixed component inventory",
-        "responsive rendered behavior",
-        "Milestone 26.6 implementation and host-independent acceptance are complete",
-        "fourteen fixed state/diagnostic components and seven unchanged bounded controls",
-        "390-pixel phone viewport",
-        "Audit finding `A04` is complete",
-        "Do not add battery, raw screen text, screen classification",
-        "special-mode-only fields",
-        "dynamic discovery components",
+        "### Milestone 26.7 — Responsive scanner-display Home Assistant card themes",
+        "Milestone 26.6 is closed",
+        "fourteen fixed state/diagnostic components",
+        "seven unchanged bounded controls",
+        "`SDS200 Display` Lovelace card",
+        "Uniden SDS200 Owner's Manual, pages 38-39",
+        "Preserve the existing `sds200-card.js` asset",
+        "must not copy manual artwork, branding, or fonts",
+        "Simple, Detail, Search/Close Call, Weather, and Tone-Out",
+        "Color, Black on White, and White on Black",
+        "Use only the existing fourteen Home Assistant state/diagnostic entities",
+        "read-only and transport-free",
+        "supported `states` context",
+        "must not add MQTT discovery components, topics, scanner commands",
+        "one bounded 4:3 display surface",
+        "fluid typography, text truncation, and no internal scrolling",
+        "Viewport fit",
+        "390-pixel phone viewport through 800x480 and 1920x1080",
+        "`sds200-display-card.js`",
+        "atomically install",
+        "registration of both `/local` JavaScript module resources",
+        "zero horizontal or vertical display overflow",
+        "Milestone 26.7 implementation and host-independent acceptance are complete",
+        "all forty-five viewport-fit layout/palette/reference-viewport combinations",
+        "all fifteen Card-fit layout/palette combinations",
+        "every rendered field has an accessible label",
+        "Do not add Home Assistant entities, scanner display customization writes",
+        "copied Uniden assets",
+        "new runtime dependencies, or Internet access",
         "semantic-control finding `A05`",
         "physical SDS150 validation remain separate work",
     ):

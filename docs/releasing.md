@@ -253,9 +253,13 @@ distribution path on Home Assistant OS.
 6. Confirm the Configuration page renders the translated scanner host, MQTT topic
    prefix, and recording-directory names/descriptions; verify the default
    recording directory resolves below `/media`.
-7. Confirm `/local/sds200/sds200-card.js` is available, register it as a
-   JavaScript Module when needed, and verify **SDS200 Scanner** appears in the
-   card picker with a working graphical editor and read-only state rendering.
+7. Confirm `/local/sds200/sds200-card.js` and
+   `/local/sds200/sds200-display-card.js` are available, register each as a
+   JavaScript Module when needed, and verify **SDS200 Scanner** and **SDS200
+   Display** appear in the card picker with working graphical editors and
+   read-only state rendering. Exercise all five display layouts, all three
+   palettes, and both fit modes; confirm viewport fit has no internal overflow at
+   390-pixel phone, 800x480, and 1920x1080 reference sizes.
 8. Confirm the discovered SDS200 device exposes twenty-one components: fourteen
    state/diagnostic components plus four Hold switches and Previous Channel,
    Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,

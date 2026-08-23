@@ -158,22 +158,27 @@ topics are scanner-control inputs even though the generic daemon MQTT command
 topic remains disabled, so broker publish permissions for the dedicated control
 namespace should be limited to trusted Home Assistant publishers.
 
-## Bundled Lovelace card
+## Bundled Lovelace cards
 
-The Home Assistant App installs its first-party read-only SDS200 card at:
+The Home Assistant App installs two first-party read-only SDS200 cards:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
+/homeassistant/www/sds200/sds200-display-card.js
 ```
 
-Home Assistant serves that file to the frontend as:
+Home Assistant serves them to the frontend as:
 
 ```text
 /local/sds200/sds200-card.js
+/local/sds200/sds200-display-card.js
 ```
 
-Register that URL once in **Settings > Dashboards > Resources** as a
-**JavaScript Module**. HACS is not required.
+Register each URL once in **Settings > Dashboards > Resources** as a
+**JavaScript Module**. HACS is not required. **SDS200 Scanner** remains the
+unchanged compact card. **SDS200 Display** adds Simple, Detail, Search/Close
+Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
+Black palettes.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -181,19 +186,19 @@ available.
 
 The automatic `/local` delivery requires the App to map Home Assistant's
 configuration directory read/write. That filesystem permission is broader than
-the single card file: the container can technically write elsewhere in the Home
+the two card files: the container can technically write elsewhere in the Home
 Assistant configuration tree while it is running. The SDS200 installer
 deliberately limits its own behavior to creating `www/sds200` when necessary and
-creating or replacing only `www/sds200/sds200-card.js`. It does not edit Home
-Assistant YAML, `.storage`, dashboards, or resource registration.
+creating or replacing only the two card files listed above. It does not edit
+Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
-Failure to install or update the optional card is isolated from the scanner
+Failure to install or update the optional cards is isolated from the scanner
 runtime. The App logs a warning and continues starting the daemon and web
 dashboard.
 
-The card intentionally does not call the App, daemon, scanner, MQTT broker, or
-Home Assistant APIs. It subscribes only to Home Assistant's supported `states`
-data context through the frontend `context-request` mechanism.
+Both cards intentionally avoid calls to the App, daemon, scanner, MQTT broker,
+or Home Assistant APIs. They subscribe only to Home Assistant's supported
+`states` data context through the frontend `context-request` mechanism.
 
 After registering the resource, add **SDS200 Scanner** from the Home Assistant
 card picker. The card uses Home Assistant's built-in graphical form editor.
@@ -210,7 +215,11 @@ entities:
   scanner_connected: binary_sensor.REPLACE_ME
   system: sensor.REPLACE_ME
   department: sensor.REPLACE_ME
+  site: sensor.REPLACE_ME
   channel: sensor.REPLACE_ME
+  frequency: sensor.REPLACE_ME
+  modulation: sensor.REPLACE_ME
+  service_type: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -222,6 +231,42 @@ entities:
 Use the actual entity IDs created by the SDS200 MQTT Discovery device. The card
 remains deliberately read-only. Scanner controls are separate standard Home
 Assistant switch and button entities and do not add a transport to the card.
+
+For the scanner-style presentation, add **SDS200 Display** from the picker,
+select the same fourteen entities, and choose a layout, palette, and fit mode.
+The corresponding YAML begins with:
+
+```yaml
+type: custom:sds200-display-card
+title: SDS200 Display
+layout: detail
+palette: color
+fit: viewport
+entities:
+  scanner_connected: binary_sensor.REPLACE_ME
+  system: sensor.REPLACE_ME
+  department: sensor.REPLACE_ME
+  site: sensor.REPLACE_ME
+  channel: sensor.REPLACE_ME
+  frequency: sensor.REPLACE_ME
+  modulation: sensor.REPLACE_ME
+  service_type: sensor.REPLACE_ME
+  signal: sensor.REPLACE_ME
+  rssi: sensor.REPLACE_ME
+  audio_running: binary_sensor.REPLACE_ME
+  recording_active: binary_sensor.REPLACE_ME
+  recording_status: sensor.REPLACE_ME
+  daemon_state: sensor.REPLACE_ME
+```
+
+Use `simple`, `detail`, `search`, `weather`, or `tone_out` for `layout`;
+`color`, `black_on_white`, or `white_on_black` for `palette`; and `card` or
+`viewport` for `fit`. Viewport fit retains a centered 4:3 surface and grows only
+to the smaller width- or height-constrained dimension, without internal
+scrolling. The original grid is inspired by the information hierarchy on pages
+38–39 of the
+[SDS200 Owner's Manual](https://www.uniden.info/download/ompdf/SDS200om.pdf)
+without copying scanner artwork, branding, or fonts.
 
 ## Troubleshooting
 

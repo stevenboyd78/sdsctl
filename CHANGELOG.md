@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add a separate responsive `SDS200 Display` Home Assistant card with Simple,
+  Detail, Search/Close Call, Weather, and Tone-Out layouts; Color, Black on
+  White, and White on Black palettes; and Card or viewport-bounded 4:3 fit. The
+  original compact card is unchanged, both cards remain read-only over the same
+  fourteen entities, and no Uniden artwork, branding, or fonts are copied.
 - Add four fixed read-only Home Assistant MQTT Discovery sensors and matching
   optional Lovelace card fields for Site, Frequency, Modulation, and Service
   Type. Existing component identities and controls remain unchanged; each new
