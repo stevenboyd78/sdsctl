@@ -216,11 +216,12 @@ Assistant Core once before registering the `/local` resource. Then add
 **SDS200 Scanner** from the card picker and use its graphical editor to choose
 the SDS200 Discovery state entities.
 
-The MQTT-discovered SDS200 device now contains seventeen components: the existing
-ten state/diagnostic components plus System, Department, Site, and Channel Hold
-switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
-seven controls use a dedicated bounded Home Assistant adapter; the App still
-does not enable the generic daemon MQTT request-envelope command topic.
+The MQTT-discovered SDS200 device now contains twenty-one components: fourteen
+state/diagnostic components, including optional Site, Frequency, Modulation, and
+Service Type sensors, plus System, Department, Site, and Channel Hold switches
+and Previous Channel, Next Channel, and Reconnect Scanner buttons. The seven
+controls use a dedicated bounded Home Assistant adapter; the App still does not
+enable the generic daemon MQTT request-envelope command topic.
 
 Existing v0.20.1 recordings and configuration remain in the same Home Assistant
 media/configuration locations. Back up important configuration and recordings

@@ -11,62 +11,58 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.5 — Battery telemetry and System Status lifecycle decision
+### Milestone 26.6 — Stable Home Assistant entity and card expansion
 
-Milestone 26.4 is closed with accessible responsive web presentation for every
-field in the then-current 34-field `RadioStateSnapshot`, one complete browser
-projection across initial status, SSE, polling fallback, and reconciliation, and
-deterministic rendered acceptance across all five themes and the phone
-breakpoint. Its implementation closes audit finding `A03` without expanding
-scanner protocol, model, firmware, transport, or physical-validation claims.
+Milestone 26.5 is closed with optional finite SDS100 battery telemetry on the
+existing authoritative PSI/GSI shared-state lifecycle and explicit fail-closed
+decisions for request-driven SDS150 charge status and session-oriented System
+Status analysis. Audit finding `A02` is complete without automatic polling,
+invented units, flattened analysis records, or expanded hardware claims.
 
-Milestone 26.5 addresses audit finding `A02` by separating ordinary PSI/GSI
-telemetry from request-driven device telemetry and operator-started analysis
-sessions before extending shared state. This is an evidence-and-lifecycle slice,
-not blanket authorization to expose every parsed field or start a persistent
-scanner mode.
+Milestone 26.6 addresses audit finding `A04` through one compatibility-reviewed,
+fixed Home Assistant presentation slice. Extend the existing MQTT Device
+Discovery document with exactly four read-only sensors: Site, Frequency,
+Modulation, and Service Type. These fields already exist in the canonical
+35-field `RadioStateSnapshot` and generic MQTT `state/radio` publication; this
+milestone must not add scanner commands, polling, state, topics, or owners.
 
-The optional SDS100 `Property.Battery` value arrives on the same authoritative
-GSI/PSI `ScannerInfo` cadence already owned by direct and daemon runtimes. Add it
-to `RadioStateSnapshot` as the exact optional finite float reported by the
-scanner. Absence must clear earlier state; literal zero must remain distinct from
-absence; and the host must not infer a unit, percentage, charging state, range,
-or SDS150/SDS200 applicability. Preserve complete daemon API, SSE, generic MQTT,
-and web-dashboard projection through stable field-inventory contracts. Do not
-add a Home Assistant entity or change the dedicated `sdsctl battery` behavior in
-this slice.
+Preserve every existing discovery component key, unique ID, state topic,
+control topic, and device identity. New component keys and unique-ID suffixes
+must be deterministic. Because the four added fields are nullable and
+mode-dependent, each new sensor must combine daemon availability with explicit
+field availability from the radio-state topic. Omission, null, and empty text
+must make only that sensor unavailable rather than publishing a misleading
+string or retaining an apparently current value.
 
-SDS150 `GCS` charge status remains explicit request/response device telemetry.
-Do not poll it automatically, merge it into PSI-owned `RadioStateSnapshot`, or
-publish a cached value without an observation timestamp and staleness contract.
-Its existing typed command and dedicated CLI remain specification-backed and
-hardware-unverified until representative SDS150 validation can establish
-availability, cadence, latency, and safe polling behavior. A later on-demand
-device-telemetry service may own that request and timestamped result.
+Expand the bundled read-only Lovelace card with the same four optional entity
+selectors. Preserve all existing card configuration keys and transport-free
+operation. Site joins the hierarchy when configured and available; Frequency,
+Modulation, and Service Type join the details grid. Existing configurations
+that do not select the new entities must retain their current rendering and
+validation behavior.
 
-System Status remains a session-oriented analysis surface rather than ordinary
-live radio state. Do not automatically issue `AST,SYSTEM_STATUS`, flatten
-repeated `SystemStatus` records into the singleton radio snapshot, invent an AST
-acknowledgement-to-frame transaction, or infer pause, resume, stop, reconnect,
-or stale-data behavior. The existing lossless records and immutable
-`SystemStatusProjection` remain the supported read-only foundation. A later
-analysis-session service requires explicit single ownership, selected site,
-ordered repeated-record semantics, observation timestamps, bounded cancellation,
-APR behavior, disconnect/reconnect policy, and physical model/firmware/transport
-acceptance before renderer or daemon control exposure.
+Host-independent acceptance must lock the complete fixed component inventory,
+unchanged existing identities and topics, exact optional-field availability,
+read-only card field coverage, backward-compatible configuration, package
+delivery, and responsive rendered behavior. Update the Home Assistant App guide
+and parity audit to state the new bounded inventory and close `A04`.
 
-Milestone 26.5 implementation and host-independent acceptance are complete. The
-canonical snapshot now has 35 fields, optional finite SDS100 battery telemetry
-flows through the existing authoritative state and browser projection, and the
-full suite covers value, literal-zero, omission-clearing, nonfinite rejection,
-daemon event/API decoding, audit, and field-inventory synchronization. Audit
-finding `A02` is complete through both this narrow implementation and the
-fail-closed GCS/System Status lifecycle decisions above; no physical support
-claim has expanded.
+Milestone 26.6 implementation and host-independent acceptance are complete. The
+discovered device now has fourteen fixed state/diagnostic components and seven
+unchanged bounded controls. Exact tests lock all original state-component IDs
+and topics, the four deterministic additions, fixed discovery under absent
+mode-specific state, and per-field availability. The bundled card preserves old
+configuration rendering and presents the selected additions without horizontal
+overflow at desktop or the 390-pixel phone viewport. Audit finding `A04` is
+complete without expanding scanner ownership, state, polling, controls, or
+physical-support claims.
 
-`STS` display projection, RF Power Plot, Home Assistant entity/card expansion,
-Rich CLI/monitor/Textual parity, semantic-control finding `A05`, advanced
-protocol controls, and physical SDS150 validation remain separate slices.
+Do not add battery, raw screen text, screen classification, identifiers,
+receiver levels, scanner-native recording, P25, special-mode-only fields, new
+controls, dynamic discovery components, or inferred units in this slice. Rich
+CLI/monitor/Textual parity, semantic-control finding `A05`, advanced protocol
+controls, System Status, RF Power Plot, and physical SDS150 validation remain
+separate work.
 
 ## Deferred hardware validation
 
@@ -561,6 +557,11 @@ is collected.
   telemetry and System Status remains a future explicitly owned analysis-session
   service pending timestamps, staleness, cancellation, reconnect, and physical
   acceptance evidence.
+- Milestone 26.6 completed the compatibility-reviewed Home Assistant expansion.
+  Four fixed read-only Site, Frequency, Modulation, and Service Type sensors and
+  matching optional card fields reuse the canonical radio-state topic, preserve
+  every existing identity and control, and fail unavailable when their current
+  mode-dependent values are absent.
 
 ## Completed milestone groups
 

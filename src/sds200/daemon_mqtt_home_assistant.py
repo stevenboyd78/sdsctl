@@ -296,6 +296,34 @@ def build_home_assistant_device_discovery(
         },
     }
 
+    for key, label in (
+        ("site", "Site"),
+        ("frequency", "Frequency"),
+        ("modulation", "Modulation"),
+        ("service_type", "Service Type"),
+    ):
+        components[key] = {
+            "platform": "sensor",
+            "name": label,
+            "unique_id": f"{unique_prefix}_{key}",
+            "state_topic": radio_topic,
+            "value_template": f"{{{{ value_json.{key} }}}}",
+            "availability": [
+                {
+                    "topic": f"{prefix}/availability",
+                },
+                {
+                    "topic": radio_topic,
+                    "value_template": (
+                        f"{{{{ 'online' if value_json.{key} is string "
+                        f"and value_json.{key} | length > 0 "
+                        "else 'offline' }}}}"
+                    ),
+                },
+            ],
+            "availability_mode": "all",
+        }
+
     if home_assistant.controls_enabled:
         control_prefix = f"{prefix}/home_assistant/control"
 

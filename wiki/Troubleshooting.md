@@ -274,8 +274,12 @@ overwritten; inspect the App log and resolve the conflict deliberately.
 
 Confirm Home Assistant's MQTT integration is active and inspect the App log for
 MQTT service or broker connection errors. The current SDS200 device contains
-seventeen Discovery components: ten state/diagnostic components plus four Hold
-switches and Previous Channel, Next Channel, and Reconnect Scanner buttons.
+twenty-one Discovery components: fourteen state/diagnostic components plus four
+Hold switches and Previous Channel, Next Channel, and Reconnect Scanner buttons.
+
+Site, Frequency, Modulation, and Service Type are intentionally unavailable when
+the current radio state omits them, reports null, or reports empty text. They
+recover without rediscovery when a later scanner mode supplies a value.
 
 The seven controls use dedicated QoS 0 non-retained Home Assistant topics. The
 App intentionally keeps the independent generic daemon MQTT

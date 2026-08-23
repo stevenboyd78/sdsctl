@@ -26,7 +26,11 @@ SNAPSHOT: dict[str, object] = {
     "radio_state": {
         "system": "County",
         "department": "Dispatch",
+        "site": "North",
         "channel": "Primary",
+        "frequency": "155.2500 MHz",
+        "modulation": "NFM",
+        "service_type": "Fire Dispatch",
         "signal": 4,
         "rssi": -83.0,
     },
@@ -104,7 +108,11 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "scanner_connected",
         "system",
         "department",
+        "site",
         "channel",
+        "frequency",
+        "modulation",
+        "service_type",
         "signal",
         "rssi",
         "audio_running",
@@ -118,6 +126,25 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         for component in components.values()
     )
     assert all("command_topic" not in component for component in components.values())
+
+    existing_topics = {
+        "daemon_state": "radio/sds200/state/daemon",
+        "scanner_connected": "radio/sds200/state/scanner/connection",
+        "system": "radio/sds200/state/radio",
+        "department": "radio/sds200/state/radio",
+        "channel": "radio/sds200/state/radio",
+        "signal": "radio/sds200/state/radio",
+        "rssi": "radio/sds200/state/radio",
+        "audio_running": "radio/sds200/state/audio",
+        "recording_active": "radio/sds200/state/recording",
+        "recording_status": "radio/sds200/state/recording",
+    }
+    for key, state_topic in existing_topics.items():
+        assert components[key]["unique_id"] == (
+            "sds200_mqtt_a699eb0a0c0e654f5a52_"
+            f"{key}"
+        )
+        assert components[key]["state_topic"] == state_topic
 
     assert components["scanner_connected"] == {
         "device_class": "connectivity",
@@ -142,6 +169,63 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "unit_of_measurement": "dBm",
         "value_template": "{{ value_json.rssi }}",
     }
+
+    for key, label in (
+        ("site", "Site"),
+        ("frequency", "Frequency"),
+        ("modulation", "Modulation"),
+        ("service_type", "Service Type"),
+    ):
+        assert components[key] == {
+            "availability": [
+                {"topic": "radio/sds200/availability"},
+                {
+                    "topic": "radio/sds200/state/radio",
+                    "value_template": (
+                        f"{{{{ 'online' if value_json.{key} is string "
+                        f"and value_json.{key} | length > 0 "
+                        "else 'offline' }}}}"
+                    ),
+                },
+            ],
+            "availability_mode": "all",
+            "name": label,
+            "platform": "sensor",
+            "state_topic": "radio/sds200/state/radio",
+            "unique_id": (
+                "sds200_mqtt_a699eb0a0c0e654f5a52_"
+                f"{key}"
+            ),
+            "value_template": f"{{{{ value_json.{key} }}}}",
+        }
+
+
+def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> None:
+    snapshot = dict(SNAPSHOT)
+    snapshot["radio_state"] = {}
+
+    discovery = build_home_assistant_device_discovery(
+        enabled_config(),
+        snapshot,
+    )
+
+    assert discovery is not None
+    components = json.loads(discovery.payload)["components"]
+    assert {
+        "site",
+        "frequency",
+        "modulation",
+        "service_type",
+    } <= set(components)
+    assert all(
+        components[key]["availability_mode"] == "all"
+        for key in (
+            "site",
+            "frequency",
+            "modulation",
+            "service_type",
+        )
+    )
 
 
 def test_discovery_honors_configured_prefix_and_qos() -> None:
@@ -185,7 +269,11 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
         "scanner_connected",
         "system",
         "department",
+        "site",
         "channel",
+        "frequency",
+        "modulation",
+        "service_type",
         "signal",
         "rssi",
         "audio_running",

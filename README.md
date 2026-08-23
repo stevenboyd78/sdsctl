@@ -688,12 +688,13 @@ private Unix-domain sockets inside the App.
 The App configuration accepts the required `scanner_host`, optional
 `mqtt_topic_prefix` defaulting to `sdsctl`, and optional media-relative
 `recording_directory` defaulting to `sdsctl/recordings`. Home Assistant MQTT
-Discovery is enabled by the App adapter and publishes seventeen components:
-the existing ten state/diagnostic entities plus System, Department, Site, and
-Channel Hold switches and Previous Channel, Next Channel, and Reconnect Scanner
-buttons. The App keeps the generic MQTT request-envelope command input disabled;
-the seven Home Assistant controls use their own bounded translation layer over
-the existing typed daemon-control boundary.
+Discovery is enabled by the App adapter and publishes twenty-one components:
+fourteen state/diagnostic entities, including the optional Site, Frequency,
+Modulation, and Service Type sensors, plus System, Department, Site, and Channel
+Hold switches and Previous Channel, Next Channel, and Reconnect Scanner buttons.
+The App keeps the generic MQTT request-envelope command input disabled; the seven
+Home Assistant controls use their own bounded translation layer over the existing
+typed daemon-control boundary.
 
 Browser audio continues to prefer AudioWorklet. When Home Assistant is opened
 from a browser context where AudioWorklet is unavailable, the dashboard falls

@@ -53,6 +53,10 @@ def test_audit_matrix_preserves_reviewed_renderer_distinctions() -> None:
     assert rows["system"][4] == "R*"
     assert rows["system_hold"][7] == "R+C* / —"
     assert rows["volume"][4] == "R+C†"
+    assert rows["site"][7] == "R"
+    assert rows["frequency"][7] == "R*"
+    assert rows["modulation"][7] == "R*"
+    assert rows["service_type"][7] == "R*"
 
     outside_shared_state = _section(
         document,
@@ -86,7 +90,7 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "GSI battery",
         "System Status",
         "Unknown or deferred is deliberately different from unsupported",
-        "`A01`, `A02`, and `A03` are complete",
+        "`A01` through `A04` are complete",
         "## Milestone 26.5 lifecycle decision",
         "optional finite SDS100 `Property.Battery`",
         "omission clears prior state",
@@ -94,5 +98,10 @@ def test_audit_preserves_evidence_and_finding_boundaries() -> None:
         "ordered repeated `SystemStatus` records",
         "a future System Status service must own",
         "does not authorize automatic `AST,SYSTEM_STATUS`",
+        "## Milestone 26.6 Home Assistant compatibility decision",
+        "Site, Frequency, Modulation, and Service Type",
+        "fixed deterministic IDs",
+        "combines daemon availability with field availability",
+        "This closes `A04`",
     ):
         assert required in document or required in normalized

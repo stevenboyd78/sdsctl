@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add fixed read-only Site, Frequency, Modulation, and Service Type MQTT
+  Discovery sensors plus matching optional bundled Lovelace card selectors.
+  Existing entity identities and controls remain unchanged, and a nullable
+  mode-dependent sensor becomes unavailable when its current field is absent.
+
 ## 0.21.0
 
 - Track the sdsctl v0.21.0 release while preserving the compatibility-sensitive

@@ -237,7 +237,7 @@ This does not create another scanner owner, PSI stream, RTSP/RTP session, or raw
 scanner-key path. The generic `<prefix>/commands` transport remains independent
 and explicitly opt-in; the Home Assistant App keeps it disabled while enabling
 the dedicated adapter. See
-[Daemon MQTT publication](daemon-mqtt.md) for the exact topics, seventeen-component
+[Daemon MQTT publication](daemon-mqtt.md) for the exact topics, twenty-one-component
 Discovery set, identity semantics, retention rules, failure behavior, and security
 boundary, and [Home Assistant App](home-assistant-app.md) for the App runtime.
 

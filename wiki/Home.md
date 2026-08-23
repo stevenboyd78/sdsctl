@@ -118,10 +118,11 @@ Assistant media storage, and publishes UDP `50000` for SDS200 RTP audio. The
 default recording library is `/media/sdsctl/recordings`; the media-relative
 `recording_directory` option can select another location below `/media`.
 
-Home Assistant MQTT Discovery exposes ten state/diagnostic components plus seven
-bounded scanner controls: System, Department, Site, and Channel Hold switches
-and Previous Channel, Next Channel, and Reconnect Scanner buttons. The App keeps
-the generic daemon MQTT request-envelope command input disabled.
+Home Assistant MQTT Discovery exposes fourteen state/diagnostic components,
+including optional Site, Frequency, Modulation, and Service Type sensors, plus
+seven bounded scanner controls: System, Department, Site, and Channel Hold
+switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
+App keeps the generic daemon MQTT request-envelope command input disabled.
 
 The App also installs the first-party read-only SDS200 Lovelace card as
 `/local/sds200/sds200-card.js`. Register it once under
