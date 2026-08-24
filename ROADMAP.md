@@ -11,77 +11,83 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.15 — Managed terminal-theme activation
+### Milestone 26.16 — Explicit Home Assistant theme trust and deployment
 
-Milestone 26.14 is closed with automatic managed web-theme discovery, immutable
-startup registration, selected-only browser links, safe stored-selection
-fallback, and digest-enforced same-origin CSS delivery. The built-in web themes,
-authentication and Ingress middleware, restrictive response policy, accessible
-shared dashboard, and scanner ownership boundaries remain authoritative.
+Milestone 26.15 is closed with automatic managed terminal-theme discovery,
+immutable startup registration, complete semantic-palette selection, strictly
+scoped presentation-only TCSS, command-line, environment, and configuration
+selection, actionable pre-scanner failure, unchanged plain-text meaning, and the
+exact built-in dark fallback. The built-in terminal themes and all scanner,
+daemon, control, audio, and responsive-layout boundaries remain authoritative.
 
-Milestone 26.15 activates only valid managed `tui` packages for terminal
-renderers. At each applicable command start, resolve the normal XDG
-configuration theme root once, isolate malformed entries, and combine the
-built-in and valid managed terminal manifests into one deterministic immutable
-runtime registry. Built-ins remain authoritative and preserve the exact `dark`
-and `light` IDs, `DEFAULT_DARK_THEME` and `DEFAULT_LIGHT_THEME` singleton
-objects, palette values, Textual CSS, ordering, and ordinary behavior when no
-managed package is selected.
+Milestone 26.16 establishes the higher-trust activation boundary for managed
+`home-assistant` packages. Discovery and installation alone must never execute,
+deploy, or approve third-party JavaScript. Add explicit activation, deactivation,
+and activation-status operations under `sdsctl themes`. Activation must resolve
+one valid managed Home Assistant package from the exact managed root, require
+the existing executable-code trust acknowledgement, and require the operator to
+confirm the package's complete current SHA-256 digest. Built-ins remain owned by
+the existing App installer and are not valid managed activation targets.
 
-Allow a valid managed package ID anywhere the existing global `--theme`,
-configuration-file `theme`, or `SDSCTL_THEME` value selects a terminal palette.
-Normalize values as lowercase kebab-case identifiers, then resolve the selected
-ID only against the startup registry for a Rich or Textual command. An unknown,
-invalid, removed, or colliding selection must fail before scanner or daemon
-access with one actionable error that lists the available IDs. Non-rendering
-commands must continue to accept a syntactically valid configured theme without
-reading the managed directory, so theme state cannot break lifecycle, recovery,
-completion, or unrelated scanner operations.
+Deploy only the manifest-declared module to an explicit absolute Home Assistant
+`www/sds200` target directory. Securely reopen the managed root, interface,
+package, manifest, and module without following symlinks; require the original
+package identity and complete confirmed digest; and read only regular files
+within the existing package bounds. Refuse missing, malformed, colliding,
+changed, replaced, manually substituted, or undeclared content. Never import or
+evaluate JavaScript inside the Python process.
 
-For Rich human-readable output, bind only the selected package's complete
-semantic palette. Preserve color auto-detection, `NO_COLOR`, `FORCE_COLOR`,
-`--no-color`, redirected plain-text structure, labels, ordering, and structured
-output independence. Color remains supplementary and must not become the only
-carrier of connection, activity, signal, hold, mute, recording, availability,
-or severity meaning.
+Record each successful activation in one strict, versioned, private activation
+ledger beneath the managed root. Pin the interface, package ID, package digest,
+module digest, installed filename, custom element, resource URL, and exact
+absolute target directory. Write the ledger atomically with private permissions
+and reject symlinks, special files, unknown fields, duplicate target filenames,
+duplicate custom elements, unsupported versions, and records outside the exact
+managed identity. Manual package placement and the install-time trust flag do
+not create a ledger entry.
 
-For the full-screen Textual interface, load only the selected managed palette
-and stylesheet into memory before constructing the application. Require every
-managed stylesheet selector to be scoped beneath its unique declared
-`Screen.<screen-class>` and permit only color, background, and border styling;
-reject imports, URLs, variables, unscoped selectors, layout properties, and
-other presentation rules that could hide, resize, reorder, or relabel shared
-widgets. Apply exactly that screen class while the managed palette is active.
-The existing `T` action remains a deterministic safe fallback: a managed theme
-switches to built-in dark, and built-in dark and light continue to toggle exactly
-as before. Shared dimensions, padding, scrolling, responsive breakpoints,
-keyboard behavior, controls, panels, scanner meaning, and lifecycle stay in
-application code.
+Installation into `www/sds200` must preserve unrelated files, refuse symlinked
+directory components or targets, use a same-directory regular-file staging
+write, `fsync`, atomic replacement, mode `0644`, and post-write byte and digest
+verification. A first activation must refuse to overwrite an unrelated existing
+filename. Reapproval after a package replacement may update only a target that
+still exactly matches its prior ledger-pinned module; changed target content
+must fail closed and remain untouched. A failed activation must retain the
+previous target and ledger state.
 
-Managed terminal assets are declarative data, not executable code. Read and
-validate the selected package once during startup, retain immutable palette and
-stylesheet values, and do not reopen package files during rendering. Installing,
-replacing, repairing, or removing a package affects only a new process; do not
-add filesystem watching or live reload. Programmatic Rich palette lookup and
-Textual construction remain deterministic and built-in-only unless the caller
-explicitly supplies a runtime registry or absolute managed root.
+Deactivation must require the same explicit target directory and exact
+`home-assistant/<id>` confirmation. Remove only a target whose filename and
+content digest still match the ledger, then remove that one ledger record while
+preserving every unrelated activation and file. Refuse modified, missing,
+substituted, or symlinked targets rather than deleting uncertain content. Block
+managed-package removal while that identity has an activation record, directing
+the operator to deactivate first. Activation status must distinguish current,
+stale-package, changed-target, missing-target, and invalid-ledger states without
+executing code or contacting Home Assistant.
 
-Host-independent acceptance must cover configuration and environment selection,
-XDG wiring, built-in singleton and toggle compatibility, deterministic registry
-ordering, absent-root fallback, malformed-entry isolation, unknown-selection
-errors before scanner access, scoped-TCSS enforcement, managed palette and class
-application, startup immutability after replacement or removal, color-disabled
-plain-text equivalence, direct, replay, and daemon-backed TUI paths,
-documentation checks, distribution validation, and the complete regression
-suite. No physical scanner validation is required because this slice changes
-only terminal presentation discovery and startup selection.
+Keep Home Assistant resource registration manual. Do not edit YAML, `.storage`,
+dashboards, Lovelace resources, App options, or Home Assistant Core state. The
+Home Assistant App continues to install only its two bundled byte-identical
+modules and must not scan user-writable managed directories automatically.
+Package replacement, installation, or discovery does not alter deployed code;
+the operator must explicitly approve each new package digest.
 
-Do not activate managed Home Assistant JavaScript; change web-theme delivery;
-download packages; extract archives; execute theme code; add remote catalogs,
-signatures, provenance updates, or live reload; change scanner, daemon,
-transport, audio, recording, control, authentication, Ingress, or container
-exposure semantics; or introduce a desktop GUI. Home Assistant activation
-remains a separate higher-trust renderer milestone, and GUI theming remains
+Host-independent acceptance must cover XDG and explicit-root wiring, exact
+digest confirmation, secure descriptor-relative package reads, private atomic
+ledger creation and replacement, first activation and idempotence, explicit
+reapproval, collision isolation, rollback on target or ledger failure, symlink
+and special-file rejection, concurrent lifecycle exclusion, safe deactivation,
+active-package removal refusal, JSON and human status output, unchanged built-in
+App installation, documentation checks, distribution validation, and the
+complete regression suite. No physical scanner or HAOS validation is required
+because this slice copies operator-approved presentation modules without
+changing first-party cards or Home Assistant integration behavior.
+
+Do not automatically activate discovered code; download packages; extract
+archives; execute JavaScript; add remote catalogs, signatures, provenance
+services, or live reload; change web or terminal theme activation; change
+scanner, daemon, transport, audio, recording, control, authentication, Ingress,
+or container exposure semantics; or introduce a desktop GUI. GUI theming remains
 reserved for the future GUI design.
 
 ## Deferred hardware validation

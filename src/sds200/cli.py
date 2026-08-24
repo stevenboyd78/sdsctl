@@ -135,6 +135,12 @@ from .exceptions import (
     DaemonProtocolError,
     SDS200Error,
 )
+from .home_assistant_theme_activation import (
+    HomeAssistantActivationInventory,
+    activate_home_assistant_theme,
+    deactivate_home_assistant_theme,
+    home_assistant_activation_inventory,
+)
 from .logging_config import LOG_LEVEL_NAMES, configure_logging
 from .models import HealthSummary, RadioEvent, RadioHealth, StatusResponse
 from .monitor import TerminalMonitor
@@ -1975,6 +1981,56 @@ def build_parser(
         help="Exact interface and identity confirmation token",
     )
     theme_remove.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_activate = theme_commands.add_parser(
+        "activate",
+        help="Explicitly approve and deploy one managed Home Assistant theme",
+    )
+    theme_activate.add_argument("interface", choices=("home-assistant",))
+    theme_activate.add_argument("identifier", metavar="ID")
+    theme_activate.add_argument(
+        "--target-directory",
+        required=True,
+        type=Path,
+        metavar="DIRECTORY",
+        help="Exact absolute Home Assistant www/sds200 directory",
+    )
+    theme_activate.add_argument(
+        "--confirm-sha256",
+        required=True,
+        metavar="SHA256",
+        help="Exact current complete package SHA-256 shown by themes list",
+    )
+    theme_activate.add_argument(
+        "--trust-home-assistant-code",
+        action="store_true",
+        help="Acknowledge that the approved theme contains executable JavaScript",
+    )
+    theme_activate.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_deactivate = theme_commands.add_parser(
+        "deactivate",
+        help="Remove one exact ledger-pinned Home Assistant theme module",
+    )
+    theme_deactivate.add_argument("interface", choices=("home-assistant",))
+    theme_deactivate.add_argument("identifier", metavar="ID")
+    theme_deactivate.add_argument(
+        "--target-directory",
+        required=True,
+        type=Path,
+        metavar="DIRECTORY",
+        help="Exact absolute Home Assistant www/sds200 directory",
+    )
+    theme_deactivate.add_argument(
+        "--confirm",
+        required=True,
+        metavar="HOME-ASSISTANT/ID",
+        help="Exact interface and identity confirmation token",
+    )
+    theme_deactivate.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_activations = theme_commands.add_parser(
+        "activations",
+        help="Show digest-pinned Home Assistant activation status",
+    )
+    theme_activations.add_argument("--json", action="store_true", help="Print stable JSON")
 
     recordings = subparsers.add_parser(
         "recordings",
@@ -4771,6 +4827,25 @@ def _print_theme_inventory(inventory: ThemeInventory) -> None:
         print(f"  {identity:40s} {issue.path}: {issue.message}")
 
 
+def _print_home_assistant_activation_inventory(
+    inventory: HomeAssistantActivationInventory,
+) -> None:
+    print("Home Assistant theme activations")
+    print(f"Root: {inventory.root}")
+    print(f"Ledger: {inventory.ledger}")
+    if not inventory.statuses:
+        print("Activations: none")
+        return
+    print("Activations:")
+    for status in inventory.statuses:
+        identity = status.record.identity if status.record is not None else "invalid-ledger"
+        target = (
+            f" target={status.record.target_path}" if status.record is not None else ""
+        )
+        print(f"  {identity:40s} {status.state}{target}")
+        print(f"    {status.message}")
+
+
 def _run_themes(
     args: argparse.Namespace,
     *,
@@ -4838,6 +4913,52 @@ def _run_themes(
         else:
             print(f"Removed managed theme: {removed.identity}")
         return 0
+
+    if args.themes_action == "activate":
+        activated = activate_home_assistant_theme(
+            root,
+            args.identifier,
+            args.target_directory,
+            confirmed_sha256=args.confirm_sha256,
+            home_assistant_code_trust=(
+                HOME_ASSISTANT_CODE_TRUST_TOKEN
+                if args.trust_home_assistant_code
+                else None
+            ),
+        )
+        payload = {"activated": True, "activation": activated.as_dict()}
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(f"Activated managed Home Assistant theme: {activated.identity}")
+            print(f"Target: {activated.target_path}")
+            print(f"Resource URL: {activated.resource_url}")
+            print("Register or update that Lovelace resource manually in Home Assistant.")
+        return 0
+
+    if args.themes_action == "deactivate":
+        deactivated = deactivate_home_assistant_theme(
+            root,
+            args.identifier,
+            args.target_directory,
+            confirmation=args.confirm,
+        )
+        payload = {"deactivated": True, "activation": deactivated.as_dict()}
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print(f"Deactivated managed Home Assistant theme: {deactivated.identity}")
+            print(f"Removed target: {deactivated.target_path}")
+            print("Remove the Lovelace resource manually if it is no longer needed.")
+        return 0
+
+    if args.themes_action == "activations":
+        activation_inventory = home_assistant_activation_inventory(root)
+        if args.json:
+            print(json.dumps(activation_inventory.as_dict(), indent=2, sort_keys=True))
+        else:
+            _print_home_assistant_activation_inventory(activation_inventory)
+        return 0 if activation_inventory.valid else 1
 
     raise ValueError(f"Unsupported themes action: {args.themes_action!r}")
 
