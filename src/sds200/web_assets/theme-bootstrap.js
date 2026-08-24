@@ -2,19 +2,11 @@
 
 (() => {
   const STORAGE_KEY = "sdsctl.web.theme";
-  const THEMES = Object.freeze([
-    "system",
-    "lcars",
-    "matrix",
-    "first-responder",
-    "amateur-radio",
-  ]);
-  const THEME_COLORS = Object.freeze({
-    lcars: "#0b0910",
-    matrix: "#020705",
-    "first-responder": "#07111f",
-    "amateur-radio": "#11100c",
-  });
+  const THEME_DOCUMENTS = Object.freeze(__SDSCTL_WEB_THEME_MANIFESTS__);
+  const THEMES = Object.freeze(THEME_DOCUMENTS.map((theme) => theme.id));
+  const THEMES_BY_ID = new Map(
+    THEME_DOCUMENTS.map((theme) => [theme.id, theme]),
+  );
   const systemColorQuery =
     typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-color-scheme: dark)")
@@ -33,22 +25,23 @@
     }
   }
 
-  function systemThemeColor() {
-    return systemColorQuery !== null && systemColorQuery.matches
-      ? "#0d1420"
-      : "#eef2f7";
-  }
-
   function updateMetadata(theme) {
     const colorScheme = document.querySelector('meta[name="color-scheme"]');
     const themeColor = document.querySelector('meta[name="theme-color"]');
+    const documentTheme = THEMES_BY_ID.get(theme);
+
+    if (documentTheme === undefined) {
+      return;
+    }
 
     if (colorScheme !== null) {
-      colorScheme.content = theme === "system" ? "light dark" : "dark";
+      colorScheme.content = documentTheme.colorScheme;
     }
     if (themeColor !== null) {
       themeColor.content =
-        theme === "system" ? systemThemeColor() : THEME_COLORS[theme];
+        systemColorQuery !== null && systemColorQuery.matches
+          ? documentTheme.themeColors.dark
+          : documentTheme.themeColors.light;
     }
   }
 

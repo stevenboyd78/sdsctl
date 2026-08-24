@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "matrix",
+  "label": "Matrix-inspired",
+  "order": 20,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {
+    "light": "#020705",
+    "dark": "#020705"
+  }
+}

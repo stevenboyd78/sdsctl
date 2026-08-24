@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "system",
+  "label": "System",
+  "order": 0,
+  "stylesheet": "theme.css",
+  "color_scheme": "light dark",
+  "theme_colors": {
+    "light": "#eef2f7",
+    "dark": "#0d1420"
+  }
+}

@@ -493,8 +493,19 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert '<option value="amateur-radio">Amateur Radio</option>' in response.text
     assert 'src="assets/theme-bootstrap.js"' in response.text
     assert 'href="assets/dashboard.css"' in response.text
+    for theme in (
+        "system",
+        "lcars",
+        "matrix",
+        "first-responder",
+        "amateur-radio",
+    ):
+        assert f'href="assets/themes/{theme}/theme.css"' in response.text
     assert response.text.index('src="assets/theme-bootstrap.js"') < response.text.index(
         'href="assets/dashboard.css"'
+    )
+    assert response.text.index('href="assets/dashboard.css"') < response.text.index(
+        'href="assets/themes/system/theme.css"'
     )
     assert 'src="assets/dashboard.js"' in response.text
     assert "<style" not in response.text
@@ -510,6 +521,16 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     with TestClient(app) as client:
         shell = client.get("/")
         stylesheet = client.get("/assets/dashboard.css")
+        theme_stylesheets = {
+            theme: client.get(f"/assets/themes/{theme}/theme.css")
+            for theme in (
+                "system",
+                "lcars",
+                "matrix",
+                "first-responder",
+                "amateur-radio",
+            )
+        }
         theme_bootstrap = client.get("/assets/theme-bootstrap.js")
         script = client.get("/assets/dashboard.js")
         audio_worklet = client.get("/assets/audio-worklet.js")
@@ -519,142 +540,155 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert stylesheet.status_code == 200
     assert stylesheet.headers["content-type"].startswith("text/css")
     assert stylesheet.headers["cache-control"] == "no-store"
-    assert "--content-width:" in stylesheet.text
-    assert "@media (prefers-reduced-motion: reduce)" in stylesheet.text
-    assert ".recording-panel" in stylesheet.text
-    assert ".scanner-controls" in stylesheet.text
-    assert ".scanner-control-status" in stylesheet.text
-    assert ".scanner-hold-control" in stylesheet.text
-    assert ".scanner-hold-state" in stylesheet.text
-    assert ".scanner-hold-state[hidden]" in stylesheet.text
-    assert ".scanner-hold-active" not in stylesheet.text
-    assert "#scanner-previous," not in stylesheet.text
-    assert "#scanner-reconnect," in stylesheet.text
-    assert ".recording-list" in stylesheet.text
-    assert ".saved-playback" in stylesheet.text
-    assert ':root[data-theme="lcars"]' in stylesheet.text
-    assert ':root[data-theme="matrix"]' in stylesheet.text
-    assert ':root[data-theme="first-responder"]' in stylesheet.text
-    assert ':root[data-theme="amateur-radio"]' in stylesheet.text
-    assert ".theme-picker" in stylesheet.text
-    assert "@keyframes matrix-grid-drift" in stylesheet.text
-    assert "animation: matrix-grid-drift 18s linear infinite" in stylesheet.text
-    assert ':root[data-theme="lcars"] .site-header::before' in stylesheet.text
-    assert ':root[data-theme="matrix"] .panel::before' in stylesheet.text
-    assert ':root[data-theme="first-responder"] .panel::after' in stylesheet.text
-    assert ':root[data-theme="amateur-radio"] .site-header::after' in stylesheet.text
-    assert "animation-duration: 0.01ms !important" in stylesheet.text
-    assert "animation-iteration-count: 1 !important" in stylesheet.text
-    assert "--content-width: 220rem" in stylesheet.text
-    assert "@media (min-width: 100rem)" in stylesheet.text
-    assert "@media (max-width: 56rem)" in stylesheet.text
-    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in stylesheet.text
-    assert ':root[data-theme="matrix"] .panel-header::before' in stylesheet.text
-    assert ':root[data-theme="first-responder"] .status-badge' in stylesheet.text
-    assert ':root[data-theme="amateur-radio"] #radio-system' in stylesheet.text
+    assert all(response.status_code == 200 for response in theme_stylesheets.values())
+    assert all(
+        response.headers["content-type"].startswith("text/css")
+        for response in theme_stylesheets.values()
+    )
+    assert all(
+        response.headers["cache-control"] == "no-store"
+        for response in theme_stylesheets.values()
+    )
+    all_stylesheets = "\n".join(
+        [stylesheet.text, *(response.text for response in theme_stylesheets.values())]
+    )
+    assert ':root[data-theme=' not in stylesheet.text
+    assert "--content-width:" in all_stylesheets
+    assert "@media (prefers-reduced-motion: reduce)" in all_stylesheets
+    assert ".recording-panel" in all_stylesheets
+    assert ".scanner-controls" in all_stylesheets
+    assert ".scanner-control-status" in all_stylesheets
+    assert ".scanner-hold-control" in all_stylesheets
+    assert ".scanner-hold-state" in all_stylesheets
+    assert ".scanner-hold-state[hidden]" in all_stylesheets
+    assert ".scanner-hold-active" not in all_stylesheets
+    assert "#scanner-previous," not in all_stylesheets
+    assert "#scanner-reconnect," in all_stylesheets
+    assert ".recording-list" in all_stylesheets
+    assert ".saved-playback" in all_stylesheets
+    assert ':root[data-theme="lcars"]' in all_stylesheets
+    assert ':root[data-theme="matrix"]' in all_stylesheets
+    assert ':root[data-theme="first-responder"]' in all_stylesheets
+    assert ':root[data-theme="amateur-radio"]' in all_stylesheets
+    assert ".theme-picker" in all_stylesheets
+    assert "@keyframes matrix-grid-drift" in all_stylesheets
+    assert "animation: matrix-grid-drift 18s linear infinite" in all_stylesheets
+    assert ':root[data-theme="lcars"] .site-header::before' in all_stylesheets
+    assert ':root[data-theme="matrix"] .panel::before' in all_stylesheets
+    assert ':root[data-theme="first-responder"] .panel::after' in all_stylesheets
+    assert ':root[data-theme="amateur-radio"] .site-header::after' in all_stylesheets
+    assert "animation-duration: 0.01ms !important" in all_stylesheets
+    assert "animation-iteration-count: 1 !important" in all_stylesheets
+    assert "--content-width: 220rem" in all_stylesheets
+    assert "@media (min-width: 100rem)" in all_stylesheets
+    assert "@media (max-width: 56rem)" in all_stylesheets
+    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in all_stylesheets
+    assert ':root[data-theme="matrix"] .panel-header::before' in all_stylesheets
+    assert ':root[data-theme="first-responder"] .status-badge' in all_stylesheets
+    assert ':root[data-theme="amateur-radio"] #radio-system' in all_stylesheets
     assert (
         ':root[data-theme="amateur-radio"] .dashboard-grid '
         '> .scanner-controls-panel::before'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "@media (min-width: 64rem) and (min-height: 36rem)" in stylesheet.text
-    assert "height: 100dvh" in stylesheet.text
-    assert "grid-template-rows: repeat(2, minmax(0, 1fr))" in stylesheet.text
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in stylesheet.text
-    assert "minmax(0, 0.9fr)" in stylesheet.text
-    assert "minmax(0, 1.08fr)" in stylesheet.text
-    assert "minmax(0, 1.02fr)" in stylesheet.text
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in stylesheet.text
-    assert "overflow-y: auto" in stylesheet.text
-    assert "grid-template-rows: auto auto auto minmax(0, 1fr)" in stylesheet.text
-    assert "--lcars-panel:" in stylesheet.text
-    assert ':root[data-theme="lcars"] .dashboard-grid::before' in stylesheet.text
-    assert ':root[data-theme="lcars"] .dashboard-grid::after' in stylesheet.text
-    assert "var(--lcars-panel-soft)" in stylesheet.text
+    assert "@media (min-width: 64rem) and (min-height: 36rem)" in all_stylesheets
+    assert "height: 100dvh" in all_stylesheets
+    assert "grid-template-rows: repeat(2, minmax(0, 1fr))" in all_stylesheets
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in all_stylesheets
+    assert "minmax(0, 0.9fr)" in all_stylesheets
+    assert "minmax(0, 1.08fr)" in all_stylesheets
+    assert "minmax(0, 1.02fr)" in all_stylesheets
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in all_stylesheets
+    assert "overflow-y: auto" in all_stylesheets
+    assert "grid-template-rows: auto auto auto minmax(0, 1fr)" in all_stylesheets
+    assert "--lcars-panel:" in all_stylesheets
+    assert ':root[data-theme="lcars"] .dashboard-grid::before' in all_stylesheets
+    assert ':root[data-theme="lcars"] .dashboard-grid::after' in all_stylesheets
+    assert "var(--lcars-panel-soft)" in all_stylesheets
     assert (
         ':root[data-theme="lcars"] .dashboard-grid::before,'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "content: none;" in stylesheet.text
-    assert "overflow-x: hidden;" in stylesheet.text
-    assert "width: min(27%, 8.5rem);" in stylesheet.text
-    assert "--term-accent:" in stylesheet.text
-    assert ':root[data-theme="matrix"] .dashboard-grid > .panel::after' in stylesheet.text
-    assert "color-mix(in srgb, var(--term-accent)" in stylesheet.text
-    assert ':root[data-theme="matrix"] .scanner-control-group::after' in stylesheet.text
-    assert "--dispatch-accent:" in stylesheet.text
+    assert "content: none;" in all_stylesheets
+    assert "overflow-x: hidden;" in all_stylesheets
+    assert "width: min(27%, 8.5rem);" in all_stylesheets
+    assert "--term-accent:" in all_stylesheets
+    assert ':root[data-theme="matrix"] .dashboard-grid > .panel::after' in all_stylesheets
+    assert "color-mix(in srgb, var(--term-accent)" in all_stylesheets
+    assert ':root[data-theme="matrix"] .scanner-control-group::after' in all_stylesheets
+    assert "--dispatch-accent:" in all_stylesheets
     assert (
         ':root[data-theme="first-responder"] .dashboard-grid > .panel::before'
-        in stylesheet.text
+        in all_stylesheets
     )
     assert (
         ':root[data-theme="first-responder"] .scanner-control-group::before'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "--radio-accent:" in stylesheet.text
+    assert "--radio-accent:" in all_stylesheets
     assert (
         ':root[data-theme="amateur-radio"] .panel-emphasis .primary-value'
-        in stylesheet.text
+        in all_stylesheets
     )
     assert (
         ':root[data-theme="amateur-radio"] .dashboard-grid '
         '> .scanner-controls-panel::before'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "conic-gradient(" in stylesheet.text
+    assert "conic-gradient(" in all_stylesheets
     assert (
         "@media (min-width: 64rem) and (max-width: 90rem) "
         "and (min-height: 36rem)"
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in stylesheet.text
-    assert ':root[data-theme="amateur-radio"] .recording-telemetry dd' in stylesheet.text
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in all_stylesheets
+    assert ':root[data-theme="amateur-radio"] .recording-telemetry dd' in all_stylesheets
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
     assert "theme-stage-h" in shell.text
-    assert ".theme-stage {" in stylesheet.text
-    assert "@keyframes matrix-stage-fall" in stylesheet.text
-    assert "@keyframes dispatch-radar-sweep" in stylesheet.text
-    assert "@keyframes radio-display-scan" in stylesheet.text
-    assert ':root[data-theme="lcars"] .theme-stage-a' in stylesheet.text
-    assert ':root[data-theme="matrix"] .theme-stage-g' in stylesheet.text
+    assert ".theme-stage {" in all_stylesheets
+    assert "@keyframes matrix-stage-fall" in all_stylesheets
+    assert "@keyframes dispatch-radar-sweep" in all_stylesheets
+    assert "@keyframes radio-display-scan" in all_stylesheets
+    assert ':root[data-theme="lcars"] .theme-stage-a' in all_stylesheets
+    assert ':root[data-theme="matrix"] .theme-stage-g' in all_stylesheets
     assert (
         ':root[data-theme="first-responder"] .theme-stage-c'
-        in stylesheet.text
+        in all_stylesheets
     )
     assert (
         ':root[data-theme="amateur-radio"] .theme-stage-e'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "contain: paint;" in stylesheet.text
-    assert ".site-header {\n  position: relative;\n  z-index: 3;\n}" in stylesheet.text
+    assert "contain: paint;" in all_stylesheets
+    assert ".site-header {\n  position: relative;\n  z-index: 3;\n}" in all_stylesheets
     assert (
         ".dashboard,\n.site-footer {\n  position: relative;\n  z-index: 1;\n}"
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert ".skip-link {\n  z-index: 10;\n}" in stylesheet.text
+    assert ".skip-link {\n  z-index: 10;\n}" in all_stylesheets
     assert (
         ".site-footer,\n.skip-link {\n  position: relative;"
-        not in stylesheet.text
+        not in all_stylesheets
     )
 
-    assert "@keyframes cinematic-bloom-breathe" in stylesheet.text
-    assert "@keyframes cinematic-scan-pass" in stylesheet.text
-    assert "@keyframes cinematic-alert-wash" in stylesheet.text
-    assert "@keyframes cinematic-meter-scan" in stylesheet.text
-    assert ':root[data-theme="lcars"] .theme-stage-g::after' in stylesheet.text
-    assert ':root[data-theme="matrix"] .theme-stage-a::before' in stylesheet.text
+    assert "@keyframes cinematic-bloom-breathe" in all_stylesheets
+    assert "@keyframes cinematic-scan-pass" in all_stylesheets
+    assert "@keyframes cinematic-alert-wash" in all_stylesheets
+    assert "@keyframes cinematic-meter-scan" in all_stylesheets
+    assert ':root[data-theme="lcars"] .theme-stage-g::after' in all_stylesheets
+    assert ':root[data-theme="matrix"] .theme-stage-a::before' in all_stylesheets
     assert (
         ':root[data-theme="first-responder"] .theme-stage-a::after'
-        in stylesheet.text
+        in all_stylesheets
     )
     assert (
         ':root[data-theme="amateur-radio"] .panel-emphasis::after'
-        in stylesheet.text
+        in all_stylesheets
     )
-    assert "perspective: 44rem;" in stylesheet.text
-    assert "backdrop-filter: blur(0.55px);" in stylesheet.text
+    assert "perspective: 44rem;" in all_stylesheets
+    assert "backdrop-filter: blur(0.55px);" in all_stylesheets
 
     assert theme_bootstrap.status_code == 200
     assert theme_bootstrap.headers["content-type"].startswith(
@@ -671,6 +705,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "localStorage.setItem" in theme_bootstrap.text
     assert "document.documentElement.dataset.theme" in theme_bootstrap.text
     assert "innerHTML" not in theme_bootstrap.text
+    assert "__SDSCTL_WEB_THEME_MANIFESTS__" not in theme_bootstrap.text
 
     assert script.status_code == 200
     assert script.headers["content-type"].startswith("application/javascript")
@@ -742,6 +777,23 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert favicon.headers["cache-control"] == "no-store"
     assert "<svg" in favicon.text
     assert 'aria-hidden="true"' in favicon.text
+
+
+def test_web_dashboard_rejects_unknown_theme_assets_with_security_headers() -> None:
+    app = create_web_dashboard_app(FakeDaemonApiClient)
+
+    with TestClient(app) as client:
+        unknown_theme = client.get("/assets/themes/unknown/theme.css")
+        unknown_asset = client.get("/assets/themes/system/theme.js")
+
+    assert unknown_theme.status_code == 404
+    assert unknown_theme.json() == {"detail": "Theme not found."}
+    assert unknown_asset.status_code == 404
+    assert unknown_asset.json() == {"detail": "Theme asset not found."}
+    for response in (unknown_theme, unknown_asset):
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+        assert "default-src 'none'" in response.headers["content-security-policy"]
 
 
 def test_web_dashboard_health_does_not_connect_to_daemon() -> None:

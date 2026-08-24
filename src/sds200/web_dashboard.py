@@ -7,6 +7,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Callable, Mapping
 from functools import cache
+from html import escape
 from importlib.resources import files
 from typing import Annotated, Literal, Protocol, TypeAlias
 
@@ -31,6 +32,12 @@ from .tui_controls import channel_navigation
 from .web_auth import (
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
+)
+from .web_themes import (
+    WebThemeError,
+    WebThemeRegistry,
+    built_in_web_theme_registry,
+    read_built_in_web_theme_stylesheet,
 )
 
 WEB_DASHBOARD_API_PROTOCOL = "sdsctl.web"
@@ -340,6 +347,8 @@ def create_web_dashboard_app(
         raise TypeError(
             "LAN authentication must be WebDashboardAuthentication or None."
         )
+
+    web_theme_registry = built_in_web_theme_registry()
     if home_assistant_ingress and lan_authentication is not None:
         raise ValueError(
             "Home Assistant Ingress and LAN authentication are mutually exclusive."
@@ -367,7 +376,7 @@ def create_web_dashboard_app(
     )
     def index() -> HTMLResponse:
         return HTMLResponse(
-            content=_read_web_asset("dashboard.html"),
+            content=_dashboard_shell(web_theme_registry),
             headers=dict(_WEB_RESPONSE_HEADERS),
         )
 
@@ -385,9 +394,36 @@ def create_web_dashboard_app(
         response_class=Response,
     )
     def theme_bootstrap_script() -> Response:
-        return _asset_response(
-            "theme-bootstrap.js",
+        return Response(
+            content=_theme_bootstrap_script(web_theme_registry),
             media_type="application/javascript",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
+    @app.get(
+        "/assets/themes/{theme_id}/{asset_name}",
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def theme_stylesheet(theme_id: str, asset_name: str) -> Response:
+        try:
+            theme = web_theme_registry.require(theme_id)
+        except WebThemeError as exc:
+            raise HTTPException(
+                status_code=404,
+                detail="Theme not found.",
+                headers=dict(_WEB_RESPONSE_HEADERS),
+            ) from exc
+        if asset_name != theme.stylesheet:
+            raise HTTPException(
+                status_code=404,
+                detail="Theme asset not found.",
+                headers=dict(_WEB_RESPONSE_HEADERS),
+            )
+        return Response(
+            content=read_built_in_web_theme_stylesheet(theme),
+            media_type="text/css",
+            headers=dict(_WEB_RESPONSE_HEADERS),
         )
 
     @app.get(
@@ -683,6 +719,34 @@ def _asset_response(name: str, *, media_type: str) -> Response:
         content=_read_web_asset(name),
         media_type=media_type,
         headers=dict(_WEB_RESPONSE_HEADERS),
+    )
+
+
+@cache
+def _dashboard_shell(registry: WebThemeRegistry) -> str:
+    stylesheet_links = "\n".join(
+        f'  <link rel="stylesheet" href="{theme.stylesheet_url}">'
+        for theme in registry.themes
+    )
+    options = "\n".join(
+        (
+            f'          <option value="{theme.identifier}">'
+            f"{escape(theme.label)}</option>"
+        )
+        for theme in registry.themes
+    )
+    return (
+        _read_web_asset("dashboard.html")
+        .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
+        .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
+    )
+
+
+@cache
+def _theme_bootstrap_script(registry: WebThemeRegistry) -> str:
+    return _read_web_asset("theme-bootstrap.js").replace(
+        "__SDSCTL_WEB_THEME_MANIFESTS__",
+        registry.browser_json(),
     )
 
 

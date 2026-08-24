@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "first-responder",
+  "label": "First Responder",
+  "order": 30,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {
+    "light": "#07111f",
+    "dark": "#07111f"
+  }
+}

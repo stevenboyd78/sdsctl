@@ -1,0 +1,48 @@
+/* System-adaptive built-in web theme. */
+
+:root[data-theme="system"] {
+  color-scheme: light dark;
+  --background: #eef2f7;
+  --surface: #ffffff;
+  --surface-emphasis: #f6f8fb;
+  --text: #172033;
+  --muted: #596579;
+  --border: #c9d2df;
+  --accent: #2458a6;
+  --accent-strong: #173e79;
+  --success: #176b45;
+  --warning: #8a5600;
+  --danger: #a12d2d;
+  --focus: #6d3fc0;
+  --shadow: 0 0.75rem 2rem rgb(23 32 51 / 0.12);
+  --radius-small: 0.5rem;
+  --radius-large: 1rem;
+}
+
+:root[data-theme="system"] body {
+  background:
+    linear-gradient(
+      150deg,
+      rgb(36 88 166 / 0.08),
+      transparent 28rem
+    ),
+    var(--background);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --background: #0d1420;
+    --surface: #172033;
+    --surface-emphasis: #1c2940;
+    --text: #f1f5fb;
+    --muted: #b9c4d4;
+    --border: #3b4b63;
+    --accent: #9ec5ff;
+    --accent-strong: #b8d5ff;
+    --success: #7ee2ae;
+    --warning: #ffd17a;
+    --danger: #ff9b9b;
+    --focus: #d0b5ff;
+    --shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.3);
+  }
+}
