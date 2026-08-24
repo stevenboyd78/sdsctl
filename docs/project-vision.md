@@ -364,9 +364,13 @@ style presentation but must not acquire scanner, daemon, MQTT, Home Assistant
 service, authentication, or control authority. Milestone 26.13 establishes the
 managed local third-party inventory and guarded validation, staging, collision,
 rollback, recovery, and removal lifecycle. It deliberately stops before
-renderer activation: CSS, TCSS, and executable Home Assistant JavaScript still
-require separate interface-specific loading, fallback, and trust decisions.
-Remote catalogs, update provenance, and signatures remain later boundaries.
+renderer activation. Milestone 26.14 activates valid managed web CSS through a
+selected-only link and same-origin digest-enforced route while preserving safe
+System fallback. TCSS and executable Home Assistant JavaScript still require
+separate interface-specific loading, fallback, and trust decisions. GUI theming
+will be designed with the future GUI rather than imposed before a renderer
+exists. Remote catalogs, update provenance, and signatures remain later
+boundaries.
 
 ## Favorites Workspace
 

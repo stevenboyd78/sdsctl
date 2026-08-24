@@ -501,11 +501,11 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         "amateur-radio",
     ):
         assert f'href="assets/themes/{theme}/theme.css"' in response.text
-    assert response.text.index('src="assets/theme-bootstrap.js"') < response.text.index(
-        'href="assets/dashboard.css"'
-    )
     assert response.text.index('href="assets/dashboard.css"') < response.text.index(
         'href="assets/themes/system/theme.css"'
+    )
+    assert response.text.index('href="assets/themes/amateur-radio/theme.css"') < (
+        response.text.index('src="assets/theme-bootstrap.js"')
     )
     assert 'src="assets/dashboard.js"' in response.text
     assert "<style" not in response.text

@@ -1,10 +1,9 @@
 # Theme package management
 
 Milestone 26.13 provides a local managed lifecycle for third-party theme
-packages. It validates and inventories packages without loading their assets
-into a renderer. The separation is intentional: web CSS, Textual CSS and
-semantic palettes, and executable Home Assistant JavaScript need different
-activation and fallback rules.
+packages. Milestone 26.14 consumes that inventory for web CSS only. The
+separation remains intentional: Textual CSS and semantic palettes and executable
+Home Assistant JavaScript need different activation and fallback rules.
 
 ## Managed directory
 
@@ -95,12 +94,34 @@ then deletes it. Built-ins are never valid removal targets. An invalid managed
 directory can still be removed by its valid directory identity, preserving a
 recovery path when its manifest cannot be parsed.
 
-## Current activation boundary
+## Web activation
 
-Successful installation means **managed and discoverable**, not active. The web
-picker and routes, Rich CLI `--theme`, Textual theme toggle, and Home Assistant
-App installer continue using built-ins only. Milestone 26.13 does not download
-themes, extract archives, execute scripts, install Home Assistant resources, or
-load third-party CSS, TCSS, palettes, or JavaScript. Future renderer-specific
-milestones can consume this managed inventory without reopening its filesystem
-mutation and recovery boundary.
+A valid package under `themes/web/<id>/` is automatically added to the existing
+dashboard picker the next time `sdsctl web` starts. There is no separate enable
+command. Discovery occurs once during process construction: installing,
+replacing, repairing, or removing a package requires a web-process restart to
+change the picker. A stored selection that is no longer in the startup registry
+falls back to **System**.
+
+The dashboard emits managed stylesheets as disabled links and enables only the
+currently selected managed package. Its same-origin theme route serves only the
+single CSS filename declared by that startup-validated manifest. Each request
+reopens the exact managed root, `web` interface, package directory, manifest,
+and stylesheet without following symlinks; requires the original package
+directory identity and complete package digest; and returns not found after any
+removal, replacement, mutation, symlink substitution, special-file substitution,
+or undeclared-file addition. Responses retain the dashboard's restrictive CSP,
+`nosniff`, and no-store headers.
+
+CSS can substantially alter presentation and can request same-origin resources
+allowed by the dashboard CSP. Review every third-party stylesheet before
+installing it. Schema, path, size, and digest validation prevent package-boundary
+violations and unnoticed post-start changes; they are not a complete safety or
+design review of CSS.
+
+Managed Rich CLI themes, Textual palettes and TCSS, and Home Assistant modules
+remain discoverable but inactive. The lifecycle does not download themes,
+extract archives, execute scripts, or install Home Assistant resources. Future
+renderer-specific milestones can consume the inventory without reopening its
+filesystem mutation and recovery boundary. GUI theming remains reserved for the
+future GUI design.

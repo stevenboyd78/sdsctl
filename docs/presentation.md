@@ -72,10 +72,11 @@ remains outside the packages.
 Milestone 26.13 adds a managed local package inventory under the resolved XDG
 configuration directory. It reuses each built-in interface schema for explicit
 validation and lifecycle operations, isolates malformed manual additions, and
-prevents managed packages from shadowing built-ins. This inventory is not a
-renderer registry: web CSS, TUI palettes and TCSS, and Home Assistant JavaScript
-remain inactive until a later per-renderer trust and fallback boundary is
-implemented. See [Theme package management](themes.md).
+prevents managed packages from shadowing built-ins. Milestone 26.14 activates
+valid managed web CSS through an immutable startup registry, selected-only link,
+and digest-enforced same-origin route. TUI palettes and TCSS and Home Assistant
+JavaScript remain inactive until their own renderer trust and fallback
+boundaries are implemented. See [Theme package management](themes.md).
 
 ```python
 from sds200 import (

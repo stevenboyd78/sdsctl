@@ -3989,6 +3989,7 @@ def _run_web(
     environ: Mapping[str, str] | None = None,
 ) -> int:
     _reject_daemon_client_scanner_options(args)
+    paths = configuration_paths or resolve_configuration_paths(environ=environ)
 
     lan_values = (
         args.lan_listen_address,
@@ -4090,22 +4091,22 @@ def _run_web(
     api_location = resolve_daemon_socket_location(
         args.daemon_socket_path,
         environ=environ,
-        configuration_paths=configuration_paths,
+        configuration_paths=paths,
     )
     event_location = resolve_daemon_event_socket_location(
         args.daemon_event_socket_path,
         environ=environ,
-        configuration_paths=configuration_paths,
+        configuration_paths=paths,
     )
     pcmu_location = resolve_daemon_pcmu_socket_location(
         args.daemon_pcmu_socket_path,
         environ=environ,
-        configuration_paths=configuration_paths,
+        configuration_paths=paths,
     )
     recording_file_location = resolve_daemon_recording_file_socket_location(
         args.daemon_recording_file_socket_path,
         environ=environ,
-        configuration_paths=configuration_paths,
+        configuration_paths=paths,
     )
     timeout = args.daemon_timeout
     max_response_bytes = (
@@ -4180,6 +4181,7 @@ def _run_web(
         recording_file_client_factory,
         home_assistant_ingress=args.home_assistant_ingress,
         lan_authentication=lan_authentication,
+        managed_theme_root=paths.theme_dir,
     )
     server_host = (
         args.lan_listen_address

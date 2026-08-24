@@ -334,16 +334,20 @@ status text; scanner state is never communicated by color alone. Decorative
 animation and transitions are suppressed for `prefers-reduced-motion`, and the
 more expensive effects are disabled in compact layouts.
 
-Milestone 26.10 deliberately exposes built-in resources only. It does not scan
-user-writable directories, extract archives, install packages, accept runtime
-uploads, or execute theme JavaScript or templates. Milestone 26.13 now provides
-an explicit local-directory lifecycle with staging validation, collision policy,
-rollback, removal, and recovery, but managed CSS does not enter this runtime
-registry yet. A later web-specific activation slice must preserve same-origin
-delivery, safe System fallback, CSP, selector isolation, and accessible shared
-structure. Home Assistant and TUI themes remain separate renderer adapters under
-their own interface directories; `gui` stays reserved until a desktop renderer
-exists.
+Milestone 26.13 provides the explicit local-directory lifecycle with staging
+validation, collision policy, rollback, removal, and recovery. Milestone 26.14
+automatically adds valid managed web packages to one immutable startup registry.
+Only the selected managed stylesheet is enabled. The existing same-origin route
+serves only its declared CSS after rechecking the exact nonsymlink directory
+chain, original directory identity, and complete startup package digest. A
+missing, malformed, removed, replaced, or changed package fails closed and is
+absent after the next process start; a stale stored selection falls back to
+System. No filesystem watcher, live reload, runtime upload, archive extraction,
+remote asset, inline code, or theme JavaScript is accepted. Third-party CSS is
+presentation-capable, so operators must inspect it before installation even
+though CSP, path, schema, size, and digest controls remain enforced. Home
+Assistant and TUI themes remain separate inactive renderer adapters under their
+own interface directories; `gui` stays reserved until a desktop renderer exists.
 
 Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
 real packaged demo application and Google Chrome. All five themes rendered at
