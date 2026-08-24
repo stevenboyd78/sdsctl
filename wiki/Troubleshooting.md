@@ -274,12 +274,14 @@ overwritten; inspect the App log and resolve the conflict deliberately.
 
 Confirm Home Assistant's MQTT integration is active and inspect the App log for
 MQTT service or broker connection errors. The current SDS200 device contains
-twenty-one Discovery components: fourteen state/diagnostic components plus four
+twenty-four Discovery components: seventeen state/diagnostic components plus four
 Hold switches and Previous Channel, Next Channel, and Reconnect Scanner buttons.
 
-Site, Frequency, Modulation, and Service Type are intentionally unavailable when
-the current radio state omits them, reports null, or reports empty text. They
-recover without rediscovery when a later scanner mode supplies a value.
+Screen Kind remains available and reports `unknown` when the normalized value is
+missing, null, or empty. Site, Frequency, Modulation, Service Type, and configured
+Tone-Out Tone A and Tone B are intentionally unavailable when the current radio
+state omits them, reports null, or reports empty text. They recover without
+rediscovery when a later scanner mode supplies a value.
 
 The seven controls use dedicated QoS 0 non-retained Home Assistant topics. The
 App intentionally keeps the independent generic daemon MQTT
@@ -303,6 +305,12 @@ once before registering the resource.
 After registration, the matching card should appear in the card picker. Both
 cards are intentionally read-only; scanner controls are separate standard Home
 Assistant switch and button entities.
+
+If the SDS200 Display card does not change automatically, select the **Auto**
+layout and configure its Screen Kind entity. Search and Close Call use the Search
+layout, Weather uses Weather, Tone-Out uses Tone-Out, and scanning or unknown
+values use the configured Simple or Detail scan fallback. Explicit layouts
+intentionally ignore Screen Kind.
 
 ## Capture detailed diagnostics
 

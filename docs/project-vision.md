@@ -258,22 +258,24 @@ components, all seven bounded scanner controls, Lovelace/configuration acceptanc
 recording and audio regression validation, and single-owner behavior physically
 validated through the repository-managed HAOS App.
 
-Current Home Assistant Discovery contains twenty-three fixed components: sixteen
-daemon/scanner/radio/audio/recording state and diagnostic components, including
-optional Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone
-A and Tone B sensors, plus the seven bounded scanner controls. Broader
+Current Home Assistant Discovery contains twenty-four fixed components:
+seventeen daemon/scanner/radio/audio/recording state and diagnostic components,
+including fixed Screen Kind and optional Site, Frequency, Modulation, Service
+Type, and configured Tone-Out Tone A and Tone B sensors, plus the seven bounded
+scanner controls. Broader
 mode-specific entity growth, destination
 health, richer scanner events, remote daemon-backed CLI/TUI/GUI transports, and
 an optional host-network deployment variant remain separate future
 considerations.
 
 Milestone 26.7 adds a separate responsive SDS200 Display Lovelace presentation
-without changing that component inventory or the original compact card. Five
-scanner-style layout presets and three palettes share one original 4:3 grid,
-with a viewport-bounded fit mode that avoids internal scrolling. Both card
-assets remain read-only, transport-free consumers of the same sixteen state
-entities; scanner display writes and copied manufacturer assets remain outside
-the product boundary.
+without changing the original compact card. Five explicit scanner-style layout
+presets and three palettes share one original 4:3 grid, with a viewport-bounded
+fit mode that avoids internal scrolling. Milestone 27.1 adds the fixed Screen
+Kind sensor and an opt-in Auto layout with a configurable Simple or Detail scan
+fallback. Both card assets remain read-only, transport-free consumers of Home
+Assistant state; scanner display writes and copied manufacturer assets remain
+outside the product boundary.
 
 HACS may still be evaluated later as an optional distribution channel, but it is
 not a dependency of the primary Home Assistant App repository distribution path.

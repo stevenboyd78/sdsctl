@@ -140,7 +140,11 @@
         </div>
       </section>
 
-      <section class="panel panel-emphasis" aria-labelledby="activity-title">
+      <section class="panel panel-emphasis"
+        id="radio-activity-panel"
+        data-screen-kind="unknown"
+        aria-labelledby="activity-title"
+      >
         <header class="panel-header">
           <p class="panel-kicker">Activity</p>
           <h2 id="activity-title">Now scanning</h2>
@@ -173,7 +177,7 @@
         </dl>
 
         <div class="radio-field-groups">
-          <section class="radio-field-group" aria-labelledby="radio-hierarchy-title">
+          <section class="radio-field-group" aria-labelledby="radio-hierarchy-title" data-radio-group="hierarchy">
             <h3 id="radio-hierarchy-title">Hierarchy</h3>
             <dl class="radio-field-list">
               <div><dt>Department</dt><dd id="radio-department">Unavailable</dd></div>
@@ -191,7 +195,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-rf-title">
+          <section class="radio-field-group" aria-labelledby="radio-rf-title" data-radio-group="rf">
             <h3 id="radio-rf-title">RF and service</h3>
             <dl class="radio-field-list">
               <div><dt>Frequency</dt><dd id="radio-frequency">Unavailable</dd></div>
@@ -201,7 +205,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-identity-title">
+          <section class="radio-field-group" aria-labelledby="radio-identity-title" data-radio-group="identity">
             <h3 id="radio-identity-title">Identity and receiver</h3>
             <dl class="radio-field-list">
               <div><dt>Talkgroup ID</dt><dd id="radio-talkgroup-id">Unavailable</dd></div>
@@ -215,7 +219,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-special-title">
+          <section class="radio-field-group" aria-labelledby="radio-special-title" data-radio-group="special">
             <h3 id="radio-special-title">Special mode</h3>
             <dl class="radio-field-list">
               <div><dt>Weather mode</dt><dd id="radio-weather-mode">Unavailable</dd></div>

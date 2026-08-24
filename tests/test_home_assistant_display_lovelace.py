@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -20,6 +23,7 @@ from sds200.home_assistant_themes import (
 
 EXPECTED_ENTITY_FIELDS = {
     "scanner_connected",
+    "screen_kind",
     "system",
     "department",
     "site",
@@ -58,6 +62,28 @@ def display_card_text() -> str:
 def compact_card_text() -> str:
     theme = built_in_home_assistant_theme_registry().require("compact")
     return read_built_in_home_assistant_theme_module(theme).decode("utf-8")
+
+
+def run_display_card_javascript(body: str) -> object:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for display-card runtime validation.")
+
+    harness = f"""
+global.HTMLElement = class {{}};
+global.CustomEvent = class {{}};
+global.customElements = {{get: () => null, define: () => undefined}};
+global.window = {{}};
+{display_card_text()}
+{body}
+"""
+    completed = subprocess.run(
+        [node, "-e", harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
 
 
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
@@ -110,6 +136,7 @@ def test_display_card_has_all_layout_palette_and_fit_presets() -> None:
         "search",
         "weather",
         "tone_out",
+        "auto",
     ):
         assert f'value: "{value}"' in text
 
@@ -122,6 +149,72 @@ def test_display_card_has_all_layout_palette_and_fit_presets() -> None:
 
     assert 'value: "card"' in text
     assert 'value: "viewport"' in text
+    assert "SDS200_DISPLAY_SCAN_LAYOUTS" in text
+    assert 'name: "scan_layout"' in text
+
+
+def test_display_card_auto_layout_maps_known_screens_and_safe_fallbacks() -> None:
+    result = run_display_card_javascript(
+        """
+const card = Object.create(Sds200DisplayCard.prototype);
+card._config = requireDisplayCardConfig({
+  layout: "auto",
+  scan_layout: "detail",
+  entities: {screen_kind: "sensor.sds200_screen_kind"},
+});
+const result = {};
+for (const kind of [
+  "scanning",
+  "search",
+  "close_call",
+  "weather",
+  "tone_out",
+  "unknown",
+  "future_mode",
+  "unavailable",
+  "",
+]) {
+  card._stateText = (_field, fallback) => kind || fallback;
+  result[kind || "missing"] = card._resolvedLayout();
+}
+process.stdout.write(JSON.stringify(result));
+"""
+    )
+
+    assert result == {
+        "scanning": "detail",
+        "search": "search",
+        "close_call": "search",
+        "weather": "weather",
+        "tone_out": "tone_out",
+        "unknown": "detail",
+        "future_mode": "detail",
+        "unavailable": "detail",
+        "missing": "detail",
+    }
+
+
+def test_display_card_explicit_layout_ignores_screen_kind() -> None:
+    result = run_display_card_javascript(
+        """
+const result = {};
+for (const layout of ["simple", "detail", "search", "weather", "tone_out"]) {
+  const card = Object.create(Sds200DisplayCard.prototype);
+  card._config = requireDisplayCardConfig({layout, entities: {}});
+  card._stateText = () => "weather";
+  result[layout] = card._resolvedLayout();
+}
+process.stdout.write(JSON.stringify(result));
+"""
+    )
+
+    assert result == {
+        "simple": "simple",
+        "detail": "detail",
+        "search": "search",
+        "weather": "weather",
+        "tone_out": "tone_out",
+    }
 
 
 def test_display_card_tone_out_layout_presents_configured_tones() -> None:

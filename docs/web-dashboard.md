@@ -458,6 +458,13 @@ screens clears values that are no longer present rather than retaining stale
 mode-specific details. Raw `screen` and classified `screen_kind` remain separate
 so an unknown future screen is still visible without being misclassified.
 
+The activity panel uses the normalized `screen_kind` to select a mode-aware
+heading and prioritize its existing detail groups. Search and Close Call place
+RF and special-mode values first; Weather and Tone-Out place special-mode values
+first; scanning and unknown values use the ordinary hierarchy-first order. This
+is presentation only: all 35 shared fields remain rendered and accessible, and
+unknown or future screen values do not hide data.
+
 The browser directly applies complete runtime snapshots, scanner connection
 changes, PSI and radio-state updates, audio snapshots, and recording snapshots.
 `recording.state` updates the recording panel directly and is also committed into

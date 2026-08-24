@@ -111,7 +111,7 @@ Lovelace card remains read-only.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `mode` | GSI/PSI; `P200`, `F` | R | R | U/R* | R | J | — | R1: Home Assistant |
 | `screen` | GSI/PSI; `P200`, `F` | R | — | U/R* | R | J | — | R1: monitor and Home Assistant |
-| `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | — | R1: CLI and Home Assistant |
+| `screen_kind` | Derived classification; `F`, `I` | — | — | U | R | J | R* | R1: CLI |
 | `system` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `department` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |
 | `site` | GSI/PSI; `P200`, `F` | R | R | R* | R | J | R | Covered on applicable panels |

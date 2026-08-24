@@ -24,6 +24,7 @@ SNAPSHOT: dict[str, object] = {
     "scanner_firmware": "1.26.01",
     "scanner_connected": True,
     "radio_state": {
+        "screen_kind": "tone_out",
         "system": "County",
         "department": "Dispatch",
         "site": "North",
@@ -112,6 +113,7 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
     assert set(components) == {
         "daemon_state",
         "scanner_connected",
+        "screen_kind",
         "system",
         "department",
         "site",
@@ -138,6 +140,7 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
     existing_topics = {
         "daemon_state": "radio/sds200/state/daemon",
         "scanner_connected": "radio/sds200/state/scanner/connection",
+        "screen_kind": "radio/sds200/state/radio",
         "system": "radio/sds200/state/radio",
         "department": "radio/sds200/state/radio",
         "channel": "radio/sds200/state/radio",
@@ -176,6 +179,15 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "unique_id": "sds200_mqtt_a699eb0a0c0e654f5a52_rssi",
         "unit_of_measurement": "dBm",
         "value_template": "{{ value_json.rssi }}",
+    }
+    assert components["screen_kind"] == {
+        "name": "Screen Kind",
+        "platform": "sensor",
+        "state_topic": "radio/sds200/state/radio",
+        "unique_id": "sds200_mqtt_a699eb0a0c0e654f5a52_screen_kind",
+        "value_template": (
+            "{{ value_json.screen_kind | default('unknown', true) }}"
+        ),
     }
 
     for key, label in (
@@ -240,6 +252,10 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
             "tone_out_tone_b",
         )
     )
+    assert components["screen_kind"]["value_template"] == (
+        "{{ value_json.screen_kind | default('unknown', true) }}"
+    )
+    assert "availability" not in components["screen_kind"]
 
 
 def test_discovery_honors_configured_prefix_and_qos() -> None:
@@ -285,6 +301,7 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
     assert set(components) == {
         "daemon_state",
         "scanner_connected",
+        "screen_kind",
         "system",
         "department",
         "site",

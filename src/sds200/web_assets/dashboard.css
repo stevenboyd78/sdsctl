@@ -226,6 +226,54 @@ select:focus-visible,
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
 }
+.radio-field-group[data-radio-group="hierarchy"] {
+  order: 1;
+}
+.radio-field-group[data-radio-group="rf"] {
+  order: 2;
+}
+.radio-field-group[data-radio-group="identity"] {
+  order: 3;
+}
+.radio-field-group[data-radio-group="special"] {
+  order: 4;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="search"],
+  [data-screen-kind="close_call"]
+) .radio-field-group[data-radio-group="rf"] {
+  order: 1;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="search"],
+  [data-screen-kind="close_call"]
+) .radio-field-group[data-radio-group="special"] {
+  order: 2;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="search"],
+  [data-screen-kind="close_call"]
+) .radio-field-group[data-radio-group="hierarchy"] {
+  order: 3;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="weather"],
+  [data-screen-kind="tone_out"]
+) .radio-field-group[data-radio-group="special"] {
+  order: 1;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="weather"],
+  [data-screen-kind="tone_out"]
+) .radio-field-group[data-radio-group="hierarchy"] {
+  order: 2;
+}
+#radio-activity-panel:is(
+  [data-screen-kind="weather"],
+  [data-screen-kind="tone_out"]
+) .radio-field-group[data-radio-group="rf"] {
+  order: 3;
+}
 .radio-field-group h3 {
   margin: 0;
   color: var(--muted);

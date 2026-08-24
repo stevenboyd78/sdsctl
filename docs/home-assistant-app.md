@@ -177,12 +177,13 @@ be played or downloaded through Ingress.
 
 The App enables the daemon's Home Assistant MQTT Discovery adapter plus the
 dedicated Milestone 20.12.3 Home Assistant control adapter. One SDS200 device
-contains twenty-three fixed components:
+contains twenty-four fixed components:
 
 | Component | Home Assistant platform |
 | --- | --- |
 | Daemon State | sensor |
 | Scanner Connection | binary sensor |
+| Screen Kind | sensor |
 | System | sensor |
 | Department | sensor |
 | Site | sensor |
@@ -208,7 +209,10 @@ contains twenty-three fixed components:
 Device metadata includes Uniden as manufacturer plus scanner model and firmware
 when the daemon's authoritative snapshot contains them.
 
-Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Screen Kind is a fixed read-only sensor over the canonical radio-state topic. It
+reports `unknown` when `screen_kind` is missing, null, or empty and remains
+available across mode changes. Site, Frequency, Modulation, Service Type, and
+configured Tone-Out Tone A and
 Tone B use the existing generic radio-state topic. Each sensor is unavailable
 when its nullable field is absent, null, or empty for the current scanner mode,
 so a prior value is not presented as current. The component inventory remains
@@ -352,18 +356,16 @@ Each package contains a versioned manifest and its one declared JavaScript
 module. A validated immutable built-in registry supplies the installer order,
 module source, custom-element identity, installed filename, and public resource
 URL. Invalid or undeclared package content is rejected before installation.
-This is a built-in packaging boundary. Milestone 26.13 can validate and manage
-third-party Home Assistant packages only after an explicit executable-code trust
-acknowledgement. Milestone 26.14 activates web CSS only; the App does not install
-or execute managed Home Assistant modules. A later App-specific activation
-boundary must define safe resource
-synchronization and stale-module removal without weakening startup isolation.
+This is a built-in packaging boundary. Managed third-party Home Assistant
+packages require an explicit executable-code trust acknowledgement and separate
+digest-confirmed activation. The App does not automatically discover, approve,
+install, execute, or replace managed modules.
 
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. The original **SDS200 Scanner**
 card remains unchanged. The additive **SDS200 Display** card provides five
-layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—and Color,
-Black on White, and White on Black palettes.
+explicit layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—plus
+an opt-in Auto layout, and Color, Black on White, and White on Black palettes.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -421,17 +423,20 @@ standard Home Assistant switch and button entities, so the card does not acquire
 a scanner, daemon, MQTT, or Home Assistant service-call transport.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker and
-configure the same sixteen entities. The graphical editor selects the layout,
-palette, and fit mode. Equivalent YAML starts with:
+configure the same sixteen display entities. To use automatic presentation,
+also configure the Screen Kind entity. The graphical editor selects the layout,
+automatic scanning fallback, palette, and fit mode. Equivalent YAML starts with:
 
 ```yaml
 type: custom:sds200-display-card
 title: SDS200 Display
-layout: detail  # simple, detail, search, weather, or tone_out
+layout: auto  # auto, simple, detail, search, weather, or tone_out
+scan_layout: detail  # simple or detail when Auto is scanning or cannot classify
 palette: color  # color, black_on_white, or white_on_black
 fit: viewport   # card or viewport
 entities:
   scanner_connected: binary_sensor.REPLACE_ME
+  screen_kind: sensor.REPLACE_ME
   system: sensor.REPLACE_ME
   department: sensor.REPLACE_ME
   site: sensor.REPLACE_ME
@@ -448,6 +453,12 @@ entities:
   recording_status: sensor.REPLACE_ME
   daemon_state: sensor.REPLACE_ME
 ```
+
+Auto maps `search` and `close_call` to Search/Close Call, `weather` to Weather,
+and `tone_out` to Tone-Out. `scanning`, `unknown`, unavailable, missing, and
+future values use `scan_layout`. Explicit layouts ignore Screen Kind and retain
+their existing behavior. Existing cards remain Simple by default unless Auto is
+selected.
 
 `card` fit fills the available Lovelace column while retaining a 4:3 surface.
 `viewport` fit grows to the smaller width- or height-constrained size, centers

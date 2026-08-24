@@ -143,6 +143,27 @@ const RADIO_STATE_FIELD_TARGETS = Object.freeze({
   recording: "radio-recording",
 });
 
+const RADIO_SCREEN_PROFILES = Object.freeze({
+  scanning: "Now scanning",
+  search: "Quick Search",
+  close_call: "Close Call",
+  weather: "Weather",
+  tone_out: "Tone-Out",
+  unknown: "Scanner activity",
+});
+
+function normalizedScreenKind(value) {
+  return typeof value === "string" && value in RADIO_SCREEN_PROFILES
+    ? value
+    : "unknown";
+}
+
+function renderRadioProfile(value) {
+  const screenKind = normalizedScreenKind(value);
+  element("radio-activity-panel").dataset.screenKind = screenKind;
+  element("activity-title").textContent = RADIO_SCREEN_PROFILES[screenKind];
+}
+
 function renderRadioState(radio) {
   for (const [field, target] of Object.entries(RADIO_STATE_FIELD_TARGETS)) {
     let value = radio[field];
@@ -160,6 +181,7 @@ function renderRadioState(radio) {
 
     setText(target, value, fallback);
   }
+  renderRadioProfile(radio.screen_kind);
 }
 
 function booleanLabel(value, trueLabel, falseLabel) {

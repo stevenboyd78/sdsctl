@@ -11,60 +11,62 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.17 — v0.22.0 release and post-v0.21 interface closure
+### Milestone 27.1 — Adaptive scanner screen-profile parity
 
-Milestones 26.1 through 26.16 are closed. Together they establish authenticated
-direct-TLS LAN dashboard access, the evidence-backed capability and field-parity
-audit, the local interactive Favorites Workspace editor, complete web snapshot
-presentation, bounded battery lifecycle handling, expanded Home Assistant state
-and scanner-style cards, exact semantic controls, and modular built-in and
-managed third-party themes across web, Home Assistant, and terminal interfaces.
+Milestone 26.17 is closed with the v0.22.0 Python distribution, generic Docker
+image, Home Assistant App images, synchronized public wiki, GitHub Release,
+public artifact verification, and tagged repository-managed Home Assistant OS
+acceptance. Milestones 26.1 through 26.17 remain the frozen v0.22.0 release.
 
-Milestone 26.17 is release closure rather than another runtime feature slice.
-Synchronize the Python package, import version, and Home Assistant App at
-0.22.0; freeze both accumulated changelogs; update installation and release
-documentation; and run the complete static, type, test, documentation,
-distribution, container, and release-contract validation before any release tag
-exists. Preserve compatibility-sensitive Python, Home Assistant, MQTT, image,
-and custom-element identities.
+Milestone 27.1 makes the existing renderer-neutral `screen_kind` classification
+an explicit presentation contract. The already implemented and physically
+observed `scanning`, `search`, `close_call`, `weather`, and `tone_out` values
+remain authoritative. Preserve raw `Mode` and `V_Screen` values and the
+`unknown` fallback without inferring new scanner modes from presentation needs.
 
-The release must retain the physical SDS200 and Home Assistant OS evidence
-already recorded for authenticated LAN sessions, responsive cards, Tone-Out
-fields, exact hold controls, and reversible volume and squelch. After the genuine
-matching tag publishes, verify PyPI, the generic amd64/arm64 Docker Hub image,
-the amd64/arm64 Home Assistant images and manifest, clean Python installation,
-and repository-managed Home Assistant upgrade. The tagged HAOS gate must cover
-both bundled cards, all fixed entities, Ingress state and controls, browser
-audio, recording persistence, App restart, and the unchanged single scanner
-owner.
+Add one fixed read-only Home Assistant MQTT Discovery sensor for screen kind on
+the existing canonical radio-state topic. Its identity must remain stable and
+its value must fall back to `unknown` when the field is missing, null, empty, or
+unsupported. Do not add a command topic, scanner poll, Home Assistant-specific
+scanner owner, or optional mode-dependent availability for this fixed sensor.
 
-Publication remains tag-gated. Pull requests, `main` pushes, and manual workflow
-dispatches may build and validate images, but only the genuine matching
-`v0.22.0` tag may publish the Python distribution and release images. Wait for
-all publication workflows and public artifact checks before creating the GitHub
-Release. Do not infer tag, publication, wiki deployment, or release approval
-from development or pull-request approval.
+Extend the additive SDS200 Display card with an opt-in `Auto` layout. Automatic
+selection maps scanning to a separately configured Simple or Detail scan
+layout, Search and Close Call to the existing Search layout, Weather to Weather,
+and Tone-Out to Tone-Out. Missing, unavailable, unknown, or future sensor values
+must select the configured scan fallback. Existing cards keep their current
+Simple default, and every explicit Simple, Detail, Search, Weather, or Tone-Out
+configuration remains byte-for-byte compatible in meaning. The graphical editor
+must expose both choices without requiring YAML.
 
-The next feature sequence is Milestone 27 and begins only after this release
-closure is merged and published:
+Make the web dashboard apply the same normalized screen profile to its activity
+heading and detail-group ordering. Every one of the 35 shared radio fields must
+remain present and accessible; adaptive presentation may prioritize relevant
+groups but must not discard data or prevent complete-detail inspection. Unknown
+or absent screen kinds use the ordinary scanning profile. Preserve theme,
+responsive, authentication, Ingress, control, audio, and recording behavior.
 
-- Milestone 27.1 will extend the existing renderer-neutral screen classifier
-  with evidence-backed adaptive presentation profiles. It will expose one fixed
-  read-only Home Assistant screen-kind sensor, add an opt-in automatic card
-  layout, and let web and terminal renderers select mode-relevant content while
-  preserving explicit manual layouts, complete-detail access, accessibility,
-  unknown-mode fallback, and the daemon as sole scanner owner.
-- Milestone 27.2 will physically qualify `GST`, `PWF`, and `GWF` waterfall
-  lifecycle, payload, cadence, error, disconnect, and restoration behavior, then
-  add one daemon-owned bounded waterfall session and local fanout contract.
-  `GW2` remains deferred unless captures establish an unambiguous binary framing
-  and transport boundary.
-- Milestone 27.3 will add a responsive, theme-aware web waterfall workspace over
-  that daemon service: a 240-bin spectrum, rolling spectrogram, frequency scale,
-  tuned marker, max hold, loss telemetry, accessible summary, and viewport-fit
-  full-screen behavior without scrolling. Scanner tuning, span, step, presets,
-  Home Assistant high-rate rendering, and terminal high-rate rendering remain
-  separately gated on protocol and restoration evidence.
+Retain and verify the existing automatic terminal layouts for Search, Close
+Call, Weather, and Tone-Out. Do not add a second terminal state model or new
+scanner request. Waterfall, System Status, RF Power Plot, Current Activity, LCN,
+menu, and other analysis screens remain outside this classifier until their raw
+screen values and lifecycle are separately qualified.
+
+Host-independent acceptance must cover the fixed Discovery identity and
+fallback, all automatic layout mappings, explicit-layout compatibility,
+graphical editor fields, unknown and missing values, complete browser field
+retention, profile-specific activity headings and group priority, TUI regression
+behavior, bundled-card installation, documentation, distribution validation,
+and the complete regression suite. Physical SDS200 and Home Assistant OS
+acceptance must exercise live transitions among scanning, Search, Close Call,
+Weather, and Tone-Out; automatic card and web changes; explicit card override;
+restart recovery; and the unchanged single scanner owner.
+
+Do not add waterfall or analysis commands, sessions, payload transport, FFT
+rendering, high-rate MQTT state, scanner tuning, automatic Home Assistant card
+replacement, remote layout control, Internet-facing access, or a desktop GUI.
+Milestone 27.2 owns waterfall protocol qualification and daemon session
+ownership; Milestone 27.3 owns the responsive web waterfall workspace.
 
 ## Deferred hardware validation
 

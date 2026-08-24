@@ -7,6 +7,12 @@ const SDS200_DISPLAY_LAYOUTS = Object.freeze([
   Object.freeze({ value: "search", label: "Search / Close Call" }),
   Object.freeze({ value: "weather", label: "Weather" }),
   Object.freeze({ value: "tone_out", label: "Tone-Out" }),
+  Object.freeze({ value: "auto", label: "Auto" }),
+]);
+
+const SDS200_DISPLAY_SCAN_LAYOUTS = Object.freeze([
+  Object.freeze({ value: "simple", label: "Simple" }),
+  Object.freeze({ value: "detail", label: "Detail" }),
 ]);
 
 const SDS200_DISPLAY_PALETTES = Object.freeze([
@@ -25,6 +31,11 @@ const SDS200_DISPLAY_ENTITY_FIELDS = Object.freeze([
     key: "scanner_connected",
     label: "Scanner connection",
     domain: "binary_sensor",
+  }),
+  Object.freeze({
+    key: "screen_kind",
+    label: "Screen kind",
+    domain: "sensor",
   }),
   Object.freeze({ key: "system", label: "System", domain: "sensor" }),
   Object.freeze({
@@ -125,12 +136,18 @@ function requireDisplayCardConfig(config) {
       ? config.title.trim()
       : "SDS200 Display";
   const layout = config.layout ?? "simple";
+  const scanLayout = config.scan_layout ?? "detail";
   const palette = config.palette ?? "color";
   const fit = config.fit ?? "card";
 
   if (!optionLabel(SDS200_DISPLAY_LAYOUTS, layout)) {
     throw new Error(
       `SDS200 display card layout "${layout}" is not supported.`,
+    );
+  }
+  if (!optionLabel(SDS200_DISPLAY_SCAN_LAYOUTS, scanLayout)) {
+    throw new Error(
+      `SDS200 display card scan layout "${scanLayout}" is not supported.`,
     );
   }
   if (!optionLabel(SDS200_DISPLAY_PALETTES, palette)) {
@@ -202,6 +219,7 @@ function requireDisplayCardConfig(config) {
   return Object.freeze({
     title,
     layout,
+    scan_layout: scanLayout,
     palette,
     fit,
     entities: Object.freeze(entities),
@@ -219,6 +237,7 @@ class Sds200DisplayCard extends HTMLElement {
   static getStubConfig() {
     return {
       layout: "simple",
+      scan_layout: "detail",
       palette: "color",
       fit: "card",
       entities: {},
@@ -233,6 +252,11 @@ class Sds200DisplayCard extends HTMLElement {
           name: "layout",
           required: true,
           selector: { select: { options: SDS200_DISPLAY_LAYOUTS } },
+        },
+        {
+          name: "scan_layout",
+          required: true,
+          selector: { select: { options: SDS200_DISPLAY_SCAN_LAYOUTS } },
         },
         {
           name: "palette",
@@ -264,6 +288,7 @@ class Sds200DisplayCard extends HTMLElement {
         const labels = {
           title: "Title",
           layout: "Display layout",
+          scan_layout: "Automatic scan layout",
           palette: "Display palette",
           fit: "Fit",
         };
@@ -272,6 +297,9 @@ class Sds200DisplayCard extends HTMLElement {
       computeHelper: (schema) => {
         const helpers = {
           layout: "Choose a scanner-inspired information layout.",
+          scan_layout: (
+            "Choose Simple or Detail for scanning and automatic fallback."
+          ),
           palette: "Choose Color, Black on White, or White on Black.",
           fit: "Viewport fit grows without exceeding the visible screen.",
           entities: (
@@ -375,6 +403,21 @@ class Sds200DisplayCard extends HTMLElement {
   _binaryActive(field) {
     const value = this._stateText(field, "").toLowerCase();
     return value === "on" || value === "true" || value === "running";
+  }
+
+  _resolvedLayout() {
+    if (this._config.layout !== "auto") {
+      return this._config.layout;
+    }
+
+    const screenKind = this._stateText("screen_kind", "unknown").toLowerCase();
+    const automaticLayouts = {
+      search: "search",
+      close_call: "search",
+      weather: "weather",
+      tone_out: "tone_out",
+    };
+    return automaticLayouts[screenKind] ?? this._config.scan_layout;
   }
 
   _cell(documentObject, label, field, options = {}) {
@@ -513,7 +556,7 @@ class Sds200DisplayCard extends HTMLElement {
     return content;
   }
 
-  _specialFields() {
+  _specialFields(layout) {
     const mappings = {
       search: [
         ["Current channel", "channel"],
@@ -533,18 +576,18 @@ class Sds200DisplayCard extends HTMLElement {
         ["Tone B", "tone_out_tone_b"],
       ],
     };
-    return mappings[this._config.layout];
+    return mappings[layout];
   }
 
-  _renderSpecial(documentObject) {
+  _renderSpecial(documentObject, layout) {
     const content = documentObject.createElement("div");
     content.className = (
-      `display-content special-layout special-layout-${this._config.layout}`
+      `display-content special-layout special-layout-${layout}`
     );
 
     const primary = documentObject.createElement("div");
     primary.className = "special-primary";
-    for (const [label, field] of this._specialFields()) {
+    for (const [label, field] of this._specialFields(layout)) {
       primary.append(
         this._cell(documentObject, label, field, {
           className: "special-primary-cell",
@@ -573,7 +616,7 @@ class Sds200DisplayCard extends HTMLElement {
     return content;
   }
 
-  _renderFooter(documentObject) {
+  _renderFooter(documentObject, layout) {
     const footer = documentObject.createElement("footer");
     footer.className = "display-footer";
     footer.append(
@@ -582,7 +625,9 @@ class Sds200DisplayCard extends HTMLElement {
         documentObject,
         "span",
         "footer-item",
-        optionLabel(SDS200_DISPLAY_LAYOUTS, this._config.layout),
+        this._config.layout === "auto"
+          ? `Auto / ${optionLabel(SDS200_DISPLAY_LAYOUTS, layout)}`
+          : optionLabel(SDS200_DISPLAY_LAYOUTS, layout),
       ),
       textElement(
         documentObject,
@@ -600,6 +645,7 @@ class Sds200DisplayCard extends HTMLElement {
     }
 
     const documentObject = this.ownerDocument;
+    const layout = this._resolvedLayout();
     const style = documentObject.createElement("style");
     style.textContent = `
       :host {
@@ -894,27 +940,29 @@ class Sds200DisplayCard extends HTMLElement {
 
     const frame = documentObject.createElement("article");
     frame.className = "scanner-frame";
-    frame.dataset.layout = this._config.layout;
+    frame.dataset.layout = layout;
+    frame.dataset.layoutMode = this._config.layout;
+    frame.dataset.screenKind = this._stateText("screen_kind", "unknown");
     frame.dataset.palette = this._config.palette;
     frame.setAttribute(
       "aria-label",
       `${this._config.title}: ${optionLabel(
         SDS200_DISPLAY_LAYOUTS,
-        this._config.layout,
+        layout,
       )} display`,
     );
 
     const content =
-      this._config.layout === "simple"
+      layout === "simple"
         ? this._renderSimple(documentObject)
-        : this._config.layout === "detail"
+        : layout === "detail"
           ? this._renderDetail(documentObject)
-          : this._renderSpecial(documentObject);
+          : this._renderSpecial(documentObject, layout);
 
     frame.append(
       this._renderTop(documentObject),
       content,
-      this._renderFooter(documentObject),
+      this._renderFooter(documentObject, layout),
     );
     viewport.append(frame);
 
