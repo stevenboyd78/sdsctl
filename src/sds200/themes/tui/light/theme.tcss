@@ -1,0 +1,15 @@
+/* Default light built-in terminal theme. */
+Screen.light {
+    background: #f3f4f6;
+    color: #1f2937;
+}
+
+Screen.light .panel {
+    background: #ffffff;
+    border: round #1d4ed8;
+}
+
+Screen.light #compact-footer {
+    background: #ffffff;
+    color: #1f2937;
+}

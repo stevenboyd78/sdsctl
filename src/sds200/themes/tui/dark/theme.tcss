@@ -1,0 +1,15 @@
+/* Default dark built-in terminal theme. */
+Screen {
+    background: #10151c;
+    color: #f5f5f5;
+}
+
+.panel {
+    background: #1b2430;
+    border: round #5fafff;
+}
+
+#compact-footer {
+    background: #1b2430;
+    color: #f5f5f5;
+}

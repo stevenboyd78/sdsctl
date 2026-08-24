@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "tui",
+  "id": "light",
+  "label": "Light",
+  "order": 10,
+  "palette": "palette.json",
+  "palette_name": "default-light",
+  "stylesheet": "theme.tcss",
+  "screen_class": "light"
+}

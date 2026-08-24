@@ -352,15 +352,19 @@ same-origin delivery, compatible pre-paint fallback, and unchanged accessible
 rendering. Milestone 26.11 extends that boundary to the byte-identical compact
 and SDS200 Display Home Assistant modules. Their versioned manifests and
 validated registry drive the existing flat App installation paths without
-changing custom elements, resource URLs, configuration, or rendering. The next
-renderer interface is `tui`; `gui` remains reserved until a desktop renderer
-exists. A visual family may reuse one theme name across interfaces while each
-package stays independently installable and appropriate for its renderer. Theme
-packages may style presentation but must not acquire scanner, daemon, MQTT, Home
-Assistant service, authentication, or control authority. Third-party
-installation and removal remain a later trust boundary requiring deliberate
-staging, validation, collision, rollback, recovery, and untrusted-asset
-decisions rather than automatic directory scans.
+changing custom elements, resource URLs, configuration, or rendering. Milestone
+26.12 completes the current built-in renderer sequence by packaging the exact
+dark and light semantic palettes plus theme-only Textual CSS under
+`themes/tui/<theme-name>/`. Rich CLI and Textual retain the same singleton
+palette objects and selection behavior while shared terminal layout stays in
+renderer code. `gui` remains reserved until a desktop renderer exists. A visual
+family may reuse one theme name across interfaces while each package stays
+independently installable and appropriate for its renderer. Theme packages may
+style presentation but must not acquire scanner, daemon, MQTT, Home Assistant
+service, authentication, or control authority. Third-party installation and
+removal remain a later trust boundary requiring deliberate staging, validation,
+collision, rollback, recovery, and untrusted-asset decisions rather than
+automatic directory scans.
 
 ## Favorites Workspace
 

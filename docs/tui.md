@@ -130,6 +130,16 @@ The interface uses the same renderer-independent `ScannerPresentation`,
 `ThemeRole`, and light/dark palettes as the Rich CLI. Meaning remains visible in
 text labels rather than relying on color alone.
 
+The two built-in terminal themes are independently packaged under
+`sds200/themes/tui/<theme-name>/`. Their versioned manifests declare stable
+`dark` and `light` identities, complete `palette.json` files retain all semantic
+role styles, and `theme.tcss` owns only Textual colors, backgrounds, and borders.
+The validated immutable registry preserves the existing `default-dark` and
+`default-light` compatibility objects and deterministic stylesheet order.
+Dimensions, padding, scrolling, responsive breakpoints, widgets, and scanner
+meaning remain shared TUI code. This built-in boundary does not discover or
+install third-party themes.
+
 Quick Search, Close Call, Weather, and Tone Out screens were physically
 validated on an SDS200 running firmware `1.26.01` over the UDP control
 transport. One continuous PSI session successfully transitioned through normal

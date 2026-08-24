@@ -263,7 +263,10 @@ SDS200 audio playback, repeatable recordings, mode-aware special-screen panels,
 operational logging, and rate-limited stale-PSI recovery through USB, network,
 profile, and replay selectors. A sustained stale PSI stream is automatically
 reconnected without stopping active network audio; see the
-[Textual TUI guide](docs/tui.md).
+[Textual TUI guide](docs/tui.md). The existing dark and light terminal themes
+are independently packaged under `sds200/themes/tui/<theme-name>/`; validated
+manifests, complete semantic palettes, and theme-only Textual CSS preserve the
+same `--theme` values and `T` toggle without enabling third-party discovery.
 
 ### Favorites Workspace editor
 
