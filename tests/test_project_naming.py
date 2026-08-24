@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_14_managed_web_activation_contract() -> None:
+def test_roadmap_records_milestone_26_15_managed_terminal_activation_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,37 +132,42 @@ def test_roadmap_records_milestone_26_14_managed_web_activation_contract() -> No
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.14 — Managed web-theme activation and safe CSS delivery",
-        "Milestone 26.13 is closed",
-        "activates only valid managed `web` packages",
-        "discover the managed theme root once",
+        "### Milestone 26.15 — Managed terminal-theme activation",
+        "Milestone 26.14 is closed",
+        "activates only valid managed `tui` packages",
+        "resolve the normal XDG configuration theme root once",
         "deterministic immutable runtime registry",
         "Built-ins remain authoritative",
-        "invalid web, Home Assistant, or TUI entries must not prevent",
-        "without an additional enable command or configuration value",
-        "`sdsctl.web.theme` local-storage key",
-        "fall back to System",
-        "only after a new web process starts",
-        "`/assets/themes/<id>/<stylesheet>` route",
-        "real nonsymlink paths beneath the exact managed `web` root",
-        "verify its startup digest before delivery",
-        "return not found on removal, replacement, symlink substitution, mutation",
-        "Do not serve manifests, undeclared files, arbitrary paths",
-        "Content Security Policy",
-        "inspect third-party CSS before installation",
-        "resolved XDG configuration theme root by default",
-        "built-in-only unless an explicit absolute managed theme root is supplied",
-        "absent root is an ordinary built-in-only startup",
-        "stored-selection fallback",
-        "authenticated and Ingress delivery",
-        "digest enforcement",
+        "`DEFAULT_DARK_THEME` and `DEFAULT_LIGHT_THEME` singleton objects",
+        "global `--theme`, configuration-file `theme`, or `SDSCTL_THEME`",
+        "lowercase kebab-case identifiers",
+        "fail before scanner or daemon access",
+        "lists the available IDs",
+        "Non-rendering commands must continue to accept",
+        "bind only the selected package's complete semantic palette",
+        "`NO_COLOR`, `FORCE_COLOR`, `--no-color`",
+        "Color remains supplementary",
+        "load only the selected managed palette and stylesheet into memory",
+        "scoped beneath its unique declared `Screen.<screen-class>`",
+        "permit only color, background, and border styling",
+        "reject imports, URLs, variables, unscoped selectors, layout properties",
+        "a managed theme switches to built-in dark",
+        "Shared dimensions, padding, scrolling, responsive breakpoints",
+        "Managed terminal assets are declarative data, not executable code",
+        "do not reopen package files during rendering",
+        "Programmatic Rich palette lookup and Textual construction remain deterministic",
+        "configuration and environment selection",
+        "unknown-selection errors before scanner access",
+        "scoped-TCSS enforcement",
+        "startup immutability after replacement or removal",
+        "direct, replay, and daemon-backed TUI paths",
         "No physical scanner validation is required",
         "Do not activate managed Home Assistant JavaScript",
-        "TUI palettes or Textual CSS",
+        "change web-theme delivery",
         "download packages",
         "extract archives",
         "live reload",
-        "GUI theming remains reserved",
+        "GUI theming remains reserved for the future GUI design",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

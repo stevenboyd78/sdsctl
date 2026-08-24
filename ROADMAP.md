@@ -11,76 +11,78 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.14 — Managed web-theme activation and safe CSS delivery
+### Milestone 26.15 — Managed terminal-theme activation
 
-Milestone 26.13 is closed with a managed XDG theme hierarchy, automatic
-inventory, local-directory validation, guarded installation and replacement,
-exact confirmed removal, malformed-package isolation, private atomic staging,
-rollback and interrupted-operation recovery, and the separate executable-code
-trust acknowledgement required for Home Assistant JavaScript. Managed assets
-remain inactive at that milestone's boundary.
+Milestone 26.14 is closed with automatic managed web-theme discovery, immutable
+startup registration, selected-only browser links, safe stored-selection
+fallback, and digest-enforced same-origin CSS delivery. The built-in web themes,
+authentication and Ingress middleware, restrictive response policy, accessible
+shared dashboard, and scanner ownership boundaries remain authoritative.
 
-Milestone 26.14 activates only valid managed `web` packages for the existing
-browser dashboard. At each web-process start, resolve the normal configuration
-paths, discover the managed theme root once, and combine the built-in web
-packages with valid managed web manifests into one deterministic immutable
-runtime registry. Built-ins remain authoritative and preserve their exact IDs,
-ordering, URLs, stylesheets, and browser behavior. Managed packages follow the
-same schema and collision rules established by the lifecycle; invalid web,
-Home Assistant, or TUI entries must not prevent the dashboard from starting or
-hide any valid web theme.
+Milestone 26.15 activates only valid managed `tui` packages for terminal
+renderers. At each applicable command start, resolve the normal XDG
+configuration theme root once, isolate malformed entries, and combine the
+built-in and valid managed terminal manifests into one deterministic immutable
+runtime registry. Built-ins remain authoritative and preserve the exact `dark`
+and `light` IDs, `DEFAULT_DARK_THEME` and `DEFAULT_LIGHT_THEME` singleton
+objects, palette values, Textual CSS, ordering, and ordinary behavior when no
+managed package is selected.
 
-Add valid managed web themes automatically to the existing picker and browser
-bootstrap metadata without an additional enable command or configuration value.
-Preserve the `sdsctl.web.theme` local-storage key and existing built-in
-selections. A missing, removed, invalid, or unavailable stored theme must fall
-back to System without an unstyled first paint, script error, or loss of scanner
-state and controls. Changes to the managed directory become active only after a
-new web process starts; do not add filesystem watching or live registry reload.
+Allow a valid managed package ID anywhere the existing global `--theme`,
+configuration-file `theme`, or `SDSCTL_THEME` value selects a terminal palette.
+Normalize values as lowercase kebab-case identifiers, then resolve the selected
+ID only against the startup registry for a Rich or Textual command. An unknown,
+invalid, removed, or colliding selection must fail before scanner or daemon
+access with one actionable error that lists the available IDs. Non-rendering
+commands must continue to accept a syntactically valid configured theme without
+reading the managed directory, so theme state cannot break lifecycle, recovery,
+completion, or unrelated scanner operations.
 
-Serve one managed theme only through the existing same-origin
-`/assets/themes/<id>/<stylesheet>` route. Resolve the asset from the validated
-package identity and manifest, reject every other filename, and recheck that the
-package directory and stylesheet are real nonsymlink paths beneath the exact
-managed `web` root before reading. Require a regular CSS file within the package
-size bound, verify its startup digest before delivery, and return not found on
-removal, replacement, symlink substitution, mutation, or read failure. Do not
-serve manifests, undeclared files, arbitrary paths, directories, special files,
-or assets from the Home Assistant and TUI interfaces.
+For Rich human-readable output, bind only the selected package's complete
+semantic palette. Preserve color auto-detection, `NO_COLOR`, `FORCE_COLOR`,
+`--no-color`, redirected plain-text structure, labels, ordering, and structured
+output independence. Color remains supplementary and must not become the only
+carrier of connection, activity, signal, hold, mute, recording, availability,
+or severity meaning.
 
-Keep the existing restrictive dashboard Content Security Policy, `nosniff`,
-no-store response policy, authentication and Home Assistant Ingress middleware,
-same-origin URL behavior, HTML escaping, metadata-only JavaScript bootstrap,
-accessible shared DOM, reduced-motion contract, and System fallback. CSS is
-presentation-capable and may make same-origin requests allowed by the existing
-CSP; documentation must tell operators to inspect third-party CSS before
-installation and must not describe schema validation as a complete safety
-review.
+For the full-screen Textual interface, load only the selected managed palette
+and stylesheet into memory before constructing the application. Require every
+managed stylesheet selector to be scoped beneath its unique declared
+`Screen.<screen-class>` and permit only color, background, and border styling;
+reject imports, URLs, variables, unscoped selectors, layout properties, and
+other presentation rules that could hide, resize, reorder, or relabel shared
+widgets. Apply exactly that screen class while the managed palette is active.
+The existing `T` action remains a deterministic safe fallback: a managed theme
+switches to built-in dark, and built-in dark and light continue to toggle exactly
+as before. Shared dimensions, padding, scrolling, responsive breakpoints,
+keyboard behavior, controls, panels, scanner meaning, and lifecycle stay in
+application code.
 
-The `sdsctl web` command uses the resolved XDG configuration theme root by
-default. Programmatic application construction must remain deterministic and
-built-in-only unless an explicit absolute managed theme root is supplied, so
-tests and embedders do not unexpectedly inspect user state. An invalid root
-type or relative path is a construction error; an absent root is an ordinary
-built-in-only startup.
+Managed terminal assets are declarative data, not executable code. Read and
+validate the selected package once during startup, retain immutable palette and
+stylesheet values, and do not reopen package files during rendering. Installing,
+replacing, repairing, or removing a package affects only a new process; do not
+add filesystem watching or live reload. Programmatic Rich palette lookup and
+Textual construction remain deterministic and built-in-only unless the caller
+explicitly supplies a runtime registry or absolute managed root.
 
-Host-independent acceptance must cover XDG wiring, built-in compatibility,
-deterministic merged ordering, picker and bootstrap inclusion, malformed-entry
-isolation, absent-root fallback, stored-selection fallback, authenticated and
-Ingress delivery, exact MIME and security headers, path and filename rejection,
-symlink and special-file substitution, post-start removal/replacement/mutation,
-digest enforcement, concurrent lifecycle replacement outcomes, no daemon or
-scanner access for static assets, documentation checks, distribution validation,
-and the complete regression suite. No physical scanner validation is required
-because this slice changes only browser theme discovery and CSS delivery.
+Host-independent acceptance must cover configuration and environment selection,
+XDG wiring, built-in singleton and toggle compatibility, deterministic registry
+ordering, absent-root fallback, malformed-entry isolation, unknown-selection
+errors before scanner access, scoped-TCSS enforcement, managed palette and class
+application, startup immutability after replacement or removal, color-disabled
+plain-text equivalence, direct, replay, and daemon-backed TUI paths,
+documentation checks, distribution validation, and the complete regression
+suite. No physical scanner validation is required because this slice changes
+only terminal presentation discovery and startup selection.
 
-Do not activate managed Home Assistant JavaScript, TUI palettes or Textual CSS;
+Do not activate managed Home Assistant JavaScript; change web-theme delivery;
 download packages; extract archives; execute theme code; add remote catalogs,
 signatures, provenance updates, or live reload; change scanner, daemon,
-transport, audio, recording, control, authentication, or container exposure
-semantics; or introduce a desktop GUI. Home Assistant and TUI activation remain
-separate renderer milestones, and GUI theming remains reserved for the future
-GUI design.
+transport, audio, recording, control, authentication, Ingress, or container
+exposure semantics; or introduce a desktop GUI. Home Assistant activation
+remains a separate higher-trust renderer milestone, and GUI theming remains
+reserved for the future GUI design.
 
 ## Deferred hardware validation
 

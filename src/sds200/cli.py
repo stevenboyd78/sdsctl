@@ -177,7 +177,6 @@ from .reliability import ReconnectPolicy
 from .remote_audio_profiles import RemoteAudioProfileStore
 from .rich_cli import (
     COLOR_MODES,
-    THEME_NAMES,
     RichCliRenderer,
     palette_for_name,
 )
@@ -196,6 +195,11 @@ from .theme_lifecycle import (
 )
 from .tui_audio import TuiAudioSession
 from .tui_logging import TuiLogBuffer, capture_package_logs
+from .tui_theme_runtime import (
+    TuiThemeRuntimeAsset,
+    TuiThemeRuntimeRegistry,
+    build_tui_theme_runtime,
+)
 from .web_server import (
     WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST,
     WEB_DASHBOARD_DEFAULT_HOST,
@@ -644,12 +648,12 @@ def build_parser(
     )
     parser.add_argument(
         "--theme",
-        choices=THEME_NAMES,
         default=_configuration_parser_default(
             "dark",
             suppress=suppress_configuration_defaults,
         ),
-        help="Semantic CLI palette: dark or light (default: dark)",
+        metavar="ID",
+        help="Terminal theme ID (default: dark)",
     )
     parser.add_argument(
         "-v",
@@ -4211,6 +4215,17 @@ def _run_web(
     )
 
 
+def _selected_terminal_theme(
+    identifier: str,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> tuple[TuiThemeRuntimeRegistry, TuiThemeRuntimeAsset]:
+    paths = configuration_paths or resolve_configuration_paths(environ=environ)
+    runtime = build_tui_theme_runtime(paths.theme_dir)
+    return runtime, runtime.require_asset(identifier)
+
+
 def _run_tui(
     args: argparse.Namespace,
     *,
@@ -4228,6 +4243,16 @@ def _run_tui(
                 'python -m pip install "sds200[tui]"'
             ) from exc
         raise
+
+    theme_runtime, theme_asset = _selected_terminal_theme(
+        args.theme,
+        configuration_paths=configuration_paths,
+        environ=environ,
+    )
+    palette = palette_for_name(args.theme, registry=theme_runtime.registry)
+    managed_stylesheet = (
+        theme_asset.stylesheet if theme_asset.origin == "managed" else None
+    )
 
     if args.audio_force and args.audio_output is None:
         raise ValueError("--audio-force requires --audio-output")
@@ -4350,7 +4375,9 @@ def _run_tui(
                 psi_recover_after=args.psi_recover_after,
                 psi_recovery_cooldown=args.psi_recovery_cooldown,
                 connected=initial.connected,
-                palette=palette_for_name(args.theme),
+                palette=palette,
+                screen_class=theme_asset.manifest.screen_class,
+                managed_stylesheet=managed_stylesheet,
                 log_buffer=log_buffer,
             )
         return 0
@@ -4423,7 +4450,9 @@ def _run_tui(
             psi_recover_after=args.psi_recover_after,
             psi_recovery_cooldown=args.psi_recovery_cooldown,
             connected=radio.connected,
-            palette=palette_for_name(args.theme),
+            palette=palette,
+            screen_class=theme_asset.manifest.screen_class,
+            managed_stylesheet=managed_stylesheet,
             log_buffer=log_buffer,
         )
     return 0
@@ -4956,6 +4985,18 @@ def main(
                 environ=environ,
             )
 
+        scanner_info_palette = None
+        if args.action == "scanner-info":
+            theme_runtime, _ = _selected_terminal_theme(
+                args.theme,
+                configuration_paths=configuration_paths,
+                environ=environ,
+            )
+            scanner_info_palette = palette_for_name(
+                args.theme,
+                registry=theme_runtime.registry,
+            )
+
         with selected_radio(args) as radio:
             if args.action == "info":
                 print(f"Endpoint: {radio.endpoint}")
@@ -5068,8 +5109,9 @@ def main(
 
             if args.action == "scanner-info":
                 info = radio.get_scanner_info()
+                assert scanner_info_palette is not None
                 RichCliRenderer(
-                    palette=palette_for_name(args.theme),
+                    palette=scanner_info_palette,
                     color=args.color,
                 ).print_scanner_info(info, connected=radio.connected)
                 return 0

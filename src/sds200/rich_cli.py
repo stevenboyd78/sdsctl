@@ -13,15 +13,15 @@ from .models import ScannerInfo
 from .presentation import present_scanner_info
 from .theme import (
     DEFAULT_DARK_THEME,
-    DEFAULT_LIGHT_THEME,
     ThemePalette,
     ThemeRole,
     ThemeStyle,
     theme_roles_for,
 )
+from .tui_themes import TuiThemeRegistry, built_in_tui_theme_registry
 
 ColorMode = Literal["auto", "always", "never"]
-ThemeName = Literal["dark", "light"]
+ThemeName = str
 COLOR_MODES: tuple[ColorMode, ...] = ("auto", "always", "never")
 THEME_NAMES: tuple[ThemeName, ...] = ("dark", "light")
 
@@ -47,17 +47,23 @@ class RichCliRenderer:
         else:
             force_terminal: bool | None = None
             no_color = False
+            console_environ = dict(os.environ if environ is None else environ)
             if self._color_mode == "always":
                 force_terminal = True
+                console_environ.pop("TERM", None)
             elif self._color_mode == "never":
                 force_terminal = False
                 no_color = True
+            if self._color_mode != "auto":
+                console_environ.pop("NO_COLOR", None)
+                console_environ.pop("FORCE_COLOR", None)
             self._console = Console(
                 file=file or sys.stdout,
                 force_terminal=force_terminal,
                 no_color=no_color,
                 highlight=False,
                 markup=False,
+                _environ=console_environ,
             )
 
     @property
@@ -137,16 +143,22 @@ def resolve_color_mode(
     return "auto"
 
 
-def palette_for_name(name: str) -> ThemePalette:
+def palette_for_name(
+    name: str,
+    *,
+    registry: TuiThemeRegistry | None = None,
+) -> ThemePalette:
     """Resolve a stable CLI theme name into a renderer-neutral palette."""
 
     normalized = name.strip().casefold()
-    if normalized == "dark":
-        return DEFAULT_DARK_THEME
-    if normalized == "light":
-        return DEFAULT_LIGHT_THEME
-    choices = ", ".join(THEME_NAMES)
-    raise ValueError(f"theme must be one of: {choices}")
+    selected_registry = registry or built_in_tui_theme_registry()
+    for theme in selected_registry.themes:
+        if theme.identifier == normalized:
+            return theme.palette
+    choices = ", ".join(selected_registry.identifiers)
+    raise ValueError(
+        f"unknown terminal theme {name!r}; available themes: {choices}"
+    )
 
 
 def rich_style(style: ThemeStyle) -> Style:

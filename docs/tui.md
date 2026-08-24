@@ -137,11 +137,13 @@ role styles, and `theme.tcss` owns only Textual colors, backgrounds, and borders
 The validated immutable registry preserves the existing `default-dark` and
 `default-light` compatibility objects and deterministic stylesheet order.
 Dimensions, padding, scrolling, responsive breakpoints, widgets, and scanner
-meaning remain shared TUI code. Milestone 26.13 adds managed-package validation,
-inventory, install/replace, and removal. Milestone 26.14 activates web CSS only;
-Rich CLI and Textual still select these two built-ins. A later terminal
-activation slice must bind a managed palette and its scoped TCSS without
-changing plain-text meaning or the `T` fallback behavior.
+meaning remain shared TUI code. Valid managed packages under the resolved
+`themes/tui/<id>/` directory are discovered once at command startup and can be
+selected with `--theme <id>`, the `theme` configuration field, or
+`SDSCTL_THEME`. Textual applies the selected complete semantic palette and its
+in-memory stylesheet under the package's unique screen class. Managed TCSS is
+limited to scoped color, background, and border rules; layout remains shared.
+Installing, replacing, or removing a package takes effect in a new process.
 
 Quick Search, Close Call, Weather, and Tone Out screens were physically
 validated on an SDS200 running firmware `1.26.01` over the UDP control
@@ -167,7 +169,8 @@ Keyboard shortcuts:
 
 - `Q`: exit and close only resources owned by this TUI; daemon mode leaves the
   foreground daemon running
-- `T`: toggle between the built-in dark and light semantic palettes
+- `T`: toggle between built-in dark and light; from a managed theme, return to
+  built-in dark
 - `C`: request bounded daemon reconnect in daemon mode, or restart the
   standalone control transport
 - `R`: start or stop an SDS200 network-audio WAV recording

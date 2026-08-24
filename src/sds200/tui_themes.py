@@ -45,6 +45,38 @@ _STYLESHEET_FILENAME_PATTERN: Final = re.compile(
     r"[a-z0-9]+(?:-[a-z0-9]+)*\.tcss\Z"
 )
 _COLOR_PATTERN: Final = re.compile(r"#[0-9a-fA-F]{6}\Z")
+_MANAGED_STYLESHEET_PROPERTIES: Final = frozenset(
+    {
+        "background",
+        "border",
+        "border-bottom",
+        "border-left",
+        "border-right",
+        "border-top",
+        "color",
+    }
+)
+_MANAGED_BORDER_STYLES: Final = frozenset(
+    {
+        "ascii",
+        "blank",
+        "dashed",
+        "double",
+        "heavy",
+        "hidden",
+        "hkey",
+        "inner",
+        "none",
+        "outer",
+        "panel",
+        "round",
+        "solid",
+        "tall",
+        "thick",
+        "vkey",
+        "wide",
+    }
+)
 
 
 class TuiThemeError(SDS200Error):
@@ -351,6 +383,91 @@ def built_in_tui_theme_stylesheets() -> str:
     ) + "\n"
 
 
+def validate_managed_tui_theme_stylesheet(
+    theme: TuiThemeManifest,
+    stylesheet: str,
+) -> None:
+    """Require managed TCSS to remain scoped and presentation-only."""
+
+    screen_class = theme.screen_class
+    if screen_class is None:
+        raise TuiThemeError(
+            f"managed TUI theme {theme.identifier!r} must declare a screen class"
+        )
+    if not isinstance(stylesheet, str):
+        raise TypeError("Managed TUI stylesheet must be text")
+    if "/*" in stylesheet and "*/" not in stylesheet:
+        raise TuiThemeError("managed TUI stylesheet contains an unterminated comment")
+    without_comments = re.sub(r"/\*.*?\*/", "", stylesheet, flags=re.DOTALL)
+    if "/*" in without_comments or "*/" in without_comments:
+        raise TuiThemeError("managed TUI stylesheet contains an invalid comment")
+    if not without_comments.strip():
+        raise TuiThemeError("managed TUI stylesheet must contain at least one rule")
+    if any(token in without_comments.casefold() for token in ("@", "url(")):
+        raise TuiThemeError("managed TUI stylesheet must not import external content")
+    if "$" in without_comments:
+        raise TuiThemeError("managed TUI stylesheet must not declare variables")
+
+    selector_pattern = re.compile(
+        rf"Screen\.{re.escape(screen_class)}"
+        r"(?:\s+(?:[.#][A-Za-z_][A-Za-z0-9_-]*))*\Z"
+    )
+    position = 0
+    rule_count = 0
+    rule_pattern = re.compile(r"\s*([^{}]+)\{([^{}]*)\}", re.DOTALL)
+    while position < len(without_comments):
+        if not without_comments[position:].strip():
+            break
+        match = rule_pattern.match(without_comments, position)
+        if match is None:
+            raise TuiThemeError("managed TUI stylesheet must contain simple rules only")
+        selectors, body = match.groups()
+        for selector in selectors.split(","):
+            normalized_selector = " ".join(selector.split())
+            if selector_pattern.fullmatch(normalized_selector) is None:
+                raise TuiThemeError(
+                    "managed TUI stylesheet selectors must be scoped beneath "
+                    f"Screen.{screen_class}"
+                )
+
+        declarations = [item.strip() for item in body.split(";") if item.strip()]
+        if not declarations:
+            raise TuiThemeError("managed TUI stylesheet rules must not be empty")
+        for declaration in declarations:
+            if ":" not in declaration:
+                raise TuiThemeError("managed TUI stylesheet declaration is invalid")
+            property_name, value = declaration.split(":", 1)
+            normalized_property = property_name.strip().casefold()
+            if normalized_property not in _MANAGED_STYLESHEET_PROPERTIES:
+                raise TuiThemeError(
+                    "managed TUI stylesheet property is not presentation-only: "
+                    f"{normalized_property or '<empty>'}"
+                )
+            if not value.strip():
+                raise TuiThemeError("managed TUI stylesheet value must not be empty")
+            normalized_value = " ".join(value.split()).casefold()
+            if normalized_property in {"color", "background"}:
+                valid_value = _COLOR_PATTERN.fullmatch(normalized_value) is not None
+            elif normalized_value == "none":
+                valid_value = True
+            else:
+                border_parts = normalized_value.split()
+                valid_value = (
+                    len(border_parts) == 2
+                    and border_parts[0] in _MANAGED_BORDER_STYLES
+                    and _COLOR_PATTERN.fullmatch(border_parts[1]) is not None
+                )
+            if not valid_value:
+                raise TuiThemeError(
+                    "managed TUI stylesheet value is outside the safe color and "
+                    f"border grammar: {normalized_value!r}"
+                )
+        position = match.end()
+        rule_count += 1
+    if rule_count == 0:
+        raise TuiThemeError("managed TUI stylesheet must contain at least one rule")
+
+
 __all__ = [
     "BUILT_IN_TUI_THEME_IDS",
     "TUI_THEME_INTERFACE",
@@ -365,4 +482,5 @@ __all__ = [
     "load_tui_theme_package",
     "load_tui_theme_registry",
     "read_built_in_tui_theme_stylesheet",
+    "validate_managed_tui_theme_stylesheet",
 ]

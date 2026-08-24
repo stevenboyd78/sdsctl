@@ -111,15 +111,20 @@ initial delay.
 the presentation layer continues to honor `NO_COLOR` and `FORCE_COLOR` as
 documented in [Presentation and accessibility](presentation.md).
 
-`theme` accepts `dark` or `light`. Both values resolve the validated built-in
-terminal packages shared by Rich CLI and Textual. Managed third-party packages
-use `<user-config>/sdsctl/themes/<interface>/<theme-name>/`; the location follows
-`XDG_CONFIG_HOME` and can be overridden for one lifecycle invocation with
-`sdsctl themes --root DIRECTORY ...`. A new `sdsctl web` process automatically
-discovers valid packages under its resolved `themes/web/` directory; no theme
-configuration field is added because selection stays browser-local. Managed
-terminal and Home Assistant packages remain inactive. Logging levels are
-`CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`.
+`theme` accepts a lowercase kebab-case terminal package ID. `dark` and `light`
+resolve the validated built-ins shared by Rich CLI and Textual. A selected valid
+managed package under `<user-config>/sdsctl/themes/tui/<theme-name>/` becomes
+available to a new Rich `scanner-info` or Textual command process. An unavailable
+selection fails before scanner or daemon access and lists the available IDs.
+Non-rendering commands validate only the identifier syntax, so an unavailable
+optional theme cannot block lifecycle recovery or unrelated operations.
+
+The managed location follows `XDG_CONFIG_HOME` and can be overridden for one
+lifecycle invocation with `sdsctl themes --root DIRECTORY ...`. A new `sdsctl
+web` process automatically discovers valid packages under its resolved
+`themes/web/` directory; web selection stays browser-local. Managed Home
+Assistant packages remain inactive. Logging levels are `CRITICAL`, `ERROR`,
+`WARNING`, `INFO`, or `DEBUG`.
 
 ## Environment examples
 

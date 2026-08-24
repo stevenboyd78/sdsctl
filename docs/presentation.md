@@ -122,6 +122,7 @@ content of the output:
 ```text
 sdsctl --theme dark --color auto scanner-info
 sdsctl --theme light --color always scanner-info
+sdsctl --theme solarized --color always scanner-info
 sdsctl --no-color scanner-info
 ```
 
@@ -132,6 +133,10 @@ environment variables. With `--color auto`, the presence of `NO_COLOR` disables 
 present, Rich performs normal terminal detection. When both variables are present,
 `NO_COLOR` takes priority.
 
-`--theme` accepts `dark` or `light`. Palette selection changes styling only. Labels,
-field values, ordering, and line structure remain identical with either palette and
-with color disabled, so scanner state is never communicated by color alone.
+`--theme` accepts the built-in `dark` and `light` IDs or a valid managed TUI
+package ID discovered under the resolved XDG theme root. Discovery and selection
+occur before scanner access. Palette selection changes styling only. Labels,
+field values, ordering, and line structure remain identical with every palette
+and with color disabled, so scanner state is never communicated by color alone.
+Structured output and commands without terminal theme rendering do not consume
+the managed palette registry.
