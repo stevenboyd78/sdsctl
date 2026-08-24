@@ -137,8 +137,11 @@ role styles, and `theme.tcss` owns only Textual colors, backgrounds, and borders
 The validated immutable registry preserves the existing `default-dark` and
 `default-light` compatibility objects and deterministic stylesheet order.
 Dimensions, padding, scrolling, responsive breakpoints, widgets, and scanner
-meaning remain shared TUI code. This built-in boundary does not discover or
-install third-party themes.
+meaning remain shared TUI code. Milestone 26.13 adds managed-package validation,
+inventory, install/replace, and removal, but Rich CLI and Textual still select
+only these two built-ins. A later terminal activation slice must bind a managed
+palette and its scoped TCSS without changing plain-text meaning or the `T`
+fallback behavior.
 
 Quick Search, Close Call, Weather, and Tone Out screens were physically
 validated on an SDS200 running firmware `1.26.01` over the UDP control

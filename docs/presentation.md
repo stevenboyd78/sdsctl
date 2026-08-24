@@ -67,8 +67,15 @@ Those two compatibility objects are loaded from validated built-in packages at
 versioned manifest, a complete declarative `palette.json`, and theme-only
 Textual CSS. One immutable registry validates every semantic role and produces
 the exact singleton objects shared by Rich CLI and Textual; shared TUI layout
-remains outside the packages. Milestone 26.12 does not scan user-writable
-directories or add theme-selection values.
+remains outside the packages.
+
+Milestone 26.13 adds a managed local package inventory under the resolved XDG
+configuration directory. It reuses each built-in interface schema for explicit
+validation and lifecycle operations, isolates malformed manual additions, and
+prevents managed packages from shadowing built-ins. This inventory is not a
+renderer registry: web CSS, TUI palettes and TCSS, and Home Assistant JavaScript
+remain inactive until a later per-renderer trust and fallback boundary is
+implemented. See [Theme package management](themes.md).
 
 ```python
 from sds200 import (

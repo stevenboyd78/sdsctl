@@ -48,7 +48,7 @@ _COLOR_PATTERN: Final = re.compile(r"#[0-9a-fA-F]{6}\Z")
 
 
 class TuiThemeError(SDS200Error):
-    """Raised when a built-in TUI theme package is invalid."""
+    """Raised when a TUI theme package is invalid."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -309,6 +309,12 @@ def load_tui_theme_registry(root: Traversable) -> TuiThemeRegistry:
     return TuiThemeRegistry(themes)
 
 
+def load_tui_theme_package(directory: Traversable) -> TuiThemeManifest:
+    """Load and validate one TUI theme package directory."""
+
+    return _read_manifest(directory)
+
+
 @lru_cache(maxsize=1)
 def built_in_tui_theme_registry() -> TuiThemeRegistry:
     """Load the exact terminal themes distributed with sdsctl."""
@@ -356,6 +362,7 @@ __all__ = [
     "TuiThemeRegistry",
     "built_in_tui_theme_registry",
     "built_in_tui_theme_stylesheets",
+    "load_tui_theme_package",
     "load_tui_theme_registry",
     "read_built_in_tui_theme_stylesheet",
 ]

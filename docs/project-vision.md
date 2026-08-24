@@ -361,10 +361,12 @@ renderer code. `gui` remains reserved until a desktop renderer exists. A visual
 family may reuse one theme name across interfaces while each package stays
 independently installable and appropriate for its renderer. Theme packages may
 style presentation but must not acquire scanner, daemon, MQTT, Home Assistant
-service, authentication, or control authority. Third-party installation and
-removal remain a later trust boundary requiring deliberate staging, validation,
-collision, rollback, recovery, and untrusted-asset decisions rather than
-automatic directory scans.
+service, authentication, or control authority. Milestone 26.13 establishes the
+managed local third-party inventory and guarded validation, staging, collision,
+rollback, recovery, and removal lifecycle. It deliberately stops before
+renderer activation: CSS, TCSS, and executable Home Assistant JavaScript still
+require separate interface-specific loading, fallback, and trust decisions.
+Remote catalogs, update provenance, and signatures remain later boundaries.
 
 ## Favorites Workspace
 

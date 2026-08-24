@@ -11,67 +11,71 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.12 — Modular TUI theme packaging foundation
+### Milestone 26.13 — Managed third-party theme discovery and lifecycle foundation
 
-Milestone 26.11 is closed with the byte-identical compact SDS200 Scanner and
-SDS200 Display Lovelace modules independently packaged under
-`themes/home-assistant/<theme-name>/`. Versioned manifests and one validated
-immutable registry now drive ordered App installation while preserving public
-custom elements, flat installed filenames, `/local/sds200/` resource URLs,
-manual registration, graphical editors, responsive rendering, startup failure
-isolation, and every scanner-ownership boundary.
+Milestone 26.12 is closed with the existing dark and light terminal
+presentations independently packaged under `themes/tui/<theme-name>/`.
+Versioned manifests, complete semantic palettes, theme-only Textual CSS, and one
+validated immutable registry now drive Rich CLI and Textual presentation while
+preserving the public compatibility objects, exact palette serialization,
+selection behavior, responsive layout, scanner meaning, and package artifacts.
 
-Milestone 26.12 completes the built-in renderer sequence by extracting the
-existing dark and light terminal presentations into independent packages under
-`themes/tui/<theme-name>/`, using stable identities `dark` and `light`. Each
-package must own its semantic terminal palette and its theme-only Textual CSS;
-shared TUI structure, layout, responsive rules, widgets, and scanner meaning
-remain renderer code rather than duplicated theme assets.
+Milestone 26.13 establishes the first deliberate user-managed trust boundary for
+third-party theme packages without yet loading their assets into a renderer.
+Use the resolved XDG user configuration path
+`<user-config>/sdsctl/themes/<interface>/<theme-name>/` as the only managed
+installation root for the existing `web`, `home-assistant`, and `tui`
+interfaces. Built-in package resources remain immutable and authoritative;
+managed packages must not replace or shadow a built-in identity.
 
-Each package must contain a versioned declarative `manifest.json`, a complete
-renderer-neutral `palette.json`, and one local `theme.tcss`. The manifest must
-describe the `tui` interface, stable lowercase kebab-case identity, directory
-identity, human label, deterministic order, palette filename and stable palette
-name, stylesheet filename, and optional existing Textual screen class. A typed
-immutable registry must reject duplicate identities, orders, palette names, or
-screen classes; missing or undeclared files; traversal, absolute, or remote
-asset paths; unknown manifest or palette fields; invalid style values; missing
-or unknown semantic roles; cross-interface packages; and unsupported schema
-versions before exposing either theme.
+Add one host-independent `sdsctl themes` command family with deterministic
+human-readable and JSON inventory, local-directory validation, guarded install
+and replace, and exact confirmed removal. Validation must reuse the existing
+interface-specific schema and asset contracts before any write. Inventory must
+automatically discover interface and package directories under the managed root,
+report valid and invalid entries independently, retain stable ordering, and
+continue reporting built-ins even when one managed package is malformed.
 
-Replace the Python-literal built-in palette definitions with registry-loaded
-packages while preserving `DEFAULT_DARK_THEME`, `DEFAULT_LIGHT_THEME`,
-`ThemePalette`, `ThemeStyle`, `ThemeRole`, their import locations, immutable
-behavior, palette names `default-dark` and `default-light`, and deterministic
-serialization. The Rich CLI `--theme dark|light` option and the Textual `T`
-toggle must still resolve the same singleton palette objects and render the same
-role styles.
+Installation accepts one explicit local unpacked theme directory only. Reject
+URLs, archives, symlinks at every level, special files, traversal or mismatched
+directory identities, undeclared content, unsupported interfaces or schemas,
+oversized packages, collisions with built-in or other managed identities and
+interface-specific registry fields, and a source already inside the managed
+root. Copy bytes into a private same-filesystem staging directory, revalidate
+the staged package, normalize private directory and file permissions, and make
+the validated directory visible with an atomic rename. Existing managed themes
+require an explicit replace option; retain a private rollback directory until
+the replacement and complete post-activation inventory validate, and restore
+the previous package on any failure.
 
-Move only theme-owned Textual colors, backgrounds, and borders out of the TUI
-stylesheet. Keep shared dimensions, padding, scrolling, compact/wide layout,
-visibility, and interaction selectors in the base module. Registry order must
-produce deterministic Textual CSS, the existing `light` screen class must remain
-compatible, and dark remains the default when no explicit palette is supplied.
-Labels, symbols, ordering, focus, keyboard operation, reduced terminal
-capability behavior, and plain-text/JSON output must not depend on color.
+Home Assistant packages contain executable browser JavaScript. Validation and
+inventory may inspect them as data, but installation or replacement must require
+an explicit executable-code trust acknowledgement distinct from ordinary CSS or
+TCSS packages. Do not claim that schema validation makes third-party JavaScript
+safe. Removal must reject built-ins, require the exact `<interface>/<id>`
+confirmation token, use a private same-filesystem tombstone before deletion, and
+leave unrelated packages and files untouched. Invalid managed entries must
+remain discoverable and removable through their exact directory identity so an
+operator always has a recovery path.
 
-Host-independent acceptance must cover registry ordering and immutability,
-manifest/palette/schema/path validation, exact semantic-role completeness,
-duplicate and missing-asset rejection, compatibility object identity, exact
-palette serialization, generated Textual CSS content and ordering, CLI color
-policy, live TUI theme toggling, wheel and source-distribution inclusion,
-installed-wheel resource loading, documentation checks, and the complete
-regression suite. No physical scanner revalidation is required because this is
-an exact presentation-source extraction with no scanner or transport change.
+Host-independent acceptance must cover XDG and explicit path resolution,
+read-only discovery, built-in and managed inventory ordering, malformed-entry
+isolation, every interface schema, collision checks, symlink and special-file
+rejection, size bounds, private modes, staging cleanup, atomic publication,
+replacement rollback under injected failures, exact removal confirmation,
+executable-code acknowledgement, stable JSON, error redaction, concurrent
+lifecycle exclusion, documentation checks, distribution validation, and the
+complete regression suite. No physical scanner validation is required because
+the slice does not change scanner, daemon, transport, or renderer behavior.
 
-Document the TUI package contract and the continued shared use of the two
-semantic palettes by Rich CLI and Textual. Do not enable third-party discovery,
-user-writable theme directories, runtime upload, archive extraction, package
-installation, or new theme selection values in this slice. Do not modify the
-web or Home Assistant registries, add a GUI, add a visual family, change scanner
-fields or controls, add network access or runtime dependencies, or make new
-physical-hardware claims. Third-party lifecycle management and a future desktop
-GUI remain separately bounded work.
+Document the managed directory and package-author workflow, including that
+copying a directory into the managed root by hand makes it discoverable but does
+not bypass validation or activate it. Do not scan arbitrary filesystem paths,
+download packages, extract archives, run package scripts, execute JavaScript,
+load third-party CSS or TCSS, add theme selector values, install Home Assistant
+resources, or change browser/TUI/App startup behavior in this slice. Per-renderer
+activation, update provenance/signatures, remote catalogs, GUI theming, and a
+desktop GUI remain separately bounded work.
 
 ## Deferred hardware validation
 
@@ -600,6 +604,11 @@ is collected.
   versioned packages and one validated immutable registry while retaining
   byte-identical JavaScript, public custom elements, flat installed filenames,
   `/local/sds200/` URLs, manual registration, and App-startup failure isolation.
+- Milestone 26.12 completed the built-in terminal packaging boundary. The exact
+  dark and light semantic palettes and theme-only Textual CSS now live in
+  independently validated `themes/tui/<theme-name>/` packages while preserving
+  compatibility objects, Rich CLI selection, Textual toggling, responsive
+  layout, and deterministic installed-wheel resource loading.
 
 ## Completed milestone groups
 

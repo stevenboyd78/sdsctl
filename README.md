@@ -266,7 +266,30 @@ reconnected without stopping active network audio; see the
 [Textual TUI guide](docs/tui.md). The existing dark and light terminal themes
 are independently packaged under `sds200/themes/tui/<theme-name>/`; validated
 manifests, complete semantic palettes, and theme-only Textual CSS preserve the
-same `--theme` values and `T` toggle without enabling third-party discovery.
+same `--theme` values and `T` toggle.
+
+### Managed third-party themes
+
+Validate, inventory, install, replace, and remove unpacked local theme packages
+with the host-independent lifecycle commands:
+
+```bash
+sdsctl themes validate /absolute/path/to/themes/web/my-theme
+sdsctl themes install /absolute/path/to/themes/web/my-theme
+sdsctl themes list
+sdsctl themes install --replace /absolute/path/to/themes/web/my-theme
+sdsctl themes remove web my-theme --confirm web/my-theme
+```
+
+The default managed root is
+`${XDG_CONFIG_HOME:-~/.config}/sdsctl/themes/<interface>/<theme-name>/` for the
+existing `web`, `home-assistant`, and `tui` interfaces. Home Assistant packages
+contain executable browser JavaScript and additionally require
+`--trust-home-assistant-code` during install or replacement. The lifecycle
+automatically inventories valid and malformed packages independently, but
+Milestone 26.13 does not load managed assets into the web dashboard, TUI, Rich
+CLI, or Home Assistant. See [Theme package management](docs/themes.md) for the
+package-author contract, recovery behavior, JSON output, and trust boundaries.
 
 ### Favorites Workspace editor
 

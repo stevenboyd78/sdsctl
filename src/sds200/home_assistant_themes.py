@@ -37,7 +37,7 @@ _JAVASCRIPT_FILENAME_PATTERN: Final = re.compile(
 
 
 class HomeAssistantThemeError(SDS200Error):
-    """Raised when a built-in Home Assistant theme package is invalid."""
+    """Raised when a Home Assistant theme package is invalid."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -239,6 +239,14 @@ def load_home_assistant_theme_registry(root: Traversable) -> HomeAssistantThemeR
     return HomeAssistantThemeRegistry(themes)
 
 
+def load_home_assistant_theme_package(
+    directory: Traversable,
+) -> HomeAssistantThemeManifest:
+    """Load and validate one Home Assistant theme package directory."""
+
+    return _read_manifest(directory)
+
+
 def built_in_home_assistant_theme_registry() -> HomeAssistantThemeRegistry:
     """Load the exact Home Assistant presentations distributed with sdsctl."""
 
@@ -279,6 +287,7 @@ __all__ = [
     "HomeAssistantThemeManifest",
     "HomeAssistantThemeRegistry",
     "built_in_home_assistant_theme_registry",
+    "load_home_assistant_theme_package",
     "load_home_assistant_theme_registry",
     "read_built_in_home_assistant_theme_module",
 ]

@@ -336,12 +336,14 @@ more expensive effects are disabled in compact layouts.
 
 Milestone 26.10 deliberately exposes built-in resources only. It does not scan
 user-writable directories, extract archives, install packages, accept runtime
-uploads, or execute theme JavaScript or templates. A later third-party lifecycle
-must define an explicit trusted installation source, staging validation,
-collision policy, atomic activation, rollback, removal behavior, and recovery
-path before external packages can enter the registry. Home Assistant and TUI
-themes remain separate renderer adapters under their own interface directories;
-`gui` stays reserved until a desktop renderer exists.
+uploads, or execute theme JavaScript or templates. Milestone 26.13 now provides
+an explicit local-directory lifecycle with staging validation, collision policy,
+rollback, removal, and recovery, but managed CSS does not enter this runtime
+registry yet. A later web-specific activation slice must preserve same-origin
+delivery, safe System fallback, CSP, selector isolation, and accessible shared
+structure. Home Assistant and TUI themes remain separate renderer adapters under
+their own interface directories; `gui` stays reserved until a desktop renderer
+exists.
 
 Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
 real packaged demo application and Google Chrome. All five themes rendered at

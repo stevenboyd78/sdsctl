@@ -112,9 +112,12 @@ the presentation layer continues to honor `NO_COLOR` and `FORCE_COLOR` as
 documented in [Presentation and accessibility](presentation.md).
 
 `theme` accepts `dark` or `light`. Both values resolve the validated built-in
-terminal packages shared by Rich CLI and Textual; Milestone 26.12 does not add a
-third-party discovery path or new configuration values. Logging levels are
-`CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`.
+terminal packages shared by Rich CLI and Textual. Managed third-party packages
+use `<user-config>/sdsctl/themes/<interface>/<theme-name>/`; the location follows
+`XDG_CONFIG_HOME` and can be overridden for one lifecycle invocation with
+`sdsctl themes --root DIRECTORY ...`. Milestone 26.13 inventories but does not
+activate those packages, so it does not add theme configuration values. Logging
+levels are `CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`.
 
 ## Environment examples
 
