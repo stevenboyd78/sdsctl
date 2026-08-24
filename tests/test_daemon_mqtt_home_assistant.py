@@ -99,7 +99,11 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "name": "sds200",
         "support_url": DAEMON_MQTT_HOME_ASSISTANT_SUPPORT_URL,
     }
-    assert payload["availability_topic"] == "radio/sds200/availability"
+    assert payload["availability"] == [
+        {"topic": "radio/sds200/availability"}
+    ]
+    assert "availability_topic" not in payload
+    assert payload["availability_mode"] == "all"
     assert payload["payload_available"] == "online"
     assert payload["payload_not_available"] == "offline"
     assert payload["qos"] == 1
@@ -251,7 +255,11 @@ def test_discovery_honors_configured_prefix_and_qos() -> None:
     assert discovery is not None
     payload = json.loads(discovery.payload)
     assert discovery.topic.startswith("ha/device/sds200_")
-    assert payload["availability_topic"] == "scanner/main/availability"
+    assert payload["availability"] == [
+        {"topic": "scanner/main/availability"}
+    ]
+    assert "availability_topic" not in payload
+    assert payload["availability_mode"] == "all"
     assert payload["qos"] == 2
     assert payload["components"]["channel"]["state_topic"] == (
         "scanner/main/state/radio"

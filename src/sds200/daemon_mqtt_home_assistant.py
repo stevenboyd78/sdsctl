@@ -434,16 +434,13 @@ def build_home_assistant_device_discovery(
         "payload_available": "online",
         "payload_not_available": "offline",
         "qos": config.qos,
-    }
-    if home_assistant.controls_enabled:
-        payload["availability"] = [
+        "availability": [
             {
                 "topic": f"{prefix}/availability",
             }
-        ]
-        payload["availability_mode"] = "all"
-    else:
-        payload["availability_topic"] = f"{prefix}/availability"
+        ],
+        "availability_mode": "all",
+    }
 
     return DaemonMqttHomeAssistantDiscovery(
         topic=(
