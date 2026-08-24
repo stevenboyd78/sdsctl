@@ -525,9 +525,9 @@ See the
 [operational logging](docs/logging.md).
 
 The generic release workflow publishes amd64 and arm64 images for genuine
-matching release tags. v0.21.0 is the first release using that publication path,
-with `theboyd78/sdsctl:0.21.0` as the immutable release image and
-`theboyd78/sdsctl:latest` tracking the newest successfully published release.
+matching release tags. v0.21.0 established that publication path; the current
+v0.22.0 immutable release image is `theboyd78/sdsctl:0.22.0`, and
+`theboyd78/sdsctl:latest` tracks the newest successfully published release.
 Prefer an exact version tag for reproducible deployment. Repository-root Compose
 remains source-built with `build: .` and does not select the published image.
 

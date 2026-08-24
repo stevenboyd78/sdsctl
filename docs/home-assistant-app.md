@@ -555,6 +555,32 @@ That evidence is the historical Milestone 20.11 baseline. The three post-v0.20.1
 Home Assistant slices require one tagged repository-managed acceptance run before
 v0.20.2 release completion.
 
+### v0.22.0 release acceptance gate
+
+After the genuine v0.22.0 tag publishes the amd64, aarch64, and generic
+multi-architecture App images, upgrade or install the repository-managed App and
+record the exact HAOS, Core, Supervisor, Docker, and SDS200 firmware versions.
+The release gate must confirm:
+
+- the App reports 0.22.0 and uses the matching published image without a Local
+  App or development-source ambiguity;
+- all twenty-three fixed MQTT Discovery components are present, including Site,
+  Frequency, Modulation, Service Type, Tone-Out Tone A, and Tone-Out Tone B;
+- both bundled JavaScript modules install at their established `/local/sds200/`
+  URLs and the compact and responsive cards load through their graphical editors;
+- the five responsive-card layouts, three palettes, Card fit, and viewport fit
+  remain available, with the selected viewport layout fully visible without
+  internal scrolling;
+- System, Department, Site, and Channel Hold, Previous Channel, Next Channel,
+  Reconnect Scanner, Ingress state, browser audio, recording, finalized playback,
+  and downloads remain healthy;
+- recordings and card resources persist across an App restart or upgrade; and
+- the App remains the sole daemon, scanner-control, PSI, and RTSP/RTP owner.
+
+Managed third-party Home Assistant theme activation remains an explicit host CLI
+workflow. The App must continue installing only its two bundled modules and must
+not scan or activate the managed XDG theme root automatically.
+
 ### v0.20.2 release acceptance
 
 After the v0.20.2 tag publishes the amd64, aarch64, and generic

@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_16_home_assistant_activation_contract() -> None:
+def test_roadmap_records_milestone_26_17_release_and_milestone_27_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,35 +132,27 @@ def test_roadmap_records_milestone_26_16_home_assistant_activation_contract() ->
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.16 — Explicit Home Assistant theme trust and deployment",
-        "Milestone 26.15 is closed",
-        "Discovery and installation alone must never execute, deploy, or approve",
-        "activation, deactivation, and activation-status operations",
-        "confirm the package's complete current SHA-256 digest",
-        "Built-ins remain owned by the existing App installer",
-        "explicit absolute Home Assistant `www/sds200` target directory",
-        "without following symlinks",
-        "Never import or evaluate JavaScript inside the Python process",
-        "strict, versioned, private activation ledger",
-        "package digest, module digest, installed filename, custom element",
-        "Write the ledger atomically with private permissions",
-        "first activation must refuse to overwrite an unrelated existing filename",
-        "Reapproval after a package replacement",
-        "failed activation must retain the previous target and ledger state",
-        "exact `home-assistant/<id>` confirmation",
-        "Refuse modified, missing, substituted, or symlinked targets",
-        "Block managed-package removal while that identity has an activation record",
-        "current, stale-package, changed-target, missing-target, and invalid-ledger",
-        "Keep Home Assistant resource registration manual",
-        "install only its two bundled byte-identical modules",
-        "operator must explicitly approve each new package digest",
-        "No physical scanner or HAOS validation is required",
-        "Do not automatically activate discovered code",
-        "download packages",
-        "extract archives",
-        "execute JavaScript",
-        "live reload",
-        "GUI theming remains reserved for the future GUI design",
+        "### Milestone 26.17 — v0.22.0 release and post-v0.21 interface closure",
+        "Milestones 26.1 through 26.16 are closed",
+        "release closure rather than another runtime feature slice",
+        "Python package, import version, and Home Assistant App at 0.22.0",
+        "complete static, type, test, documentation, distribution, container",
+        "verify PyPI, the generic amd64/arm64 Docker Hub image",
+        "tagged HAOS gate",
+        "only the genuine matching `v0.22.0` tag",
+        "Do not infer tag, publication, wiki deployment, or release approval",
+        "Milestone 27.1",
+        "screen-kind sensor",
+        "explicit manual layouts",
+        "unknown-mode fallback",
+        "Milestone 27.2",
+        "`GST`, `PWF`, and `GWF` waterfall",
+        "daemon-owned bounded waterfall session",
+        "`GW2` remains deferred",
+        "Milestone 27.3",
+        "240-bin spectrum",
+        "rolling spectrogram",
+        "viewport-fit full-screen behavior without scrolling",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
@@ -247,20 +239,20 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v021_release_documentation_names_first_generic_image() -> None:
+def test_v022_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
     for document in (readme, deployment):
-        assert "v0.21.0" in document
-        assert "theboyd78/sdsctl:0.21.0" in document
+        assert "v0.22.0" in document
+        assert "theboyd78/sdsctl:0.22.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.21.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.21.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.21.0" in installation
+    assert "## Upgrade to v0.22.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.22.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.22.0" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built"
         in installation

@@ -161,6 +161,39 @@ before changing network or MQTT settings.
 The Local App workflow under `/addons` remains available for development but is
 not required for normal release installation.
 
+## Upgrade to v0.22.0
+
+v0.22.0 freezes Milestones 26.1 through 26.16: authenticated direct-TLS LAN
+dashboard access, the capability and field-parity audit, the local interactive
+Favorites Workspace editor, complete web snapshot presentation, bounded battery
+lifecycle handling, expanded Home Assistant state and responsive scanner-style
+cards, exact semantic controls, Tone-Out parity, and modular built-in and
+managed themes for web, Home Assistant, and terminal interfaces.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the Python package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.22.0"
+sdsctl --version
+```
+
+For the generic container, prefer the immutable exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.22.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release, but
+the exact version tag is recommended for reproducible deployments.
+Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built and do
+not switch automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.22.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, and bundled card custom elements. Upgrade the repository-managed App
+through Home Assistant after the matching release images have published.
+
 ## Upgrade to v0.21.0
 
 v0.21.0 is the first release after v0.20.2 and freezes the completed Milestones

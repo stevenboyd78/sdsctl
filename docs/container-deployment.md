@@ -40,8 +40,8 @@ docker build --tag sds200-daemon .
 ```
 
 Starting with v0.21.0, a genuine matching release tag publishes standalone
-images for `linux/amd64` and `linux/arm64`. The first immutable generic release
-image is `theboyd78/sdsctl:0.21.0`; `theboyd78/sdsctl:latest` follows the newest
+images for `linux/amd64` and `linux/arm64`. The current v0.22.0 immutable generic
+release image is `theboyd78/sdsctl:0.22.0`; `theboyd78/sdsctl:latest` follows the newest
 successfully published release. Pull an exact published version for a
 reproducible deployment:
 
