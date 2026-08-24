@@ -317,7 +317,8 @@ def build_home_assistant_device_discovery(
                 {
                     "topic": radio_topic,
                     "value_template": (
-                        f"{{{{ 'online' if value_json.{key} is string "
+                        f"{{{{ 'online' if value_json.{key} is defined "
+                        f"and value_json.{key} is not none "
                         f"and value_json.{key} | length > 0 "
                         "else 'offline' }}}}"
                     ),
