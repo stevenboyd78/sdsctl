@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_9_tone_out_parity_contract() -> None:
+def test_roadmap_records_milestone_26_10_modular_web_theme_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,31 +132,38 @@ def test_roadmap_records_milestone_26_9_tone_out_parity_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.9 — Home Assistant Tone-Out field parity",
-        "Milestone 26.8 is closed",
-        "`ToneOutChannel` `ToneA` and `ToneB` attributes",
-        "two fixed, read-only configured Tone A and configured Tone B sensor components",
-        "without adding a scanner query, state owner, MQTT state topic, or control operation",
-        "stable deterministic component and unique IDs",
-        "existing canonical radio-state topic",
-        "current field availability",
-        "entity identity remains stable across mode changes",
-        "Preserve the scanner-reported configured tone text",
-        "detected `SAD`",
-        "compact and SDS200 Display card configuration contracts",
-        "Existing fourteen-entity YAML",
-        "A scanner-reported numeric zero tone",
-        "presented as `Detect`",
-        "nonzero and unrecognized nonempty scanner text remains visible",
-        "zero detection presentation",
-        "existing ban on card-owned scanner, MQTT, Home Assistant service, or network transports",
-        "one configured nonzero tone and one zero-as-detection tone",
-        "retain one daemon scanner owner",
-        "Do not add modular theme loading",
-        "new Home Assistant controls or MQTT state topics",
-        "`themes/<interface>/<theme-name>/`",
-        "new runtime dependencies",
-        "physical SDS150 claims",
+        "### Milestone 26.10 — Modular web-theme packaging foundation",
+        "Milestone 26.9 is closed",
+        "`themes/web/<theme-name>/`",
+        "versioned declarative manifest",
+        "typed, deterministic registry",
+        "stable lowercase kebab-case identifier",
+        "directory identity",
+        "local stylesheet entry point",
+        "color-scheme metadata",
+        "Reject duplicate identities",
+        "traversal or absolute paths",
+        "remote URLs",
+        "executable theme payloads",
+        "cross-interface assets",
+        "Replace the hard-coded web-theme list and colors",
+        "pre-paint browser-local bootstrap",
+        "fall back to System before first paint",
+        "Preserve the existing local-storage key",
+        "current accessible shared HTML structure",
+        "1920x1080, 1366x768, 800x480",
+        "Decorative layers remain ARIA-hidden and pointer-inert",
+        "theme-owned selectors and design tokens belong to their theme package",
+        "registry ordering, immutability",
+        "wheel/sdist inclusion",
+        "stored-selection compatibility and fallback",
+        "deterministic browser captures for all five themes",
+        "future installation/removal trust boundary",
+        "do not enable third-party discovery",
+        "Do not add Home Assistant or TUI theme loaders",
+        "theme-owned JavaScript",
+        "runtime dependencies",
+        "physical hardware claims",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
@@ -174,7 +181,7 @@ def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
     )[1].split("## Completed milestone groups", 1)[0]
     normalized_group = " ".join(milestone_group.split())
 
-    assert "### Milestone 26.1" not in active_milestone
+    assert "### Milestone 26.1 —" not in active_milestone
     for required in (
         "Milestone 26.1 completed explicit authenticated direct-TLS LAN access",
         "loopback-only operation as the default",
