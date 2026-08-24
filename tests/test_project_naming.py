@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_13_theme_lifecycle_contract() -> None:
+def test_roadmap_records_milestone_26_14_managed_web_activation_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,40 +132,37 @@ def test_roadmap_records_milestone_26_13_theme_lifecycle_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.13 — Managed third-party theme discovery and lifecycle foundation",
-        "Milestone 26.12 is closed",
-        "`<user-config>/sdsctl/themes/<interface>/<theme-name>/`",
-        "`web`, `home-assistant`, and `tui`",
-        "must not replace or shadow a built-in identity",
-        "`sdsctl themes` command family",
-        "human-readable and JSON inventory",
-        "local-directory validation",
-        "guarded install and replace",
-        "exact confirmed removal",
-        "report valid and invalid entries independently",
-        "one explicit local unpacked theme directory only",
-        "Reject URLs, archives, symlinks at every level, special files",
-        "oversized packages",
-        "source already inside the managed root",
-        "private same-filesystem staging directory",
-        "atomic rename",
-        "private rollback directory",
-        "restore the previous package on any failure",
-        "Home Assistant packages contain executable browser JavaScript",
-        "explicit executable-code trust acknowledgement",
-        "schema validation makes third-party JavaScript safe",
-        "exact `<interface>/<id>` confirmation token",
-        "private same-filesystem tombstone",
-        "Invalid managed entries must remain discoverable and removable",
-        "concurrent lifecycle exclusion",
+        "### Milestone 26.14 — Managed web-theme activation and safe CSS delivery",
+        "Milestone 26.13 is closed",
+        "activates only valid managed `web` packages",
+        "discover the managed theme root once",
+        "deterministic immutable runtime registry",
+        "Built-ins remain authoritative",
+        "invalid web, Home Assistant, or TUI entries must not prevent",
+        "without an additional enable command or configuration value",
+        "`sdsctl.web.theme` local-storage key",
+        "fall back to System",
+        "only after a new web process starts",
+        "`/assets/themes/<id>/<stylesheet>` route",
+        "real nonsymlink paths beneath the exact managed `web` root",
+        "verify its startup digest before delivery",
+        "return not found on removal, replacement, symlink substitution, mutation",
+        "Do not serve manifests, undeclared files, arbitrary paths",
+        "Content Security Policy",
+        "inspect third-party CSS before installation",
+        "resolved XDG configuration theme root by default",
+        "built-in-only unless an explicit absolute managed theme root is supplied",
+        "absent root is an ordinary built-in-only startup",
+        "stored-selection fallback",
+        "authenticated and Ingress delivery",
+        "digest enforcement",
         "No physical scanner validation is required",
-        "does not bypass validation or activate it",
-        "Do not scan arbitrary filesystem paths",
+        "Do not activate managed Home Assistant JavaScript",
+        "TUI palettes or Textual CSS",
         "download packages",
         "extract archives",
-        "load third-party CSS or TCSS",
-        "Per-renderer activation",
-        "GUI theming",
+        "live reload",
+        "GUI theming remains reserved",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

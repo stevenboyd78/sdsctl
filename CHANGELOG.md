@@ -8,6 +8,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 26.14 automatic managed web-theme activation. Each web process
+  combines built-ins with valid managed `web` packages discovered under the
+  resolved XDG theme root, adds them to the existing picker and pre-paint
+  bootstrap, and serves only the declared CSS through the same-origin theme
+  route. Managed stylesheets stay disabled until selected. Delivery reopens the
+  exact nonsymlink directory chain, verifies the complete startup package digest
+  and directory identity, and fails closed after mutation, replacement, removal,
+  or substitution while preserving CSP, no-store, `nosniff`, System fallback,
+  authentication, Ingress, and scanner-ownership boundaries.
 - Add the Milestone 26.13 managed third-party theme discovery and lifecycle
   foundation. The new `sdsctl themes` command family validates, inventories,
   privately stages, installs or replaces with rollback, and exactly removes
@@ -16,7 +25,7 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   cannot be shadowed or removed, symlinks and special or oversized content are
   rejected, concurrent mutation is excluded, and Home Assistant JavaScript
   requires an explicit executable-code trust acknowledgement. Managed packages
-  are discoverable but deliberately not activated in a renderer yet.
+  are discoverable; activation remains separately bounded by renderer.
 - Add the Milestone 26.12 modular TUI theme packaging foundation. The existing
   dark and light terminal presentations now live under
   `themes/tui/<theme-name>/` with versioned manifests, complete declarative

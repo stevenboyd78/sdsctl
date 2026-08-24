@@ -7,6 +7,11 @@
   const THEMES_BY_ID = new Map(
     THEME_DOCUMENTS.map((theme) => [theme.id, theme]),
   );
+  const MANAGED_THEME_LINKS = new Map(
+    Array.from(
+      document.querySelectorAll("link[data-sdsctl-managed-theme]"),
+    ).map((link) => [link.dataset.sdsctlManagedTheme, link]),
+  );
   const systemColorQuery =
     typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-color-scheme: dark)")
@@ -45,9 +50,16 @@
     }
   }
 
+  function updateManagedStylesheet(theme) {
+    MANAGED_THEME_LINKS.forEach((link, identifier) => {
+      link.media = identifier === theme ? "all" : "not all";
+    });
+  }
+
   function applyTheme(value, persist) {
     const theme = normalizeTheme(value);
     activeTheme = theme;
+    updateManagedStylesheet(theme);
     document.documentElement.dataset.theme = theme;
     updateMetadata(theme);
 

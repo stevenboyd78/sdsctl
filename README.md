@@ -286,10 +286,12 @@ The default managed root is
 existing `web`, `home-assistant`, and `tui` interfaces. Home Assistant packages
 contain executable browser JavaScript and additionally require
 `--trust-home-assistant-code` during install or replacement. The lifecycle
-automatically inventories valid and malformed packages independently, but
-Milestone 26.13 does not load managed assets into the web dashboard, TUI, Rich
-CLI, or Home Assistant. See [Theme package management](docs/themes.md) for the
-package-author contract, recovery behavior, JSON output, and trust boundaries.
+automatically inventories valid and malformed packages independently. Valid
+managed web themes are automatically available to a newly started `sdsctl web`
+process and load only when selected in its existing browser-local picker.
+Managed TUI, Rich CLI, and Home Assistant packages remain inactive. See
+[Theme package management](docs/themes.md) for the package-author contract,
+recovery behavior, activation details, JSON output, and trust boundaries.
 
 ### Favorites Workspace editor
 

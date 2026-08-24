@@ -354,8 +354,9 @@ module source, custom-element identity, installed filename, and public resource
 URL. Invalid or undeclared package content is rejected before installation.
 This is a built-in packaging boundary. Milestone 26.13 can validate and manage
 third-party Home Assistant packages only after an explicit executable-code trust
-acknowledgement, but the App does not install or execute those managed modules
-yet. A later App-specific activation boundary must define safe resource
+acknowledgement. Milestone 26.14 activates web CSS only; the App does not install
+or execute managed Home Assistant modules. A later App-specific activation
+boundary must define safe resource
 synchronization and stale-module removal without weakening startup isolation.
 
 Register each URL once in **Settings > Dashboards > Resources** as a

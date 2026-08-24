@@ -11,71 +11,76 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.13 — Managed third-party theme discovery and lifecycle foundation
+### Milestone 26.14 — Managed web-theme activation and safe CSS delivery
 
-Milestone 26.12 is closed with the existing dark and light terminal
-presentations independently packaged under `themes/tui/<theme-name>/`.
-Versioned manifests, complete semantic palettes, theme-only Textual CSS, and one
-validated immutable registry now drive Rich CLI and Textual presentation while
-preserving the public compatibility objects, exact palette serialization,
-selection behavior, responsive layout, scanner meaning, and package artifacts.
+Milestone 26.13 is closed with a managed XDG theme hierarchy, automatic
+inventory, local-directory validation, guarded installation and replacement,
+exact confirmed removal, malformed-package isolation, private atomic staging,
+rollback and interrupted-operation recovery, and the separate executable-code
+trust acknowledgement required for Home Assistant JavaScript. Managed assets
+remain inactive at that milestone's boundary.
 
-Milestone 26.13 establishes the first deliberate user-managed trust boundary for
-third-party theme packages without yet loading their assets into a renderer.
-Use the resolved XDG user configuration path
-`<user-config>/sdsctl/themes/<interface>/<theme-name>/` as the only managed
-installation root for the existing `web`, `home-assistant`, and `tui`
-interfaces. Built-in package resources remain immutable and authoritative;
-managed packages must not replace or shadow a built-in identity.
+Milestone 26.14 activates only valid managed `web` packages for the existing
+browser dashboard. At each web-process start, resolve the normal configuration
+paths, discover the managed theme root once, and combine the built-in web
+packages with valid managed web manifests into one deterministic immutable
+runtime registry. Built-ins remain authoritative and preserve their exact IDs,
+ordering, URLs, stylesheets, and browser behavior. Managed packages follow the
+same schema and collision rules established by the lifecycle; invalid web,
+Home Assistant, or TUI entries must not prevent the dashboard from starting or
+hide any valid web theme.
 
-Add one host-independent `sdsctl themes` command family with deterministic
-human-readable and JSON inventory, local-directory validation, guarded install
-and replace, and exact confirmed removal. Validation must reuse the existing
-interface-specific schema and asset contracts before any write. Inventory must
-automatically discover interface and package directories under the managed root,
-report valid and invalid entries independently, retain stable ordering, and
-continue reporting built-ins even when one managed package is malformed.
+Add valid managed web themes automatically to the existing picker and browser
+bootstrap metadata without an additional enable command or configuration value.
+Preserve the `sdsctl.web.theme` local-storage key and existing built-in
+selections. A missing, removed, invalid, or unavailable stored theme must fall
+back to System without an unstyled first paint, script error, or loss of scanner
+state and controls. Changes to the managed directory become active only after a
+new web process starts; do not add filesystem watching or live registry reload.
 
-Installation accepts one explicit local unpacked theme directory only. Reject
-URLs, archives, symlinks at every level, special files, traversal or mismatched
-directory identities, undeclared content, unsupported interfaces or schemas,
-oversized packages, collisions with built-in or other managed identities and
-interface-specific registry fields, and a source already inside the managed
-root. Copy bytes into a private same-filesystem staging directory, revalidate
-the staged package, normalize private directory and file permissions, and make
-the validated directory visible with an atomic rename. Existing managed themes
-require an explicit replace option; retain a private rollback directory until
-the replacement and complete post-activation inventory validate, and restore
-the previous package on any failure.
+Serve one managed theme only through the existing same-origin
+`/assets/themes/<id>/<stylesheet>` route. Resolve the asset from the validated
+package identity and manifest, reject every other filename, and recheck that the
+package directory and stylesheet are real nonsymlink paths beneath the exact
+managed `web` root before reading. Require a regular CSS file within the package
+size bound, verify its startup digest before delivery, and return not found on
+removal, replacement, symlink substitution, mutation, or read failure. Do not
+serve manifests, undeclared files, arbitrary paths, directories, special files,
+or assets from the Home Assistant and TUI interfaces.
 
-Home Assistant packages contain executable browser JavaScript. Validation and
-inventory may inspect them as data, but installation or replacement must require
-an explicit executable-code trust acknowledgement distinct from ordinary CSS or
-TCSS packages. Do not claim that schema validation makes third-party JavaScript
-safe. Removal must reject built-ins, require the exact `<interface>/<id>`
-confirmation token, use a private same-filesystem tombstone before deletion, and
-leave unrelated packages and files untouched. Invalid managed entries must
-remain discoverable and removable through their exact directory identity so an
-operator always has a recovery path.
+Keep the existing restrictive dashboard Content Security Policy, `nosniff`,
+no-store response policy, authentication and Home Assistant Ingress middleware,
+same-origin URL behavior, HTML escaping, metadata-only JavaScript bootstrap,
+accessible shared DOM, reduced-motion contract, and System fallback. CSS is
+presentation-capable and may make same-origin requests allowed by the existing
+CSP; documentation must tell operators to inspect third-party CSS before
+installation and must not describe schema validation as a complete safety
+review.
 
-Host-independent acceptance must cover XDG and explicit path resolution,
-read-only discovery, built-in and managed inventory ordering, malformed-entry
-isolation, every interface schema, collision checks, symlink and special-file
-rejection, size bounds, private modes, staging cleanup, atomic publication,
-replacement rollback under injected failures, exact removal confirmation,
-executable-code acknowledgement, stable JSON, error redaction, concurrent
-lifecycle exclusion, documentation checks, distribution validation, and the
-complete regression suite. No physical scanner validation is required because
-the slice does not change scanner, daemon, transport, or renderer behavior.
+The `sdsctl web` command uses the resolved XDG configuration theme root by
+default. Programmatic application construction must remain deterministic and
+built-in-only unless an explicit absolute managed theme root is supplied, so
+tests and embedders do not unexpectedly inspect user state. An invalid root
+type or relative path is a construction error; an absent root is an ordinary
+built-in-only startup.
 
-Document the managed directory and package-author workflow, including that
-copying a directory into the managed root by hand makes it discoverable but does
-not bypass validation or activate it. Do not scan arbitrary filesystem paths,
-download packages, extract archives, run package scripts, execute JavaScript,
-load third-party CSS or TCSS, add theme selector values, install Home Assistant
-resources, or change browser/TUI/App startup behavior in this slice. Per-renderer
-activation, update provenance/signatures, remote catalogs, GUI theming, and a
-desktop GUI remain separately bounded work.
+Host-independent acceptance must cover XDG wiring, built-in compatibility,
+deterministic merged ordering, picker and bootstrap inclusion, malformed-entry
+isolation, absent-root fallback, stored-selection fallback, authenticated and
+Ingress delivery, exact MIME and security headers, path and filename rejection,
+symlink and special-file substitution, post-start removal/replacement/mutation,
+digest enforcement, concurrent lifecycle replacement outcomes, no daemon or
+scanner access for static assets, documentation checks, distribution validation,
+and the complete regression suite. No physical scanner validation is required
+because this slice changes only browser theme discovery and CSS delivery.
+
+Do not activate managed Home Assistant JavaScript, TUI palettes or Textual CSS;
+download packages; extract archives; execute theme code; add remote catalogs,
+signatures, provenance updates, or live reload; change scanner, daemon,
+transport, audio, recording, control, authentication, or container exposure
+semantics; or introduce a desktop GUI. Home Assistant and TUI activation remain
+separate renderer milestones, and GUI theming remains reserved for the future
+GUI design.
 
 ## Deferred hardware validation
 
@@ -609,6 +614,11 @@ is collected.
   independently validated `themes/tui/<theme-name>/` packages while preserving
   compatibility objects, Rich CLI selection, Textual toggling, responsive
   layout, and deterministic installed-wheel resource loading.
+- Milestone 26.13 completed the managed third-party theme lifecycle. The XDG
+  interface-scoped hierarchy now has automatic inventory, schema reuse,
+  malformed-entry isolation, guarded install and replacement, exact confirmed
+  removal, private atomic staging, rollback and recovery, concurrent mutation
+  exclusion, and explicit trust acknowledgement for Home Assistant JavaScript.
 
 ## Completed milestone groups
 

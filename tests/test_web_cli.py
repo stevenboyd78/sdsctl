@@ -278,6 +278,7 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
     captured_event_factories: list[Callable[[], object]] = []
     captured_pcmu_factories: list[Callable[[], object]] = []
     captured_recording_file_factories: list[Callable[[], object]] = []
+    captured_theme_roots: list[Path] = []
     app = object()
     captured_ingress_modes: list[bool] = []
     server_calls: list[tuple[object, str, int, bool, bool]] = []
@@ -290,8 +291,11 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         *,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
     ) -> object:
         assert lan_authentication is None
+        assert managed_theme_root is not None
+        captured_theme_roots.append(managed_theme_root)
         captured_api_factories.append(api_client_factory)
         captured_event_factories.append(event_client_factory)
         captured_pcmu_factories.append(pcmu_client_factory)
@@ -376,12 +380,13 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
             "8123",
             "--no-access-log",
         ],
-        environ={},
+        environ={"XDG_CONFIG_HOME": str(tmp_path / "config")},
     )
 
     assert result == 0
     assert server_calls == [(app, "127.0.0.1", 8123, False, False)]
     assert captured_ingress_modes == [False]
+    assert captured_theme_roots == [tmp_path / "config" / "sdsctl" / "themes"]
     assert len(captured_api_factories) == 1
     assert len(captured_event_factories) == 1
     assert len(captured_pcmu_factories) == 1
@@ -437,6 +442,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
         *,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
     ) -> object:
         del (
             api_client_factory,
@@ -445,6 +451,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
             recording_file_client_factory,
         )
         assert lan_authentication is None
+        assert managed_theme_root is not None
         create_calls.append(home_assistant_ingress)
         return app
 
@@ -549,9 +556,11 @@ def test_web_cli_container_exposure_uses_wildcard_without_ingress(
         *args: object,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
     ) -> object:
         del args
         assert lan_authentication is None
+        assert managed_theme_root is not None
         create_calls.append(home_assistant_ingress)
         return object()
 
@@ -615,10 +624,12 @@ def test_web_cli_authenticated_lan_resolves_secret_and_configures_tls(
         *args: object,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
     ) -> object:
         del args
         assert home_assistant_ingress is False
         assert lan_authentication is not None
+        assert managed_theme_root is not None
         authentications.append(lan_authentication)
         return app
 
