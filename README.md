@@ -271,8 +271,8 @@ selected by ID with `--theme`; pressing `T` from one returns to built-in dark.
 
 ### Managed third-party themes
 
-Validate, inventory, install, replace, and remove unpacked local theme packages
-with the host-independent lifecycle commands:
+Validate, inventory, install, replace, explicitly activate, and remove unpacked
+local theme packages with the host-independent lifecycle commands:
 
 ```bash
 sdsctl themes validate /absolute/path/to/themes/web/my-theme
@@ -291,8 +291,10 @@ automatically inventories valid and malformed packages independently. Valid
 managed web themes are automatically available to a newly started `sdsctl web`
 process and load only when selected in its existing browser-local picker.
 Valid managed TUI palettes are available to Rich `scanner-info` and Textual on
-the next command start when selected by ID. Managed Home Assistant packages
-remain inactive. See
+the next command start when selected by ID. Managed Home Assistant packages stay
+inactive until their exact digest is explicitly approved and deployed to an
+operator-selected `www/sds200` directory; resource registration remains manual.
+See
 [Theme package management](docs/themes.md) for the package-author contract,
 recovery behavior, activation details, JSON output, and trust boundaries.
 

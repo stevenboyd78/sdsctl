@@ -783,6 +783,12 @@ def remove_theme_package(
         interface_root = managed_root / normalized_interface
         _prepare_directory(interface_root)
         _recover_interface(interface_root)
+        if normalized_interface == "home-assistant":
+            from .home_assistant_theme_activation import (
+                ensure_home_assistant_theme_inactive,
+            )
+
+            ensure_home_assistant_theme_inactive(managed_root, normalized_identifier)
         target = interface_root / normalized_identifier
         tombstone = interface_root / f"{_REMOVE_PREFIX}{normalized_identifier}"
         if not target.exists():

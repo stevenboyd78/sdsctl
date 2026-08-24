@@ -2,8 +2,8 @@
 
 Milestone 26.13 provides a local managed lifecycle for third-party theme
 packages. Milestones 26.14 and 26.15 consume that inventory for web CSS and
-terminal palettes and TCSS respectively. Executable Home Assistant JavaScript
-retains a separate activation and fallback boundary.
+terminal palettes and TCSS respectively. Milestone 26.16 adds explicit,
+digest-pinned deployment for executable Home Assistant JavaScript.
 
 ## Managed directory
 
@@ -80,6 +80,10 @@ sdsctl themes install \
   /absolute/path/to/themes/home-assistant/my-card
 ```
 
+Installation makes the package discoverable but does not deploy or approve its
+module. Replacing an active package leaves the deployed bytes unchanged and
+marks its activation stale until the new complete package digest is approved.
+
 ## Remove and recover
 
 Removal requires the exact interface and identity twice so an accidental broad
@@ -92,7 +96,9 @@ sdsctl themes remove web my-theme --confirm web/my-theme
 The operation first renames only that managed directory to a private tombstone,
 then deletes it. Built-ins are never valid removal targets. An invalid managed
 directory can still be removed by its valid directory identity, preserving a
-recovery path when its manifest cannot be parsed.
+recovery path when its manifest cannot be parsed. A Home Assistant package with
+any activation record cannot be removed until every target is explicitly
+deactivated.
 
 ## Web activation
 
@@ -144,6 +150,62 @@ An unavailable selected ID fails with the valid startup IDs; malformed managed
 entries remain isolated. `T` from a managed Textual theme returns to built-in
 dark, after which dark/light toggling remains unchanged.
 
-Managed Home Assistant modules remain discoverable but inactive. The lifecycle
-does not download themes, extract archives, execute scripts, or install Home
-Assistant resources. GUI theming remains reserved for the future GUI design.
+## Home Assistant activation
+
+First inspect the managed package and copy its complete `sha256` value:
+
+```bash
+sdsctl themes list
+```
+
+After reviewing all package files, approve that exact digest and deploy only its
+declared module to an existing absolute Home Assistant `www/sds200` directory:
+
+```bash
+sdsctl themes activate home-assistant my-card \
+  --target-directory /homeassistant/www/sds200 \
+  --confirm-sha256 <sha256-from-the-current-inventory> \
+  --trust-home-assistant-code
+```
+
+The activation command securely reopens the managed package without following
+symlinks, verifies its complete digest, and never evaluates JavaScript. It
+atomically installs the module with mode `0644` and records the exact package,
+module, manifest fields, and target directory in a private ledger under the
+managed root. A new activation never overwrites unrelated target content. A
+replacement is deployed only when the current target still matches the prior
+approved module digest, so an operator-modified file is left untouched.
+
+Inspect all activation records without contacting Home Assistant:
+
+```bash
+sdsctl themes activations
+sdsctl themes activations --json
+```
+
+Each record reports `current`, `stale-package`, `changed-target`, or
+`missing-target`; an unsafe or malformed ledger reports `invalid-ledger`.
+Package install, manual placement, replacement, and discovery never update the
+deployed module automatically.
+
+Deactivation requires the same exact target directory and identity confirmation:
+
+```bash
+sdsctl themes deactivate home-assistant my-card \
+  --target-directory /homeassistant/www/sds200 \
+  --confirm home-assistant/my-card
+```
+
+Only the ledger-pinned filename with the exact approved module digest is
+removed. Modified, missing, symlinked, or substituted targets fail closed.
+Unrelated files and activation records are preserved.
+
+Register `/local/sds200/<declared-filename>.js` as a JavaScript module resource
+in Home Assistant manually. These commands do not edit YAML, `.storage`,
+dashboards, Lovelace resources, App options, or Home Assistant Core state. The
+Home Assistant App continues to install only the two bundled first-party cards;
+it does not scan or activate the user-writable managed theme directory.
+
+The lifecycle does not download themes, extract archives, execute scripts, or
+install Home Assistant resources automatically. GUI theming remains reserved
+for the future GUI design.
