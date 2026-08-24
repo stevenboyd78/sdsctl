@@ -11,84 +11,60 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.16 — Explicit Home Assistant theme trust and deployment
+### Milestone 26.17 — v0.22.0 release and post-v0.21 interface closure
 
-Milestone 26.15 is closed with automatic managed terminal-theme discovery,
-immutable startup registration, complete semantic-palette selection, strictly
-scoped presentation-only TCSS, command-line, environment, and configuration
-selection, actionable pre-scanner failure, unchanged plain-text meaning, and the
-exact built-in dark fallback. The built-in terminal themes and all scanner,
-daemon, control, audio, and responsive-layout boundaries remain authoritative.
+Milestones 26.1 through 26.16 are closed. Together they establish authenticated
+direct-TLS LAN dashboard access, the evidence-backed capability and field-parity
+audit, the local interactive Favorites Workspace editor, complete web snapshot
+presentation, bounded battery lifecycle handling, expanded Home Assistant state
+and scanner-style cards, exact semantic controls, and modular built-in and
+managed third-party themes across web, Home Assistant, and terminal interfaces.
 
-Milestone 26.16 establishes the higher-trust activation boundary for managed
-`home-assistant` packages. Discovery and installation alone must never execute,
-deploy, or approve third-party JavaScript. Add explicit activation, deactivation,
-and activation-status operations under `sdsctl themes`. Activation must resolve
-one valid managed Home Assistant package from the exact managed root, require
-the existing executable-code trust acknowledgement, and require the operator to
-confirm the package's complete current SHA-256 digest. Built-ins remain owned by
-the existing App installer and are not valid managed activation targets.
+Milestone 26.17 is release closure rather than another runtime feature slice.
+Synchronize the Python package, import version, and Home Assistant App at
+0.22.0; freeze both accumulated changelogs; update installation and release
+documentation; and run the complete static, type, test, documentation,
+distribution, container, and release-contract validation before any release tag
+exists. Preserve compatibility-sensitive Python, Home Assistant, MQTT, image,
+and custom-element identities.
 
-Deploy only the manifest-declared module to an explicit absolute Home Assistant
-`www/sds200` target directory. Securely reopen the managed root, interface,
-package, manifest, and module without following symlinks; require the original
-package identity and complete confirmed digest; and read only regular files
-within the existing package bounds. Refuse missing, malformed, colliding,
-changed, replaced, manually substituted, or undeclared content. Never import or
-evaluate JavaScript inside the Python process.
+The release must retain the physical SDS200 and Home Assistant OS evidence
+already recorded for authenticated LAN sessions, responsive cards, Tone-Out
+fields, exact hold controls, and reversible volume and squelch. After the genuine
+matching tag publishes, verify PyPI, the generic amd64/arm64 Docker Hub image,
+the amd64/arm64 Home Assistant images and manifest, clean Python installation,
+and repository-managed Home Assistant upgrade. The tagged HAOS gate must cover
+both bundled cards, all fixed entities, Ingress state and controls, browser
+audio, recording persistence, App restart, and the unchanged single scanner
+owner.
 
-Record each successful activation in one strict, versioned, private activation
-ledger beneath the managed root. Pin the interface, package ID, package digest,
-module digest, installed filename, custom element, resource URL, and exact
-absolute target directory. Write the ledger atomically with private permissions
-and reject symlinks, special files, unknown fields, duplicate target filenames,
-duplicate custom elements, unsupported versions, and records outside the exact
-managed identity. Manual package placement and the install-time trust flag do
-not create a ledger entry.
+Publication remains tag-gated. Pull requests, `main` pushes, and manual workflow
+dispatches may build and validate images, but only the genuine matching
+`v0.22.0` tag may publish the Python distribution and release images. Wait for
+all publication workflows and public artifact checks before creating the GitHub
+Release. Do not infer tag, publication, wiki deployment, or release approval
+from development or pull-request approval.
 
-Installation into `www/sds200` must preserve unrelated files, refuse symlinked
-directory components or targets, use a same-directory regular-file staging
-write, `fsync`, atomic replacement, mode `0644`, and post-write byte and digest
-verification. A first activation must refuse to overwrite an unrelated existing
-filename. Reapproval after a package replacement may update only a target that
-still exactly matches its prior ledger-pinned module; changed target content
-must fail closed and remain untouched. A failed activation must retain the
-previous target and ledger state.
+The next feature sequence is Milestone 27 and begins only after this release
+closure is merged and published:
 
-Deactivation must require the same explicit target directory and exact
-`home-assistant/<id>` confirmation. Remove only a target whose filename and
-content digest still match the ledger, then remove that one ledger record while
-preserving every unrelated activation and file. Refuse modified, missing,
-substituted, or symlinked targets rather than deleting uncertain content. Block
-managed-package removal while that identity has an activation record, directing
-the operator to deactivate first. Activation status must distinguish current,
-stale-package, changed-target, missing-target, and invalid-ledger states without
-executing code or contacting Home Assistant.
-
-Keep Home Assistant resource registration manual. Do not edit YAML, `.storage`,
-dashboards, Lovelace resources, App options, or Home Assistant Core state. The
-Home Assistant App continues to install only its two bundled byte-identical
-modules and must not scan user-writable managed directories automatically.
-Package replacement, installation, or discovery does not alter deployed code;
-the operator must explicitly approve each new package digest.
-
-Host-independent acceptance must cover XDG and explicit-root wiring, exact
-digest confirmation, secure descriptor-relative package reads, private atomic
-ledger creation and replacement, first activation and idempotence, explicit
-reapproval, collision isolation, rollback on target or ledger failure, symlink
-and special-file rejection, concurrent lifecycle exclusion, safe deactivation,
-active-package removal refusal, JSON and human status output, unchanged built-in
-App installation, documentation checks, distribution validation, and the
-complete regression suite. No physical scanner or HAOS validation is required
-because this slice copies operator-approved presentation modules without
-changing first-party cards or Home Assistant integration behavior.
-
-Do not automatically activate discovered code; download packages; extract
-archives; execute JavaScript; add remote catalogs, signatures, provenance
-services, or live reload; change web or terminal theme activation; change
-scanner, daemon, transport, audio, recording, control, authentication, Ingress,
-or container exposure semantics; or introduce a desktop GUI. GUI theming remains
-reserved for the future GUI design.
+- Milestone 27.1 will extend the existing renderer-neutral screen classifier
+  with evidence-backed adaptive presentation profiles. It will expose one fixed
+  read-only Home Assistant screen-kind sensor, add an opt-in automatic card
+  layout, and let web and terminal renderers select mode-relevant content while
+  preserving explicit manual layouts, complete-detail access, accessibility,
+  unknown-mode fallback, and the daemon as sole scanner owner.
+- Milestone 27.2 will physically qualify `GST`, `PWF`, and `GWF` waterfall
+  lifecycle, payload, cadence, error, disconnect, and restoration behavior, then
+  add one daemon-owned bounded waterfall session and local fanout contract.
+  `GW2` remains deferred unless captures establish an unambiguous binary framing
+  and transport boundary.
+- Milestone 27.3 will add a responsive, theme-aware web waterfall workspace over
+  that daemon service: a 240-bin spectrum, rolling spectrogram, frequency scale,
+  tuned marker, max hold, loss telemetry, accessible summary, and viewport-fit
+  full-screen behavior without scrolling. Scanner tuning, span, step, presets,
+  Home Assistant high-rate rendering, and terminal high-rate rendering remain
+  separately gated on protocol and restoration evidence.
 
 ## Deferred hardware validation
 
@@ -627,6 +603,34 @@ is collected.
   malformed-entry isolation, guarded install and replacement, exact confirmed
   removal, private atomic staging, rollback and recovery, concurrent mutation
   exclusion, and explicit trust acknowledgement for Home Assistant JavaScript.
+- Milestone 26.14 completed automatic managed web-theme activation. Valid
+  managed CSS packages join the existing browser picker and pre-paint bootstrap,
+  remain disabled until selected, and are served only through a same-origin,
+  startup-digest-pinned route that fails closed after package mutation or
+  substitution.
+- Milestone 26.15 completed automatic managed terminal-theme activation. Valid
+  managed semantic palettes and presentation-only TCSS can be selected through
+  command-line, environment, or configuration inputs while malformed packages
+  remain isolated and the exact built-in dark presentation remains the runtime
+  fallback.
+- Milestone 26.16 completed explicit managed Home Assistant theme activation.
+  Exact operator-approved package and module digests, secure descriptor-relative
+  reads, atomic target deployment, and a private activation ledger provide
+  guarded activation, reapproval, status, deactivation, and active-package
+  removal refusal without executing JavaScript or editing Home Assistant state.
+- Milestone 26.17 closes and publishes the accumulated v0.22.0 release after
+  complete repository validation, tag-gated Python and multi-architecture image
+  publication, public artifact verification, clean-install validation, and
+  repository-managed Home Assistant OS acceptance.
+
+### Milestone 27 — Adaptive scanner screens and waterfall workspace
+
+- Milestone 27.1: evidence-backed screen-profile parity and opt-in automatic
+  renderer selection across web, Home Assistant, and terminal interfaces.
+- Milestone 27.2: physical waterfall protocol qualification and one daemon-owned
+  bounded `PWF`/`GWF` session and local fanout service.
+- Milestone 27.3: responsive theme-aware web spectrum and rolling-waterfall
+  workspace with viewport-fit full-screen presentation and loss telemetry.
 
 ## Completed milestone groups
 

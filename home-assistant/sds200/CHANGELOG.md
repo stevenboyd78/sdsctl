@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.22.0
+
+- Track the sdsctl v0.22.0 release while preserving the compatibility-sensitive
+  Home Assistant App name, slug, image identity, MQTT identities, and bundled
+  custom elements. Managed third-party Home Assistant modules remain outside
+  the App's automatic installation path and require explicit digest-confirmed
+  operator activation.
+
 - Package the unchanged compact SDS200 Scanner and SDS200 Display modules under
   separate `themes/home-assistant/<theme-name>/` directories with versioned
   manifests and a validated built-in registry. Installed filenames,

@@ -6,8 +6,17 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-24
+
 ### Added
 
+- Add Milestone 26.16 explicit managed Home Assistant theme activation. Exact
+  operator-approved package and module digests, secure descriptor-relative
+  reads, collision-safe atomic deployment, and a strict private activation
+  ledger provide guarded activation, reapproval, status, deactivation, and
+  active-package removal refusal. Built-ins remain App-owned, resource
+  registration remains manual, JavaScript is never executed by Python, and
+  package discovery or replacement never changes deployed code automatically.
 - Add Milestone 26.15 automatic managed terminal-theme activation. Valid
   managed `tui` package IDs can be selected through `--theme`, configuration,
   or `SDSCTL_THEME` for Rich scanner information and the full-screen Textual
@@ -1201,7 +1210,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.0...v0.20.1
