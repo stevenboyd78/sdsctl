@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_10_modular_web_theme_contract() -> None:
+def test_roadmap_records_milestone_26_11_modular_home_assistant_theme_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,38 +132,39 @@ def test_roadmap_records_milestone_26_10_modular_web_theme_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.10 — Modular web-theme packaging foundation",
-        "Milestone 26.9 is closed",
-        "`themes/web/<theme-name>/`",
-        "versioned declarative manifest",
-        "typed, deterministic registry",
-        "stable lowercase kebab-case identifier",
+        "### Milestone 26.11 — Modular Home Assistant theme packaging foundation",
+        "Milestone 26.10 is closed",
+        "`themes/home-assistant/<theme-name>/`",
+        "`compact` and `sds200-display`",
+        "versioned declarative `manifest.json`",
+        "typed immutable registry",
+        "stable lowercase kebab-case identity",
         "directory identity",
-        "local stylesheet entry point",
-        "color-scheme metadata",
-        "Reject duplicate identities",
-        "traversal or absolute paths",
-        "remote URLs",
-        "executable theme payloads",
-        "cross-interface assets",
-        "Replace the hard-coded web-theme list and colors",
-        "pre-paint browser-local bootstrap",
-        "fall back to System before first paint",
-        "Preserve the existing local-storage key",
-        "current accessible shared HTML structure",
-        "1920x1080, 1366x768, 800x480",
-        "Decorative layers remain ARIA-hidden and pointer-inert",
-        "theme-owned selectors and design tokens belong to their theme package",
-        "registry ordering, immutability",
-        "wheel/sdist inclusion",
-        "stored-selection compatibility and fallback",
-        "deterministic browser captures for all five themes",
-        "future installation/removal trust boundary",
-        "do not enable third-party discovery",
-        "Do not add Home Assistant or TUI theme loaders",
-        "theme-owned JavaScript",
+        "one local JavaScript module",
+        "existing custom-element type",
+        "existing `/local/sds200/` resource URL",
+        "reject duplicate identities, orders, custom elements, filenames, or resource URLs",
+        "missing or undeclared files",
+        "traversal, absolute, or remote asset paths",
+        "cross-interface payloads",
+        "installer’s hard-coded packaged-source mapping",
+        "preserving its public constants and compatibility functions",
+        "same flat `/homeassistant/www/sds200/` directory",
+        "managed-symlink refusal",
+        "atomic replacement, idempotence",
+        "preserve the JavaScript modules byte-for-byte",
+        "sixteen entity fields",
+        "five display layouts, three palettes, two fit modes",
+        "No Home Assistant OS revalidation is required",
+        "registry ordering and immutability",
+        "wheel and source-distribution inclusion",
+        "Home Assistant App/container packaging",
+        "unchanged manual resource-registration workflow",
+        "Do not enable third-party discovery",
+        "Do not modify the web registry",
+        "add a TUI or GUI loader",
         "runtime dependencies",
-        "physical hardware claims",
+        "new physical-hardware claims",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
