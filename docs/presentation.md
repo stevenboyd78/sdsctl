@@ -62,6 +62,14 @@ flags. The built-in `DEFAULT_DARK_THEME` and `DEFAULT_LIGHT_THEME` provide
 complete starting palettes. Renderers translate these generic values into their
 own style systems.
 
+Those two compatibility objects are loaded from validated built-in packages at
+`sds200/themes/tui/dark/` and `sds200/themes/tui/light/`. Each package contains a
+versioned manifest, a complete declarative `palette.json`, and theme-only
+Textual CSS. One immutable registry validates every semantic role and produces
+the exact singleton objects shared by Rich CLI and Textual; shared TUI layout
+remains outside the packages. Milestone 26.12 does not scan user-writable
+directories or add theme-selection values.
+
 ```python
 from sds200 import (
     DEFAULT_DARK_THEME,

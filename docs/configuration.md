@@ -111,8 +111,10 @@ initial delay.
 the presentation layer continues to honor `NO_COLOR` and `FORCE_COLOR` as
 documented in [Presentation and accessibility](presentation.md).
 
-`theme` accepts `dark` or `light`. Logging levels are `CRITICAL`, `ERROR`,
-`WARNING`, `INFO`, or `DEBUG`.
+`theme` accepts `dark` or `light`. Both values resolve the validated built-in
+terminal packages shared by Rich CLI and Textual; Milestone 26.12 does not add a
+third-party discovery path or new configuration values. Logging levels are
+`CRITICAL`, `ERROR`, `WARNING`, `INFO`, or `DEBUG`.
 
 ## Environment examples
 

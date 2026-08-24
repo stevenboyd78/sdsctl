@@ -14,6 +14,7 @@ from .presentation import (
     ScannerPresentation,
     SignalLevel,
 )
+from .tui_themes import built_in_tui_theme_registry
 
 
 class ThemeRole(StrEnum):
@@ -245,89 +246,6 @@ def theme_roles_for(presentation: ScannerPresentation) -> PresentationThemeRoles
     )
 
 
-def _style(
-    foreground: str | None = None,
-    *,
-    bold: bool = False,
-    dim: bool = False,
-    underline: bool = False,
-) -> ThemeStyle:
-    return ThemeStyle(
-        foreground=foreground,
-        bold=bold,
-        dim=dim,
-        underline=underline,
-    )
-
-
-DEFAULT_DARK_THEME = ThemePalette(
-    name="default-dark",
-    styles={
-        ThemeRole.TEXT_PRIMARY: _style("#f5f5f5"),
-        ThemeRole.TEXT_MUTED: _style("#a3a3a3", dim=True),
-        ThemeRole.CONNECTION_UNKNOWN: _style("#a3a3a3", dim=True),
-        ThemeRole.CONNECTION_CONNECTED: _style("#5fd75f", bold=True),
-        ThemeRole.CONNECTION_DEGRADED: _style("#ffaf00", bold=True),
-        ThemeRole.CONNECTION_DISCONNECTED: _style("#ff5f5f", bold=True),
-        ThemeRole.ACTIVITY_UNKNOWN: _style("#a3a3a3", dim=True),
-        ThemeRole.ACTIVITY_IDLE: _style("#f5f5f5"),
-        ThemeRole.ACTIVITY_SCANNING: _style("#5fafff"),
-        ThemeRole.ACTIVITY_RECEIVING: _style("#5fd7d7", bold=True),
-        ThemeRole.ACTIVITY_HOLDING: _style("#d787ff", bold=True),
-        ThemeRole.SIGNAL_UNKNOWN: _style("#a3a3a3", dim=True),
-        ThemeRole.SIGNAL_NONE: _style("#737373", dim=True),
-        ThemeRole.SIGNAL_WEAK: _style("#ff5f5f"),
-        ThemeRole.SIGNAL_FAIR: _style("#ffaf00"),
-        ThemeRole.SIGNAL_GOOD: _style("#afd75f"),
-        ThemeRole.SIGNAL_STRONG: _style("#5fd75f", bold=True),
-        ThemeRole.HOLD_UNKNOWN: _style("#a3a3a3", dim=True),
-        ThemeRole.HOLD_NONE: _style("#f5f5f5"),
-        ThemeRole.HOLD_ACTIVE: _style("#d787ff", bold=True),
-        ThemeRole.AVAILABILITY_UNKNOWN: _style("#a3a3a3", dim=True),
-        ThemeRole.AVAILABILITY_AVAILABLE: _style("#f5f5f5"),
-        ThemeRole.AVAILABILITY_STALE: _style("#ffaf00"),
-        ThemeRole.AVAILABILITY_UNAVAILABLE: _style("#ff5f5f"),
-        ThemeRole.SEVERITY_NORMAL: _style("#f5f5f5"),
-        ThemeRole.SEVERITY_INFO: _style("#5fafff"),
-        ThemeRole.SEVERITY_WARNING: _style("#ffaf00", bold=True),
-        ThemeRole.SEVERITY_ERROR: _style("#ff5f5f", bold=True),
-        ThemeRole.STATE_MUTED: _style("#a3a3a3", dim=True),
-        ThemeRole.STATE_RECORDING: _style("#ff5f5f", bold=True),
-    },
-)
-
-DEFAULT_LIGHT_THEME = ThemePalette(
-    name="default-light",
-    styles={
-        ThemeRole.TEXT_PRIMARY: _style("#1f2937"),
-        ThemeRole.TEXT_MUTED: _style("#6b7280", dim=True),
-        ThemeRole.CONNECTION_UNKNOWN: _style("#6b7280", dim=True),
-        ThemeRole.CONNECTION_CONNECTED: _style("#15803d", bold=True),
-        ThemeRole.CONNECTION_DEGRADED: _style("#b45309", bold=True),
-        ThemeRole.CONNECTION_DISCONNECTED: _style("#b91c1c", bold=True),
-        ThemeRole.ACTIVITY_UNKNOWN: _style("#6b7280", dim=True),
-        ThemeRole.ACTIVITY_IDLE: _style("#1f2937"),
-        ThemeRole.ACTIVITY_SCANNING: _style("#1d4ed8"),
-        ThemeRole.ACTIVITY_RECEIVING: _style("#0f766e", bold=True),
-        ThemeRole.ACTIVITY_HOLDING: _style("#7e22ce", bold=True),
-        ThemeRole.SIGNAL_UNKNOWN: _style("#6b7280", dim=True),
-        ThemeRole.SIGNAL_NONE: _style("#9ca3af", dim=True),
-        ThemeRole.SIGNAL_WEAK: _style("#b91c1c"),
-        ThemeRole.SIGNAL_FAIR: _style("#b45309"),
-        ThemeRole.SIGNAL_GOOD: _style("#4d7c0f"),
-        ThemeRole.SIGNAL_STRONG: _style("#15803d", bold=True),
-        ThemeRole.HOLD_UNKNOWN: _style("#6b7280", dim=True),
-        ThemeRole.HOLD_NONE: _style("#1f2937"),
-        ThemeRole.HOLD_ACTIVE: _style("#7e22ce", bold=True),
-        ThemeRole.AVAILABILITY_UNKNOWN: _style("#6b7280", dim=True),
-        ThemeRole.AVAILABILITY_AVAILABLE: _style("#1f2937"),
-        ThemeRole.AVAILABILITY_STALE: _style("#b45309"),
-        ThemeRole.AVAILABILITY_UNAVAILABLE: _style("#b91c1c"),
-        ThemeRole.SEVERITY_NORMAL: _style("#1f2937"),
-        ThemeRole.SEVERITY_INFO: _style("#1d4ed8"),
-        ThemeRole.SEVERITY_WARNING: _style("#b45309", bold=True),
-        ThemeRole.SEVERITY_ERROR: _style("#b91c1c", bold=True),
-        ThemeRole.STATE_MUTED: _style("#6b7280", dim=True),
-        ThemeRole.STATE_RECORDING: _style("#b91c1c", bold=True),
-    },
-)
+_BUILT_IN_TUI_THEMES = built_in_tui_theme_registry()
+DEFAULT_DARK_THEME = _BUILT_IN_TUI_THEMES.require("dark").palette
+DEFAULT_LIGHT_THEME = _BUILT_IN_TUI_THEMES.require("light").palette

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "tui",
+  "id": "dark",
+  "label": "Dark",
+  "order": 0,
+  "palette": "palette.json",
+  "palette_name": "default-dark",
+  "stylesheet": "theme.tcss",
+  "screen_class": null
+}

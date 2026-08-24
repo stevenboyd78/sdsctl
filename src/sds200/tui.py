@@ -44,6 +44,7 @@ from .tui_controls import (
     channel_navigation,
 )
 from .tui_logging import TUI_LOG_VISIBLE_LINES, TuiLogBuffer
+from .tui_themes import built_in_tui_theme_stylesheets
 
 Unsubscribe = Callable[[], None]
 Clock = Callable[[], float]
@@ -184,17 +185,7 @@ class ScannerTuiApp(App[None]):
     """Full-screen Textual interface for live SDS scanner state."""
 
     TITLE = "SDS Scanner"
-    CSS: ClassVar[str] = """
-    Screen {
-        background: #10151c;
-        color: #f5f5f5;
-    }
-
-    Screen.light {
-        background: #f3f4f6;
-        color: #1f2937;
-    }
-
+    CSS: ClassVar[str] = built_in_tui_theme_stylesheets() + """
     #body {
         height: 1fr;
         padding: 1;
@@ -205,13 +196,6 @@ class ScannerTuiApp(App[None]):
         min-height: 3;
         margin-bottom: 1;
         padding: 0 1;
-        background: #1b2430;
-        border: round #5fafff;
-    }
-
-    Screen.light .panel {
-        background: #ffffff;
-        border: round #1d4ed8;
     }
 
     #compact-footer {
@@ -220,13 +204,6 @@ class ScannerTuiApp(App[None]):
         height: 1;
         padding: 0 1;
         content-align: center middle;
-        background: #1b2430;
-        color: #f5f5f5;
-    }
-
-    Screen.light #compact-footer {
-        background: #ffffff;
-        color: #1f2937;
     }
 
     Screen.-short #footer {

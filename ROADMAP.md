@@ -11,65 +11,67 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.11 — Modular Home Assistant theme packaging foundation
+### Milestone 26.12 — Modular TUI theme packaging foundation
 
-Milestone 26.10 is closed with the five existing web themes independently
-packaged under `themes/web/<theme-name>/`, a versioned manifest contract, one
-typed immutable registry, registry-derived picker and pre-paint metadata,
-same-origin stylesheet delivery, unchanged accessible rendering, distribution
-artifact coverage, and responsive browser acceptance. The dashboard retains its
-existing public theme identifiers, browser-local selection, security headers,
-Home Assistant Ingress behavior, and default-loopback service boundary.
+Milestone 26.11 is closed with the byte-identical compact SDS200 Scanner and
+SDS200 Display Lovelace modules independently packaged under
+`themes/home-assistant/<theme-name>/`. Versioned manifests and one validated
+immutable registry now drive ordered App installation while preserving public
+custom elements, flat installed filenames, `/local/sds200/` resource URLs,
+manual registration, graphical editors, responsive rendering, startup failure
+isolation, and every scanner-ownership boundary.
 
-Milestone 26.11 extends the interface-scoped packaging model to the two existing
-first-party Home Assistant presentations. Move the compact SDS200 Scanner card
-and the SDS200 Display card into built-in packages under
-`themes/home-assistant/<theme-name>/`, using the stable package identities
-`compact` and `sds200-display`. Keep renderer-specific JavaScript inside its own
-package so web, Home Assistant, later TUI, and reserved GUI assets do not share
-implementation files accidentally.
+Milestone 26.12 completes the built-in renderer sequence by extracting the
+existing dark and light terminal presentations into independent packages under
+`themes/tui/<theme-name>/`, using stable identities `dark` and `light`. Each
+package must own its semantic terminal palette and its theme-only Textual CSS;
+shared TUI structure, layout, responsive rules, widgets, and scanner meaning
+remain renderer code rather than duplicated theme assets.
 
-Each package must carry a versioned declarative `manifest.json` describing the
-`home-assistant` interface, stable lowercase kebab-case identity, directory
-identity, human label, deterministic order, one local JavaScript module,
-existing custom-element type, installed filename, and existing `/local/sds200/`
-resource URL. A typed immutable registry must reject duplicate identities,
-orders, custom elements, filenames, or resource URLs; missing or undeclared
-files; traversal, absolute, or remote asset paths; undeclared executable or
-cross-interface payloads; unknown fields; and unsupported schema versions before
-installation.
+Each package must contain a versioned declarative `manifest.json`, a complete
+renderer-neutral `palette.json`, and one local `theme.tcss`. The manifest must
+describe the `tui` interface, stable lowercase kebab-case identity, directory
+identity, human label, deterministic order, palette filename and stable palette
+name, stylesheet filename, and optional existing Textual screen class. A typed
+immutable registry must reject duplicate identities, orders, palette names, or
+screen classes; missing or undeclared files; traversal, absolute, or remote
+asset paths; unknown manifest or palette fields; invalid style values; missing
+or unknown semantic roles; cross-interface packages; and unsupported schema
+versions before exposing either theme.
 
-Replace the installer’s hard-coded packaged-source mapping with the validated
-built-in registry while preserving its public constants and compatibility
-functions. Continue installing the two modules to the same flat
-`/homeassistant/www/sds200/` directory with the same filenames, resource URLs,
-mode `0644`, managed-symlink refusal, atomic replacement, idempotence, and
-failure isolation from daemon and dashboard startup. Registry packaging must not
-edit Home Assistant YAML, `.storage`, dashboards, or resource registration.
+Replace the Python-literal built-in palette definitions with registry-loaded
+packages while preserving `DEFAULT_DARK_THEME`, `DEFAULT_LIGHT_THEME`,
+`ThemePalette`, `ThemeStyle`, `ThemeRole`, their import locations, immutable
+behavior, palette names `default-dark` and `default-light`, and deterministic
+serialization. The Rich CLI `--theme dark|light` option and the Textual `T`
+toggle must still resolve the same singleton palette objects and render the same
+role styles.
 
-Extraction must preserve the JavaScript modules byte-for-byte so the existing
-`custom:sds200-card` and `custom:sds200-display-card` types, card-picker names,
-graphical editors, sixteen entity fields, state-context subscription, read-only
-transport-free behavior, Tone-Out `Detect` presentation, five display layouts,
-three palettes, two fit modes, accessibility, and responsive rendering remain
-unchanged. No Home Assistant OS revalidation is required for a source-only move
-when hashes, installed bytes, public paths, and package artifacts are exact.
+Move only theme-owned Textual colors, backgrounds, and borders out of the TUI
+stylesheet. Keep shared dimensions, padding, scrolling, compact/wide layout,
+visibility, and interaction selectors in the base module. Registry order must
+produce deterministic Textual CSS, the existing `light` screen class must remain
+compatible, and dark remains the default when no explicit palette is supplied.
+Labels, symbols, ordering, focus, keyboard operation, reduced terminal
+capability behavior, and plain-text/JSON output must not depend on color.
 
 Host-independent acceptance must cover registry ordering and immutability,
-manifest and path validation, duplicate and missing-asset rejection, exact
-package-resource reads, byte-identical installed output, existing destination
-guards, atomic/idempotent installation, wheel and source-distribution inclusion,
-Home Assistant App/container packaging, all existing Lovelace behavior tests,
-documentation checks, and the complete regression suite.
+manifest/palette/schema/path validation, exact semantic-role completeness,
+duplicate and missing-asset rejection, compatibility object identity, exact
+palette serialization, generated Textual CSS content and ordering, CLI color
+policy, live TUI theme toggling, wheel and source-distribution inclusion,
+installed-wheel resource loading, documentation checks, and the complete
+regression suite. No physical scanner revalidation is required because this is
+an exact presentation-source extraction with no scanner or transport change.
 
-Document the built-in Home Assistant package contract and unchanged manual
-resource-registration workflow. Do not enable third-party discovery,
+Document the TUI package contract and the continued shared use of the two
+semantic palettes by Rich CLI and Textual. Do not enable third-party discovery,
 user-writable theme directories, runtime upload, archive extraction, package
-installation, or automatic Home Assistant resource registration in this slice.
-Do not modify the web registry, add a TUI or GUI loader, add cards, layouts,
-palettes, entities, scanner fields, controls, network access, runtime
-dependencies, or new physical-hardware claims. Third-party lifecycle management
-and TUI packaging remain later deliberately bounded milestones.
+installation, or new theme selection values in this slice. Do not modify the
+web or Home Assistant registries, add a GUI, add a visual family, change scanner
+fields or controls, add network access or runtime dependencies, or make new
+physical-hardware claims. Third-party lifecycle management and a future desktop
+GUI remain separately bounded work.
 
 ## Deferred hardware validation
 
@@ -593,6 +595,11 @@ is collected.
   and stylesheets, one validated immutable registry, registry-derived picker and
   pre-paint metadata, same-origin delivery, unchanged accessible responsive
   rendering, and verified wheel/source-distribution inclusion.
+- Milestone 26.11 completed the built-in Home Assistant packaging boundary. The
+  compact SDS200 Scanner and SDS200 Display modules now use independent
+  versioned packages and one validated immutable registry while retaining
+  byte-identical JavaScript, public custom elements, flat installed filenames,
+  `/local/sds200/` URLs, manual registration, and App-startup failure isolation.
 
 ## Completed milestone groups
 

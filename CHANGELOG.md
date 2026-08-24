@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.12 modular TUI theme packaging foundation. The existing
+  dark and light terminal presentations now live under
+  `themes/tui/<theme-name>/` with versioned manifests, complete declarative
+  semantic palettes, theme-only Textual CSS, and one validated immutable
+  registry. Existing `DEFAULT_*` objects, Rich CLI selection, Textual toggling,
+  exact role styles, responsive layout, accessible text cues, and scanner
+  boundaries remain unchanged.
 - Add the Milestone 26.11 modular Home Assistant theme packaging foundation.
   The existing compact SDS200 Scanner and SDS200 Display Lovelace modules now
   live under `themes/home-assistant/compact/` and
