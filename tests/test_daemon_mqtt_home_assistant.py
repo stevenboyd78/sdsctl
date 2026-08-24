@@ -194,7 +194,7 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
                     "value_template": (
                         f"{{{{ 'online' if value_json.{key} "
                         "| default(none) not in [none, ''] "
-                        "else 'offline' }}}}"
+                        "else 'offline' }}"
                     ),
                 },
             ],

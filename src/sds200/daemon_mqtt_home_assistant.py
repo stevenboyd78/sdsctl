@@ -319,7 +319,7 @@ def build_home_assistant_device_discovery(
                     "value_template": (
                         f"{{{{ 'online' if value_json.{key} "
                         "| default(none) not in [none, ''] "
-                        "else 'offline' }}}}"
+                        "else 'offline' }}"
                     ),
                 },
             ],
