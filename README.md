@@ -266,7 +266,8 @@ reconnected without stopping active network audio; see the
 [Textual TUI guide](docs/tui.md). The existing dark and light terminal themes
 are independently packaged under `sds200/themes/tui/<theme-name>/`; validated
 manifests, complete semantic palettes, and theme-only Textual CSS preserve the
-same `--theme` values and `T` toggle.
+same `--theme` values and `T` toggle. Valid managed TUI packages can also be
+selected by ID with `--theme`; pressing `T` from one returns to built-in dark.
 
 ### Managed third-party themes
 
@@ -289,7 +290,9 @@ contain executable browser JavaScript and additionally require
 automatically inventories valid and malformed packages independently. Valid
 managed web themes are automatically available to a newly started `sdsctl web`
 process and load only when selected in its existing browser-local picker.
-Managed TUI, Rich CLI, and Home Assistant packages remain inactive. See
+Valid managed TUI palettes are available to Rich `scanner-info` and Textual on
+the next command start when selected by ID. Managed Home Assistant packages
+remain inactive. See
 [Theme package management](docs/themes.md) for the package-author contract,
 recovery behavior, activation details, JSON output, and trust boundaries.
 

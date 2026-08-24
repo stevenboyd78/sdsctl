@@ -181,11 +181,7 @@ def _titled_panel(
     return widget
 
 
-class ScannerTuiApp(App[None]):
-    """Full-screen Textual interface for live SDS scanner state."""
-
-    TITLE = "SDS Scanner"
-    CSS: ClassVar[str] = built_in_tui_theme_stylesheets() + """
+_SHARED_TUI_STYLESHEET = """
     #body {
         height: 1fr;
         padding: 1;
@@ -305,6 +301,13 @@ class ScannerTuiApp(App[None]):
         column-span: 2;
     }
     """
+
+
+class ScannerTuiApp(App[None]):
+    """Full-screen Textual interface for live SDS scanner state."""
+
+    TITLE = "SDS Scanner"
+    CSS: ClassVar[str] = built_in_tui_theme_stylesheets() + _SHARED_TUI_STYLESHEET
     HORIZONTAL_BREAKPOINTS: list[tuple[int, str]] | None = [
         (0, "-compact"),
         (80, "-standard"),
@@ -389,6 +392,8 @@ class ScannerTuiApp(App[None]):
         psi_recovery_cooldown: float = 60.0,
         connected: bool | None = True,
         palette: ThemePalette = DEFAULT_DARK_THEME,
+        screen_class: str | None = None,
+        managed_stylesheet: str | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -401,6 +406,15 @@ class ScannerTuiApp(App[None]):
         if psi_recovery_cooldown < 0:
             raise ValueError("PSI recovery cooldown must not be negative")
 
+        if managed_stylesheet is not None:
+            object.__setattr__(
+                self,
+                "CSS",
+                built_in_tui_theme_stylesheets()
+                + managed_stylesheet.rstrip()
+                + "\n"
+                + _SHARED_TUI_STYLESHEET,
+            )
         super().__init__()
         self._identity = identity
         self._snapshot = snapshot
@@ -438,6 +452,12 @@ class ScannerTuiApp(App[None]):
         self._psi_recovery_cooldown = psi_recovery_cooldown
         self._connected = connected
         self._palette = palette
+        self._theme_screen_class = (
+            "light"
+            if screen_class is None and palette.name == DEFAULT_LIGHT_THEME.name
+            else screen_class
+        )
+        self._applied_theme_screen_class: str | None = None
         self._clock = clock
         self._now = now
         self._transition_values: dict[str, str] = {}
@@ -573,11 +593,12 @@ class ScannerTuiApp(App[None]):
     def action_toggle_theme(self) -> None:
         """Toggle between the built-in semantic light and dark palettes."""
 
-        self._palette = (
-            DEFAULT_LIGHT_THEME
-            if self._palette.name == DEFAULT_DARK_THEME.name
-            else DEFAULT_DARK_THEME
-        )
+        if self._palette.name == DEFAULT_DARK_THEME.name:
+            self._palette = DEFAULT_LIGHT_THEME
+            self._theme_screen_class = "light"
+        else:
+            self._palette = DEFAULT_DARK_THEME
+            self._theme_screen_class = None
         self._refresh_view()
 
     def action_toggle_key_help(self) -> None:
@@ -1994,9 +2015,11 @@ class ScannerTuiApp(App[None]):
         return output
 
     def _apply_theme_class(self) -> None:
-        self.screen.remove_class("light")
-        if self._palette.name == DEFAULT_LIGHT_THEME.name:
-            self.screen.add_class("light")
+        if self._applied_theme_screen_class is not None:
+            self.screen.remove_class(self._applied_theme_screen_class)
+        if self._theme_screen_class is not None:
+            self.screen.add_class(self._theme_screen_class)
+        self._applied_theme_screen_class = self._theme_screen_class
 
 
 def run_tui(
@@ -2014,6 +2037,8 @@ def run_tui(
     psi_recovery_cooldown: float = 60.0,
     connected: bool | None,
     palette: ThemePalette,
+    screen_class: str | None = None,
+    managed_stylesheet: str | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2031,6 +2056,8 @@ def run_tui(
         psi_recovery_cooldown=psi_recovery_cooldown,
         connected=connected,
         palette=palette,
+        screen_class=screen_class,
+        managed_stylesheet=managed_stylesheet,
     )
     try:
         app.run()

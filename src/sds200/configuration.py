@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -35,7 +36,7 @@ ConfigurationSource: TypeAlias = Literal[
 ]
 FileConfigurationSource: TypeAlias = Literal["system", "user"]
 ColorMode: TypeAlias = Literal["auto", "always", "never"]
-ThemeName: TypeAlias = Literal["dark", "light"]
+ThemeName: TypeAlias = str
 
 CONFIGURATION_SOURCE_PRECEDENCE: tuple[ConfigurationSource, ...] = (
     "default",
@@ -69,7 +70,7 @@ ENVIRONMENT_CONFIGURATION_VARIABLES: tuple[tuple[str, str], ...] = (
     ("log_file", "SDSCTL_LOG_FILE"),
 )
 _COLOR_MODES: tuple[ColorMode, ...] = ("auto", "always", "never")
-_THEME_NAMES: tuple[ThemeName, ...] = ("dark", "light")
+_THEME_NAME_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,9 +213,10 @@ class ApplicationConfiguration:
         if not isinstance(self.theme, str):
             raise TypeError("Theme name must be a string.")
         normalized_theme = self.theme.strip().lower()
-        if normalized_theme not in _THEME_NAMES:
-            choices = ", ".join(_THEME_NAMES)
-            raise ValueError(f"Theme name must be one of: {choices}.")
+        if _THEME_NAME_PATTERN.fullmatch(normalized_theme) is None:
+            raise ValueError(
+                "Theme name must be a lowercase kebab-case identifier."
+            )
         object.__setattr__(self, "theme", normalized_theme)
 
         if self.log_level is not None:

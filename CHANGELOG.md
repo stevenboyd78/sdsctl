@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 26.15 automatic managed terminal-theme activation. Valid
+  managed `tui` package IDs can be selected through `--theme`, configuration,
+  or `SDSCTL_THEME` for Rich scanner information and the full-screen Textual
+  interface. One immutable startup registry binds complete semantic palettes
+  and strictly scoped presentation-only TCSS, isolates malformed packages,
+  fails unknown selections before scanner access, preserves plain-text meaning,
+  and makes `T` return a managed theme to the exact built-in dark fallback.
 - Add Milestone 26.14 automatic managed web-theme activation. Each web process
   combines built-ins with valid managed `web` packages discovered under the
   resolved XDG theme root, adds them to the existing picker and pre-paint

@@ -1,9 +1,9 @@
 # Theme package management
 
 Milestone 26.13 provides a local managed lifecycle for third-party theme
-packages. Milestone 26.14 consumes that inventory for web CSS only. The
-separation remains intentional: Textual CSS and semantic palettes and executable
-Home Assistant JavaScript need different activation and fallback rules.
+packages. Milestones 26.14 and 26.15 consume that inventory for web CSS and
+terminal palettes and TCSS respectively. Executable Home Assistant JavaScript
+retains a separate activation and fallback boundary.
 
 ## Managed directory
 
@@ -119,9 +119,31 @@ installing it. Schema, path, size, and digest validation prevent package-boundar
 violations and unnoticed post-start changes; they are not a complete safety or
 design review of CSS.
 
-Managed Rich CLI themes, Textual palettes and TCSS, and Home Assistant modules
-remain discoverable but inactive. The lifecycle does not download themes,
-extract archives, execute scripts, or install Home Assistant resources. Future
-renderer-specific milestones can consume the inventory without reopening its
-filesystem mutation and recovery boundary. GUI theming remains reserved for the
-future GUI design.
+## Terminal activation
+
+A valid package under `themes/tui/<id>/` is available to a newly started
+terminal-rendering command when its ID is selected with `--theme`, the `theme`
+configuration field, or `SDSCTL_THEME`. The Rich `scanner-info` adapter consumes
+the complete semantic palette. The full-screen Textual interface also adds the
+selected stylesheet to its in-memory startup CSS and applies the manifest's
+declared `screen_class`. There is no filesystem watching or live reload.
+
+Managed terminal packages must declare a non-null, unique lowercase kebab-case
+`screen_class`. Every TCSS selector must be that exact `Screen.<screen-class>`
+or a descendant class/ID selector. Declarations are restricted to `color`,
+`background`, and whole or side-specific `border` properties with literal
+`#RRGGBB` colors and supported border styles. Imports, URLs, variables, unscoped
+selectors, nested rules, layout properties, and undeclared files are rejected.
+Shared dimensions, visibility, ordering, labels, responsive behavior, and
+controls cannot be supplied by a theme package.
+
+The selected package is revalidated against its complete discovery digest and
+read into immutable runtime values before scanner or daemon access. Later file
+mutation, replacement, or removal cannot change the running terminal process.
+An unavailable selected ID fails with the valid startup IDs; malformed managed
+entries remain isolated. `T` from a managed Textual theme returns to built-in
+dark, after which dark/light toggling remains unchanged.
+
+Managed Home Assistant modules remain discoverable but inactive. The lifecycle
+does not download themes, extract archives, execute scripts, or install Home
+Assistant resources. GUI theming remains reserved for the future GUI design.

@@ -375,6 +375,12 @@ def test_application_configuration_normalizes_operational_values(
     assert config.log_file == tmp_path / "sdsctl.log"
 
 
+def test_application_configuration_accepts_managed_theme_identifier() -> None:
+    from sds200 import ApplicationConfiguration
+
+    assert ApplicationConfiguration(theme=" Solarized-Dark ").theme == "solarized-dark"
+
+
 @pytest.mark.parametrize(
     ("overrides", "message"),
     [
@@ -393,7 +399,7 @@ def test_application_configuration_normalizes_operational_values(
             "Reconnect maximum delay must be at least the initial delay",
         ),
         ({"color": "sometimes"}, "Color mode must be one of"),
-        ({"theme": "blue"}, "Theme name must be one of"),
+        ({"theme": "Bad Theme"}, "lowercase kebab-case identifier"),
         ({"log_level": "TRACE"}, "Log level must be one of"),
     ],
 )
