@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -11,6 +10,10 @@ from sds200.home_assistant_lovelace import (
     HOME_ASSISTANT_LOVELACE_CARD_FILENAME,
     HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL,
     install_home_assistant_lovelace_card,
+)
+from sds200.home_assistant_themes import (
+    built_in_home_assistant_theme_registry,
+    read_built_in_home_assistant_theme_module,
 )
 
 EXPECTED_ENTITY_FIELDS = {
@@ -38,10 +41,9 @@ def lovelace_target(tmp_path: Path) -> Path:
 
 
 def card_text() -> str:
-    return (
-        files("sds200.web_assets")
-        .joinpath(HOME_ASSISTANT_LOVELACE_CARD_FILENAME)
-        .read_text(encoding="utf-8")
+    theme = built_in_home_assistant_theme_registry().require("compact")
+    return read_built_in_home_assistant_theme_module(theme).decode(
+        "utf-8"
     )
 
 

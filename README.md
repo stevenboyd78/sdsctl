@@ -719,7 +719,11 @@ read-only state entities. Numeric zero configured for a Tone-Out tone is shown
 as `Detect` while the entity retains the scanner text. Register both
 `/local/sds200/sds200-card.js` and
 `/local/sds200/sds200-display-card.js` as JavaScript Modules when using both
-cards.
+cards. Their byte-identical sources are independently packaged under
+`sds200/themes/home-assistant/compact/` and
+`sds200/themes/home-assistant/sds200-display/`; versioned manifests and one
+validated immutable registry drive App installation without changing those
+public URLs or enabling third-party discovery.
 
 See the [Home Assistant App guide](docs/home-assistant-app.md) for architecture,
 installation, configuration, networking, Ingress, local HAOS development,

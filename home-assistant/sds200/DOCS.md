@@ -178,6 +178,13 @@ Home Assistant serves them to the frontend as:
 /local/sds200/sds200-display-card.js
 ```
 
+The two byte-identical modules are independently packaged under
+`sds200/themes/home-assistant/compact/` and
+`sds200/themes/home-assistant/sds200-display/`. Versioned manifests and one
+validated immutable built-in registry drive their ordered installation while
+preserving the same flat installed filenames and public URLs. The App does not
+scan user-writable theme directories or discover third-party packages.
+
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. **SDS200 Scanner** remains the
 unchanged compact card. **SDS200 Display** adds Simple, Detail, Search/Close

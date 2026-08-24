@@ -340,6 +340,21 @@ Home Assistant serves them to the frontend as:
 /local/sds200/sds200-display-card.js
 ```
 
+The byte-identical source modules are independently packaged inside the Python
+distribution as:
+
+```text
+sds200/themes/home-assistant/compact/
+sds200/themes/home-assistant/sds200-display/
+```
+
+Each package contains a versioned manifest and its one declared JavaScript
+module. A validated immutable built-in registry supplies the installer order,
+module source, custom-element identity, installed filename, and public resource
+URL. Invalid or undeclared package content is rejected before installation.
+This is a built-in packaging boundary, not a user-writable theme directory or a
+third-party discovery mechanism.
+
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. The original **SDS200 Scanner**
 card remains unchanged. The additive **SDS200 Display** card provides five

@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.11 modular Home Assistant theme packaging foundation.
+  The existing compact SDS200 Scanner and SDS200 Display Lovelace modules now
+  live under `themes/home-assistant/compact/` and
+  `themes/home-assistant/sds200-display/` with versioned manifests and one
+  validated immutable registry. The registry drives packaged-source reads and
+  ordered installation while preserving byte-identical modules, public custom
+  elements, `/local/sds200/` URLs, manual resource registration, graphical
+  editors, responsive rendering, and every scanner-ownership boundary.
 - Add the Milestone 26.10 modular web-theme packaging foundation. System,
   LCARS-inspired, Matrix-inspired, First Responder, and Amateur Radio now live
   under `themes/web/<theme-name>/` as independently validated versioned

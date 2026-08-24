@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Package the unchanged compact SDS200 Scanner and SDS200 Display modules under
+  separate `themes/home-assistant/<theme-name>/` directories with versioned
+  manifests and a validated built-in registry. Installed filenames,
+  `/local/sds200/` resource URLs, manual registration, card configuration, and
+  rendering remain unchanged.
 - Add fixed read-only configured Tone-Out Tone A and Tone B MQTT Discovery
   sensors plus matching optional selectors in both bundled Lovelace cards.
   Numeric zero tones render as `Detect` while preserving raw entity state.

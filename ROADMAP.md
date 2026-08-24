@@ -35,8 +35,9 @@ identity, human label, deterministic order, one local JavaScript module,
 existing custom-element type, installed filename, and existing `/local/sds200/`
 resource URL. A typed immutable registry must reject duplicate identities,
 orders, custom elements, filenames, or resource URLs; missing or undeclared
-files; traversal, absolute, or remote asset paths; executable or cross-interface
-payloads; unknown fields; and unsupported schema versions before installation.
+files; traversal, absolute, or remote asset paths; undeclared executable or
+cross-interface payloads; unknown fields; and unsupported schema versions before
+installation.
 
 Replace the installer’s hard-coded packaged-source mapping with the validated
 built-in registry while preserving its public constants and compatibility
