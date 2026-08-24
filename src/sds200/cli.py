@@ -184,6 +184,16 @@ from .rich_cli import (
 from .rtsp import DEFAULT_RTSP_PORT
 from .scanner import SUPPORTED_SCANNER_MODELS, ScannerModel, normalize_model_name
 from .state import snapshot_from_scanner_info
+from .theme_lifecycle import (
+    HOME_ASSISTANT_CODE_TRUST_TOKEN,
+    THEME_INTERFACES,
+    ThemeInventory,
+    ThemePackageSummary,
+    discover_theme_inventory,
+    install_theme_package,
+    remove_theme_package,
+    validate_theme_package,
+)
 from .tui_audio import TuiAudioSession
 from .tui_logging import TuiLogBuffer, capture_package_logs
 from .web_server import (
@@ -1908,6 +1918,59 @@ def build_parser(
         metavar="SECONDS",
         help="RTSP GET_PARAMETER interval (default: 15.0)",
     )
+
+    themes = subparsers.add_parser(
+        "themes",
+        help="Validate and manage local third-party theme packages",
+    )
+    themes.add_argument(
+        "--root",
+        dest="theme_root",
+        type=Path,
+        metavar="DIRECTORY",
+        help="Explicit managed theme root (default: XDG user configuration)",
+    )
+    theme_commands = themes.add_subparsers(dest="themes_action", required=True)
+    theme_list = theme_commands.add_parser(
+        "list",
+        help="List built-in, valid managed, and invalid managed themes",
+    )
+    theme_list.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_validate = theme_commands.add_parser(
+        "validate",
+        help="Validate one unpacked local theme directory without installing it",
+    )
+    theme_validate.add_argument("source", type=Path, metavar="DIRECTORY")
+    theme_validate.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_install = theme_commands.add_parser(
+        "install",
+        help="Stage, revalidate, and install one local theme directory",
+    )
+    theme_install.add_argument("source", type=Path, metavar="DIRECTORY")
+    theme_install.add_argument(
+        "--replace",
+        action="store_true",
+        help="Explicitly replace an existing managed theme with rollback protection",
+    )
+    theme_install.add_argument(
+        "--trust-home-assistant-code",
+        action="store_true",
+        help="Acknowledge that a Home Assistant theme contains executable JavaScript",
+    )
+    theme_install.add_argument("--json", action="store_true", help="Print stable JSON")
+    theme_remove = theme_commands.add_parser(
+        "remove",
+        help="Remove one exact managed theme through a recoverable tombstone",
+    )
+    theme_remove.add_argument("interface", choices=THEME_INTERFACES)
+    theme_remove.add_argument("identifier", metavar="ID")
+    theme_remove.add_argument(
+        "--confirm",
+        required=True,
+        metavar="INTERFACE/ID",
+        help="Exact interface and identity confirmation token",
+    )
+    theme_remove.add_argument("--json", action="store_true", help="Print stable JSON")
 
     recordings = subparsers.add_parser(
         "recordings",
@@ -4635,6 +4698,119 @@ def _run_recordings(args: argparse.Namespace) -> int:
     )
 
 
+def _reject_theme_connection_options(args: argparse.Namespace) -> None:
+    if any(
+        value is not None
+        for value in (
+            args.model,
+            args.port,
+            args.host,
+            args.replay,
+            args.profile,
+            args.connection_preference,
+            args.trace,
+            args.capture,
+        )
+    ):
+        raise ValueError("Scanner connection and traffic options are not used with themes.")
+    if args.udp_port is not None or args.bind_address or args.bind_port:
+        raise ValueError("Network socket options are not used with themes.")
+
+
+def _print_theme_package(package: ThemePackageSummary) -> None:
+    executable = " executable-code" if package.executable else ""
+    digest = f" sha256={package.sha256}" if package.sha256 is not None else ""
+    print(
+        f"  {package.identity:40s} {package.origin:8s} "
+        f"order={package.order:<4d}{executable}{digest}"
+    )
+
+
+def _print_theme_inventory(inventory: ThemeInventory) -> None:
+    print("Theme package inventory")
+    print(f"Root: {inventory.root}")
+    print("Packages:")
+    for package in inventory.packages:
+        _print_theme_package(package)
+    print("Invalid managed entries:")
+    if not inventory.issues:
+        print("  none")
+    for issue in inventory.issues:
+        identity = issue.identity or "unidentified"
+        print(f"  {identity:40s} {issue.path}: {issue.message}")
+
+
+def _run_themes(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    _reject_theme_connection_options(args)
+    paths = configuration_paths or resolve_configuration_paths(environ=environ)
+    root = (
+        args.theme_root.expanduser().absolute()
+        if args.theme_root is not None
+        else paths.theme_dir
+    )
+
+    if args.themes_action == "list":
+        inventory = discover_theme_inventory(root)
+        if args.json:
+            print(json.dumps(inventory.as_dict(), indent=2, sort_keys=True))
+        else:
+            _print_theme_inventory(inventory)
+        return 1 if inventory.issues else 0
+
+    if args.themes_action == "validate":
+        package = validate_theme_package(args.source)
+        payload = {"valid": True, "package": package.summary.as_dict()}
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print("Theme package is valid but not activated.")
+            _print_theme_package(package.summary)
+        return 0
+
+    if args.themes_action == "install":
+        installed = install_theme_package(
+            args.source,
+            root,
+            replace=args.replace,
+            home_assistant_code_trust=(
+                HOME_ASSISTANT_CODE_TRUST_TOKEN
+                if args.trust_home_assistant_code
+                else None
+            ),
+        )
+        payload = {
+            "installed": True,
+            "activated": False,
+            "package": installed.as_dict(),
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        else:
+            print("Theme package installed and discoverable but not activated.")
+            _print_theme_package(installed)
+        return 0
+
+    if args.themes_action == "remove":
+        removed = remove_theme_package(
+            root,
+            args.interface,
+            args.identifier,
+            confirmation=args.confirm,
+        )
+        if args.json:
+            print(json.dumps(removed.as_dict(), indent=2, sort_keys=True))
+        else:
+            print(f"Removed managed theme: {removed.identity}")
+        return 0
+
+    raise ValueError(f"Unsupported themes action: {args.themes_action!r}")
+
+
 def _run_discovery(args: argparse.Namespace) -> int:
     if (
         args.port is not None
@@ -4770,6 +4946,13 @@ def main(
 
         if args.action == "recordings":
             return _run_recordings(args)
+
+        if args.action == "themes":
+            return _run_themes(
+                args,
+                configuration_paths=configuration_paths,
+                environ=environ,
+            )
 
         with selected_radio(args) as radio:
             if args.action == "info":

@@ -40,7 +40,7 @@ _COLOR_SCHEMES = frozenset({"light", "dark", "light dark"})
 
 
 class WebThemeError(SDS200Error):
-    """Raised when a built-in web theme package is invalid."""
+    """Raised when a web theme package is invalid."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,6 +250,12 @@ def load_web_theme_registry(root: Traversable) -> WebThemeRegistry:
         )
     )
     return WebThemeRegistry(themes)
+
+
+def load_web_theme_package(directory: Traversable) -> WebThemeManifest:
+    """Load and validate one web theme package directory."""
+
+    return _read_manifest(directory)
 
 
 def built_in_web_theme_registry() -> WebThemeRegistry:

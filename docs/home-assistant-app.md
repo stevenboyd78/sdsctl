@@ -352,8 +352,11 @@ Each package contains a versioned manifest and its one declared JavaScript
 module. A validated immutable built-in registry supplies the installer order,
 module source, custom-element identity, installed filename, and public resource
 URL. Invalid or undeclared package content is rejected before installation.
-This is a built-in packaging boundary, not a user-writable theme directory or a
-third-party discovery mechanism.
+This is a built-in packaging boundary. Milestone 26.13 can validate and manage
+third-party Home Assistant packages only after an explicit executable-code trust
+acknowledgement, but the App does not install or execute those managed modules
+yet. A later App-specific activation boundary must define safe resource
+synchronization and stale-module removal without weakening startup isolation.
 
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. The original **SDS200 Scanner**

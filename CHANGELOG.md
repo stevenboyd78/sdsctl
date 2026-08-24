@@ -8,6 +8,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.13 managed third-party theme discovery and lifecycle
+  foundation. The new `sdsctl themes` command family validates, inventories,
+  privately stages, installs or replaces with rollback, and exactly removes
+  local unpacked `web`, `home-assistant`, and `tui` packages under the resolved
+  XDG configuration root. Malformed manual additions are isolated, built-ins
+  cannot be shadowed or removed, symlinks and special or oversized content are
+  rejected, concurrent mutation is excluded, and Home Assistant JavaScript
+  requires an explicit executable-code trust acknowledgement. Managed packages
+  are discoverable but deliberately not activated in a renderer yet.
 - Add the Milestone 26.12 modular TUI theme packaging foundation. The existing
   dark and light terminal presentations now live under
   `themes/tui/<theme-name>/` with versioned manifests, complete declarative
