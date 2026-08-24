@@ -192,9 +192,8 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
                 {
                     "topic": "radio/sds200/state/radio",
                     "value_template": (
-                        f"{{{{ 'online' if value_json.{key} is defined "
-                        f"and value_json.{key} is not none "
-                        f"and value_json.{key} | length > 0 "
+                        f"{{{{ 'online' if value_json.{key} "
+                        "| default(none) not in [none, ''] "
                         "else 'offline' }}}}"
                     ),
                 },
