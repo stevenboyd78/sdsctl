@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "home-assistant",
+  "id": "sds200-display",
+  "label": "SDS200 Display",
+  "order": 10,
+  "module": "sds200-display-card.js",
+  "custom_element": "sds200-display-card",
+  "installed_filename": "sds200-display-card.js",
+  "resource_url": "/local/sds200/sds200-display-card.js"
+}

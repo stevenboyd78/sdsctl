@@ -349,14 +349,18 @@ Modular theme packaging uses the interface-scoped hierarchy
 built-in implementation by extracting the five existing web themes into
 versioned manifest plus declarative CSS packages with deterministic validation,
 same-origin delivery, compatible pre-paint fallback, and unchanged accessible
-rendering. The next renderer interfaces are `home-assistant` and `tui`; `gui`
-remains reserved until a desktop renderer exists. A visual family may reuse one
-theme name across interfaces while each package stays independently installable
-and appropriate for its renderer. Theme packages may style presentation but
-must not acquire scanner, daemon, MQTT, Home Assistant service, authentication,
-or control authority. Third-party installation and removal remain a later trust
-boundary requiring deliberate staging, validation, collision, rollback,
-recovery, and untrusted-asset decisions rather than automatic directory scans.
+rendering. Milestone 26.11 extends that boundary to the byte-identical compact
+and SDS200 Display Home Assistant modules. Their versioned manifests and
+validated registry drive the existing flat App installation paths without
+changing custom elements, resource URLs, configuration, or rendering. The next
+renderer interface is `tui`; `gui` remains reserved until a desktop renderer
+exists. A visual family may reuse one theme name across interfaces while each
+package stays independently installable and appropriate for its renderer. Theme
+packages may style presentation but must not acquire scanner, daemon, MQTT, Home
+Assistant service, authentication, or control authority. Third-party
+installation and removal remain a later trust boundary requiring deliberate
+staging, validation, collision, rollback, recovery, and untrusted-asset
+decisions rather than automatic directory scans.
 
 ## Favorites Workspace
 

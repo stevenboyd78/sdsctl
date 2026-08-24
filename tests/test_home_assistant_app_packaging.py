@@ -179,12 +179,14 @@ def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:
         _REPOSITORY_ROOT
         / "src"
         / "sds200"
-        / "web_assets"
+        / "themes"
+        / "home-assistant"
+        / "compact"
         / "sds200-card.js"
     )
 
     assert card.is_file()
-    assert (card.parent / "__init__.py").is_file()
+    assert (card.parent / "manifest.json").is_file()
 
     text = card.read_text(encoding="utf-8")
     assert 'const SDS200_CARD_TYPE = "sds200-card";' in text
@@ -203,8 +205,16 @@ def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:
     assert "innerHTML" not in text
     assert "callService" not in text
 
-    display_card = card.parent / "sds200-display-card.js"
+    display_card = (
+        card.parent.parent
+        / "sds200-display"
+        / "sds200-display-card.js"
+    )
     assert display_card.is_file()
+    assert (display_card.parent / "manifest.json").is_file()
+    legacy_assets = _REPOSITORY_ROOT / "src" / "sds200" / "web_assets"
+    assert not (legacy_assets / "sds200-card.js").exists()
+    assert not (legacy_assets / "sds200-display-card.js").exists()
     display_text = display_card.read_text(encoding="utf-8")
     assert (
         'const SDS200_DISPLAY_CARD_TYPE = "sds200-display-card";'

@@ -25,6 +25,7 @@ from sds200.home_assistant_app_supervisor import (
     prepare_home_assistant_app_launch_plan,
     run_home_assistant_app,
 )
+from sds200.home_assistant_themes import HomeAssistantThemeError
 
 
 class FakeSignals:
@@ -456,6 +457,7 @@ def test_run_home_assistant_app_installs_lovelace_card_before_supervisor(
     "installation_error",
     [
         SDS200Error("unsafe Lovelace target"),
+        HomeAssistantThemeError("invalid built-in theme manifest"),
         PermissionError(
             "read-only Home Assistant configuration"
         ),

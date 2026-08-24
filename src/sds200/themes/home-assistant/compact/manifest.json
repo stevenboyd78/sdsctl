@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "home-assistant",
+  "id": "compact",
+  "label": "SDS200 Scanner",
+  "order": 0,
+  "module": "sds200-card.js",
+  "custom_element": "sds200-card",
+  "installed_filename": "sds200-card.js",
+  "resource_url": "/local/sds200/sds200-card.js"
+}

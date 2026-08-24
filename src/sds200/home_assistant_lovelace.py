@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import os
-from importlib.resources import files
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
 from .exceptions import SDS200Error
+from .home_assistant_themes import (
+    HomeAssistantThemeError,
+    built_in_home_assistant_theme_registry,
+    read_built_in_home_assistant_theme_module,
+)
 
 HOME_ASSISTANT_LOVELACE_CARD_FILENAME = "sds200-card.js"
 HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY = Path("/homeassistant/www/sds200")
@@ -22,11 +26,16 @@ HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL = (
     "/local/sds200/sds200-display-card.js"
 )
 _HOME_ASSISTANT_LOVELACE_CARD_MODE = 0o644
-_WEB_ASSET_PACKAGE = "sds200.web_assets"
 
 
 def _asset_bytes(filename: str) -> bytes:
-    return files(_WEB_ASSET_PACKAGE).joinpath(filename).read_bytes()
+    registry = built_in_home_assistant_theme_registry()
+    for theme in registry.themes:
+        if theme.installed_filename == filename:
+            return read_built_in_home_assistant_theme_module(theme)
+    raise HomeAssistantThemeError(
+        f"unknown built-in Home Assistant module filename: {filename}"
+    )
 
 
 def _install_home_assistant_lovelace_asset(
@@ -119,10 +128,18 @@ def install_home_assistant_lovelace_display_card(
 
 def install_home_assistant_lovelace_cards() -> tuple[Path, Path]:
     """Install both first-party Home Assistant Lovelace card assets."""
-    return (
-        install_home_assistant_lovelace_card(),
-        install_home_assistant_lovelace_display_card(),
+    installed = tuple(
+        _install_home_assistant_lovelace_asset(
+            HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / theme.installed_filename,
+            filename=theme.installed_filename,
+        )
+        for theme in built_in_home_assistant_theme_registry().themes
     )
+    if len(installed) != 2:
+        raise HomeAssistantThemeError(
+            "built-in Home Assistant compatibility set must contain two modules"
+        )
+    return installed[0], installed[1]
 
 
 __all__ = [

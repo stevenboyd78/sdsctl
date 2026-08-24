@@ -11,72 +11,65 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.10 — Modular web-theme packaging foundation
+### Milestone 26.11 — Modular Home Assistant theme packaging foundation
 
-Milestone 26.9 is closed with two fixed read-only Home Assistant sensors for
-configured Tone-Out Tone A and Tone B values, additive compact and SDS200 Display
-card support, correct mode-dependent availability, zero-as-`Detect`
-presentation, restart persistence, and physical Home Assistant OS acceptance
-against SDS200 firmware 1.26.01. The daemon remains the only scanner owner, and
-the existing canonical MQTT radio-state topic remains the only source for those
-entities.
+Milestone 26.10 is closed with the five existing web themes independently
+packaged under `themes/web/<theme-name>/`, a versioned manifest contract, one
+typed immutable registry, registry-derived picker and pre-paint metadata,
+same-origin stylesheet delivery, unchanged accessible rendering, distribution
+artifact coverage, and responsive browser acceptance. The dashboard retains its
+existing public theme identifiers, browser-local selection, security headers,
+Home Assistant Ingress behavior, and default-loopback service boundary.
 
-Milestone 26.10 establishes the first interface-scoped modular theme boundary.
-Move the five existing web choices—System, LCARS-inspired, Matrix-inspired,
-First Responder, and Amateur Radio—into built-in packages under
-`themes/web/<theme-name>/`. The repository and installed Python package may root
-that hierarchy inside the `sds200` package, but the interface and theme directory
-levels must remain explicit so later `home-assistant`, `tui`, and reserved `gui`
-adapters do not share renderer-specific assets accidentally.
+Milestone 26.11 extends the interface-scoped packaging model to the two existing
+first-party Home Assistant presentations. Move the compact SDS200 Scanner card
+and the SDS200 Display card into built-in packages under
+`themes/home-assistant/<theme-name>/`, using the stable package identities
+`compact` and `sds200-display`. Keep renderer-specific JavaScript inside its own
+package so web, Home Assistant, later TUI, and reserved GUI assets do not share
+implementation files accidentally.
 
-Each built-in web theme must carry a versioned declarative manifest and explicit
-stylesheet assets. A typed, deterministic registry must validate the manifest
-schema version, interface, stable lowercase kebab-case identifier, directory
-identity, human label, local stylesheet entry point, color-scheme metadata, and
-theme color before exposing a theme. Reject duplicate identities, missing or
-undeclared files, traversal or absolute paths, remote URLs, executable theme
-payloads, unsupported schema versions, and cross-interface assets. Theme
-packages style presentation only and gain no scanner, daemon, MQTT, Home
-Assistant service, authentication, recording, audio, or control authority.
+Each package must carry a versioned declarative `manifest.json` describing the
+`home-assistant` interface, stable lowercase kebab-case identity, directory
+identity, human label, deterministic order, one local JavaScript module,
+existing custom-element type, installed filename, and existing `/local/sds200/`
+resource URL. A typed immutable registry must reject duplicate identities,
+orders, custom elements, filenames, or resource URLs; missing or undeclared
+files; traversal, absolute, or remote asset paths; undeclared executable or
+cross-interface payloads; unknown fields; and unsupported schema versions before
+installation.
 
-Replace the hard-coded web-theme list and colors with the validated built-in
-registry. The dashboard picker, pre-paint browser-local bootstrap, theme-color
-metadata, and same-origin stylesheet delivery must derive from the same ordered
-registry. A missing, invalid, removed, or no-longer-supported stored selection
-must fall back to System before first paint without breaking the dashboard.
-Preserve the existing local-storage key, stable public theme identifiers,
-current selection behavior, system light/dark reaction, restrictive response
-headers, authenticated-LAN and Home Assistant Ingress behavior, and default
-loopback service boundary.
+Replace the installer’s hard-coded packaged-source mapping with the validated
+built-in registry while preserving its public constants and compatibility
+functions. Continue installing the two modules to the same flat
+`/homeassistant/www/sds200/` directory with the same filenames, resource URLs,
+mode `0644`, managed-symlink refusal, atomic replacement, idempotence, and
+failure isolation from daemon and dashboard startup. Registry packaging must not
+edit Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
-Extraction must preserve the current accessible shared HTML structure and the
-rendered appearance of every existing theme at the documented 1920x1080,
-1366x768, 800x480, and compact responsive reference sizes. Decorative layers
-remain ARIA-hidden and pointer-inert; reduced motion, keyboard operation, focus
-visibility, contrast intent, viewport fit, and no-required-scroll behavior must
-remain valid. The base dashboard stylesheet must contain shared layout only;
-theme-owned selectors and design tokens belong to their theme package rather
-than a new monolith.
+Extraction must preserve the JavaScript modules byte-for-byte so the existing
+`custom:sds200-card` and `custom:sds200-display-card` types, card-picker names,
+graphical editors, sixteen entity fields, state-context subscription, read-only
+transport-free behavior, Tone-Out `Detect` presentation, five display layouts,
+three palettes, two fit modes, accessibility, and responsive rendering remain
+unchanged. No Home Assistant OS revalidation is required for a source-only move
+when hashes, installed bytes, public paths, and package artifacts are exact.
 
-Host-independent acceptance must cover registry ordering, immutability, schema
-and path validation, duplicate and missing-asset rejection, package-resource and
-wheel/sdist inclusion, exact same-origin asset routing, media types and cache
-policy, selector generation, stored-selection compatibility and fallback,
-system color-scheme changes, content-security behavior, accessibility, all
-existing dashboard API and control tests, and deterministic browser captures for
-all five themes. The existing screenshots may be regenerated only when the
-rendered result is intentionally demonstrated to be equivalent or an explicitly
-reviewed correction.
+Host-independent acceptance must cover registry ordering and immutability,
+manifest and path validation, duplicate and missing-asset rejection, exact
+package-resource reads, byte-identical installed output, existing destination
+guards, atomic/idempotent installation, wheel and source-distribution inclusion,
+Home Assistant App/container packaging, all existing Lovelace behavior tests,
+documentation checks, and the complete regression suite.
 
-Document the manifest and built-in package contract plus the future
-installation/removal trust boundary, but do not enable third-party discovery,
-user-writable theme directories, archive extraction, package installation,
-runtime upload, or untrusted CSS in this slice. Do not add Home Assistant or TUI
-theme loaders, a desktop GUI, new visual families, remote assets, theme-owned
-JavaScript, templates, fonts, scanner fields, controls, network listeners,
-runtime dependencies, or physical hardware claims. Later milestones may add
-renderer adapters and deliberate third-party lifecycle management after this
-built-in web foundation is stable.
+Document the built-in Home Assistant package contract and unchanged manual
+resource-registration workflow. Do not enable third-party discovery,
+user-writable theme directories, runtime upload, archive extraction, package
+installation, or automatic Home Assistant resource registration in this slice.
+Do not modify the web registry, add a TUI or GUI loader, add cards, layouts,
+palettes, entities, scanner fields, controls, network access, runtime
+dependencies, or new physical-hardware claims. Third-party lifecycle management
+and TUI packaging remain later deliberately bounded milestones.
 
 ## Deferred hardware validation
 
@@ -595,6 +588,11 @@ is collected.
   detection presentation, programmed nonzero values, correct optional-field
   availability, App restart persistence, and the unchanged single-owner
   boundary against SDS200 firmware 1.26.01.
+- Milestone 26.10 completed the first interface-scoped modular theme boundary.
+  Five built-in web themes now use independently packaged versioned manifests
+  and stylesheets, one validated immutable registry, registry-derived picker and
+  pre-paint metadata, same-origin delivery, unchanged accessible responsive
+  rendering, and verified wheel/source-distribution inclusion.
 
 ## Completed milestone groups
 

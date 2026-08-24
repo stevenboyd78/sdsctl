@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -13,6 +12,10 @@ from sds200.home_assistant_lovelace import (
     HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL,
     install_home_assistant_lovelace_cards,
     install_home_assistant_lovelace_display_card,
+)
+from sds200.home_assistant_themes import (
+    built_in_home_assistant_theme_registry,
+    read_built_in_home_assistant_theme_module,
 )
 
 EXPECTED_ENTITY_FIELDS = {
@@ -46,11 +49,15 @@ def display_target(tmp_path: Path) -> Path:
 
 
 def display_card_text() -> str:
-    return (
-        files("sds200.web_assets")
-        .joinpath(HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME)
-        .read_text(encoding="utf-8")
+    theme = built_in_home_assistant_theme_registry().require("sds200-display")
+    return read_built_in_home_assistant_theme_module(theme).decode(
+        "utf-8"
     )
+
+
+def compact_card_text() -> str:
+    theme = built_in_home_assistant_theme_registry().require("compact")
+    return read_built_in_home_assistant_theme_module(theme).decode("utf-8")
 
 
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
@@ -63,19 +70,17 @@ def test_install_cards_installs_both_packaged_assets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(
+        "sds200.home_assistant_lovelace.HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY",
+        tmp_path,
+    )
+
     compact = tmp_path / HOME_ASSISTANT_LOVELACE_CARD_FILENAME
     display = tmp_path / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
 
-    monkeypatch.setattr(
-        "sds200.home_assistant_lovelace.install_home_assistant_lovelace_card",
-        lambda: compact,
-    )
-    monkeypatch.setattr(
-        "sds200.home_assistant_lovelace.install_home_assistant_lovelace_display_card",
-        lambda: display,
-    )
-
     assert install_home_assistant_lovelace_cards() == (compact, display)
+    assert compact.read_text(encoding="utf-8") == compact_card_text()
+    assert display.read_text(encoding="utf-8") == display_card_text()
 
 
 def test_display_card_packaged_asset_is_importable() -> None:
