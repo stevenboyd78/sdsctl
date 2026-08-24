@@ -301,6 +301,8 @@ def build_home_assistant_device_discovery(
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),
+        ("tone_out_tone_a", "Tone-Out Tone A"),
+        ("tone_out_tone_b", "Tone-Out Tone B"),
     ):
         components[key] = {
             "platform": "sensor",
@@ -315,9 +317,9 @@ def build_home_assistant_device_discovery(
                 {
                     "topic": radio_topic,
                     "value_template": (
-                        f"{{{{ 'online' if value_json.{key} is string "
-                        f"and value_json.{key} | length > 0 "
-                        "else 'offline' }}}}"
+                        f"{{{{ 'online' if value_json.{key} "
+                        "| default(none) not in [none, ''] "
+                        "else 'offline' }}"
                     ),
                 },
             ],
@@ -432,16 +434,13 @@ def build_home_assistant_device_discovery(
         "payload_available": "online",
         "payload_not_available": "offline",
         "qos": config.qos,
-    }
-    if home_assistant.controls_enabled:
-        payload["availability"] = [
+        "availability": [
             {
                 "topic": f"{prefix}/availability",
             }
-        ]
-        payload["availability_mode"] = "all"
-    else:
-        payload["availability_topic"] = f"{prefix}/availability"
+        ],
+        "availability_mode": "all",
+    }
 
     return DaemonMqttHomeAssistantDiscovery(
         topic=(

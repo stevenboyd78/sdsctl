@@ -49,6 +49,16 @@ const SDS200_DISPLAY_ENTITY_FIELDS = Object.freeze([
     label: "Service type",
     domain: "sensor",
   }),
+  Object.freeze({
+    key: "tone_out_tone_a",
+    label: "Tone-Out Tone A",
+    domain: "sensor",
+  }),
+  Object.freeze({
+    key: "tone_out_tone_b",
+    label: "Tone-Out Tone B",
+    domain: "sensor",
+  }),
   Object.freeze({ key: "signal", label: "Signal", domain: "sensor" }),
   Object.freeze({ key: "rssi", label: "RSSI", domain: "sensor" }),
   Object.freeze({
@@ -81,6 +91,13 @@ function fieldForName(name) {
   return SDS200_DISPLAY_ENTITY_FIELDS.find(
     (field) => field.key === name,
   );
+}
+
+function toneOutDisplay(value) {
+  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:hz)?$/i.exec(
+    value.trim(),
+  );
+  return match !== null && Number(match[1]) === 0 ? "Detect" : value;
 }
 
 function requireDisplayCardConfig(config) {
@@ -350,7 +367,9 @@ class Sds200DisplayCard extends HTMLElement {
     ) {
       return fallback;
     }
-    return value;
+    return ["tone_out_tone_a", "tone_out_tone_b"].includes(field)
+      ? toneOutDisplay(value)
+      : value;
   }
 
   _binaryActive(field) {
@@ -510,6 +529,8 @@ class Sds200DisplayCard extends HTMLElement {
         ["Tone-Out channel", "channel"],
         ["Tone-Out frequency", "frequency"],
         ["Tone-Out modulation", "modulation"],
+        ["Tone A", "tone_out_tone_a"],
+        ["Tone B", "tone_out_tone_b"],
       ],
     };
     return mappings[this._config.layout];
@@ -517,7 +538,9 @@ class Sds200DisplayCard extends HTMLElement {
 
   _renderSpecial(documentObject) {
     const content = documentObject.createElement("div");
-    content.className = "display-content special-layout";
+    content.className = (
+      `display-content special-layout special-layout-${this._config.layout}`
+    );
 
     const primary = documentObject.createElement("div");
     primary.className = "special-primary";
@@ -800,10 +823,22 @@ class Sds200DisplayCard extends HTMLElement {
         grid-template-rows: 61% minmax(0, 1fr);
       }
 
+      .special-layout-tone_out {
+        grid-template-rows: 72% minmax(0, 1fr);
+      }
+
       .special-primary {
         display: grid;
         grid-template-rows: repeat(3, minmax(0, 1fr));
         min-height: 0;
+      }
+
+      .special-layout-tone_out .special-primary {
+        grid-template-rows: repeat(5, minmax(0, 1fr));
+      }
+
+      .special-layout-tone_out .special-grid {
+        grid-template-rows: repeat(3, minmax(0, 1fr));
       }
 
       .special-primary-cell {

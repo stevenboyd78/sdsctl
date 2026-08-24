@@ -24,6 +24,8 @@ EXPECTED_ENTITY_FIELDS = {
     "frequency",
     "modulation",
     "service_type",
+    "tone_out_tone_a",
+    "tone_out_tone_b",
     "signal",
     "rssi",
     "audio_running",
@@ -115,6 +117,18 @@ def test_display_card_has_all_layout_palette_and_fit_presets() -> None:
 
     assert 'value: "card"' in text
     assert 'value: "viewport"' in text
+
+
+def test_display_card_tone_out_layout_presents_configured_tones() -> None:
+    text = display_card_text()
+
+    assert '["Tone A", "tone_out_tone_a"]' in text
+    assert '["Tone B", "tone_out_tone_b"]' in text
+    assert "function toneOutDisplay(value)" in text
+    assert 'Number(match[1]) === 0 ? "Detect" : value' in text
+    assert '["tone_out_tone_a", "tone_out_tone_b"].includes(field)' in text
+    assert "special-layout-tone_out" in text
+    assert "grid-template-rows: repeat(5, minmax(0, 1fr));" in text
 
 
 def test_display_card_uses_graphical_configuration_and_domain_filters() -> None:

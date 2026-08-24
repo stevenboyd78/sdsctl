@@ -22,6 +22,8 @@ EXPECTED_ENTITY_FIELDS = {
     "frequency",
     "modulation",
     "service_type",
+    "tone_out_tone_a",
+    "tone_out_tone_b",
     "signal",
     "rssi",
     "audio_running",
@@ -87,8 +89,20 @@ def test_lovelace_card_preserves_old_layout_when_new_details_are_unselected() ->
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
     ):
         assert f'"{field}",' in text
+
+
+def test_lovelace_card_presents_zero_tone_out_configuration_as_detect() -> None:
+    text = card_text()
+
+    assert "function toneOutDisplay(value)" in text
+    assert 'Number(match[1]) === 0 ? "Detect" : value' in text
+    assert '["tone_out_tone_a", "tone_out_tone_b"].includes(field)' in text
+    assert '["tone_out_tone_a", "Tone A"]' in text
+    assert '["tone_out_tone_b", "Tone B"]' in text
 
 
 def test_lovelace_card_uses_supported_state_context_subscription() -> None:

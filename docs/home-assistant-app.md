@@ -177,7 +177,7 @@ be played or downloaded through Ingress.
 
 The App enables the daemon's Home Assistant MQTT Discovery adapter plus the
 dedicated Milestone 20.12.3 Home Assistant control adapter. One SDS200 device
-contains twenty-one fixed components:
+contains twenty-three fixed components:
 
 | Component | Home Assistant platform |
 | --- | --- |
@@ -190,6 +190,8 @@ contains twenty-one fixed components:
 | Frequency | sensor |
 | Modulation | sensor |
 | Service Type | sensor |
+| Tone-Out Tone A | sensor |
+| Tone-Out Tone B | sensor |
 | Signal | sensor |
 | RSSI | sensor |
 | Audio | binary sensor |
@@ -206,11 +208,12 @@ contains twenty-one fixed components:
 Device metadata includes Uniden as manufacturer plus scanner model and firmware
 when the daemon's authoritative snapshot contains them.
 
-Site, Frequency, Modulation, and Service Type use the existing generic radio
-state topic. Each sensor is unavailable when its nullable field is absent, null,
-or empty for the current scanner mode, so a prior value is not presented as
-current. The component inventory remains fixed; mode changes do not create or
-remove discovery components.
+Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Tone B use the existing generic radio-state topic. Each sensor is unavailable
+when its nullable field is absent, null, or empty for the current scanner mode,
+so a prior value is not presented as current. The component inventory remains
+fixed; mode changes do not create or remove discovery components. Tone-Out
+values are scanner configuration, not detected search or Close Call `SAD`.
 
 The App keeps the generic daemon MQTT request-envelope command transport
 disabled. Home Assistant controls instead use seven exact dedicated QoS 0,
@@ -383,6 +386,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -397,7 +402,7 @@ standard Home Assistant switch and button entities, so the card does not acquire
 a scanner, daemon, MQTT, or Home Assistant service-call transport.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker and
-configure the same fourteen entities. The graphical editor selects the layout,
+configure the same sixteen entities. The graphical editor selects the layout,
 palette, and fit mode. Equivalent YAML starts with:
 
 ```yaml
@@ -415,6 +420,8 @@ entities:
   frequency: sensor.REPLACE_ME
   modulation: sensor.REPLACE_ME
   service_type: sensor.REPLACE_ME
+  tone_out_tone_a: sensor.REPLACE_ME
+  tone_out_tone_b: sensor.REPLACE_ME
   signal: sensor.REPLACE_ME
   rssi: sensor.REPLACE_ME
   audio_running: binary_sensor.REPLACE_ME
@@ -431,6 +438,12 @@ layouts are an original accessible presentation inspired by the information
 hierarchy on pages 38–39 of the
 [SDS200 Owner's Manual](https://www.uniden.info/download/ompdf/SDS200om.pdf);
 they do not copy scanner artwork, branding, or fonts.
+
+The compact card includes optional Tone A and Tone B detail rows, and the
+`tone_out` display layout presents both configured values. Numeric zero with an
+optional `Hz` suffix is displayed as `Detect`, matching the scanner's
+tone-frequency detection configuration, while nonzero or unrecognized nonempty
+scanner text is shown unchanged. The Home Assistant sensor retains the raw text.
 
 ## Security boundary
 
@@ -538,9 +551,10 @@ previous Local App installation:
   JavaScript Module;
 - confirm **SDS200 Scanner** appears in the card picker, its graphical editor
   works, and the read-only card renders the selected Discovery state entities;
-- confirm the SDS200 MQTT device exposes twenty-one total components;
-- confirm Site, Frequency, Modulation, and Service Type become unavailable when
-  the current radio state omits them and recover on the next applicable state;
+- confirm the SDS200 MQTT device exposes twenty-three total components;
+- confirm Site, Frequency, Modulation, Service Type, and Tone-Out Tone A and
+  Tone B become unavailable when the current radio state omits them and recover
+  on the next applicable state;
 - exercise System, Department, Site, and Channel Hold in both meaningful
   desired-state directions and confirm authoritative Home Assistant state;
 - exercise Previous Channel and Next Channel while a valid current TGID or
@@ -583,3 +597,34 @@ The acceptance run confirmed:
 This development run does not replace the tagged repository-managed App test in
 the release checklist. Repeat that gate against the published release images
 before release completion.
+
+### Milestone 26.9 Tone-Out development acceptance
+
+Milestone 26.9 development acceptance completed on August 24, 2026, using the
+Local App built from commit `63f5e5b`. The test host ran amd64 Home Assistant OS
+18.2, Core 2026.8.3, Supervisor 2026.07.5, and Docker 29.6.2 with a physical
+SDS200 running firmware 1.26.01. The repository-managed App remained stopped,
+and the Local App remained the only daemon, scanner-control, PSI, and RTSP/RTP
+owner.
+
+The acceptance run confirmed:
+
+- the fixed Tone-Out Tone A and Tone B Discovery entities were available while
+  applicable, and optional Site and Service Type stayed correctly unavailable
+  when omitted by the Tone-Out radio state;
+- a programmed zero-tone entry reported raw entity values `0.0Hz` and `0.0Hz`,
+  while both Tone-Out display cards rendered `Detect` for each value;
+- programmed nonzero entries preserved and rendered exact scanner text,
+  including `1063.0Hz` / `304.7Hz` before restart and `539.0Hz` / `399.8Hz`
+  after restart as the scanner advanced through its Tone-Out entries;
+- the original compact **SDS200 Scanner** card rendered the live channel plus
+  Tone A and Tone B rows through its normal graphical/YAML configuration
+  contract;
+- the Local App restarted cleanly, Home Assistant restored the two entities,
+  both display cards resumed live numeric rendering, and Scanner Connection and
+  Daemon State returned to `Connected` and `running`; and
+- no scanner programming was changed and the temporary compact-card preview was
+  discarded after verification.
+
+This development run validates the physical Milestone 26.9 behavior. It does
+not replace the tagged repository-managed App test in the release checklist.

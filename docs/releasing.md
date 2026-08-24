@@ -260,10 +260,11 @@ distribution path on Home Assistant OS.
    read-only state rendering. Exercise all five display layouts, all three
    palettes, and both fit modes; confirm viewport fit has no internal overflow at
    390-pixel phone, 800x480, and 1920x1080 reference sizes.
-8. Confirm the discovered SDS200 device exposes twenty-one components: fourteen
+8. Confirm the discovered SDS200 device exposes twenty-three components: sixteen
    state/diagnostic components plus four Hold switches and Previous Channel,
    Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,
-   Frequency, Modulation, and Service Type sensors follow field availability.
+   Frequency, Modulation, Service Type, and configured Tone-Out Tone A and Tone B
+   sensors follow field availability; zero tones render as `Detect` in both cards.
 9. Exercise all four Hold scopes when meaningful, Previous and Next with a valid
    current channel selection, and Reconnect Scanner. Confirm Home Assistant state
    remains authoritative after each action and the App does not enable the

@@ -31,6 +31,8 @@ SNAPSHOT: dict[str, object] = {
         "frequency": "155.2500 MHz",
         "modulation": "NFM",
         "service_type": "Fire Dispatch",
+        "tone_out_tone_a": "600.9Hz",
+        "tone_out_tone_b": "0.0Hz",
         "signal": 4,
         "rssi": -83.0,
     },
@@ -97,7 +99,11 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "name": "sds200",
         "support_url": DAEMON_MQTT_HOME_ASSISTANT_SUPPORT_URL,
     }
-    assert payload["availability_topic"] == "radio/sds200/availability"
+    assert payload["availability"] == [
+        {"topic": "radio/sds200/availability"}
+    ]
+    assert "availability_topic" not in payload
+    assert payload["availability_mode"] == "all"
     assert payload["payload_available"] == "online"
     assert payload["payload_not_available"] == "offline"
     assert payload["qos"] == 1
@@ -113,6 +119,8 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
         "signal",
         "rssi",
         "audio_running",
@@ -175,6 +183,8 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
         ("frequency", "Frequency"),
         ("modulation", "Modulation"),
         ("service_type", "Service Type"),
+        ("tone_out_tone_a", "Tone-Out Tone A"),
+        ("tone_out_tone_b", "Tone-Out Tone B"),
     ):
         assert components[key] == {
             "availability": [
@@ -182,9 +192,9 @@ def test_device_discovery_uses_stable_topic_identity_and_read_only_entities() ->
                 {
                     "topic": "radio/sds200/state/radio",
                     "value_template": (
-                        f"{{{{ 'online' if value_json.{key} is string "
-                        f"and value_json.{key} | length > 0 "
-                        "else 'offline' }}}}"
+                        f"{{{{ 'online' if value_json.{key} "
+                        "| default(none) not in [none, ''] "
+                        "else 'offline' }}"
                     ),
                 },
             ],
@@ -216,6 +226,8 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
     } <= set(components)
     assert all(
         components[key]["availability_mode"] == "all"
@@ -224,6 +236,8 @@ def test_optional_radio_sensors_are_fixed_when_current_fields_are_absent() -> No
             "frequency",
             "modulation",
             "service_type",
+            "tone_out_tone_a",
+            "tone_out_tone_b",
         )
     )
 
@@ -241,7 +255,11 @@ def test_discovery_honors_configured_prefix_and_qos() -> None:
     assert discovery is not None
     payload = json.loads(discovery.payload)
     assert discovery.topic.startswith("ha/device/sds200_")
-    assert payload["availability_topic"] == "scanner/main/availability"
+    assert payload["availability"] == [
+        {"topic": "scanner/main/availability"}
+    ]
+    assert "availability_topic" not in payload
+    assert payload["availability_mode"] == "all"
     assert payload["qos"] == 2
     assert payload["components"]["channel"]["state_topic"] == (
         "scanner/main/state/radio"
@@ -274,6 +292,8 @@ def test_discovery_adds_deliberate_home_assistant_control_entities() -> None:
         "frequency",
         "modulation",
         "service_type",
+        "tone_out_tone_a",
+        "tone_out_tone_b",
         "signal",
         "rssi",
         "audio_running",

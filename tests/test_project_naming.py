@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_8_semantic_control_contract() -> None:
+def test_roadmap_records_milestone_26_9_tone_out_parity_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,40 +132,29 @@ def test_roadmap_records_milestone_26_8_semantic_control_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.8 — Explicit semantic-control parity",
-        "Milestone 26.7 is closed",
-        "capability-audit finding `A05`",
-        "direct CLI, daemon-client CLI, direct Textual TUI",
-        "daemon-backed Textual TUI",
-        "one exact desired-state hold operation",
-        "System, Department, Site, and Channel",
-        "avoid a key press when the requested state is already current",
-        "require a valid current index before entering hold",
-        "confirm the resulting state before reporting success",
-        "exact bounded volume and squelch set operations",
-        "model-specific ranges before scanner mutation",
-        "literal zero",
-        "versioned semantic operations",
-        "existing bounded request and response framing",
-        "one daemon control lock",
-        "return an authoritative completion snapshot",
-        "no second PSI reader, socket, worker, or state cache",
-        "preserve existing indexed `hold`, `next`",
-        "read-only daemon compatibility negotiation",
-        "Milestone 26.8 implementation and host-independent acceptance are complete",
-        "completed enter and release for all four hold scopes",
-        "volume/squelch portion of the physical matrix also passes on SDS200 UDP",
-        "Firmware 1.26.01 acknowledges setters with `VOL,OK` and `SQL,OK`",
-        "Daemon completion uses the authoritative `VOL`/`SQL` getters",
-        "final getter verification after daemon shutdown",
-        "does not limit the accepted native UDP path",
-        "Physical SDS200 acceptance must use reversible bounded changes",
-        "change and restore volume",
-        "change and restore squelch",
-        "without concurrent scanner owners",
-        "Do not add remote daemon networking",
-        "Home Assistant entities or topics",
-        "raw-key passthrough",
+        "### Milestone 26.9 — Home Assistant Tone-Out field parity",
+        "Milestone 26.8 is closed",
+        "`ToneOutChannel` `ToneA` and `ToneB` attributes",
+        "two fixed, read-only configured Tone A and configured Tone B sensor components",
+        "without adding a scanner query, state owner, MQTT state topic, or control operation",
+        "stable deterministic component and unique IDs",
+        "existing canonical radio-state topic",
+        "current field availability",
+        "entity identity remains stable across mode changes",
+        "Preserve the scanner-reported configured tone text",
+        "detected `SAD`",
+        "compact and SDS200 Display card configuration contracts",
+        "Existing fourteen-entity YAML",
+        "A scanner-reported numeric zero tone",
+        "presented as `Detect`",
+        "nonzero and unrecognized nonempty scanner text remains visible",
+        "zero detection presentation",
+        "existing ban on card-owned scanner, MQTT, Home Assistant service, or network transports",
+        "one configured nonzero tone and one zero-as-detection tone",
+        "retain one daemon scanner owner",
+        "Do not add modular theme loading",
+        "new Home Assistant controls or MQTT state topics",
+        "`themes/<interface>/<theme-name>/`",
         "new runtime dependencies",
         "physical SDS150 claims",
     ):

@@ -246,7 +246,7 @@ MQTT state contract rather than a second state system. Enable it with:
 enabled = true
 ```
 
-Without Home Assistant controls, the device document contains fourteen fixed
+Without Home Assistant controls, the device document contains sixteen fixed
 state/diagnostic components:
 
 | Component | Platform | Source |
@@ -260,6 +260,8 @@ state/diagnostic components:
 | Frequency | sensor | `<prefix>/state/radio` |
 | Modulation | sensor | `<prefix>/state/radio` |
 | Service Type | sensor | `<prefix>/state/radio` |
+| Tone-Out Tone A | sensor | `<prefix>/state/radio` |
+| Tone-Out Tone B | sensor | `<prefix>/state/radio` |
 | Signal | sensor | `<prefix>/state/radio` |
 | RSSI | sensor | `<prefix>/state/radio` |
 | Audio running | binary sensor | `<prefix>/state/audio` |
@@ -268,10 +270,12 @@ state/diagnostic components:
 
 The shared device metadata uses Uniden as manufacturer, scanner model and
 firmware when available in the authoritative snapshot, and daemon availability.
-Site, Frequency, Modulation, and Service Type combine daemon availability with
-field availability from the radio-state topic. A missing, null, or empty value
-makes only that optional sensor unavailable; the fixed discovery inventory does
-not change with scanner mode.
+Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Tone B combine daemon availability with field availability from the radio-state
+topic. A missing, null, or empty value makes only that optional sensor
+unavailable; the fixed discovery inventory does not change with scanner mode.
+Tone-Out values preserve scanner text and are distinct from detected search or
+Close Call `SAD` values.
 The discovery document remains non-retained and is republished after an
 authoritative snapshot, broker reconnect, event-stream resynchronization, or an
 exact configured Home Assistant birth message.

@@ -1223,7 +1223,11 @@ def test_worker_publishes_discovery_and_republishes_on_home_assistant_birth() ->
     assert first.qos == 1
     assert first.retain is False
     payload = decode_json(first)
-    assert payload["availability_topic"] == "sdsctl/availability"
+    assert payload["availability"] == [
+        {"topic": "sdsctl/availability"}
+    ]
+    assert "availability_topic" not in payload
+    assert payload["availability_mode"] == "all"
     assert payload["components"]["channel"]["state_topic"] == (
         "sdsctl/state/radio"
     )

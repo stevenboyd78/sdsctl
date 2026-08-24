@@ -129,8 +129,8 @@ Lovelace card remains read-only.
 | `frequency` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R* | Covered when available |
 | `modulation` | Mode-selected node; `P200`, `F` | R | R | R | R | J | R* | Covered when available |
 | `sub_audio_detected` | Search/Close Call SAD; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
-| `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
-| `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
+| `tone_out_tone_a` | Tone-Out node; `F` | — | — | R* | R | J | R* | R1: Rich and monitor |
+| `tone_out_tone_b` | Tone-Out node; `F` | — | — | R* | R | J | R* | R1: Rich and monitor |
 | `weather_mode` | Weather node; `P200`, `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `weather_same` | Weather node; `F` | — | — | R* | R | J | — | R1: CLI and Home Assistant |
 | `service_type` | Mode-selected node; `P200`, `F` | R | R | R* | R | J | R* | Covered when available |
@@ -156,6 +156,8 @@ new protocol semantics:
 - Milestone 26.6 adds a fixed compatibility-reviewed Home Assistant core of
   Site, Frequency, Modulation, and Service Type without dynamic discovery or
   new scanner state;
+- Milestone 26.9 adds fixed configured Tone-Out Tone A and Tone B sensors plus
+  optional compact and display-card fields without new scanner polling or state;
 - Rich, monitor, TUI, and Home Assistant gaps remain surface-specific rather
   than losses from the shared state; and
 - Home Assistant Discovery intentionally exposes a small stable core even though
@@ -351,3 +353,13 @@ This closes `A04` without adding dynamic components, commands, scanner polling,
 state fields, inferred units, or another scanner owner. The other Home Assistant
 gaps remain candidates for separate compatibility review rather than an implied
 entity backlog.
+
+## Milestone 26.9 Tone-Out compatibility decision
+
+Configured `ToneOutChannel` `ToneA` and `ToneB` values already traverse shared
+state and the canonical MQTT radio topic. Two fixed optional sensors now expose
+that text with field-level availability, and both bundled cards accept them
+without invalidating existing fourteen-entity configurations. The cards present
+a numeric zero with an optional `Hz` suffix as `Detect`; entity state remains raw
+and nonzero or unrecognized nonempty text is not reinterpreted. These configured
+values remain distinct from detected search or Close Call `SAD`.

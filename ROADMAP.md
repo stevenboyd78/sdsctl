@@ -11,86 +11,72 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.8 — Explicit semantic-control parity
+### Milestone 26.9 — Home Assistant Tone-Out field parity
 
-Milestone 26.7 is closed with one additive responsive SDS200 Display Lovelace
-card, unchanged compact-card compatibility, host-independent browser acceptance,
-and physical development validation on Home Assistant OS against an SDS200
-running firmware 1.26.01. Tagged repository-managed App acceptance remains a
-release gate rather than Milestone 26.8 runtime scope.
+Milestone 26.8 is closed with exact desired-state hold and release across all
+four meaningful scopes, exact model-bounded volume and squelch mutation, direct
+and daemon-backed CLI/TUI parity, and reversible SDS200 firmware 1.26.01
+physical acceptance. Firmware `VOL,OK` and `SQL,OK` acknowledgements and
+screen-independent scalar getter confirmation are now part of the accepted
+native UDP path.
 
-Milestone 26.8 addresses capability-audit finding `A05`. Align explicit
-hold/release and volume/squelch mutation across the direct CLI, daemon-client
-CLI, direct Textual TUI, and daemon-backed Textual TUI without creating another
-scanner owner or exposing raw scanner commands. Terminal monitor, Rich
-scanner-information output, the web dashboard, Home Assistant, and generic MQTT
-state remain unchanged unless documentation must describe the shared boundary.
+Milestone 26.9 corrects one narrow Home Assistant presentation omission. The
+scanner protocol parser, shared radio state, daemon event stream, and canonical
+MQTT radio-state topic already preserve the `ToneOutChannel` `ToneA` and `ToneB`
+attributes, but Home Assistant MQTT Discovery creates no matching entities and
+the Tone-Out Lovelace layout cannot select or render them. Add two fixed,
+read-only configured Tone A and configured Tone B sensor components without
+adding a scanner query, state owner, MQTT state topic, or control operation.
 
-Provide one exact desired-state hold operation for System, Department, Site, and
-Channel. The caller selects the scope and `held` boolean; implementations must
-read authoritative scanner state, avoid a key press when the requested state is
-already current, require a valid current index before entering hold, use only the
-documented bounded hold-key sequence, and confirm the resulting state before
-reporting success. Direct and daemon-backed CLI commands must expose both hold
-and release explicitly. Direct and daemon-backed TUI actions must choose the
-desired state from the latest authoritative snapshot rather than remaining
-one-way hold shortcuts or applying optimistic local state.
+Both sensors must use stable deterministic component and unique IDs, reuse the
+existing canonical radio-state topic, and combine daemon availability with
+current field availability. They must exist in the discovery document even when
+the current scanner mode omits Tone-Out fields so entity identity remains stable
+across mode changes. Preserve the scanner-reported configured tone text in the
+entity state; do not reinterpret it as CTCSS, DCS, detected `SAD`, alert state,
+or a writable frequency.
 
-Provide exact bounded volume and squelch set operations. Validate integer types
-and model-specific ranges before scanner mutation, execute through the existing
-typed `VOL` and `SQL` commands, and confirm the authoritative value after the
-write. CLI surfaces accept an exact level; TUI increment/decrement actions clamp
-to the connected model's capability bounds and reuse the same operation. Do not
-infer percentage, loudness, mute, charging, or cross-model equivalence from raw
-levels.
+Extend the compact and SDS200 Display card configuration contracts additively
+with optional Tone A and Tone B sensor selectors. Existing fourteen-entity YAML,
+graphical-editor configuration, saved layouts, card sizing, and read-only
+transport boundary must remain valid. The Tone-Out display layout must present
+both configured tones. A scanner-reported numeric zero tone, with or without an
+`Hz` suffix, is presented as `Detect` because zero configures tone-frequency
+detection; nonzero and unrecognized nonempty scanner text remains visible
+without speculative conversion. Missing or unavailable entities retain the
+existing accessible unavailable presentation.
 
-The daemon API adds only versioned semantic operations for these controls. They
-must negotiate through hello capabilities, use the existing bounded request and
-response framing, serialize with reconnect, navigation, Home Assistant, web, and
-PSI recovery through the one daemon control lock, return an authoritative
-completion snapshot, and preserve stable unavailable, busy, timeout, rejected,
-invalid-parameter, unsupported-model, and failed error classes. The daemon event
-stream remains the authoritative asynchronous state source; no second PSI
-reader, socket, worker, or state cache is permitted.
+Host-independent acceptance must cover stable discovery identity, exact value
+templates, field-level availability, mode omission and restoration, legacy card
+configuration, graphical selectors, Tone-Out layout rendering, zero detection
+presentation, nonzero configured tones, unavailable values, viewport behavior,
+accessibility text, and the existing ban on card-owned scanner, MQTT, Home
+Assistant service, or network transports. Documentation must distinguish
+configured Tone-Out A/B values from detected search/Close Call `SAD` values.
 
-Compatibility acceptance must preserve existing indexed `hold`, `next`,
-`previous`, `reconnect`, web hold-state, Home Assistant control, and generic MQTT
-contracts. Add deterministic unit and integration coverage for no-op desired
-states, unavailable indexes and fields, model bounds, literal zero, upper limits,
-protocol rejection, timeouts, concurrency, reconnect, stale snapshots, event
-reconciliation, CLI output/JSON, TUI non-blocking behavior, and read-only daemon
-compatibility negotiation.
+Physical Home Assistant OS acceptance must update the development App, verify
+the two discovered entities across a non-Tone-Out to Tone-Out transition,
+exercise at least one configured nonzero tone and one zero-as-detection tone,
+confirm the compact and Tone-Out display cards, verify restart persistence, and
+retain one daemon scanner owner. Record SDS200 firmware, entity availability,
+rendered values, and cleanup without changing scanner programming.
 
-Milestone 26.8 implementation and host-independent acceptance are complete.
-Direct and daemon-backed CLI/TUI paths now share exact desired-state hold/release
-semantics and model-bounded volume/squelch mutation with authoritative completion.
-Physical SDS200 firmware 1.26.01 acceptance on 2026-08-23 completed enter and
-release for all four hold scopes through both direct and daemon-owned paths. The
-scanner was restored to its starting hold states and Utah County site without a
-concurrent owner.
+Development acceptance completed on August 24, 2026, on Home Assistant OS 18.2
+with Core 2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and a physical SDS200
+running firmware 1.26.01. The two fixed entities stayed available across
+Tone-Out entries, preserved exact zero and nonzero scanner text, rendered zero
+as `Detect` without changing entity state, recovered numeric values after an App
+restart, and remained under the existing single daemon scanner owner. The
+original compact card and the Tone-Out display layout both rendered live A/B
+values through Home Assistant state only.
 
-The volume/squelch portion of the physical matrix also passes on SDS200 UDP.
-Firmware 1.26.01 acknowledges setters with `VOL,OK` and `SQL,OK`; the parser now
-preserves those acknowledgements instead of requiring a numeric getter response.
-Daemon completion uses the authoritative `VOL`/`SQL` getters because a Menu-tree
-`GSI` response may omit both levels. Direct and daemon-owned paths each changed
-and restored volume `0` to `1` to `0` and squelch `2` to `3` to `2`, with final
-getter verification after daemon shutdown. Milestone 26.8 implementation and
-physical acceptance are complete. USB setter comparison remains unperformed but
-does not limit the accepted native UDP path.
-
-Physical SDS200 acceptance must use reversible bounded changes: exercise enter
-and release for each meaningful hold scope, change and restore volume, change and
-restore squelch, and verify both direct and daemon-owned paths without concurrent
-scanner owners. Record firmware, starting and restored values, authoritative PSI
-confirmation, shutdown cleanup, and any mode-dependent scope that could not be
-safely exercised. SDS100 behavior remains capability-bounded; SDS150 claims
-remain fixture/specification-only until representative hardware exists.
-
-Do not add remote daemon networking, Home Assistant entities or topics, browser
-controls, raw-key passthrough, arbitrary protocol commands, advanced-protocol
+Do not add modular theme loading, third-party theme discovery, new web dashboard
+themes, remote daemon networking, new Home Assistant controls or MQTT state
+topics, raw-key passthrough, arbitrary protocol commands, advanced-protocol
 controls, System Status, RF Power Plot, audio/recording observability expansion,
-new runtime dependencies, or physical SDS150 claims in this slice.
+new runtime dependencies, or physical SDS150 claims in this slice. The planned
+`themes/<interface>/<theme-name>/` manifest and loader foundation remains a
+separate milestone beginning with extraction of the existing web themes.
 
 ## Deferred hardware validation
 
@@ -598,6 +584,11 @@ is collected.
   state, and restart persistence against SDS200 firmware 1.26.01. The existing
   compact card and all Home Assistant component and scanner-ownership boundaries
   remain unchanged.
+- Milestone 26.8 completed exact desired-state hold/release and exact bounded
+  volume/squelch parity across direct and daemon-backed CLI/TUI paths. SDS200
+  firmware 1.26.01 physical acceptance covered all four hold scopes and
+  reversible native-UDP volume and squelch changes with authoritative
+  completion and restored starting state.
 
 ## Completed milestone groups
 

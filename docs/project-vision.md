@@ -258,10 +258,11 @@ components, all seven bounded scanner controls, Lovelace/configuration acceptanc
 recording and audio regression validation, and single-owner behavior physically
 validated through the repository-managed HAOS App.
 
-Current Home Assistant Discovery contains twenty-one fixed components: fourteen
+Current Home Assistant Discovery contains twenty-three fixed components: sixteen
 daemon/scanner/radio/audio/recording state and diagnostic components, including
-optional Site, Frequency, Modulation, and Service Type sensors, plus the seven
-bounded scanner controls. Broader mode-specific entity growth, destination
+optional Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone
+A and Tone B sensors, plus the seven bounded scanner controls. Broader
+mode-specific entity growth, destination
 health, richer scanner events, remote daemon-backed CLI/TUI/GUI transports, and
 an optional host-network deployment variant remain separate future
 considerations.
@@ -270,7 +271,7 @@ Milestone 26.7 adds a separate responsive SDS200 Display Lovelace presentation
 without changing that component inventory or the original compact card. Five
 scanner-style layout presets and three palettes share one original 4:3 grid,
 with a viewport-bounded fit mode that avoids internal scrolling. Both card
-assets remain read-only, transport-free consumers of the same fourteen state
+assets remain read-only, transport-free consumers of the same sixteen state
 entities; scanner display writes and copied manufacturer assets remain outside
 the product boundary.
 
@@ -342,6 +343,18 @@ Scalable, theme-aware vector effects and responsive layouts should continue to
 be preferred as shared visual work expands so the design can adapt to web,
 terminal, desktop, documentation, 4K workstations, and compact Raspberry Pi
 presentation surfaces without requiring separate semantic interfaces.
+
+Future modular theme packaging should use the interface-scoped hierarchy
+`themes/<interface>/<theme-name>/`. Each theme directory should carry a
+versioned manifest plus renderer-appropriate declarative assets. The initial
+interfaces are `web`, `home-assistant`, and `tui`; `gui` remains reserved until
+a desktop renderer exists. A visual family may reuse one theme name across
+interfaces while each package stays independently installable and appropriate
+for its renderer. Theme packages may style presentation but must not acquire
+scanner, daemon, MQTT, Home Assistant service, authentication, or control
+authority. Begin that future work by extracting the existing web themes and
+defining manifest, fallback, validation, accessibility, and third-party
+installation/removal contracts before adding other renderer adapters.
 
 ## Favorites Workspace
 
