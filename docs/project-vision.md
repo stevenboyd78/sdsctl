@@ -344,17 +344,19 @@ be preferred as shared visual work expands so the design can adapt to web,
 terminal, desktop, documentation, 4K workstations, and compact Raspberry Pi
 presentation surfaces without requiring separate semantic interfaces.
 
-Future modular theme packaging should use the interface-scoped hierarchy
-`themes/<interface>/<theme-name>/`. Each theme directory should carry a
-versioned manifest plus renderer-appropriate declarative assets. The initial
-interfaces are `web`, `home-assistant`, and `tui`; `gui` remains reserved until
-a desktop renderer exists. A visual family may reuse one theme name across
-interfaces while each package stays independently installable and appropriate
-for its renderer. Theme packages may style presentation but must not acquire
-scanner, daemon, MQTT, Home Assistant service, authentication, or control
-authority. Begin that future work by extracting the existing web themes and
-defining manifest, fallback, validation, accessibility, and third-party
-installation/removal contracts before adding other renderer adapters.
+Modular theme packaging uses the interface-scoped hierarchy
+`themes/<interface>/<theme-name>/`. Milestone 26.10 establishes its first
+built-in implementation by extracting the five existing web themes into
+versioned manifest plus declarative CSS packages with deterministic validation,
+same-origin delivery, compatible pre-paint fallback, and unchanged accessible
+rendering. The next renderer interfaces are `home-assistant` and `tui`; `gui`
+remains reserved until a desktop renderer exists. A visual family may reuse one
+theme name across interfaces while each package stays independently installable
+and appropriate for its renderer. Theme packages may style presentation but
+must not acquire scanner, daemon, MQTT, Home Assistant service, authentication,
+or control authority. Third-party installation and removal remain a later trust
+boundary requiring deliberate staging, validation, collision, rollback,
+recovery, and untrusted-asset decisions rather than automatic directory scans.
 
 ## Favorites Workspace
 

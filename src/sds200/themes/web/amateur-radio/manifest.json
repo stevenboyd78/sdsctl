@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "amateur-radio",
+  "label": "Amateur Radio",
+  "order": 40,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {
+    "light": "#11100c",
+    "dark": "#11100c"
+  }
+}

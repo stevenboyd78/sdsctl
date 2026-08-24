@@ -293,6 +293,22 @@ deliberately more theatrical while preserving the same dashboard semantics:
   with a scanner display window, tactile controls, rotary hardware, vents,
   chassis depth, and bench-equipment lighting.
 
+The five choices are built-in packages under the installed
+`sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
+only a versioned `manifest.json` and its declared `theme.css`. The manifest
+records schema version 1, the `web` interface, stable theme ID, human label,
+picker order, local stylesheet filename, color scheme, and light/dark browser
+theme colors. The registry requires the directory name and manifest ID to match,
+rejects unknown fields and schema versions, and exposes only validated local CSS
+files.
+
+The base `/assets/dashboard.css` contains the shared layout and accessibility
+rules. Theme-owned selectors, design tokens, responsive styling, and decorative
+effects remain inside their package and are served at
+`/assets/themes/<theme-name>/theme.css`. The HTML options, stylesheet links, and
+pre-paint browser metadata are generated from the same immutable ordered
+registry, so they cannot drift into separate hard-coded theme lists.
+
 At desktop-class sizes the custom themes use a dense three-by-two full-screen
 workstation composition with minimal page scrolling. Intermediate widths reflow
 recording telemetry to preserve readable values, while compact and phone layouts
@@ -301,12 +317,15 @@ Large displays can expose more of the surrounding instrumentation rather than
 merely enlarging controls.
 
 The same-origin `/assets/theme-bootstrap.js` script runs in the document head
-before `/assets/dashboard.css`. It validates the stored value, applies the
-corresponding `data-theme` value to the document root before first paint, and
-updates `color-scheme` and `theme-color` metadata. The normal dashboard Content
-Security Policy remains unchanged: inline scripts and styles are still
-forbidden, and no remote fonts, scripts, styles, or theme assets are required.
-If local storage is unavailable, the dashboard safely falls back to **System**.
+before `/assets/dashboard.css` and the packaged theme stylesheets. It validates
+the stored value against registry-generated metadata, applies the corresponding
+`data-theme` value to the document root before first paint, and updates
+`color-scheme` and `theme-color` metadata. A missing, removed, or malformed
+selection and unavailable local storage safely fall back to **System** while the
+existing `sdsctl.web.theme` storage key and public theme IDs remain compatible.
+The normal dashboard Content Security Policy remains unchanged: inline scripts
+and styles are still forbidden, and no remote fonts, scripts, styles, or theme
+assets are required.
 
 The cinematic layer is a shared `aria-hidden` decorative stage. It is
 pointer-inert and carries no scanner meaning. All themes retain the same labels,
@@ -314,6 +333,25 @@ DOM structure, ARIA state, keyboard focus treatment, responsive behavior, and
 status text; scanner state is never communicated by color alone. Decorative
 animation and transitions are suppressed for `prefers-reduced-motion`, and the
 more expensive effects are disabled in compact layouts.
+
+Milestone 26.10 deliberately exposes built-in resources only. It does not scan
+user-writable directories, extract archives, install packages, accept runtime
+uploads, or execute theme JavaScript or templates. A later third-party lifecycle
+must define an explicit trusted installation source, staging validation,
+collision policy, atomic activation, rollback, removal behavior, and recovery
+path before external packages can enter the registry. Home Assistant and TUI
+themes remain separate renderer adapters under their own interface directories;
+`gui` stays reserved until a desktop renderer exists.
+
+Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
+real packaged demo application and Google Chrome. All five themes rendered at
+1920x1080, 800x480, and 390x844; Amateur Radio also rendered at the documented
+1366x768 reference. The System 1920x1080 capture was byte-identical to the
+pre-extraction commit. Side-by-side custom-theme captures preserved layout,
+geometry, colors, controls, and responsive reflow; only the sampled frames of
+their existing decorative animations varied. The wheel and sdist both contained
+all five manifests and stylesheets, and no checked-in gallery image required a
+content change.
 
 ## Theme gallery
 

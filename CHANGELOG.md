@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 26.10 modular web-theme packaging foundation. System,
+  LCARS-inspired, Matrix-inspired, First Responder, and Amateur Radio now live
+  under `themes/web/<theme-name>/` as independently validated versioned
+  manifest and declarative CSS packages. One immutable registry drives picker
+  order, same-origin stylesheets, pre-paint metadata, and safe System fallback
+  while preserving public IDs, browser-local selection, visual behavior,
+  accessibility, response security, and all scanner-ownership boundaries.
 - Add two fixed read-only Home Assistant MQTT Discovery sensors for configured
   Tone-Out Tone A and Tone B values on the existing radio-state topic. Both
   bundled Lovelace cards accept the sensors additively, the Tone-Out display

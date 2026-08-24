@@ -11,72 +11,72 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 26.9 — Home Assistant Tone-Out field parity
+### Milestone 26.10 — Modular web-theme packaging foundation
 
-Milestone 26.8 is closed with exact desired-state hold and release across all
-four meaningful scopes, exact model-bounded volume and squelch mutation, direct
-and daemon-backed CLI/TUI parity, and reversible SDS200 firmware 1.26.01
-physical acceptance. Firmware `VOL,OK` and `SQL,OK` acknowledgements and
-screen-independent scalar getter confirmation are now part of the accepted
-native UDP path.
+Milestone 26.9 is closed with two fixed read-only Home Assistant sensors for
+configured Tone-Out Tone A and Tone B values, additive compact and SDS200 Display
+card support, correct mode-dependent availability, zero-as-`Detect`
+presentation, restart persistence, and physical Home Assistant OS acceptance
+against SDS200 firmware 1.26.01. The daemon remains the only scanner owner, and
+the existing canonical MQTT radio-state topic remains the only source for those
+entities.
 
-Milestone 26.9 corrects one narrow Home Assistant presentation omission. The
-scanner protocol parser, shared radio state, daemon event stream, and canonical
-MQTT radio-state topic already preserve the `ToneOutChannel` `ToneA` and `ToneB`
-attributes, but Home Assistant MQTT Discovery creates no matching entities and
-the Tone-Out Lovelace layout cannot select or render them. Add two fixed,
-read-only configured Tone A and configured Tone B sensor components without
-adding a scanner query, state owner, MQTT state topic, or control operation.
+Milestone 26.10 establishes the first interface-scoped modular theme boundary.
+Move the five existing web choices—System, LCARS-inspired, Matrix-inspired,
+First Responder, and Amateur Radio—into built-in packages under
+`themes/web/<theme-name>/`. The repository and installed Python package may root
+that hierarchy inside the `sds200` package, but the interface and theme directory
+levels must remain explicit so later `home-assistant`, `tui`, and reserved `gui`
+adapters do not share renderer-specific assets accidentally.
 
-Both sensors must use stable deterministic component and unique IDs, reuse the
-existing canonical radio-state topic, and combine daemon availability with
-current field availability. They must exist in the discovery document even when
-the current scanner mode omits Tone-Out fields so entity identity remains stable
-across mode changes. Preserve the scanner-reported configured tone text in the
-entity state; do not reinterpret it as CTCSS, DCS, detected `SAD`, alert state,
-or a writable frequency.
+Each built-in web theme must carry a versioned declarative manifest and explicit
+stylesheet assets. A typed, deterministic registry must validate the manifest
+schema version, interface, stable lowercase kebab-case identifier, directory
+identity, human label, local stylesheet entry point, color-scheme metadata, and
+theme color before exposing a theme. Reject duplicate identities, missing or
+undeclared files, traversal or absolute paths, remote URLs, executable theme
+payloads, unsupported schema versions, and cross-interface assets. Theme
+packages style presentation only and gain no scanner, daemon, MQTT, Home
+Assistant service, authentication, recording, audio, or control authority.
 
-Extend the compact and SDS200 Display card configuration contracts additively
-with optional Tone A and Tone B sensor selectors. Existing fourteen-entity YAML,
-graphical-editor configuration, saved layouts, card sizing, and read-only
-transport boundary must remain valid. The Tone-Out display layout must present
-both configured tones. A scanner-reported numeric zero tone, with or without an
-`Hz` suffix, is presented as `Detect` because zero configures tone-frequency
-detection; nonzero and unrecognized nonempty scanner text remains visible
-without speculative conversion. Missing or unavailable entities retain the
-existing accessible unavailable presentation.
+Replace the hard-coded web-theme list and colors with the validated built-in
+registry. The dashboard picker, pre-paint browser-local bootstrap, theme-color
+metadata, and same-origin stylesheet delivery must derive from the same ordered
+registry. A missing, invalid, removed, or no-longer-supported stored selection
+must fall back to System before first paint without breaking the dashboard.
+Preserve the existing local-storage key, stable public theme identifiers,
+current selection behavior, system light/dark reaction, restrictive response
+headers, authenticated-LAN and Home Assistant Ingress behavior, and default
+loopback service boundary.
 
-Host-independent acceptance must cover stable discovery identity, exact value
-templates, field-level availability, mode omission and restoration, legacy card
-configuration, graphical selectors, Tone-Out layout rendering, zero detection
-presentation, nonzero configured tones, unavailable values, viewport behavior,
-accessibility text, and the existing ban on card-owned scanner, MQTT, Home
-Assistant service, or network transports. Documentation must distinguish
-configured Tone-Out A/B values from detected search/Close Call `SAD` values.
+Extraction must preserve the current accessible shared HTML structure and the
+rendered appearance of every existing theme at the documented 1920x1080,
+1366x768, 800x480, and compact responsive reference sizes. Decorative layers
+remain ARIA-hidden and pointer-inert; reduced motion, keyboard operation, focus
+visibility, contrast intent, viewport fit, and no-required-scroll behavior must
+remain valid. The base dashboard stylesheet must contain shared layout only;
+theme-owned selectors and design tokens belong to their theme package rather
+than a new monolith.
 
-Physical Home Assistant OS acceptance must update the development App, verify
-the two discovered entities across a non-Tone-Out to Tone-Out transition,
-exercise at least one configured nonzero tone and one zero-as-detection tone,
-confirm the compact and Tone-Out display cards, verify restart persistence, and
-retain one daemon scanner owner. Record SDS200 firmware, entity availability,
-rendered values, and cleanup without changing scanner programming.
+Host-independent acceptance must cover registry ordering, immutability, schema
+and path validation, duplicate and missing-asset rejection, package-resource and
+wheel/sdist inclusion, exact same-origin asset routing, media types and cache
+policy, selector generation, stored-selection compatibility and fallback,
+system color-scheme changes, content-security behavior, accessibility, all
+existing dashboard API and control tests, and deterministic browser captures for
+all five themes. The existing screenshots may be regenerated only when the
+rendered result is intentionally demonstrated to be equivalent or an explicitly
+reviewed correction.
 
-Development acceptance completed on August 24, 2026, on Home Assistant OS 18.2
-with Core 2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and a physical SDS200
-running firmware 1.26.01. The two fixed entities stayed available across
-Tone-Out entries, preserved exact zero and nonzero scanner text, rendered zero
-as `Detect` without changing entity state, recovered numeric values after an App
-restart, and remained under the existing single daemon scanner owner. The
-original compact card and the Tone-Out display layout both rendered live A/B
-values through Home Assistant state only.
-
-Do not add modular theme loading, third-party theme discovery, new web dashboard
-themes, remote daemon networking, new Home Assistant controls or MQTT state
-topics, raw-key passthrough, arbitrary protocol commands, advanced-protocol
-controls, System Status, RF Power Plot, audio/recording observability expansion,
-new runtime dependencies, or physical SDS150 claims in this slice. The planned
-`themes/<interface>/<theme-name>/` manifest and loader foundation remains a
-separate milestone beginning with extraction of the existing web themes.
+Document the manifest and built-in package contract plus the future
+installation/removal trust boundary, but do not enable third-party discovery,
+user-writable theme directories, archive extraction, package installation,
+runtime upload, or untrusted CSS in this slice. Do not add Home Assistant or TUI
+theme loaders, a desktop GUI, new visual families, remote assets, theme-owned
+JavaScript, templates, fonts, scanner fields, controls, network listeners,
+runtime dependencies, or physical hardware claims. Later milestones may add
+renderer adapters and deliberate third-party lifecycle management after this
+built-in web foundation is stable.
 
 ## Deferred hardware validation
 
@@ -589,6 +589,12 @@ is collected.
   firmware 1.26.01 physical acceptance covered all four hold scopes and
   reversible native-UDP volume and squelch changes with authoritative
   completion and restored starting state.
+- Milestone 26.9 completed two fixed read-only Home Assistant sensors for
+  configured Tone-Out Tone A and Tone B values plus additive compact and SDS200
+  Display card rendering. Physical Home Assistant OS acceptance covered zero
+  detection presentation, programmed nonzero values, correct optional-field
+  availability, App restart persistence, and the unchanged single-owner
+  boundary against SDS200 firmware 1.26.01.
 
 ## Completed milestone groups
 

@@ -631,7 +631,10 @@ custom themes become dense full-screen workstations while preserving the same
 accessible structure and semantic scanner state; smaller displays reflow into a
 compact presentation instead of using a separate interface. The selection is
 browser-local, is restored before the dashboard stylesheet paints, and does not
-change daemon or scanner state. The
+change daemon or scanner state. All five choices are independently packaged
+under the interface-scoped `sds200/themes/web/<theme-name>/` hierarchy with a
+validated versioned manifest and declarative stylesheet; the shared dashboard
+layout contains no theme-owned selectors. The
 [web dashboard guide](docs/web-dashboard.md#theme-gallery) includes generated
 captures of every theme using deterministic fictional demo data.
 
