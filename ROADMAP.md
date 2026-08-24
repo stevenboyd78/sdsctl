@@ -61,6 +61,15 @@ confirm the compact and Tone-Out display cards, verify restart persistence, and
 retain one daemon scanner owner. Record SDS200 firmware, entity availability,
 rendered values, and cleanup without changing scanner programming.
 
+Development acceptance completed on August 24, 2026, on Home Assistant OS 18.2
+with Core 2026.8.3, Supervisor 2026.07.5, Docker 29.6.2, and a physical SDS200
+running firmware 1.26.01. The two fixed entities stayed available across
+Tone-Out entries, preserved exact zero and nonzero scanner text, rendered zero
+as `Detect` without changing entity state, recovered numeric values after an App
+restart, and remained under the existing single daemon scanner owner. The
+original compact card and the Tone-Out display layout both rendered live A/B
+values through Home Assistant state only.
+
 Do not add modular theme loading, third-party theme discovery, new web dashboard
 themes, remote daemon networking, new Home Assistant controls or MQTT state
 topics, raw-key passthrough, arbitrary protocol commands, advanced-protocol

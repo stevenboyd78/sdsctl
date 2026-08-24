@@ -597,3 +597,34 @@ The acceptance run confirmed:
 This development run does not replace the tagged repository-managed App test in
 the release checklist. Repeat that gate against the published release images
 before release completion.
+
+### Milestone 26.9 Tone-Out development acceptance
+
+Milestone 26.9 development acceptance completed on August 24, 2026, using the
+Local App built from commit `63f5e5b`. The test host ran amd64 Home Assistant OS
+18.2, Core 2026.8.3, Supervisor 2026.07.5, and Docker 29.6.2 with a physical
+SDS200 running firmware 1.26.01. The repository-managed App remained stopped,
+and the Local App remained the only daemon, scanner-control, PSI, and RTSP/RTP
+owner.
+
+The acceptance run confirmed:
+
+- the fixed Tone-Out Tone A and Tone B Discovery entities were available while
+  applicable, and optional Site and Service Type stayed correctly unavailable
+  when omitted by the Tone-Out radio state;
+- a programmed zero-tone entry reported raw entity values `0.0Hz` and `0.0Hz`,
+  while both Tone-Out display cards rendered `Detect` for each value;
+- programmed nonzero entries preserved and rendered exact scanner text,
+  including `1063.0Hz` / `304.7Hz` before restart and `539.0Hz` / `399.8Hz`
+  after restart as the scanner advanced through its Tone-Out entries;
+- the original compact **SDS200 Scanner** card rendered the live channel plus
+  Tone A and Tone B rows through its normal graphical/YAML configuration
+  contract;
+- the Local App restarted cleanly, Home Assistant restored the two entities,
+  both display cards resumed live numeric rendering, and Scanner Connection and
+  Daemon State returned to `Connected` and `running`; and
+- no scanner programming was changed and the temporary compact-card preview was
+  discarded after verification.
+
+This development run validates the physical Milestone 26.9 behavior. It does
+not replace the tagged repository-managed App test in the release checklist.

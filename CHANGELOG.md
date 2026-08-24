@@ -14,6 +14,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   layout presents both values, and numeric zero with an optional `Hz` suffix is
   shown as `Detect` without changing the raw entity state. Existing fourteen-
   entity card configurations and all scanner-ownership boundaries remain valid.
+  Physical Home Assistant OS 18.2 acceptance with SDS200 firmware 1.26.01
+  confirmed zero and nonzero entities, both card presentations, restart
+  persistence, and the unchanged single-owner boundary.
 - Add Milestone 26.8 exact semantic controls across direct and daemon-backed CLI
   and Textual surfaces. System, Department, Site, and Channel controls now choose
   an explicit scanner-confirmed hold or release state; volume and squelch expose
