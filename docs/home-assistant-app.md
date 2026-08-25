@@ -684,3 +684,41 @@ The acceptance run confirmed:
 
 This development run validates the physical Milestone 26.9 behavior. It does
 not replace the tagged repository-managed App test in the release checklist.
+
+### Milestone 27.1 adaptive screen-profile development acceptance
+
+Milestone 27.1 development acceptance completed on August 25, 2026, using an
+isolated Local App built from commit `0fe2e5f`. The test host ran amd64 Home
+Assistant OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7,
+and Docker 29.6.2 with a physical SDS200 running firmware 1.26.01. The published
+repository App and the older Local App remained stopped, so the acceptance App
+was the only daemon, scanner-control, PSI, and RTSP/RTP owner.
+
+The acceptance run confirmed:
+
+- the isolated App built, installed, configured, and started at version 0.22.0,
+  and its deployed daemon, dashboard, and display-card files matched the branch
+  source digests;
+- Home Assistant exposed all twenty-four expected entities, including the fixed
+  Screen Kind sensor, which reported the live `scanning`, `search`,
+  `close_call`, `weather`, and `tone_out` values;
+- the Display card graphical editor exposed Auto plus the Simple and Detail
+  scanning fallback, while an unsaved live Auto preview selected Detail for
+  scanning, Search / Close Call for both corresponding scanner modes, Weather,
+  and Tone-Out without modifying the verification dashboard;
+- the web dashboard selected **Now scanning**, **Quick Search**, **Close Call**,
+  **Weather**, and **Tone-Out** headings and mode-priority groups while retaining
+  the complete shared radio detail;
+- configured Tone-Out entries rendered their exact A and B values while a
+  `0.0Hz` / `0.0Hz` entry rendered `Detect` / `Detect` in the display card;
+- live browser audio received 118 packets with zero queue, overflow, and RTP
+  loss, and a short recording finalized as a 39.4 KiB WAV that remained in the
+  eight-recording inventory after App restart;
+- the App restart restored scanner connection, ordered PSI updates, MQTT state,
+  Ingress, audio ownership, and recording inventory; and
+- the repository App returned to normal service after the bounded run. The
+  isolated acceptance App remains installed but stopped for rollback and was
+  not uninstalled or deleted.
+
+This development run validates the physical Milestone 27.1 behavior. It does
+not replace a later tagged repository-managed release acceptance.

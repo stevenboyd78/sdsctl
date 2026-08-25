@@ -62,6 +62,17 @@ acceptance must exercise live transitions among scanning, Search, Close Call,
 Weather, and Tone-Out; automatic card and web changes; explicit card override;
 restart recovery; and the unchanged single scanner owner.
 
+Physical development acceptance completed on August 25, 2026, against SDS200
+firmware 1.26.01 on Home Assistant OS 18.2, Core 2026.8.3, Supervisor
+2026.07.5, Frontend 20260729.7, and Docker 29.6.2. One isolated Local App built
+from commit `0fe2e5f` exposed all twenty-four expected entities and followed
+live transitions through scanning, Quick Search, Close Call, Weather, and
+Tone-Out. The automatic card and web profiles changed without opening another
+scanner owner; browser audio, recording finalization and persistence, App
+restart recovery, configured Tone-Out values, and zero-tone `Detect`
+presentation all passed. The normal repository App was restored after the
+bounded run, and the isolated acceptance App remained installed but stopped.
+
 Do not add waterfall or analysis commands, sessions, payload transport, FFT
 rendering, high-rate MQTT state, scanner tuning, automatic Home Assistant card
 replacement, remote layout control, Internet-facing access, or a desktop GUI.
@@ -629,6 +640,11 @@ is collected.
 
 - Milestone 27.1: evidence-backed screen-profile parity and opt-in automatic
   renderer selection across web, Home Assistant, and terminal interfaces.
+  Physical development acceptance on Home Assistant OS exercised every
+  classified screen transition, automatic web and card presentation, restart,
+  browser-audio and recording regressions, all twenty-four entities, configured
+  Tone-Out values, zero-tone detection presentation, and the unchanged
+  single-owner boundary against SDS200 firmware 1.26.01.
 - Milestone 27.2: physical waterfall protocol qualification and one daemon-owned
   bounded `PWF`/`GWF` session and local fanout service.
 - Milestone 27.3: responsive theme-aware web spectrum and rolling-waterfall
