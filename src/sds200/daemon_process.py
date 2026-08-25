@@ -292,12 +292,12 @@ class DaemonProcess:
                     pcmu_server_attempted = True
                     self.pcmu_server.start()
 
+                runtime_attempted = True
+                self.runtime.start()
+
                 if self.waterfall_server is not None:
                     waterfall_server_attempted = True
                     self.waterfall_server.start()
-
-                runtime_attempted = True
-                self.runtime.start()
 
                 if self.mqtt_service is not None:
                     mqtt_service_attempted = True

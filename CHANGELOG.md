@@ -8,6 +8,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add the Milestone 27.2 qualified text-waterfall data plane. Exact typed GST,
+  PWF, and 240-value GWF handling feeds one demand-driven radio-owned session
+  with deterministic rollback, final-consumer stop, interruption/recovery, and
+  isolated bounded subscriber loss telemetry. A private mode-`0600`
+  `waterfall.sock` provides a versioned size-bounded JSON Lines stream to local
+  daemon consumers, including Home Assistant App process wiring and a
+  time-and-record-bounded validating `daemon-client waterfall` diagnostic.
+  Binary GW2, FFT interpretation, tuning, public exposure, storage, and product
+  rendering remain deferred.
 - Add Milestone 27.1 adaptive scanner screen-profile parity. One fixed read-only
   Home Assistant Screen Kind sensor exposes the existing normalized radio-state
   classification with an `unknown` fallback. The SDS200 Display card gains an

@@ -268,6 +268,33 @@ class FakePcmuServer:
             raise self.stop_error
 
 
+class FakeWaterfallServer:
+    def __init__(
+        self,
+        order: list[str],
+        *,
+        start_error: BaseException | None = None,
+        stop_error: BaseException | None = None,
+    ) -> None:
+        self.order = order
+        self.start_error = start_error
+        self.stop_error = stop_error
+        self.start_calls = 0
+        self.stop_calls = 0
+
+    def start(self) -> None:
+        self.order.append("waterfall.start")
+        self.start_calls += 1
+        if self.start_error is not None:
+            raise self.start_error
+
+    def stop(self) -> None:
+        self.order.append("waterfall.stop")
+        self.stop_calls += 1
+        if self.stop_error is not None:
+            raise self.stop_error
+
+
 class FakeSignalController:
     def __init__(
         self,
@@ -1434,6 +1461,97 @@ def test_process_brackets_runtime_with_event_and_pcmu_servers() -> None:
     ]
     assert pcmu_server.start_calls == 1
     assert pcmu_server.stop_calls == 1
+
+
+def test_process_starts_waterfall_after_runtime_and_stops_it_before_runtime() -> None:
+    order: list[str] = []
+    runtime = FakeRuntime(order)
+    api_server = FakeApiServer(order)
+    event_server = FakeEventServer(order)
+    pcmu_server = FakePcmuServer(order)
+    waterfall_server = FakeWaterfallServer(order)
+    signals = FakeSignalController(order, (True,))
+
+    DaemonProcess(
+        runtime,
+        api_server=api_server,
+        event_server=event_server,
+        pcmu_server=pcmu_server,
+        waterfall_server=waterfall_server,
+        signals=signals,
+        poll_interval=0.25,
+    ).run()
+
+    assert order == [
+        "signals.enter",
+        "events.start",
+        "pcmu.start",
+        "runtime.start",
+        "waterfall.start",
+        "api.start",
+        "signals.wait",
+        "api.stop",
+        "waterfall.stop",
+        "runtime.stop",
+        "pcmu.stop",
+        "events.stop",
+        "signals.exit",
+    ]
+    assert waterfall_server.start_calls == 1
+    assert waterfall_server.stop_calls == 1
+
+
+def test_runtime_startup_failure_does_not_start_waterfall_server() -> None:
+    order: list[str] = []
+    startup_error = RuntimeError("secret runtime startup failure")
+    runtime = FakeRuntime(order, start_error=startup_error)
+    waterfall_server = FakeWaterfallServer(order)
+    signals = FakeSignalController(order, ())
+
+    with pytest.raises(RuntimeError) as raised:
+        DaemonProcess(
+            runtime,
+            waterfall_server=waterfall_server,
+            signals=signals,
+            poll_interval=0.25,
+        ).run()
+
+    assert raised.value is startup_error
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "runtime.stop",
+        "signals.exit",
+    ]
+    assert waterfall_server.start_calls == 0
+    assert waterfall_server.stop_calls == 0
+
+
+def test_waterfall_startup_failure_stops_waterfall_before_runtime() -> None:
+    order: list[str] = []
+    startup_error = RuntimeError("secret waterfall startup failure")
+    runtime = FakeRuntime(order)
+    waterfall_server = FakeWaterfallServer(order, start_error=startup_error)
+    signals = FakeSignalController(order, ())
+
+    with pytest.raises(RuntimeError) as raised:
+        DaemonProcess(
+            runtime,
+            waterfall_server=waterfall_server,
+            signals=signals,
+            poll_interval=0.25,
+        ).run()
+
+    assert raised.value is startup_error
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "waterfall.start",
+        "waterfall.stop",
+        "runtime.stop",
+        "signals.exit",
+    ]
+    assert waterfall_server.stop_calls == 1
 
 
 def test_pcmu_startup_failure_stops_pcmu_then_event_before_runtime() -> None:
