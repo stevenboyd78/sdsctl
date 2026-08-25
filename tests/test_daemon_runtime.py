@@ -21,6 +21,7 @@ from sds200.daemon_runtime import (
 )
 from sds200.exceptions import CommandRejectedError, CommandTimeoutError
 from sds200.state import RadioStateSnapshot
+from sds200.waterfall_session import WaterfallSessionState
 
 from .fakes import FakeAudioTransport
 
@@ -144,6 +145,20 @@ class FakeScanner:
         self.close_calls += 1
         self._psi_active = False
         self._connected = False
+
+
+class FakeWaterfallSession:
+    def __init__(self, *, fail_recovery: bool = False) -> None:
+        self.state = WaterfallSessionState.INTERRUPTED
+        self.fail_recovery = fail_recovery
+        self.recover_calls: list[float | None] = []
+
+    def recover(self, *, timeout: float | None = None) -> None:
+        self.recover_calls.append(timeout)
+        if self.fail_recovery:
+            self.state = WaterfallSessionState.FAILED
+            raise RuntimeError("waterfall recovery failed")
+        self.state = WaterfallSessionState.RUNNING
 
 
 class TrackingAudioTransport(FakeAudioTransport):
@@ -396,6 +411,52 @@ def test_runtime_recovers_sustained_silent_psi_with_cooldown() -> None:
     runtime.poll()
     assert order.count("scanner.reconnect") == 2
 
+    runtime.stop()
+
+
+def test_runtime_recovers_interrupted_waterfall_independently_of_psi_policy() -> None:
+    order: list[str] = []
+    scanner = FakeScanner(order)
+    waterfall = FakeWaterfallSession()
+    scanner.waterfall_session = waterfall  # type: ignore[attr-defined]
+    transport = TrackingAudioTransport(order)
+    router = TrackingRouter(order)
+    audio = AudioFanoutSession(AudioStream(transport), (router,))
+    runtime = DaemonRuntime(
+        scanner,
+        audio,
+        router,
+        psi_auto_recover=False,
+    )
+
+    runtime.start()
+    runtime.poll()
+
+    assert waterfall.recover_calls == [3.0]
+    assert waterfall.state is WaterfallSessionState.RUNNING
+
+    runtime.poll()
+    assert waterfall.recover_calls == [3.0]
+    runtime.stop()
+
+
+def test_runtime_records_failed_waterfall_recovery_without_retry_loop() -> None:
+    order: list[str] = []
+    scanner = FakeScanner(order)
+    waterfall = FakeWaterfallSession(fail_recovery=True)
+    scanner.waterfall_session = waterfall  # type: ignore[attr-defined]
+    transport = TrackingAudioTransport(order)
+    router = TrackingRouter(order)
+    audio = AudioFanoutSession(AudioStream(transport), (router,))
+    runtime = DaemonRuntime(scanner, audio, router)
+
+    runtime.start()
+    runtime.poll()
+    runtime.poll()
+
+    assert waterfall.recover_calls == [3.0]
+    assert waterfall.state is WaterfallSessionState.FAILED
+    assert runtime.snapshot().state is DaemonRuntimeState.RUNNING
     runtime.stop()
 
 

@@ -123,6 +123,11 @@ from .daemon_server import (
     DaemonApiServer,
 )
 from .daemon_tui import DaemonTuiRadio
+from .daemon_waterfall_client import DaemonWaterfallClient
+from .daemon_waterfall_protocol import (
+    DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
+    DaemonWaterfallRecord,
+)
 from .daemon_waterfall_server import DaemonWaterfallServer
 from .device import choose_scanner, discover_scanners
 from .discovery import (
@@ -1329,6 +1334,49 @@ def build_parser(
         "--json",
         action="store_true",
         help="Print validated daemon events as JSON Lines",
+    )
+
+    daemon_waterfall = daemon_client_commands.add_parser(
+        "waterfall",
+        help="Capture a bounded validated daemon waterfall stream",
+    )
+    daemon_waterfall.add_argument(
+        "--waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit absolute daemon waterfall socket path; otherwise use "
+            "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    daemon_waterfall.add_argument(
+        "--max-record-bytes",
+        type=_positive_integer,
+        default=DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
+        metavar="BYTES",
+        help=(
+            "Maximum accepted encoded waterfall record size "
+            f"(default: {DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES})"
+        ),
+    )
+    daemon_waterfall.add_argument(
+        "--count",
+        type=_positive_integer,
+        default=100,
+        metavar="COUNT",
+        help="Stop after at most this many records (default: 100)",
+    )
+    daemon_waterfall.add_argument(
+        "--duration",
+        type=_positive_float,
+        default=10.0,
+        metavar="SECONDS",
+        help="Stop after this many seconds even if count is not met (default: 10)",
+    )
+    daemon_waterfall.add_argument(
+        "--json",
+        action="store_true",
+        help="Print validated waterfall records as JSON Lines",
     )
 
     for action_name, action_help in (
@@ -3486,6 +3534,74 @@ def _print_daemon_event(event: DaemonEvent, *, as_json: bool) -> None:
     )
 
 
+def _print_daemon_waterfall_record(
+    record: DaemonWaterfallRecord,
+    *,
+    as_json: bool,
+) -> None:
+    if as_json:
+        print(json.dumps(record.as_dict(), sort_keys=True), flush=True)
+        return
+
+    payload = json.dumps(
+        record.as_dict()["payload"],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    print(
+        f"{record.observed_at.isoformat()} "
+        f"#{record.sequence} {record.kind.value}: {payload}",
+        flush=True,
+    )
+
+
+def _run_daemon_client_waterfall(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    _reject_daemon_stream_api_options(
+        args,
+        action="waterfall",
+        socket_option="--waterfall-socket-path",
+    )
+    location = resolve_daemon_waterfall_socket_location(
+        args.waterfall_socket_path,
+        environ=environ,
+        configuration_paths=configuration_paths,
+    )
+    client = DaemonWaterfallClient(
+        location,
+        timeout=args.timeout,
+        max_record_bytes=args.max_record_bytes,
+    )
+    expired = threading.Event()
+
+    def expire() -> None:
+        expired.set()
+        client.close()
+
+    timer = threading.Timer(args.duration, expire)
+    timer.daemon = True
+    timer.start()
+    try:
+        try:
+            for record in client.watch(count=args.count):
+                if expired.is_set():
+                    break
+                _print_daemon_waterfall_record(record, as_json=args.json)
+        except DaemonDisconnectedError:
+            if not expired.is_set():
+                raise
+        except KeyboardInterrupt:
+            return 0
+    finally:
+        timer.cancel()
+        client.close()
+    return 0
+
+
 def _print_daemon_control_result(result: Mapping[str, object]) -> None:
     snapshot = _daemon_client_mapping(result, "snapshot")
     print(f"Control:            {result.get('operation', '-')}")
@@ -3557,6 +3673,13 @@ def _run_daemon_client(
     action = args.daemon_client_action
     if action == "audio":
         return _run_daemon_client_audio(
+            args,
+            configuration_paths=configuration_paths,
+            environ=environ,
+        )
+
+    if action == "waterfall":
+        return _run_daemon_client_waterfall(
             args,
             configuration_paths=configuration_paths,
             environ=environ,

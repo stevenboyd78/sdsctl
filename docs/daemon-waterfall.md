@@ -45,6 +45,12 @@ both stop wires. Explicit shutdown, partial startup, transport interruption,
 recovery, and cleanup failure are represented by immutable ordered session
 transitions and snapshots.
 
+When the owned scanner transport reconnects automatically, the receive callback
+only marks the session interrupted. The daemon poll loop performs the blocking
+GST/PWF/GWF restoration later under the shared control lock. This keeps scanner
+commands off the receive thread, avoids competing with browser/API controls, and
+emits an explicit running or failed session transition.
+
 One slow client drops only its own oldest unread records. Each delivered record
 includes that lease's cumulative `responses_dropped` and `overflows` counters.
 Scanner receive dispatch and other consumers do not block behind a slow client.
@@ -92,6 +98,22 @@ timestamp, and any per-client sequence gap.
 The default encoded-record limit is 64 KiB and the default server limit is eight
 concurrent local clients. These are framing and resource bounds, not claims
 about scanner cadence or FFT semantics.
+
+## Bounded diagnostic client
+
+The daemon client can validate and print the private stream without opening
+scanner hardware:
+
+```console
+sdsctl daemon-client waterfall --duration 10 --count 100 --json
+```
+
+`--duration` is a wall-clock deadline and `--count` is a record ceiling; the
+first boundary reached closes the connection. Closing the final connection
+releases demand and sends `GWF,1,OFF` followed by `PWF,1,OFF`. The command
+defaults to ten seconds and 100 records. `--waterfall-socket-path` selects an
+explicit socket, while `--max-record-bytes` can lower the 64 KiB client framing
+limit for negative tests.
 
 ## Current validation status
 

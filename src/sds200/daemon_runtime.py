@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from math import isfinite
 from time import monotonic
-from typing import Protocol, Self
+from typing import Protocol, Self, cast
 
 from .audio_sinks import (
     AudioFanoutSession,
@@ -28,6 +28,7 @@ from .exceptions import (
 )
 from .models import ScannerInfo
 from .state import RadioStateSnapshot
+from .waterfall_session import WaterfallSessionState
 
 logger = logging.getLogger(__name__)
 
@@ -181,6 +182,13 @@ class _ScannerLike(Protocol):
     def stop_scanner_info_push(self) -> None: ...
 
     def close(self) -> None: ...
+
+
+class _WaterfallSessionLike(Protocol):
+    @property
+    def state(self) -> WaterfallSessionState: ...
+
+    def recover(self, *, timeout: float | None = None) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -412,7 +420,9 @@ class DaemonRuntime:
         return self.events.subscribe("transition", callback)
 
     def poll(self) -> None:
-        "Recover a sustained silent PSI stream without a watchdog thread."
+        "Recover interrupted waterfall demand and sustained silent PSI."
+
+        self._recover_interrupted_waterfall()
 
         if not self.psi_auto_recover:
             return
@@ -532,6 +542,51 @@ class DaemonRuntime:
                 "daemon PSI recovery completed scanner=%s",
                 self.scanner.endpoint,
             )
+
+    def _recover_interrupted_waterfall(self) -> None:
+        candidate = getattr(self.scanner, "waterfall_session", None)
+        if candidate is None:
+            return
+        session = cast(_WaterfallSessionLike, candidate)
+
+        with self._state_lock:
+            if (
+                self._state is not DaemonRuntimeState.RUNNING
+                or not self.scanner.connected
+                or session.state is not WaterfallSessionState.INTERRUPTED
+            ):
+                return
+
+        if not self._control_lock.acquire(blocking=False):
+            return
+        try:
+            with self._state_lock:
+                if (
+                    self._state is not DaemonRuntimeState.RUNNING
+                    or not self.scanner.connected
+                    or session.state is not WaterfallSessionState.INTERRUPTED
+                ):
+                    return
+            logger.warning(
+                "daemon waterfall session interrupted scanner=%s "
+                "attempting_recovery=waterfall-publication",
+                self.scanner.endpoint,
+            )
+            try:
+                session.recover(timeout=self.psi_timeout)
+            except Exception as error:
+                logger.warning(
+                    "daemon waterfall recovery failed scanner=%s error=%s",
+                    self.scanner.endpoint,
+                    error.__class__.__name__,
+                )
+            else:
+                logger.info(
+                    "daemon waterfall recovery completed scanner=%s",
+                    self.scanner.endpoint,
+                )
+        finally:
+            self._control_lock.release()
 
     def _observe_psi(self, info: ScannerInfo) -> None:
         del info

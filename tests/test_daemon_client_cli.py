@@ -12,11 +12,15 @@ from sds200 import (
     DAEMON_API_VERSION,
     DAEMON_EVENT_PROTOCOL,
     DAEMON_EVENT_VERSION,
+    DAEMON_WATERFALL_PROTOCOL,
+    DAEMON_WATERFALL_VERSION,
     DaemonApiOperation,
     DaemonEvent,
     DaemonEventKind,
     DaemonSocketLocation,
     DaemonUnavailableError,
+    DaemonWaterfallRecord,
+    DaemonWaterfallRecordKind,
     cli,
 )
 
@@ -109,6 +113,23 @@ EVENT_RADIO = DaemonEvent(
     observed_at=datetime(2026, 8, 5, 11, 0, 1, tzinfo=UTC),
     kind=DaemonEventKind.RADIO_STATE,
     payload={"fields": ["channel"]},
+)
+
+WATERFALL_CHECKPOINT = DaemonWaterfallRecord(
+    protocol=DAEMON_WATERFALL_PROTOCOL,
+    version=DAEMON_WATERFALL_VERSION,
+    sequence=1,
+    observed_at=datetime(2026, 8, 5, 11, tzinfo=UTC),
+    kind=DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+    payload={"state": "running", "consumer_count": 1},
+)
+WATERFALL_PWF = DaemonWaterfallRecord(
+    protocol=DAEMON_WATERFALL_PROTOCOL,
+    version=DAEMON_WATERFALL_VERSION,
+    sequence=2,
+    observed_at=datetime(2026, 8, 5, 11, 0, 1, tzinfo=UTC),
+    kind=DaemonWaterfallRecordKind.PWF,
+    payload={"source_sequence": 3, "values": ["100", "101"]},
 )
 
 
@@ -338,6 +359,35 @@ class FakeDaemonEventClient:
             yield event
 
 
+class FakeDaemonWaterfallClient:
+    instances: list[FakeDaemonWaterfallClient] = []
+
+    def __init__(
+        self,
+        location: DaemonSocketLocation,
+        *,
+        timeout: float,
+        max_record_bytes: int,
+    ) -> None:
+        self.location = location
+        self.timeout = timeout
+        self.max_record_bytes = max_record_bytes
+        self.closed = False
+        self.watch_calls: list[int | None] = []
+        self.instances.append(self)
+
+    def close(self) -> None:
+        self.closed = True
+
+    def watch(
+        self,
+        *,
+        count: int | None = None,
+    ) -> Iterator[DaemonWaterfallRecord]:
+        self.watch_calls.append(count)
+        yield from (WATERFALL_CHECKPOINT, WATERFALL_PWF)
+
+
 def test_daemon_client_parser_accepts_status_options() -> None:
     args = cli.build_parser().parse_args(
         [
@@ -387,6 +437,33 @@ def test_daemon_client_parser_accepts_event_watch_options() -> None:
     assert args.max_event_bytes == 4096
     assert args.kind == ["radio.state"]
     assert args.count == 2
+    assert args.json is True
+
+
+def test_daemon_client_parser_accepts_bounded_waterfall_options() -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "daemon-client",
+            "--timeout",
+            "1.5",
+            "waterfall",
+            "--waterfall-socket-path",
+            "/tmp/sdsctl-waterfall.sock",
+            "--max-record-bytes",
+            "4096",
+            "--count",
+            "2",
+            "--duration",
+            "3.5",
+            "--json",
+        ]
+    )
+
+    assert args.daemon_client_action == "waterfall"
+    assert args.waterfall_socket_path == Path("/tmp/sdsctl-waterfall.sock")
+    assert args.max_record_bytes == 4096
+    assert args.count == 2
+    assert args.duration == 3.5
     assert args.json is True
 
 
@@ -614,6 +691,107 @@ def test_daemon_client_events_prints_human_summary(
         "2026-08-05T11:00:00+00:00 #7 stream.snapshot: "
         + json.dumps(SNAPSHOT, sort_keys=True, separators=(",", ":"))
     ]
+
+
+def test_daemon_client_waterfall_prints_bounded_json_lines(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    FakeDaemonWaterfallClient.instances.clear()
+    monkeypatch.setattr(
+        cli,
+        "DaemonWaterfallClient",
+        FakeDaemonWaterfallClient,
+    )
+
+    class UnexpectedApiClient:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+            pytest.fail("daemon-client waterfall must not open the API socket")
+
+    monkeypatch.setattr(cli, "DaemonApiClient", UnexpectedApiClient)
+
+    assert (
+        cli.main(
+            [
+                "daemon-client",
+                "--timeout",
+                "1.5",
+                "waterfall",
+                "--waterfall-socket-path",
+                "/tmp/sdsctl-waterfall.sock",
+                "--max-record-bytes",
+                "4096",
+                "--count",
+                "2",
+                "--duration",
+                "3.5",
+                "--json",
+            ],
+            environ={},
+        )
+        == 0
+    )
+
+    payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [payload["kind"] for payload in payloads] == [
+        "session.checkpoint",
+        "waterfall.pwf",
+    ]
+    client = FakeDaemonWaterfallClient.instances[0]
+    assert client.location.path == Path("/tmp/sdsctl-waterfall.sock")
+    assert client.timeout == 1.5
+    assert client.max_record_bytes == 4096
+    assert client.watch_calls == [2]
+    assert client.closed is True
+
+
+@pytest.mark.parametrize(
+    ("option", "value", "expected"),
+    [
+        (
+            "--socket-path",
+            "/tmp/sdsctl-api.sock",
+            "--socket-path is not used with daemon-client waterfall",
+        ),
+        (
+            "--max-response-bytes",
+            "4096",
+            "--max-response-bytes is not used with daemon-client waterfall",
+        ),
+    ],
+)
+def test_daemon_client_waterfall_rejects_api_only_options(
+    option: str,
+    value: str,
+    expected: str,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    FakeDaemonWaterfallClient.instances.clear()
+    monkeypatch.setattr(
+        cli,
+        "DaemonWaterfallClient",
+        FakeDaemonWaterfallClient,
+    )
+
+    assert (
+        cli.main(
+            [
+                "daemon-client",
+                option,
+                value,
+                "waterfall",
+                "--waterfall-socket-path",
+                "/tmp/sdsctl-waterfall.sock",
+            ],
+            environ={},
+        )
+        == 2
+    )
+
+    assert expected in capsys.readouterr().err
+    assert FakeDaemonWaterfallClient.instances == []
 
 
 def test_daemon_client_events_reports_missing_event_socket(
