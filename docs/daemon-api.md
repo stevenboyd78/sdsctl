@@ -14,6 +14,7 @@ separate services:
 
 - [local daemon event stream](daemon-events.md) through `events.sock`;
 - [local daemon PCMU stream](daemon-pcmu.md) through `pcmu.sock`; and
+- [local daemon waterfall stream](daemon-waterfall.md) through `waterfall.sock`;
 - finalized inventory-approved WAV access through `recordings.sock`, documented
   with the [web dashboard](web-dashboard.md) and
   [daemon deployment guide](daemon-deployment.md).

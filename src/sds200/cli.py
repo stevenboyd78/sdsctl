@@ -85,6 +85,7 @@ from .daemon_ipc import (
     resolve_daemon_pcmu_socket_location,
     resolve_daemon_recording_file_socket_location,
     resolve_daemon_socket_location,
+    resolve_daemon_waterfall_socket_location,
 )
 from .daemon_mqtt import load_daemon_mqtt_configuration
 from .daemon_mqtt_paho import PahoMqttBrokerFactory
@@ -122,6 +123,7 @@ from .daemon_server import (
     DaemonApiServer,
 )
 from .daemon_tui import DaemonTuiRadio
+from .daemon_waterfall_server import DaemonWaterfallServer
 from .device import choose_scanner, discover_scanners
 from .discovery import (
     DEFAULT_DISCOVERY_TIMEOUT,
@@ -1019,6 +1021,15 @@ def build_parser(
         metavar="PATH",
         help=(
             "Explicit absolute Unix event socket path; otherwise use "
+            "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    daemon.add_argument(
+        "--waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit absolute Unix waterfall socket path; otherwise use "
             "XDG_RUNTIME_DIR or the user state directory"
         ),
     )
@@ -2974,6 +2985,11 @@ def _run_daemon(
             configuration_paths=resolved_paths,
         )
     )
+    waterfall_socket_location = resolve_daemon_waterfall_socket_location(
+        args.waterfall_socket_path,
+        environ=environ,
+        configuration_paths=resolved_paths,
+    )
 
     router = PcmSinkRouter(name="daemon-pcm")
     network_transport: NetworkAudioTransport | None = None
@@ -3049,6 +3065,20 @@ def _run_daemon(
         max_event_bytes=args.event_max_bytes,
         send_timeout=args.event_send_timeout,
         shutdown_timeout=args.event_shutdown_timeout,
+    )
+    waterfall_session = getattr(scanner, "waterfall_session", None)
+    waterfall_server = (
+        None
+        if waterfall_session is None
+        else DaemonWaterfallServer(
+            DaemonSocketListener(waterfall_socket_location),
+            waterfall_session,
+        )
+    )
+    waterfall_process_options = (
+        {"waterfall_server": waterfall_server}
+        if waterfall_server is not None
+        else {}
     )
 
     pcmu_stream: PcmuStream | None = None
@@ -3149,6 +3179,7 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, waterfall_process_options),
         )
     else:
         process = DaemonProcess(
@@ -3161,16 +3192,18 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, waterfall_process_options),
         )
     result = process.run()
     logger.info(
         "foreground daemon stopped audio_host=%s socket=%s event_socket=%s "
-        "pcmu_socket=%s recording_file_socket=%s signal=%s",
+        "pcmu_socket=%s recording_file_socket=%s waterfall_socket=%s signal=%s",
         host,
         socket_location.path,
         event_socket_location.path,
         pcmu_socket_location.path,
         recording_file_socket_location.path,
+        waterfall_socket_location.path,
         result.last_signal,
     )
     return 0

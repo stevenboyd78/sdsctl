@@ -321,6 +321,7 @@ def test_daemon_cli_constructs_one_runtime_and_process(
             api_server: object,
             event_server: object,
             pcmu_server: object,
+            waterfall_server: object = None,
         ) -> None:
             self.runtime = runtime
             self.destination_coordinator = destination_coordinator
@@ -330,6 +331,7 @@ def test_daemon_cli_constructs_one_runtime_and_process(
             self.api_server = api_server
             self.event_server = event_server
             self.pcmu_server = pcmu_server
+            self.waterfall_server = waterfall_server
             processes.append(self)
 
         def run(self) -> DaemonProcessResult:

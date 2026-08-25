@@ -8,6 +8,7 @@ from sds200.commands import (
     GetGltFavorites,
     GetMsi,
     GetScannerRecordingStatus,
+    GetWaterfallStatus,
     HoldSelection,
     NextSelection,
     OpenIndexedMenu,
@@ -15,6 +16,8 @@ from sds200.commands import (
     PressKey,
     PreviousSelection,
     SetFavoritesQuickKeys,
+    SetGwfPublication,
+    SetPwfPublication,
     SetScannerRecordingStatus,
     SetSquelch,
     SetVolume,
@@ -32,14 +35,86 @@ from sds200.exceptions import (
 from sds200.models import (
     AnalysisMode,
     AnalysisResponse,
+    DisplayLine,
     FavoritesQuickKeys,
     FavoritesQuickKeyState,
     GltResponse,
+    GstResponse,
     MsiResponse,
     Packet,
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
 )
+
+
+def test_waterfall_status_command_exact_contract() -> None:
+    packet = Packet(
+        command="GST",
+        fields=("00000",),
+        raw="GST,00000",
+    )
+    response = GstResponse(
+        display_form="00000",
+        lines=tuple(DisplayLine("", "") for _ in range(5)),
+        mute="0",
+        alert_led="0",
+        charge_led="0",
+        waterfall_mode="1",
+        marker_frequency="1555500",
+        modulation="NFM",
+        marker_position="120",
+        center_frequency="1550000",
+        lower_frequency="1540000",
+        upper_frequency="1560000",
+        color_mode="0",
+        fft_area_size="1",
+        packet=packet,
+    )
+    command = GetWaterfallStatus()
+
+    assert command.wire == "GST"
+    assert command.response_command == "GST"
+    assert command.parse_response(response) is response
+    with pytest.raises(ProtocolError, match="supported waterfall status shape"):
+        command.parse_response(packet)
+
+
+@pytest.mark.parametrize(
+    ("command_type", "enabled", "wire"),
+    [
+        (SetPwfPublication, True, "PWF,1,ON"),
+        (SetPwfPublication, False, "PWF,1,OFF"),
+        (SetGwfPublication, True, "GWF,1,ON"),
+        (SetGwfPublication, False, "GWF,1,OFF"),
+    ],
+)
+def test_text_waterfall_publication_commands_exact_contract(
+    command_type: type,
+    enabled: bool,
+    wire: str,
+) -> None:
+    assert command_type(enabled).wire == wire
+
+
+@pytest.mark.parametrize("enabled", [0, 1, "ON", None])
+@pytest.mark.parametrize("command_type", [SetPwfPublication, SetGwfPublication])
+def test_text_waterfall_publication_commands_require_boolean_state(
+    command_type: type,
+    enabled: object,
+) -> None:
+    with pytest.raises(TypeError, match="state must be a boolean"):
+        command_type(enabled)  # type: ignore[call-arg]
+
+
+@pytest.mark.parametrize("fft_type", [True, "1", 0, 2])
+@pytest.mark.parametrize("command_type", [SetPwfPublication, SetGwfPublication])
+def test_text_waterfall_publication_commands_reject_unqualified_types(
+    command_type: type,
+    fft_type: object,
+) -> None:
+    error = TypeError if type(fft_type) is not int else ValueError
+    with pytest.raises(error, match="FFT type"):
+        command_type(True, fft_type=fft_type)  # type: ignore[call-arg]
 
 
 def test_analysis_modes_are_the_six_exact_apr_tokens() -> None:

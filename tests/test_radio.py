@@ -2017,3 +2017,95 @@ def test_radio_owns_receive_only_bounded_waterfall_publication() -> None:
     assert not thread.is_alive()
     assert failures == [WaterfallSubscriptionClosed]
     assert transport.writes == []
+
+
+def test_radio_starts_and_stops_qualified_text_waterfall_publication() -> None:
+    from sds200.models import GwfResponse, PwfResponse
+
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    subscription = radio.subscribe_waterfall()
+    radio.connect()
+    gwf_values = tuple(str(index) for index in range(240))
+
+    def respond() -> None:
+        while transport.writes != ["PWF,1,ON"]:
+            time.sleep(0.005)
+        transport.feed_line("PWF,17,,23,FUTURE")
+        while transport.writes != ["PWF,1,ON", "GWF,1,ON"]:
+            time.sleep(0.005)
+        transport.feed_line("GWF," + ",".join(gwf_values))
+
+    thread = threading.Thread(target=respond, daemon=True)
+    thread.start()
+    first_pwf, first_gwf = radio.start_waterfall_publication(timeout=1.0)
+    thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert isinstance(first_pwf, PwfResponse)
+    assert first_pwf.values == ("17", "", "23", "FUTURE")
+    assert isinstance(first_gwf, GwfResponse)
+    assert first_gwf.values == gwf_values
+    assert [subscription.get(0).response, subscription.get(0).response] == [
+        first_pwf,
+        first_gwf,
+    ]
+
+    radio.stop_waterfall_publication(timeout=1.0)
+
+    assert transport.writes == [
+        "PWF,1,ON",
+        "GWF,1,ON",
+        "GWF,1,OFF",
+        "PWF,1,OFF",
+    ]
+    subscription.close()
+    radio.close()
+
+
+def test_radio_rolls_back_both_waterfall_wires_after_partial_start() -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    radio.connect()
+
+    def respond() -> None:
+        while transport.writes != ["PWF,1,ON"]:
+            time.sleep(0.005)
+        transport.feed_line("PWF,17,23")
+        while transport.writes != ["PWF,1,ON", "GWF,1,ON"]:
+            time.sleep(0.005)
+        transport.feed_line("GWF,OK")
+
+    thread = threading.Thread(target=respond, daemon=True)
+    thread.start()
+    with pytest.raises(ProtocolError, match="240-value waterfall record"):
+        radio.start_waterfall_publication(timeout=1.0)
+    thread.join(timeout=1.0)
+
+    assert not thread.is_alive()
+    assert transport.writes == [
+        "PWF,1,ON",
+        "GWF,1,ON",
+        "GWF,1,OFF",
+        "PWF,1,OFF",
+    ]
+    radio.close()
+
+
+def test_radio_waterfall_stop_attempts_both_wires_after_first_failure() -> None:
+    class FirstStopFailureTransport(FakeTransport):
+        def write_command(self, command: str) -> None:
+            if command == "GWF,1,OFF":
+                self.writes.append(command)
+                raise OSError("synthetic GWF stop failure")
+            super().write_command(command)
+
+    transport = FirstStopFailureTransport()
+    radio = SDS200.from_transport(transport)
+    radio.connect()
+
+    with pytest.raises(OSError, match="synthetic GWF stop failure"):
+        radio.stop_waterfall_publication(timeout=1.0)
+
+    assert transport.writes == ["GWF,1,OFF", "PWF,1,OFF"]
+    radio.close()

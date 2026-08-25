@@ -103,6 +103,8 @@ def test_home_assistant_daemon_command_uses_explicit_private_paths() -> None:
         "/run/sdsctl/pcmu.sock",
         "--recording-file-socket-path",
         "/run/sdsctl/recordings.sock",
+        "--waterfall-socket-path",
+        "/run/sdsctl/waterfall.sock",
     )
 
 

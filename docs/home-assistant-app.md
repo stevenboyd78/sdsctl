@@ -25,6 +25,7 @@ Private runtime files live under `/run/sdsctl`:
 - `events.sock`
 - `pcmu.sock`
 - `recordings.sock`
+- `waterfall.sock`
 - generated `daemon-mqtt.toml`
 
 These remain container-private Unix-domain interfaces. The Home Assistant App

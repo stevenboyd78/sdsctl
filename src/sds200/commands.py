@@ -17,6 +17,7 @@ from .models import (
     FavoritesQuickKeyState,
     FirmwareResponse,
     GltResponse,
+    GstResponse,
     ModelResponse,
     MsiResponse,
     Packet,
@@ -188,6 +189,68 @@ class GetStatus:
         if not isinstance(response, StatusResponse):
             raise TypeError("STS did not return StatusResponse")
         return response
+
+
+@dataclass(frozen=True, slots=True)
+class GetWaterfallStatus:
+    """Retrieve the specification-defined scanner status used by Waterfall."""
+
+    @property
+    def wire(self) -> str:
+        return "GST"
+
+    @property
+    def response_command(self) -> str:
+        return "GST"
+
+    def parse_response(self, response: object) -> GstResponse:
+        if not isinstance(response, GstResponse):
+            raise ProtocolError("GST did not return a supported waterfall status shape.")
+        return response
+
+
+def _waterfall_push_state(enabled: object) -> str:
+    if type(enabled) is not bool:
+        raise TypeError("Waterfall publication state must be a boolean.")
+    return "ON" if enabled else "OFF"
+
+
+@dataclass(frozen=True, slots=True)
+class SetPwfPublication:
+    """Enable or disable the qualified type-1 text PWF publication."""
+
+    enabled: bool
+    fft_type: int = 1
+
+    def __post_init__(self) -> None:
+        _waterfall_push_state(self.enabled)
+        if type(self.fft_type) is not int:
+            raise TypeError("PWF FFT type must be an integer.")
+        if self.fft_type != 1:
+            raise ValueError("Only specification-defined PWF FFT type 1 is supported.")
+
+    @property
+    def wire(self) -> str:
+        return f"PWF,{self.fft_type},{_waterfall_push_state(self.enabled)}"
+
+
+@dataclass(frozen=True, slots=True)
+class SetGwfPublication:
+    """Enable or disable the qualified type-1 text GWF publication."""
+
+    enabled: bool
+    fft_type: int = 1
+
+    def __post_init__(self) -> None:
+        _waterfall_push_state(self.enabled)
+        if type(self.fft_type) is not int:
+            raise TypeError("GWF FFT type must be an integer.")
+        if self.fft_type != 1:
+            raise ValueError("Only specification-defined GWF FFT type 1 is supported.")
+
+    @property
+    def wire(self) -> str:
+        return f"GWF,{self.fft_type},{_waterfall_push_state(self.enabled)}"
 
 
 @dataclass(frozen=True, slots=True)

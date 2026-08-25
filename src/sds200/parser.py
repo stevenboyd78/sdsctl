@@ -7,6 +7,7 @@ from .models import (
     ChargeStatus,
     DisplayLine,
     FirmwareResponse,
+    GstResponse,
     GwfResponse,
     ModelResponse,
     Packet,
@@ -58,6 +59,7 @@ class PacketParser:
         | FirmwareResponse
         | ValueResponse
         | StatusResponse
+        | GstResponse
         | PwfResponse
         | GwfResponse
     ):
@@ -87,6 +89,9 @@ class PacketParser:
             )
         if packet.command == "STS":
             return self._parse_status(packet)
+        if packet.command == "GST":
+            parsed_gst = self._parse_waterfall_status(packet)
+            return packet if parsed_gst is None else parsed_gst
         if packet.command == "PWF":
             return PwfResponse(values=packet.fields, packet=packet)
         if packet.command == "GWF" and len(packet.fields) == 240:
@@ -151,5 +156,49 @@ class PacketParser:
             display_form=display_form,
             lines=tuple(lines),
             reserved=tuple(reserved),
+            packet=packet,
+        )
+
+    @staticmethod
+    def _parse_waterfall_status(packet: Packet) -> GstResponse | None:
+        if not packet.fields:
+            return None
+
+        display_form = packet.fields[0]
+        if (
+            not 5 <= len(display_form) <= 20
+            or any(value not in {"0", "1"} for value in display_form)
+        ):
+            return None
+
+        tail_count = 12
+        expected_fields = 1 + (2 * len(display_form)) + tail_count
+        if len(packet.fields) != expected_fields:
+            return None
+
+        line_fields = packet.fields[1 : 1 + (2 * len(display_form))]
+        tail = packet.fields[-tail_count:]
+        lines = tuple(
+            DisplayLine(
+                text=line_fields[index].replace("\t", ",").rstrip(),
+                mode=line_fields[index + 1],
+            )
+            for index in range(0, len(line_fields), 2)
+        )
+        return GstResponse(
+            display_form=display_form,
+            lines=lines,
+            mute=tail[0],
+            alert_led=tail[1],
+            charge_led=tail[2],
+            waterfall_mode=tail[3],
+            marker_frequency=tail[4],
+            modulation=tail[5],
+            marker_position=tail[6],
+            center_frequency=tail[7],
+            lower_frequency=tail[8],
+            upper_frequency=tail[9],
+            color_mode=tail[10],
+            fft_area_size=tail[11],
             packet=packet,
         )

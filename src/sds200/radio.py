@@ -30,6 +30,7 @@ from .commands import (
     GetSquelch,
     GetStatus,
     GetVolume,
+    GetWaterfallStatus,
     HoldSelection,
     IndexedMenuId,
     NavigationTarget,
@@ -41,6 +42,8 @@ from .commands import (
     RfPowerPlotModulation,
     RfPowerPlotSamplingRate,
     SetFavoritesQuickKeys,
+    SetGwfPublication,
+    SetPwfPublication,
     SetScannerRecordingStatus,
     SetSquelch,
     SetVolume,
@@ -69,6 +72,7 @@ from .models import (
     FavoritesQuickKeyState,
     FirmwareResponse,
     GltResponse,
+    GstResponse,
     GwfResponse,
     HealthSummary,
     ModelResponse,
@@ -111,6 +115,11 @@ from .transport import (
     SerialTransport,
     StatisticalControlTransport,
     TransportDiagnostic,
+)
+from .waterfall_session import (
+    WaterfallSession,
+    WaterfallSessionLease,
+    WaterfallSessionSnapshot,
 )
 from .waterfall_subscriptions import (
     WaterfallPublisher,
@@ -241,6 +250,7 @@ class SDSScanner:
         self._responses: dict[str, _PendingResponse] = {}
         self._response_lock = threading.RLock()
         self._command_lock = threading.RLock()
+        self._waterfall_session = WaterfallSession(self)
         self._fallback_transport = fallback_transport
         self._direct_udp_msi_supported = direct_udp_msi_supported
         if self._fallback_transport is not None:
@@ -602,6 +612,12 @@ class SDSScanner:
                         interval_ms,
                         timeout=remaining,
                     )
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise CommandTimeoutError(
+                        "Scanner reconnect timed out before waterfall restoration."
+                    )
+                self._waterfall_session.recover(timeout=remaining)
             except Exception:
                 self._psi_interval_ms = interval_ms
                 self._psi_active = False
@@ -616,6 +632,8 @@ class SDSScanner:
 
     def close(self) -> None:
         self._analysis_publisher.close()
+        with suppress(SDS200Error, OSError, RuntimeError, ValueError):
+            self._waterfall_session.close()
         self._waterfall_publisher.close()
         if self._psi_interval_ms is not None:
             with suppress(SDS200Error, OSError, ValueError):
@@ -653,6 +671,16 @@ class SDSScanner:
 
     def waterfall_snapshot(self) -> WaterfallPublisherSnapshot:
         return self._waterfall_publisher.snapshot()
+
+    def subscribe_waterfall_session(self) -> WaterfallSessionLease:
+        return self._waterfall_session.subscribe()
+
+    def waterfall_session_snapshot(self) -> WaterfallSessionSnapshot:
+        return self._waterfall_session.snapshot()
+
+    @property
+    def waterfall_session(self) -> WaterfallSession:
+        return self._waterfall_session
 
     def on_response(self, callback: Callable[[object], None]) -> Callable[[], None]:
         return self.events.subscribe("response", callback)
@@ -911,6 +939,96 @@ class SDSScanner:
 
     def get_status(self, *, timeout: float = 2.0) -> StatusResponse:
         return self.execute(GetStatus(), timeout=timeout)
+
+    def get_waterfall_status(self, *, timeout: float = 2.0) -> GstResponse:
+        return self.execute(GetWaterfallStatus(), timeout=timeout)
+
+    def start_waterfall_publication(
+        self,
+        *,
+        timeout: float = 3.0,
+    ) -> tuple[PwfResponse, GwfResponse]:
+        """Start qualified text waterfall publication and await both first records."""
+
+        normalized_timeout = _require_positive_timeout(
+            timeout,
+            label="Waterfall publication start timeout",
+        )
+        deadline = monotonic() + normalized_timeout
+        remaining = deadline - monotonic()
+        if remaining <= 0 or not self._command_lock.acquire(timeout=remaining):
+            raise CommandTimeoutError(
+                "Timed out waiting to start waterfall publication."
+            )
+
+        try:
+            pwf_started = False
+            try:
+                first_pwf = self._wait_for_response(
+                    "PWF",
+                    SetPwfPublication(True).wire,
+                    max(0.0, deadline - monotonic()),
+                )
+                if not isinstance(first_pwf, PwfResponse):
+                    raise ProtocolError(
+                        "PWF start did not return typed waterfall data."
+                    )
+                pwf_started = True
+
+                first_gwf = self._wait_for_response(
+                    "GWF",
+                    SetGwfPublication(True).wire,
+                    max(0.0, deadline - monotonic()),
+                )
+                if not isinstance(first_gwf, GwfResponse):
+                    raise ProtocolError(
+                        "GWF start did not return one 240-value waterfall record."
+                    )
+                return first_pwf, first_gwf
+            except BaseException:
+                if self.connected:
+                    for command in (
+                        SetGwfPublication(False),
+                        SetPwfPublication(False),
+                    ):
+                        with suppress(BaseException):
+                            self.send(command.wire)
+                elif pwf_started:
+                    logger.warning(
+                        "Could not send waterfall rollback after transport disconnect"
+                    )
+                raise
+        finally:
+            self._command_lock.release()
+
+    def stop_waterfall_publication(self, *, timeout: float = 2.0) -> None:
+        """Attempt both qualified text waterfall stop wires under one command lock."""
+
+        normalized_timeout = _require_positive_timeout(
+            timeout,
+            label="Waterfall publication stop timeout",
+        )
+        if not self._command_lock.acquire(timeout=normalized_timeout):
+            raise CommandTimeoutError(
+                "Timed out waiting to stop waterfall publication."
+            )
+
+        try:
+            if not self.connected:
+                return
+            failures: list[BaseException] = []
+            for command in (
+                SetGwfPublication(False),
+                SetPwfPublication(False),
+            ):
+                try:
+                    self.send(command.wire)
+                except BaseException as error:
+                    failures.append(error)
+            if failures:
+                raise failures[0]
+        finally:
+            self._command_lock.release()
 
     def get_scanner_info(self, *, timeout: float = 3.0) -> ScannerInfo:
         return self.execute(GetScannerInfo(), timeout=timeout)
@@ -1526,6 +1644,7 @@ class SDSScanner:
         observed_at = datetime.now(UTC)
         if not connected:
             self._psi_active = False
+            self._waterfall_session.mark_interrupted()
         with self._health_lock:
             if self._last_connection_state != connected:
                 self._connection_events += 1
