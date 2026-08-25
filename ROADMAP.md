@@ -11,73 +11,79 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.1 — Adaptive scanner screen-profile parity
+### Milestone 27.2 — Qualified waterfall session and daemon-local fanout
 
-Milestone 26.17 is closed with the v0.22.0 Python distribution, generic Docker
-image, Home Assistant App images, synchronized public wiki, GitHub Release,
-public artifact verification, and tagged repository-managed Home Assistant OS
-acceptance. Milestones 26.1 through 26.17 remain the frozen v0.22.0 release.
+Milestone 27.1 is closed with one evidence-backed adaptive screen-profile
+contract across the web dashboard, Home Assistant Display card, MQTT Discovery,
+and terminal interface. Host-independent validation and physical Home Assistant
+OS acceptance exercised every classified live screen transition, browser audio,
+recording, restart recovery, configured Tone-Out values, zero-tone detection,
+and the unchanged single-scanner-owner boundary.
 
-Milestone 27.1 makes the existing renderer-neutral `screen_kind` classification
-an explicit presentation contract. The already implemented and physically
-observed `scanning`, `search`, `close_call`, `weather`, and `tone_out` values
-remain authoritative. Preserve raw `Mode` and `V_Screen` values and the
-`unknown` fallback without inferring new scanner modes from presentation needs.
+Milestone 27.2 qualifies and owns the text waterfall protocol below the future
+renderer. The official SDS Series Remote Command Specification V2.00 and the
+earlier V1.02 specification establish `GST` waterfall status plus type-1
+`PWF`/`GWF` on/off forms. Existing code already preserves variable `PWF` fields,
+accepts exactly 240 text `GWF` values, and publishes those typed responses into
+isolated bounded queues. Treat specification text, synthetic fixtures, sanitized
+captures, and physical observations as distinct evidence; do not infer numeric
+FFT magnitude, color, cadence, or unsupported-model semantics.
 
-Add one fixed read-only Home Assistant MQTT Discovery sensor for screen kind on
-the existing canonical radio-state topic. Its identity must remain stable and
-its value must fall back to `unknown` when the field is missing, null, empty, or
-unsupported. Do not add a command topic, scanner poll, Home Assistant-specific
-scanner owner, or optional mode-dependent availability for this fixed sensor.
+Add a lossless typed `GST` response for the specification-defined display lines,
+mute and LED fields, waterfall mode, marker frequency and position, modulation,
+center/lower/upper frequencies, color mode, and FFT-area size. Preserve the
+source packet and raw strings while exposing only structurally justified values.
+Unknown future tail fields and unsupported line shapes must remain available as
+generic packets instead of being silently discarded or misclassified.
 
-Extend the additive SDS200 Display card with an opt-in `Auto` layout. Automatic
-selection maps scanning to a separately configured Simple or Detail scan
-layout, Search and Close Call to the existing Search layout, Weather to Weather,
-and Tone-Out to Tone-Out. Missing, unavailable, unknown, or future sensor values
-must select the configured scan fallback. Existing cards keep their current
-Simple default, and every explicit Simple, Detail, Search, Weather, or Tone-Out
-configuration remains byte-for-byte compatible in meaning. The graphical editor
-must expose both choices without requiring YAML.
+Add one bounded waterfall-session state machine owned by the existing radio and
+daemon runtime. It may issue only the qualified type-1 text `PWF` and `GWF`
+start/stop wires, must serialize lifecycle changes with other scanner commands,
+and must expose immutable state, transition, response, drop, overflow, and last-
+error telemetry. Start, repeated start, partial-start rollback, explicit stop,
+last-consumer stop, disconnect, reconnect, daemon shutdown, timeout, rejection,
+and cleanup failure behavior must be deterministic. No consumer may write a
+waterfall command directly or create another scanner connection.
 
-Make the web dashboard apply the same normalized screen profile to its activity
-heading and detail-group ordering. Every one of the 35 shared radio fields must
-remain present and accessible; adaptive presentation may prioritize relevant
-groups but must not discard data or prevent complete-detail inspection. Unknown
-or absent screen kinds use the ordinary scanning profile. Preserve theme,
-responsive, authentication, Ingress, control, audio, and recording behavior.
+Expose that single session through a private mode-`0600` Unix-domain waterfall
+socket beside the existing daemon API, event, PCMU, and recording-file sockets.
+The first local client starts the shared session on demand; later clients receive
+independent bounded subscriptions; and the final client departure stops scanner
+publication. Use a versioned, size-bounded JSON Lines stream with an initial
+authoritative session checkpoint, monotonically ordered typed `GST`, `PWF`, and
+`GWF` records, cumulative per-client loss information, and explicit session
+transitions. A slow or disconnected client may degrade only its own queue and
+must never block scanner receive dispatch or another consumer.
 
-Retain and verify the existing automatic terminal layouts for Search, Close
-Call, Weather, and Tone-Out. Do not add a second terminal state model or new
-scanner request. Waterfall, System Status, RF Power Plot, Current Activity, LCN,
-menu, and other analysis screens remain outside this classifier until their raw
-screen values and lifecycle are separately qualified.
+Provide a validating local client abstraction and a bounded diagnostic command
+that can inspect the checkpoint and a caller-selected number of records. Wire
+the service into ordinary daemon and Home Assistant App process ownership,
+socket resolution, startup rollback, reverse-order shutdown, diagnostics, and
+documentation. The socket is local process IPC, not an authenticated LAN API;
+web and Ingress consumers will remain behind the existing authenticated web
+boundary when Milestone 27.3 integrates them.
 
-Host-independent acceptance must cover the fixed Discovery identity and
-fallback, all automatic layout mappings, explicit-layout compatibility,
-graphical editor fields, unknown and missing values, complete browser field
-retention, profile-specific activity headings and group priority, TUI regression
-behavior, bundled-card installation, documentation, distribution validation,
-and the complete regression suite. Physical SDS200 and Home Assistant OS
-acceptance must exercise live transitions among scanning, Search, Close Call,
-Weather, and Tone-Out; automatic card and web changes; explicit card override;
-restart recovery; and the unchanged single scanner owner.
+Physical qualification on the SDS200 must record firmware, transport, Waterfall
+license state, scanner mode, exact transmitted wires, received record shapes,
+observed cadence, `GST` metadata, `PWF` variability, 240-value `GWF` behavior,
+interleaving with PSI, repeated start/stop, last-client shutdown, daemon restart,
+and return to normal scanner operation. Probes must be time- and record-bounded,
+sanitize frequency or programming data before committing fixtures, and always
+attempt both qualified stop wires during cleanup.
 
-Physical development acceptance completed on August 25, 2026, against SDS200
-firmware 1.26.01 on Home Assistant OS 18.2, Core 2026.8.3, Supervisor
-2026.07.5, Frontend 20260729.7, and Docker 29.6.2. One isolated Local App built
-from commit `0fe2e5f` exposed all twenty-four expected entities and followed
-live transitions through scanning, Quick Search, Close Call, Weather, and
-Tone-Out. The automatic card and web profiles changed without opening another
-scanner owner; browser audio, recording finalization and persistence, App
-restart recovery, configured Tone-Out values, and zero-tone `Detect`
-presentation all passed. The normal repository App was restored after the
-bounded run, and the isolated acceptance App remained installed but stopped.
+Host-independent acceptance must cover command validation, typed parsing,
+session state and rollback, demand ownership, subscriber isolation and overflow,
+JSON framing and size limits, sequence-gap detection, socket permissions and
+stale-path handling, client disconnects, runtime startup failure, reverse-order
+shutdown, Home Assistant App argv parity, documentation, distribution builds,
+and the complete regression suite.
 
-Do not add waterfall or analysis commands, sessions, payload transport, FFT
-rendering, high-rate MQTT state, scanner tuning, automatic Home Assistant card
-replacement, remote layout control, Internet-facing access, or a desktop GUI.
-Milestone 27.2 owns waterfall protocol qualification and daemon session
-ownership; Milestone 27.3 owns the responsive web waterfall workspace.
+Do not add binary `GW2` framing, raw high-rate MQTT entities, public TCP or Web
+Socket exposure, stored waterfall history, FFT interpretation, signal-strength
+calibration, scanner tuning or Waterfall-mode navigation, web/HA/TUI waterfall
+rendering, automatic screen switching, Internet-facing access, or a desktop GUI.
+Milestone 27.3 owns the responsive theme-aware web spectrum and rolling-
+waterfall workspace after this local data plane is physically qualified.
 
 ## Deferred hardware validation
 

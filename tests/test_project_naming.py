@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_27_1_adaptive_screen_contract() -> None:
+def test_roadmap_records_milestone_27_2_waterfall_session_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,26 +132,26 @@ def test_roadmap_records_milestone_27_1_adaptive_screen_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.1 — Adaptive scanner screen-profile parity",
-        "Milestone 26.17 is closed with the v0.22.0 Python distribution",
-        "`scanning`, `search`, `close_call`, `weather`, and `tone_out`",
-        "Preserve raw `Mode` and `V_Screen` values",
-        "Add one fixed read-only Home Assistant MQTT Discovery sensor",
-        "fall back to `unknown` when the field is missing, null, empty",
-        "Do not add a command topic, scanner poll",
-        "opt-in `Auto` layout",
-        "Search and Close Call to the existing Search layout",
-        "Missing, unavailable, unknown, or future sensor values",
-        "Existing cards keep their current Simple default",
-        "graphical editor must expose both choices",
-        "Every one of the 35 shared radio fields must remain present",
-        "Unknown or absent screen kinds use the ordinary scanning profile",
-        "existing automatic terminal layouts",
-        "Waterfall, System Status, RF Power Plot, Current Activity, LCN",
-        "Physical SDS200 and Home Assistant OS acceptance",
-        "Do not add waterfall or analysis commands",
-        "Milestone 27.2 owns waterfall protocol qualification",
-        "Milestone 27.3 owns the responsive web waterfall workspace",
+        "### Milestone 27.2 — Qualified waterfall session and daemon-local fanout",
+        "Milestone 27.1 is closed with one evidence-backed adaptive",
+        "official SDS Series Remote Command Specification V2.00",
+        "`GST` waterfall status plus type-1 `PWF`/`GWF` on/off forms",
+        "lossless typed `GST` response",
+        "Unknown future tail fields and unsupported line shapes",
+        "one bounded waterfall-session state machine",
+        "partial-start rollback",
+        "No consumer may write a waterfall command directly",
+        "private mode-`0600` Unix-domain waterfall socket",
+        "first local client starts the shared session on demand",
+        "versioned, size-bounded JSON Lines stream",
+        "cumulative per-client loss information",
+        "validating local client abstraction",
+        "ordinary daemon and Home Assistant App process ownership",
+        "Physical qualification on the SDS200",
+        "always attempt both qualified stop wires during cleanup",
+        "Host-independent acceptance must cover command validation",
+        "Do not add binary `GW2` framing",
+        "Milestone 27.3 owns the responsive theme-aware web spectrum",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
