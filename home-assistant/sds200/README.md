@@ -16,13 +16,14 @@ It provides:
 - daemon-owned recordings stored in Home Assistant media, defaulting to
   `/media/sdsctl/recordings`;
 - automatic use of the Supervisor-provided MQTT service;
-- Home Assistant MQTT Discovery with sixteen state/diagnostic entities,
-  including optional Site, Frequency, Modulation, Service Type, and configured
-  Tone-Out Tone A and Tone B sensors, plus
+- Home Assistant MQTT Discovery with seventeen state/diagnostic entities,
+  including fixed Screen Kind and optional Site, Frequency, Modulation, Service
+  Type, and configured Tone-Out Tone A and Tone B sensors, plus
   seven bounded scanner-control entities: four Hold switches and Previous
   Channel, Next Channel, and Reconnect Scanner buttons; and
 - two optional read-only Lovelace presentations: the compact SDS200 Scanner card
-  and a responsive 4:3 SDS200 Display card with five layouts and three palettes.
+  and a responsive 4:3 SDS200 Display card with five explicit layouts, opt-in
+  automatic layout selection, and three palettes.
 
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the

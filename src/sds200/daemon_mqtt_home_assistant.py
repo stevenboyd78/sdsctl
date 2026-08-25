@@ -233,6 +233,15 @@ def build_home_assistant_device_discovery(
             "device_class": "connectivity",
             "entity_category": "diagnostic",
         },
+        "screen_kind": {
+            "platform": "sensor",
+            "name": "Screen Kind",
+            "unique_id": f"{unique_prefix}_screen_kind",
+            "state_topic": radio_topic,
+            "value_template": (
+                "{{ value_json.screen_kind | default('unknown', true) }}"
+            ),
+        },
         "system": {
             "platform": "sensor",
             "name": "System",

@@ -6,6 +6,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add Milestone 27.1 adaptive scanner screen-profile parity. One fixed read-only
+  Home Assistant Screen Kind sensor exposes the existing normalized radio-state
+  classification with an `unknown` fallback. The SDS200 Display card gains an
+  opt-in Auto layout with a configurable Simple or Detail scan fallback while
+  preserving all explicit layouts. The web dashboard applies the same profile
+  to activity headings and group priority without hiding any of the 35 shared
+  radio fields, and the existing mode-aware terminal presentation is retained.
+
 ## [0.22.0] - 2026-08-24
 
 ### Added

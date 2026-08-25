@@ -93,12 +93,13 @@ inventory.
 
 ## MQTT entities
 
-The discovered SDS200 device contains twenty-three components.
+The discovered SDS200 device contains twenty-four components.
 
 State and diagnostic entities:
 
 - Daemon State
 - Scanner Connection
+- Screen Kind
 - System
 - Department
 - Site
@@ -114,7 +115,9 @@ State and diagnostic entities:
 - Recording
 - Recording Status
 
-Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
+Screen Kind remains available and reports `unknown` when its normalized value is
+missing, null, or empty. Site, Frequency, Modulation, Service Type, and configured
+Tone-Out Tone A and
 Tone B are unavailable when the current scanner mode does not supply a non-empty
 value. Their fixed entities recover on the next applicable radio state. A zero
 Tone-Out value remains unchanged in the entity and appears as `Detect` in the
@@ -246,17 +249,20 @@ remains deliberately read-only. Scanner controls are separate standard Home
 Assistant switch and button entities and do not add a transport to the card.
 
 For the scanner-style presentation, add **SDS200 Display** from the picker,
-select the same sixteen entities, and choose a layout, palette, and fit mode.
-The corresponding YAML begins with:
+select the same sixteen display entities, and choose a layout, palette, and fit
+mode. To use automatic presentation, also select Screen Kind and choose the
+Simple or Detail scanning fallback. The corresponding YAML begins with:
 
 ```yaml
 type: custom:sds200-display-card
 title: SDS200 Display
-layout: detail
+layout: auto
+scan_layout: detail
 palette: color
 fit: viewport
 entities:
   scanner_connected: binary_sensor.REPLACE_ME
+  screen_kind: sensor.REPLACE_ME
   system: sensor.REPLACE_ME
   department: sensor.REPLACE_ME
   site: sensor.REPLACE_ME
@@ -274,7 +280,8 @@ entities:
   daemon_state: sensor.REPLACE_ME
 ```
 
-Use `simple`, `detail`, `search`, `weather`, or `tone_out` for `layout`;
+Use `auto`, `simple`, `detail`, `search`, `weather`, or `tone_out` for `layout`;
+and `simple` or `detail` for `scan_layout` when Auto is active;
 `color`, `black_on_white`, or `white_on_black` for `palette`; and `card` or
 `viewport` for `fit`. Viewport fit retains a centered 4:3 surface and grows only
 to the smaller width- or height-constrained dimension, without internal
@@ -282,6 +289,10 @@ scrolling. The original grid is inspired by the information hierarchy on pages
 38–39 of the
 [SDS200 Owner's Manual](https://www.uniden.info/download/ompdf/SDS200om.pdf)
 without copying scanner artwork, branding, or fonts.
+
+Auto maps Search and Close Call to the Search layout, Weather to Weather, and
+Tone-Out to Tone-Out. Scanning, missing, unavailable, unknown, and future Screen
+Kind values use `scan_layout`. Explicit layouts intentionally ignore Screen Kind.
 
 The compact card includes optional Tone A and Tone B detail rows, and the
 `tone_out` display layout presents both configured values. Numeric zero with an

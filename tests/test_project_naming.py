@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_26_17_release_and_milestone_27_contract() -> None:
+def test_roadmap_records_milestone_27_1_adaptive_screen_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,27 +132,26 @@ def test_roadmap_records_milestone_26_17_release_and_milestone_27_contract() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 26.17 — v0.22.0 release and post-v0.21 interface closure",
-        "Milestones 26.1 through 26.16 are closed",
-        "release closure rather than another runtime feature slice",
-        "Python package, import version, and Home Assistant App at 0.22.0",
-        "complete static, type, test, documentation, distribution, container",
-        "verify PyPI, the generic amd64/arm64 Docker Hub image",
-        "tagged HAOS gate",
-        "only the genuine matching `v0.22.0` tag",
-        "Do not infer tag, publication, wiki deployment, or release approval",
-        "Milestone 27.1",
-        "screen-kind sensor",
-        "explicit manual layouts",
-        "unknown-mode fallback",
-        "Milestone 27.2",
-        "`GST`, `PWF`, and `GWF` waterfall",
-        "daemon-owned bounded waterfall session",
-        "`GW2` remains deferred",
-        "Milestone 27.3",
-        "240-bin spectrum",
-        "rolling spectrogram",
-        "viewport-fit full-screen behavior without scrolling",
+        "### Milestone 27.1 — Adaptive scanner screen-profile parity",
+        "Milestone 26.17 is closed with the v0.22.0 Python distribution",
+        "`scanning`, `search`, `close_call`, `weather`, and `tone_out`",
+        "Preserve raw `Mode` and `V_Screen` values",
+        "Add one fixed read-only Home Assistant MQTT Discovery sensor",
+        "fall back to `unknown` when the field is missing, null, empty",
+        "Do not add a command topic, scanner poll",
+        "opt-in `Auto` layout",
+        "Search and Close Call to the existing Search layout",
+        "Missing, unavailable, unknown, or future sensor values",
+        "Existing cards keep their current Simple default",
+        "graphical editor must expose both choices",
+        "Every one of the 35 shared radio fields must remain present",
+        "Unknown or absent screen kinds use the ordinary scanning profile",
+        "existing automatic terminal layouts",
+        "Waterfall, System Status, RF Power Plot, Current Activity, LCN",
+        "Physical SDS200 and Home Assistant OS acceptance",
+        "Do not add waterfall or analysis commands",
+        "Milestone 27.2 owns waterfall protocol qualification",
+        "Milestone 27.3 owns the responsive web waterfall workspace",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

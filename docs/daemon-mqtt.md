@@ -246,13 +246,14 @@ MQTT state contract rather than a second state system. Enable it with:
 enabled = true
 ```
 
-Without Home Assistant controls, the device document contains sixteen fixed
+Without Home Assistant controls, the device document contains seventeen fixed
 state/diagnostic components:
 
 | Component | Platform | Source |
 | --- | --- | --- |
 | Daemon state | sensor | `<prefix>/state/daemon` |
 | Scanner connected | binary sensor | `<prefix>/state/scanner/connection` |
+| Screen Kind | sensor | `<prefix>/state/radio` |
 | System | sensor | `<prefix>/state/radio` |
 | Department | sensor | `<prefix>/state/radio` |
 | Site | sensor | `<prefix>/state/radio` |
@@ -270,6 +271,9 @@ state/diagnostic components:
 
 The shared device metadata uses Uniden as manufacturer, scanner model and
 firmware when available in the authoritative snapshot, and daemon availability.
+Screen Kind is fixed and read-only. It reports the normalized radio-state value
+and falls back to `unknown` when that value is missing, null, or empty; it does
+not become unavailable as scanner modes change.
 Site, Frequency, Modulation, Service Type, and configured Tone-Out Tone A and
 Tone B combine daemon availability with field availability from the radio-state
 topic. A missing, null, or empty value makes only that optional sensor

@@ -93,7 +93,7 @@ def test_built_in_modules_preserve_pre_extraction_bytes() -> None:
 
     assert hashes == {
         "compact": "0c6c09d7c127f358f58b192c6709e5983dffe0a02199f23f20ae46f13ce8d10d",
-        "sds200-display": "5c805134ed9543dcfd29fdf18f17b680b3fb5e58f3c92fbb961411ae690c541e",
+        "sds200-display": "9b73390b49064dfd250384eb5e726a20e10514e46c5904e074a2c0890609bd80",
     }
 
 

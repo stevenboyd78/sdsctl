@@ -93,3 +93,37 @@ def test_dashboard_exposes_mode_transition_and_unknown_fallback_hooks() -> None:
     assert ".radio-field-list {" in stylesheet
     assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in stylesheet
     assert "@media (max-width: 42rem)" in stylesheet
+
+
+def test_dashboard_adaptive_profiles_prioritize_without_hiding_fields() -> None:
+    dashboard = _asset("dashboard.html")
+    script = _asset("dashboard.js")
+    stylesheet = _asset("dashboard.css")
+
+    assert 'id="radio-activity-panel"' in dashboard
+    assert 'data-screen-kind="unknown"' in dashboard
+    for group in ("hierarchy", "rf", "identity", "special"):
+        assert dashboard.count(f'data-radio-group="{group}"') == 1
+
+    for kind, title in (
+        ("scanning", "Now scanning"),
+        ("search", "Quick Search"),
+        ("close_call", "Close Call"),
+        ("weather", "Weather"),
+        ("tone_out", "Tone-Out"),
+        ("unknown", "Scanner activity"),
+    ):
+        assert f'{kind}: "{title}"' in script
+
+    assert "function normalizedScreenKind(value)" in script
+    assert 'return typeof value === "string" && value in RADIO_SCREEN_PROFILES' in script
+    assert 'element("radio-activity-panel").dataset.screenKind = screenKind;' in script
+    assert "renderRadioProfile(radio.screen_kind);" in script
+
+    for kind in ("search", "close_call", "weather", "tone_out"):
+        assert f'[data-screen-kind="{kind}"]' in stylesheet
+    adaptive_styles = stylesheet.split("#radio-activity-panel", 1)[1].split(
+        ".radio-field-group h3",
+        1,
+    )[0]
+    assert "display: none" not in adaptive_styles

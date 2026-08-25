@@ -118,9 +118,10 @@ Assistant media storage, and publishes UDP `50000` for SDS200 RTP audio. The
 default recording library is `/media/sdsctl/recordings`; the media-relative
 `recording_directory` option can select another location below `/media`.
 
-Home Assistant MQTT Discovery exposes fourteen state/diagnostic components,
-including optional Site, Frequency, Modulation, and Service Type sensors, plus
-seven bounded scanner controls: System, Department, Site, and Channel Hold
+Home Assistant MQTT Discovery exposes seventeen state/diagnostic components,
+including fixed Screen Kind and optional Site, Frequency, Modulation, Service
+Type, and configured Tone-Out Tone A and Tone B sensors, plus seven bounded
+scanner controls: System, Department, Site, and Channel Hold
 switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
 App keeps the generic daemon MQTT request-envelope command input disabled.
 
@@ -128,8 +129,9 @@ The App installs two first-party read-only Lovelace resources:
 `/local/sds200/sds200-card.js` for the unchanged compact **SDS200 Scanner** card
 and `/local/sds200/sds200-display-card.js` for **SDS200 Display**. Register each
 desired resource once under **Settings > Dashboards > Resources** as a JavaScript
-Module. The display card provides five scanner-style layouts, three palettes,
-and a viewport-bounded 4:3 fit over the same fourteen Discovery entities.
+Module. The display card provides five explicit scanner-style layouts plus an
+opt-in Auto layout, three palettes, and a viewport-bounded 4:3 fit. Auto uses
+Screen Kind with a configurable Simple or Detail scanning fallback.
 Scanner controls remain standard Home Assistant entities rather than a
 transport inside either card.
 

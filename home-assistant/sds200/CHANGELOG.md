@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add one fixed read-only Screen Kind MQTT Discovery sensor and an opt-in Auto
+  SDS200 Display layout. Auto selects Search/Close Call, Weather, or Tone-Out
+  presentation from the normalized scanner state and uses a configured Simple
+  or Detail fallback for scanning, missing, unavailable, unknown, or future
+  values. Existing explicit layouts and the compact card remain unchanged.
+
 ## 0.22.0
 
 - Track the sdsctl v0.22.0 release while preserving the compatibility-sensitive

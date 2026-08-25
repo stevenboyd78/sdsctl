@@ -257,14 +257,16 @@ distribution path on Home Assistant OS.
    `/local/sds200/sds200-display-card.js` are available, register each as a
    JavaScript Module when needed, and verify **SDS200 Scanner** and **SDS200
    Display** appear in the card picker with working graphical editors and
-   read-only state rendering. Exercise all five display layouts, all three
-   palettes, and both fit modes; confirm viewport fit has no internal overflow at
-   390-pixel phone, 800x480, and 1920x1080 reference sizes.
-8. Confirm the discovered SDS200 device exposes twenty-three components: sixteen
+   read-only state rendering. Exercise all five explicit display layouts, Auto
+   with every supported Screen Kind and both scan fallbacks, all three palettes,
+   and both fit modes; confirm viewport fit has no internal overflow at 390-pixel
+   phone, 800x480, and 1920x1080 reference sizes.
+8. Confirm the discovered SDS200 device exposes twenty-four components: seventeen
    state/diagnostic components plus four Hold switches and Previous Channel,
    Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,
    Frequency, Modulation, Service Type, and configured Tone-Out Tone A and Tone B
-   sensors follow field availability; zero tones render as `Detect` in both cards.
+   sensors follow field availability; Screen Kind falls back to `unknown`; and
+   zero tones render as `Detect` in both cards.
 9. Exercise all four Hold scopes when meaningful, Previous and Next with a valid
    current channel selection, and Reconnect Scanner. Confirm Home Assistant state
    remains authoritative after each action and the App does not enable the

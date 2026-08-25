@@ -359,6 +359,16 @@ their existing decorative animations varied. The wheel and sdist both contained
 all five manifests and stylesheets, and no checked-in gallery image required a
 content change.
 
+Milestone 27.1 adaptive-profile acceptance completed on August 25, 2026,
+through Home Assistant Ingress against a physical SDS200 running firmware
+1.26.01. One continuous daemon ownership session followed normal scanning,
+Quick Search Hold, Close Call Only, Weather Scan, and Tone-Out. The activity
+heading changed to **Now scanning**, **Quick Search**, **Close Call**,
+**Weather**, and **Tone-Out** respectively, while the complete hierarchy, RF,
+identity, receiver, and special-mode groups remained available. Browser audio,
+recording finalization and inventory, restart recovery, themes, controls, and
+the single-owner boundary remained healthy throughout the bounded run.
+
 ## Theme gallery
 
 These documentation captures render the real packaged dashboard and stylesheet
@@ -457,6 +467,13 @@ trunk scanning, Quick Search, Close Call, Weather, Tone-Out, and unknown future
 screens clears values that are no longer present rather than retaining stale
 mode-specific details. Raw `screen` and classified `screen_kind` remain separate
 so an unknown future screen is still visible without being misclassified.
+
+The activity panel uses the normalized `screen_kind` to select a mode-aware
+heading and prioritize its existing detail groups. Search and Close Call place
+RF and special-mode values first; Weather and Tone-Out place special-mode values
+first; scanning and unknown values use the ordinary hierarchy-first order. This
+is presentation only: all 35 shared fields remain rendered and accessible, and
+unknown or future screen values do not hide data.
 
 The browser directly applies complete runtime snapshots, scanner connection
 changes, PSI and radio-state updates, audio snapshots, and recording snapshots.
