@@ -224,6 +224,33 @@ def test_decoder_expires_xml_sequence_during_unrelated_continuous_traffic() -> N
     assert diagnostics[0].command == "GSI"
 
 
+def test_decoder_expired_followup_fragment_emits_one_diagnostic() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    late_second = (
+        b'GSI,<XML>,<ScannerInfo><Department Name="Late" />'
+        b'<Footer No="2" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    now = 105.0
+
+    assert decoder.feed(late_second) == ()
+    assert [diagnostic.kind for diagnostic in diagnostics] == [
+        "sequence_expired"
+    ]
+    assert diagnostics[0].command == "GSI"
+
+
 @pytest.mark.parametrize(
     ("argument", "value", "message"),
     [

@@ -219,7 +219,7 @@ class UdpDatagramDecoder:
     def feed(self, data: bytes) -> tuple[str, ...]:
         text = data.decode("utf-8", errors="replace").strip("\x00")
         with self._lock:
-            self._expire_sequences(self._monotonic())
+            expired_commands = self._expire_sequences(self._monotonic())
             if not text:
                 return ()
 
@@ -231,7 +231,11 @@ class UdpDatagramDecoder:
                     "\x00\r\n "
                 )
                 if command and payload:
-                    result = self._feed_xml(command, payload)
+                    result = self._feed_xml(
+                        command,
+                        payload,
+                        expired_commands=expired_commands,
+                    )
                     self._complete_expected(command, result.completed)
                     return result.lines
                 if command:
@@ -242,7 +246,11 @@ class UdpDatagramDecoder:
                 root_tag = self._xml_root(stripped)
                 xml_command = self._bare_xml_command(root_tag)
                 if xml_command is not None:
-                    result = self._feed_xml(xml_command, stripped)
+                    result = self._feed_xml(
+                        xml_command,
+                        stripped,
+                        expired_commands=expired_commands,
+                    )
                     self._complete_expected(xml_command, result.completed)
                     return result.lines
 
@@ -314,7 +322,13 @@ class UdpDatagramDecoder:
                 return command
         return None
 
-    def _feed_xml(self, command: str, payload: str) -> _XmlDecodeResult:
+    def _feed_xml(
+        self,
+        command: str,
+        payload: str,
+        *,
+        expired_commands: frozenset[str],
+    ) -> _XmlDecodeResult:
         expected_root = XML_COMMAND_ROOTS.get(command)
         if expected_root is None:
             return _XmlDecodeResult()
@@ -343,23 +357,6 @@ class UdpDatagramDecoder:
         sequence = self._sequences.get(command)
         now = self._monotonic()
 
-        if (
-            sequence is not None
-            and now - sequence.started_at >= self._max_sequence_lifetime
-        ):
-            self._sequences.pop(command, None)
-            self._diagnose(
-                "sequence_expired",
-                f"Discarding incomplete {command} XML response: sequence lifetime "
-                "expired",
-                command=command,
-                expected_fragment=sequence.next_number,
-                received_fragment=number,
-            )
-            sequence = None
-            if number != 1:
-                return _XmlDecodeResult()
-
         if number == 1:
             sequence = _XmlSequence(
                 root_tag=root.tag,
@@ -368,6 +365,8 @@ class UdpDatagramDecoder:
             )
             self._sequences[command] = sequence
         elif sequence is None:
+            if command in expired_commands:
+                return _XmlDecodeResult()
             self._diagnose(
                 "missing_first",
                 f"Discarding {command} XML fragment {number}: fragment 1 was not received",
@@ -429,7 +428,7 @@ class UdpDatagramDecoder:
             completed=True,
         )
 
-    def _expire_sequences(self, now: float) -> None:
+    def _expire_sequences(self, now: float) -> frozenset[str]:
         expired = tuple(
             (command, sequence)
             for command, sequence in self._sequences.items()
@@ -444,6 +443,7 @@ class UdpDatagramDecoder:
                 command=command,
                 expected_fragment=sequence.next_number,
             )
+        return frozenset(command for command, _sequence in expired)
 
     @staticmethod
     def _remove_footer(root: ET.Element) -> ET.Element | None:
