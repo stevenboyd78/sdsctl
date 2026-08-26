@@ -19,7 +19,10 @@ _DOCKER_HUB_WORKFLOW = (
 def test_generic_container_dockerfile_builds_with_mqtt_and_web_support() -> None:
     dockerfile = _DOCKERFILE.read_text(encoding="utf-8")
 
-    assert dockerfile.count("FROM python:3.14-slim") == 2
+    assert dockerfile.count(
+        "FROM python:3.14-slim@sha256:"
+        "83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83"
+    ) == 2
     assert '".[mqtt,web]"' in dockerfile
     assert '"sds200[mqtt,web]"' in dockerfile
     assert 'ENTRYPOINT ["sdsctl"]' in dockerfile

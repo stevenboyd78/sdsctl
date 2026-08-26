@@ -298,6 +298,13 @@ def test_tui_panel_reports_active_device_during_saved_playback() -> None:
             assert "Saved playback: PLAYING" in panel
             assert "Playback device: ACTIVE" in panel
 
+            # This panel-only fixture starts playback outside the session's
+            # saved-playback worker, so it must also release that unowned
+            # device explicitly before the app closes.
+            playback.stop()
+            with session._state_lock:
+                session._saved_status = SavedPlaybackStatus.STOPPED
+
         assert playback.stop_calls == 1
 
     asyncio.run(exercise())

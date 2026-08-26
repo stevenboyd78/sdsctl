@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_2_1_hardening_contract() -> None:
+def test_roadmap_records_active_milestone_27_2_2_hardening_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,18 +132,19 @@ def test_roadmap_records_active_milestone_27_2_1_hardening_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.2.1 — Reviewed network and protocol hardening",
-        "must not be amended with unrelated review work",
+        "### Milestone 27.2.2 — Audio lifecycle and release-integrity hardening",
+        "without amending the physically qualified Milestone 27.2 waterfall data plane",
         "evidence rather than implementation authority",
-        "Bound RTSP response headers and declared bodies",
-        "fragment count, aggregate source bytes, child count, and monotonic lifetime",
-        "unexpected UDP application-callback failures",
-        "redacted malformed STS handling",
-        "Treat Broadcastify source and metadata credentials as cleartext",
-        "Do not silently wrap a documented plaintext port in TLS",
-        "descriptor-relative theme copy",
-        "RTP padding must continue to follow RFC 3550",
-        "Do not add a waterfall renderer",
+        "independently owned, bounded PCM delivery",
+        "never wait for arbitrary destination code",
+        "deterministic monotonic bounded exponential backoff",
+        "WAV writer worker the sole writer and finalizer",
+        "must not race the live worker",
+        "Pin every third-party workflow action",
+        "verified multi-architecture Python base-image digest",
+        "shared 86 percent coverage floor",
+        "separately designed, cross-Python reproducible-build slice",
+        "Do not reopen the resolved or rejected Milestone 27.2.1 findings",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

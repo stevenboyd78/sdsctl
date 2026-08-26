@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 import threading
 import wave
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -145,6 +145,7 @@ class TuiAudioSession:
         self._saved_stop = threading.Event()
         self._saved_pause = threading.Event()
         self._saved_thread: threading.Thread | None = None
+        self._recording_lifecycle_operation: str | None = None
 
     @property
     def status(self) -> AudioSessionStatus:
@@ -242,6 +243,21 @@ class TuiAudioSession:
     ) -> Callable[[], None]:
         return self.events.subscribe("state", callback)
 
+    @contextmanager
+    def _recording_operation(self, name: str) -> Iterator[None]:
+        with self._lifecycle_lock:
+            with self._state_lock:
+                if self._recording_lifecycle_operation is not None:
+                    raise RuntimeError(
+                        "Another TUI recording lifecycle operation is in progress"
+                    )
+                self._recording_lifecycle_operation = name
+            try:
+                yield
+            finally:
+                with self._state_lock:
+                    self._recording_lifecycle_operation = None
+
     def snapshot(self) -> AudioSessionSnapshot:
         with self._state_lock:
             status = self._status
@@ -256,7 +272,10 @@ class TuiAudioSession:
             samples = self._last_samples
         if started_clock is not None:
             elapsed = max(elapsed, self._clock() - started_clock)
-        if recorder is not None:
+        if recorder is not None and status in {
+            AudioSessionStatus.STARTING,
+            AudioSessionStatus.RECORDING,
+        }:
             packets = recorder.packets
             samples = recorder.samples
         return AudioSessionSnapshot(
@@ -275,6 +294,11 @@ class TuiAudioSession:
 
     def open_audio(self) -> None:
         """Start the shared RTSP/RTP stream without opening the output device."""
+
+        with self._recording_operation("open"):
+            self._open_audio()
+
+    def _open_audio(self) -> None:
         with self._lifecycle_lock:
             with self._state_lock:
                 if self._open:
@@ -287,9 +311,14 @@ class TuiAudioSession:
 
     def start(self) -> None:
         """Start one recording while retaining the shared audio stream."""
+
+        with self._recording_operation("start"):
+            self._start_recording()
+
+    def _start_recording(self) -> None:
         with self._lifecycle_lock:
             if not self.open:
-                self.open_audio()
+                self._open_audio()
             if not self.recording_enabled:
                 raise RuntimeError(
                     "Start the TUI with --audio-directory or --audio-output "
@@ -301,7 +330,7 @@ class TuiAudioSession:
                     AudioSessionStatus.STARTING,
                     AudioSessionStatus.RECORDING,
                     AudioSessionStatus.STOPPING,
-                }:
+                } or self._recording_sink is not None:
                     raise RuntimeError("An audio recording is already active")
                 self._status = AudioSessionStatus.STARTING
                 self._started_at = None
@@ -330,6 +359,7 @@ class TuiAudioSession:
             path: Path | None = None
             recorder: PcmuWavRecorder | None = None
             sink: PcmWavSink | None = None
+            attach_attempted = False
             try:
                 path = self.path_policy.next_path(
                     started_at,
@@ -342,11 +372,16 @@ class TuiAudioSession:
                     overwrite=self.path_policy.overwrite,
                 )
                 sink = PcmWavSink(recorder)
+                attach_attempted = True
                 self._router.attach(sink)
             except BaseException as error:
-                if recorder is not None:
+                if sink is not None and attach_attempted:
                     with suppress(Exception):
-                        recorder.close()
+                        self._router.detach(
+                            sink,
+                            stop=True,
+                            raise_on_failure=True,
+                        )
                 with self._state_lock:
                     self._status = AudioSessionStatus.FAILED
                     self._stopped_at = self._now()
@@ -380,32 +415,52 @@ class TuiAudioSession:
 
     def stop(self) -> None:
         """Stop and finalize the active recording without stopping live audio."""
+
+        with self._recording_operation("stop"):
+            self._stop_recording()
+
+    def _stop_recording(self) -> None:
         with self._lifecycle_lock:
             with self._state_lock:
+                sink = self._recording_sink
+                if self._status is AudioSessionStatus.STOPPING:
+                    return
                 if self._status not in {
                     AudioSessionStatus.STARTING,
                     AudioSessionStatus.RECORDING,
-                    AudioSessionStatus.STOPPING,
-                }:
+                } and sink is None:
                     return
                 self._status = AudioSessionStatus.STOPPING
-                sink, self._recording_sink = self._recording_sink, None
-                recorder, self._recorder = self._recorder, None
+                recorder = self._recorder
                 started_clock = self._started_clock
                 started_snapshot = self._recording_started_snapshot
                 started_state = self._recording_started_state
+                prior_packets = self._last_packets
+                prior_samples = self._last_samples
             self._emit_state()
 
             failure: BaseException | None = None
             if sink is not None:
                 try:
-                    self._router.detach(sink)
+                    self._router.detach(sink, raise_on_failure=True)
                 except BaseException as error:
                     failure = error
             ended = self._clock()
             stopped_at = self._now()
-            packets = recorder.packets if recorder is not None else 0
-            samples = recorder.samples if recorder is not None else 0
+            sink_statistics = (
+                sink.statistics
+                if sink is not None
+                else PcmSinkStatistics()
+            )
+            if failure is None:
+                packets = recorder.packets if recorder is not None else 0
+                samples = recorder.samples if recorder is not None else 0
+            else:
+                packets = prior_packets
+                samples = max(
+                    prior_samples,
+                    sink_statistics.bytes_written // PCM_SAMPLE_WIDTH,
+                )
             output_path = recorder.path if recorder is not None else self._output_path
             with self._state_lock:
                 elapsed_seconds = self._elapsed_seconds
@@ -470,10 +525,12 @@ class TuiAudioSession:
                     else AudioSessionStatus.STOPPED
                 )
                 self._error = _error_message(failure) if failure is not None else None
-                self._recording_started_snapshot = None
-                self._recording_started_state = None
                 self._last_metadata_path = metadata_path
                 if failure is None:
+                    self._recording_sink = None
+                    self._recorder = None
+                    self._recording_started_snapshot = None
+                    self._recording_started_state = None
                     self._completed_count += 1
             self.refresh_recordings()
             if failure is None:
@@ -504,10 +561,15 @@ class TuiAudioSession:
 
     def start_live_playback(self) -> None:
         """Prepare and attach live playback while retaining the shared stream."""
+
+        with self._recording_operation("live-start"):
+            self._start_live_playback()
+
+    def _start_live_playback(self) -> None:
         playback = self._playback
         with self._lifecycle_lock:
             if not self.open:
-                self.open_audio()
+                self._open_audio()
             with self._state_lock:
                 self._live_playback_enabled = True
                 saved_active = self._saved_status in {
@@ -526,10 +588,14 @@ class TuiAudioSession:
             self._emit_state()
 
     def toggle_live_playback(self) -> None:
+        with self._recording_operation("live-toggle"):
+            self._toggle_live_playback()
+
+    def _toggle_live_playback(self) -> None:
         playback = self._playback
         with self._lifecycle_lock:
             if not self.open:
-                self.open_audio()
+                self._open_audio()
             with self._state_lock:
                 enabled = not self._live_playback_enabled
                 self._live_playback_enabled = enabled
@@ -557,7 +623,8 @@ class TuiAudioSession:
         with self._state_lock:
             active_path = (
                 self._output_path
-                if self._status
+                if self._recording_sink is not None
+                or self._status
                 in {
                     AudioSessionStatus.STARTING,
                     AudioSessionStatus.RECORDING,
@@ -589,6 +656,10 @@ class TuiAudioSession:
         return entries
 
     def play_recording(self, path: Path) -> None:
+        with self._recording_operation("saved-start"):
+            self._play_recording(path)
+
+    def _play_recording(self, path: Path) -> None:
         playback = self._playback
         requested = path.expanduser().resolve()
         entry = next(
@@ -600,11 +671,11 @@ class TuiAudioSession:
         self.stop_saved_playback()
         with self._lifecycle_lock:
             if not self.open:
-                self.open_audio()
+                self._open_audio()
             with self._state_lock:
                 attached = self._live_playback_attached
             if attached:
-                self._router.detach(playback)
+                self._router.detach(playback, raise_on_failure=True)
                 with self._state_lock:
                     self._live_playback_attached = False
             _set_playback_muted(playback, False)
@@ -652,24 +723,29 @@ class TuiAudioSession:
 
     def close(self) -> None:
         """Finalize recording and stop saved, live, and network audio."""
+
+        with self._recording_operation("close"):
+            self._close()
+
+    def _close(self) -> None:
         with self._lifecycle_lock:
             self.stop_saved_playback()
-            self.stop()
+            failure: BaseException | None = None
+            try:
+                self._stop_recording()
+            except BaseException as error:
+                failure = error
             with self._state_lock:
                 if not self._open:
+                    if failure is not None:
+                        raise failure
                     return
                 self._open = False
-            failure: BaseException | None = None
             try:
                 self._fanout.stop()
             except BaseException as error:
-                failure = error
-            if self._playback.running:
-                try:
-                    self._playback.stop()
-                except BaseException as error:
-                    if failure is None:
-                        failure = error
+                if failure is None:
+                    failure = error
             with self._state_lock:
                 self._live_playback_attached = False
             self._emit_state()
@@ -739,6 +815,18 @@ class TuiAudioSession:
             with self._state_lock:
                 self._saved_thread = None
                 self._saved_pause.clear()
+                resume_live = self._open and self._live_playback_enabled
+            if resume_live:
+                try:
+                    self._router.attach(playback)
+                    _set_playback_muted(playback, False)
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
+                else:
+                    with self._state_lock:
+                        self._live_playback_attached = True
+            with self._state_lock:
                 self._saved_status = (
                     SavedPlaybackStatus.FAILED
                     if failure is not None
@@ -747,18 +835,6 @@ class TuiAudioSession:
                 self._saved_error = (
                     _error_message(failure) if failure is not None else None
                 )
-                resume_live = self._open and self._live_playback_enabled
-            if resume_live:
-                try:
-                    self._router.attach(playback)
-                    _set_playback_muted(playback, False)
-                except BaseException as error:
-                    with self._state_lock:
-                        self._saved_status = SavedPlaybackStatus.FAILED
-                        self._saved_error = _error_message(error)
-                else:
-                    with self._state_lock:
-                        self._live_playback_attached = True
             self._emit_state()
 
     def _read_recording(self, path: Path) -> RecordingEntry | None:

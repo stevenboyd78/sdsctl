@@ -20,6 +20,24 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Complete Milestone 27.2.2 audio-lifecycle and release-integrity hardening.
+  Fanout and dynamic-router destinations now receive PCM through independent
+  bounded workers, so producer paths never wait for destination code; overflow
+  drops only the affected sink's oldest complete samples with telemetry, while
+  submission failures enter an ordered, redacted quarantine with deterministic
+  monotonic bounded exponential backoff. The WAV worker remains the sole writer
+  and finalizer after startup, drains and closes exactly once, retains ownership
+  after a finite stop timeout, completes finalization when a blocked write later
+  returns, and gives a later stop a deterministic outcome. Every external
+  workflow action is pinned to a reviewed full commit with a readable version
+  comment, both stages of both Python container images share one reviewed
+  multi-architecture base digest, Dependabot covers both Dockerfile roots as
+  well as Python and GitHub Actions dependencies, and CI and release validation
+  enforce the shared measured 86 percent coverage floor. The README project
+  status now agrees with the current v0.22.0 release metadata and scope.
+  Dependency locking remains explicitly deferred to a separately designed
+  cross-Python reproducible-build milestone rather than freezing this public
+  library's supported ranges to one development environment.
 - Treat Broadcastify source and metadata Basic credentials as exposed whenever
   the assigned transport uses ordinary HTTP. Source and metadata transport now
   require an explicit operator acknowledgement, legacy remote-audio profile

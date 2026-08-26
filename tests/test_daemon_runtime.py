@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -232,6 +233,7 @@ class CollectingSink:
     def __init__(self, name: str) -> None:
         self._name = name
         self._running = False
+        self._condition = threading.Condition()
         self.received: list[bytes] = []
 
     @property
@@ -244,7 +246,8 @@ class CollectingSink:
 
     @property
     def statistics(self) -> PcmSinkStatistics:
-        written = sum(len(data) for data in self.received)
+        with self._condition:
+            written = sum(len(data) for data in self.received)
         return PcmSinkStatistics(
             bytes_submitted=written,
             bytes_written=written,
@@ -255,7 +258,16 @@ class CollectingSink:
 
     def submit_pcm(self, data: bytes) -> None:
         assert self._running
-        self.received.append(data)
+        with self._condition:
+            self.received.append(data)
+            self._condition.notify_all()
+
+    def wait_for_received(self, count: int) -> bool:
+        with self._condition:
+            return self._condition.wait_for(
+                lambda: len(self.received) >= count,
+                timeout=1.0,
+            )
 
     def stop(self) -> None:
         self._running = False
@@ -715,9 +727,11 @@ def test_runtime_routes_dynamic_sinks_through_one_audio_stream() -> None:
     runtime.attach_sink(first)
     runtime.start()
     transport.feed(AudioChunk(b"\xff\x7f"))
+    assert first.wait_for_received(1)
 
     runtime.attach_sink(second)
     transport.feed(AudioChunk(b"\x00"))
+    assert first.wait_for_received(2)
 
     runtime.detach_sink(first)
     transport.feed(AudioChunk(b"\x01\x02"))
@@ -742,7 +756,7 @@ def test_destination_start_failure_does_not_stop_runtime() -> None:
 
     assert runtime.running
     transport.feed(AudioChunk(b"\xff"))
-    assert len(healthy.received) == 1
+    assert healthy.wait_for_received(1)
 
     snapshot = runtime.snapshot()
     failed = next(
@@ -767,7 +781,7 @@ def test_preattached_destination_failure_isolated_during_start() -> None:
 
     assert runtime.running
     transport.feed(AudioChunk(b"\xff"))
-    assert len(healthy.received) == 1
+    assert healthy.wait_for_received(1)
 
     snapshot = runtime.snapshot()
     failed = next(
@@ -812,6 +826,64 @@ def test_runtime_stop_is_idempotent_and_serialized() -> None:
 
     runtime.stop()
     assert scanner.close_calls == 1
+
+
+@pytest.mark.parametrize("blocked_property", ["statistics", "running"])
+def test_runtime_stop_ignores_blocked_sink_telemetry(
+    blocked_property: str,
+) -> None:
+    class BlockingTelemetrySink(CollectingSink):
+        def __init__(self) -> None:
+            super().__init__("blocking-telemetry")
+            self.block_telemetry = False
+            self.telemetry_started = threading.Event()
+            self.telemetry_release = threading.Event()
+
+        def _wait_if_blocked(self, property_name: str) -> None:
+            if self.block_telemetry and blocked_property == property_name:
+                self.telemetry_started.set()
+                assert self.telemetry_release.wait(timeout=5.0)
+
+        @property
+        def running(self) -> bool:
+            self._wait_if_blocked("running")
+            return super().running
+
+        @property
+        def statistics(self) -> PcmSinkStatistics:
+            self._wait_if_blocked("statistics")
+            return super().statistics
+
+    order: list[str] = []
+    stop_timeout = 0.05
+    scanner = FakeScanner(order)
+    transport = TrackingAudioTransport(order)
+    router = PcmSinkRouter(stop_timeout=stop_timeout)
+    audio = AudioFanoutSession(
+        AudioStream(transport),
+        (router,),
+        stop_timeout=stop_timeout,
+    )
+    runtime = DaemonRuntime(scanner, audio, router)
+    blocked = BlockingTelemetrySink()
+    runtime.attach_sink(blocked)
+    runtime.start()
+    blocked.block_telemetry = True
+    snapshot_thread = threading.Thread(target=runtime.snapshot, daemon=True)
+    snapshot_thread.start()
+    assert blocked.telemetry_started.wait(timeout=1.0)
+
+    started = time.monotonic()
+    try:
+        runtime.stop()
+        elapsed = time.monotonic() - started
+        assert elapsed < stop_timeout * 4
+        assert not runtime.running
+    finally:
+        blocked.telemetry_release.set()
+        snapshot_thread.join(timeout=1.0)
+    assert not snapshot_thread.is_alive()
+    assert not blocked.running
 
 
 def test_runtime_reports_shutdown_failure_after_full_cleanup() -> None:

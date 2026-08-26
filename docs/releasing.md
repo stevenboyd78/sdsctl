@@ -8,6 +8,8 @@ version before starting.
 - Confirm the default branch is clean and current.
 - Confirm `pyproject.toml` and `sds200.__version__` both contain the intended release version.
 - Confirm `home-assistant/sds200/config.yaml` contains that same release version.
+- Confirm the README Project status names that same release version and describes
+  the current release rather than an earlier feature slice.
 - Confirm the Home Assistant App changelog contains that release version.
 - Confirm `sdsctl -V` and `sdsctl --version` report that same version.
 - Update `CHANGELOG.md` and leave a fresh `Unreleased` section.
@@ -28,6 +30,24 @@ Before release validation, run a semantic search for stale version and feature
 language in addition to the normal broken-link checker. Historical changelog and
 roadmap references may remain when they accurately describe older releases.
 
+Third-party workflow actions must use full 40-character commit SHAs with a
+nearby reviewed release-version comment. Resolve both the release tag and commit
+from the action's authoritative upstream repository before changing a pin; do
+not copy an unverified SHA from an issue or review. Dependabot continues to
+propose GitHub Actions updates, but each proposed commit and version comment
+still requires review.
+
+Each Dockerfile must preserve the readable `python:3.14-slim` tag and pin its
+verified multi-architecture OCI index digest. Inspect the digest-form reference
+and confirm both `linux/amd64` and `linux/arm64` before accepting an update.
+Dependabot monitors the generic and Home Assistant Dockerfile roots separately.
+
+The public dependency ranges in `pyproject.toml` are compatibility declarations,
+not a transitive reproducibility lock. Do not replace them with a single-host
+`pip freeze` or describe CI and container resolution as fully locked. A future
+lock design must cover every supported Python version, build isolation, optional
+extras, hashes, regeneration, and automated maintenance.
+
 ## 2. Run validation
 
 ```bash
@@ -35,7 +55,7 @@ python -m pip install -e ".[dev]"
 
 ruff check .
 mypy src/sds200
-pytest
+pytest --cov=sds200 --cov-report=term-missing
 python scripts/check_docs.py
 git diff --check
 

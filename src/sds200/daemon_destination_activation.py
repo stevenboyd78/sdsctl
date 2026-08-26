@@ -267,6 +267,7 @@ class _DestinationRuntimeLike(Protocol):
         sink: PcmSink,
         *,
         stop: bool = True,
+        raise_on_failure: bool = False,
     ) -> None: ...
 
 
@@ -538,10 +539,7 @@ class DaemonDestinationCoordinator:
                     continue
                 previous = previous_resources[change.name]
                 cleanup_failures.extend(
-                    self._cleanup_resource(
-                        previous,
-                        attached=change.action == "removed",
-                    )
+                    self._cleanup_resource(previous)
                 )
 
             return DaemonDestinationReplacementResult(
@@ -577,9 +575,7 @@ class DaemonDestinationCoordinator:
 
             failures: list[DaemonDestinationCleanupFailure] = []
             for resource in resources:
-                failures.extend(
-                    self._cleanup_resource(resource, attached=True)
-                )
+                failures.extend(self._cleanup_resource(resource))
 
         if failures:
             first = failures[0]
@@ -673,6 +669,7 @@ class DaemonDestinationCoordinator:
                     self.runtime.detach_sink(
                         stage.resources.sink,
                         stop=True,
+                        raise_on_failure=True,
                     )
                 except BaseException as error:
                     failures.append(error)
@@ -690,8 +687,6 @@ class DaemonDestinationCoordinator:
     def _cleanup_resource(
         self,
         resources: DaemonDestinationResources,
-        *,
-        attached: bool,
     ) -> tuple[DaemonDestinationCleanupFailure, ...]:
         failures: list[DaemonDestinationCleanupFailure] = []
         publisher = resources.metadata_publisher
@@ -715,13 +710,11 @@ class DaemonDestinationCoordinator:
                 )
 
         try:
-            if attached:
-                self.runtime.detach_sink(
-                    resources.sink,
-                    stop=True,
-                )
-            else:
-                resources.sink.stop()
+            self.runtime.detach_sink(
+                resources.sink,
+                stop=True,
+                raise_on_failure=True,
+            )
         except BaseException as error:
             failures.append(
                 DaemonDestinationCleanupFailure(
