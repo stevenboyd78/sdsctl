@@ -13,6 +13,11 @@ from .exceptions import ProtocolError, ScannerConnectionError
 DEFAULT_RTSP_PORT = 554
 DEFAULT_AUDIO_PATH = "/au:scanner.au"
 DEFAULT_USER_AGENT = "sds200-python/0.11"
+DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES = 64 * 1024
+DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES = 4 * 1024 * 1024
+
+_RTSP_HEADER_TERMINATOR = b"\r\n\r\n"
+_RTSP_RECEIVE_CHUNK_BYTES = 4096
 
 
 class RtspProtocolError(ProtocolError):
@@ -202,6 +207,8 @@ class RtspClient:
         timeout: float = 5.0,
         user_agent: str = DEFAULT_USER_AGENT,
         connection_factory: StreamConnectionFactory = default_stream_connection_factory,
+        max_response_header_bytes: int = DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES,
+        max_response_body_bytes: int = DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES,
     ) -> None:
         if not host.strip():
             raise ValueError("RTSP host must not be empty.")
@@ -211,12 +218,22 @@ class RtspClient:
             raise ValueError("RTSP path must begin with '/'.")
         if timeout <= 0:
             raise ValueError("RTSP timeout must be greater than zero.")
+        if type(max_response_header_bytes) is not int:
+            raise TypeError("RTSP maximum response header size must be an integer.")
+        if max_response_header_bytes <= 0:
+            raise ValueError("RTSP maximum response header size must be greater than zero.")
+        if type(max_response_body_bytes) is not int:
+            raise TypeError("RTSP maximum response body size must be an integer.")
+        if max_response_body_bytes <= 0:
+            raise ValueError("RTSP maximum response body size must be greater than zero.")
 
         self.host = host
         self.port = port
         self.path = path
         self.timeout = timeout
         self.user_agent = user_agent
+        self.max_response_header_bytes = max_response_header_bytes
+        self.max_response_body_bytes = max_response_body_bytes
         self._connection_factory = connection_factory
         self._socket: StreamSocketLike | None = None
         self._buffer = bytearray()
@@ -377,43 +394,70 @@ class RtspClient:
             stream.sendall(payload)
             response = self._read_response(stream)
         except OSError as exc:
+            self.close()
             raise ScannerConnectionError(
                 f"RTSP {method} failed while communicating with {self.endpoint}."
             ) from exc
+        except (RtspProtocolError, ScannerConnectionError):
+            self.close()
+            raise
 
         response_cseq = response.header("cseq")
         if response_cseq is None or response_cseq.strip() != str(cseq):
-            raise RtspProtocolError(
-                f"RTSP {method} response CSeq {response_cseq!r} does not match {cseq}."
-            )
+            self.close()
+            raise RtspProtocolError(f"RTSP {method} response CSeq does not match request.")
         if response.status_code != 200:
             raise RtspStatusError(method, response.status_code, response.reason)
         return response
 
     def _read_response(self, stream: StreamSocketLike) -> RtspResponse:
-        marker = b"\r\n\r\n"
-        while marker not in self._buffer:
-            self._receive(stream)
+        marker = _RTSP_HEADER_TERMINATOR
+        while True:
+            marker_index = self._buffer.find(marker)
+            if marker_index >= 0:
+                header_end = marker_index + len(marker)
+                if header_end > self.max_response_header_bytes:
+                    raise RtspProtocolError(
+                        "RTSP response headers exceed the configured size limit."
+                    )
+                break
+            remaining_header_bytes = (
+                self.max_response_header_bytes - len(self._buffer)
+            )
+            if remaining_header_bytes <= 0:
+                raise RtspProtocolError(
+                    "RTSP response headers exceed the configured size limit."
+                )
+            self._receive(
+                stream,
+                size=min(_RTSP_RECEIVE_CHUNK_BYTES, remaining_header_bytes),
+            )
 
-        header_bytes, remainder = bytes(self._buffer).split(marker, 1)
+        header_bytes = bytes(self._buffer[:marker_index])
         status_code, reason, headers = self._parse_headers(header_bytes)
         raw_length = headers.get("content-length", "0")
+        if not raw_length.isascii() or not raw_length.isdecimal():
+            raise RtspProtocolError("RTSP response has an invalid Content-Length.")
         try:
             content_length = int(raw_length)
         except ValueError as exc:
             raise RtspProtocolError(
-                f"RTSP response has invalid Content-Length {raw_length!r}."
+                "RTSP response has an invalid Content-Length."
             ) from exc
-        if content_length < 0:
-            raise RtspProtocolError("RTSP response has a negative Content-Length.")
+        if content_length > self.max_response_body_bytes:
+            raise RtspProtocolError(
+                "RTSP response body exceeds the configured size limit."
+            )
 
-        while len(remainder) < content_length:
-            self._receive(stream)
-            _, remainder = bytes(self._buffer).split(marker, 1)
+        body_end = header_end + content_length
+        while len(self._buffer) < body_end:
+            self._receive(
+                stream,
+                size=min(_RTSP_RECEIVE_CHUNK_BYTES, body_end - len(self._buffer)),
+            )
 
-        body = remainder[:content_length]
-        trailing = remainder[content_length:]
-        self._buffer = bytearray(trailing)
+        body = bytes(self._buffer[header_end:body_end])
+        del self._buffer[:body_end]
         return RtspResponse(
             status_code=status_code,
             reason=reason,
@@ -421,8 +465,8 @@ class RtspClient:
             body=body,
         )
 
-    def _receive(self, stream: StreamSocketLike) -> None:
-        chunk = stream.recv(4096)
+    def _receive(self, stream: StreamSocketLike, *, size: int) -> None:
+        chunk = stream.recv(size)
         if not chunk:
             raise ScannerConnectionError("RTSP connection closed while reading a response.")
         self._buffer.extend(chunk)
@@ -437,11 +481,11 @@ class RtspClient:
             raise RtspProtocolError("RTSP response is missing a status line.")
         status_fields = lines[0].split(" ", 2)
         if len(status_fields) < 2 or status_fields[0] != "RTSP/1.0":
-            raise RtspProtocolError(f"Invalid RTSP status line {lines[0]!r}.")
+            raise RtspProtocolError("RTSP response has an invalid status line.")
         try:
             status_code = int(status_fields[1])
         except ValueError as exc:
-            raise RtspProtocolError(f"Invalid RTSP status code {status_fields[1]!r}.") from exc
+            raise RtspProtocolError("RTSP response has an invalid status code.") from exc
         reason = status_fields[2] if len(status_fields) == 3 else ""
 
         headers: dict[str, str] = {}
@@ -450,6 +494,8 @@ class RtspClient:
                 continue
             name, separator, value = line.partition(":")
             if not separator or not name.strip():
-                raise RtspProtocolError(f"Invalid RTSP header line {line!r}.")
+                raise RtspProtocolError(
+                    "RTSP response contains an invalid header line."
+                )
             headers[name.strip().lower()] = value.strip()
         return status_code, reason, headers
