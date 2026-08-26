@@ -87,7 +87,7 @@ def test_status_preserves_display_lines() -> None:
     assert len(parsed.reserved) == 9
 
 
-def test_status_accepts_current_seven_reserved_field_shape() -> None:
+def test_status_rejects_undocumented_seven_reserved_field_shape() -> None:
     parser = PacketParser()
     raw = ",".join(
         (
@@ -113,11 +113,10 @@ def test_status_accepts_current_seven_reserved_field_shape() -> None:
         )
     )
 
-    parsed = parser.parse_typed(parser.parse_packet(raw))
+    with pytest.raises(ProtocolError, match="invalid field shape") as caught:
+        parser.parse_typed(parser.parse_packet(raw))
 
-    assert isinstance(parsed, StatusResponse)
-    assert len(parsed.lines) == 5
-    assert len(parsed.reserved) == 7
+    assert raw not in str(caught.value)
 
 
 def test_status_rejects_missing_reserved_fields_without_exposing_payload() -> None:
