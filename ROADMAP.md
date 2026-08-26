@@ -11,50 +11,66 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.2.1 — Reviewed network and protocol hardening
+### Milestone 27.2.2 — Audio lifecycle and release-integrity hardening
 
-Milestone 27.2 is closed with its physically qualified waterfall data plane and
-must not be amended with unrelated review work. Milestone 27.2.1 independently
-reproduces and closes the bounded network, parser, and credential-handling
-findings from the post-milestone implementation review. The review package is
-evidence rather than implementation authority, and its unexecuted draft patch
-must not be applied wholesale.
+Milestone 27.2.1 is closed after independently reproducing and resolving the
+applicable bounded network, parser, callback-isolation, and credential-handling
+findings from the post-milestone implementation review. Milestone 27.2.2 closes
+the remaining reproduced audio-lifecycle and release-integrity findings without
+amending the physically qualified Milestone 27.2 waterfall data plane. The
+review package remains evidence rather than implementation authority, and its
+unexecuted draft patch must not be applied wholesale.
 
-Bound RTSP response headers and declared bodies before untrusted growth, close
-or reset a failed RTSP exchange deterministically, and cover exact-limit,
-boundary-straddling, malformed-length, and over-limit behavior. Bound fragmented
-XML assembly by fragment count, aggregate source bytes, child count, and
-monotonic lifetime, with deterministic sequence discard and later recovery.
+Move every fanout and dynamic-router subscriber behind independently owned,
+bounded PCM delivery. The RTP-facing callback and router submission path must
+never wait for arbitrary destination code. A slow destination may lose only its
+own oldest complete PCM data while healthy peers continue, with bounded queue,
+drop, and overflow telemetry. Quarantine a destination after a submission
+failure and permit recovery only after deterministic monotonic bounded
+exponential backoff, rather than retrying it on every frame. Preserve ordered
+subscriber transitions and expose exception types without audio data or error
+details.
 
-Isolate unexpected UDP application-callback failures so one rejected line
-cannot terminate the reader. Record bounded failure telemetry and a redacted
-diagnostic without logging packet contents. Reject structurally odd STS display-
-field collections without including raw scanner display data in the resulting
-error.
+Make the WAV writer worker the sole writer and finalizer after recorder startup.
+It must drain and close exactly once on normal shutdown and close exactly once
+after a write failure. A configurable finite stop deadline may report a timeout,
+but the stopping thread must not race the live worker by closing its recorder.
+When a blocked write later completes, the worker must still finalize, and a
+later stop attempt must report the stored outcome deterministically. Failed
+thread startup must also close any recorder that was already opened.
 
-Treat Broadcastify source and metadata credentials as cleartext whenever the
-configured provider endpoint uses ordinary HTTP. Require explicit operator
-acknowledgement of that risk unless a provider-supported TLS source endpoint has
-been independently verified. Do not silently wrap a documented plaintext port
-in TLS or claim transport confidentiality without provider evidence.
+Restore release-integrity invariants: rewrite the README current-status text for
+the actual package version and enforce agreement among that status, Python
+package metadata, import metadata, and Home Assistant release metadata. Pin
+every third-party workflow action to an independently resolved full commit SHA
+with a readable version comment. Pin both container build stages to the verified
+multi-architecture Python base-image digest, retain automated GitHub Actions and
+Python dependency updates, and add Docker digest updates for both image roots.
+Define one measured coverage floor from the completed baseline and require it in
+both continuous-integration and release validation.
 
-Record the two rejected review recommendations explicitly. The current
-descriptor-relative theme copy, stable file-identity checks, private staging,
-and source/staged digest comparison already close the reported theme race. RTP
-padding must continue to follow RFC 3550, in which the final padding octet gives
-the padding count, rather than requiring every padding octet to repeat that
-count.
+The review's broader dependency-lock request needs a separately designed,
+cross-Python reproducible-build slice covering build isolation, optional extras,
+transitive artifacts, hashes, regeneration, and automated updates. Do not
+replace the public library's supported dependency ranges with a local Python
+3.14 freeze or claim that mutable transitive dependency resolution is closed in
+this milestone.
 
-Acceptance must cover RTSP exact and one-byte-over limits, delimiter receive
-boundaries, XML aggregate and expiry limits, recovery after every rejection, a
-callback exception followed by later valid datagrams, redacted malformed STS
-handling, Broadcastify migration and risk-acknowledgement behavior, credential-
-free diagnostics, documentation, distribution contents, and the complete
-static and test suite. Existing scanner control, PSI, RTSP/RTP audio, daemon
-ownership, Home Assistant packaging, and waterfall behavior must not regress.
+Acceptance must prove that a blocked sink cannot delay RTP-facing submission or
+a healthy peer; one full queue cannot affect another; quarantine suppresses
+per-frame retries and recovers only after the backoff boundary; detach and stop
+accept no later work; and transitions and diagnostics remain ordered and
+redacted. It must cover normal, write-error, close-error, blocked-write,
+eventual-finalization, and thread-start-failure WAV paths. Repository contracts
+must reject mutable workflow refs, floating Dockerfile base images, inconsistent
+current-version metadata, and workflows that bypass the shared 86 percent
+coverage floor. Run documentation and distribution checks plus the complete
+static and test suite; no scanner hardware validation is required for these
+host-independent boundaries.
 
-Do not add a waterfall renderer, dashboard layout change, new theme, new scanner
-command, remote provider, or unverified Broadcastify TLS endpoint.
+Do not reopen the resolved or rejected Milestone 27.2.1 findings, add a
+waterfall renderer, change a dashboard layout, add a theme or scanner command,
+invent a provider TLS endpoint, or describe dependency inputs as fully locked.
 
 ## Deferred hardware validation
 
