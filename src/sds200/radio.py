@@ -1532,7 +1532,11 @@ class SDSScanner:
     def _receive_line(self, raw: str) -> None:
         self.trace.rx(raw)
 
-        assembled = self.xml_assembler.feed(raw)
+        try:
+            assembled = self.xml_assembler.feed(raw)
+        except ProtocolError as exc:
+            self.events.emit("protocol_error", exc)
+            return
         if assembled is not None:
             command, xml = assembled
             try:

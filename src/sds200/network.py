@@ -35,6 +35,7 @@ _XML_MARKER = ",<XML>,"
 _FOOTER_TAGS = {"Foot", "Footer"}
 MAX_XML_SEQUENCE_FRAGMENTS = 256
 MAX_XML_SEQUENCE_CHILDREN = 10_000
+MAX_XML_SEQUENCE_DEPTH = 64
 MAX_XML_SEQUENCE_BYTES = 4 * 1024 * 1024
 MAX_XML_SEQUENCE_LIFETIME = 10.0
 _RETRYABLE_DIAGNOSTICS = {
@@ -144,6 +145,7 @@ class UdpDatagramDecoder:
         completion_handler: Callable[[str], None] | None = None,
         max_sequence_fragments: int = MAX_XML_SEQUENCE_FRAGMENTS,
         max_sequence_children: int = MAX_XML_SEQUENCE_CHILDREN,
+        max_sequence_depth: int = MAX_XML_SEQUENCE_DEPTH,
         max_sequence_bytes: int = MAX_XML_SEQUENCE_BYTES,
         max_sequence_lifetime: float = MAX_XML_SEQUENCE_LIFETIME,
         monotonic: Callable[[], float] = time.monotonic,
@@ -156,6 +158,10 @@ class UdpDatagramDecoder:
             raise TypeError("Maximum XML sequence children must be an integer.")
         if max_sequence_children <= 0:
             raise ValueError("Maximum XML sequence children must be positive.")
+        if type(max_sequence_depth) is not int:
+            raise TypeError("Maximum XML sequence depth must be an integer.")
+        if max_sequence_depth <= 0:
+            raise ValueError("Maximum XML sequence depth must be positive.")
         if type(max_sequence_bytes) is not int:
             raise TypeError("Maximum XML sequence bytes must be an integer.")
         if max_sequence_bytes <= 0:
@@ -177,6 +183,7 @@ class UdpDatagramDecoder:
         self._completion_handler = completion_handler
         self._max_sequence_fragments = max_sequence_fragments
         self._max_sequence_children = max_sequence_children
+        self._max_sequence_depth = max_sequence_depth
         self._max_sequence_bytes = max_sequence_bytes
         self._max_sequence_lifetime = max_sequence_lifetime
         self._monotonic = monotonic
@@ -390,21 +397,22 @@ class UdpDatagramDecoder:
             return _XmlDecodeResult()
 
         fragment_children = list(root)
-        fragment_child_count = sum(
-            1 for child in fragment_children for _element in child.iter()
+        fragment_child_count, fragment_depth = self._xml_metrics(
+            fragment_children
         )
         fragment_bytes = len(payload.encode("utf-8"))
         if (
             sequence.fragment_count + 1 > self._max_sequence_fragments
             or sequence.child_count + fragment_child_count
             > self._max_sequence_children
+            or fragment_depth > self._max_sequence_depth
             or sequence.source_bytes + fragment_bytes > self._max_sequence_bytes
         ):
             self._sequences.pop(command, None)
             self._diagnose(
                 "sequence_limit",
                 f"Discarding incomplete {command} XML response: sequence exceeded "
-                "its fragment, element, or byte limit",
+                "its fragment, element, depth, or byte limit",
                 command=command,
                 expected_fragment=sequence.next_number,
                 received_fragment=number,
@@ -427,6 +435,21 @@ class UdpDatagramDecoder:
             (f"{command}{_XML_MARKER}", xml),
             completed=True,
         )
+
+    @staticmethod
+    def _xml_metrics(children: list[ET.Element]) -> tuple[int, int]:
+        """Return retained element count and document depth without recursion."""
+        count = 0
+        maximum_depth = 1
+        stack = [(child, 2) for child in reversed(children)]
+        while stack:
+            element, depth = stack.pop()
+            count += 1
+            maximum_depth = max(maximum_depth, depth)
+            stack.extend(
+                (child, depth + 1) for child in reversed(list(element))
+            )
+        return count, maximum_depth
 
     def _expire_sequences(self, now: float) -> frozenset[str]:
         expired = tuple(

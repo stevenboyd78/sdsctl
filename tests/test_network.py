@@ -14,6 +14,7 @@ import sds200
 from sds200.network import (
     MAX_XML_SEQUENCE_BYTES,
     MAX_XML_SEQUENCE_CHILDREN,
+    MAX_XML_SEQUENCE_DEPTH,
     MAX_XML_SEQUENCE_FRAGMENTS,
     MAX_XML_SEQUENCE_LIFETIME,
     UdpDatagramDecoder,
@@ -46,6 +47,7 @@ def test_xml_sequence_limit_defaults_are_public() -> None:
     expected = {
         "MAX_XML_SEQUENCE_BYTES": MAX_XML_SEQUENCE_BYTES,
         "MAX_XML_SEQUENCE_CHILDREN": MAX_XML_SEQUENCE_CHILDREN,
+        "MAX_XML_SEQUENCE_DEPTH": MAX_XML_SEQUENCE_DEPTH,
         "MAX_XML_SEQUENCE_FRAGMENTS": MAX_XML_SEQUENCE_FRAGMENTS,
         "MAX_XML_SEQUENCE_LIFETIME": MAX_XML_SEQUENCE_LIFETIME,
     }
@@ -194,6 +196,45 @@ def test_decoder_bounds_all_retained_xml_elements_and_recovers() -> None:
     assert ET.fromstring(lines[1]).find("Property").attrib["Sig"] == "4"
 
 
+def test_decoder_bounds_deep_xml_iteratively_and_recovers() -> None:
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_depth=64,
+    )
+    opening = "<Nested>" * 1_000
+    closing = "</Nested>" * 1_000
+    deeply_nested = (
+        "GSI,<XML>,<ScannerInfo>"
+        f"{opening}<Leaf />{closing}"
+        '<Footer No="1" EOT="1" /></ScannerInfo>'
+    ).encode()
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><Property Sig="4" />'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(deeply_nested) == ()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_limit"]
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("Property").attrib["Sig"] == "4"
+
+
+def test_decoder_accepts_xml_at_exact_depth_limit() -> None:
+    decoder = UdpDatagramDecoder(max_sequence_depth=3)
+    packet = (
+        b'GSI,<XML>,<ScannerInfo><Nested><Leaf /></Nested>'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    lines = decoder.feed(packet)
+
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("Nested/Leaf") is not None
+
+
 def test_decoder_expires_xml_sequence_by_monotonic_lifetime_and_recovers() -> None:
     now = 100.0
     diagnostics: list[TransportDiagnostic] = []
@@ -277,6 +318,7 @@ def test_decoder_expired_followup_fragment_emits_one_diagnostic() -> None:
     [
         ("max_sequence_fragments", 0, "fragments"),
         ("max_sequence_children", 0, "children"),
+        ("max_sequence_depth", 0, "depth"),
         ("max_sequence_bytes", 0, "bytes"),
         ("max_sequence_lifetime", float("inf"), "lifetime"),
     ],
@@ -296,6 +338,7 @@ def test_decoder_rejects_invalid_xml_sequence_limits(
         ("max_sequence_fragments", True, "fragments"),
         ("max_sequence_fragments", 1.5, "fragments"),
         ("max_sequence_children", float("inf"), "children"),
+        ("max_sequence_depth", 1.5, "depth"),
         ("max_sequence_bytes", float("nan"), "bytes"),
         ("max_sequence_lifetime", True, "lifetime"),
         ("max_sequence_lifetime", "10", "lifetime"),

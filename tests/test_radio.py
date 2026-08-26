@@ -27,6 +27,7 @@ from sds200.models import (
 from sds200.profiles import ConnectionProfile
 from sds200.radio import SDS200
 from sds200.transport import TransportDiagnostic
+from sds200.xml_protocol import XmlResponseAssembler
 
 from .fakes import FakeSerial, FakeTransport
 
@@ -986,9 +987,38 @@ def test_malformed_glt_emits_protocol_error_without_a_response() -> None:
     with radio:
         transport.feed_line("GLT,<XML>,")
         transport.feed_line("<GLT><FL></GLT>")
+        transport.feed_line("GSI,<XML>,")
+        transport.feed_line(
+            '<ScannerInfo><Property Sig="4" /></ScannerInfo>'
+        )
 
     assert len(errors) == 1
     assert str(errors[0]) == "Invalid GLT XML response"
+    assert radio.state.snapshot.signal == 4
+
+
+def test_xml_assembly_limit_emits_redacted_error_and_recovers() -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    radio.xml_assembler = XmlResponseAssembler(max_lines=1)
+    errors: list[ProtocolError] = []
+    radio.events.subscribe("protocol_error", errors.append)
+
+    with radio:
+        transport.feed_line("GSI,<XML>,")
+        transport.feed_line("<ScannerInfo>")
+        transport.feed_line("PRIVATE SCANNER XML CONTENT")
+        transport.feed_line("GSI,<XML>,")
+        transport.feed_line(
+            '<ScannerInfo><Property Sig="4" /></ScannerInfo>'
+        )
+
+    assert len(errors) == 1
+    assert str(errors[0]) == (
+        "XML response assembly exceeded its configured limit."
+    )
+    assert "PRIVATE" not in str(errors[0])
+    assert radio.state.snapshot.signal == 4
 
 
 def test_system_status_start_correlates_exact_ast_ack_without_state_mutation() -> None:

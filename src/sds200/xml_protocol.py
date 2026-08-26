@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import math
+import time
 import xml.etree.ElementTree as ET
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from types import MappingProxyType
+from typing import cast
 
 from .exceptions import ProtocolError
 from .models import (
@@ -25,12 +28,46 @@ XML_COMMAND_ROOTS: Mapping[str, str] = MappingProxyType(
         "MSI": "MSI",
     }
 )
+XML_RESPONSE_DEFAULT_MAX_LINES = 10_000
+XML_RESPONSE_DEFAULT_MAX_BYTES = 4 * 1024 * 1024
+XML_RESPONSE_DEFAULT_MAX_ELEMENTS = 10_000
+XML_RESPONSE_DEFAULT_MAX_DEPTH = 64
+XML_RESPONSE_DEFAULT_MAX_LIFETIME = 10.0
 
 
 class XmlResponseAssembler:
     """Collect supported CR-delimited XML responses into bounded documents."""
 
-    def __init__(self, command_roots: Mapping[str, str] | None = None) -> None:
+    def __init__(
+        self,
+        command_roots: Mapping[str, str] | None = None,
+        *,
+        max_lines: int = XML_RESPONSE_DEFAULT_MAX_LINES,
+        max_bytes: int = XML_RESPONSE_DEFAULT_MAX_BYTES,
+        max_elements: int = XML_RESPONSE_DEFAULT_MAX_ELEMENTS,
+        max_depth: int = XML_RESPONSE_DEFAULT_MAX_DEPTH,
+        max_lifetime: float = XML_RESPONSE_DEFAULT_MAX_LIFETIME,
+        monotonic: Callable[[], float] = time.monotonic,
+    ) -> None:
+        for name, value in (
+            ("lines", max_lines),
+            ("bytes", max_bytes),
+            ("elements", max_elements),
+            ("depth", max_depth),
+        ):
+            if type(value) is not int:
+                raise TypeError(f"Maximum XML response {name} must be an integer.")
+            if value <= 0:
+                raise ValueError(f"Maximum XML response {name} must be positive.")
+        if isinstance(max_lifetime, bool) or not isinstance(
+            max_lifetime,
+            (int, float),
+        ):
+            raise TypeError("Maximum XML response lifetime must be numeric.")
+        if not math.isfinite(max_lifetime) or max_lifetime <= 0:
+            raise ValueError(
+                "Maximum XML response lifetime must be finite and positive."
+            )
         configured = XML_COMMAND_ROOTS if command_roots is None else command_roots
         self._command_roots = MappingProxyType(
             {command.upper(): root for command, root in configured.items()}
@@ -38,6 +75,18 @@ class XmlResponseAssembler:
         self._command: str | None = None
         self._root: str | None = None
         self._lines: list[str] = []
+        self._max_lines = max_lines
+        self._max_bytes = max_bytes
+        self._max_elements = max_elements
+        self._max_depth = max_depth
+        self._max_lifetime = max_lifetime
+        self._monotonic = monotonic
+        self._started_at: float | None = None
+        self._byte_count = 0
+        self._element_count = 0
+        self._depth = 0
+        self._seen_root = False
+        self._parser: ET.XMLPullParser[ET.Element] | None = None
 
     def _header_command(self, line: str) -> str | None:
         upper = line.upper()
@@ -57,15 +106,79 @@ class XmlResponseAssembler:
             self._command = header_command
             self._root = self._command_roots[header_command]
             self._lines.clear()
+            self._started_at = self._monotonic()
+            self._byte_count = 0
+            self._element_count = 0
+            self._depth = 0
+            self._seen_root = False
+            self._parser = ET.XMLPullParser(events=("start", "end"))
             return None
 
         if self._command is None:
             return None
 
+        started_at = self._started_at
+        assert started_at is not None
+        if self._monotonic() - started_at >= self._max_lifetime:
+            self.reset()
+            raise ProtocolError("XML response assembly exceeded its lifetime limit.")
+
+        encoded_length = len(line.encode("utf-8"))
+        byte_count = self._byte_count + encoded_length + int(bool(self._lines))
+        if len(self._lines) + 1 > self._max_lines or byte_count > self._max_bytes:
+            self.reset()
+            raise ProtocolError("XML response assembly exceeded its configured limit.")
+
         self._lines.append(line)
-        assert self._root is not None
-        if f"</{self._root}>" not in line:
+        self._byte_count = byte_count
+        parser = self._parser
+        expected_root = self._root
+        assert parser is not None
+        assert expected_root is not None
+        complete = False
+        try:
+            parser.feed(f"{line}\n")
+            for raw_event in parser.read_events():
+                event, element = cast(tuple[str, ET.Element], raw_event)
+                if event == "start":
+                    if not self._seen_root:
+                        if element.tag != expected_root:
+                            raise ProtocolError(
+                                "XML response has an unexpected root element."
+                            )
+                        self._seen_root = True
+                    self._element_count += 1
+                    self._depth += 1
+                    if (
+                        self._element_count > self._max_elements
+                        or self._depth > self._max_depth
+                    ):
+                        raise ProtocolError(
+                            "XML response assembly exceeded its configured limit."
+                        )
+                else:
+                    self._depth -= 1
+                    if self._seen_root and self._depth == 0:
+                        complete = True
+        except ET.ParseError as exc:
+            command = self._command
+            self.reset()
+            assert command is not None
+            raise ProtocolError(f"Invalid {command} XML response") from exc
+        except ProtocolError:
+            self.reset()
+            raise
+
+        if not complete:
             return None
+
+        try:
+            parser.close()
+        except ET.ParseError as exc:
+            command = self._command
+            self.reset()
+            assert command is not None
+            raise ProtocolError(f"Invalid {command} XML response") from exc
 
         command = self._command
         xml = "\n".join(self._lines)
@@ -76,6 +189,12 @@ class XmlResponseAssembler:
         self._command = None
         self._root = None
         self._lines.clear()
+        self._started_at = None
+        self._byte_count = 0
+        self._element_count = 0
+        self._depth = 0
+        self._seen_root = False
+        self._parser = None
 
     @property
     def collecting(self) -> bool:
