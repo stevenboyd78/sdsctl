@@ -20,6 +20,12 @@ _LEGACY_REMOTE_AUDIO_PROFILE_VERSIONS = frozenset({1})
 RemoteAudioProfileKind = Literal["broadcastify"]
 
 
+def _toml_basic_string(value: str) -> str:
+    """Encode validated profile text as a TOML-compatible basic string."""
+
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007F")
+
+
 def default_remote_audio_profile_path() -> Path:
     """Return the legacy user path used until migration is explicitly selected."""
 
@@ -308,24 +314,25 @@ class RemoteAudioProfileStore:
         lines = [f"version = {REMOTE_AUDIO_PROFILE_VERSION}", ""]
         for name in sorted(profiles):
             profile = profiles[name]
-            lines.append(f"[destinations.{json.dumps(name)}]")
+            lines.append(f"[destinations.{_toml_basic_string(name)}]")
             lines.append('kind = "broadcastify"')
-            lines.append(f"server = {json.dumps(profile.server)}")
-            lines.append(f"mount = {json.dumps(profile.mount)}")
+            lines.append(f"server = {_toml_basic_string(profile.server)}")
+            lines.append(f"mount = {_toml_basic_string(profile.mount)}")
             lines.append(
                 "environment_variable = "
-                f"{json.dumps(profile.environment_variable)}"
+                f"{_toml_basic_string(profile.environment_variable)}"
             )
             lines.append(
                 "acknowledge_cleartext_credentials = "
                 f"{str(profile.acknowledge_cleartext_credentials).lower()}"
             )
             lines.append(f"port = {profile.port}")
-            lines.append(f"stream_name = {json.dumps(profile.stream_name)}")
-            lines.append(f"genre = {json.dumps(profile.genre)}")
+            lines.append(f"stream_name = {_toml_basic_string(profile.stream_name)}")
+            lines.append(f"genre = {_toml_basic_string(profile.genre)}")
             lines.append(f"public = {str(profile.public).lower()}")
             lines.append(
-                f"ffmpeg_executable = {json.dumps(profile.ffmpeg_executable)}"
+                "ffmpeg_executable = "
+                f"{_toml_basic_string(profile.ffmpeg_executable)}"
             )
             lines.append(f"connect_timeout = {profile.connect_timeout}")
             lines.append(f"socket_timeout = {profile.socket_timeout}")

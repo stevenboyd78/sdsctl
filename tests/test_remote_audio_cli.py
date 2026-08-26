@@ -132,6 +132,57 @@ def test_remote_audio_cli_acknowledges_migrates_and_can_revoke(
     assert "PRIVATE_BROADCASTIFY_SECRET" not in revoke_output
 
 
+def test_remote_audio_cli_migration_preserves_non_bmp_unicode(
+    tmp_path: Path,
+) -> None:
+    profile_path = tmp_path / "remote-audio-profiles.toml"
+    profile_path.write_text(
+        "version = 1\n\n"
+        '[destinations."county-feed"]\n'
+        'kind = "broadcastify"\n'
+        'server = "private-feed.example.test"\n'
+        'mount = "/private-mount"\n'
+        'environment_variable = "PRIVATE_BROADCASTIFY_SECRET"\n\n'
+        '[destinations."portable 📻"]\n'
+        'kind = "broadcastify"\n'
+        'server = "portable-feed.example.test"\n'
+        'mount = "/portable-mount"\n'
+        'environment_variable = "PORTABLE\\u007F_BROADCASTIFY_SECRET"\n'
+        'stream_name = "Field scanner 📡"\n',
+        encoding="utf-8",
+    )
+
+    status = main(
+        [
+            "remote-audio",
+            "--profiles-file",
+            str(profile_path),
+            "acknowledge-cleartext",
+            "county-feed",
+            "--acknowledge-cleartext-credentials",
+        ],
+        environ={"XDG_CONFIG_HOME": str(tmp_path)},
+    )
+
+    store = RemoteAudioProfileStore(profile_path)
+    acknowledged = store.get("county-feed")
+    unicode_peer = store.get("portable 📻")
+    document = profile_path.read_text(encoding="utf-8")
+
+    assert status == 0
+    assert acknowledged.acknowledge_cleartext_credentials is True
+    assert unicode_peer.acknowledge_cleartext_credentials is False
+    assert unicode_peer.stream_name == "Field scanner 📡"
+    assert unicode_peer.environment_variable == (
+        "PORTABLE\x7f_BROADCASTIFY_SECRET"
+    )
+    assert "portable 📻" in document
+    assert "Field scanner 📡" in document
+    assert "PORTABLE\\u007F_BROADCASTIFY_SECRET" in document
+    assert "\x7f" not in document
+    assert "\\ud83d" not in document
+
+
 @pytest.mark.parametrize("flag", [None, "--ack", "--acknowledge"])
 def test_remote_audio_cli_requires_exact_explicit_acknowledgement_flag(
     tmp_path: Path,
