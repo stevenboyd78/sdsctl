@@ -539,10 +539,12 @@ See the
 
 The generic release workflow publishes amd64 and arm64 images for genuine
 matching release tags. v0.21.0 established that publication path; the current
-v0.22.0 immutable release image is `theboyd78/sdsctl:0.22.0`, and
+v0.22.0 version-selected release image is `theboyd78/sdsctl:0.22.0`, and
 `theboyd78/sdsctl:latest` tracks the newest successfully published release.
-Prefer an exact version tag for reproducible deployment. Repository-root Compose
-remains source-built with `build: .` and does not select the published image.
+Prefer an exact version tag for controlled upgrades. Registry tags remain mutable;
+use a separately verified manifest digest when cryptographic immutability is
+required. Repository-root Compose remains source-built with `build: .` and does
+not select the published image.
 
 The same generic image contains the existing MQTT support and the web extra.
 Compose provides both an opt-in, network-disabled daemon-client sidecar and an
@@ -1145,7 +1147,7 @@ python -m pip install -e ".[dev]"
 
 ruff check .
 mypy src/sds200
-pytest
+pytest --cov=sds200 --cov-report=term-missing
 python scripts/check_docs.py
 python -m build
 python -m twine check dist/*
@@ -1156,16 +1158,15 @@ documented separately in pull requests and release notes.
 
 ## Project status
 
-Version `0.15.0` hardens the optional Textual workstation interface for sustained
-Raspberry Pi operation. It adds configurable operational logging, automatic
-rate-limited recovery from a connected-but-stale PSI stream, and deterministic
-fault-injection coverage for audio startup, shutdown, repeated requests, and
-scanner reconnects. Failed PSI reconnects preserve their requested update interval
-so recovery continues after control traffic returns, while active SDS200 network
-audio remains uninterrupted. SDS100 and SDS200 control support is
-hardware-validated. SDS150 support is implemented and fixture-tested, but physical
-validation is deferred until representative hardware is available. It does not
-block unrelated releases. API compatibility is not guaranteed until version 1.0.
+Version `0.22.0` delivers authenticated direct-TLS LAN dashboard access, remote
+daemon-backed CLI and TUI operation, the interactive Favorites Workspace editor,
+expanded scanner field and semantic-control parity, responsive Home Assistant
+display cards, and modular built-in and managed third-party themes for web, Home
+Assistant, and terminal interfaces. Loopback access remains the default, and the
+daemon remains the sole owner of scanner control, PSI, and RTSP/RTP audio. SDS100
+and SDS200 control support is hardware-validated. SDS150 support is implemented
+and fixture-tested, with physical validation deferred until representative
+hardware is available. API compatibility is not guaranteed until version 1.0.
 
 See [CHANGELOG.md](CHANGELOG.md) for development history,
 [ROADMAP.md](ROADMAP.md) for ordered work, and

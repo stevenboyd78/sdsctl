@@ -15,12 +15,14 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        # actions/checkout v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
       - name: Set up Python
-        uses: actions/setup-python@v7
+        # actions/setup-python v7.0.0
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
-          python-version: "3.x"
+          python-version: "3.14"
 
       - name: Install development dependencies
         run: python -m pip install --upgrade pip -e ".[dev]"
@@ -49,7 +51,7 @@ jobs:
         run: |
           ruff check .
           mypy src/sds200
-          pytest
+          pytest --cov=sds200 --cov-report=term-missing
           python scripts/check_docs.py
 
       - name: Build distributions
@@ -59,7 +61,8 @@ jobs:
           python -m twine check dist/*
 
       - name: Upload distributions
-        uses: actions/upload-artifact@v7
+        # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: release-dists
           path: dist/
@@ -79,10 +82,12 @@ jobs:
 
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v8
+        # actions/download-artifact v8.0.1
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: release-dists
           path: dist/
 
       - name: Publish distributions to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        # pypa/gh-action-pypi-publish v1.14.2
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33

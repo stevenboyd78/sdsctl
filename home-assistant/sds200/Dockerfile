@@ -1,6 +1,6 @@
 # Build this monorepo image from the repository root:
 # docker build -f home-assistant/sds200/Dockerfile .
-FROM python:3.14-slim AS build
+FROM python:3.14-slim@sha256:83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83 AS build
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ RUN python -m pip wheel \
     --wheel-dir /wheels \
     ".[web,mqtt]"
 
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83
 
 ARG BUILD_VERSION=dev
 ARG BUILD_ARCH=unknown

@@ -247,7 +247,10 @@ def test_home_assistant_app_outer_timeout_covers_ordered_child_shutdown() -> Non
 def test_home_assistant_app_dockerfile_builds_local_source_with_required_extras() -> None:
     dockerfile = _APP_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert dockerfile.count("FROM python:3.14-slim") == 2
+    assert dockerfile.count(
+        "FROM python:3.14-slim@sha256:"
+        "83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83"
+    ) == 2
     assert 'io.hass.type="app"' in dockerfile
     assert 'io.hass.version="${BUILD_VERSION}"' in dockerfile
     assert 'io.hass.arch="${BUILD_ARCH}"' in dockerfile
@@ -271,7 +274,7 @@ def test_home_assistant_app_dockerfile_has_complete_app_image_labels() -> None:
         assert required in dockerfile
 
 
-def test_home_assistant_app_image_workflow_uses_current_builder_actions() -> None:
+def test_home_assistant_app_image_workflow_uses_reviewed_builder_action_commit() -> None:
     workflow = (
         _REPOSITORY_ROOT
         / ".github"
@@ -281,14 +284,21 @@ def test_home_assistant_app_image_workflow_uses_current_builder_actions() -> Non
 
     assert 'ARCHITECTURES: \'["amd64", "aarch64"]\'' in workflow
     assert (
-        "home-assistant/builder/actions/prepare-multi-arch-matrix@2026.06.0"
+        "home-assistant/builder/actions/prepare-multi-arch-matrix@"
+        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
         in workflow
     )
-    assert "home-assistant/builder/actions/build-image@2026.06.0" in workflow
     assert (
-        "home-assistant/builder/actions/publish-multi-arch-manifest@2026.06.0"
+        "home-assistant/builder/actions/build-image@"
+        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
         in workflow
     )
+    assert (
+        "home-assistant/builder/actions/publish-multi-arch-manifest@"
+        "4de35182ce1e329181bffcbcc84d33db5e2c7e10"
+        in workflow
+    )
+    assert workflow.count("# home-assistant/builder 2026.06.0") == 4
     assert "context: .\n" in workflow
     assert "file: ${{ env.APP_DOCKERFILE }}\n" in workflow
 

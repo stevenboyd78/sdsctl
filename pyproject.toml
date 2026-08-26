@@ -92,6 +92,9 @@ packages = ["src/sds200"]
 addopts = "-ra"
 testpaths = ["tests"]
 
+[tool.coverage.report]
+fail_under = 86
+
 [tool.ruff]
 target-version = "py311"
 line-length = 100

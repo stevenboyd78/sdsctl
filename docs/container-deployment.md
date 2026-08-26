@@ -40,10 +40,10 @@ docker build --tag sds200-daemon .
 ```
 
 Starting with v0.21.0, a genuine matching release tag publishes standalone
-images for `linux/amd64` and `linux/arm64`. The current v0.22.0 immutable generic
-release image is `theboyd78/sdsctl:0.22.0`; `theboyd78/sdsctl:latest` follows the newest
-successfully published release. Pull an exact published version for a
-reproducible deployment:
+images for `linux/amd64` and `linux/arm64`. The current v0.22.0 version-selected
+generic release image is `theboyd78/sdsctl:0.22.0`;
+`theboyd78/sdsctl:latest` follows the newest successfully published release.
+Pull an exact published version for a controlled deployment:
 
 ```bash
 docker pull theboyd78/sdsctl:VERSION
@@ -66,7 +66,9 @@ docker run --detach \
 
 Replace `VERSION` with an actually published package version, without a leading
 `v`. The `latest` tag follows the newest successfully published release, but
-exact version tags are recommended for reproducibility and controlled upgrades.
+exact version tags are recommended for controlled upgrades. Registry tags are
+mutable pointers; deployments that require cryptographic immutability must first
+verify and then use the published multi-architecture manifest digest.
 
 The image:
 
