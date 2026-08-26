@@ -8,9 +8,10 @@ from sds200 import (
     REMOTE_AUDIO_PROFILE_VERSION,
     BroadcastifyDestinationProfile,
     RemoteAudioProfileStore,
+    create_broadcastify_sink,
     default_remote_audio_profile_path,
 )
-from sds200.exceptions import ProfileError
+from sds200.exceptions import AudioOutputError, ProfileError
 from sds200.remote_audio import EnvironmentSecret
 
 
@@ -59,8 +60,12 @@ def test_remote_audio_profile_store_round_trip_and_conversion(
         "SDS200_BROADCASTIFY_PASSWORD"
     )
     assert config.reconnect_policy == profile.reconnect_policy
+    assert config.acknowledge_cleartext_credentials is False
     assert path.read_text(encoding="utf-8").startswith(
         f"version = {REMOTE_AUDIO_PROFILE_VERSION}\n"
+    )
+    assert "acknowledge_cleartext_credentials = false" in path.read_text(
+        encoding="utf-8"
     )
 
 
@@ -84,6 +89,7 @@ def test_remote_audio_profile_store_preserves_all_settings(
         reconnect_multiplier=1.5,
         reconnect_max_delay=12.0,
         reconnect_max_attempts=7,
+        acknowledge_cleartext_credentials=True,
     )
 
     store.put(profile)
@@ -106,6 +112,7 @@ def test_remote_audio_profile_store_preserves_all_settings(
     assert config.reconnect_policy.multiplier == 1.5
     assert config.reconnect_policy.max_delay == 12.0
     assert config.reconnect_policy.max_attempts == 7
+    assert config.acknowledge_cleartext_credentials is True
 
 
 def test_remote_audio_profile_store_orders_profiles_deterministically(
@@ -157,17 +164,20 @@ def test_remote_audio_profile_file_never_contains_resolved_secret(
     assert secret not in repr(profile)
 
 
-def test_remote_audio_profile_store_loads_minimal_document_with_defaults(
+def test_remote_audio_profile_store_loads_legacy_document_safely_without_rewrite(
     tmp_path: Path,
 ) -> None:
     path = tmp_path / "remote-audio-profiles.toml"
-    path.write_text(
-        'version = 1\n\n'
+    original = (
+        "version = 1\n\n"
         '[destinations."county-feed"]\n'
         'kind = "broadcastify"\n'
         'server = "audio1.broadcastify.com"\n'
         'mount = "/abc123"\n'
-        'environment_variable = "SDS200_BROADCASTIFY_PASSWORD"\n',
+        'environment_variable = "SDS200_BROADCASTIFY_PASSWORD"\n'
+    )
+    path.write_text(
+        original,
         encoding="utf-8",
     )
 
@@ -175,6 +185,10 @@ def test_remote_audio_profile_store_loads_minimal_document_with_defaults(
 
     assert profile == minimal_profile()
     assert profile.reconnect_max_attempts is None
+    assert profile.acknowledge_cleartext_credentials is False
+    assert path.read_text(encoding="utf-8") == original
+    with pytest.raises(AudioOutputError, match="ordinary HTTP"):
+        create_broadcastify_sink(profile.to_broadcastify_config())
 
 
 def test_remote_audio_profile_store_rejects_malformed_toml(
@@ -191,9 +205,10 @@ def test_remote_audio_profile_store_rejects_malformed_toml(
     "version",
     [
         "",
-        "version = 2\n",
+        "version = 0\n",
+        "version = 3\n",
         "version = true\n",
-        "version = 1.0\n",
+        "version = 2.0\n",
     ],
 )
 def test_remote_audio_profile_store_rejects_unsupported_version(
@@ -203,7 +218,7 @@ def test_remote_audio_profile_store_rejects_unsupported_version(
     path = tmp_path / "remote-audio-profiles.toml"
     path.write_text(version, encoding="utf-8")
 
-    with pytest.raises(ProfileError, match="version must be 1"):
+    with pytest.raises(ProfileError, match="version must be 1 or 2"):
         RemoteAudioProfileStore(path).list()
 
 
@@ -276,6 +291,28 @@ def test_remote_audio_profile_store_rejects_invalid_field_types(
     )
 
     with pytest.raises(ProfileError, match=message):
+        RemoteAudioProfileStore(path).get("county-feed")
+
+
+def test_remote_audio_profile_store_rejects_invalid_acknowledgement_type(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "remote-audio-profiles.toml"
+    path.write_text(
+        "version = 2\n\n"
+        '[destinations."county-feed"]\n'
+        'kind = "broadcastify"\n'
+        'server = "audio1.broadcastify.com"\n'
+        'mount = "/abc123"\n'
+        'environment_variable = "SDS200_BROADCASTIFY_PASSWORD"\n'
+        'acknowledge_cleartext_credentials = "yes"\n',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(
+        ProfileError,
+        match="invalid acknowledge_cleartext_credentials",
+    ):
         RemoteAudioProfileStore(path).get("county-feed")
 
 

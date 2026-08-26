@@ -37,6 +37,12 @@ BROADCASTIFY_ALLOWED_PORTS = frozenset({80, 8000, 8080, 8500})
 BROADCASTIFY_PASSWORD_SECRET = "password"
 BROADCASTIFY_METADATA_PATH = "/admin/metadata"
 
+_CLEARTEXT_CREDENTIAL_ACKNOWLEDGEMENT_ERROR = (
+    "Broadcastify source and metadata credentials use ordinary HTTP without "
+    "transport encryption. Set acknowledge_cleartext_credentials=true only "
+    "after explicitly accepting this risk."
+)
+
 _MAX_RESPONSE_BYTES = 8192
 _PUMP_CHUNK_BYTES = 4096
 
@@ -75,6 +81,7 @@ class BroadcastifyConfig:
     buffer_seconds: float = 5.0
     stop_timeout: float = 5.0
     reconnect_policy: ReconnectPolicy = field(default_factory=ReconnectPolicy)
+    acknowledge_cleartext_credentials: bool = False
 
     def __post_init__(self) -> None:
         _validate_header_text("Broadcastify destination name", self.name)
@@ -82,6 +89,10 @@ class BroadcastifyConfig:
         _validate_mount(self.mount)
         if not isinstance(self.password, EnvironmentSecret):
             raise TypeError("Broadcastify password must be an EnvironmentSecret.")
+        if not isinstance(self.acknowledge_cleartext_credentials, bool):
+            raise TypeError(
+                "Broadcastify cleartext-credential acknowledgement must be a boolean."
+            )
         if self.port not in BROADCASTIFY_ALLOWED_PORTS:
             allowed = ", ".join(str(port) for port in sorted(BROADCASTIFY_ALLOWED_PORTS))
             raise ValueError(f"Broadcastify port must be one of: {allowed}.")
@@ -207,6 +218,7 @@ class BroadcastifyConnectionFactory:
         encoder_factory: AudioEncoderProcessFactory | None = None,
         socket_factory: _SocketFactory | None = None,
     ) -> None:
+        _require_cleartext_credential_acknowledgement(config)
         self.config = config
         self._encoder_factory = encoder_factory
         self._socket_factory = _open_socket if socket_factory is None else socket_factory
@@ -240,6 +252,7 @@ class BroadcastifyMetadataPublicationFactory:
         *,
         socket_factory: _SocketFactory | None = None,
     ) -> None:
+        _require_cleartext_credential_acknowledgement(config)
         self.config = config
         self._socket_factory = (
             _open_socket if socket_factory is None else socket_factory
@@ -279,6 +292,7 @@ class BroadcastifyMetadataPublication:
         *,
         socket_factory: _SocketFactory | None = None,
     ) -> None:
+        _require_cleartext_credential_acknowledgement(config)
         if not password:
             raise AudioOutputError(
                 "Broadcastify metadata password must not be empty."
@@ -390,6 +404,7 @@ class BroadcastifyConnection:
         encoder_factory: AudioEncoderProcessFactory | None = None,
         socket_factory: _SocketFactory | None = None,
     ) -> None:
+        _require_cleartext_credential_acknowledgement(config)
         if not password:
             raise AudioOutputError("Broadcastify source password must not be empty.")
 
@@ -579,6 +594,13 @@ def create_broadcastify_sink(
 
 def _open_socket(address: tuple[str, int], timeout: float) -> _SocketLike:
     return socket.create_connection(address, timeout=timeout)
+
+
+def _require_cleartext_credential_acknowledgement(
+    config: BroadcastifyConfig,
+) -> None:
+    if not config.acknowledge_cleartext_credentials:
+        raise AudioOutputError(_CLEARTEXT_CREDENTIAL_ACKNOWLEDGEMENT_ERROR)
 
 
 def _metadata_request(

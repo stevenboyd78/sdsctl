@@ -14,7 +14,8 @@ from .exceptions import ProfileError
 from .reliability import ReconnectPolicy
 from .remote_audio import EnvironmentSecret
 
-REMOTE_AUDIO_PROFILE_VERSION = 1
+REMOTE_AUDIO_PROFILE_VERSION = 2
+_LEGACY_REMOTE_AUDIO_PROFILE_VERSIONS = frozenset({1})
 
 RemoteAudioProfileKind = Literal["broadcastify"]
 
@@ -47,6 +48,7 @@ class BroadcastifyDestinationProfile:
     reconnect_multiplier: float = 2.0
     reconnect_max_delay: float = 30.0
     reconnect_max_attempts: int | None = None
+    acknowledge_cleartext_credentials: bool = False
 
     def __post_init__(self) -> None:
         try:
@@ -88,6 +90,9 @@ class BroadcastifyDestinationProfile:
             buffer_seconds=self.buffer_seconds,
             stop_timeout=self.stop_timeout,
             reconnect_policy=self.reconnect_policy,
+            acknowledge_cleartext_credentials=(
+                self.acknowledge_cleartext_credentials
+            ),
         )
 
 
@@ -152,14 +157,19 @@ class RemoteAudioProfileStore:
             )
 
         version = document.get("version")
+        supported_versions = {
+            REMOTE_AUDIO_PROFILE_VERSION,
+            *_LEGACY_REMOTE_AUDIO_PROFILE_VERSIONS,
+        }
         if (
             isinstance(version, bool)
             or not isinstance(version, int)
-            or version != REMOTE_AUDIO_PROFILE_VERSION
+            or version not in supported_versions
         ):
+            supported = " or ".join(str(item) for item in sorted(supported_versions))
             raise ProfileError(
-                "Remote audio profile document version must be "
-                f"{REMOTE_AUDIO_PROFILE_VERSION}; found {version!r}."
+                f"Remote audio profile document version must be {supported}; "
+                f"found {version!r}."
             )
 
         raw_destinations = document.get("destinations", {})
@@ -175,13 +185,15 @@ class RemoteAudioProfileStore:
                 raise ProfileError(
                     "Each remote audio destination must be a named TOML table."
                 )
-            profiles[name] = self._parse_profile(name, raw)
+            profiles[name] = self._parse_profile(name, raw, version=version)
         return profiles
 
     @staticmethod
     def _parse_profile(
         name: str,
         raw: Mapping[object, object],
+        *,
+        version: int,
     ) -> BroadcastifyDestinationProfile:
         allowed_fields = {
             "kind",
@@ -203,6 +215,8 @@ class RemoteAudioProfileStore:
             "reconnect_max_delay",
             "reconnect_max_attempts",
         }
+        if version >= 2:
+            allowed_fields.add("acknowledge_cleartext_credentials")
         unexpected_fields = sorted(
             str(field) for field in raw if field not in allowed_fields
         )
@@ -279,6 +293,12 @@ class RemoteAudioProfileStore:
                 30.0,
             ),
             reconnect_max_attempts=max_attempts_value,
+            acknowledge_cleartext_credentials=_bool_field(
+                name,
+                raw,
+                "acknowledge_cleartext_credentials",
+                False,
+            ),
         )
 
     def _save(
@@ -295,6 +315,10 @@ class RemoteAudioProfileStore:
             lines.append(
                 "environment_variable = "
                 f"{json.dumps(profile.environment_variable)}"
+            )
+            lines.append(
+                "acknowledge_cleartext_credentials = "
+                f"{str(profile.acknowledge_cleartext_credentials).lower()}"
             )
             lines.append(f"port = {profile.port}")
             lines.append(f"stream_name = {json.dumps(profile.stream_name)}")

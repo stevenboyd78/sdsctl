@@ -1988,6 +1988,53 @@ def build_parser(
         help="RTSP GET_PARAMETER interval (default: 15.0)",
     )
 
+    remote_audio = subparsers.add_parser(
+        "remote-audio",
+        help="Inspect and migrate saved remote-audio security policy",
+    )
+    remote_audio.add_argument(
+        "--profiles-file",
+        dest="remote_audio_profiles_file",
+        type=Path,
+        metavar="FILE",
+        help=(
+            "Explicit remote-audio profile file "
+            "(default: legacy XDG configuration path)"
+        ),
+    )
+    remote_audio_commands = remote_audio.add_subparsers(
+        dest="remote_audio_action",
+        required=True,
+    )
+    remote_audio_list = remote_audio_commands.add_parser(
+        "list",
+        help="List profiles and cleartext-credential acknowledgement state",
+    )
+    remote_audio_list.add_argument(
+        "--json",
+        action="store_true",
+        help="Print stable credential-free JSON",
+    )
+    remote_audio_acknowledge = remote_audio_commands.add_parser(
+        "acknowledge-cleartext",
+        help="Acknowledge ordinary-HTTP credential exposure for one profile",
+    )
+    remote_audio_acknowledge.add_argument("name", metavar="PROFILE")
+    remote_audio_acknowledge.add_argument(
+        "--acknowledge-cleartext-credentials",
+        action="store_true",
+        required=True,
+        help=(
+            "Explicitly accept that source and metadata credentials are sent "
+            "without transport encryption"
+        ),
+    )
+    remote_audio_revoke = remote_audio_commands.add_parser(
+        "revoke-cleartext",
+        help="Disable ordinary-HTTP credential transport for one profile",
+    )
+    remote_audio_revoke.add_argument("name", metavar="PROFILE")
+
     themes = subparsers.add_parser(
         "themes",
         help="Validate and manage local third-party theme packages",
@@ -4109,6 +4156,85 @@ def _run_audio(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_remote_audio(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    paths = configuration_paths or resolve_configuration_paths(environ=environ)
+    profile_path = (
+        args.remote_audio_profiles_file.expanduser().absolute()
+        if args.remote_audio_profiles_file is not None
+        else paths.legacy_remote_audio_profiles_file
+    )
+    store = RemoteAudioProfileStore(profile_path)
+
+    if args.remote_audio_action == "list":
+        profiles = store.list()
+        payload = [
+            {
+                "name": profile.name,
+                "kind": profile.kind,
+                "ordinary_http_cleartext_credentials_acknowledged": (
+                    profile.acknowledge_cleartext_credentials
+                ),
+            }
+            for profile in profiles
+        ]
+        if args.json:
+            print(json.dumps(payload, indent=2, sort_keys=True))
+        elif not profiles:
+            print(f"No remote-audio profiles in {store.path}")
+        else:
+            for profile in profiles:
+                status = (
+                    "acknowledged"
+                    if profile.acknowledge_cleartext_credentials
+                    else "acknowledgement required"
+                )
+                print(f"{profile.name:20s} {profile.kind:12s} ordinary HTTP: {status}")
+        return 0
+
+    if args.remote_audio_action == "acknowledge-cleartext":
+        if not args.acknowledge_cleartext_credentials:
+            raise ValueError(
+                "acknowledge-cleartext requires "
+                "--acknowledge-cleartext-credentials"
+            )
+        profile = store.get(args.name)
+        store.put(
+            replace(
+                profile,
+                acknowledge_cleartext_credentials=True,
+            )
+        )
+        print(
+            "Recorded explicit ordinary-HTTP cleartext-credential "
+            f"acknowledgement for profile {profile.name!r}."
+        )
+        print("The Broadcastify transport remains unencrypted ordinary HTTP.")
+        return 0
+
+    if args.remote_audio_action == "revoke-cleartext":
+        profile = store.get(args.name)
+        store.put(
+            replace(
+                profile,
+                acknowledge_cleartext_credentials=False,
+            )
+        )
+        print(
+            "Revoked ordinary-HTTP cleartext-credential acknowledgement for "
+            f"profile {profile.name!r}; its Broadcastify transport is disabled."
+        )
+        return 0
+
+    raise ValueError(
+        f"Unsupported remote-audio action: {args.remote_audio_action!r}"
+    )
+
+
 def _reject_standalone_tui_daemon_options(
     args: argparse.Namespace,
 ) -> None:
@@ -5251,6 +5377,13 @@ def main(
 
         if args.action == "audio":
             return _run_audio(args)
+
+        if args.action == "remote-audio":
+            return _run_remote_audio(
+                args,
+                configuration_paths=configuration_paths,
+                environ=environ,
+            )
 
         if args.action == "recordings":
             return _run_recordings(args)
