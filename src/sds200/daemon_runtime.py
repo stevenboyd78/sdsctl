@@ -4,7 +4,7 @@ import logging
 import threading
 from collections import deque
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
 from math import isfinite
@@ -413,7 +413,12 @@ class DaemonRuntime:
 
     def snapshot(self) -> DaemonRuntimeSnapshot:
         with self._state_lock:
-            return self._snapshot_locked()
+            cached = self._snapshot_locked()
+        return replace(
+            cached,
+            audio=self.audio.snapshot(),
+            router=self.router.snapshot(),
+        )
 
     def on_transition(
         self,
@@ -1007,7 +1012,7 @@ class DaemonRuntime:
         logger.info(
             "daemon runtime started scanner=%s audio=%s psi_interval_ms=%d",
             self.scanner.endpoint,
-            self.audio.snapshot().endpoint,
+            self.audio.lifecycle_snapshot().endpoint,
             self.psi_interval_ms,
         )
 
@@ -1093,7 +1098,8 @@ class DaemonRuntime:
 
         self._emit_pending_transitions()
 
-        snapshot = self.snapshot()
+        with self._state_lock:
+            snapshot = self._snapshot_locked()
         logger.info(
             "daemon runtime stopped scanner=%s state=%s",
             snapshot.scanner_endpoint,
@@ -1114,9 +1120,19 @@ class DaemonRuntime:
                     )
             self.router.attach(sink)
 
-    def detach_sink(self, sink: PcmSink, *, stop: bool = True) -> None:
+    def detach_sink(
+        self,
+        sink: PcmSink,
+        *,
+        stop: bool = True,
+        raise_on_failure: bool = False,
+    ) -> None:
         with self._lifecycle_lock:
-            self.router.detach(sink, stop=stop)
+            self.router.detach(
+                sink,
+                stop=stop,
+                raise_on_failure=raise_on_failure,
+            )
 
     def __enter__(self) -> Self:
         self.start()
@@ -1255,8 +1271,8 @@ class DaemonRuntime:
             psi_interval_ms=self.psi_interval_ms,
             psi_active=self.scanner.psi_active,
             radio_state=self.scanner.state.snapshot,
-            audio=self.audio.snapshot(),
-            router=self.router.snapshot(),
+            audio=self.audio.lifecycle_snapshot(),
+            router=self.router.lifecycle_snapshot(),
             started_at=self._started_at,
             stopped_at=self._stopped_at,
             state_changed_at=self._state_changed_at,

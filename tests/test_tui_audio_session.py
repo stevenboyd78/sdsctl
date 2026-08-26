@@ -9,9 +9,12 @@ from pathlib import Path
 
 import pytest
 
+import sds200.tui_audio as tui_audio
 from sds200.audio import AudioChunk, AudioChunkHandler, AudioStream
+from sds200.audio_recording import PcmuWavRecorder
 from sds200.audio_session import AudioSessionStatus
-from sds200.audio_sinks import PcmSinkRouter, PcmSinkStatistics
+from sds200.audio_sinks import PcmSinkRouter, PcmSinkStatistics, PcmWavSink
+from sds200.exceptions import AudioOutputError
 from sds200.recording_metadata import recording_metadata_path
 from sds200.recording_organization import RecordingOrganizationPolicy
 from sds200.state import RadioStateSnapshot
@@ -396,6 +399,116 @@ def test_tui_audio_writes_opt_in_metadata_with_boundary_state(
     session.close()
 
 
+def test_tui_recording_starting_listener_cannot_reenter_stop(
+    tmp_path: Path,
+) -> None:
+    transport = CountingAudioTransport()
+    session = TuiAudioSession(
+        AudioStream(transport),
+        RecordingPathPolicy(directory=tmp_path),
+    )
+    rejected: list[AudioSessionStatus] = []
+
+    def stop_while_starting(snapshot: object) -> None:
+        if getattr(snapshot, "status", None) is AudioSessionStatus.STARTING:
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.stop()
+            rejected.append(AudioSessionStatus.STARTING)
+
+    session.on_state(stop_while_starting)
+    session.start()
+    started = session.snapshot()
+
+    assert rejected == [AudioSessionStatus.STARTING]
+    assert started.status is AudioSessionStatus.RECORDING
+    assert started.stopped_at is None
+    assert started.error is None
+    assert session.completed_recordings == 0
+
+    session.stop()
+    session.close()
+
+
+def test_tui_recording_stopping_listener_cannot_finalize_twice(
+    tmp_path: Path,
+) -> None:
+    transport = CountingAudioTransport()
+    session = TuiAudioSession(
+        AudioStream(transport),
+        RecordingPathPolicy(directory=tmp_path),
+        metadata=True,
+    )
+    session.start()
+    rejected: list[AudioSessionStatus] = []
+
+    def stop_while_stopping(snapshot: object) -> None:
+        if getattr(snapshot, "status", None) is AudioSessionStatus.STOPPING:
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.stop()
+            rejected.append(AudioSessionStatus.STOPPING)
+
+    session.on_state(stop_while_stopping)
+    session.stop()
+
+    assert rejected == [AudioSessionStatus.STOPPING]
+    assert session.status is AudioSessionStatus.STOPPED
+    assert session.completed_recordings == 1
+    assert session.last_metadata_path is not None
+    assert session.last_metadata_path.exists()
+    assert len(session.recordings) == 1
+    session.close()
+
+
+def test_tui_close_rejects_stopped_listener_new_audio_work(
+    tmp_path: Path,
+) -> None:
+    transport = CountingAudioTransport()
+    session = TuiAudioSession(
+        AudioStream(transport),
+        RecordingPathPolicy(directory=tmp_path),
+        metadata=True,
+    )
+    session.start()
+    rejected: list[str] = []
+
+    def restart_while_closing(snapshot: object) -> None:
+        if (
+            not rejected
+            and getattr(snapshot, "status", None) is AudioSessionStatus.STOPPED
+        ):
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.start()
+            rejected.append("recording")
+            (entry,) = session.recordings
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.play_recording(entry.path)
+            rejected.append("saved-playback")
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.start_live_playback()
+            rejected.append("live-playback")
+            with pytest.raises(RuntimeError, match="lifecycle operation"):
+                session.open_audio()
+            rejected.append("network-audio")
+
+    session.on_state(restart_while_closing)
+    session.close()
+
+    assert rejected == [
+        "recording",
+        "saved-playback",
+        "live-playback",
+        "network-audio",
+    ]
+    assert not session.open
+    assert session.status is AudioSessionStatus.STOPPED
+    assert not session.active
+    assert session.completed_recordings == 1
+    assert session.last_metadata_path is not None
+    assert session.last_metadata_path.exists()
+    assert session.saved_playback_status is SavedPlaybackStatus.STOPPED
+    assert session._saved_thread is None
+
+
 def test_metadata_sidecar_collision_allocates_a_new_recording_name(
     tmp_path: Path,
 ) -> None:
@@ -468,6 +581,181 @@ def test_explicit_output_remains_one_shot_and_protected(tmp_path: Path) -> None:
 
     with pytest.raises(RuntimeError, match="already been used"):
         session.start()
+    session.close()
+
+
+def test_tui_recording_thread_start_failure_closes_recorder_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CountingRecorder:
+        instances: list[CountingRecorder] = []
+
+        def __init__(
+            self,
+            path: Path,
+            *,
+            overwrite: bool = False,
+        ) -> None:
+            del overwrite
+            self.path = path
+            self.close_calls = 0
+            self.packets = 0
+            self.samples = 0
+            self.instances.append(self)
+
+        def start(self) -> None:
+            return
+
+        def write_pcm(self, data: bytes) -> None:
+            del data
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    class StartFailingThread:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        def start(self) -> None:
+            raise RuntimeError("secret thread start failure")
+
+    session = TuiAudioSession(
+        AudioStream(CountingAudioTransport()),
+        RecordingPathPolicy(directory=tmp_path),
+    )
+    session.open_audio()
+    monkeypatch.setattr(tui_audio, "PcmuWavRecorder", CountingRecorder)
+    monkeypatch.setattr(
+        "sds200.audio_sinks.threading.Thread",
+        StartFailingThread,
+    )
+
+    with pytest.raises(RuntimeError, match="secret thread start failure"):
+        session.start()
+    assert len(CountingRecorder.instances) == 1
+    assert CountingRecorder.instances[0].close_calls == 1
+    session.close()
+
+
+def test_tui_terminal_wav_failure_is_retained_and_not_in_inventory(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    transport = CountingAudioTransport()
+    session = TuiAudioSession(
+        AudioStream(transport),
+        RecordingPathPolicy(directory=tmp_path),
+    )
+
+    def fail_write(self: PcmuWavRecorder, data: bytes) -> None:
+        del self, data
+        raise OSError("sensitive WAV write failure")
+
+    monkeypatch.setattr(PcmuWavRecorder, "write_pcm", fail_write)
+    session.open_audio()
+    session.start()
+    output = session.snapshot().output_path
+    transport.feed(bytes((0xFF,)))
+
+    for _ in range(2):
+        with pytest.raises(AudioOutputError, match="PCM WAV sink failed"):
+            session.stop()
+        snapshot = session.snapshot()
+        assert snapshot.status is AudioSessionStatus.FAILED
+        assert "sensitive" not in (snapshot.error or "")
+        assert session.completed_recordings == 0
+        assert all(entry.path != output for entry in session.recordings)
+
+    with pytest.raises(RuntimeError, match="already active"):
+        session.start()
+    with pytest.raises(AudioOutputError, match="PCM WAV sink failed"):
+        session.close()
+
+
+def test_tui_blocked_wav_stop_is_bounded_and_retryable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class BlockingRecorder:
+        instance: BlockingRecorder | None = None
+
+        def __init__(
+            self,
+            path: Path,
+            *,
+            overwrite: bool = False,
+        ) -> None:
+            del overwrite
+            self.path = path
+            self._lock = threading.Lock()
+            self._packets = 0
+            self._samples = 0
+            self.write_started = threading.Event()
+            self.write_release = threading.Event()
+            self.closed = threading.Event()
+            type(self).instance = self
+
+        @property
+        def packets(self) -> int:
+            with self._lock:
+                return self._packets
+
+        @property
+        def samples(self) -> int:
+            with self._lock:
+                return self._samples
+
+        def start(self) -> None:
+            self.path.touch()
+
+        def write_pcm(self, data: bytes) -> None:
+            with self._lock:
+                self.write_started.set()
+                assert self.write_release.wait(timeout=5.0)
+                self._packets += 1
+                self._samples += len(data) // 2
+
+        def close(self) -> None:
+            with self._lock:
+                self.closed.set()
+
+    def short_timeout_sink(
+        recorder: BlockingRecorder,
+        *,
+        buffer_seconds: float = 5.0,
+    ) -> PcmWavSink:
+        return PcmWavSink(  # type: ignore[arg-type]
+            recorder,
+            buffer_seconds=buffer_seconds,
+            stop_timeout=0.02,
+        )
+
+    transport = CountingAudioTransport()
+    session = TuiAudioSession(
+        AudioStream(transport),
+        RecordingPathPolicy(directory=tmp_path),
+    )
+    monkeypatch.setattr(tui_audio, "PcmuWavRecorder", BlockingRecorder)
+    monkeypatch.setattr(tui_audio, "PcmWavSink", short_timeout_sink)
+    session.open_audio()
+    session.start()
+    transport.feed(bytes((0xFF,)))
+    recorder = BlockingRecorder.instance
+    assert recorder is not None
+    assert recorder.write_started.wait(timeout=1.0)
+
+    started = time.monotonic()
+    with pytest.raises(AudioOutputError, match="Timed out while finalizing"):
+        session.stop()
+    assert time.monotonic() - started < 0.2
+    assert session.status is AudioSessionStatus.FAILED
+    assert session.snapshot().status is AudioSessionStatus.FAILED
+
+    recorder.write_release.set()
+    assert recorder.closed.wait(timeout=1.0)
+    session.stop()
+    assert session.status is AudioSessionStatus.STOPPED
     session.close()
 
 

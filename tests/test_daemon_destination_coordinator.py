@@ -180,7 +180,9 @@ class FakeRuntime:
         sink: FakeSink,
         *,
         stop: bool = True,
+        raise_on_failure: bool = False,
     ) -> None:
+        del raise_on_failure
         self.order.append(
             f"runtime.detach:{sink.name}:stop={str(stop).lower()}"
         )

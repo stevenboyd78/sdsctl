@@ -5,8 +5,8 @@ import os
 import stat
 import threading
 import wave
-from collections.abc import Callable
-from contextlib import suppress
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -107,7 +107,13 @@ class _RuntimeLike(Protocol):
 
     def attach_sink(self, sink: PcmSink) -> None: ...
 
-    def detach_sink(self, sink: PcmSink, *, stop: bool = True) -> None: ...
+    def detach_sink(
+        self,
+        sink: PcmSink,
+        *,
+        stop: bool = True,
+        raise_on_failure: bool = False,
+    ) -> None: ...
 
 
 def _local_now() -> datetime:
@@ -303,6 +309,7 @@ class DaemonRecordingManager:
         self._started_state: RadioStateSnapshot | None = None
         self._completed_recordings = 0
         self._closed = False
+        self._lifecycle_operation: str | None = None
 
     @property
     def closed(self) -> bool:
@@ -324,6 +331,21 @@ class DaemonRecordingManager:
         callback: Callable[[DaemonRecordingSnapshot], None],
     ) -> Callable[[], None]:
         return self.events.subscribe("state", callback)
+
+    @contextmanager
+    def _recording_operation(self, name: str) -> Iterator[None]:
+        with self._lifecycle_lock:
+            with self._state_lock:
+                if self._lifecycle_operation is not None:
+                    raise DaemonRecordingBusyError(
+                        "Another daemon recording lifecycle operation is in progress."
+                    )
+                self._lifecycle_operation = name
+            try:
+                yield
+            finally:
+                with self._state_lock:
+                    self._lifecycle_operation = None
 
     def snapshot(self) -> DaemonRecordingSnapshot:
         with self._state_lock:
@@ -348,7 +370,10 @@ class DaemonRecordingManager:
                 elapsed_seconds,
                 self._clock() - started_clock,
             )
-        if recorder is not None:
+        if recorder is not None and status in {
+            AudioSessionStatus.STARTING,
+            AudioSessionStatus.RECORDING,
+        }:
             packets = recorder.packets
             samples = recorder.samples
         if sink is not None:
@@ -509,6 +534,11 @@ class DaemonRecordingManager:
     def start_recording(self) -> DaemonRecordingSnapshot:
         """Attach one new WAV sink without opening another scanner audio stream."""
 
+        with self._recording_operation("start"):
+            return self._start_recording()
+
+    def _start_recording(self) -> DaemonRecordingSnapshot:
+
         with self._lifecycle_lock:
             with self._state_lock:
                 if self._closed:
@@ -578,12 +608,11 @@ class DaemonRecordingManager:
             except BaseException as error:
                 if sink is not None and attach_attempted:
                     with suppress(Exception):
-                        self.runtime.detach_sink(sink, stop=False)
-                    with suppress(Exception):
-                        sink.stop()
-                if recorder is not None:
-                    with suppress(Exception):
-                        recorder.close()
+                        self.runtime.detach_sink(
+                            sink,
+                            stop=True,
+                            raise_on_failure=True,
+                        )
                 with self._state_lock:
                     self._status = AudioSessionStatus.FAILED
                     self._recording_path = path
@@ -632,13 +661,19 @@ class DaemonRecordingManager:
     def stop_recording(self) -> DaemonRecordingSnapshot:
         """Detach and finalize the active recording without stopping daemon audio."""
 
+        with self._recording_operation("stop"):
+            return self._stop_recording()
+
+    def _stop_recording(self) -> DaemonRecordingSnapshot:
+
         with self._lifecycle_lock:
             with self._state_lock:
                 sink = self._sink
+                if self._status is AudioSessionStatus.STOPPING:
+                    return self.snapshot()
                 if self._status not in {
                     AudioSessionStatus.STARTING,
                     AudioSessionStatus.RECORDING,
-                    AudioSessionStatus.STOPPING,
                 } and sink is None:
                     return self.snapshot()
 
@@ -649,29 +684,37 @@ class DaemonRecordingManager:
                 started_snapshot = self._started_snapshot
                 started_state = self._started_state
                 recording_path = self._recording_path
+                prior_packets = self._last_packets
+                prior_samples = self._last_samples
             self._emit_state()
 
             failure: BaseException | None = None
             if sink is not None:
                 try:
-                    self.runtime.detach_sink(sink, stop=False)
+                    self.runtime.detach_sink(
+                        sink,
+                        stop=True,
+                        raise_on_failure=True,
+                    )
                 except BaseException as error:
                     failure = error
-                try:
-                    sink.stop()
-                except BaseException as error:
-                    if failure is None:
-                        failure = error
 
             ended_clock = self._clock()
             stopped_at = _require_aware(self._now())
-            packets = recorder.packets if recorder is not None else 0
-            samples = recorder.samples if recorder is not None else 0
             sink_statistics = (
                 sink.statistics
                 if sink is not None
                 else PcmSinkStatistics()
             )
+            if failure is None:
+                packets = recorder.packets if recorder is not None else 0
+                samples = recorder.samples if recorder is not None else 0
+            else:
+                packets = prior_packets
+                samples = max(
+                    prior_samples,
+                    sink_statistics.bytes_written // PCM_SAMPLE_WIDTH,
+                )
 
             elapsed_seconds = prior_elapsed_seconds
             if started_clock is not None:
@@ -763,10 +806,15 @@ class DaemonRecordingManager:
     def close(self) -> None:
         """Finalize any active recording and permanently close this manager."""
 
+        with self._recording_operation("close"):
+            self._close()
+
+    def _close(self) -> None:
+
         failure: BaseException | None = None
         with self._lifecycle_lock:
             try:
-                self.stop_recording()
+                self._stop_recording()
             except BaseException as error:
                 failure = error
             with self._state_lock:

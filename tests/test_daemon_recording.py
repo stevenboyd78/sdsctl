@@ -151,9 +151,19 @@ class FakeRuntime:
             raise self.attach_error
         self.router.attach(sink)
 
-    def detach_sink(self, sink: PcmSink, *, stop: bool = True) -> None:
+    def detach_sink(
+        self,
+        sink: PcmSink,
+        *,
+        stop: bool = True,
+        raise_on_failure: bool = False,
+    ) -> None:
         self.detach_calls += 1
-        self.router.detach(sink, stop=stop)
+        self.router.detach(
+            sink,
+            stop=stop,
+            raise_on_failure=raise_on_failure,
+        )
 
     def close(self) -> None:
         self.router.stop()
@@ -253,6 +263,97 @@ def test_daemon_recording_records_and_finalizes_metadata(
         unsubscribe()
         manager.close()
         runtime.close()
+
+
+def test_daemon_recording_starting_listener_cannot_reenter_stop(
+    tmp_path: Path,
+) -> None:
+    runtime = FakeRuntime()
+    manager = DaemonRecordingManager(runtime, tmp_path)
+    rejected: list[AudioSessionStatus] = []
+
+    def stop_while_starting(snapshot: object) -> None:
+        if getattr(snapshot, "status", None) is AudioSessionStatus.STARTING:
+            with pytest.raises(DaemonRecordingBusyError):
+                manager.stop_recording()
+            rejected.append(AudioSessionStatus.STARTING)
+
+    manager.on_state(stop_while_starting)
+    started = manager.start_recording()
+
+    assert rejected == [AudioSessionStatus.STARTING]
+    assert started.status is AudioSessionStatus.RECORDING
+    assert started.stopped_at is None
+    assert started.error is None
+    assert started.completed_recordings == 0
+    assert runtime.detach_calls == 0
+
+    manager.stop_recording()
+    manager.close()
+    runtime.close()
+
+
+def test_daemon_recording_stopping_listener_cannot_finalize_twice(
+    tmp_path: Path,
+) -> None:
+    runtime = FakeRuntime()
+    manager = DaemonRecordingManager(runtime, tmp_path)
+    started = manager.start_recording()
+    assert started.recording_path is not None
+    rejected: list[AudioSessionStatus] = []
+
+    def stop_while_stopping(snapshot: object) -> None:
+        if getattr(snapshot, "status", None) is AudioSessionStatus.STOPPING:
+            with pytest.raises(DaemonRecordingBusyError):
+                manager.stop_recording()
+            rejected.append(AudioSessionStatus.STOPPING)
+
+    manager.on_state(stop_while_stopping)
+    stopped = manager.stop_recording()
+
+    assert rejected == [AudioSessionStatus.STOPPING]
+    assert stopped.status is AudioSessionStatus.STOPPED
+    assert stopped.completed_recordings == 1
+    assert runtime.detach_calls == 1
+    assert stopped.metadata_path == recording_metadata_path(started.recording_path)
+    assert stopped.metadata_path.exists()
+
+    manager.close()
+    runtime.close()
+
+
+def test_daemon_recording_close_rejects_stopped_listener_restart(
+    tmp_path: Path,
+) -> None:
+    runtime = FakeRuntime()
+    manager = DaemonRecordingManager(runtime, tmp_path)
+    started = manager.start_recording()
+    assert started.recording_path is not None
+    rejected = False
+
+    def restart_while_closing(snapshot: object) -> None:
+        nonlocal rejected
+        if (
+            not rejected
+            and getattr(snapshot, "status", None) is AudioSessionStatus.STOPPED
+        ):
+            with pytest.raises(DaemonRecordingBusyError):
+                manager.start_recording()
+            rejected = True
+
+    manager.on_state(restart_while_closing)
+    manager.close()
+    closed = manager.snapshot()
+
+    assert rejected
+    assert closed.closed
+    assert closed.status is AudioSessionStatus.STOPPED
+    assert not closed.active
+    assert closed.completed_recordings == 1
+    assert runtime.detach_calls == 1
+    assert closed.metadata_path == recording_metadata_path(started.recording_path)
+    assert closed.metadata_path.exists()
+    runtime.close()
 
 
 def test_daemon_recording_repeats_with_collision_safe_paths(
@@ -423,6 +524,106 @@ def test_daemon_recording_finalization_failure_is_retryable(
         assert recovered.metadata_path.exists()
     finally:
         manager.close()
+        runtime.close()
+
+
+@pytest.mark.parametrize("failure_phase", ["write", "close"])
+def test_daemon_recording_real_wav_terminal_failure_is_not_healed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_phase: str,
+) -> None:
+    runtime = FakeRuntime()
+    manager = DaemonRecordingManager(runtime, tmp_path)
+
+    if failure_phase == "write":
+        def fail_write(self: PcmuWavRecorder, data: bytes) -> None:
+            del self, data
+            raise OSError("sensitive WAV write failure")
+
+        monkeypatch.setattr(PcmuWavRecorder, "write_pcm", fail_write)
+    else:
+        original_close = PcmuWavRecorder.close
+
+        def fail_close(self: PcmuWavRecorder) -> None:
+            original_close(self)
+            raise OSError("sensitive WAV close failure")
+
+        monkeypatch.setattr(PcmuWavRecorder, "close", fail_close)
+
+    try:
+        started = manager.start_recording()
+        assert started.recording_path is not None
+        runtime.router.submit_pcm(b"\x00\x00")
+
+        for _ in range(2):
+            with pytest.raises(
+                DaemonRecordingOperationError,
+                match="Could not finalize daemon recording",
+            ):
+                manager.stop_recording()
+
+            failed = manager.snapshot()
+            assert failed.status is AudioSessionStatus.FAILED
+            assert failed.error == "AudioOutputError"
+            assert failed.completed_recordings == 0
+            assert failed.metadata_path is None
+            assert not recording_metadata_path(started.recording_path).exists()
+    finally:
+        runtime.close()
+
+
+def test_daemon_recording_thread_start_failure_closes_recorder_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class CountingRecorder:
+        instances: list[CountingRecorder] = []
+
+        def __init__(self, path: Path) -> None:
+            self.path = path
+            self.close_calls = 0
+            self.packets = 0
+            self.samples = 0
+            self.instances.append(self)
+
+        def start(self) -> None:
+            return
+
+        def write_pcm(self, data: bytes) -> None:
+            del data
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    class StartFailingThread:
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            del args, kwargs
+
+        def start(self) -> None:
+            raise RuntimeError("secret thread start failure")
+
+    runtime = FakeRuntime()
+    manager = DaemonRecordingManager(runtime, tmp_path)
+    monkeypatch.setattr(
+        daemon_recording,
+        "PcmuWavRecorder",
+        CountingRecorder,
+    )
+    monkeypatch.setattr(
+        "sds200.audio_sinks.threading.Thread",
+        StartFailingThread,
+    )
+
+    try:
+        with pytest.raises(
+            DaemonRecordingOperationError,
+            match="Could not start daemon recording",
+        ):
+            manager.start_recording()
+        assert len(CountingRecorder.instances) == 1
+        assert CountingRecorder.instances[0].close_calls == 1
+    finally:
         runtime.close()
 
 

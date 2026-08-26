@@ -3469,16 +3469,16 @@ def _run_daemon_client_audio(
             )
         )
 
-    started_sinks: list[PcmSink] = []
+    router = PcmSinkRouter(name="daemon-client-audio")
     expired = threading.Event()
     timer: threading.Timer | None = None
     failure: BaseException | None = None
 
     try:
         client.connect()
+        router.start()
         for sink in sinks:
-            started_sinks.append(sink)
-            sink.start()
+            router.attach(sink)
 
         if args.duration is not None:
             def expire() -> None:
@@ -3501,14 +3501,7 @@ def _run_daemon_client_audio(
             if not payload:
                 continue
             pcm = decode_mulaw(payload)
-            for sink in sinks:
-                try:
-                    sink.submit_pcm(pcm)
-                except Exception:
-                    logger.exception(
-                        "Daemon PCMU audio sink rejected PCM sink=%s",
-                        sink.name,
-                    )
+            router.submit_pcm(pcm)
     except KeyboardInterrupt:
         pass
     except BaseException as error:
@@ -3517,12 +3510,11 @@ def _run_daemon_client_audio(
         if timer is not None:
             timer.cancel()
         client.close()
-        for sink in reversed(started_sinks):
-            try:
-                sink.stop()
-            except BaseException as error:
-                if failure is None:
-                    failure = error
+        try:
+            router.stop(raise_on_failure=True)
+        except BaseException as error:
+            if failure is None:
+                failure = error
 
     if failure is not None:
         raise failure
