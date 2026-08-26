@@ -20,6 +20,7 @@ class FakeStreamSocket:
     def __init__(self, chunks: Iterable[bytes]) -> None:
         self.chunks = list(chunks)
         self.sent: list[bytes] = []
+        self.receive_sizes: list[int] = []
         self.timeout: float | None = None
         self.closed = False
 
@@ -30,6 +31,7 @@ class FakeStreamSocket:
         self.sent.append(data)
 
     def recv(self, size: int) -> bytes:
+        self.receive_sizes.append(size)
         if not self.chunks:
             return b""
         chunk = self.chunks.pop(0)
@@ -230,6 +232,37 @@ def test_invalid_content_length_closes_connection_and_redacts() -> None:
     assert stream.closed
 
 
+@pytest.mark.parametrize(
+    ("declared_length", "message"),
+    (
+        ("-1", "invalid Content-Length"),
+        ("11", "body exceeds"),
+    ),
+)
+def test_rejected_content_length_does_not_read_more_body_bytes(
+    declared_length: str,
+    message: str,
+) -> None:
+    private_body = b"private-body-must-remain-unread"
+    packet = (
+        b"RTSP/1.0 200 OK\r\n"
+        b"CSeq: 1\r\n"
+        + f"Content-Length: {declared_length}\r\n\r\n".encode("ascii")
+    )
+    stream = FakeStreamSocket([packet, private_body])
+    client = make_client(stream, max_response_body_bytes=10)
+    client.connect()
+
+    with pytest.raises(RtspProtocolError, match=message) as captured:
+        client.options()
+
+    assert stream.receive_sizes == [4096]
+    assert stream.chunks == [private_body]
+    assert declared_length not in str(captured.value)
+    assert private_body.decode() not in str(captured.value)
+    assert stream.closed
+
+
 @pytest.mark.parametrize("value", [0, -1])
 def test_response_limits_must_be_positive(value: int) -> None:
     with pytest.raises(ValueError, match="header size must be greater than zero"):
@@ -238,11 +271,25 @@ def test_response_limits_must_be_positive(value: int) -> None:
         RtspClient("192.0.2.25", max_response_body_bytes=value)
 
 
-def test_response_limits_reject_boolean_values() -> None:
+@pytest.mark.parametrize("value", [True, 1.5, "1", None])
+def test_response_limits_reject_non_integer_values(value: object) -> None:
     with pytest.raises(TypeError, match="header size must be an integer"):
-        RtspClient("192.0.2.25", max_response_header_bytes=True)
+        RtspClient("192.0.2.25", max_response_header_bytes=value)
     with pytest.raises(TypeError, match="body size must be an integer"):
-        RtspClient("192.0.2.25", max_response_body_bytes=True)
+        RtspClient("192.0.2.25", max_response_body_bytes=value)
+
+
+def test_mismatched_cseq_closes_connection_and_redacts_peer_value() -> None:
+    private_cseq = "private-cseq-value"
+    stream = FakeStreamSocket([response(1, headers={"CSeq": private_cseq})])
+    client = make_client(stream)
+    client.connect()
+
+    with pytest.raises(RtspProtocolError, match="CSeq does not match") as captured:
+        client.options()
+
+    assert private_cseq not in str(captured.value)
+    assert stream.closed
 
 
 def test_non_success_response_raises_status_error() -> None:
