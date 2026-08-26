@@ -148,15 +148,25 @@ class UdpDatagramDecoder:
         max_sequence_lifetime: float = MAX_XML_SEQUENCE_LIFETIME,
         monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
-        if isinstance(max_sequence_fragments, bool) or max_sequence_fragments <= 0:
+        if type(max_sequence_fragments) is not int:
+            raise TypeError("Maximum XML sequence fragments must be an integer.")
+        if max_sequence_fragments <= 0:
             raise ValueError("Maximum XML sequence fragments must be positive.")
-        if isinstance(max_sequence_children, bool) or max_sequence_children <= 0:
+        if type(max_sequence_children) is not int:
+            raise TypeError("Maximum XML sequence children must be an integer.")
+        if max_sequence_children <= 0:
             raise ValueError("Maximum XML sequence children must be positive.")
-        if isinstance(max_sequence_bytes, bool) or max_sequence_bytes <= 0:
+        if type(max_sequence_bytes) is not int:
+            raise TypeError("Maximum XML sequence bytes must be an integer.")
+        if max_sequence_bytes <= 0:
             raise ValueError("Maximum XML sequence bytes must be positive.")
+        if isinstance(max_sequence_lifetime, bool) or not isinstance(
+            max_sequence_lifetime,
+            (int, float),
+        ):
+            raise TypeError("Maximum XML sequence lifetime must be numeric.")
         if (
-            isinstance(max_sequence_lifetime, bool)
-            or not math.isfinite(max_sequence_lifetime)
+            not math.isfinite(max_sequence_lifetime)
             or max_sequence_lifetime <= 0
         ):
             raise ValueError("Maximum XML sequence lifetime must be finite and positive.")
@@ -208,10 +218,11 @@ class UdpDatagramDecoder:
 
     def feed(self, data: bytes) -> tuple[str, ...]:
         text = data.decode("utf-8", errors="replace").strip("\x00")
-        if not text:
-            return ()
-
         with self._lock:
+            self._expire_sequences(self._monotonic())
+            if not text:
+                return ()
+
             upper_text = text.upper()
             marker_index = upper_text.find(_XML_MARKER)
             if marker_index > 0:
@@ -862,6 +873,7 @@ class UdpTransport:
             if self._stop.is_set():
                 return
             if not datagram:
+                self._decoder.expire_incomplete_sequences()
                 continue
 
             with self._statistics_lock:

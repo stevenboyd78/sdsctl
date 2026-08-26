@@ -201,6 +201,29 @@ def test_decoder_expires_xml_sequence_by_monotonic_lifetime_and_recovers() -> No
     assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Recovered"
 
 
+def test_decoder_expires_xml_sequence_during_unrelated_continuous_traffic() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    now = 105.0
+
+    assert decoder.feed(b"MDL,SDS200\r") == ("MDL,SDS200",)
+    assert [diagnostic.kind for diagnostic in diagnostics] == [
+        "sequence_expired"
+    ]
+    assert diagnostics[0].command == "GSI"
+
+
 @pytest.mark.parametrize(
     ("argument", "value", "message"),
     [
@@ -216,6 +239,26 @@ def test_decoder_rejects_invalid_xml_sequence_limits(
     message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
+        UdpDatagramDecoder(**{argument: value})
+
+
+@pytest.mark.parametrize(
+    ("argument", "value", "message"),
+    [
+        ("max_sequence_fragments", True, "fragments"),
+        ("max_sequence_fragments", 1.5, "fragments"),
+        ("max_sequence_children", float("inf"), "children"),
+        ("max_sequence_bytes", float("nan"), "bytes"),
+        ("max_sequence_lifetime", True, "lifetime"),
+        ("max_sequence_lifetime", "10", "lifetime"),
+    ],
+)
+def test_decoder_rejects_non_numeric_or_non_integer_xml_sequence_limits(
+    argument: str,
+    value: object,
+    message: str,
+) -> None:
+    with pytest.raises(TypeError, match=message):
         UdpDatagramDecoder(**{argument: value})
 
 
