@@ -263,6 +263,32 @@ def test_decoder_expires_xml_sequence_by_monotonic_lifetime_and_recovers() -> No
     assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Recovered"
 
 
+def test_footerless_complete_xml_supersedes_numbered_partial_sequence() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    complete = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Complete" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    lines = decoder.feed(complete)
+    now = 105.0
+    decoder.expire_incomplete_sequences()
+
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Complete"
+    assert diagnostics == []
+
+
 def test_decoder_expires_xml_sequence_during_unrelated_continuous_traffic() -> None:
     now = 100.0
     diagnostics: list[TransportDiagnostic] = []

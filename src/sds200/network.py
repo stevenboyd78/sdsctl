@@ -350,6 +350,7 @@ class UdpDatagramDecoder:
 
         footer = self._remove_footer(root)
         if footer is None:
+            self._sequences.pop(command, None)
             return _XmlDecodeResult(
                 (f"{command}{_XML_MARKER}", *self._split_lines(payload)),
                 completed=True,
