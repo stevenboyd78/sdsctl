@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_2_2_hardening_contract() -> None:
+def test_roadmap_records_active_milestone_27_3_theme_workspace_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,33 +132,9 @@ def test_roadmap_records_active_milestone_27_2_2_hardening_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.2.2 — Audio lifecycle and release-integrity hardening",
-        "without amending the physically qualified Milestone 27.2 waterfall data plane",
-        "evidence rather than implementation authority",
-        "independently owned, bounded PCM delivery",
-        "never wait for arbitrary destination code",
-        "deterministic monotonic bounded exponential backoff",
-        "WAV writer worker the sole writer and finalizer",
-        "must not race the live worker",
-        "Pin every third-party workflow action",
-        "verified multi-architecture Python base-image digest",
-        "shared 86 percent coverage floor",
-        "separately designed, cross-Python reproducible-build slice",
-        "Do not reopen the resolved or rejected Milestone 27.2.1 findings",
-    ):
-        assert required in active_milestone or required in normalized_active_milestone
-
-
-def test_roadmap_preserves_planned_milestone_27_3_theme_workspace_contract() -> None:
-    roadmap = ROADMAP.read_text(encoding="utf-8")
-    milestone_group = roadmap.split(
-        "### Milestone 27 — Adaptive scanner screens, hardening, and waterfall workspace",
-        1,
-    )[1].split("## Completed milestone groups", 1)[0]
-    normalized_group = " ".join(milestone_group.split())
-
-    for required in (
-        "#### Planned Milestone 27.3 contract",
+        "### Milestone 27.3 — Responsive web workspace and Pip-Boy-inspired theme",
+        "Milestone 27.2.2 is closed after independently reproducing",
+        "browser renderer remains owned by Milestone 27.4",
         "`system` as the stable theme ID, picker order zero, browser-local default",
         "Simple, Detail, Search/Close Call, Weather, and Tone-Out",
         "Scanner, Controls, Audio, Recordings, and Diagnostics panes",
@@ -171,7 +147,7 @@ def test_roadmap_preserves_planned_milestone_27_3_theme_workspace_contract() -> 
         "all existing controls and all 35 radio fields",
         "Do not add copied manufacturer or game assets",
     ):
-        assert required in milestone_group or required in normalized_group
+        assert required in active_milestone or required in normalized_active_milestone
 
 
 def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> None:
