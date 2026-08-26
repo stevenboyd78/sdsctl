@@ -24,8 +24,10 @@ class FakeWaterfallRadio:
         self.start_calls: list[float] = []
         self.status_calls: list[float] = []
         self.stop_calls: list[float] = []
+        self.poll_calls: list[float] = []
         self.start_error: BaseException | None = None
         self.stop_error: BaseException | None = None
+        self.poll_errors_remaining = 0
 
     def get_waterfall_status(self, *, timeout: float = 2.0) -> GstResponse:
         self.status_calls.append(timeout)
@@ -66,6 +68,15 @@ class FakeWaterfallRadio:
         self.stop_calls.append(timeout)
         if self.stop_error is not None:
             raise self.stop_error
+
+    def get_waterfall_frame(self, *, timeout: float = 2.0) -> GwfResponse:
+        self.poll_calls.append(timeout)
+        if self.poll_errors_remaining > 0:
+            self.poll_errors_remaining -= 1
+            raise RuntimeError("synthetic GWF timeout")
+        response = self._gwf(len(self.poll_calls))
+        self.publisher.publish(response)
+        return response
 
     def subscribe_waterfall(self) -> WaterfallSubscription:
         return self.publisher.subscribe()
@@ -178,6 +189,111 @@ def test_transport_interruption_retains_demand_and_recovery_restarts_once() -> N
     assert radio.start_calls == [3.0, 0.5]
     assert radio.status_calls == [3.0, 0.5]
     assert session.snapshot().state is WaterfallSessionState.RUNNING
+    lease.close()
+
+
+def test_recovery_is_a_noop_without_an_interrupted_session() -> None:
+    radio = FakeWaterfallRadio()
+    session = WaterfallSession(radio)
+    lease = session.subscribe()
+
+    session.recover(timeout=0.5)
+
+    assert radio.start_calls == [3.0]
+    assert radio.status_calls == [3.0]
+    assert session.snapshot().state is WaterfallSessionState.RUNNING
+    lease.close()
+
+
+def test_due_poll_requests_one_shared_gwf_frame() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        poll_timeout=0.75,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+    lease.get(0)
+    lease.get(0)
+
+    assert session.poll() is False
+    clock[0] = 100.24
+    assert session.poll() is False
+    clock[0] = 100.25
+    assert session.poll() is True
+
+    delivery = lease.get(0)
+    assert isinstance(delivery.response, GwfResponse)
+    assert radio.poll_calls == [0.75]
+    snapshot = session.snapshot()
+    assert snapshot.gwf_poll_interval_seconds == 0.25
+    assert snapshot.gwf_max_consecutive_failures == 3
+    assert snapshot.gwf_requests == 2
+    assert snapshot.gwf_poll_failures == 0
+    assert snapshot.consecutive_gwf_failures == 0
+    assert snapshot.last_gwf_request_at is not None
+    lease.close()
+
+
+def test_one_missed_gwf_poll_is_tolerated_and_next_success_recovers() -> None:
+    radio = FakeWaterfallRadio()
+    radio.poll_errors_remaining = 1
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+
+    clock[0] = 100.25
+    assert session.poll() is False
+    missed = session.snapshot()
+    assert missed.state is WaterfallSessionState.RUNNING
+    assert missed.gwf_requests == 2
+    assert missed.gwf_poll_failures == 1
+    assert missed.consecutive_gwf_failures == 1
+    assert missed.last_gwf_failure_at is not None
+    assert missed.last_gwf_error == "RuntimeError: synthetic GWF timeout"
+
+    clock[0] = 100.50
+    assert session.poll() is True
+    recovered = session.snapshot()
+    assert recovered.state is WaterfallSessionState.RUNNING
+    assert recovered.gwf_requests == 3
+    assert recovered.gwf_poll_failures == 1
+    assert recovered.consecutive_gwf_failures == 0
+    lease.close()
+
+
+def test_consecutive_gwf_poll_failure_threshold_fails_session() -> None:
+    radio = FakeWaterfallRadio()
+    radio.poll_errors_remaining = 3
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        max_consecutive_poll_failures=3,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+
+    for _attempt in range(2):
+        clock[0] += 0.25
+        assert session.poll() is False
+        assert session.state is WaterfallSessionState.RUNNING
+
+    clock[0] += 0.25
+    with pytest.raises(RuntimeError, match="synthetic GWF timeout"):
+        session.poll()
+
+    failed = session.snapshot()
+    assert failed.state is WaterfallSessionState.FAILED
+    assert failed.gwf_requests == 4
+    assert failed.gwf_poll_failures == 3
+    assert failed.consecutive_gwf_failures == 3
     lease.close()
 
 

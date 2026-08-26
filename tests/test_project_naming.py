@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_27_2_waterfall_session_contract() -> None:
+def test_roadmap_records_milestone_27_3_web_waterfall_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,26 +132,25 @@ def test_roadmap_records_milestone_27_2_waterfall_session_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.2 — Qualified waterfall session and daemon-local fanout",
-        "Milestone 27.1 is closed with one evidence-backed adaptive",
-        "official SDS Series Remote Command Specification V2.00",
-        "`GST` waterfall status plus type-1 `PWF`/`GWF` on/off forms",
-        "lossless typed `GST` response",
-        "Unknown future tail fields and unsupported line shapes",
-        "one bounded waterfall-session state machine",
-        "partial-start rollback",
-        "No consumer may write a waterfall command directly",
-        "private mode-`0600` Unix-domain waterfall socket",
-        "first local client starts the shared session on demand",
-        "versioned, size-bounded JSON Lines stream",
-        "cumulative per-client loss information",
-        "validating local client abstraction",
-        "ordinary daemon and Home Assistant App process ownership",
-        "Physical qualification on the SDS200",
-        "always attempt both qualified stop wires during cleanup",
-        "Host-independent acceptance must cover command validation",
-        "Do not add binary `GW2` framing",
-        "Milestone 27.3 owns the responsive theme-aware web spectrum",
+        "### Milestone 27.3 — Responsive theme-aware web waterfall workspace",
+        "Milestone 27.2 is closed with a physically qualified",
+        "SDS200 running firmware 1.26.01",
+        "`GWF,1,ON` is a one-frame get rather than sustained publication",
+        "polls it at a conservative 250 ms interval",
+        "return to normal scanning",
+        "existing web service without changing the trust boundary",
+        "same-origin, authenticated, size-bounded streaming route",
+        "last consumer triggers scanner cleanup",
+        "bounded Canvas-based spectrum and rolling-waterfall surface",
+        "uncalibrated/relative-data labeling",
+        "must not claim calibrated power, dB, signal strength",
+        "established modular web-theme token contract",
+        "fit the active viewport up to full screen without document or panel "
+        "scrolling",
+        "pause/resume display, clear-history, and full-screen controls",
+        "authenticated route denial",
+        "Do not add binary `GW2`",
+        "a Home Assistant waterfall card, TUI/GUI rendering",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

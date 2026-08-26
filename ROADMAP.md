@@ -11,79 +11,77 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.2 — Qualified waterfall session and daemon-local fanout
+### Milestone 27.3 — Responsive theme-aware web waterfall workspace
 
-Milestone 27.1 is closed with one evidence-backed adaptive screen-profile
-contract across the web dashboard, Home Assistant Display card, MQTT Discovery,
-and terminal interface. Host-independent validation and physical Home Assistant
-OS acceptance exercised every classified live screen transition, browser audio,
-recording, restart recovery, configured Tone-Out values, zero-tone detection,
-and the unchanged single-scanner-owner boundary.
+Milestone 27.2 is closed with a physically qualified, renderer-neutral text-
+waterfall data plane. A LAN-connected SDS200 running firmware 1.26.01 returned
+the typed `GST` checkpoint, a one-field `PWF,OK` response, and 240-value `GWF`
+frames with the specification-defined trailing separator. On this firmware,
+`GWF,1,ON` is a one-frame get rather than sustained publication, so the single
+daemon-owned session now polls it at a conservative 250 ms interval while demand
+exists and tolerates fewer than three consecutive misses.
 
-Milestone 27.2 qualifies and owns the text waterfall protocol below the future
-renderer. The official SDS Series Remote Command Specification V2.00 and the
-earlier V1.02 specification establish `GST` waterfall status plus type-1
-`PWF`/`GWF` on/off forms. Existing code already preserves variable `PWF` fields,
-accepts exactly 240 text `GWF` values, and publishes those typed responses into
-isolated bounded queues. Treat specification text, synthetic fixtures, sanitized
-captures, and physical observations as distinct evidence; do not infer numeric
-FFT magnitude, color, cadence, or unsupported-model semantics.
+Time- and record-bounded physical runs validated repeated and overlapping local
+clients, ordered isolated fanout, zero observed client loss or overflow,
+interleaved PSI, scanner reconnect with interrupted/starting/running recovery,
+daemon restart, last-client stop, both cleanup wires, private socket removal,
+and return to normal scanning. The repository Home Assistant App was stopped to
+preserve one scanner owner during direct branch qualification, then restored and
+verified through its authenticated Ingress dashboard and live MQTT entities.
+Raw programming and frequency data remain outside the repository.
 
-Add a lossless typed `GST` response for the specification-defined display lines,
-mute and LED fields, waterfall mode, marker frequency and position, modulation,
-center/lower/upper frequencies, color mode, and FFT-area size. Preserve the
-source packet and raw strings while exposing only structurally justified values.
-Unknown future tail fields and unsupported line shapes must remain available as
-generic packets instead of being silently discarded or misclassified.
+Milestone 27.3 integrates that private local stream into the existing web
+service without changing the trust boundary. The web process may connect to
+`waterfall.sock` only after the current session or Home Assistant Ingress
+authentication succeeds, and it must expose waterfall records only through a
+same-origin, authenticated, size-bounded streaming route. A browser must never
+receive the Unix socket path, open another scanner transport, or send `GST`,
+`PWF`, or `GWF` commands. Opening the workspace creates demand; hiding,
+navigating away, signing out, disconnecting, or shutting down releases it
+deterministically so the last consumer triggers scanner cleanup.
 
-Add one bounded waterfall-session state machine owned by the existing radio and
-daemon runtime. It may issue only the qualified type-1 text `PWF` and `GWF`
-start/stop wires, must serialize lifecycle changes with other scanner commands,
-and must expose immutable state, transition, response, drop, overflow, and last-
-error telemetry. Start, repeated start, partial-start rollback, explicit stop,
-last-consumer stop, disconnect, reconnect, daemon shutdown, timeout, rejection,
-and cleanup failure behavior must be deterministic. No consumer may write a
-waterfall command directly or create another scanner connection.
+Render the 240-bin frames with a bounded Canvas-based spectrum and
+rolling-waterfall surface rather than a 240-cell table. Canvas is the appropriate
+high-frequency raster boundary, while adjacent semantic HTML must expose
+connection state, uncalibrated/relative-data labeling, GST context, frame rate,
+frame age, sequence, cumulative queue loss, overflow, poll failures, and session
+transitions. Malformed, non-finite, incomplete, oversized, or out-of-order data
+must fail closed without freezing the dashboard or retaining stale live state.
 
-Expose that single session through a private mode-`0600` Unix-domain waterfall
-socket beside the existing daemon API, event, PCMU, and recording-file sockets.
-The first local client starts the shared session on demand; later clients receive
-independent bounded subscriptions; and the final client departure stops scanner
-publication. Use a versioned, size-bounded JSON Lines stream with an initial
-authoritative session checkpoint, monotonically ordered typed `GST`, `PWF`, and
-`GWF` records, cumulative per-client loss information, and explicit session
-transitions. A slow or disconnected client may degrade only its own queue and
-must never block scanner receive dispatch or another consumer.
+The visualization may scale observed numeric values into a clearly labeled
+relative display but must not claim calibrated power, dB, signal strength, or
+documented FFT magnitude semantics. Preserve the raw 240 strings below that
+presentation boundary. Use lower, center, upper, and marker frequency metadata
+only when their typed GST fields are structurally valid; otherwise show bin
+position without inventing an RF axis. Do not derive scanner tuning or mode
+navigation from pointer or touch input.
 
-Provide a validating local client abstraction and a bounded diagnostic command
-that can inspect the checkpoint and a caller-selected number of records. Wire
-the service into ordinary daemon and Home Assistant App process ownership,
-socket resolution, startup rollback, reverse-order shutdown, diagnostics, and
-documentation. The socket is local process IPC, not an authenticated LAN API;
-web and Ingress consumers will remain behind the existing authenticated web
-boundary when Milestone 27.3 integrates them.
+Make the workspace responsive through the established modular web-theme token
+contract. It must fit the active viewport up to full screen without document or
+panel scrolling at representative 390x844 phone, 800x480 compact landscape,
+and 1920x1080 desktop sizes. Theme changes must recolor both CSS and Canvas
+content immediately without restarting the stream. Include keyboard-accessible
+pause/resume display, clear-history, and full-screen controls; reduced-motion,
+high-contrast, resize, visibility, reconnect, and empty/error states must remain
+usable. Display pause may freeze rendering but must not be described as pausing
+the scanner protocol.
 
-Physical qualification on the SDS200 must record firmware, transport, Waterfall
-license state, scanner mode, exact transmitted wires, received record shapes,
-observed cadence, `GST` metadata, `PWF` variability, 240-value `GWF` behavior,
-interleaving with PSI, repeated start/stop, last-client shutdown, daemon restart,
-and return to normal scanner operation. Probes must be time- and record-bounded,
-sanitize frequency or programming data before committing fixtures, and always
-attempt both qualified stop wires during cleanup.
+Acceptance must cover authenticated route denial, Ingress prefixing, demand and
+last-consumer cleanup, strict stream validation, reconnect and sequence-gap
+handling, bounded rolling history, resize and device-pixel-ratio behavior,
+theme switching, accessibility status, background-tab cleanup, browser and
+daemon restart, responsive viewport references, existing dashboard/audio/
+recording regression behavior, documentation, distribution builds, and the
+complete static and test suite. Physical acceptance must use the same SDS200
+single-owner guard and confirm normal scanner and repository App restoration.
 
-Host-independent acceptance must cover command validation, typed parsing,
-session state and rollback, demand ownership, subscriber isolation and overflow,
-JSON framing and size limits, sequence-gap detection, socket permissions and
-stale-path handling, client disconnects, runtime startup failure, reverse-order
-shutdown, Home Assistant App argv parity, documentation, distribution builds,
-and the complete regression suite.
-
-Do not add binary `GW2` framing, raw high-rate MQTT entities, public TCP or Web
-Socket exposure, stored waterfall history, FFT interpretation, signal-strength
-calibration, scanner tuning or Waterfall-mode navigation, web/HA/TUI waterfall
-rendering, automatic screen switching, Internet-facing access, or a desktop GUI.
-Milestone 27.3 owns the responsive theme-aware web spectrum and rolling-
-waterfall workspace after this local data plane is physically qualified.
+Do not add binary `GW2`, high-rate MQTT entities, public waterfall sockets,
+persistent waterfall history, calibrated FFT or RF-power claims, scanner tuning,
+Waterfall-mode navigation, automatic scanner-screen switching, a Home Assistant
+waterfall card, TUI/GUI rendering, Internet-facing access, or new third-party
+JavaScript dependencies. Later milestones may reuse this renderer contract in
+other interfaces only after their own lifecycle and performance boundaries are
+defined.
 
 ## Deferred hardware validation
 
@@ -651,8 +649,10 @@ is collected.
   browser-audio and recording regressions, all twenty-four entities, configured
   Tone-Out values, zero-tone detection presentation, and the unchanged
   single-owner boundary against SDS200 firmware 1.26.01.
-- Milestone 27.2: physical waterfall protocol qualification and one daemon-owned
-  bounded `PWF`/`GWF` session and local fanout service.
+- Milestone 27.2: physical SDS200 firmware 1.26.01 waterfall qualification and
+  one daemon-owned bounded `PWF`/recurring-`GWF` session with private local
+  fanout, transient-poll tolerance, reconnect/restart recovery, deterministic
+  cleanup, and normal-scanner/Home Assistant ownership restoration.
 - Milestone 27.3: responsive theme-aware web spectrum and rolling-waterfall
   workspace with viewport-fit full-screen presentation and loss telemetry.
 

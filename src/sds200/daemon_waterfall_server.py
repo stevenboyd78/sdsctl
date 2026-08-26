@@ -330,8 +330,13 @@ class DaemonWaterfallServer:
             _close_client(client)
 
     def _record_error(self, error: BaseException) -> None:
+        error_type = error.__class__.__name__
         with self._state_lock:
-            self._last_error = f"{error.__class__.__name__}: {error}"
+            self._last_error = f"{error_type}: {error}"
+        logger.warning(
+            "daemon waterfall client failed error=%s",
+            error_type,
+        )
 
 
 def _client_disconnected(client: socket_module.socket) -> bool:

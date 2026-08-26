@@ -190,6 +190,8 @@ class _WaterfallSessionLike(Protocol):
 
     def recover(self, *, timeout: float | None = None) -> None: ...
 
+    def poll(self) -> bool: ...
+
 
 @dataclass(frozen=True, slots=True)
 class DaemonRuntimeSnapshot:
@@ -423,6 +425,7 @@ class DaemonRuntime:
         "Recover interrupted waterfall demand and sustained silent PSI."
 
         self._recover_interrupted_waterfall()
+        self._poll_running_waterfall()
 
         if not self.psi_auto_recover:
             return
@@ -549,11 +552,17 @@ class DaemonRuntime:
             return
         session = cast(_WaterfallSessionLike, candidate)
 
+        # Do not read session state while holding runtime state.  Waterfall
+        # startup owns the session lock while it waits for the first scanner
+        # records, and the scanner receive thread takes runtime state when an
+        # interleaved PSI update arrives.  Reversing that order here would
+        # prevent the receive thread from reaching the awaited GWF record.
+        if session.state is not WaterfallSessionState.INTERRUPTED:
+            return
         with self._state_lock:
             if (
                 self._state is not DaemonRuntimeState.RUNNING
                 or not self.scanner.connected
-                or session.state is not WaterfallSessionState.INTERRUPTED
             ):
                 return
 
@@ -561,12 +570,15 @@ class DaemonRuntime:
             return
         try:
             with self._state_lock:
-                if (
-                    self._state is not DaemonRuntimeState.RUNNING
-                    or not self.scanner.connected
-                    or session.state is not WaterfallSessionState.INTERRUPTED
-                ):
-                    return
+                runtime_ready = (
+                    self._state is DaemonRuntimeState.RUNNING
+                    and self.scanner.connected
+                )
+            if (
+                not runtime_ready
+                or session.state is not WaterfallSessionState.INTERRUPTED
+            ):
+                return
             logger.warning(
                 "daemon waterfall session interrupted scanner=%s "
                 "attempting_recovery=waterfall-publication",
@@ -584,6 +596,45 @@ class DaemonRuntime:
                 logger.info(
                     "daemon waterfall recovery completed scanner=%s",
                     self.scanner.endpoint,
+                )
+        finally:
+            self._control_lock.release()
+
+    def _poll_running_waterfall(self) -> None:
+        candidate = getattr(self.scanner, "waterfall_session", None)
+        if candidate is None:
+            return
+        session = cast(_WaterfallSessionLike, candidate)
+
+        if session.state is not WaterfallSessionState.RUNNING:
+            return
+        with self._state_lock:
+            if (
+                self._state is not DaemonRuntimeState.RUNNING
+                or not self.scanner.connected
+            ):
+                return
+
+        if not self._control_lock.acquire(blocking=False):
+            return
+        try:
+            with self._state_lock:
+                runtime_ready = (
+                    self._state is DaemonRuntimeState.RUNNING
+                    and self.scanner.connected
+                )
+            if (
+                not runtime_ready
+                or session.state is not WaterfallSessionState.RUNNING
+            ):
+                return
+            try:
+                session.poll()
+            except Exception as error:
+                logger.warning(
+                    "daemon waterfall polling failed scanner=%s error=%s",
+                    self.scanner.endpoint,
+                    error.__class__.__name__,
                 )
         finally:
             self._control_lock.release()

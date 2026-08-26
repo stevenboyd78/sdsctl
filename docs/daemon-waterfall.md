@@ -15,8 +15,9 @@ The implementation follows the official SDS Series Remote Command
 Specification V2.00 text forms:
 
 - `GST` retrieves the Waterfall-oriented scanner status;
-- `PWF,1,ON` and `PWF,1,OFF` control type-1 text PWF publication; and
-- `GWF,1,ON` and `GWF,1,OFF` control type-1 text GWF publication.
+- `PWF,1,ON` and `PWF,1,OFF` are the type-1 text PWF lifecycle forms; and
+- `GWF,1,ON` requests one type-1 text GWF frame on the physically tested
+  SDS200, while `GWF,1,OFF` is still issued during cleanup.
 
 `GST` is promoted to a typed response only when its display-form length, line
 pairs, and twelve documented trailing fields form one exact specification
@@ -24,10 +25,15 @@ shape. Other shapes remain generic lossless packets. Typed GST values remain raw
 strings. In particular, frequency units, FFT magnitude, color, and cadence are
 not inferred.
 
-PWF records preserve all fields and empty positions. GWF becomes typed only for
-exactly 240 comma-separated values. Binary `GW2` is excluded because the current
-line-oriented transports cannot preserve its framing safely and the V2.00 text
-contains unresolved command details.
+PWF records preserve all fields and empty positions. The physically observed
+SDS200 acknowledgement is the one-field `PWF,OK` form, but the parser retains
+variable future PWF shapes. GWF becomes typed only for exactly 240
+comma-separated values. It accepts either 240 packet fields or those same 240
+values followed by the specification-defined terminal empty field produced by
+the trailing comma on the physical scanner; the lossless source `Packet` retains
+that separator. Binary `GW2` is excluded because the current line-oriented
+transports cannot preserve its framing safely and the V2.00 text contains
+unresolved command details.
 
 ## Shared session lifecycle
 
@@ -39,17 +45,29 @@ attempts both stop wires in this order:
 1. `GWF,1,OFF`
 2. `PWF,1,OFF`
 
-Later clients receive independent bounded queues without sending another scanner
-start. Closing a client affects only that lease. The final client departure sends
-both stop wires. Explicit shutdown, partial startup, transport interruption,
-recovery, and cleanup failure are represented by immutable ordered session
-transitions and snapshots.
+The SDS200 firmware tested in this milestone does not continue sending GWF after
+that initial request. While the shared session is running, the daemon runtime
+therefore serializes a new `GWF,1,ON` request at a conservative 250 ms interval.
+One missed response records redacted poll-failure telemetry without destroying
+the session; three consecutive misses transition it to failed. A successful
+response resets only the consecutive-failure count. Request attempts, last-
+request time, total and consecutive failures, last failure time, and redacted
+last error are part of the immutable checkpoint.
+
+Later clients receive independent bounded queues without sending another PWF
+start or creating another recurring poll owner. Closing a client affects only
+that lease. The final client departure sends both stop wires. Explicit shutdown,
+partial startup, transport interruption, recovery, and cleanup failure are
+represented by immutable ordered session transitions and snapshots.
 
 When the owned scanner transport reconnects automatically, the receive callback
 only marks the session interrupted. The daemon poll loop performs the blocking
-GST/PWF/GWF restoration later under the shared control lock. This keeps scanner
-commands off the receive thread, avoids competing with browser/API controls, and
-emits an explicit running or failed session transition.
+GST/PWF/GWF restoration later under the shared control lock. The runtime never
+waits for waterfall-session state while holding its own state lock; that explicit
+lock order lets the scanner receive thread publish interleaved PSI before the
+awaited GWF response. The same non-blocking control-lock path owns recurring GWF
+requests, keeps scanner commands off the receive thread, avoids competing with
+browser/API controls, and emits an explicit running or failed session transition.
 
 One slow client drops only its own oldest unread records. Each delivered record
 includes that lease's cumulative `responses_dropped` and `overflows` counters.
@@ -86,8 +104,10 @@ newline and carries:
 
 Every connection begins with `session.checkpoint`. Its payload contains the
 authoritative shared-session snapshot, latest typed GST metadata, publisher
-counts, consumer count, lifecycle timestamps, and last failure. Later records
-are `waterfall.pwf`, `waterfall.gwf`, or `session.transition`.
+counts, consumer count, lifecycle timestamps, last failure, GWF poll interval,
+request attempts, transient and consecutive failure counts, and redacted last
+poll failure. Later records are `waterfall.pwf`, `waterfall.gwf`, or
+`session.transition`.
 
 PWF and GWF payloads include the radio-owned `source_sequence`, raw `values`,
 source receive timestamp, and cumulative lease loss counters. The validating
@@ -117,13 +137,28 @@ limit for negative tests.
 
 ## Current validation status
 
-Host-independent tests cover exact commands, strict GST/PWF/GWF parsing, first-
-record confirmation, partial-start rollback, both-stop cleanup after a failure,
-shared demand, retry, interruption and recovery, per-client overflow isolation,
-canonical JSON, client ordering, socket mode, multi-client fanout, final-client
-stop, and socket removal.
+Host-independent tests cover exact commands, strict GST/PWF/GWF parsing including
+the terminal separator, first-record confirmation, recurring polls, transient-
+miss tolerance and failure threshold, lock ordering, partial-start rollback,
+both-stop cleanup after a failure, shared demand, retry, interruption and
+recovery, per-client overflow isolation, canonical JSON, client ordering, socket
+mode, multi-client fanout, final-client stop, and socket removal.
 
-Physical SDS200 qualification remains required before Milestone 27.2 closes. It
-must use a time- and record-bounded session while the scanner is manually placed
-in Waterfall mode, record exact observed response shapes and cadence, and restore
-normal scanner operation during cleanup.
+Physical Milestone 27.2 qualification completed on August 26, 2026, over the
+LAN control transport with an SDS200 running firmware 1.26.01 and manually
+placed in its available Waterfall mode. The scanner returned typed GST metadata,
+`PWF,OK`, and GWF lines containing 240 values plus the trailing separator. Five
+bounded direct requests returned one fresh frame each, establishing the
+request/response behavior instead of sustained GWF push behavior.
+
+A ten-second daemon-client run received 30 GWF frames in order, each exactly 240
+values wide, with no client drop or overflow. Overlapping clients shared one
+scanner lifecycle and retained independent contiguous sequences. A longer run
+spanned scanner reconnect and observed interrupted, starting, and running
+transitions before continued 240-value delivery. Daemon restart disconnected the
+active client, issued `GWF,1,OFF`, `PWF,1,OFF`, then `PSI,0`, removed every
+private socket, and admitted a fresh bounded client after restart. The scanner
+was returned to normal scanning, the temporary host daemon was stopped, and the
+repository Home Assistant App was restored with connected Ingress state and live
+entities. Raw captures contain programming data and remain uncommitted; these
+sanitized structural observations are the committed evidence.

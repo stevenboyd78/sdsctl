@@ -188,6 +188,22 @@ def test_gwf_typed_response_preserves_exact_240_values_and_raw_packet() -> None:
     assert parsed.packet.raw == raw
 
 
+def test_gwf_typed_response_accepts_specification_terminal_separator() -> None:
+    from sds200.models import GwfResponse
+
+    parser = PacketParser()
+    values = tuple(str(index) for index in range(240))
+    raw = "GWF," + ",".join(values) + ","
+    packet = parser.parse_packet(raw)
+    parsed = parser.parse_typed(packet)
+
+    assert isinstance(parsed, GwfResponse)
+    assert parsed.values == values
+    assert parsed.packet is packet
+    assert parsed.packet.fields == values + ("",)
+    assert parsed.packet.raw == raw
+
+
 @pytest.mark.parametrize("count", [0, 1, 239, 241])
 def test_non_240_gwf_shapes_remain_lossless_generic_packets(
     count: int,

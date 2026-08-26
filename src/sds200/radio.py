@@ -943,6 +943,20 @@ class SDSScanner:
     def get_waterfall_status(self, *, timeout: float = 2.0) -> GstResponse:
         return self.execute(GetWaterfallStatus(), timeout=timeout)
 
+    def get_waterfall_frame(self, *, timeout: float = 2.0) -> GwfResponse:
+        """Request one qualified type-1 text GWF frame."""
+
+        response = self._wait_for_response(
+            "GWF",
+            SetGwfPublication(True).wire,
+            timeout,
+        )
+        if not isinstance(response, GwfResponse):
+            raise ProtocolError(
+                "GWF did not return one 240-value waterfall record."
+            )
+        return response
+
     def start_waterfall_publication(
         self,
         *,

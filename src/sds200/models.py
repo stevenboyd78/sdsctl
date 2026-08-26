@@ -65,7 +65,7 @@ class PwfResponse:
 
 @dataclass(frozen=True, slots=True)
 class GwfResponse:
-    """One lossless received 240-value GWF waterfall line."""
+    """One received 240-value GWF line with its lossless source packet."""
 
     values: tuple[str, ...]
     packet: Packet
@@ -78,9 +78,11 @@ class GwfResponse:
             raise ValueError("GWF responses require a GWF packet.")
         if len(values) != 240:
             raise ValueError("GWF responses require exactly 240 values.")
-        if values != self.packet.fields:
+        packet_values = self.packet.fields
+        if values != packet_values and values + ("",) != packet_values:
             raise ValueError(
-                "GWF response values must exactly match packet fields."
+                "GWF response values must match packet fields, optionally before "
+                "one specification-defined terminal empty field."
             )
         object.__setattr__(self, "values", values)
 

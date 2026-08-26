@@ -2034,7 +2034,7 @@ def test_radio_starts_and_stops_qualified_text_waterfall_publication() -> None:
         transport.feed_line("PWF,17,,23,FUTURE")
         while transport.writes != ["PWF,1,ON", "GWF,1,ON"]:
             time.sleep(0.005)
-        transport.feed_line("GWF," + ",".join(gwf_values))
+        transport.feed_line("GWF," + ",".join(gwf_values) + ",")
 
     thread = threading.Thread(target=respond, daemon=True)
     thread.start()
@@ -2046,6 +2046,7 @@ def test_radio_starts_and_stops_qualified_text_waterfall_publication() -> None:
     assert first_pwf.values == ("17", "", "23", "FUTURE")
     assert isinstance(first_gwf, GwfResponse)
     assert first_gwf.values == gwf_values
+    assert first_gwf.packet.fields == gwf_values + ("",)
     assert [subscription.get(0).response, subscription.get(0).response] == [
         first_pwf,
         first_gwf,

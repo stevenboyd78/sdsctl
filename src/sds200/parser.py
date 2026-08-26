@@ -94,8 +94,11 @@ class PacketParser:
             return packet if parsed_gst is None else parsed_gst
         if packet.command == "PWF":
             return PwfResponse(values=packet.fields, packet=packet)
-        if packet.command == "GWF" and len(packet.fields) == 240:
-            return GwfResponse(values=packet.fields, packet=packet)
+        if packet.command == "GWF":
+            if len(packet.fields) == 240:
+                return GwfResponse(values=packet.fields, packet=packet)
+            if len(packet.fields) == 241 and packet.fields[-1] == "":
+                return GwfResponse(values=packet.fields[:-1], packet=packet)
         return packet
 
     @staticmethod

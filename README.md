@@ -396,7 +396,10 @@ sockets:
   `--recording-file-socket-path`.
 - `$XDG_RUNTIME_DIR/sdsctl/waterfall.sock`, or the user-state fallback, provides
   a demand-driven, size-bounded JSON Lines stream of qualified GST/PWF/GWF
-  records. Select an explicit absolute path with `--waterfall-socket-path`.
+  records. On the physically tested SDS200 firmware 1.26.01, the daemon requests
+  one GWF frame every 250 ms while shared demand exists; the raw 240 values remain
+  uncalibrated and uninterpreted. Select an explicit absolute path with
+  `--waterfall-socket-path`.
 
 Use the explicit daemon client when another process owns the scanner:
 

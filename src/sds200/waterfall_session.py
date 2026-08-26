@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from time import monotonic
 from typing import Protocol
 
 from .models import GstResponse, GwfResponse, PwfResponse
@@ -40,6 +41,8 @@ class _WaterfallRadio(Protocol):
         timeout: float = 3.0,
     ) -> tuple[PwfResponse, GwfResponse]: ...
 
+    def get_waterfall_frame(self, *, timeout: float = 2.0) -> GwfResponse: ...
+
     def stop_waterfall_publication(self, *, timeout: float = 2.0) -> None: ...
 
     def subscribe_waterfall(self) -> WaterfallSubscription: ...
@@ -59,6 +62,14 @@ class WaterfallSessionSnapshot:
     state_changed_at: datetime
     last_failure_at: datetime | None
     last_error: str | None
+    gwf_poll_interval_seconds: float
+    gwf_max_consecutive_failures: int
+    gwf_requests: int
+    last_gwf_request_at: datetime | None
+    gwf_poll_failures: int
+    consecutive_gwf_failures: int
+    last_gwf_failure_at: datetime | None
+    last_gwf_error: str | None
     waterfall_status: GstResponse | None
     publisher: WaterfallPublisherSnapshot
 
@@ -86,6 +97,20 @@ class WaterfallSessionSnapshot:
             "state_changed_at": self.state_changed_at.isoformat(),
             "last_failure_at": _optional_datetime(self.last_failure_at),
             "last_error": self.last_error,
+            "gwf_poll_interval_seconds": self.gwf_poll_interval_seconds,
+            "gwf_max_consecutive_failures": (
+                self.gwf_max_consecutive_failures
+            ),
+            "gwf_requests": self.gwf_requests,
+            "last_gwf_request_at": _optional_datetime(
+                self.last_gwf_request_at
+            ),
+            "gwf_poll_failures": self.gwf_poll_failures,
+            "consecutive_gwf_failures": self.consecutive_gwf_failures,
+            "last_gwf_failure_at": _optional_datetime(
+                self.last_gwf_failure_at
+            ),
+            "last_gwf_error": self.last_gwf_error,
             "waterfall_status": (
                 None
                 if self.waterfall_status is None
@@ -183,17 +208,39 @@ class WaterfallSession:
         *,
         start_timeout: float = 3.0,
         stop_timeout: float = 2.0,
+        poll_interval: float = 0.25,
+        poll_timeout: float = 2.0,
+        max_consecutive_poll_failures: int = 3,
+        poll_clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
         if start_timeout <= 0:
             raise ValueError("Waterfall session start timeout must be greater than zero.")
         if stop_timeout <= 0:
             raise ValueError("Waterfall session stop timeout must be greater than zero.")
+        if poll_interval <= 0:
+            raise ValueError("Waterfall GWF poll interval must be greater than zero.")
+        if poll_timeout <= 0:
+            raise ValueError("Waterfall GWF poll timeout must be greater than zero.")
+        if (
+            isinstance(max_consecutive_poll_failures, bool)
+            or not isinstance(max_consecutive_poll_failures, int)
+            or max_consecutive_poll_failures <= 0
+        ):
+            raise ValueError(
+                "Waterfall maximum consecutive GWF poll failures must be a "
+                "positive integer."
+            )
         self.radio = radio
         self.start_timeout = float(start_timeout)
         self.stop_timeout = float(stop_timeout)
+        self.poll_interval = float(poll_interval)
+        self.poll_timeout = float(poll_timeout)
+        self.max_consecutive_poll_failures = max_consecutive_poll_failures
+        self._poll_clock = poll_clock
         self._now = now
         self._lock = threading.RLock()
+        self._poll_lock = threading.Lock()
         initial = now()
         self._state = WaterfallSessionState.IDLE
         self._leases: set[WaterfallSessionLease] = set()
@@ -203,6 +250,13 @@ class WaterfallSession:
         self._state_changed_at = initial
         self._last_failure_at: datetime | None = None
         self._last_error: str | None = None
+        self._gwf_requests = 0
+        self._last_gwf_request_at: datetime | None = None
+        self._gwf_poll_failures = 0
+        self._consecutive_gwf_failures = 0
+        self._last_gwf_failure_at: datetime | None = None
+        self._last_gwf_error: str | None = None
+        self._next_poll_at: float | None = None
         self._waterfall_status: GstResponse | None = None
         self._callbacks: set[Callable[[WaterfallSessionTransition], None]] = set()
 
@@ -262,9 +316,67 @@ class WaterfallSession:
             self._started_at = self._now()
             self._stopped_at = None
             self._last_error = None
+            self._record_gwf_request_locked()
             self._waterfall_status = status
             self._transition_locked(WaterfallSessionState.RUNNING)
             return lease
+
+    def poll(self) -> bool:
+        """Request one due GWF frame for the shared daemon-owned session."""
+
+        if not self._poll_lock.acquire(blocking=False):
+            return False
+        try:
+            with self._lock:
+                now = self._poll_clock()
+                if (
+                    self._state is not WaterfallSessionState.RUNNING
+                    or not self._leases
+                    or self._next_poll_at is None
+                    or now < self._next_poll_at
+                ):
+                    return False
+                self._next_poll_at = now + self.poll_interval
+                self._gwf_requests += 1
+                self._last_gwf_request_at = self._now()
+
+            try:
+                self.radio.get_waterfall_frame(timeout=self.poll_timeout)
+            except Exception as error:
+                with self._lock:
+                    if (
+                        self._state is WaterfallSessionState.RUNNING
+                        and self._leases
+                    ):
+                        self._gwf_poll_failures += 1
+                        self._consecutive_gwf_failures += 1
+                        self._last_gwf_failure_at = self._now()
+                        self._last_gwf_error = (
+                            f"{error.__class__.__name__}: {error}"
+                        )
+                        if (
+                            self._consecutive_gwf_failures
+                            >= self.max_consecutive_poll_failures
+                        ):
+                            self._record_failure_locked(error)
+                            raise
+                        logger.warning(
+                            "Waterfall GWF poll missed error=%s "
+                            "consecutive_failures=%d",
+                            error.__class__.__name__,
+                            self._consecutive_gwf_failures,
+                        )
+                return False
+
+            with self._lock:
+                if (
+                    self._state is WaterfallSessionState.RUNNING
+                    and self._leases
+                ):
+                    self._consecutive_gwf_failures = 0
+            return True
+        finally:
+            self._poll_lock.release()
 
     def mark_interrupted(self) -> None:
         """Record transport loss without releasing existing consumer demand."""
@@ -281,7 +393,10 @@ class WaterfallSession:
         """Re-establish publication after reconnect while consumer demand remains."""
 
         with self._lock:
-            if self._state is WaterfallSessionState.CLOSED or not self._leases:
+            if (
+                self._state is not WaterfallSessionState.INTERRUPTED
+                or not self._leases
+            ):
                 return
             start_timeout = self.start_timeout if timeout is None else float(timeout)
             if start_timeout <= 0:
@@ -298,6 +413,7 @@ class WaterfallSession:
             self._started_at = self._now()
             self._stopped_at = None
             self._last_error = None
+            self._record_gwf_request_locked()
             self._waterfall_status = status
             self._transition_locked(WaterfallSessionState.RUNNING)
 
@@ -322,6 +438,7 @@ class WaterfallSession:
                     self._last_error = f"{error.__class__.__name__}: {error}"
 
             self._stopped_at = self._now()
+            self._next_poll_at = None
             self._transition_locked(WaterfallSessionState.CLOSED)
             self._callbacks.clear()
             if stop_error is not None:
@@ -344,7 +461,14 @@ class WaterfallSession:
                 self._record_failure_locked(error)
                 raise
             self._stopped_at = self._now()
+            self._next_poll_at = None
             self._transition_locked(WaterfallSessionState.IDLE)
+
+    def _record_gwf_request_locked(self) -> None:
+        self._gwf_requests += 1
+        self._last_gwf_request_at = self._now()
+        self._consecutive_gwf_failures = 0
+        self._next_poll_at = self._poll_clock() + self.poll_interval
 
     def _record_failure_locked(self, error: BaseException) -> None:
         self._last_failure_at = self._now()
@@ -380,6 +504,16 @@ class WaterfallSession:
             state_changed_at=self._state_changed_at,
             last_failure_at=self._last_failure_at,
             last_error=self._last_error,
+            gwf_poll_interval_seconds=self.poll_interval,
+            gwf_max_consecutive_failures=(
+                self.max_consecutive_poll_failures
+            ),
+            gwf_requests=self._gwf_requests,
+            last_gwf_request_at=self._last_gwf_request_at,
+            gwf_poll_failures=self._gwf_poll_failures,
+            consecutive_gwf_failures=self._consecutive_gwf_failures,
+            last_gwf_failure_at=self._last_gwf_failure_at,
+            last_gwf_error=self._last_gwf_error,
             waterfall_status=self._waterfall_status,
             publisher=self.radio.waterfall_snapshot(),
         )

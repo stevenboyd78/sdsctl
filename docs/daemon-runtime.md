@@ -151,7 +151,13 @@ runtime startup transitions. Starting the PCMU service before the runtime allows
 clients to subscribe before the shared transport begins publishing accepted
 packets. The waterfall listener starts only after the runtime is authoritative,
 so its first admitted demand can safely retrieve GST and start PWF/GWF on the
-connected scanner. MQTT then starts so its first broker session can publish a
+connected scanner. While that demand remains, the runtime poll loop serializes
+one `GWF,1,ON` get every 250 ms through the same non-blocking control lock used
+by reconnect restoration. It reads waterfall-session state outside the runtime
+state lock so an interleaved PSI receive callback can publish before the awaited
+GWF response. Fewer than three consecutive GWF misses are recorded and tolerated;
+the third consecutive miss fails the session for explicit cleanup. MQTT then
+starts so its first broker session can publish a
 running snapshot and, when enabled, Home Assistant device Discovery, but before
 destinations so it can observe their later health. Broker connectivity and Home
 Assistant birth-topic handling stay inside the MQTT worker and do not make

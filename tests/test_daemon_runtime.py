@@ -152,6 +152,7 @@ class FakeWaterfallSession:
         self.state = WaterfallSessionState.INTERRUPTED
         self.fail_recovery = fail_recovery
         self.recover_calls: list[float | None] = []
+        self.poll_calls = 0
 
     def recover(self, *, timeout: float | None = None) -> None:
         self.recover_calls.append(timeout)
@@ -159,6 +160,28 @@ class FakeWaterfallSession:
             self.state = WaterfallSessionState.FAILED
             raise RuntimeError("waterfall recovery failed")
         self.state = WaterfallSessionState.RUNNING
+
+    def poll(self) -> bool:
+        self.poll_calls += 1
+        return True
+
+
+class BlockingWaterfallState:
+    def __init__(self) -> None:
+        self.state_read_started = threading.Event()
+        self.release_state_read = threading.Event()
+
+    @property
+    def state(self) -> WaterfallSessionState:
+        self.state_read_started.set()
+        assert self.release_state_read.wait(timeout=1.0)
+        return WaterfallSessionState.IDLE
+
+    def recover(self, *, timeout: float | None = None) -> None:
+        raise AssertionError(f"unexpected recovery timeout={timeout}")
+
+    def poll(self) -> bool:
+        raise AssertionError("unexpected waterfall poll")
 
 
 class TrackingAudioTransport(FakeAudioTransport):
@@ -457,6 +480,39 @@ def test_runtime_records_failed_waterfall_recovery_without_retry_loop() -> None:
     assert waterfall.recover_calls == [3.0]
     assert waterfall.state is WaterfallSessionState.FAILED
     assert runtime.snapshot().state is DaemonRuntimeState.RUNNING
+    runtime.stop()
+
+
+def test_runtime_poll_does_not_hold_state_while_reading_waterfall_state() -> None:
+    order: list[str] = []
+    scanner = FakeScanner(order)
+    waterfall = BlockingWaterfallState()
+    scanner.waterfall_session = waterfall  # type: ignore[attr-defined]
+    transport = TrackingAudioTransport(order)
+    router = TrackingRouter(order)
+    audio = AudioFanoutSession(AudioStream(transport), (router,))
+    runtime = DaemonRuntime(scanner, audio, router)
+    runtime.start()
+
+    poll = threading.Thread(target=runtime.poll)
+    poll.start()
+    assert waterfall.state_read_started.wait(timeout=1.0)
+
+    psi_observed = threading.Event()
+
+    def observe_psi() -> None:
+        runtime._observe_psi(object())  # type: ignore[arg-type]
+        psi_observed.set()
+
+    receive = threading.Thread(target=observe_psi)
+    receive.start()
+    assert psi_observed.wait(timeout=0.5)
+
+    waterfall.release_state_read.set()
+    poll.join(timeout=1.0)
+    receive.join(timeout=1.0)
+    assert not poll.is_alive()
+    assert not receive.is_alive()
     runtime.stop()
 
 
