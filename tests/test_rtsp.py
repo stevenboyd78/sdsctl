@@ -4,6 +4,7 @@ from collections.abc import Iterable
 
 import pytest
 
+import sds200
 from sds200.exceptions import ScannerConnectionError
 from sds200.rtsp import (
     DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES,
@@ -82,6 +83,19 @@ def make_client(
         max_response_header_bytes=max_response_header_bytes,
         max_response_body_bytes=max_response_body_bytes,
     )
+
+
+def test_rtsp_response_limit_defaults_are_public() -> None:
+    assert (
+        sds200.DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES
+        == DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES
+    )
+    assert (
+        sds200.DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES
+        == DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES
+    )
+    assert "DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES" in sds200.__all__
+    assert "DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES" in sds200.__all__
 
 
 def test_scanner_specific_session_sequence_with_fragmented_responses() -> None:

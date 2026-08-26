@@ -10,7 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from sds200.network import UdpDatagramDecoder, UdpTransport
+import sds200
+from sds200.network import (
+    MAX_XML_SEQUENCE_BYTES,
+    MAX_XML_SEQUENCE_CHILDREN,
+    MAX_XML_SEQUENCE_FRAGMENTS,
+    MAX_XML_SEQUENCE_LIFETIME,
+    UdpDatagramDecoder,
+    UdpTransport,
+)
 from sds200.radio import SDS200
 from sds200.reliability import ReconnectPolicy
 from sds200.transport import TransportDiagnostic
@@ -32,6 +40,19 @@ def wait_until(predicate: Callable[[], bool], *, timeout: float = 1.0) -> None:
     while not predicate() and time.monotonic() < deadline:
         time.sleep(0.005)
     assert predicate()
+
+
+def test_xml_sequence_limit_defaults_are_public() -> None:
+    expected = {
+        "MAX_XML_SEQUENCE_BYTES": MAX_XML_SEQUENCE_BYTES,
+        "MAX_XML_SEQUENCE_CHILDREN": MAX_XML_SEQUENCE_CHILDREN,
+        "MAX_XML_SEQUENCE_FRAGMENTS": MAX_XML_SEQUENCE_FRAGMENTS,
+        "MAX_XML_SEQUENCE_LIFETIME": MAX_XML_SEQUENCE_LIFETIME,
+    }
+
+    for name, value in expected.items():
+        assert getattr(sds200, name) == value
+        assert name in sds200.__all__
 
 
 def test_decoder_emits_normal_command_responses() -> None:
