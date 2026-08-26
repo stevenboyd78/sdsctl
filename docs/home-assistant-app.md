@@ -25,6 +25,7 @@ Private runtime files live under `/run/sdsctl`:
 - `events.sock`
 - `pcmu.sock`
 - `recordings.sock`
+- `waterfall.sock`
 - generated `daemon-mqtt.toml`
 
 These remain container-private Unix-domain interfaces. The Home Assistant App
@@ -722,3 +723,33 @@ The acceptance run confirmed:
 
 This development run validates the physical Milestone 27.1 behavior. It does
 not replace a later tagged repository-managed release acceptance.
+
+### Milestone 27.2 waterfall qualification and ownership restoration
+
+Milestone 27.2 physical qualification completed on August 26, 2026, using a
+direct isolated branch daemon on the development host against the LAN-connected
+SDS200 running firmware 1.26.01. The Home Assistant host ran amd64 Home Assistant
+OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7, and Docker
+29.7.2.
+
+The repository-managed App was deliberately stopped before the direct daemon
+claimed the scanner, and both installed Local Apps remained stopped. This
+preserved one daemon, scanner-control, PSI, and RTSP/RTP owner throughout the
+bounded protocol work. The branch daemon validated recurring 240-value GWF
+delivery, overlapping local consumers, scanner reconnect, daemon restart,
+reverse-order cleanup, and private-socket removal. The scanner was then returned
+manually to normal scanning and every temporary host daemon was stopped.
+
+The repository-managed App at version 0.22.0 was restarted after the ownership
+guard was clear. Home Assistant reported it running; authenticated Ingress showed
+the SDS200 connected on firmware 1.26.01 with the daemon, PSI, audio, scanner
+state, controls, recordings, and recent inventory available; and the existing
+verification dashboard showed live MQTT entity values with Scanner online,
+Audio on, and Daemon running.
+
+This run physically qualifies the branch protocol implementation on the direct
+host path and validates safe Home Assistant ownership restoration. The branch
+code was not staged or deployed into Home Assistant OS, so this evidence does
+not claim that the new waterfall socket or polling code ran inside the 0.22.0
+App image. Home Assistant argv parity remains host-tested, and Milestone 27.3
+must perform its own branch-image Ingress acceptance before closure.

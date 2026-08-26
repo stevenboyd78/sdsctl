@@ -9,6 +9,7 @@ from .daemon_ipc import (
     DAEMON_PCMU_SOCKET_FILENAME,
     DAEMON_RECORDING_FILE_SOCKET_FILENAME,
     DAEMON_SOCKET_FILENAME,
+    DAEMON_WATERFALL_SOCKET_FILENAME,
 )
 from .home_assistant_app import (
     HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY,
@@ -62,6 +63,7 @@ class HomeAssistantAppRuntimePaths:
     pcmu_socket: Path
     recording_file_socket: Path
     recording_directory: Path
+    waterfall_socket: Path | None = None
 
     def __post_init__(self) -> None:
         runtime_directory = _require_absolute_path(
@@ -69,6 +71,12 @@ class HomeAssistantAppRuntimePaths:
             label="Home Assistant App runtime directory",
         )
         object.__setattr__(self, "runtime_directory", runtime_directory)
+        if self.waterfall_socket is None:
+            object.__setattr__(
+                self,
+                "waterfall_socket",
+                runtime_directory / DAEMON_WATERFALL_SOCKET_FILENAME,
+            )
 
         for field_name, label in (
             ("mqtt_configuration", "Home Assistant App MQTT configuration"),
@@ -79,6 +87,7 @@ class HomeAssistantAppRuntimePaths:
                 "recording_file_socket",
                 "Home Assistant App recording-file socket",
             ),
+            ("waterfall_socket", "Home Assistant App waterfall socket"),
         ):
             path = _require_absolute_path(
                 getattr(self, field_name),
@@ -121,6 +130,7 @@ def default_home_assistant_app_runtime_paths(
         recording_file_socket=(
             runtime / DAEMON_RECORDING_FILE_SOCKET_FILENAME
         ),
+        waterfall_socket=runtime / DAEMON_WATERFALL_SOCKET_FILENAME,
         recording_directory=(
             HOME_ASSISTANT_APP_MEDIA_DIRECTORY / recording_relative
         ),
@@ -145,6 +155,7 @@ def build_home_assistant_daemon_command(
         )
 
     program = _require_executable(executable)
+    assert paths.waterfall_socket is not None
     return (
         program,
         "--host",
@@ -164,6 +175,8 @@ def build_home_assistant_daemon_command(
         os.fspath(paths.pcmu_socket),
         "--recording-file-socket-path",
         os.fspath(paths.recording_file_socket),
+        "--waterfall-socket-path",
+        os.fspath(paths.waterfall_socket),
     )
 
 

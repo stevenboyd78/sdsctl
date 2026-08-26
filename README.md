@@ -86,7 +86,8 @@ information in this image represents a real system.*
   scanner session
 - Explicit `sdsctl daemon-client` workflows for negotiated status and snapshot
   reads, safe typed scanner controls, validated gap-detecting event watches, and
-  daemon-owned PCMU playback or WAV recording
+  daemon-owned PCMU playback or WAV recording, plus bounded validated waterfall
+  diagnostics
 - Optional default-loopback daemon-backed HTTP service with a separate explicit
   password-authenticated native-TLS LAN mode, versioned health, status,
   snapshot, typed scanner-control, and OpenAPI endpoints, self-hosted Swagger UI
@@ -377,7 +378,7 @@ an in-flight control defers the watchdog without consuming its cooldown. The
 bounded reconnect reopens only scanner control/PSI; the independent RTSP/RTP
 audio path remains running.
 
-The daemon exposes four versioned local services through private Unix-domain
+The daemon exposes five versioned local services through private Unix-domain
 sockets:
 
 - `$XDG_RUNTIME_DIR/sdsctl/daemon.sock`, or the user-state fallback, provides the
@@ -393,6 +394,12 @@ sockets:
   bounded read access to finalized inventory-approved WAV files for daemon
   clients such as the web dashboard. Select an explicit absolute path with
   `--recording-file-socket-path`.
+- `$XDG_RUNTIME_DIR/sdsctl/waterfall.sock`, or the user-state fallback, provides
+  a demand-driven, size-bounded JSON Lines stream of qualified GST/PWF/GWF
+  records. On the physically tested SDS200 firmware 1.26.01, the daemon requests
+  one GWF frame every 250 ms while shared demand exists; the raw 240 values remain
+  uncalibrated and uninterpreted. Select an explicit absolute path with
+  `--waterfall-socket-path`.
 
 Use the explicit daemon client when another process owns the scanner:
 
@@ -406,6 +413,7 @@ sdsctl daemon-client squelch 2
 sdsctl daemon-client next TGID 12345 --count 1
 sdsctl daemon-client reconnect
 sdsctl daemon-client events --count 10 --json
+sdsctl daemon-client waterfall --duration 10 --count 100 --json
 sdsctl daemon-client audio --play
 sdsctl daemon-client audio \
   --output scanner-audio.wav \
@@ -416,10 +424,11 @@ sdsctl tui --daemon-client \
   --audio-directory ~/recordings
 ```
 
-API options such as `--socket-path` precede the client action. Event watching
-and audio use their separate `--event-socket-path` and `--pcmu-socket-path`
-options after the corresponding action. The top-level scanner commands remain
-the explicit standalone workflows. Volume and squelch setters are
+API options such as `--socket-path` precede the client action. Event watching,
+waterfall diagnostics, and audio use their separate `--event-socket-path`,
+`--waterfall-socket-path`, and `--pcmu-socket-path` options after the
+corresponding action. The top-level scanner commands remain the explicit
+standalone workflows. Volume and squelch setters are
 specification-backed and fixture-tested, but physical SDS200 firmware 1.26.01
 testing found that UDP `VOL`/`SQL` writes timed out without mutation. Treat those
 two LAN controls as unaccepted until the transport boundary is resolved; hold

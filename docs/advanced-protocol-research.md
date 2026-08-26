@@ -261,6 +261,35 @@ decode bytes to text before radio dispatch. Preserving GW2 therefore requires a
 separate evidence-backed binary transport/framing contract rather than forcing
 binary data through the line parser.
 
+## Milestone 27.2 physical waterfall qualification
+
+Milestone 27.2 later promoted the type-1 text lifecycle into one radio- and
+daemon-owned demand session, without changing the historical Milestone 24.7
+evidence boundary above. Physical qualification completed on August 26, 2026,
+using the LAN control transport and an SDS200 running firmware 1.26.01 in its
+available Waterfall mode.
+
+The physical observations establish only these additional facts:
+
+- `GST` returned the exact typed display form, including raw Waterfall mode,
+  modulation, frequency, marker, LED, mute, color, and FFT-area fields;
+- `PWF,1,ON` returned the one-field `PWF,OK` line on the tested firmware;
+- each `GWF,1,ON` request returned one fresh text frame rather than enabling an
+  ongoing push stream;
+- each physical GWF line held exactly 240 values followed by a trailing comma,
+  represented losslessly as a terminal empty packet field while the typed value
+  tuple remains exactly 240 entries; and
+- recurring 250 ms daemon polling, overlapping consumers, PSI interleaving,
+  scanner reconnect, final-consumer stop, and daemon restart completed within
+  bounded runs while preserving a single scanner owner.
+
+The renderer-neutral session tolerates fewer than three consecutive GWF request
+misses and records attempt/failure telemetry. This is a reliability policy, not
+a claim about a scanner-specified cadence. The observed values remain raw and
+uninterpreted: no magnitude, dB, color, calibrated power, or universal firmware
+semantics are established. Raw physical captures contain scanner programming and
+frequency data and are not repository fixtures.
+
 ## Evidence policy
 
 Material claims must identify their strongest evidence as specification,
@@ -455,19 +484,23 @@ abstraction” is a planning inference, not established protocol behavior.
 
 ### PWF, GWF, and GW2
 
-- **Evidence:** V2.00 specification and its history; status: specification.
-- **Shape:** `PWF,[FFT_TYPE],[ON/OFF]\r` pushes
-  `PWF,[DATA1]...[DATA_n]\r`. `GWF,[TYPE],[ON/OFF]\r` has a reviewed response
-  containing 240 FFT values. `GW2`, added in V2.00, is a binary/no-separator
-  waterfall form.
-- **Lifecycle and safety:** persistent waterfall session/data, not ordinary
-  request/response. Exact binary framing, shutdown/error behavior, transport
-  applicability, model support, and firmware thresholds remain unresolved.
-- **Repository fit:** session ownership plus bounded line/binary data framing;
-  `GW2` requires a transport contract capable of preserving binary records.
-  Fixture targets include start/stop, 240-value GWF records, PWF variability,
-  unknown values, truncation, and structurally faithful GW2 binary samples.
-  Implementation is deferred beyond 24.1.
+- **Evidence:** V2.00 specification and its history plus Milestone 27.2 physical
+  SDS200 firmware 1.26.01 LAN-control observations; status: specification and
+  model/firmware-specific physical evidence.
+- **Shape:** the specification describes `PWF,[FFT_TYPE],[ON/OFF]\r` and
+  `GWF,[TYPE],[ON/OFF]\r`. The tested SDS200 returned `PWF,OK` and one 240-value
+  GWF line with a trailing separator for each `GWF,1,ON` request. `GW2`, added
+  in V2.00, remains a binary/no-separator waterfall form.
+- **Lifecycle and safety:** one daemon-owned demand session serializes PWF/GWF
+  lifecycle and recurring 250 ms GWF gets, isolates bounded consumers, restores
+  after reconnect, and sends both stop wires on final release or shutdown. The
+  interval and three-consecutive-miss policy are application choices, not
+  scanner protocol semantics.
+- **Repository fit:** the qualified text path is implemented through typed raw
+  records and a private JSON Lines fanout. `GW2` still requires a transport
+  contract capable of preserving binary records. Numeric FFT magnitude, color,
+  calibration, and applicability beyond the tested model/firmware remain
+  unresolved.
 
 ### MNU, MSI, MSV, and MSB
 

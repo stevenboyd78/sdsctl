@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_27_1_adaptive_screen_contract() -> None:
+def test_roadmap_records_milestone_27_3_web_waterfall_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,26 +132,25 @@ def test_roadmap_records_milestone_27_1_adaptive_screen_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.1 — Adaptive scanner screen-profile parity",
-        "Milestone 26.17 is closed with the v0.22.0 Python distribution",
-        "`scanning`, `search`, `close_call`, `weather`, and `tone_out`",
-        "Preserve raw `Mode` and `V_Screen` values",
-        "Add one fixed read-only Home Assistant MQTT Discovery sensor",
-        "fall back to `unknown` when the field is missing, null, empty",
-        "Do not add a command topic, scanner poll",
-        "opt-in `Auto` layout",
-        "Search and Close Call to the existing Search layout",
-        "Missing, unavailable, unknown, or future sensor values",
-        "Existing cards keep their current Simple default",
-        "graphical editor must expose both choices",
-        "Every one of the 35 shared radio fields must remain present",
-        "Unknown or absent screen kinds use the ordinary scanning profile",
-        "existing automatic terminal layouts",
-        "Waterfall, System Status, RF Power Plot, Current Activity, LCN",
-        "Physical SDS200 and Home Assistant OS acceptance",
-        "Do not add waterfall or analysis commands",
-        "Milestone 27.2 owns waterfall protocol qualification",
-        "Milestone 27.3 owns the responsive web waterfall workspace",
+        "### Milestone 27.3 — Responsive theme-aware web waterfall workspace",
+        "Milestone 27.2 is closed with a physically qualified",
+        "SDS200 running firmware 1.26.01",
+        "`GWF,1,ON` is a one-frame get rather than sustained publication",
+        "polls it at a conservative 250 ms interval",
+        "return to normal scanning",
+        "existing web service without changing the trust boundary",
+        "same-origin, authenticated, size-bounded streaming route",
+        "last consumer triggers scanner cleanup",
+        "bounded Canvas-based spectrum and rolling-waterfall surface",
+        "uncalibrated/relative-data labeling",
+        "must not claim calibrated power, dB, signal strength",
+        "established modular web-theme token contract",
+        "fit the active viewport up to full screen without document or panel "
+        "scrolling",
+        "pause/resume display, clear-history, and full-screen controls",
+        "authenticated route denial",
+        "Do not add binary `GW2`",
+        "a Home Assistant waterfall card, TUI/GUI rendering",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

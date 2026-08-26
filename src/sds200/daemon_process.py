@@ -58,6 +58,12 @@ class _DaemonPcmuServerLike(Protocol):
     def stop(self) -> None: ...
 
 
+class _DaemonWaterfallServerLike(Protocol):
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+
 class _DaemonRecordingFileServerLike(Protocol):
     def start(self) -> None: ...
 
@@ -236,6 +242,7 @@ class DaemonProcess:
         api_server: _DaemonApiServerLike | None = None,
         event_server: _DaemonEventServerLike | None = None,
         pcmu_server: _DaemonPcmuServerLike | None = None,
+        waterfall_server: _DaemonWaterfallServerLike | None = None,
         signals: _DaemonSignalControllerLike | None = None,
         poll_interval: float = 0.1,
     ) -> None:
@@ -261,6 +268,7 @@ class DaemonProcess:
         self.api_server = api_server
         self.event_server = event_server
         self.pcmu_server = pcmu_server
+        self.waterfall_server = waterfall_server
         self.signals = signals or DaemonSignalController()
         self.poll_interval = poll_interval
 
@@ -268,6 +276,7 @@ class DaemonProcess:
         with self.signals:
             event_server_attempted = False
             pcmu_server_attempted = False
+            waterfall_server_attempted = False
             runtime_attempted = False
             mqtt_service_attempted = False
             destination_coordinator_attempted = False
@@ -285,6 +294,10 @@ class DaemonProcess:
 
                 runtime_attempted = True
                 self.runtime.start()
+
+                if self.waterfall_server is not None:
+                    waterfall_server_attempted = True
+                    self.waterfall_server.start()
 
                 if self.mqtt_service is not None:
                     mqtt_service_attempted = True
@@ -324,6 +337,7 @@ class DaemonProcess:
                     ),
                     stop_mqtt_service=mqtt_service_attempted,
                     stop_runtime=runtime_attempted,
+                    stop_waterfall_server=waterfall_server_attempted,
                     stop_pcmu_server=pcmu_server_attempted,
                     stop_event_server=event_server_attempted,
                 )
@@ -347,6 +361,7 @@ class DaemonProcess:
                     ),
                     stop_mqtt_service=mqtt_service_attempted,
                     stop_runtime=runtime_attempted,
+                    stop_waterfall_server=waterfall_server_attempted,
                     stop_pcmu_server=pcmu_server_attempted,
                     stop_event_server=event_server_attempted,
                 )
@@ -404,6 +419,7 @@ class DaemonProcess:
         stop_destination_coordinator: bool,
         stop_mqtt_service: bool,
         stop_runtime: bool,
+        stop_waterfall_server: bool,
         stop_pcmu_server: bool,
         stop_event_server: bool,
     ) -> list[BaseException]:
@@ -442,6 +458,12 @@ class DaemonProcess:
         if stop_mqtt_service and self.mqtt_service is not None:
             try:
                 self.mqtt_service.stop()
+            except BaseException as error:
+                failures.append(error)
+
+        if stop_waterfall_server and self.waterfall_server is not None:
+            try:
+                self.waterfall_server.stop()
             except BaseException as error:
                 failures.append(error)
 

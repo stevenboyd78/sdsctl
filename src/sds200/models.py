@@ -65,7 +65,7 @@ class PwfResponse:
 
 @dataclass(frozen=True, slots=True)
 class GwfResponse:
-    """One lossless received 240-value GWF waterfall line."""
+    """One received 240-value GWF line with its lossless source packet."""
 
     values: tuple[str, ...]
     packet: Packet
@@ -78,9 +78,11 @@ class GwfResponse:
             raise ValueError("GWF responses require a GWF packet.")
         if len(values) != 240:
             raise ValueError("GWF responses require exactly 240 values.")
-        if values != self.packet.fields:
+        packet_values = self.packet.fields
+        if values != packet_values and values + ("",) != packet_values:
             raise ValueError(
-                "GWF response values must exactly match packet fields."
+                "GWF response values must match packet fields, optionally before "
+                "one specification-defined terminal empty field."
             )
         object.__setattr__(self, "values", values)
 
@@ -144,6 +146,55 @@ class StatusResponse:
     lines: tuple[DisplayLine, ...]
     reserved: tuple[str, ...]
     packet: Packet
+
+
+@dataclass(frozen=True, slots=True)
+class GstResponse:
+    """One lossless specification-shaped GST waterfall status response."""
+
+    display_form: str
+    lines: tuple[DisplayLine, ...]
+    mute: str
+    alert_led: str
+    charge_led: str
+    waterfall_mode: str
+    marker_frequency: str
+    modulation: str
+    marker_position: str
+    center_frequency: str
+    lower_frequency: str
+    upper_frequency: str
+    color_mode: str
+    fft_area_size: str
+    packet: Packet
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.packet, Packet):
+            raise TypeError("GST responses require the source Packet.")
+        if self.packet.command != "GST":
+            raise ValueError("GST responses require a GST packet.")
+        object.__setattr__(self, "lines", tuple(self.lines))
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "display_form": self.display_form,
+            "lines": tuple(
+                {"text": line.text, "mode": line.mode} for line in self.lines
+            ),
+            "mute": self.mute,
+            "alert_led": self.alert_led,
+            "charge_led": self.charge_led,
+            "waterfall_mode": self.waterfall_mode,
+            "marker_frequency": self.marker_frequency,
+            "modulation": self.modulation,
+            "marker_position": self.marker_position,
+            "center_frequency": self.center_frequency,
+            "lower_frequency": self.lower_frequency,
+            "upper_frequency": self.upper_frequency,
+            "color_mode": self.color_mode,
+            "fft_area_size": self.fft_area_size,
+            "received_at": self.packet.received_at.isoformat(),
+        }
 
 
 @dataclass(frozen=True, slots=True)

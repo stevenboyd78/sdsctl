@@ -156,8 +156,8 @@ The App does not enable `host_network`.
 The dashboard port is not published directly to the LAN; Home Assistant Ingress
 is the browser access boundary. Only UDP `50000` is published for SDS200 RTP.
 
-The daemon API, event, PCMU, and recording-file services remain private
-Unix-domain sockets inside the App container.
+The daemon API, event, PCMU, recording-file, and waterfall services remain
+private Unix-domain sockets inside the App container.
 
 The current MQTT adapter does not configure TLS. Keep Home Assistant, the MQTT
 broker, and the scanner on trusted networks. The seven Home Assistant control

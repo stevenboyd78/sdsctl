@@ -85,6 +85,7 @@ from .daemon_ipc import (
     resolve_daemon_pcmu_socket_location,
     resolve_daemon_recording_file_socket_location,
     resolve_daemon_socket_location,
+    resolve_daemon_waterfall_socket_location,
 )
 from .daemon_mqtt import load_daemon_mqtt_configuration
 from .daemon_mqtt_paho import PahoMqttBrokerFactory
@@ -122,6 +123,12 @@ from .daemon_server import (
     DaemonApiServer,
 )
 from .daemon_tui import DaemonTuiRadio
+from .daemon_waterfall_client import DaemonWaterfallClient
+from .daemon_waterfall_protocol import (
+    DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
+    DaemonWaterfallRecord,
+)
+from .daemon_waterfall_server import DaemonWaterfallServer
 from .device import choose_scanner, discover_scanners
 from .discovery import (
     DEFAULT_DISCOVERY_TIMEOUT,
@@ -1023,6 +1030,15 @@ def build_parser(
         ),
     )
     daemon.add_argument(
+        "--waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit absolute Unix waterfall socket path; otherwise use "
+            "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    daemon.add_argument(
         "--event-queue-capacity",
         type=_positive_integer,
         default=DAEMON_EVENT_DEFAULT_QUEUE_CAPACITY,
@@ -1318,6 +1334,49 @@ def build_parser(
         "--json",
         action="store_true",
         help="Print validated daemon events as JSON Lines",
+    )
+
+    daemon_waterfall = daemon_client_commands.add_parser(
+        "waterfall",
+        help="Capture a bounded validated daemon waterfall stream",
+    )
+    daemon_waterfall.add_argument(
+        "--waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit absolute daemon waterfall socket path; otherwise use "
+            "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    daemon_waterfall.add_argument(
+        "--max-record-bytes",
+        type=_positive_integer,
+        default=DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
+        metavar="BYTES",
+        help=(
+            "Maximum accepted encoded waterfall record size "
+            f"(default: {DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES})"
+        ),
+    )
+    daemon_waterfall.add_argument(
+        "--count",
+        type=_positive_integer,
+        default=100,
+        metavar="COUNT",
+        help="Stop after at most this many records (default: 100)",
+    )
+    daemon_waterfall.add_argument(
+        "--duration",
+        type=_positive_float,
+        default=10.0,
+        metavar="SECONDS",
+        help="Stop after this many seconds even if count is not met (default: 10)",
+    )
+    daemon_waterfall.add_argument(
+        "--json",
+        action="store_true",
+        help="Print validated waterfall records as JSON Lines",
     )
 
     for action_name, action_help in (
@@ -2974,6 +3033,11 @@ def _run_daemon(
             configuration_paths=resolved_paths,
         )
     )
+    waterfall_socket_location = resolve_daemon_waterfall_socket_location(
+        args.waterfall_socket_path,
+        environ=environ,
+        configuration_paths=resolved_paths,
+    )
 
     router = PcmSinkRouter(name="daemon-pcm")
     network_transport: NetworkAudioTransport | None = None
@@ -3049,6 +3113,20 @@ def _run_daemon(
         max_event_bytes=args.event_max_bytes,
         send_timeout=args.event_send_timeout,
         shutdown_timeout=args.event_shutdown_timeout,
+    )
+    waterfall_session = getattr(scanner, "waterfall_session", None)
+    waterfall_server = (
+        None
+        if waterfall_session is None
+        else DaemonWaterfallServer(
+            DaemonSocketListener(waterfall_socket_location),
+            waterfall_session,
+        )
+    )
+    waterfall_process_options = (
+        {"waterfall_server": waterfall_server}
+        if waterfall_server is not None
+        else {}
     )
 
     pcmu_stream: PcmuStream | None = None
@@ -3149,6 +3227,7 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, waterfall_process_options),
         )
     else:
         process = DaemonProcess(
@@ -3161,16 +3240,18 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, waterfall_process_options),
         )
     result = process.run()
     logger.info(
         "foreground daemon stopped audio_host=%s socket=%s event_socket=%s "
-        "pcmu_socket=%s recording_file_socket=%s signal=%s",
+        "pcmu_socket=%s recording_file_socket=%s waterfall_socket=%s signal=%s",
         host,
         socket_location.path,
         event_socket_location.path,
         pcmu_socket_location.path,
         recording_file_socket_location.path,
+        waterfall_socket_location.path,
         result.last_signal,
     )
     return 0
@@ -3453,6 +3534,74 @@ def _print_daemon_event(event: DaemonEvent, *, as_json: bool) -> None:
     )
 
 
+def _print_daemon_waterfall_record(
+    record: DaemonWaterfallRecord,
+    *,
+    as_json: bool,
+) -> None:
+    if as_json:
+        print(json.dumps(record.as_dict(), sort_keys=True), flush=True)
+        return
+
+    payload = json.dumps(
+        record.as_dict()["payload"],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    print(
+        f"{record.observed_at.isoformat()} "
+        f"#{record.sequence} {record.kind.value}: {payload}",
+        flush=True,
+    )
+
+
+def _run_daemon_client_waterfall(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    _reject_daemon_stream_api_options(
+        args,
+        action="waterfall",
+        socket_option="--waterfall-socket-path",
+    )
+    location = resolve_daemon_waterfall_socket_location(
+        args.waterfall_socket_path,
+        environ=environ,
+        configuration_paths=configuration_paths,
+    )
+    client = DaemonWaterfallClient(
+        location,
+        timeout=args.timeout,
+        max_record_bytes=args.max_record_bytes,
+    )
+    expired = threading.Event()
+
+    def expire() -> None:
+        expired.set()
+        client.close()
+
+    timer = threading.Timer(args.duration, expire)
+    timer.daemon = True
+    timer.start()
+    try:
+        try:
+            for record in client.watch(count=args.count):
+                if expired.is_set():
+                    break
+                _print_daemon_waterfall_record(record, as_json=args.json)
+        except DaemonDisconnectedError:
+            if not expired.is_set():
+                raise
+        except KeyboardInterrupt:
+            return 0
+    finally:
+        timer.cancel()
+        client.close()
+    return 0
+
+
 def _print_daemon_control_result(result: Mapping[str, object]) -> None:
     snapshot = _daemon_client_mapping(result, "snapshot")
     print(f"Control:            {result.get('operation', '-')}")
@@ -3524,6 +3673,13 @@ def _run_daemon_client(
     action = args.daemon_client_action
     if action == "audio":
         return _run_daemon_client_audio(
+            args,
+            configuration_paths=configuration_paths,
+            environ=environ,
+        )
+
+    if action == "waterfall":
+        return _run_daemon_client_waterfall(
             args,
             configuration_paths=configuration_paths,
             environ=environ,

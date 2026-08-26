@@ -139,21 +139,29 @@ At the process-host level, startup occurs in this order:
 1. bind and start the local `DaemonEventServer`;
 2. bind and start the local `DaemonPcmuServer`;
 3. start `DaemonRuntime`;
-4. start the optional daemon MQTT worker;
-5. activate the validated daemon destination configuration;
-6. bind and start the local `DaemonRecordingFileServer`;
-7. bind and start the local `DaemonApiServer`; and
-8. wait for `SIGHUP`, `SIGINT`, `SIGTERM`, or another process-loop failure.
+4. bind and start the local `DaemonWaterfallServer`;
+5. start the optional daemon MQTT worker;
+6. activate the validated daemon destination configuration;
+7. bind and start the local `DaemonRecordingFileServer`;
+8. bind and start the local `DaemonApiServer`; and
+9. wait for `SIGHUP`, `SIGINT`, `SIGTERM`, or another process-loop failure.
 
 Starting the event service first allows an already connected client to observe
 runtime startup transitions. Starting the PCMU service before the runtime allows
 clients to subscribe before the shared transport begins publishing accepted
-packets. MQTT starts only after the runtime is authoritative, so its first broker
-session can publish a running snapshot and, when enabled, Home Assistant device
-Discovery, but before destinations so it can observe their later health. Broker
-connectivity and Home Assistant birth-topic handling stay inside the MQTT worker
-and do not make scanner ownership depend on broker or Home Assistant
-availability. Starting the
+packets. The waterfall listener starts only after the runtime is authoritative,
+so its first admitted demand can safely retrieve GST and start PWF/GWF on the
+connected scanner. While that demand remains, the runtime poll loop serializes
+one `GWF,1,ON` get every 250 ms through the same non-blocking control lock used
+by reconnect restoration. It reads waterfall-session state outside the runtime
+state lock so an interleaved PSI receive callback can publish before the awaited
+GWF response. Fewer than three consecutive GWF misses are recorded and tolerated;
+the third consecutive miss fails the session for explicit cleanup. MQTT then
+starts so its first broker session can publish a
+running snapshot and, when enabled, Home Assistant device Discovery, but before
+destinations so it can observe their later health. Broker connectivity and Home
+Assistant birth-topic handling stay inside the MQTT worker and do not make
+scanner ownership depend on broker or Home Assistant availability. Starting the
 recording-file service after runtime and destination activation makes finalized
 inventory access available before recording API requests are admitted. Starting
 the API last ensures every admitted request observes an initialized runtime and
@@ -170,12 +178,15 @@ Shutdown occurs in this order:
 6. stop all configured daemon-owned destinations;
 7. publish retained MQTT `offline` when possible and stop the optional MQTT
    worker;
-8. stop the daemon runtime while the event service remains available for final
-   lifecycle transitions;
-9. close the PCMU listener, publisher subscription, and connected clients;
-10. wait for bounded PCMU worker completion;
-11. close the event listener and connected subscribers; and
-12. wait for bounded event-worker completion.
+8. close the waterfall listener and connected clients, releasing final scanner
+   publication demand while the runtime is still connected;
+9. wait for bounded waterfall-worker completion;
+10. stop the daemon runtime while the event service remains available for final
+    lifecycle transitions;
+11. close the PCMU listener, publisher subscription, and connected clients;
+12. wait for bounded PCMU worker completion;
+13. close the event listener and connected subscribers; and
+14. wait for bounded event-worker completion.
 
 If any component startup fails, cleanup is attempted for every component whose
 startup was attempted. Cleanup continues after an individual failure, while the
