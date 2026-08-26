@@ -208,5 +208,17 @@ username. Resolved credentials must not be written to application configuration,
 destination configuration, MQTT configuration, logs, exceptions, traces, or
 serialized output.
 
+Broadcastify profile schema version 2 also stores the non-secret boolean
+`acknowledge_cleartext_credentials`. New source and metadata transport
+construction from that profile is rejected while it is false. Existing version
+1 documents load without an automatic rewrite and migrate to false in memory;
+use `sdsctl remote-audio list` and the explicit `acknowledge-cleartext` command
+described in the
+[audio guide](audio.md#saved-remote-audio-destination-profiles) to acknowledge
+the selected profile while atomically rewriting the complete document as schema
+version 2. Other legacy profiles remain false. The acknowledgement records
+operator acceptance that Basic credentials cross ordinary HTTP without
+transport encryption; it does not enable or imply TLS.
+
 See [Daemon deployment and upgrade guide](daemon-deployment.md) for systemd,
 destination-manifest, service-account, migration, and upgrade examples.

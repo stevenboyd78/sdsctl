@@ -30,6 +30,7 @@ ALLOWED_PORTS = {80, 8000, 8080, 8500}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,
         description="Validate the Broadcastify adapter against an assigned live feed."
     )
     parser.add_argument("--host", required=True, help="SDS200 IPv4 address or hostname")
@@ -44,6 +45,15 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path("/tmp/sds200-broadcastify-live-summary.json"),
         help="Counters-only sanitized JSON evidence path",
+    )
+    parser.add_argument(
+        "--acknowledge-cleartext-credentials",
+        action="store_true",
+        required=True,
+        help=(
+            "Acknowledge that source credentials are sent over ordinary HTTP "
+            "without transport encryption"
+        ),
     )
     return parser.parse_args()
 
@@ -118,6 +128,9 @@ def main() -> int:
             multiplier=2.0,
             max_delay=5.0,
             max_attempts=3,
+        ),
+        acknowledge_cleartext_credentials=(
+            args.acknowledge_cleartext_credentials
         ),
     )
     sink = create_broadcastify_sink(config)

@@ -122,7 +122,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_milestone_27_3_web_waterfall_contract() -> None:
+def test_roadmap_records_active_milestone_27_2_1_hardening_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split(
         "## Active milestone", 1
@@ -132,7 +132,57 @@ def test_roadmap_records_milestone_27_3_web_waterfall_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.3 — Responsive theme-aware web waterfall workspace",
+        "### Milestone 27.2.1 — Reviewed network and protocol hardening",
+        "must not be amended with unrelated review work",
+        "evidence rather than implementation authority",
+        "Bound RTSP response headers and declared bodies",
+        "fragment count, aggregate source bytes, child count, and monotonic lifetime",
+        "unexpected UDP application-callback failures",
+        "redacted malformed STS handling",
+        "Treat Broadcastify source and metadata credentials as cleartext",
+        "Do not silently wrap a documented plaintext port in TLS",
+        "descriptor-relative theme copy",
+        "RTP padding must continue to follow RFC 3550",
+        "Do not add a waterfall renderer",
+    ):
+        assert required in active_milestone or required in normalized_active_milestone
+
+
+def test_roadmap_preserves_planned_milestone_27_3_theme_workspace_contract() -> None:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    milestone_group = roadmap.split(
+        "### Milestone 27 — Adaptive scanner screens, hardening, and waterfall workspace",
+        1,
+    )[1].split("## Completed milestone groups", 1)[0]
+    normalized_group = " ".join(milestone_group.split())
+
+    for required in (
+        "#### Planned Milestone 27.3 contract",
+        "`system` as the stable theme ID, picker order zero, browser-local default",
+        "Simple, Detail, Search/Close Call, Weather, and Tone-Out",
+        "Scanner, Controls, Audio, Recordings, and Diagnostics panes",
+        "`themes/web/pip-boy-inspired/`",
+        "picker label `Pip-Boy-inspired`",
+        "local declarative CSS",
+        "Apply the same shared viewport shell",
+        "390x844, 800x480, 1366x768, and 1920x1080",
+        "At user text enlargement or browser zoom, accessibility",
+        "all existing controls and all 35 radio fields",
+        "Do not add copied manufacturer or game assets",
+    ):
+        assert required in milestone_group or required in normalized_group
+
+
+def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> None:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    milestone_group = roadmap.split(
+        "### Milestone 27 — Adaptive scanner screens, hardening, and waterfall workspace",
+        1,
+    )[1].split("## Completed milestone groups", 1)[0]
+    normalized_group = " ".join(milestone_group.split())
+
+    for required in (
+        "#### Planned Milestone 27.4 contract",
         "Milestone 27.2 is closed with a physically qualified",
         "SDS200 running firmware 1.26.01",
         "`GWF,1,ON` is a one-frame get rather than sustained publication",
@@ -144,15 +194,14 @@ def test_roadmap_records_milestone_27_3_web_waterfall_contract() -> None:
         "bounded Canvas-based spectrum and rolling-waterfall surface",
         "uncalibrated/relative-data labeling",
         "must not claim calibrated power, dB, signal strength",
-        "established modular web-theme token contract",
-        "fit the active viewport up to full screen without document or panel "
-        "scrolling",
+        "shared semantic visualization tokens",
+        "fit the active viewport up to full screen without document or panel scrolling",
         "pause/resume display, clear-history, and full-screen controls",
         "authenticated route denial",
         "Do not add binary `GW2`",
         "a Home Assistant waterfall card, TUI/GUI rendering",
     ):
-        assert required in active_milestone or required in normalized_active_milestone
+        assert required in milestone_group or required in normalized_group
 
 
 def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:

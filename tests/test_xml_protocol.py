@@ -1,8 +1,16 @@
+import threading
+
 import pytest
 
+import sds200
 from sds200 import SystemStatusProjection
 from sds200.exceptions import ProtocolError
 from sds200.xml_protocol import (
+    XML_RESPONSE_DEFAULT_MAX_BYTES,
+    XML_RESPONSE_DEFAULT_MAX_DEPTH,
+    XML_RESPONSE_DEFAULT_MAX_ELEMENTS,
+    XML_RESPONSE_DEFAULT_MAX_LIFETIME,
+    XML_RESPONSE_DEFAULT_MAX_LINES,
     AnalysisParser,
     GltParser,
     MsiParser,
@@ -27,6 +35,202 @@ def test_xml_assembler() -> None:
     for line in XML.splitlines():
         result = assembler.feed(line)
     assert result == ("GSI", XML)
+
+
+def test_xml_response_assembly_limit_defaults_are_public() -> None:
+    expected = {
+        "XML_RESPONSE_DEFAULT_MAX_BYTES": XML_RESPONSE_DEFAULT_MAX_BYTES,
+        "XML_RESPONSE_DEFAULT_MAX_DEPTH": XML_RESPONSE_DEFAULT_MAX_DEPTH,
+        "XML_RESPONSE_DEFAULT_MAX_ELEMENTS": XML_RESPONSE_DEFAULT_MAX_ELEMENTS,
+        "XML_RESPONSE_DEFAULT_MAX_LIFETIME": XML_RESPONSE_DEFAULT_MAX_LIFETIME,
+        "XML_RESPONSE_DEFAULT_MAX_LINES": XML_RESPONSE_DEFAULT_MAX_LINES,
+    }
+
+    for name, value in expected.items():
+        assert getattr(sds200, name) == value
+        assert name in sds200.__all__
+
+
+@pytest.mark.parametrize(
+    "xml",
+    (
+        "<ScannerInfo />",
+        "<ScannerInfo></ScannerInfo >",
+    ),
+)
+def test_xml_assembler_recognizes_structurally_complete_roots(xml: str) -> None:
+    assembler = XmlResponseAssembler()
+
+    assert assembler.feed("GSI,<XML>,") is None
+
+    assert assembler.feed(xml) == ("GSI", xml)
+    assert assembler.collecting is False
+
+
+def test_xml_assembler_accepts_exact_line_and_byte_limits() -> None:
+    lines = ("<ScannerInfo>", "<Property />", "</ScannerInfo>")
+    byte_limit = len("\n".join(lines).encode())
+    assembler = XmlResponseAssembler(
+        max_lines=len(lines),
+        max_bytes=byte_limit,
+    )
+
+    assert assembler.feed("GSI,<XML>,") is None
+    result = None
+    for line in lines:
+        result = assembler.feed(line)
+
+    assert result == ("GSI", "\n".join(lines))
+
+
+def test_xml_assembler_accepts_exact_element_and_depth_limits() -> None:
+    xml = "<ScannerInfo><Container><Leaf /></Container></ScannerInfo>"
+    assembler = XmlResponseAssembler(max_elements=3, max_depth=3)
+
+    assert assembler.feed("GSI,<XML>,") is None
+
+    assert assembler.feed(xml) == ("GSI", xml)
+
+
+@pytest.mark.parametrize("limit_kind", ["lines", "bytes"])
+def test_xml_assembler_rejects_limit_and_recovers_without_payload(
+    limit_kind: str,
+) -> None:
+    private_line = "PRIVATE SCANNER XML CONTENT"
+    assembler = XmlResponseAssembler(
+        max_lines=1 if limit_kind == "lines" else 10,
+        max_bytes=20 if limit_kind == "bytes" else 1_000,
+    )
+    assert assembler.feed("GSI,<XML>,") is None
+
+    with pytest.raises(ProtocolError, match="configured limit") as caught:
+        if limit_kind == "lines":
+            assert assembler.feed("<ScannerInfo>") is None
+            assembler.feed(private_line)
+        else:
+            assembler.feed(private_line)
+
+    assert private_line not in str(caught.value)
+    assert assembler.collecting is False
+    assert assembler.feed("GSI,<XML>,") is None
+    assert assembler.feed("<ScannerInfo/>") == (
+        "GSI",
+        "<ScannerInfo/>",
+    )
+
+
+@pytest.mark.parametrize(
+    ("constructor_options", "xml"),
+    (
+        (
+            {"max_elements": 2},
+            "<ScannerInfo><Container><Leaf /></Container></ScannerInfo>",
+        ),
+        (
+            {"max_depth": 2},
+            "<ScannerInfo><Container><Leaf /></Container></ScannerInfo>",
+        ),
+    ),
+)
+def test_xml_assembler_bounds_elements_and_depth(
+    constructor_options: dict[str, int],
+    xml: str,
+) -> None:
+    assembler = XmlResponseAssembler(**constructor_options)
+    assert assembler.feed("GSI,<XML>,") is None
+
+    with pytest.raises(ProtocolError, match="configured limit"):
+        assembler.feed(xml)
+
+    assert assembler.collecting is False
+
+
+def test_xml_assembler_bounds_elements_inside_one_large_line() -> None:
+    assembler = XmlResponseAssembler(max_elements=10)
+    xml = "<ScannerInfo>" + "<A/>" * 20_000 + "</ScannerInfo>"
+    assert assembler.feed("GSI,<XML>,") is None
+
+    with pytest.raises(ProtocolError, match="configured limit"):
+        assembler.feed(xml)
+
+    assert assembler.collecting is False
+
+
+def test_xml_assembler_expires_during_continuous_input_and_recovers() -> None:
+    now = 100.0
+    assembler = XmlResponseAssembler(
+        max_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    assert assembler.feed("GSI,<XML>,") is None
+    assert assembler.feed("<ScannerInfo>") is None
+    now = 105.0
+
+    with pytest.raises(ProtocolError, match="lifetime limit"):
+        assembler.feed("PRIVATE SCANNER XML CONTENT")
+
+    assert assembler.collecting is False
+    assert assembler.feed("GSI,<XML>,") is None
+    assert assembler.feed("<ScannerInfo/>") is not None
+
+
+def test_xml_assembler_idle_watchdog_clears_state_and_marks_late_xml_consumed() -> None:
+    expired = threading.Event()
+    assembler = XmlResponseAssembler(
+        max_lifetime=0.01,
+        expiration_handler=lambda _error: expired.set(),
+    )
+    assert assembler.feed("GSI,<XML>,") is None
+    assert assembler.feed("<ScannerInfo>") is None
+
+    assert expired.wait(1.0)
+    assert assembler.collecting is False
+    result = assembler.feed_with_status('<Property Private="discard" />')
+
+    assert result.expired is True
+    assert result.report_expiration is False
+    assert result.consumed is True
+    assert result.response is None
+
+
+def test_xml_assembler_accepts_document_just_before_lifetime_limit() -> None:
+    now = 100.0
+    xml = "<ScannerInfo />"
+    assembler = XmlResponseAssembler(
+        max_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    assert assembler.feed("GSI,<XML>,") is None
+    now = 104.999
+
+    assert assembler.feed(xml) == ("GSI", xml)
+
+
+@pytest.mark.parametrize(
+    ("argument", "value", "error"),
+    (
+        ("max_lines", 0, ValueError),
+        ("max_lines", 1.5, TypeError),
+        ("max_bytes", 0, ValueError),
+        ("max_bytes", True, TypeError),
+        ("max_elements", float("inf"), TypeError),
+        ("max_depth", 0, ValueError),
+        ("max_lifetime", float("inf"), ValueError),
+        ("max_lifetime", "10", TypeError),
+    ),
+)
+def test_xml_assembler_rejects_invalid_limits(
+    argument: str,
+    value: object,
+    error: type[Exception],
+) -> None:
+    with pytest.raises(error):
+        XmlResponseAssembler(**{argument: value})
+
+
+def test_xml_assembler_rejects_integer_lifetime_too_large_for_timer() -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        XmlResponseAssembler(max_lifetime=10**10_000)
 
 
 def test_scanner_info_parser() -> None:

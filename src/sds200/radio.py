@@ -239,8 +239,10 @@ class SDSScanner:
         self.glt_parser = GltParser()
         self.analysis_parser = AnalysisParser()
         self.msi_parser = MsiParser()
-        self.xml_assembler = XmlResponseAssembler()
         self.events = EventBus()
+        self.xml_assembler = XmlResponseAssembler(
+            expiration_handler=self._xml_assembly_expired,
+        )
         self._analysis_publisher = AnalysisPublisher()
         self._waterfall_publisher = WaterfallPublisher()
         if isinstance(self.transport, DiagnosticControlTransport):
@@ -559,6 +561,8 @@ class SDSScanner:
         return isinstance(self.transport, UdpTransport)
 
     def connect(self) -> None:
+        if not self.connected:
+            self.xml_assembler.reset()
         self._closed.clear()
         try:
             self.transport.start(self._receive_line, self._connection_changed)
@@ -641,6 +645,7 @@ class SDSScanner:
         self._psi_active = False
         self._psi_interval_ms = None
         self.transport.stop()
+        self.xml_assembler.reset()
         self._closed.set()
 
     def __enter__(self) -> Self:
@@ -1532,7 +1537,19 @@ class SDSScanner:
     def _receive_line(self, raw: str) -> None:
         self.trace.rx(raw)
 
-        assembled = self.xml_assembler.feed(raw)
+        try:
+            feed_result = self.xml_assembler.feed_with_status(raw)
+        except ProtocolError as exc:
+            self.events.emit("protocol_error", exc)
+            return
+        if feed_result.report_expiration:
+            self.events.emit(
+                "protocol_error",
+                ProtocolError(
+                    "XML response assembly exceeded its lifetime limit."
+                ),
+            )
+        assembled = feed_result.response
         if assembled is not None:
             command, xml = assembled
             try:
@@ -1562,7 +1579,7 @@ class SDSScanner:
             self._publish(command, info)
             return
 
-        if self.xml_assembler.collecting or self.xml_assembler.recognizes_header(raw):
+        if feed_result.consumed:
             return
 
         try:
@@ -1576,6 +1593,10 @@ class SDSScanner:
         if packet.command in {"ERR", "NG"}:
             self._reject_pending(packet)
         self._publish(packet.command, response)
+
+    def _xml_assembly_expired(self, error: ProtocolError) -> None:
+        if self.connected:
+            self.events.emit("protocol_error", error)
 
     def _publish_level_state(
         self,
@@ -1659,6 +1680,7 @@ class SDSScanner:
         if not connected:
             self._psi_active = False
             self._waterfall_session.mark_interrupted()
+            self.xml_assembler.reset()
         with self._health_lock:
             if self._last_connection_state != connected:
                 self._connection_events += 1

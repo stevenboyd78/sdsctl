@@ -53,16 +53,154 @@ def test_invalid_level_response_is_rejected(raw: str) -> None:
 
 def test_status_preserves_display_lines() -> None:
     parser = PacketParser()
-    raw = (
-        "STS,00000,System Name,************************,"
-        "Channel Name,________________________,0,1,0,0,,,,0,OFF,3"
+    raw = ",".join(
+        (
+            "STS",
+            "00000",
+            "System Name",
+            "************************",
+            "Channel Name",
+            "________________________",
+            "Line 3",
+            "",
+            "Line 4",
+            "",
+            "Line 5",
+            "",
+            "0",
+            "1",
+            "0",
+            "0",
+            "",
+            "",
+            "",
+            "0",
+            "OFF",
+        )
     )
     parsed = parser.parse_typed(parser.parse_packet(raw))
     assert isinstance(parsed, StatusResponse)
     assert parsed.display_form == "00000"
     assert parsed.lines[0].text == "System Name"
     assert parsed.lines[1].text == "Channel Name"
+    assert len(parsed.lines) == 5
     assert len(parsed.reserved) == 9
+
+
+@pytest.mark.parametrize(
+    "display_form",
+    (
+        "0000",
+        "0" * 21,
+        "0000x",
+    ),
+)
+def test_status_rejects_invalid_display_form_without_exposing_it(
+    display_form: str,
+) -> None:
+    parser = PacketParser()
+    raw = f"STS,{display_form}"
+
+    with pytest.raises(ProtocolError, match="invalid display form") as caught:
+        parser.parse_typed(parser.parse_packet(raw))
+
+    assert display_form not in str(caught.value)
+    assert raw not in str(caught.value)
+
+
+def test_status_accepts_twenty_line_display_form_boundary() -> None:
+    parser = PacketParser()
+    display_form = "01" * 10
+    line_fields = tuple(
+        value
+        for line_number in range(1, 21)
+        for value in (f"Line {line_number}", "*")
+    )
+    raw = ",".join(
+        (
+            "STS",
+            display_form,
+            *line_fields,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+    )
+
+    parsed = parser.parse_typed(parser.parse_packet(raw))
+
+    assert isinstance(parsed, StatusResponse)
+    assert parsed.display_form == display_form
+    assert len(parsed.lines) == 20
+    assert parsed.lines[-1].text == "Line 20"
+    assert len(parsed.reserved) == 9
+
+
+def test_status_rejects_undocumented_seven_reserved_field_shape() -> None:
+    parser = PacketParser()
+    raw = ",".join(
+        (
+            "STS",
+            "11111",
+            "Line 1",
+            "*",
+            "Line 2",
+            "_",
+            "Line 3",
+            "",
+            "Line 4",
+            "",
+            "Line 5",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+    )
+
+    with pytest.raises(ProtocolError, match="invalid field shape") as caught:
+        parser.parse_typed(parser.parse_packet(raw))
+
+    assert raw not in str(caught.value)
+
+
+def test_status_rejects_missing_reserved_fields_without_exposing_payload() -> None:
+    parser = PacketParser()
+    raw = "STS,00000,SENSITIVE DISPLAY,MODE,0,1"
+
+    with pytest.raises(ProtocolError, match="invalid field shape") as caught:
+        parser.parse_typed(parser.parse_packet(raw))
+
+    assert "SENSITIVE" not in str(caught.value)
+    assert raw not in str(caught.value)
+
+
+def test_status_rejects_odd_display_fields_without_exposing_payload() -> None:
+    parser = PacketParser()
+    raw = (
+        "STS,00000,SENSITIVE DISPLAY,MODE,UNMATCHED,"
+        "0,1,0,0,,,,0,OFF"
+    )
+
+    with pytest.raises(
+        ProtocolError,
+        match="invalid field shape",
+    ) as caught:
+        parser.parse_typed(parser.parse_packet(raw))
+
+    assert "SENSITIVE" not in str(caught.value)
+    assert "UNMATCHED" not in str(caught.value)
+    assert raw not in str(caught.value)
 
 
 def test_waterfall_status_preserves_exact_specification_shape() -> None:

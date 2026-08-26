@@ -156,6 +156,32 @@ credentials. Supply referenced secrets through a root-owned environment file:
 sudo install -o root -g root -m 0600 /dev/null /etc/sdsctl/sdsctl.env
 ```
 
+Broadcastify source and metadata credentials cross the assigned ordinary-HTTP
+Icecast endpoint without transport encryption. Schema version 1 remote-audio
+profiles remain readable after upgrade but default to blocking future transport
+construction. A referenced false profile fails destination activation rather
+than being silently skipped. Review the assigned endpoint, then acknowledge the
+selected service-account profile if that risk is accepted:
+
+```bash
+sudo -u sdsctl sdsctl remote-audio \
+  --profiles-file /var/lib/sdsctl/.config/sds200/remote-audio-profiles.toml \
+  acknowledge-cleartext county-feed \
+  --acknowledge-cleartext-credentials
+```
+
+The atomic migration rewrites the complete document as schema version 2, sets
+only the selected profile's acknowledgement true, leaves other legacy profiles
+false, retains only environment-variable secret references, and does not display
+endpoint or credential fields. The acknowledgement does not add TLS. Restart or
+reload the daemon destination only after the profile is reviewed.
+
+Use `revoke-cleartext` with the same profile-file option to block future
+construction from the saved profile. Revocation alone does not stop an
+already-constructed worker, and an unchanged-manifest reload does not rebuild
+it. To halt an active source and metadata transport, remove its destination from
+the daemon manifest and reload, or stop the daemon.
+
 Do not place resolved credentials in the destination manifest, application
 configuration, unit file, logs, traces, or captures.
 

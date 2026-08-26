@@ -705,7 +705,16 @@ from .models import (
     ValueResponse,
     WaterfallResponse,
 )
-from .network import DEFAULT_UDP_PORT, UdpDatagramDecoder, UdpTransport
+from .network import (
+    DEFAULT_UDP_PORT,
+    MAX_XML_SEQUENCE_BYTES,
+    MAX_XML_SEQUENCE_CHILDREN,
+    MAX_XML_SEQUENCE_DEPTH,
+    MAX_XML_SEQUENCE_FRAGMENTS,
+    MAX_XML_SEQUENCE_LIFETIME,
+    UdpDatagramDecoder,
+    UdpTransport,
+)
 from .network_audio import NetworkAudioStatistics, NetworkAudioTransport
 from .pcmu import (
     PcmuPacket,
@@ -960,6 +969,8 @@ from .rtp import (
 )
 from .rtsp import (
     DEFAULT_AUDIO_PATH,
+    DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES,
+    DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES,
     DEFAULT_RTSP_PORT,
     RtpTransportInfo,
     RtspClient,
@@ -1019,6 +1030,11 @@ from .waterfall_subscriptions import (
     WaterfallSubscriptionSnapshot,
 )
 from .xml_protocol import (
+    XML_RESPONSE_DEFAULT_MAX_BYTES,
+    XML_RESPONSE_DEFAULT_MAX_DEPTH,
+    XML_RESPONSE_DEFAULT_MAX_ELEMENTS,
+    XML_RESPONSE_DEFAULT_MAX_LIFETIME,
+    XML_RESPONSE_DEFAULT_MAX_LINES,
     AnalysisParser,
     MsiParser,
 )
@@ -1256,6 +1272,8 @@ __all__ = [
     "DaemonWaterfallServerSnapshot",
     "DEFAULT_LIGHT_THEME",
     "DEFAULT_REMOTE_STREAM_TITLE_MAX_LENGTH",
+    "DEFAULT_RTSP_MAX_RESPONSE_BODY_BYTES",
+    "DEFAULT_RTSP_MAX_RESPONSE_HEADER_BYTES",
     "DEFAULT_RTSP_PORT",
     "DEFAULT_SDS_PATTERN",
     "DEFAULT_SDS200_PATTERN",
@@ -1438,6 +1456,11 @@ __all__ = [
     "LegacyConfigurationDiscovery",
     "LocalPlaybackAdapter",
     "LocalPlaybackAdapterFactory",
+    "MAX_XML_SEQUENCE_BYTES",
+    "MAX_XML_SEQUENCE_CHILDREN",
+    "MAX_XML_SEQUENCE_DEPTH",
+    "MAX_XML_SEQUENCE_FRAGMENTS",
+    "MAX_XML_SEQUENCE_LIFETIME",
     "ModelResponse",
     "MsiMenuErrorMessage",
     "MsiMenuInput",
@@ -1715,6 +1738,11 @@ __all__ = [
     "WaterfallSubscriptionClosed",
     "WaterfallSubscriptionHealth",
     "WaterfallSubscriptionSnapshot",
+    "XML_RESPONSE_DEFAULT_MAX_BYTES",
+    "XML_RESPONSE_DEFAULT_MAX_DEPTH",
+    "XML_RESPONSE_DEFAULT_MAX_ELEMENTS",
+    "XML_RESPONSE_DEFAULT_MAX_LIFETIME",
+    "XML_RESPONSE_DEFAULT_MAX_LINES",
     "capabilities_for_model",
     "classify_connection",
     "classify_scanner_screen",

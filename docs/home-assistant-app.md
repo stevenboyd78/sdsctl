@@ -751,5 +751,5 @@ This run physically qualifies the branch protocol implementation on the direct
 host path and validates safe Home Assistant ownership restoration. The branch
 code was not staged or deployed into Home Assistant OS, so this evidence does
 not claim that the new waterfall socket or polling code ran inside the 0.22.0
-App image. Home Assistant argv parity remains host-tested, and Milestone 27.3
+App image. Home Assistant argv parity remains host-tested, and Milestone 27.4
 must perform its own branch-image Ingress acceptance before closure.

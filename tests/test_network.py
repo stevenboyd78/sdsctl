@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import socket
 import threading
 import time
@@ -9,7 +10,16 @@ from pathlib import Path
 
 import pytest
 
-from sds200.network import UdpDatagramDecoder, UdpTransport
+import sds200
+from sds200.network import (
+    MAX_XML_SEQUENCE_BYTES,
+    MAX_XML_SEQUENCE_CHILDREN,
+    MAX_XML_SEQUENCE_DEPTH,
+    MAX_XML_SEQUENCE_FRAGMENTS,
+    MAX_XML_SEQUENCE_LIFETIME,
+    UdpDatagramDecoder,
+    UdpTransport,
+)
 from sds200.radio import SDS200
 from sds200.reliability import ReconnectPolicy
 from sds200.transport import TransportDiagnostic
@@ -31,6 +41,20 @@ def wait_until(predicate: Callable[[], bool], *, timeout: float = 1.0) -> None:
     while not predicate() and time.monotonic() < deadline:
         time.sleep(0.005)
     assert predicate()
+
+
+def test_xml_sequence_limit_defaults_are_public() -> None:
+    expected = {
+        "MAX_XML_SEQUENCE_BYTES": MAX_XML_SEQUENCE_BYTES,
+        "MAX_XML_SEQUENCE_CHILDREN": MAX_XML_SEQUENCE_CHILDREN,
+        "MAX_XML_SEQUENCE_DEPTH": MAX_XML_SEQUENCE_DEPTH,
+        "MAX_XML_SEQUENCE_FRAGMENTS": MAX_XML_SEQUENCE_FRAGMENTS,
+        "MAX_XML_SEQUENCE_LIFETIME": MAX_XML_SEQUENCE_LIFETIME,
+    }
+
+    for name, value in expected.items():
+        assert getattr(sds200, name) == value
+        assert name in sds200.__all__
 
 
 def test_decoder_emits_normal_command_responses() -> None:
@@ -90,6 +114,271 @@ def test_decoder_discards_xml_after_sequence_gap() -> None:
     assert decoder.feed(third) == ()
 
 
+def test_decoder_bounds_xml_sequence_fragment_count_and_recovers() -> None:
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_fragments=1,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="One" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    second = (
+        b'GSI,<XML>,<ScannerInfo><Department Name="Two" />'
+        b'<Footer No="2" EOT="1" /></ScannerInfo>'
+    )
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Recovered" />'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    assert decoder.feed(second) == ()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_limit"]
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Recovered"
+
+
+def test_decoder_bounds_xml_sequence_aggregate_source_bytes() -> None:
+    diagnostics: list[TransportDiagnostic] = []
+    first_payload = (
+        '<ScannerInfo><System Name="One" />'
+        '<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    second_payload = (
+        '<ScannerInfo><Department Name="Two" />'
+        '<Footer No="2" EOT="1" /></ScannerInfo>'
+    )
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_bytes=len(first_payload.encode("utf-8")),
+    )
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(f"GSI,<XML>,{first_payload}".encode()) == ()
+    assert decoder.feed(f"GSI,<XML>,{second_payload}".encode()) == ()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_limit"]
+    assert lines[0] == "GSI,<XML>,"
+
+
+def test_decoder_bounds_all_retained_xml_elements_and_recovers() -> None:
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_children=2,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="One"><Nested /></System>'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    second = (
+        b'GSI,<XML>,<ScannerInfo><Department Name="Two" />'
+        b'<Footer No="2" EOT="1" /></ScannerInfo>'
+    )
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><Property Sig="4" />'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    assert decoder.feed(second) == ()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_limit"]
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("Property").attrib["Sig"] == "4"
+
+
+def test_decoder_bounds_deep_xml_iteratively_and_recovers() -> None:
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_depth=64,
+    )
+    opening = "<Nested>" * 1_000
+    closing = "</Nested>" * 1_000
+    deeply_nested = (
+        "GSI,<XML>,<ScannerInfo>"
+        f"{opening}<Leaf />{closing}"
+        '<Footer No="1" EOT="1" /></ScannerInfo>'
+    ).encode()
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><Property Sig="4" />'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(deeply_nested) == ()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_limit"]
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("Property").attrib["Sig"] == "4"
+
+
+def test_decoder_accepts_xml_at_exact_depth_limit() -> None:
+    decoder = UdpDatagramDecoder(max_sequence_depth=3)
+    packet = (
+        b'GSI,<XML>,<ScannerInfo><Nested><Leaf /></Nested>'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    lines = decoder.feed(packet)
+
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("Nested/Leaf") is not None
+
+
+def test_decoder_expires_xml_sequence_by_monotonic_lifetime_and_recovers() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    recovered = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Recovered" />'
+        b'<Footer No="1" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    now = 105.0
+    decoder.expire_incomplete_sequences()
+    lines = decoder.feed(recovered)
+
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["sequence_expired"]
+    assert diagnostics[0].expected_fragment == 2
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Recovered"
+
+
+def test_footerless_complete_xml_supersedes_numbered_partial_sequence() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    complete = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Complete" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    lines = decoder.feed(complete)
+    now = 105.0
+    decoder.expire_incomplete_sequences()
+
+    assert lines[0] == "GSI,<XML>,"
+    assert ET.fromstring(lines[1]).find("System").attrib["Name"] == "Complete"
+    assert diagnostics == []
+
+
+def test_decoder_expires_xml_sequence_during_unrelated_continuous_traffic() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    now = 105.0
+
+    assert decoder.feed(b"MDL,SDS200\r") == ("MDL,SDS200",)
+    assert [diagnostic.kind for diagnostic in diagnostics] == [
+        "sequence_expired"
+    ]
+    assert diagnostics[0].command == "GSI"
+
+
+def test_decoder_expired_followup_fragment_emits_one_diagnostic() -> None:
+    now = 100.0
+    diagnostics: list[TransportDiagnostic] = []
+    decoder = UdpDatagramDecoder(
+        diagnostic_handler=diagnostics.append,
+        max_sequence_lifetime=5.0,
+        monotonic=lambda: now,
+    )
+    first = (
+        b'GSI,<XML>,<ScannerInfo><System Name="Stale" />'
+        b'<Footer No="1" EOT="0" /></ScannerInfo>'
+    )
+    late_second = (
+        b'GSI,<XML>,<ScannerInfo><Department Name="Late" />'
+        b'<Footer No="2" EOT="1" /></ScannerInfo>'
+    )
+
+    assert decoder.feed(first) == ()
+    now = 105.0
+
+    assert decoder.feed(late_second) == ()
+    assert [diagnostic.kind for diagnostic in diagnostics] == [
+        "sequence_expired"
+    ]
+    assert diagnostics[0].command == "GSI"
+
+
+@pytest.mark.parametrize(
+    ("argument", "value", "message"),
+    [
+        ("max_sequence_fragments", 0, "fragments"),
+        ("max_sequence_children", 0, "children"),
+        ("max_sequence_depth", 0, "depth"),
+        ("max_sequence_bytes", 0, "bytes"),
+        ("max_sequence_lifetime", float("inf"), "lifetime"),
+    ],
+)
+def test_decoder_rejects_invalid_xml_sequence_limits(
+    argument: str,
+    value: int | float,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        UdpDatagramDecoder(**{argument: value})
+
+
+@pytest.mark.parametrize(
+    ("argument", "value", "message"),
+    [
+        ("max_sequence_fragments", True, "fragments"),
+        ("max_sequence_fragments", 1.5, "fragments"),
+        ("max_sequence_children", float("inf"), "children"),
+        ("max_sequence_depth", 1.5, "depth"),
+        ("max_sequence_bytes", float("nan"), "bytes"),
+        ("max_sequence_lifetime", True, "lifetime"),
+        ("max_sequence_lifetime", "10", "lifetime"),
+    ],
+)
+def test_decoder_rejects_non_numeric_or_non_integer_xml_sequence_limits(
+    argument: str,
+    value: object,
+    message: str,
+) -> None:
+    with pytest.raises(TypeError, match=message):
+        UdpDatagramDecoder(**{argument: value})
+
+
 def test_udp_transport_sends_cr_terminated_command_and_receives_response() -> None:
     fake = FakeDatagramSocket()
     factory = FakeDatagramSocketFactory(fake)
@@ -112,6 +401,54 @@ def test_udp_transport_sends_cr_terminated_command_and_receives_response() -> No
     assert fake.bound is None
     assert fake.remote == ("192.0.2.25", 50536)
     assert fake.sent == [b"MDL\r"]
+
+
+def test_udp_transport_isolates_and_redacts_application_handler_errors(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakeDatagramSocket()
+    diagnostics: list[TransportDiagnostic] = []
+    received: list[str] = []
+    private_line = "PRIVATE SYSTEM ALPHA"
+    private_error = "private callback failure"
+
+    def handler(line: str) -> None:
+        if line == private_line:
+            raise RuntimeError(private_error)
+        received.append(line)
+
+    transport = UdpTransport(
+        "192.0.2.25",
+        socket_factory=FakeDatagramSocketFactory(fake),
+        reconnect=False,
+    )
+    transport.set_diagnostic_handler(diagnostics.append)
+
+    with caplog.at_level(logging.DEBUG, logger="sds200.network"):
+        transport.start(handler)
+        try:
+            fake.feed(f"{private_line}\rMDL,SDS200\r".encode())
+            fake.feed(b"VER,Version 1.26.01\r")
+            wait_until(
+                lambda: received == ["MDL,SDS200", "VER,Version 1.26.01"]
+            )
+        finally:
+            transport.stop()
+
+    statistics = transport.statistics
+    assert statistics["handler_errors"] == 1
+    assert [diagnostic.kind for diagnostic in diagnostics] == ["handler_error"]
+    assert diagnostics[0].endpoint == "udp://192.0.2.25:50536"
+    evidence = "\n".join(
+        (
+            caplog.text,
+            diagnostics[0].message,
+            str(statistics["last_diagnostic"]),
+        )
+    )
+    assert "RuntimeError" in evidence
+    assert private_line not in evidence
+    assert private_error not in evidence
 
 
 def test_udp_transport_resolves_specific_address_for_explicit_local_port() -> None:

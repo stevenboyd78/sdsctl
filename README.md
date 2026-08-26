@@ -58,10 +58,12 @@ information in this image represents a real system.*
   both the Textual TUI and foreground daemon ownership runtime
 - JSON Lines events for connection, retry, failover, and state changes
 - Discovery-based repair for stale USB paths and scanner IP addresses
-- Hardware-validated SDS200 network audio over RTSP/RTP
+- Hardware-validated SDS200 network audio over RTSP/RTP with bounded response
+  framing and deterministic framing, read, and CSeq-failure reset
 - Native G.711 mu-law decoding with independently buffered PCM destinations
 - Versioned Broadcastify destination profiles with environment-backed secret
-  references and validated adapter conversion
+  references, safe legacy migration, explicit ordinary-HTTP credential-risk
+  acknowledgement, and validated adapter conversion
 - Optional renderer-neutral live stream metadata with newest-value buffering,
   duplicate suppression, rate limiting, and Broadcastify-compatible alpha-tag
   updates isolated from PSI and PCM delivery
@@ -101,7 +103,9 @@ information in this image represents a real system.*
   accepted RTP payloads, continuity metadata, and independent client-loss counters
 - Optional live playback through the local default or selected audio output device
 - Simultaneous local playback and streaming PCM WAV recording from one RTSP session
-- UDP XML fragment validation, statistics, and bounded retries
+- UDP XML fragment, retained-element, nesting-depth, aggregate-byte, and lifetime
+  bounds plus bounded structural XML response assembly, recovery statistics,
+  bounded retries, and isolated callback-failure telemetry
 - Bash and Zsh tab completion
 - Strict MyPy typing, Ruff checks, and hardware-independent tests
 

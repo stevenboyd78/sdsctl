@@ -191,6 +191,7 @@ def config(**overrides: object) -> BroadcastifyConfig:
         "socket_timeout": 1.0,
         "encoder_stop_timeout": 0.1,
         "stop_timeout": 1.0,
+        "acknowledge_cleartext_credentials": True,
     }
     values.update(overrides)
     return BroadcastifyConfig(**values)
@@ -228,6 +229,91 @@ def test_broadcastify_config_builds_fixed_profile_and_remote_secret() -> None:
             "SDS200_BROADCASTIFY_PASSWORD"
         )
     }
+
+
+def test_broadcastify_config_requires_boolean_cleartext_acknowledgement() -> None:
+    with pytest.raises(TypeError, match="acknowledgement must be a boolean"):
+        config(acknowledge_cleartext_credentials="yes")
+
+
+def test_broadcastify_config_rejects_terminal_control_characters() -> None:
+    with pytest.raises(ValueError, match="control characters"):
+        config(name="safe\x1b[2Jspoofed")
+
+
+def test_broadcastify_factories_reject_unacknowledged_cleartext_transport() -> None:
+    socket_calls: list[tuple[tuple[str, int], float]] = []
+    secret = "resolved-secret-must-not-appear"
+    feed = config(
+        server="private-feed.example.test",
+        mount="/private-mount",
+        password=EnvironmentSecret("PRIVATE_BROADCASTIFY_SECRET"),
+        acknowledge_cleartext_credentials=False,
+    )
+
+    def socket_factory(
+        address: tuple[str, int],
+        timeout: float,
+    ) -> FakeSocket:
+        socket_calls.append((address, timeout))
+        return FakeSocket()
+
+    errors: list[AudioOutputError] = []
+    for create_transport in (
+        lambda: create_broadcastify_sink(
+            feed,
+            environ={"PRIVATE_BROADCASTIFY_SECRET": secret},
+            socket_factory=socket_factory,
+        ),
+        lambda: create_broadcastify_metadata_publisher(
+            feed,
+            environ={"PRIVATE_BROADCASTIFY_SECRET": secret},
+            socket_factory=socket_factory,
+        ),
+    ):
+        with pytest.raises(AudioOutputError) as raised:
+            create_transport()
+        errors.append(raised.value)
+
+    assert socket_calls == []
+    for error in errors:
+        diagnostic = str(error)
+        assert "ordinary HTTP" in diagnostic
+        assert "acknowledge_cleartext_credentials=true" in diagnostic
+        assert secret not in diagnostic
+        assert "PRIVATE_BROADCASTIFY_SECRET" not in diagnostic
+        assert feed.server not in diagnostic
+        assert feed.mount not in diagnostic
+
+
+def test_direct_broadcastify_transports_enforce_cleartext_policy_before_io() -> None:
+    socket_calls = 0
+    feed = config(acknowledge_cleartext_credentials=False)
+
+    def socket_factory(
+        address: tuple[str, int],
+        timeout: float,
+    ) -> FakeSocket:
+        nonlocal socket_calls
+        del address, timeout
+        socket_calls += 1
+        return FakeSocket()
+
+    with pytest.raises(AudioOutputError, match="ordinary HTTP"):
+        BroadcastifyConnection(
+            feed,
+            "source-secret",
+            socket_factory=socket_factory,
+        )
+    with pytest.raises(AudioOutputError, match="ordinary HTTP"):
+        BroadcastifyMetadataPublication(
+            feed,
+            "source-secret",
+            stream_metadata(),
+            socket_factory=socket_factory,
+        )
+
+    assert socket_calls == 0
 
 
 @pytest.mark.parametrize("port", [0, 443, 8443])

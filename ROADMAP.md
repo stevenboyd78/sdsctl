@@ -11,77 +11,50 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.3 — Responsive theme-aware web waterfall workspace
+### Milestone 27.2.1 — Reviewed network and protocol hardening
 
-Milestone 27.2 is closed with a physically qualified, renderer-neutral text-
-waterfall data plane. A LAN-connected SDS200 running firmware 1.26.01 returned
-the typed `GST` checkpoint, a one-field `PWF,OK` response, and 240-value `GWF`
-frames with the specification-defined trailing separator. On this firmware,
-`GWF,1,ON` is a one-frame get rather than sustained publication, so the single
-daemon-owned session now polls it at a conservative 250 ms interval while demand
-exists and tolerates fewer than three consecutive misses.
+Milestone 27.2 is closed with its physically qualified waterfall data plane and
+must not be amended with unrelated review work. Milestone 27.2.1 independently
+reproduces and closes the bounded network, parser, and credential-handling
+findings from the post-milestone implementation review. The review package is
+evidence rather than implementation authority, and its unexecuted draft patch
+must not be applied wholesale.
 
-Time- and record-bounded physical runs validated repeated and overlapping local
-clients, ordered isolated fanout, zero observed client loss or overflow,
-interleaved PSI, scanner reconnect with interrupted/starting/running recovery,
-daemon restart, last-client stop, both cleanup wires, private socket removal,
-and return to normal scanning. The repository Home Assistant App was stopped to
-preserve one scanner owner during direct branch qualification, then restored and
-verified through its authenticated Ingress dashboard and live MQTT entities.
-Raw programming and frequency data remain outside the repository.
+Bound RTSP response headers and declared bodies before untrusted growth, close
+or reset a failed RTSP exchange deterministically, and cover exact-limit,
+boundary-straddling, malformed-length, and over-limit behavior. Bound fragmented
+XML assembly by fragment count, aggregate source bytes, child count, and
+monotonic lifetime, with deterministic sequence discard and later recovery.
 
-Milestone 27.3 integrates that private local stream into the existing web
-service without changing the trust boundary. The web process may connect to
-`waterfall.sock` only after the current session or Home Assistant Ingress
-authentication succeeds, and it must expose waterfall records only through a
-same-origin, authenticated, size-bounded streaming route. A browser must never
-receive the Unix socket path, open another scanner transport, or send `GST`,
-`PWF`, or `GWF` commands. Opening the workspace creates demand; hiding,
-navigating away, signing out, disconnecting, or shutting down releases it
-deterministically so the last consumer triggers scanner cleanup.
+Isolate unexpected UDP application-callback failures so one rejected line
+cannot terminate the reader. Record bounded failure telemetry and a redacted
+diagnostic without logging packet contents. Reject structurally odd STS display-
+field collections without including raw scanner display data in the resulting
+error.
 
-Render the 240-bin frames with a bounded Canvas-based spectrum and
-rolling-waterfall surface rather than a 240-cell table. Canvas is the appropriate
-high-frequency raster boundary, while adjacent semantic HTML must expose
-connection state, uncalibrated/relative-data labeling, GST context, frame rate,
-frame age, sequence, cumulative queue loss, overflow, poll failures, and session
-transitions. Malformed, non-finite, incomplete, oversized, or out-of-order data
-must fail closed without freezing the dashboard or retaining stale live state.
+Treat Broadcastify source and metadata credentials as cleartext whenever the
+configured provider endpoint uses ordinary HTTP. Require explicit operator
+acknowledgement of that risk unless a provider-supported TLS source endpoint has
+been independently verified. Do not silently wrap a documented plaintext port
+in TLS or claim transport confidentiality without provider evidence.
 
-The visualization may scale observed numeric values into a clearly labeled
-relative display but must not claim calibrated power, dB, signal strength, or
-documented FFT magnitude semantics. Preserve the raw 240 strings below that
-presentation boundary. Use lower, center, upper, and marker frequency metadata
-only when their typed GST fields are structurally valid; otherwise show bin
-position without inventing an RF axis. Do not derive scanner tuning or mode
-navigation from pointer or touch input.
+Record the two rejected review recommendations explicitly. The current
+descriptor-relative theme copy, stable file-identity checks, private staging,
+and source/staged digest comparison already close the reported theme race. RTP
+padding must continue to follow RFC 3550, in which the final padding octet gives
+the padding count, rather than requiring every padding octet to repeat that
+count.
 
-Make the workspace responsive through the established modular web-theme token
-contract. It must fit the active viewport up to full screen without document or
-panel scrolling at representative 390x844 phone, 800x480 compact landscape,
-and 1920x1080 desktop sizes. Theme changes must recolor both CSS and Canvas
-content immediately without restarting the stream. Include keyboard-accessible
-pause/resume display, clear-history, and full-screen controls; reduced-motion,
-high-contrast, resize, visibility, reconnect, and empty/error states must remain
-usable. Display pause may freeze rendering but must not be described as pausing
-the scanner protocol.
+Acceptance must cover RTSP exact and one-byte-over limits, delimiter receive
+boundaries, XML aggregate and expiry limits, recovery after every rejection, a
+callback exception followed by later valid datagrams, redacted malformed STS
+handling, Broadcastify migration and risk-acknowledgement behavior, credential-
+free diagnostics, documentation, distribution contents, and the complete
+static and test suite. Existing scanner control, PSI, RTSP/RTP audio, daemon
+ownership, Home Assistant packaging, and waterfall behavior must not regress.
 
-Acceptance must cover authenticated route denial, Ingress prefixing, demand and
-last-consumer cleanup, strict stream validation, reconnect and sequence-gap
-handling, bounded rolling history, resize and device-pixel-ratio behavior,
-theme switching, accessibility status, background-tab cleanup, browser and
-daemon restart, responsive viewport references, existing dashboard/audio/
-recording regression behavior, documentation, distribution builds, and the
-complete static and test suite. Physical acceptance must use the same SDS200
-single-owner guard and confirm normal scanner and repository App restoration.
-
-Do not add binary `GW2`, high-rate MQTT entities, public waterfall sockets,
-persistent waterfall history, calibrated FFT or RF-power claims, scanner tuning,
-Waterfall-mode navigation, automatic scanner-screen switching, a Home Assistant
-waterfall card, TUI/GUI rendering, Internet-facing access, or new third-party
-JavaScript dependencies. Later milestones may reuse this renderer contract in
-other interfaces only after their own lifecycle and performance boundaries are
-defined.
+Do not add a waterfall renderer, dashboard layout change, new theme, new scanner
+command, remote provider, or unverified Broadcastify TLS endpoint.
 
 ## Deferred hardware validation
 
@@ -640,7 +613,7 @@ is collected.
   publication, public artifact verification, clean-install validation, and
   repository-managed Home Assistant OS acceptance.
 
-### Milestone 27 — Adaptive scanner screens and waterfall workspace
+### Milestone 27 — Adaptive scanner screens, hardening, and waterfall workspace
 
 - Milestone 27.1: evidence-backed screen-profile parity and opt-in automatic
   renderer selection across web, Home Assistant, and terminal interfaces.
@@ -653,8 +626,165 @@ is collected.
   one daemon-owned bounded `PWF`/recurring-`GWF` session with private local
   fanout, transient-poll tolerance, reconnect/restart recovery, deterministic
   cleanup, and normal-scanner/Home Assistant ownership restoration.
-- Milestone 27.3: responsive theme-aware web spectrum and rolling-waterfall
-  workspace with viewport-fit full-screen presentation and loss telemetry.
+- Milestone 27.2.1: independently reproduced network and protocol hardening for
+  bounded RTSP and fragmented XML, isolated UDP callbacks, strict redacted STS
+  structure, and explicit Broadcastify cleartext-credential acknowledgement.
+- Milestone 27.2.2: audio lifecycle and release-integrity hardening, including
+  nonblocking per-sink ownership, safe single-owner WAV finalization, current
+  version documentation, reviewed workflow and image pins, and a measured
+  non-regressive coverage floor.
+- Milestone 27.3: one responsive viewport-owned web workspace, with the stable
+  system-adaptive `system` default and fallback theme redesigned around the
+  existing scanner-display hierarchy and a modular original Pip-Boy-inspired
+  built-in web theme. Every built-in theme uses the shared accessible Scanner,
+  Controls, Audio, Recordings, and Diagnostics panes without document or active-
+  pane scrolling at 390x844, 800x480, 1366x768, and 1920x1080 reference sizes.
+- Milestone 27.4: responsive theme-aware web spectrum and rolling-waterfall
+  workspace inside the shared viewport shell, with authenticated bounded demand,
+  immediate CSS/Canvas recoloring, relative-data labeling, and loss telemetry.
+
+#### Planned Milestone 27.3 contract
+
+Milestone 27.3 converts the existing web dashboard into one responsive viewport-
+owned workspace while preserving its authoritative daemon-client boundary,
+authenticated session and Home Assistant Ingress behavior, all existing fields
+and controls, browser audio, recording workflows, and theme lifecycle.
+
+Keep `system` as the stable theme ID, picker order zero, browser-local default,
+and safe fallback so existing stored selections and managed-theme failure
+behavior require no migration. Redesign its presentation around the established
+SDS200 Display card hierarchy: one prominent scanner-display pane with Simple,
+Detail, Search/Close Call, Weather, and Tone-Out presentations driven by the
+existing normalized screen kind and the same configurable scan fallback. Build
+that presentation in the web renderer; do not load the Home Assistant custom-
+element module or duplicate Home Assistant entity state.
+
+The System presentation remains system-adaptive for light and dark preferences
+while using scanner-display proportions, hierarchy, status strip, and mode-aware
+field selection. Keep the complete web feature set reachable through one shared
+keyboard-accessible pane model rather than permanently hiding it or shrinking it
+below readability. Scanner, Controls, Audio, Recordings, and Diagnostics panes
+use semantic HTML, explicit labels, predictable focus movement, and browser-
+local presentation state. The future Waterfall pane may be reserved structurally
+but must not connect to the daemon or render waterfall data in this milestone.
+
+Add one built-in package under `themes/web/pip-boy-inspired/` with stable ID
+`pip-boy-inspired`, picker label `Pip-Boy-inspired`, and order 50 after Amateur
+Radio. Use an original retro-futurist field-terminal presentation with phosphor-
+green or amber semantic tokens, restrained CRT depth, grid or radar
+instrumentation, scanline effects, and hardware-console framing. Do not use
+`Fallout` in the package ID or copy game logos, character or corporate artwork,
+screenshots, sounds, proprietary fonts, copied hardware geometry, or other game
+assets. The package remains local declarative CSS under the existing manifest,
+CSP, digest, and managed-theme rules.
+
+Apply the same shared viewport shell to System, LCARS-inspired, Matrix-inspired,
+First Responder, Amateur Radio, Pip-Boy-inspired, and valid managed web themes.
+At normal browser zoom, the document and active pane must fit without horizontal
+or vertical scrolling at 390x844, 800x480, 1366x768, and 1920x1080, and scale
+cleanly to larger full-screen viewports. Information that cannot fit concurrently
+must remain available through explicit pane or page controls rather than being
+clipped, reduced below readability, or placed in an unannounced scroll region.
+At user text enlargement or browser zoom, accessibility and content reachability
+take precedence over the decorative no-scroll composition.
+
+Theme switching must preserve the selected pane, live scanner state, form and
+control state, browser audio, recording state, and focus meaning. System
+fallback, first-paint selection, managed-theme activation, same-origin delivery,
+CSP, `nosniff`, reduced-motion, forced-colors/high-contrast behavior, and state
+meaning independent of color must remain intact.
+
+Acceptance must cover every automatic scanner screen transition, Simple and
+Detail scan fallback, configured and zero/detect Tone-Out values, all existing
+controls and all 35 radio fields, recording pagination, pane navigation by
+pointer and keyboard, focus restoration, direct authenticated web sessions,
+Home Assistant Ingress prefixing, sign-out and restart, every built-in theme at
+every reference viewport, device-pixel-ratio and resize changes, reduced motion,
+high contrast, missing and mutated managed-theme fallback, gallery/reference
+captures, package contents, documentation, distribution builds, and the complete
+static and test suite. Physical acceptance must use the existing SDS200 single-
+owner guard and restore the repository Home Assistant App and normal scanning.
+
+Do not add copied manufacturer or game assets, theme JavaScript, remote fonts or
+resources, automatic theme downloads, a GUI theme, a new Home Assistant card, a
+TUI layout, a waterfall daemon consumer, scanner mode navigation, or theme-owned
+scanner controls.
+
+#### Planned Milestone 27.4 contract
+
+Milestone 27.2 is closed with a physically qualified, renderer-neutral text-
+waterfall data plane. A LAN-connected SDS200 running firmware 1.26.01 returned
+the typed `GST` checkpoint, a one-field `PWF,OK` response, and 240-value `GWF`
+frames with the specification-defined trailing separator. On this firmware,
+`GWF,1,ON` is a one-frame get rather than sustained publication, so the single
+daemon-owned session polls it at a conservative 250 ms interval while demand
+exists and tolerates fewer than three consecutive misses.
+
+Time- and record-bounded physical runs validated repeated and overlapping local
+clients, ordered isolated fanout, zero observed client loss or overflow,
+interleaved PSI, scanner reconnect with interrupted/starting/running recovery,
+daemon restart, last-client stop, both cleanup wires, private socket removal,
+and return to normal scanning. The repository Home Assistant App was stopped to
+preserve one scanner owner during direct branch qualification, then restored and
+verified through its authenticated Ingress dashboard and live MQTT entities.
+Raw programming and frequency data remain outside the repository.
+
+Milestone 27.4 fills the shared Waterfall pane by integrating that private local
+stream into the existing web service without changing the trust boundary. The
+web process may connect to `waterfall.sock` only after the current session or
+Home Assistant Ingress authentication succeeds, and it exposes waterfall
+records only through a same-origin, authenticated, size-bounded streaming route.
+A browser must never receive the Unix socket path, open another scanner
+transport, or send `GST`, `PWF`, or `GWF` commands. Opening the workspace creates
+demand; hiding, navigating away, signing out, disconnecting, or shutting down
+releases it deterministically so the last consumer triggers scanner cleanup.
+
+Render the 240-bin frames with a bounded Canvas-based spectrum and
+rolling-waterfall surface rather than a 240-cell table. Canvas is the
+high-frequency raster boundary, while adjacent semantic HTML exposes connection state,
+uncalibrated/relative-data labeling, GST context, frame rate, frame age,
+sequence, cumulative queue loss, overflow, poll failures, and session
+transitions. Malformed, non-finite, incomplete, oversized, or out-of-order data
+must fail closed without freezing the dashboard or retaining stale live state.
+
+The visualization may scale observed numeric values into a clearly labeled
+relative display but must not claim calibrated power, dB, signal strength, or
+documented FFT magnitude semantics. Preserve the raw 240 strings below that
+presentation boundary. Use lower, center, upper, and marker frequency metadata
+only when their typed GST fields are structurally valid; otherwise show bin
+position without inventing an RF axis. Do not derive scanner tuning or mode
+navigation from pointer or touch input.
+
+Use shared semantic visualization tokens with safe base defaults. System and
+Pip-Boy-inspired provide deliberate spectrum, grid, marker, history, warning,
+and unavailable-state colors; every other built-in and managed theme remains
+legible through the defaults. Theme changes recolor both CSS and existing Canvas
+history immediately without restarting or duplicating the daemon subscription.
+The pane must fit the active viewport up to full screen without document or
+panel scrolling at 390x844, 800x480, 1366x768, and 1920x1080.
+
+Include keyboard-accessible pause/resume display, clear-history, and full-screen
+controls; reduced-motion, high-contrast, resize, visibility, reconnect, and
+empty/error states remain usable. Display pause may freeze rendering but must
+not be described as pausing the scanner protocol.
+
+Acceptance must cover authenticated route denial, Ingress prefixing, demand and
+last-consumer cleanup, strict stream validation, reconnect and sequence-gap
+handling, bounded rolling history, resize and device-pixel-ratio behavior,
+theme switching, accessibility status, background-tab cleanup, browser and
+daemon restart, responsive viewport references, existing dashboard/audio/
+recording regression behavior, documentation, distribution builds, and the
+complete static and test suite. Physical acceptance uses the SDS200 single-owner
+guard and confirms normal scanner and repository App restoration through the
+branch image.
+
+Do not add binary `GW2`, high-rate MQTT entities, public waterfall sockets,
+persistent waterfall history, calibrated FFT or RF-power claims, scanner tuning,
+Waterfall-mode navigation, automatic scanner-screen switching, a Home Assistant
+waterfall card, TUI/GUI rendering, Internet-facing access, or new third-party
+JavaScript dependencies. Later milestones may reuse this renderer contract in
+other interfaces only after their own lifecycle and performance boundaries are
+defined.
 
 ## Completed milestone groups
 

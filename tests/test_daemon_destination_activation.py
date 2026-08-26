@@ -15,7 +15,7 @@ from sds200 import (
     PcmSinkStatistics,
 )
 from sds200 import daemon_destination_activation as activation
-from sds200.exceptions import ProfileError
+from sds200.exceptions import AudioOutputError, ProfileError
 
 
 class FakeSink:
@@ -120,6 +120,7 @@ def profile() -> BroadcastifyDestinationProfile:
         server="audio.example.test",
         mount="/county",
         environment_variable="BROADCASTIFY_PASSWORD",
+        acknowledge_cleartext_credentials=True,
     )
 
 
@@ -422,6 +423,35 @@ def test_remote_profile_can_disable_metadata(
 
     assert resources.metadata_publisher is None
     assert metadata_calls == 0
+
+
+def test_remote_profile_requires_cleartext_acknowledgement_before_activation() -> None:
+    unacknowledged = BroadcastifyDestinationProfile(
+        name="private-feed",
+        server="private-feed.example.test",
+        mount="/private-mount",
+        environment_variable="PRIVATE_BROADCASTIFY_SECRET",
+    )
+    factory = DaemonDestinationFactory(
+        remote_profile_store=StubRemoteProfileStore(unacknowledged),
+        environ={"PRIVATE_BROADCASTIFY_SECRET": "do-not-report"},
+    )
+
+    with pytest.raises(AudioOutputError) as raised:
+        factory.build(
+            DaemonRemoteProfileDestination(
+                name="feed",
+                profile="private-feed",
+                publish_metadata=True,
+            )
+        )
+
+    diagnostic = str(raised.value)
+    assert "ordinary HTTP" in diagnostic
+    assert "do-not-report" not in diagnostic
+    assert "PRIVATE_BROADCASTIFY_SECRET" not in diagnostic
+    assert "private-feed.example.test" not in diagnostic
+    assert "/private-mount" not in diagnostic
 
 
 def test_remote_profile_lookup_failure_is_preserved() -> None:

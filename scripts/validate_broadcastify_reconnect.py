@@ -349,6 +349,7 @@ def _measure_decoded_audio(path: Path) -> dict[str, int | float]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,
         description="Validate Broadcastify reconnect against a local Icecast loopback."
     )
     parser.add_argument("--host", required=True, help="SDS200 IPv4 address or hostname")
@@ -369,6 +370,15 @@ def _parse_args() -> argparse.Namespace:
         type=Path,
         required=True,
         help="Directory for sanitized requests, MP3 captures, and JSON evidence",
+    )
+    parser.add_argument(
+        "--acknowledge-cleartext-credentials",
+        action="store_true",
+        required=True,
+        help=(
+            "Acknowledge that the test source credential is sent over "
+            "ordinary HTTP without transport encryption"
+        ),
     )
     return parser.parse_args()
 
@@ -411,6 +421,9 @@ def main() -> int:
             multiplier=1.0,
             max_delay=0.25,
             max_attempts=5,
+        ),
+        acknowledge_cleartext_credentials=(
+            args.acknowledge_cleartext_credentials
         ),
     )
     sink = create_broadcastify_sink(config)

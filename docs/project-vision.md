@@ -189,13 +189,26 @@ The web process remains a daemon client and does not open scanner hardware or a
 second RTSP/RTP session. The dashboard also provides capability-negotiated
 semantic scanner controls and browser-local system-adaptive, LCARS-inspired,
 Matrix-inspired, First Responder, and Amateur Radio themes over one shared
-accessible structure. The four custom themes can become immersive full-screen
-desktop workstations with renderer-specific staging and instrumentation while
-compact displays reflow the same controls and state. Theme staging remains
-decorative, pointer-inert, reduced-motion aware, and independent of daemon or
-scanner state. Remaining dashboard work includes operational logs, additional
-shared branding assets, and deliberate authentication and transport-security
-design before any supported remote access.
+accessible structure. Planned work will preserve the stable `system` identity
+as the browser-local default and safe fallback while redesigning its presentation
+around the established scanner-display hierarchy and automatic screen profiles.
+One shared viewport-owned pane model will keep scanner state, controls, audio,
+recordings, diagnostics, and later the waterfall reachable without document or
+active-pane scrolling at 390x844, 800x480, 1366x768, and 1920x1080 reference
+sizes and larger full-screen viewports.
+
+A planned original Pip-Boy-inspired built-in web theme will reuse that same
+semantic workspace through the existing modular CSS package contract. It may use
+original phosphor, CRT, grid, meter, and field-terminal treatments, but must not
+include game logos, character or corporate artwork, screenshots, sounds,
+proprietary fonts, copied hardware geometry, remote resources, or theme-owned
+JavaScript. System and every built-in or valid managed web theme must use the
+same non-scrolling pane shell rather than substituting theme-owned application
+behavior. Theme staging remains decorative, pointer-inert,
+reduced-motion aware, and independent of daemon or scanner state. Remaining
+dashboard work includes operational logs, additional shared branding assets,
+and deliberate authentication and transport-security design before any
+supported remote access.
 
 ### Home Assistant
 
