@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import math
 import socket
 import threading
+import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
 from contextlib import suppress
@@ -31,7 +33,17 @@ DEFAULT_UDP_PORT = 50536
 MAX_DATAGRAM_SIZE = 65535
 _XML_MARKER = ",<XML>,"
 _FOOTER_TAGS = {"Foot", "Footer"}
-_RETRYABLE_DIAGNOSTICS = {"invalid_footer", "missing_first", "sequence_gap"}
+MAX_XML_SEQUENCE_FRAGMENTS = 256
+MAX_XML_SEQUENCE_CHILDREN = 10_000
+MAX_XML_SEQUENCE_BYTES = 4 * 1024 * 1024
+MAX_XML_SEQUENCE_LIFETIME = 10.0
+_RETRYABLE_DIAGNOSTICS = {
+    "invalid_footer",
+    "missing_first",
+    "sequence_expired",
+    "sequence_gap",
+    "sequence_limit",
+}
 
 
 class DatagramSocketLike(Protocol):
@@ -57,7 +69,11 @@ def default_datagram_socket_factory(
 class _XmlSequence:
     root_tag: str
     attributes: dict[str, str]
+    started_at: float
     children: list[ET.Element] = field(default_factory=list)
+    fragment_count: int = 0
+    child_count: int = 0
+    source_bytes: int = 0
     next_number: int = 1
 
 
@@ -83,6 +99,7 @@ class _MutableNetworkStatistics:
     last_reconnect_at: datetime | None = None
     xml_documents_completed: int = 0
     xml_fragments_dropped: int = 0
+    handler_errors: int = 0
     last_receive_at: datetime | None = None
     last_diagnostic: str | None = None
 
@@ -106,6 +123,7 @@ class _MutableNetworkStatistics:
             ),
             "xml_documents_completed": self.xml_documents_completed,
             "xml_fragments_dropped": self.xml_fragments_dropped,
+            "handler_errors": self.handler_errors,
             "last_receive_at": (
                 self.last_receive_at.isoformat()
                 if self.last_receive_at is not None
@@ -124,12 +142,34 @@ class UdpDatagramDecoder:
         *,
         diagnostic_handler: DiagnosticHandler | None = None,
         completion_handler: Callable[[str], None] | None = None,
+        max_sequence_fragments: int = MAX_XML_SEQUENCE_FRAGMENTS,
+        max_sequence_children: int = MAX_XML_SEQUENCE_CHILDREN,
+        max_sequence_bytes: int = MAX_XML_SEQUENCE_BYTES,
+        max_sequence_lifetime: float = MAX_XML_SEQUENCE_LIFETIME,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
+        if isinstance(max_sequence_fragments, bool) or max_sequence_fragments <= 0:
+            raise ValueError("Maximum XML sequence fragments must be positive.")
+        if isinstance(max_sequence_children, bool) or max_sequence_children <= 0:
+            raise ValueError("Maximum XML sequence children must be positive.")
+        if isinstance(max_sequence_bytes, bool) or max_sequence_bytes <= 0:
+            raise ValueError("Maximum XML sequence bytes must be positive.")
+        if (
+            isinstance(max_sequence_lifetime, bool)
+            or not math.isfinite(max_sequence_lifetime)
+            or max_sequence_lifetime <= 0
+        ):
+            raise ValueError("Maximum XML sequence lifetime must be finite and positive.")
         self._sequences: dict[str, _XmlSequence] = {}
         self._expected_xml_command: str | None = None
         self._stream_xml_command: str | None = None
         self._diagnostic_handler = diagnostic_handler
         self._completion_handler = completion_handler
+        self._max_sequence_fragments = max_sequence_fragments
+        self._max_sequence_children = max_sequence_children
+        self._max_sequence_bytes = max_sequence_bytes
+        self._max_sequence_lifetime = max_sequence_lifetime
+        self._monotonic = monotonic
         self._lock = threading.RLock()
 
     def reset(self) -> None:
@@ -137,6 +177,11 @@ class UdpDatagramDecoder:
             self._sequences.clear()
             self._expected_xml_command = None
             self._stream_xml_command = None
+
+    def expire_incomplete_sequences(self) -> None:
+        """Discard incomplete XML responses after their bounded lifetime."""
+        with self._lock:
+            self._expire_sequences(self._monotonic())
 
     def expect_command(self, command: str) -> None:
         """Record commands whose UDP response may be a bare XML document."""
@@ -285,11 +330,30 @@ class UdpDatagramDecoder:
 
         end_of_transmission = footer.attrib.get("EOT") == "1"
         sequence = self._sequences.get(command)
+        now = self._monotonic()
+
+        if (
+            sequence is not None
+            and now - sequence.started_at >= self._max_sequence_lifetime
+        ):
+            self._sequences.pop(command, None)
+            self._diagnose(
+                "sequence_expired",
+                f"Discarding incomplete {command} XML response: sequence lifetime "
+                "expired",
+                command=command,
+                expected_fragment=sequence.next_number,
+                received_fragment=number,
+            )
+            sequence = None
+            if number != 1:
+                return _XmlDecodeResult()
 
         if number == 1:
             sequence = _XmlSequence(
                 root_tag=root.tag,
                 attributes=dict(root.attrib),
+                started_at=now,
             )
             self._sequences[command] = sequence
         elif sequence is None:
@@ -315,7 +379,32 @@ class UdpDatagramDecoder:
             self._sequences.pop(command, None)
             return _XmlDecodeResult()
 
-        sequence.children.extend(list(root))
+        fragment_children = list(root)
+        fragment_child_count = sum(
+            1 for child in fragment_children for _element in child.iter()
+        )
+        fragment_bytes = len(payload.encode("utf-8"))
+        if (
+            sequence.fragment_count + 1 > self._max_sequence_fragments
+            or sequence.child_count + fragment_child_count
+            > self._max_sequence_children
+            or sequence.source_bytes + fragment_bytes > self._max_sequence_bytes
+        ):
+            self._sequences.pop(command, None)
+            self._diagnose(
+                "sequence_limit",
+                f"Discarding incomplete {command} XML response: sequence exceeded "
+                "its fragment, element, or byte limit",
+                command=command,
+                expected_fragment=sequence.next_number,
+                received_fragment=number,
+            )
+            return _XmlDecodeResult()
+
+        sequence.children.extend(fragment_children)
+        sequence.fragment_count += 1
+        sequence.child_count += fragment_child_count
+        sequence.source_bytes += fragment_bytes
         sequence.next_number = number + 1
         if not end_of_transmission:
             return _XmlDecodeResult()
@@ -328,6 +417,22 @@ class UdpDatagramDecoder:
             (f"{command}{_XML_MARKER}", xml),
             completed=True,
         )
+
+    def _expire_sequences(self, now: float) -> None:
+        expired = tuple(
+            (command, sequence)
+            for command, sequence in self._sequences.items()
+            if now - sequence.started_at >= self._max_sequence_lifetime
+        )
+        for command, sequence in expired:
+            self._sequences.pop(command, None)
+            self._diagnose(
+                "sequence_expired",
+                f"Discarding incomplete {command} XML response: sequence lifetime "
+                "expired",
+                command=command,
+                expected_fragment=sequence.next_number,
+            )
 
     @staticmethod
     def _remove_footer(root: ET.Element) -> ET.Element | None:
@@ -351,7 +456,7 @@ class UdpDatagramDecoder:
         if number is None or number <= 0:
             self._diagnose(
                 "invalid_footer",
-                f"Discarding {command} XML fragment with invalid Footer No={raw_number!r}",
+                f"Discarding {command} XML fragment with an invalid footer number",
                 command=command,
                 received_fragment=number,
             )
@@ -652,6 +757,34 @@ class UdpTransport:
         with self._statistics_lock:
             self._mutable_statistics.xml_documents_completed += 1
 
+    def _deliver_line(self, line: str) -> None:
+        handler = self._handler
+        if handler is None:
+            return
+        try:
+            handler(line)
+        except Exception as exc:
+            exception_name = type(exc).__name__
+            message = (
+                "UDP application handler raised "
+                f"{exception_name}; decoded line was discarded"
+            )
+            with self._statistics_lock:
+                self._mutable_statistics.handler_errors += 1
+                self._mutable_statistics.last_diagnostic = message
+            logger.warning(
+                "UDP application handler raised %s for %s; decoded line discarded",
+                exception_name,
+                self.endpoint,
+            )
+            self._emit_diagnostic(
+                TransportDiagnostic(
+                    kind="handler_error",
+                    endpoint=self.endpoint,
+                    message=message,
+                )
+            )
+
     def _reader_loop(self) -> None:
         while not self._stop.is_set():
             if not self.connected:
@@ -714,6 +847,7 @@ class UdpTransport:
             except TimeoutError:
                 with self._statistics_lock:
                     self._mutable_statistics.receive_timeouts += 1
+                self._decoder.expire_incomplete_sequences()
                 continue
             except OSError:
                 if self._stop.is_set():
@@ -734,8 +868,7 @@ class UdpTransport:
                 self._mutable_statistics.datagrams_received += 1
                 self._mutable_statistics.bytes_received += len(datagram)
                 self._mutable_statistics.last_receive_at = datetime.now(UTC)
-            logger.debug("RX UDP datagram %r", datagram)
+            logger.debug("RX UDP datagram (%d bytes)", len(datagram))
             for line in self._decoder.feed(datagram):
-                logger.debug("RX %s", line)
-                if self._handler is not None:
-                    self._handler(line)
+                logger.debug("RX decoded UDP line (%d characters)", len(line))
+                self._deliver_line(line)
