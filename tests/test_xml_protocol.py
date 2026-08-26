@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 
 import sds200
@@ -143,6 +145,17 @@ def test_xml_assembler_bounds_elements_and_depth(
     assert assembler.collecting is False
 
 
+def test_xml_assembler_bounds_elements_inside_one_large_line() -> None:
+    assembler = XmlResponseAssembler(max_elements=10)
+    xml = "<ScannerInfo>" + "<A/>" * 20_000 + "</ScannerInfo>"
+    assert assembler.feed("GSI,<XML>,") is None
+
+    with pytest.raises(ProtocolError, match="configured limit"):
+        assembler.feed(xml)
+
+    assert assembler.collecting is False
+
+
 def test_xml_assembler_expires_during_continuous_input_and_recovers() -> None:
     now = 100.0
     assembler = XmlResponseAssembler(
@@ -159,6 +172,25 @@ def test_xml_assembler_expires_during_continuous_input_and_recovers() -> None:
     assert assembler.collecting is False
     assert assembler.feed("GSI,<XML>,") is None
     assert assembler.feed("<ScannerInfo/>") is not None
+
+
+def test_xml_assembler_idle_watchdog_clears_state_and_marks_late_xml_consumed() -> None:
+    expired = threading.Event()
+    assembler = XmlResponseAssembler(
+        max_lifetime=0.01,
+        expiration_handler=lambda _error: expired.set(),
+    )
+    assert assembler.feed("GSI,<XML>,") is None
+    assert assembler.feed("<ScannerInfo>") is None
+
+    assert expired.wait(1.0)
+    assert assembler.collecting is False
+    result = assembler.feed_with_status('<Property Private="discard" />')
+
+    assert result.expired is True
+    assert result.report_expiration is False
+    assert result.consumed is True
+    assert result.response is None
 
 
 def test_xml_assembler_accepts_document_just_before_lifetime_limit() -> None:
@@ -194,6 +226,11 @@ def test_xml_assembler_rejects_invalid_limits(
 ) -> None:
     with pytest.raises(error):
         XmlResponseAssembler(**{argument: value})
+
+
+def test_xml_assembler_rejects_integer_lifetime_too_large_for_timer() -> None:
+    with pytest.raises(ValueError, match="finite and positive"):
+        XmlResponseAssembler(max_lifetime=10**10_000)
 
 
 def test_scanner_info_parser() -> None:

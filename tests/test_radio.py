@@ -1021,6 +1021,99 @@ def test_xml_assembly_limit_emits_redacted_error_and_recovers() -> None:
     assert radio.state.snapshot.signal == 4
 
 
+def test_disconnect_discards_partial_xml_before_ordinary_packet_recovery() -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    packets: list[Packet] = []
+    radio.events.subscribe("packet", packets.append)
+
+    radio.connect()
+    transport.feed_line("GSI,<XML>,")
+    transport.feed_line("<ScannerInfo>")
+    assert radio.xml_assembler.collecting is True
+
+    transport.set_connected(False)
+    assert radio.xml_assembler.collecting is False
+    transport.set_connected(True)
+    transport.feed_line("MDL,SDS200")
+    radio.close()
+
+    assert [packet.raw for packet in packets] == ["MDL,SDS200"]
+    assert radio.model == "SDS200"
+
+
+def test_redundant_connect_does_not_abort_in_progress_xml() -> None:
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+
+    radio.connect()
+    transport.feed_line("GSI,<XML>,")
+    transport.feed_line("<ScannerInfo>")
+    radio.connect()
+
+    assert radio.xml_assembler.collecting is True
+    transport.feed_line("</ScannerInfo>")
+    assert radio.xml_assembler.collecting is False
+    radio.close()
+
+
+def test_expired_partial_xml_does_not_swallow_next_ordinary_packet() -> None:
+    now = 100.0
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    radio.xml_assembler.reset()
+    radio.xml_assembler = XmlResponseAssembler(
+        max_lifetime=5.0,
+        monotonic=lambda: now,
+        expiration_handler=radio._xml_assembly_expired,
+    )
+    errors: list[ProtocolError] = []
+    packets: list[Packet] = []
+    radio.events.subscribe("protocol_error", errors.append)
+    radio.events.subscribe("packet", packets.append)
+
+    radio.connect()
+    transport.feed_line("GSI,<XML>,")
+    transport.feed_line("<ScannerInfo>")
+    now = 105.0
+    transport.feed_line("MDL,SDS200")
+    radio.close()
+
+    assert [str(error) for error in errors] == [
+        "XML response assembly exceeded its lifetime limit."
+    ]
+    assert [packet.raw for packet in packets] == ["MDL,SDS200"]
+    assert radio.model == "SDS200"
+
+
+def test_expired_partial_xml_discards_late_continuation_then_recovers() -> None:
+    now = 100.0
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    radio.xml_assembler.reset()
+    radio.xml_assembler = XmlResponseAssembler(
+        max_lifetime=5.0,
+        monotonic=lambda: now,
+        expiration_handler=radio._xml_assembly_expired,
+    )
+    errors: list[ProtocolError] = []
+    packets: list[Packet] = []
+    radio.events.subscribe("protocol_error", errors.append)
+    radio.events.subscribe("packet", packets.append)
+
+    radio.connect()
+    transport.feed_line("GSI,<XML>,")
+    transport.feed_line("<ScannerInfo>")
+    now = 105.0
+    transport.feed_line('<Property Private="must-not-publish" />')
+    transport.feed_line("MDL,SDS200")
+    radio.close()
+
+    assert len(errors) == 1
+    assert "must-not-publish" not in str(errors[0])
+    assert [packet.raw for packet in packets] == ["MDL,SDS200"]
+
+
 def test_system_status_start_correlates_exact_ast_ack_without_state_mutation() -> None:
     transport = FakeTransport()
     radio = SDS200.from_transport(transport)
