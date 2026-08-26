@@ -33,6 +33,7 @@ _CHARGE_PATTERN = re.compile(
     r"TEMP=\s*(?P<temperature>[+-]?\d+(?:\.\d+)?)C$",
     re.IGNORECASE,
 )
+_STS_SUPPORTED_RESERVED_FIELD_COUNTS = frozenset({7, 9})
 
 
 class PacketParser:
@@ -140,14 +141,28 @@ class PacketParser:
         display_form = self._required(packet, 0)
         payload = packet.fields[1:]
 
-        # The protocol appends nine reserved fields after a variable number of
-        # (line text, line mode) pairs.
-        reserved_count = min(9, len(payload))
-        line_fields = payload[:-reserved_count] if reserved_count else payload
-        reserved = payload[-reserved_count:] if reserved_count else ()
+        if (
+            not 5 <= len(display_form) <= 20
+            or any(value not in {"0", "1"} for value in display_form)
+        ):
+            raise ProtocolError("STS response has an invalid display form.")
+
+        # Remote Command Specification V1.02 defines nine trailing reserved
+        # fields; V2.00 defines seven. In both versions, DSP_FORM determines the
+        # exact number of (line text, line mode) pairs.
+        line_field_count = 2 * len(display_form)
+        reserved_count = len(payload) - line_field_count
+        if reserved_count not in _STS_SUPPORTED_RESERVED_FIELD_COUNTS:
+            raise ProtocolError(
+                "STS response has an invalid field shape "
+                f"({len(display_form)} display lines, "
+                f"{max(reserved_count, 0)} trailing fields)."
+            )
+        line_fields = payload[:line_field_count]
+        reserved = payload[line_field_count:]
 
         lines: list[DisplayLine] = []
-        for index in range(0, len(line_fields) - 1, 2):
+        for index in range(0, len(line_fields), 2):
             lines.append(
                 DisplayLine(
                     text=line_fields[index].replace("\t", ",").rstrip(),
