@@ -714,6 +714,8 @@ def _validate_header_text(label: str, value: str) -> None:
         raise ValueError(f"{label} must not be empty or padded.")
     if "\r" in value or "\n" in value:
         raise ValueError(f"{label} must not contain line breaks.")
+    if any(not character.isprintable() for character in value):
+        raise ValueError(f"{label} must not contain control characters.")
 
 
 def _validate_server(server: str) -> None:

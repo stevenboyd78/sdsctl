@@ -236,6 +236,11 @@ def test_broadcastify_config_requires_boolean_cleartext_acknowledgement() -> Non
         config(acknowledge_cleartext_credentials="yes")
 
 
+def test_broadcastify_config_rejects_terminal_control_characters() -> None:
+    with pytest.raises(ValueError, match="control characters"):
+        config(name="safe\x1b[2Jspoofed")
+
+
 def test_broadcastify_factories_reject_unacknowledged_cleartext_transport() -> None:
     socket_calls: list[tuple[tuple[str, int], float]] = []
     secret = "resolved-secret-must-not-appear"

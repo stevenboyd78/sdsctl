@@ -1990,6 +1990,7 @@ def build_parser(
 
     remote_audio = subparsers.add_parser(
         "remote-audio",
+        allow_abbrev=False,
         help="Inspect and migrate saved remote-audio security policy",
     )
     remote_audio.add_argument(
@@ -2008,6 +2009,7 @@ def build_parser(
     )
     remote_audio_list = remote_audio_commands.add_parser(
         "list",
+        allow_abbrev=False,
         help="List profiles and cleartext-credential acknowledgement state",
     )
     remote_audio_list.add_argument(
@@ -2017,6 +2019,7 @@ def build_parser(
     )
     remote_audio_acknowledge = remote_audio_commands.add_parser(
         "acknowledge-cleartext",
+        allow_abbrev=False,
         help="Acknowledge ordinary-HTTP credential exposure for one profile",
     )
     remote_audio_acknowledge.add_argument("name", metavar="PROFILE")
@@ -2031,7 +2034,8 @@ def build_parser(
     )
     remote_audio_revoke = remote_audio_commands.add_parser(
         "revoke-cleartext",
-        help="Disable ordinary-HTTP credential transport for one profile",
+        allow_abbrev=False,
+        help="Block future ordinary-HTTP transport construction from one profile",
     )
     remote_audio_revoke.add_argument("name", metavar="PROFILE")
 
@@ -4193,7 +4197,10 @@ def _run_remote_audio(
                     if profile.acknowledge_cleartext_credentials
                     else "acknowledgement required"
                 )
-                print(f"{profile.name:20s} {profile.kind:12s} ordinary HTTP: {status}")
+                print(
+                    f"{profile.name!r:22s} {profile.kind:12s} "
+                    f"ordinary HTTP: {status}"
+                )
         return 0
 
     if args.remote_audio_action == "acknowledge-cleartext":
@@ -4226,7 +4233,12 @@ def _run_remote_audio(
         )
         print(
             "Revoked ordinary-HTTP cleartext-credential acknowledgement for "
-            f"profile {profile.name!r}; its Broadcastify transport is disabled."
+            f"saved profile {profile.name!r}."
+        )
+        print(
+            "Future construction from this saved profile is blocked. To stop an "
+            "active transport, remove its destination from the daemon manifest "
+            "and reload, or stop the daemon."
         )
         return 0
 

@@ -30,6 +30,7 @@ ALLOWED_PORTS = {80, 8000, 8080, 8500}
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
+        allow_abbrev=False,
         description="Validate the Broadcastify adapter against an assigned live feed."
     )
     parser.add_argument("--host", required=True, help="SDS200 IPv4 address or hostname")
