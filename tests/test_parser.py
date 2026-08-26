@@ -87,6 +87,61 @@ def test_status_preserves_display_lines() -> None:
     assert len(parsed.reserved) == 9
 
 
+@pytest.mark.parametrize(
+    "display_form",
+    (
+        "0000",
+        "0" * 21,
+        "0000x",
+    ),
+)
+def test_status_rejects_invalid_display_form_without_exposing_it(
+    display_form: str,
+) -> None:
+    parser = PacketParser()
+    raw = f"STS,{display_form}"
+
+    with pytest.raises(ProtocolError, match="invalid display form") as caught:
+        parser.parse_typed(parser.parse_packet(raw))
+
+    assert display_form not in str(caught.value)
+    assert raw not in str(caught.value)
+
+
+def test_status_accepts_twenty_line_display_form_boundary() -> None:
+    parser = PacketParser()
+    display_form = "01" * 10
+    line_fields = tuple(
+        value
+        for line_number in range(1, 21)
+        for value in (f"Line {line_number}", "*")
+    )
+    raw = ",".join(
+        (
+            "STS",
+            display_form,
+            *line_fields,
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+            "",
+        )
+    )
+
+    parsed = parser.parse_typed(parser.parse_packet(raw))
+
+    assert isinstance(parsed, StatusResponse)
+    assert parsed.display_form == display_form
+    assert len(parsed.lines) == 20
+    assert parsed.lines[-1].text == "Line 20"
+    assert len(parsed.reserved) == 9
+
+
 def test_status_rejects_undocumented_seven_reserved_field_shape() -> None:
     parser = PacketParser()
     raw = ",".join(
