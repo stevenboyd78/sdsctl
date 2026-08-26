@@ -290,6 +290,42 @@ uninterpreted: no magnitude, dB, color, calibrated power, or universal firmware
 semantics are established. Raw physical captures contain scanner programming and
 frequency data and are not repository fixtures.
 
+## Milestone 27.2.1 protocol-hardening evidence
+
+Milestone 27.2.1 independently reproduced the applicable network and parser
+findings from a post-milestone review rather than treating its draft patch as
+implementation authority. Numbered UDP XML reconstruction now has explicit
+fragment, retained-element, nesting-depth, aggregate-source-byte, and
+monotonic-lifetime limits. Expiry is checked on every decoder feed and UDP
+receive timeout. Any limit, expiry, footer, or sequence failure discards the
+in-progress document, uses the existing bounded command retry where applicable,
+and permits later fragment-1 resynchronization. Once transport framing has
+delivered a line, the shared XML assembler independently bounds lines, source
+bytes, parsed elements, nesting depth, and lifetime. A single watchdog clears
+idle partial state, synchronous incremental XML parser callbacks establish
+structural completion without a retained parse tree, and disconnect resets avoid
+cross-session continuation. An unexpected decoded-line application callback
+exception is reported through countable payload-free telemetry and cannot stop
+the reader from processing later lines or datagrams.
+
+The official SDS100/SDS200 Remote Command Specification V1.02 and SDS Series
+Remote Command Specification V2.00 both define the `STS` response grammar with
+nine trailing reserved fields. V2.00 additionally states that `DSP_FORM` is a
+5- to 20-digit binary value and that its length determines the exact number of
+line-character and line-mode pairs. The typed parser therefore accepts exactly
+one text/mode pair per display-form digit followed by nine reserved fields.
+Accepted responses continue to preserve their original packet; invalid display
+forms and field shapes fail with structural, count-only diagnostics that do not
+include scanner display text.
+
+The specification evidence is the official [V1.02 SDS100/SDS200 command
+specification][uniden-command-v1-02] and [V2.00 SDS Series command
+specification][uniden-command-v2-00]. It is specification and synthetic-test
+evidence, not a new physical STS validation claim.
+
+[uniden-command-v1-02]: https://info.uniden.com/twiki/pub/UnidenMan4/SDS200FirmwareUpdate/SDS200_RemoteCommand_Specification_V1_02.pdf
+[uniden-command-v2-00]: https://info.uniden.com/twiki/pub/UnidenMan4/SDS100FirmwareUpdate/SDS_Series_RemoteCommand_Specification_V2_00.pdf
+
 ## Evidence policy
 
 Material claims must identify their strongest evidence as specification,
@@ -360,7 +396,10 @@ expectation and retry bookkeeping from the existing GSI/PSI paths to exact
 `GLT,FL`, while reconstruction remains a transport concern and GLT domain
 semantics remain above `network.py`. Milestone 24.8's fifth slice now reuses
 that same one-shot bounded-XML machinery for exact `MSI`, without changing MSI
-domain parsing or claiming physical UDP support.
+domain parsing or claiming physical UDP support. Milestone 27.2.1 subsequently
+made the production fragment, retained-element, nesting-depth, aggregate-byte,
+lifetime, discard, retry, and recovery bounds explicit and bounded the shared
+XML response assembler without changing XML domain semantics.
 
 ### Existing stream lifecycle
 

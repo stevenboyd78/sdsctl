@@ -45,6 +45,22 @@ I/O. Each sink owns its buffering and failure behavior so one destination cannot
 hold up RTP reception or another destination. This contract is also the extension
 point for future remote streaming adapters listed in [the roadmap](../ROADMAP.md).
 
+### RTSP response framing
+
+`RtspClient` accepts at most 64 KiB through the terminating `\r\n\r\n` of one
+response header and at most 4 MiB in its declared body by default. Python callers
+may select other positive integer limits with `max_response_header_bytes` and
+`max_response_body_bytes`; booleans are not accepted as integers. Each socket
+read is restricted to the remaining allowance. A header read may include
+coalesced body bytes, but an over-limit `Content-Length` is rejected before any
+additional body receive after the header is framed.
+
+Header-limit, invalid-length, body-limit, response-read, and CSeq-mismatch
+failures close and clear the RTSP client, so a later exchange requires a new
+`connect()`. Their diagnostics identify the framing failure without including
+the rejected header value or body contents. Ordinary non-success RTSP status
+responses remain a separate protocol result.
+
 ## CLI playback and recording
 
 Install the optional local-playback backend:
@@ -492,10 +508,18 @@ SDS200's `RTP-Info` starting sequence is not a reliable initialization value.
 Synthetic fixtures exercise loss, duplicate, late, malformed, wraparound, and
 backward-timestamp behavior without requiring scanner hardware.
 
+RTP padding follows [RFC 3550 section 5.1][rfc-3550-padding]: the final padding
+octet gives the number of padding octets to ignore, including itself. The RFC
+does not require preceding padding octets to repeat that value. The parser
+therefore rejects a zero or out-of-bounds padding count but deliberately accepts
+nonuniform preceding padding bytes.
+
 The RTP socket binds to the local IPv4 interface selected by the route to the
 scanner. Packets are accepted only from the source address, server port, and SSRC
 negotiated during RTSP `SETUP`; unexpected senders are counted and discarded.
 Explicit `0.0.0.0` RTP binds are rejected.
+
+[rfc-3550-padding]: https://www.rfc-editor.org/rfc/rfc3550#section-5.1
 
 ## Remote destination core
 
@@ -536,7 +560,9 @@ injected `RemoteConnectionFactory`. Adapter connections provide a prompt,
 thread-safe `interrupt()` operation so shutdown can unblock an in-flight
 `write_pcm()` before the worker finalizes the connection with `close()`. The
 Broadcastify adapter below is the first production implementation; command-line
-configuration is not available yet.
+endpoint configuration is not available. The narrow `sdsctl remote-audio`
+command family only inspects and migrates the cleartext-credential policy on
+saved profiles.
 
 ## Saved remote-audio destination profiles
 
@@ -549,13 +575,14 @@ A minimal document contains adapter identity, endpoint fields, and the name of
 the environment variable that supplies the source password:
 
 ```toml
-version = 1
+version = 2
 
 [destinations."county-feed"]
 kind = "broadcastify"
 server = "audio1.broadcastify.com"
 mount = "/replace-with-technicals-mount"
 environment_variable = "SDS200_BROADCASTIFY_PASSWORD"
+acknowledge_cleartext_credentials = false
 port = 80
 stream_name = "County Public Safety"
 ```
@@ -563,7 +590,46 @@ stream_name = "County Public Safety"
 The profile never contains the resolved password. Calling
 `to_broadcastify_config()` creates the existing validated `BroadcastifyConfig`
 with an `EnvironmentSecret` reference while preserving port, metadata, FFmpeg,
-buffering, timeout, and reconnect-policy settings:
+buffering, timeout, reconnect-policy, and acknowledgement settings. Conversion
+does not authorize transport: both source and metadata factories reject the
+configuration before secret resolution or socket use while
+`acknowledge_cleartext_credentials` is false. A daemon destination that refers
+to such a profile fails activation; it is not silently skipped.
+
+Version 1 files remain readable and are not rewritten merely by inspection.
+Every version 1 profile migrates in memory to the safe false setting. List only
+profile identity and policy state, then record the explicit acknowledgement for
+one profile if the assigned ordinary-HTTP endpoint is accepted:
+
+```bash
+sdsctl remote-audio list
+
+sdsctl remote-audio acknowledge-cleartext county-feed \
+  --acknowledge-cleartext-credentials
+```
+
+The acknowledgement command requires the exact, unabbreviated long option shown
+above. It acknowledges only the selected profile while atomically rewriting the
+complete profile document as schema version 2; other legacy profiles remain at
+the safe false setting. It never prints the endpoint, mount,
+environment-variable name, or resolved credential, and it does not encrypt the
+transport. To block future construction from the saved profile without deleting
+it:
+
+```bash
+sdsctl remote-audio revoke-cleartext county-feed
+```
+
+Revocation changes saved policy only. An already-constructed source or metadata
+worker retains its immutable acknowledged configuration. To stop an active
+daemon transport, remove its destination from the daemon manifest and reload,
+or stop the daemon. Reloading an unchanged manifest does not rebuild that
+destination, and restarting while the false profile is still referenced causes
+activation to fail rather than silently omitting the destination.
+
+Use `--profiles-file /absolute/path/remote-audio-profiles.toml` immediately
+after `remote-audio` when migrating an explicit service-account file. After the
+acknowledgement is recorded, API callers can create the existing workers:
 
 ```python
 from sds200 import (
@@ -644,7 +710,9 @@ printf '\n'
 export SDS200_BROADCASTIFY_PASSWORD
 ```
 
-Create the sink with only an environment-variable reference in Python:
+Create the sink with only an environment-variable reference in Python. Setting
+the acknowledgement to true records acceptance of the documented risk; it does
+not add TLS or otherwise protect the Authorization header:
 
 ```python
 from sds200 import (
@@ -660,6 +728,7 @@ feed = BroadcastifyConfig(
     mount="/replace-with-technicals-mount",
     password=EnvironmentSecret("SDS200_BROADCASTIFY_PASSWORD"),
     stream_name="County Public Safety",
+    acknowledge_cleartext_credentials=True,
 )
 broadcastify_sink = create_broadcastify_sink(feed)
 ```
@@ -723,11 +792,16 @@ still requires a service-account smoke test. Existing production validation
 covers source authorization, routing, encoding, and audio delivery, but not the
 new `/admin/metadata` request.
 
-Broadcastify currently documents plain Icecast source ports rather than TLS source
-endpoints. The source authorization header is therefore transported over an
-unencrypted TCP connection. Use only the server and port assigned by Broadcastify,
-protect the host running the feed, and never expose the source port or credentials
-in logs.
+Broadcastify currently documents plain Icecast source ports rather than a
+provider-supported TLS source endpoint. The source and metadata Basic
+Authorization headers are therefore transported over an unencrypted TCP
+connection. sdsctl requires explicit acknowledgement before constructing either
+transport, keeps the default false during version 1 profile migration, and emits
+credential-free policy diagnostics. The acknowledgement does not provide
+confidentiality. Use only the server and port assigned by Broadcastify, protect
+the host running the feed, and never expose the source port or credentials in
+logs. Do not substitute port 443, prepend `https://`, or otherwise assume TLS
+support without separate provider evidence.
 
 See [Broadcastify's alternative-client requirements][broadcastify-alternative]
 and [Barix Icecast source setup][broadcastify-barix] for the service-side profile.
@@ -854,12 +928,14 @@ export SDS200_BROADCASTIFY_PASSWORD="$(
 python scripts/validate_broadcastify_loopback.py \
   --host 192.168.0.251 \
   --duration 15 \
+  --acknowledge-cleartext-credentials \
   --output-dir /tmp/sds200-broadcastify-loopback
 
 python scripts/validate_broadcastify_reconnect.py \
   --host 192.168.0.251 \
   --drop-after-bytes 4096 \
   --post-reconnect-duration 10 \
+  --acknowledge-cleartext-credentials \
   --output-dir /tmp/sds200-broadcastify-reconnect
 
 unset SDS200_BROADCASTIFY_PASSWORD
@@ -901,6 +977,7 @@ export SDS200_BROADCASTIFY_PASSWORD
 python scripts/validate_broadcastify_live.py \
   --host 192.168.0.251 \
   --duration 60 \
+  --acknowledge-cleartext-credentials \
   --output /tmp/sds200-broadcastify-live-summary.json
 
 unset SDS200_BROADCASTIFY_PASSWORD

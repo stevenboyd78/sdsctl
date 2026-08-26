@@ -179,7 +179,7 @@ labels above concern human renderers, not loss from those machine-readable paths
 | --- | --- | --- | --- |
 | GCS charge status | Status/code, voltage, capacity, current, temperature, and charging predicate | Dedicated `sdsctl battery`; absent from shared state and SDS150 remains specification-only | R1/R3 |
 | System Status | Sixteen exact-string fields including system/site identity, signal, quality, activity, IDs, WACN, NAC, Color, RAN, Area, attenuation, frequencies, and P25 status | Parsed projection only; absent from shared state and every renderer | R1/R3 |
-| STS display | Display form, ordered line text/mode pairs, reserved fields, and raw packet | Dedicated `sdsctl command STS` renders the display form and ordered lines; no shared-state projection and only synthetic parser/renderer evidence | R1/R3 |
+| STS display | Display form, ordered line text/mode pairs, nine reserved fields, and raw packet | Dedicated `sdsctl command STS` rendering; V1.02/V2.00 specification-backed line shape with synthetic valid and malformed parser coverage; no shared-state projection or physical STS acceptance | R1/R3 |
 | Unknown GSI/PSI material | Raw XML, ordered/repeated nodes, attributes, `MonitorList`, `Avoid`, `RecSlot`, `LVL`, and `IFX` | Losslessly preserved but not semantically projected | R3 |
 
 Raw preservation prevents silent data loss. It does not make an unknown field

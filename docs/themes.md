@@ -59,6 +59,14 @@ collisions are rejected. The package is copied to a private same-filesystem
 staging directory, validated again, assigned private directory and file modes,
 and published by rename.
 
+Installation opens the source directory and every declared entry
+descriptor-relatively without following symlinks, requires stable file identity
+across inspection and copy, and compares the complete private-stage digest with
+the validated source digest before publication. These checks are the
+source-replacement race boundary. A pathname-only recursive directory copy is
+deliberately not substituted because it would not provide the same identity and
+digest guarantees.
+
 Replacing an existing managed identity is always explicit:
 
 ```bash

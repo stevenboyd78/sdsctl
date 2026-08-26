@@ -11,11 +11,11 @@ and the newest published prerelease only.
 | Latest prerelease | Yes |
 | Older development snapshots | No |
 
-## Network-control security
+## Scanner LAN protocol security
 
-The SDS200-only virtual serial network protocol uses unauthenticated, unencrypted UDP
-traffic. Anyone who can reach the scanner's control port may be able to send
-commands or observe responses.
+The SDS200-only virtual serial network protocol uses unauthenticated,
+unencrypted UDP traffic. Anyone who can reach the scanner's control port may be
+able to send commands or observe responses.
 
 - Keep the scanner on a trusted LAN.
 - Use firewall rules to limit access.
@@ -24,8 +24,32 @@ commands or observe responses.
 - Treat traces and debug logs as potentially sensitive.
 - Do not embed public scanner addresses or private network credentials in issues.
 
-Network audio, when implemented, will remain separate from control transport and
-will require its own threat review.
+Implemented SDS200 network audio remains separate from control transport, but
+its RTSP negotiation over TCP and RTP delivery over UDP are likewise
+unauthenticated and unencrypted. Keep the default RTSP TCP port `554` and the
+negotiated RTP receive port on the same trusted LAN or secured VPN. Do not expose
+either protocol directly to the public Internet. The Home Assistant App's fixed
+UDP `50000` mapping is a packaging-specific RTP receive-port boundary, not
+protocol authentication or encryption.
+
+## Remote-provider credentials
+
+Broadcastify currently documents ordinary-HTTP Icecast source ports. Source and
+metadata Basic credentials therefore cross the assigned provider endpoint
+without transport encryption. `sdsctl` requires an explicit per-profile
+acknowledgement before constructing either credential-bearing transport. That
+acknowledgement records acceptance of the risk; it does not add TLS, verify a
+TLS endpoint, or provide confidentiality.
+
+Revoking the saved acknowledgement blocks future construction from that profile
+but cannot mutate an already-running worker. Remove its daemon destination and
+reload, or stop the daemon, to end an active source and metadata transport.
+
+Keep the source password in an environment-backed secret reference, use only
+the endpoint assigned by Broadcastify, and do not place the resolved credential
+in application arguments, configuration, logs, traces, captures, or issues. See
+the [saved remote-audio profile guidance](docs/audio.md#saved-remote-audio-destination-profiles)
+for safe legacy migration, acknowledgement, and revocation.
 
 ## Reporting a vulnerability
 

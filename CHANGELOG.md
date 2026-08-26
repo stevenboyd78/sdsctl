@@ -20,6 +20,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Treat Broadcastify source and metadata Basic credentials as exposed whenever
+  the assigned transport uses ordinary HTTP. Source and metadata transport now
+  require an explicit operator acknowledgement, legacy remote-audio profile
+  schema version 1 loads safely with future construction blocked, schema version
+  2 persists the acknowledgement, and credential-free CLI migration can record
+  or revoke saved policy without inventing an unverified TLS endpoint.
 - Qualify the Milestone 27.2 data plane on a physical SDS200 running firmware
   1.26.01. Physical GWF records carry 240 values plus the documented trailing
   separator, and `GWF,1,ON` returns one frame rather than enabling a sustained
@@ -37,6 +43,23 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   preserving all explicit layouts. The web dashboard applies the same profile
   to activity headings and group priority without hiding any of the 35 shared
   radio fields, and the existing mode-aware terminal presentation is retained.
+
+### Security
+
+- Bound peer-controlled RTSP response framing to 64 KiB through the header
+  terminator and 4 MiB of declared body by default, reject an oversized declared
+  length before any additional body receive, close framing, read, and CSeq
+  failures deterministically, and keep rejected response contents out of framing
+  diagnostics. Numbered UDP XML reconstruction now has 256-fragment,
+  10,000-element, 64-level-depth, 4 MiB, and ten-second limits with deterministic
+  discard and recovery. After transport framing delivers a line, shared XML
+  response assembly additionally bounds lines, source bytes, parsed elements,
+  nesting depth, and lifetime; a single watchdog clears idle state, and
+  incremental parser callbacks establish structural completion instead of a
+  closing-tag suffix.
+  Decoded-line callback failures are isolated with redacted telemetry, and STS
+  parsing requires the specification-defined display shape and nine reserved
+  fields without echoing rejected display content.
 
 ## [0.22.0] - 2026-08-24
 
