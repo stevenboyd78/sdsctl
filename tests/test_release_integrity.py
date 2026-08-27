@@ -8,9 +8,7 @@ from sds200 import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = ROOT / ".github" / "workflows"
-PYTHON_BASE_DIGEST = (
-    "83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83"
-)
+PYTHON_BASE_DIGEST = "83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83"
 APPROVED_ACTIONS = {
     "actions/checkout": (
         "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -19,6 +17,10 @@ APPROVED_ACTIONS = {
     "actions/setup-python": (
         "5fda3b95a4ea91299a34e894583c3862153e4b97",
         "actions/setup-python v7.0.0",
+    ),
+    "actions/setup-node": (
+        "820762786026740c76f36085b0efc47a31fe5020",
+        "actions/setup-node v7.0.0",
     ),
     "actions/upload-artifact": (
         "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -67,11 +69,46 @@ def _read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
+def _workflow_executables(contents: str) -> tuple[str, ...]:
+    """Collect executable run lines and action references, excluding comments."""
+
+    lines = contents.splitlines()
+    executables: list[str] = []
+    for index, line in enumerate(lines):
+        uses_match = re.match(r"^\s*-?\s*uses:\s+([^#\s]+)", line)
+        if uses_match is not None:
+            executables.append(uses_match.group(1))
+
+        run_match = re.match(r"^(\s*)-?\s*run:\s*(.*?)\s*$", line)
+        if run_match is None:
+            continue
+        indentation, value = run_match.groups()
+        if value not in {"|", "|-", ">", ">-"}:
+            if value and not value.startswith("#"):
+                executables.append(value)
+            continue
+
+        run_indentation = len(indentation)
+        for command_line in lines[index + 1 :]:
+            stripped = command_line.strip()
+            if stripped and len(command_line) - len(command_line.lstrip()) <= run_indentation:
+                break
+            if stripped and not stripped.startswith("#"):
+                executables.append(stripped)
+    return tuple(executables)
+
+
+def _single_executable_index(executables: tuple[str, ...], command: str) -> int:
+    matches = tuple(index for index, observed in enumerate(executables) if observed == command)
+    assert len(matches) == 1, (command, matches, executables)
+    return matches[0]
+
+
 def test_current_status_matches_all_release_metadata() -> None:
     project = tomllib.loads(_read("pyproject.toml"))["project"]
-    readme_status = _read("README.md").split("## Project status", 1)[1].split(
-        "## Acknowledgments", 1
-    )[0]
+    readme_status = (
+        _read("README.md").split("## Project status", 1)[1].split("## Acknowledgments", 1)[0]
+    )
     status_match = re.search(r"Version `([^`]+)`", readme_status)
     app_match = re.search(
         r'^version: "([^"\n]+)"$',
@@ -123,18 +160,14 @@ def test_container_bases_share_one_reviewed_multi_architecture_digest() -> None:
 
     for relative_path in ("Dockerfile", "home-assistant/sds200/Dockerfile"):
         dockerfile = _read(relative_path)
-        from_lines = [
-            line
-            for line in dockerfile.splitlines()
-            if line.startswith("FROM ")
-        ]
+        from_lines = [line for line in dockerfile.splitlines() if line.startswith("FROM ")]
         assert from_lines == expected, relative_path
 
 
 def test_dependabot_retains_python_actions_and_both_docker_roots() -> None:
     dependabot = _read(".github/dependabot.yml")
     updates = re.findall(
-        r'^  - package-ecosystem: ([^\n]+)\n'
+        r"^  - package-ecosystem: ([^\n]+)\n"
         r'^    directory: "([^"\n]+)"\n'
         r"^    schedule:\n"
         r"^      interval: ([^\n]+)$",
@@ -154,8 +187,64 @@ def test_dependabot_retains_python_actions_and_both_docker_roots() -> None:
 def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     project = tomllib.loads(_read("pyproject.toml"))
     coverage_command = "pytest --cov=sds200 --cov-report=term-missing"
+    gallery_command = "python scripts/generate_web_dashboard_screenshots.py --verify-gallery"
+    audit_command = "node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000"
+    repeatability_command = (
+        "python scripts/generate_web_dashboard_screenshots.py --verify-repeatability "
+        "--only theme-system-1920x1080.png"
+    )
+    build_command = "python -m build"
+    sdist_gallery_command = (
+        "python scripts/generate_web_dashboard_screenshots.py --verify-sdist dist"
+    )
+    twine_command = "python -m twine check dist/*"
 
     assert project["tool"]["coverage"]["report"]["fail_under"] == 86
-    assert coverage_command in _read(".github/workflows/ci.yml")
-    assert coverage_command in _read(".github/workflows/release.yml")
+    for workflow in (".github/workflows/ci.yml", ".github/workflows/release.yml"):
+        executables = _workflow_executables(_read(workflow))
+        assert coverage_command in executables
+        ordered_commands = (
+            gallery_command,
+            audit_command,
+            repeatability_command,
+            build_command,
+            sdist_gallery_command,
+            twine_command,
+        )
+        ordered_indices = tuple(
+            _single_executable_index(executables, command) for command in ordered_commands
+        )
+        assert ordered_indices == tuple(sorted(ordered_indices)), (workflow, ordered_indices)
+
+    release_executables = _workflow_executables(_read(".github/workflows/release.yml"))
+    upload_action = "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+    assert _single_executable_index(release_executables, twine_command) < (
+        _single_executable_index(release_executables, upload_action)
+    )
     assert 'python-version: "3.14"' in _read(".github/workflows/release.yml")
+
+    releasing = _read("docs/releasing.md")
+    assert gallery_command in releasing
+    assert audit_command in releasing
+    assert repeatability_command in releasing
+    assert sdist_gallery_command in releasing
+
+
+def test_workflow_execution_parser_ignores_comments_and_labels() -> None:
+    contents = """\
+steps:
+  # run: python fake-comment.py
+  - name: python fake-label.py
+    run: |
+      # python fake-block-comment.py
+      python real-block.py
+  - run: python real-inline.py
+  # uses: fake/comment@123
+  - uses: actions/example@123
+"""
+
+    assert _workflow_executables(contents) == (
+        "python real-block.py",
+        "python real-inline.py",
+        "actions/example@123",
+    )

@@ -11,66 +11,78 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.2.2 — Audio lifecycle and release-integrity hardening
+### Milestone 27.3 — Responsive web workspace and Pip-Boy-inspired theme
 
-Milestone 27.2.1 is closed after independently reproducing and resolving the
-applicable bounded network, parser, callback-isolation, and credential-handling
-findings from the post-milestone implementation review. Milestone 27.2.2 closes
-the remaining reproduced audio-lifecycle and release-integrity findings without
-amending the physically qualified Milestone 27.2 waterfall data plane. The
-review package remains evidence rather than implementation authority, and its
-unexecuted draft patch must not be applied wholesale.
+Milestone 27.2.2 is closed after independently reproducing and resolving the
+remaining applicable audio-lifecycle and release-integrity findings from the
+post-milestone implementation review. The physically qualified Milestone 27.2
+waterfall data plane remains unchanged, and its browser renderer remains owned
+by Milestone 27.4.
 
-Move every fanout and dynamic-router subscriber behind independently owned,
-bounded PCM delivery. The RTP-facing callback and router submission path must
-never wait for arbitrary destination code. A slow destination may lose only its
-own oldest complete PCM data while healthy peers continue, with bounded queue,
-drop, and overflow telemetry. Quarantine a destination after a submission
-failure and permit recovery only after deterministic monotonic bounded
-exponential backoff, rather than retrying it on every frame. Preserve ordered
-subscriber transitions and expose exception types without audio data or error
-details.
+Milestone 27.3 converts the existing web dashboard into one responsive viewport-
+owned workspace while preserving its authoritative daemon-client boundary,
+authenticated session and Home Assistant Ingress behavior, all existing fields
+and controls, browser audio, recording workflows, and theme lifecycle.
 
-Make the WAV writer worker the sole writer and finalizer after recorder startup.
-It must drain and close exactly once on normal shutdown and close exactly once
-after a write failure. A configurable finite stop deadline may report a timeout,
-but the stopping thread must not race the live worker by closing its recorder.
-When a blocked write later completes, the worker must still finalize, and a
-later stop attempt must report the stored outcome deterministically. Failed
-thread startup must also close any recorder that was already opened.
+Keep `system` as the stable theme ID, picker order zero, browser-local default,
+and safe fallback so existing stored selections and managed-theme failure
+behavior require no migration. Redesign its presentation around the established
+SDS200 Display card hierarchy: one prominent scanner-display pane with Simple,
+Detail, Search/Close Call, Weather, and Tone-Out presentations driven by the
+existing normalized screen kind and the same configurable scan fallback. Build
+that presentation in the web renderer; do not load the Home Assistant custom-
+element module or duplicate Home Assistant entity state.
 
-Restore release-integrity invariants: rewrite the README current-status text for
-the actual package version and enforce agreement among that status, Python
-package metadata, import metadata, and Home Assistant release metadata. Pin
-every third-party workflow action to an independently resolved full commit SHA
-with a readable version comment. Pin both container build stages to the verified
-multi-architecture Python base-image digest, retain automated GitHub Actions and
-Python dependency updates, and add Docker digest updates for both image roots.
-Define one measured coverage floor from the completed baseline and require it in
-both continuous-integration and release validation.
+The System presentation remains system-adaptive for light and dark preferences
+while using scanner-display proportions, hierarchy, status strip, and mode-aware
+field selection. Keep the complete web feature set reachable through one shared
+keyboard-accessible pane model rather than permanently hiding it or shrinking it
+below readability. Scanner, Controls, Audio, Recordings, and Diagnostics panes
+use semantic HTML, explicit labels, predictable focus movement, and browser-
+local presentation state. The future Waterfall pane may be reserved structurally
+but must not connect to the daemon or render waterfall data in this milestone.
 
-The review's broader dependency-lock request needs a separately designed,
-cross-Python reproducible-build slice covering build isolation, optional extras,
-transitive artifacts, hashes, regeneration, and automated updates. Do not
-replace the public library's supported dependency ranges with a local Python
-3.14 freeze or claim that mutable transitive dependency resolution is closed in
-this milestone.
+Add one built-in package under `themes/web/pip-boy-inspired/` with stable ID
+`pip-boy-inspired`, picker label `Pip-Boy-inspired`, and order 50 after Amateur
+Radio. Use an original retro-futurist field-terminal presentation with phosphor-
+green or amber semantic tokens, restrained CRT depth, grid or radar
+instrumentation, scanline effects, and hardware-console framing. Do not use
+`Fallout` in the package ID or copy game logos, character or corporate artwork,
+screenshots, sounds, proprietary fonts, copied hardware geometry, or other game
+assets. The package remains local declarative CSS under the existing manifest,
+CSP, digest, and managed-theme rules.
 
-Acceptance must prove that a blocked sink cannot delay RTP-facing submission or
-a healthy peer; one full queue cannot affect another; quarantine suppresses
-per-frame retries and recovers only after the backoff boundary; detach and stop
-accept no later work; and transitions and diagnostics remain ordered and
-redacted. It must cover normal, write-error, close-error, blocked-write,
-eventual-finalization, and thread-start-failure WAV paths. Repository contracts
-must reject mutable workflow refs, floating Dockerfile base images, inconsistent
-current-version metadata, and workflows that bypass the shared 86 percent
-coverage floor. Run documentation and distribution checks plus the complete
-static and test suite; no scanner hardware validation is required for these
-host-independent boundaries.
+Apply the same shared viewport shell to System, LCARS-inspired, Matrix-inspired,
+First Responder, Amateur Radio, Pip-Boy-inspired, and valid managed web themes.
+At normal browser zoom, the document and active pane must fit without horizontal
+or vertical scrolling at 390x844, 800x480, 1366x768, and 1920x1080, and scale
+cleanly to larger full-screen viewports. Information that cannot fit concurrently
+must remain available through explicit pane or page controls rather than being
+clipped, reduced below readability, or placed in an unannounced scroll region.
+At user text enlargement or browser zoom, accessibility and content reachability
+take precedence over the decorative no-scroll composition.
 
-Do not reopen the resolved or rejected Milestone 27.2.1 findings, add a
-waterfall renderer, change a dashboard layout, add a theme or scanner command,
-invent a provider TLS endpoint, or describe dependency inputs as fully locked.
+Theme switching must preserve the selected pane, live scanner state, form and
+control state, browser audio, recording state, and focus meaning. System
+fallback, first-paint selection, managed-theme activation, same-origin delivery,
+CSP, `nosniff`, reduced-motion, forced-colors/high-contrast behavior, and state
+meaning independent of color must remain intact.
+
+Acceptance must cover every automatic scanner screen transition, Simple and
+Detail scan fallback, configured and zero/detect Tone-Out values, all existing
+controls and all 35 radio fields, recording pagination, pane navigation by
+pointer and keyboard, focus restoration, direct authenticated web sessions,
+Home Assistant Ingress prefixing, sign-out and restart, every built-in theme at
+every reference viewport, device-pixel-ratio and resize changes, reduced motion,
+high contrast, missing and mutated managed-theme fallback, gallery/reference
+captures, package contents, documentation, distribution builds, and the complete
+static and test suite. Physical acceptance must use the existing SDS200 single-
+owner guard and restore the repository Home Assistant App and normal scanning.
+
+Do not add copied manufacturer or game assets, theme JavaScript, remote fonts or
+resources, automatic theme downloads, a GUI theme, a new Home Assistant card, a
+TUI layout, a waterfall daemon consumer, scanner mode navigation, or theme-owned
+scanner controls.
 
 ## Deferred hardware validation
 
@@ -658,73 +670,6 @@ is collected.
 - Milestone 27.4: responsive theme-aware web spectrum and rolling-waterfall
   workspace inside the shared viewport shell, with authenticated bounded demand,
   immediate CSS/Canvas recoloring, relative-data labeling, and loss telemetry.
-
-#### Planned Milestone 27.3 contract
-
-Milestone 27.3 converts the existing web dashboard into one responsive viewport-
-owned workspace while preserving its authoritative daemon-client boundary,
-authenticated session and Home Assistant Ingress behavior, all existing fields
-and controls, browser audio, recording workflows, and theme lifecycle.
-
-Keep `system` as the stable theme ID, picker order zero, browser-local default,
-and safe fallback so existing stored selections and managed-theme failure
-behavior require no migration. Redesign its presentation around the established
-SDS200 Display card hierarchy: one prominent scanner-display pane with Simple,
-Detail, Search/Close Call, Weather, and Tone-Out presentations driven by the
-existing normalized screen kind and the same configurable scan fallback. Build
-that presentation in the web renderer; do not load the Home Assistant custom-
-element module or duplicate Home Assistant entity state.
-
-The System presentation remains system-adaptive for light and dark preferences
-while using scanner-display proportions, hierarchy, status strip, and mode-aware
-field selection. Keep the complete web feature set reachable through one shared
-keyboard-accessible pane model rather than permanently hiding it or shrinking it
-below readability. Scanner, Controls, Audio, Recordings, and Diagnostics panes
-use semantic HTML, explicit labels, predictable focus movement, and browser-
-local presentation state. The future Waterfall pane may be reserved structurally
-but must not connect to the daemon or render waterfall data in this milestone.
-
-Add one built-in package under `themes/web/pip-boy-inspired/` with stable ID
-`pip-boy-inspired`, picker label `Pip-Boy-inspired`, and order 50 after Amateur
-Radio. Use an original retro-futurist field-terminal presentation with phosphor-
-green or amber semantic tokens, restrained CRT depth, grid or radar
-instrumentation, scanline effects, and hardware-console framing. Do not use
-`Fallout` in the package ID or copy game logos, character or corporate artwork,
-screenshots, sounds, proprietary fonts, copied hardware geometry, or other game
-assets. The package remains local declarative CSS under the existing manifest,
-CSP, digest, and managed-theme rules.
-
-Apply the same shared viewport shell to System, LCARS-inspired, Matrix-inspired,
-First Responder, Amateur Radio, Pip-Boy-inspired, and valid managed web themes.
-At normal browser zoom, the document and active pane must fit without horizontal
-or vertical scrolling at 390x844, 800x480, 1366x768, and 1920x1080, and scale
-cleanly to larger full-screen viewports. Information that cannot fit concurrently
-must remain available through explicit pane or page controls rather than being
-clipped, reduced below readability, or placed in an unannounced scroll region.
-At user text enlargement or browser zoom, accessibility and content reachability
-take precedence over the decorative no-scroll composition.
-
-Theme switching must preserve the selected pane, live scanner state, form and
-control state, browser audio, recording state, and focus meaning. System
-fallback, first-paint selection, managed-theme activation, same-origin delivery,
-CSP, `nosniff`, reduced-motion, forced-colors/high-contrast behavior, and state
-meaning independent of color must remain intact.
-
-Acceptance must cover every automatic scanner screen transition, Simple and
-Detail scan fallback, configured and zero/detect Tone-Out values, all existing
-controls and all 35 radio fields, recording pagination, pane navigation by
-pointer and keyboard, focus restoration, direct authenticated web sessions,
-Home Assistant Ingress prefixing, sign-out and restart, every built-in theme at
-every reference viewport, device-pixel-ratio and resize changes, reduced motion,
-high contrast, missing and mutated managed-theme fallback, gallery/reference
-captures, package contents, documentation, distribution builds, and the complete
-static and test suite. Physical acceptance must use the existing SDS200 single-
-owner guard and restore the repository Home Assistant App and normal scanning.
-
-Do not add copied manufacturer or game assets, theme JavaScript, remote fonts or
-resources, automatic theme downloads, a GUI theme, a new Home Assistant card, a
-TUI layout, a waterfall daemon consumer, scanner mode navigation, or theme-owned
-scanner controls.
 
 #### Planned Milestone 27.4 contract
 

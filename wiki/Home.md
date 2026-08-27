@@ -25,9 +25,8 @@ The project is not affiliated with or endorsed by Uniden.
   — full-screen monitoring, controls, recording, and playback.
 - [Network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
   — SDS200 playback, recording, Broadcastify, and Asterisk integration.
-- [Web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md)
-  — loopback browser monitoring, live events, audio playback, recording, and
-  finalized-WAV playback/download.
+- [Web dashboard](Web-Dashboard.md) — visual guide to the responsive five-pane
+  workspace, six themes, live monitoring, controls, audio, and recordings.
 - [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
   — repository installation, Ingress, scanner controls, audio, persistent
   recordings, MQTT Discovery, and security boundaries.
@@ -102,7 +101,8 @@ connection. Current browser workflows include ordered live updates, explicit
 audio playback, daemon-owned recording, and safe playback/download of finalized
 recordings.
 
-See the canonical
+See the visual [Web dashboard](Web-Dashboard.md) page for the workspace and theme
+gallery, and the canonical
 [web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md)
 for security boundaries and exact behavior.
 

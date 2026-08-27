@@ -22,6 +22,7 @@ REQUIRED_FILES = (
     Path("docs/supported-models.md"),
     Path("wiki/Home.md"),
     Path("wiki/_Sidebar.md"),
+    Path("wiki/Web-Dashboard.md"),
     Path("wiki/Installation.md"),
     Path("wiki/Troubleshooting.md"),
     Path("wiki/Publishing.md"),

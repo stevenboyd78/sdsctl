@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "pip-boy-inspired",
+  "label": "Pip-Boy-inspired",
+  "order": 50,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {
+    "light": "#071008",
+    "dark": "#071008"
+  }
+}

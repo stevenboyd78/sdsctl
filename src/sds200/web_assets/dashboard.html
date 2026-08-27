@@ -72,7 +72,70 @@
       </p>
     </noscript>
 
-    <div class="dashboard-grid">
+    <div class="workspace-shell">
+      <div
+        class="workspace-tabs"
+        role="tablist"
+        aria-label="Dashboard panes"
+        aria-orientation="horizontal"
+      >
+        <button
+          id="pane-tab-scanner"
+          type="button"
+          role="tab"
+          aria-selected="true"
+          aria-controls="pane-scanner"
+          tabindex="0"
+          data-workspace-tab="scanner"
+        >Scanner</button>
+        <button
+          id="pane-tab-controls"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-controls"
+          tabindex="-1"
+          data-workspace-tab="controls"
+        >Controls</button>
+        <button
+          id="pane-tab-audio"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-audio"
+          tabindex="-1"
+          data-workspace-tab="audio"
+        >Audio</button>
+        <button
+          id="pane-tab-recordings"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-recordings"
+          tabindex="-1"
+          data-workspace-tab="recordings"
+        >Recordings</button>
+        <button
+          id="pane-tab-diagnostics"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-diagnostics"
+          tabindex="-1"
+          data-workspace-tab="diagnostics"
+        >Diagnostics</button>
+      </div>
+
+      <div class="workspace-deck dashboard-grid">
+        <section
+          id="pane-diagnostics"
+          class="workspace-pane"
+          role="tabpanel"
+        aria-labelledby="pane-tab-diagnostics"
+        data-workspace-pane="diagnostics"
+        hidden
+      >
+        <div class="diagnostics-layout">
       <section class="panel scanner-panel" aria-labelledby="scanner-title">
         <header class="panel-header">
           <p class="panel-kicker">Connection</p>
@@ -99,12 +162,6 @@
             </dd>
           </div>
         </dl>
-
-        <div class="scanner-connection-actions">
-          <button id="scanner-reconnect" type="button" disabled>
-            Reconnect scanner
-          </button>
-        </div>
 
         <div
           class="panel-subsection daemon-runtime-section"
@@ -139,10 +196,22 @@
           </dl>
         </div>
       </section>
+        </div>
+        </section>
 
+        <section
+          id="pane-scanner"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-scanner"
+          data-workspace-pane="scanner"
+        >
       <section class="panel panel-emphasis"
         id="radio-activity-panel"
         data-screen-kind="unknown"
+        data-display-layout="detail"
+        data-radio-view="auto"
+        data-active-radio-group="hierarchy"
         aria-labelledby="activity-title"
       >
         <header class="panel-header">
@@ -150,8 +219,68 @@
           <h2 id="activity-title">Now scanning</h2>
         </header>
 
-        <p id="radio-system" class="primary-value">No active system</p>
-        <p id="radio-channel" class="secondary-value">No active channel</p>
+        <div class="radio-view-controls">
+          <div role="group" aria-label="Scanner field inspection">
+            <button
+              id="radio-view-auto"
+              type="button"
+              data-radio-view="auto"
+              aria-pressed="true"
+              aria-controls="radio-field-groups"
+            >Auto</button>
+            <button
+              id="radio-view-hierarchy"
+              type="button"
+              data-radio-view="hierarchy"
+              aria-pressed="false"
+              aria-controls="radio-group-hierarchy"
+            >Hierarchy</button>
+            <button
+              id="radio-view-rf"
+              type="button"
+              data-radio-view="rf"
+              aria-pressed="false"
+              aria-controls="radio-group-rf"
+            >RF</button>
+            <button
+              id="radio-view-identity"
+              type="button"
+              data-radio-view="identity"
+              aria-pressed="false"
+              aria-controls="radio-group-identity"
+            >Identity</button>
+            <button
+              id="radio-view-special"
+              type="button"
+              data-radio-view="special"
+              aria-pressed="false"
+              aria-controls="radio-group-special"
+            >Special</button>
+          </div>
+
+          <div class="radio-scan-fallback">
+            <label for="radio-scan-fallback-select">Scan fallback</label>
+            <select id="radio-scan-fallback-select">
+              <option value="simple">Simple</option>
+              <option value="detail" selected>Detail</option>
+            </select>
+          </div>
+        </div>
+
+        <dl class="scanner-display-hierarchy">
+          <div>
+            <dt>System</dt>
+            <dd id="radio-system" class="primary-value">No active system</dd>
+          </div>
+          <div>
+            <dt>Department</dt>
+            <dd id="radio-department" class="secondary-value">Unavailable</dd>
+          </div>
+          <div>
+            <dt>Channel</dt>
+            <dd id="radio-channel" class="secondary-value">No active channel</dd>
+          </div>
+        </dl>
 
         <dl class="status-list status-list-compact radio-summary">
           <div>
@@ -176,11 +305,10 @@
           </div>
         </dl>
 
-        <div class="radio-field-groups">
-          <section class="radio-field-group" aria-labelledby="radio-hierarchy-title" data-radio-group="hierarchy">
+        <div id="radio-field-groups" class="radio-field-groups">
+          <section id="radio-group-hierarchy" class="radio-field-group" aria-labelledby="radio-hierarchy-title" data-radio-group="hierarchy">
             <h3 id="radio-hierarchy-title">Hierarchy</h3>
             <dl class="radio-field-list">
-              <div><dt>Department</dt><dd id="radio-department">Unavailable</dd></div>
               <div><dt>Site</dt><dd id="radio-site">Unavailable</dd></div>
               <div><dt>System index</dt><dd id="radio-system-index">Unavailable</dd></div>
               <div><dt>System hold</dt><dd id="radio-system-hold">Unavailable</dd></div>
@@ -195,7 +323,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-rf-title" data-radio-group="rf">
+          <section id="radio-group-rf" class="radio-field-group" aria-labelledby="radio-rf-title" data-radio-group="rf" hidden>
             <h3 id="radio-rf-title">RF and service</h3>
             <dl class="radio-field-list">
               <div><dt>Frequency</dt><dd id="radio-frequency">Unavailable</dd></div>
@@ -205,7 +333,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-identity-title" data-radio-group="identity">
+          <section id="radio-group-identity" class="radio-field-group" aria-labelledby="radio-identity-title" data-radio-group="identity" hidden>
             <h3 id="radio-identity-title">Identity and receiver</h3>
             <dl class="radio-field-list">
               <div><dt>Talkgroup ID</dt><dd id="radio-talkgroup-id">Unavailable</dd></div>
@@ -219,7 +347,7 @@
             </dl>
           </section>
 
-          <section class="radio-field-group" aria-labelledby="radio-special-title" data-radio-group="special">
+          <section id="radio-group-special" class="radio-field-group" aria-labelledby="radio-special-title" data-radio-group="special" hidden>
             <h3 id="radio-special-title">Special mode</h3>
             <dl class="radio-field-list">
               <div><dt>Weather mode</dt><dd id="radio-weather-mode">Unavailable</dd></div>
@@ -230,7 +358,16 @@
           </section>
         </div>
       </section>
+        </section>
 
+        <section
+          id="pane-controls"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-controls"
+          data-workspace-pane="controls"
+          hidden
+        >
       <section class="panel scanner-controls-panel" aria-labelledby="scanner-controls-title">
         <header class="panel-header">
           <p class="panel-kicker">Control</p>
@@ -245,6 +382,12 @@
         >
           Checking control capabilities.
         </p>
+
+        <div class="scanner-connection-actions">
+          <button id="scanner-reconnect" type="button" disabled>
+            Reconnect scanner
+          </button>
+        </div>
 
         <div class="scanner-control-group">
           <h3>Hold / release</h3>
@@ -337,7 +480,16 @@
         </div>
 
       </section>
+        </section>
 
+        <section
+          id="pane-audio"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-audio"
+          data-workspace-pane="audio"
+          hidden
+        >
       <section class="panel browser-audio-panel" aria-labelledby="browser-audio-title">
         <header class="panel-header">
           <p class="panel-kicker">Listen</p>
@@ -377,7 +529,17 @@
           </div>
         </dl>
       </section>
+        </section>
 
+        <section
+          id="pane-recordings"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-recordings"
+          data-workspace-pane="recordings"
+          hidden
+        >
+          <div class="recordings-layout">
       <section class="panel recording-capture-panel" aria-labelledby="recording-title">
         <header class="panel-header">
           <p class="panel-kicker">Capture</p>
@@ -459,6 +621,23 @@
 
           <ul id="recordings-list" class="recording-list"></ul>
 
+          <div
+            id="recordings-pagination"
+            class="recordings-pagination"
+            role="group"
+            aria-label="Recent recording pages"
+          >
+            <button id="recordings-previous-page" type="button" disabled>
+              Previous
+            </button>
+            <p id="recordings-page-status" role="status" aria-live="polite">
+              Page 1 of 1
+            </p>
+            <button id="recordings-next-page" type="button" disabled>
+              Next
+            </button>
+          </div>
+
           <div class="saved-playback">
             <p
               id="saved-playback-status"
@@ -476,6 +655,9 @@
           </div>
         </div>
       </section>
+          </div>
+        </section>
+      </div>
     </div>
   </main>
 

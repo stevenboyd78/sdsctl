@@ -1,0 +1,544 @@
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from dataclasses import dataclass
+from html.parser import HTMLParser
+from pathlib import Path
+
+import pytest
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+ASSET_ROOT = REPOSITORY_ROOT / "src" / "sds200" / "web_assets"
+WORKSPACE_PANES = ("scanner", "controls", "audio", "recordings", "diagnostics")
+
+
+@dataclass(frozen=True)
+class _Element:
+    tag: str
+    attributes: dict[str, str | None]
+    ancestors: tuple[str, ...]
+
+
+class _DashboardParser(HTMLParser):
+    _VOID_ELEMENTS = {
+        "area",
+        "base",
+        "br",
+        "col",
+        "embed",
+        "hr",
+        "img",
+        "input",
+        "link",
+        "meta",
+        "param",
+        "source",
+        "track",
+        "wbr",
+    }
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.elements: dict[str, _Element] = {}
+        self.duplicate_ids: set[str] = set()
+        self.stack: list[tuple[str, str | None]] = []
+
+    def handle_starttag(
+        self,
+        tag: str,
+        attrs: list[tuple[str, str | None]],
+    ) -> None:
+        attributes = dict(attrs)
+        identifier = attributes.get("id")
+        if identifier is not None:
+            if identifier in self.elements:
+                self.duplicate_ids.add(identifier)
+            self.elements[identifier] = _Element(
+                tag=tag,
+                attributes=attributes,
+                ancestors=tuple(
+                    ancestor_id for _, ancestor_id in self.stack if ancestor_id is not None
+                ),
+            )
+        if tag not in self._VOID_ELEMENTS:
+            self.stack.append((tag, identifier))
+
+    def handle_endtag(self, tag: str) -> None:
+        for index in range(len(self.stack) - 1, -1, -1):
+            if self.stack[index][0] == tag:
+                del self.stack[index:]
+                return
+
+
+def _asset(name: str) -> str:
+    return (ASSET_ROOT / name).read_text(encoding="utf-8")
+
+
+def _dashboard_parser() -> _DashboardParser:
+    parser = _DashboardParser()
+    parser.feed(_asset("dashboard.html"))
+    parser.close()
+    return parser
+
+
+def _classes(element: _Element) -> set[str]:
+    return set((element.attributes.get("class") or "").split())
+
+
+def _node() -> str:
+    executable = shutil.which("node")
+    if executable is None:
+        pytest.skip("Node.js is required for browser behavior contract checks")
+    return executable
+
+
+def _run_node(program: str) -> None:
+    result = subprocess.run(
+        [_node(), "-"],
+        input=program,
+        text=True,
+        capture_output=True,
+        cwd=REPOSITORY_ROOT,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_workspace_tab_and_panel_semantics_are_complete_and_unique() -> None:
+    parser = _dashboard_parser()
+
+    assert not parser.duplicate_ids
+    for index, pane in enumerate(WORKSPACE_PANES):
+        tab = parser.elements[f"pane-tab-{pane}"]
+        panel = parser.elements[f"pane-{pane}"]
+
+        assert tab.tag == "button"
+        assert tab.attributes["role"] == "tab"
+        assert tab.attributes["aria-controls"] == f"pane-{pane}"
+        assert tab.attributes["data-workspace-tab"] == pane
+        assert tab.attributes["aria-selected"] == str(index == 0).lower()
+        assert tab.attributes["tabindex"] == ("0" if index == 0 else "-1")
+
+        assert panel.tag == "section"
+        assert panel.attributes["role"] == "tabpanel"
+        assert panel.attributes["aria-labelledby"] == f"pane-tab-{pane}"
+        assert panel.attributes["data-workspace-pane"] == pane
+        assert ("hidden" in panel.attributes) is (index != 0)
+        assert "workspace-pane" in _classes(panel)
+
+
+def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
+    parser = _dashboard_parser()
+    expected_descendants = {
+        "pane-scanner": ("radio-activity-panel", "radio-system", "radio-channel"),
+        "pane-controls": (
+            "scanner-control-status",
+            "scanner-reconnect",
+            "scanner-hold-system",
+            "scanner-next",
+        ),
+        "pane-audio": ("audio-play", "audio-stop", "audio-source"),
+        "pane-recordings": (
+            "recording-start",
+            "recordings-list",
+            "saved-recording-player",
+        ),
+        "pane-diagnostics": (
+            "scanner-connected",
+            "scanner-endpoint",
+            "daemon-state",
+            "transition-sequence",
+        ),
+    }
+
+    for pane, descendants in expected_descendants.items():
+        for identifier in descendants:
+            assert pane in parser.elements[identifier].ancestors
+
+    dashboard = _asset("dashboard.html")
+    for class_name in (
+        "workspace-shell",
+        "workspace-tabs",
+        "workspace-deck",
+        "dashboard-grid",
+        "recordings-layout",
+        "diagnostics-layout",
+        "radio-view-controls",
+        "radio-scan-fallback",
+        "radio-field-groups",
+        "scanner-display-hierarchy",
+    ):
+        assert re.search(rf'class="[^"]*\b{re.escape(class_name)}\b', dashboard)
+
+
+def test_recording_pagination_is_a_labeled_group() -> None:
+    pagination = _dashboard_parser().elements["recordings-pagination"]
+
+    assert pagination.tag == "div"
+    assert pagination.attributes["role"] == "group"
+    assert pagination.attributes["aria-label"] == "Recent recording pages"
+
+
+def test_dashboard_javascript_is_syntactically_valid() -> None:
+    result = subprocess.run(
+        [_node(), "--check", str(ASSET_ROOT / "dashboard.js")],
+        text=True,
+        capture_output=True,
+        cwd=REPOSITORY_ROOT,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_workspace_radio_and_recording_browser_behaviors() -> None:
+    script = _asset("dashboard.js")
+    boundary = 'document.addEventListener("visibilitychange"'
+    assert boundary in script
+    implementation = script.split(boundary, 1)[0]
+
+    harness = r"""
+const assert = require("node:assert/strict");
+
+class FakeNode {
+  constructor(id = "", dataset = {}) {
+    this.id = id;
+    this.dataset = {...dataset};
+    this.attributes = {};
+    this.children = [];
+    this.listeners = {};
+    this.hidden = false;
+    this.disabled = false;
+    this.tabIndex = 0;
+    this.value = "";
+    this._textContent = "";
+    this.textContentWrites = 0;
+    this.className = "";
+    this.parentNode = null;
+  }
+
+  setAttribute(name, value) {
+    this.attributes[name] = String(value);
+  }
+
+  addEventListener(type, listener) {
+    (this.listeners[type] ||= []).push(listener);
+  }
+
+  dispatch(type, values = {}) {
+    const event = {
+      currentTarget: this,
+      target: this,
+      defaultPrevented: false,
+      preventDefault() {
+        this.defaultPrevented = true;
+      },
+      ...values,
+    };
+    for (const listener of this.listeners[type] || []) {
+      listener(event);
+    }
+    return event;
+  }
+
+  focus() {
+    document.activeElement = this;
+  }
+
+  click() {
+    if (!this.disabled) {
+      return this.dispatch("click");
+    }
+    return null;
+  }
+
+  get textContent() {
+    return this._textContent;
+  }
+
+  set textContent(value) {
+    this._textContent = String(value);
+    this.textContentWrites += 1;
+  }
+
+  appendChild(child) {
+    child.parentNode = this;
+    this.children.push(child);
+    return child;
+  }
+
+  removeChild(child) {
+    const index = this.children.indexOf(child);
+    if (index >= 0) {
+      this.children.splice(index, 1);
+      child.parentNode = null;
+    }
+    return child;
+  }
+
+  contains(node) {
+    return node === this || this.children.some((child) => child.contains(node));
+  }
+
+  get firstChild() {
+    return this.children[0] || null;
+  }
+}
+
+const nodes = new Map();
+function add(id, dataset = {}) {
+  const node = new FakeNode(id, dataset);
+  nodes.set(id, node);
+  return node;
+}
+
+const paneNames = ["scanner", "controls", "audio", "recordings", "diagnostics"];
+const workspaceTabs = paneNames.map((pane) => add(`pane-tab-${pane}`, {
+  workspaceTab: pane,
+}));
+const workspacePanels = paneNames.map((pane) => add(`pane-${pane}`, {
+  workspacePane: pane,
+}));
+
+const storageValues = new Map([["sdsctl.web.pane", "audio"]]);
+const workingStorage = {
+  getItem(key) {
+    return storageValues.has(key) ? storageValues.get(key) : null;
+  },
+  setItem(key, value) {
+    storageValues.set(key, String(value));
+  },
+};
+
+const document = {
+  currentScript: {src: "https://example.test/ingress/assets/dashboard.js"},
+  documentElement: new FakeNode("document-root"),
+  activeElement: null,
+  hidden: false,
+  getElementById(id) {
+    return nodes.get(id) || null;
+  },
+  querySelectorAll(selector) {
+    if (selector === "[data-workspace-tab]") {
+      return workspaceTabs;
+    }
+    if (selector === ".workspace-pane[data-workspace-pane]") {
+      return workspacePanels;
+    }
+    if (selector === "[data-workspace-pane]") {
+      return [document.documentElement, ...workspacePanels];
+    }
+    return [];
+  },
+  createElement() {
+    return new FakeNode();
+  },
+};
+
+const themeSelect = add("theme-select");
+let selectedTheme = "system";
+const window = {
+  localStorage: workingStorage,
+  sdsctlTheme: {
+    current() {
+      return selectedTheme;
+    },
+    select(value) {
+      selectedTheme = value;
+    },
+  },
+};
+globalThis.document = document;
+globalThis.window = window;
+"""
+
+    assertions = r"""
+initializeWorkspace();
+assert.equal(activeWorkspacePane, "audio");
+assert.equal(workspaceTabs[2].attributes["aria-selected"], "true");
+assert.equal(workspacePanels[2].hidden, false);
+assert.equal(workspacePanels[0].hidden, true);
+assert.equal(document.documentElement.hidden, false);
+
+const endEvent = workspaceTabs[2].dispatch("keydown", {key: "End"});
+assert.equal(endEvent.defaultPrevented, true);
+assert.equal(activeWorkspacePane, "diagnostics");
+assert.equal(document.activeElement, workspaceTabs[4]);
+assert.equal(storageValues.get("sdsctl.web.pane"), "diagnostics");
+assert.equal(document.documentElement.hidden, false);
+workspaceTabs[4].dispatch("keydown", {key: "ArrowRight"});
+assert.equal(activeWorkspacePane, "scanner");
+workspaceTabs[0].dispatch("keydown", {key: "ArrowLeft"});
+assert.equal(activeWorkspacePane, "diagnostics");
+workspaceTabs[4].dispatch("keydown", {key: "Home"});
+assert.equal(activeWorkspacePane, "scanner");
+activateWorkspacePane("not-a-pane");
+assert.equal(activeWorkspacePane, "scanner");
+
+window.localStorage = {
+  getItem() { throw new Error("blocked"); },
+  setItem() { throw new Error("blocked"); },
+};
+assert.equal(readStoredValue("missing"), null);
+assert.doesNotThrow(() => writeStoredValue("key", "value"));
+assert.doesNotThrow(() => activateWorkspacePane("controls"));
+window.localStorage = workingStorage;
+
+storageValues.set("sdsctl.web.scan-fallback", "simple");
+add("radio-activity-panel");
+add("activity-title");
+const fallbackSelect = add("radio-scan-fallback-select");
+for (const view of ["auto", "hierarchy", "rf", "identity", "special"]) {
+  add(`radio-view-${view}`, {radioView: view});
+}
+for (const group of ["hierarchy", "rf", "identity", "special"]) {
+  add(`radio-group-${group}`, {radioGroup: group});
+}
+
+initializeRadioViewControls();
+const activityPanel = nodes.get("radio-activity-panel");
+assert.equal(fallbackSelect.value, "simple");
+assert.equal(activityPanel.dataset.displayLayout, "simple");
+assert.equal(activityPanel.dataset.activeRadioGroup, "none");
+renderRadioProfile("search");
+assert.equal(activityPanel.dataset.displayLayout, "search");
+assert.equal(activityPanel.dataset.activeRadioGroup, "rf");
+assert.equal(nodes.get("radio-group-rf").hidden, false);
+
+nodes.get("radio-view-identity").dispatch("click");
+renderRadioProfile("weather");
+assert.equal(activityPanel.dataset.displayLayout, "weather");
+assert.equal(activityPanel.dataset.activeRadioGroup, "identity");
+assert.equal(nodes.get("radio-group-special").hidden, true);
+nodes.get("radio-view-auto").dispatch("click");
+assert.equal(activityPanel.dataset.activeRadioGroup, "special");
+assert.equal(nodes.get("radio-group-special").hidden, false);
+
+fallbackSelect.value = "detail";
+fallbackSelect.dispatch("change");
+renderRadioProfile("unknown-value");
+assert.equal(activityPanel.dataset.screenKind, "unknown");
+assert.equal(activityPanel.dataset.displayLayout, "detail");
+assert.equal(activityPanel.dataset.activeRadioGroup, "hierarchy");
+assert.equal(storageValues.get("sdsctl.web.scan-fallback"), "detail");
+for (const inheritedName of ["constructor", "toString", "__proto__"]) {
+  renderRadioProfile(inheritedName);
+  assert.equal(activityPanel.dataset.screenKind, "unknown");
+  assert.equal(activityPanel.dataset.displayLayout, "detail");
+  assert.equal(activityPanel.dataset.activeRadioGroup, "hierarchy");
+}
+
+assert.equal(toneOutDisplayValue(0), "Detect");
+assert.equal(toneOutDisplayValue(-0), "Detect");
+assert.equal(toneOutDisplayValue("0"), "Detect");
+assert.equal(toneOutDisplayValue("0.000 Hz"), "Detect");
+assert.equal(toneOutDisplayValue("67.0"), "67.0");
+assert.equal(toneOutDisplayValue(67), 67);
+for (const target of Object.values(RADIO_STATE_FIELD_TARGETS)) {
+  if (!nodes.has(target)) {
+    add(target);
+  }
+}
+renderRadioState({
+  screen_kind: "tone_out",
+  tone_out_tone_a: "0.0",
+  tone_out_tone_b: "67.0",
+});
+assert.equal(nodes.get("radio-tone-out-tone-a").textContent, "Detect");
+assert.equal(nodes.get("radio-tone-out-tone-b").textContent, "67.0");
+
+activateWorkspacePane("audio");
+nodes.get("radio-view-special").focus();
+audioPlaybackActive = true;
+const preservedFocus = document.activeElement;
+const preservedFallback = fallbackSelect.value;
+initializeThemeControl();
+themeSelect.value = "pip-boy-inspired";
+themeSelect.dispatch("change");
+assert.equal(selectedTheme, "pip-boy-inspired");
+assert.equal(activeWorkspacePane, "audio");
+assert.equal(radioInspectionView, "auto");
+assert.equal(fallbackSelect.value, preservedFallback);
+assert.equal(audioPlaybackActive, true);
+assert.equal(document.activeElement, preservedFocus);
+
+add("recordings-list");
+add("recordings-message");
+add("recordings-page-status");
+add("recordings-previous-page");
+add("recordings-next-page");
+add("recordings-refresh");
+add("recording-start");
+add("recording-stop");
+initializeRecordingPaginationControls();
+const entries = Array.from({length: 7}, (_, index) => ({
+  audio: `2026/example-${index}.wav`,
+  recorded_at: "2026-08-26T00:00:00Z",
+  duration_seconds: index,
+  audio_size_bytes: index * 100,
+  playable: true,
+}));
+
+assert.equal(recordingsPageCount(entries), 3);
+assert.equal(recordingPageEntries(entries, 0).length, 3);
+assert.equal(recordingPageEntries(entries, 1)[0].audio, "2026/example-3.wav");
+assert.equal(normalizedRecordingPageIndex(20, entries), 2);
+renderRecordings({entries, total_entries: 7});
+assert.equal(nodes.get("recordings-list").children.length, 3);
+assert.equal(nodes.get("recordings-page-status").textContent, "Page 1 of 3");
+assert.equal(nodes.get("recordings-previous-page").disabled, true);
+assert.equal(nodes.get("recordings-next-page").disabled, false);
+const pageStatusWrites = nodes.get("recordings-page-status").textContentWrites;
+setRecordingControls(currentRecording);
+assert.equal(
+  nodes.get("recordings-page-status").textContentWrites,
+  pageStatusWrites,
+);
+
+const previousPage = nodes.get("recordings-previous-page");
+const nextPage = nodes.get("recordings-next-page");
+const recordingsRefresh = nodes.get("recordings-refresh");
+nextPage.focus();
+nextPage.click();
+assert.equal(recordingPageIndex, 1);
+assert.equal(document.activeElement, nextPage);
+nextPage.click();
+assert.equal(recordingPageIndex, 2);
+assert.equal(nodes.get("recordings-list").children.length, 1);
+assert.equal(nodes.get("recordings-page-status").textContent, "Page 3 of 3");
+assert.equal(nextPage.disabled, true);
+assert.equal(document.activeElement, previousPage);
+previousPage.click();
+assert.equal(recordingPageIndex, 1);
+assert.equal(document.activeElement, previousPage);
+previousPage.click();
+assert.equal(recordingPageIndex, 0);
+assert.equal(previousPage.disabled, true);
+assert.equal(document.activeElement, nextPage);
+
+nextPage.click();
+assert.equal(recordingPageIndex, 1);
+renderRecordings({entries, total_entries: 7});
+assert.equal(recordingPageIndex, 1);
+previousPage.focus();
+renderRecordings({entries: entries.slice(0, 4), total_entries: 4});
+assert.equal(recordingPageIndex, 0);
+assert.equal(nodes.get("recordings-list").children.length, 3);
+assert.equal(previousPage.disabled, true);
+assert.equal(document.activeElement, nextPage);
+nextPage.click();
+assert.equal(recordingPageIndex, 1);
+assert.equal(document.activeElement, previousPage);
+renderRecordings({entries: [], total_entries: 0});
+assert.equal(recordingPageIndex, 0);
+assert.equal(nodes.get("recordings-list").children.length, 1);
+assert.equal(nodes.get("recordings-next-page").disabled, true);
+assert.equal(document.activeElement, recordingsRefresh);
+assert.equal(
+  recordingFileUrl("2026/example name.wav"),
+  "https://example.test/ingress/api/v1/recordings/file/2026/example%20name.wav",
+);
+"""
+
+    _run_node(f"{harness}\n{implementation}\n{assertions}")

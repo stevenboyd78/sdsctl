@@ -4,6 +4,7 @@
   const STORAGE_KEY = "sdsctl.web.theme";
   const THEME_DOCUMENTS = Object.freeze(__SDSCTL_WEB_THEME_MANIFESTS__);
   const THEMES = Object.freeze(THEME_DOCUMENTS.map((theme) => theme.id));
+  const MANAGED_THEMES = new Set(__SDSCTL_MANAGED_WEB_THEME_IDS__);
   const THEMES_BY_ID = new Map(
     THEME_DOCUMENTS.map((theme) => [theme.id, theme]),
   );
@@ -19,14 +20,32 @@
   let activeTheme = "system";
 
   function normalizeTheme(value) {
-    return THEMES.includes(value) ? value : "system";
+    if (!THEMES.includes(value)) {
+      return "system";
+    }
+    if (MANAGED_THEMES.has(value)) {
+      const link = MANAGED_THEME_LINKS.get(value);
+      if (
+        link === undefined ||
+        typeof link.dataset.sdsctlManagedThemeHref !== "string" ||
+        link.dataset.sdsctlManagedThemeHref.length === 0
+      ) {
+        return "system";
+      }
+    }
+    return value;
   }
 
   function readStoredTheme() {
     try {
-      return normalizeTheme(window.localStorage.getItem(STORAGE_KEY));
+      const storedTheme = window.localStorage.getItem(STORAGE_KEY);
+      const theme = normalizeTheme(storedTheme);
+      return Object.freeze({
+        theme,
+        repair: storedTheme !== null && storedTheme !== theme,
+      });
     } catch {
-      return "system";
+      return Object.freeze({ theme: "system", repair: false });
     }
   }
 
@@ -50,9 +69,26 @@
     }
   }
 
+  function updatePicker(theme) {
+    const picker = document.querySelector("#theme-select");
+    if (picker !== null && picker.value !== theme) {
+      picker.value = theme;
+    }
+  }
+
   function updateManagedStylesheet(theme) {
     MANAGED_THEME_LINKS.forEach((link, identifier) => {
-      link.media = identifier === theme ? "all" : "not all";
+      if (identifier === theme) {
+        if (!link.hasAttribute("href")) {
+          link.setAttribute(
+            "href",
+            link.dataset.sdsctlManagedThemeHref,
+          );
+        }
+        link.media = "all";
+      } else {
+        link.media = "not all";
+      }
     });
   }
 
@@ -62,6 +98,7 @@
     updateManagedStylesheet(theme);
     document.documentElement.dataset.theme = theme;
     updateMetadata(theme);
+    updatePicker(theme);
 
     if (persist) {
       try {
@@ -74,7 +111,17 @@
     return theme;
   }
 
-  activeTheme = applyTheme(readStoredTheme(), false);
+  MANAGED_THEME_LINKS.forEach((link, identifier) => {
+    link.addEventListener("error", () => {
+      link.removeAttribute("href");
+      if (activeTheme === identifier) {
+        applyTheme("system", true);
+      }
+    });
+  });
+
+  const storedSelection = readStoredTheme();
+  activeTheme = applyTheme(storedSelection.theme, storedSelection.repair);
 
   if (
     systemColorQuery !== null &&

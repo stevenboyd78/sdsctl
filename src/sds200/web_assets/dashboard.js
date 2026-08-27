@@ -15,6 +15,29 @@ const PCMU_SAMPLE_RATE = 8000;
 const AUDIO_FALLBACK_BUFFER_CAPACITY_SAMPLES = 16000;
 const AUDIO_FALLBACK_START_THRESHOLD_SAMPLES = 480;
 const AUDIO_FALLBACK_SCRIPT_BUFFER_SIZE = 1024;
+const WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane";
+const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
+const RECORDINGS_PAGE_SIZE = 3;
+const WORKSPACE_PANES = Object.freeze([
+  "scanner",
+  "controls",
+  "audio",
+  "recordings",
+  "diagnostics",
+]);
+const RADIO_INSPECTION_VIEWS = Object.freeze([
+  "auto",
+  "hierarchy",
+  "rf",
+  "identity",
+  "special",
+]);
+const RADIO_FIELD_GROUPS = Object.freeze([
+  "hierarchy",
+  "rf",
+  "identity",
+  "special",
+]);
 
 let currentSnapshot = {};
 let currentDaemonHello = {};
@@ -29,6 +52,15 @@ let recordingRefreshInProgress = false;
 let recordingsRefreshInProgress = false;
 let recordingMutationInProgress = false;
 let scannerControlMutationInProgress = false;
+let activeWorkspacePane = "scanner";
+let radioScanFallback = "detail";
+let radioInspectionView = "auto";
+let currentScreenKind = "unknown";
+let recordingEntries = [];
+let recordingTotalEntries = 0;
+let recordingPageIndex = 0;
+let recordingInventorySignature = "";
+let recordingPaginationFocusId = null;
 
 let audioPlaybackGeneration = 0;
 let audioPlaybackActive = false;
@@ -61,6 +93,87 @@ function element(id) {
     throw new Error(`Dashboard element not found: ${id}`);
   }
   return node;
+}
+
+function readStoredValue(key) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredValue(key, value) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Storage may be unavailable in privacy modes or embedded WebViews.
+  }
+}
+
+function normalizedWorkspacePane(value) {
+  return typeof value === "string" && WORKSPACE_PANES.includes(value)
+    ? value
+    : "scanner";
+}
+
+function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
+  const pane = normalizedWorkspacePane(value);
+  activeWorkspacePane = pane;
+
+  for (const tab of document.querySelectorAll("[data-workspace-tab]")) {
+    const selected = tab.dataset.workspaceTab === pane;
+    tab.setAttribute("aria-selected", String(selected));
+    tab.tabIndex = selected ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll(
+    ".workspace-pane[data-workspace-pane]",
+  )) {
+    panel.hidden = panel.dataset.workspacePane !== pane;
+  }
+
+  document.documentElement.dataset.workspacePane = pane;
+  if (persist) {
+    writeStoredValue(WORKSPACE_PANE_STORAGE_KEY, pane);
+  }
+  if (focus) {
+    element(`pane-tab-${pane}`).focus();
+  }
+}
+
+function initializeWorkspace() {
+  const tabs = Array.from(
+    document.querySelectorAll("[data-workspace-tab]"),
+  );
+  activateWorkspacePane(readStoredValue(WORKSPACE_PANE_STORAGE_KEY), {
+    persist: false,
+  });
+
+  for (const tab of tabs) {
+    tab.addEventListener("click", () => {
+      activateWorkspacePane(tab.dataset.workspaceTab);
+    });
+    tab.addEventListener("keydown", (event) => {
+      const currentIndex = tabs.indexOf(tab);
+      let nextIndex = currentIndex;
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = (currentIndex + 1) % tabs.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = tabs.length - 1;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      activateWorkspacePane(tabs[nextIndex].dataset.workspaceTab, {
+        focus: true,
+      });
+    });
+  }
 }
 
 function initializeThemeControl() {
@@ -152,16 +265,106 @@ const RADIO_SCREEN_PROFILES = Object.freeze({
   unknown: "Scanner activity",
 });
 
+const RADIO_SCREEN_PRESENTATIONS = Object.freeze({
+  search: Object.freeze({layout: "search", group: "rf"}),
+  close_call: Object.freeze({layout: "search", group: "rf"}),
+  weather: Object.freeze({layout: "weather", group: "special"}),
+  tone_out: Object.freeze({layout: "tone_out", group: "special"}),
+});
+
 function normalizedScreenKind(value) {
-  return typeof value === "string" && value in RADIO_SCREEN_PROFILES
+  return typeof value === "string" && Object.hasOwn(RADIO_SCREEN_PROFILES, value)
     ? value
     : "unknown";
 }
 
+function normalizedRadioScanFallback(value) {
+  return value === "simple" || value === "detail" ? value : "detail";
+}
+
+function normalizedRadioInspectionView(value) {
+  return typeof value === "string" && RADIO_INSPECTION_VIEWS.includes(value)
+    ? value
+    : "auto";
+}
+
+function automaticRadioPresentation(screenKind = currentScreenKind) {
+  const adaptive = Object.hasOwn(RADIO_SCREEN_PRESENTATIONS, screenKind)
+    ? RADIO_SCREEN_PRESENTATIONS[screenKind]
+    : undefined;
+  if (adaptive !== undefined) {
+    return adaptive;
+  }
+  return {
+    layout: radioScanFallback,
+    group: radioScanFallback === "detail" ? "hierarchy" : null,
+  };
+}
+
+function applyRadioPresentation() {
+  const panel = element("radio-activity-panel");
+  const automatic = automaticRadioPresentation();
+  const group =
+    radioInspectionView === "auto" ? automatic.group : radioInspectionView;
+
+  panel.dataset.displayLayout = automatic.layout;
+  panel.dataset.radioView = radioInspectionView;
+  panel.dataset.activeRadioGroup = group === null ? "none" : group;
+
+  for (const view of RADIO_INSPECTION_VIEWS) {
+    element(`radio-view-${view}`).setAttribute(
+      "aria-pressed",
+      String(view === radioInspectionView),
+    );
+  }
+  for (const fieldGroup of RADIO_FIELD_GROUPS) {
+    element(`radio-group-${fieldGroup}`).hidden = fieldGroup !== group;
+  }
+}
+
+function initializeRadioViewControls() {
+  radioScanFallback = normalizedRadioScanFallback(
+    readStoredValue(RADIO_SCAN_FALLBACK_STORAGE_KEY),
+  );
+  const fallbackSelect = element("radio-scan-fallback-select");
+  fallbackSelect.value = radioScanFallback;
+  fallbackSelect.addEventListener("change", () => {
+    radioScanFallback = normalizedRadioScanFallback(fallbackSelect.value);
+    fallbackSelect.value = radioScanFallback;
+    writeStoredValue(RADIO_SCAN_FALLBACK_STORAGE_KEY, radioScanFallback);
+    applyRadioPresentation();
+  });
+
+  for (const view of RADIO_INSPECTION_VIEWS) {
+    element(`radio-view-${view}`).addEventListener("click", () => {
+      radioInspectionView = normalizedRadioInspectionView(view);
+      applyRadioPresentation();
+    });
+  }
+  applyRadioPresentation();
+}
+
+function toneOutDisplayValue(value) {
+  if (typeof value === "number" && Number.isFinite(value) && value === 0) {
+    return "Detect";
+  }
+  if (typeof value === "string") {
+    const numeric = value.trim().match(
+      /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))(?:\s*hz)?$/i,
+    );
+    if (numeric !== null && Number(numeric[1]) === 0) {
+      return "Detect";
+    }
+  }
+  return value;
+}
+
 function renderRadioProfile(value) {
   const screenKind = normalizedScreenKind(value);
+  currentScreenKind = screenKind;
   element("radio-activity-panel").dataset.screenKind = screenKind;
   element("activity-title").textContent = RADIO_SCREEN_PROFILES[screenKind];
+  applyRadioPresentation();
 }
 
 function renderRadioState(radio) {
@@ -177,6 +380,8 @@ function renderRadioState(radio) {
       value = signalLabel(value);
     } else if (field === "rssi") {
       value = rssiLabel(value);
+    } else if (field === "tone_out_tone_a" || field === "tone_out_tone_b") {
+      value = toneOutDisplayValue(value);
     }
 
     setText(target, value, fallback);
@@ -281,6 +486,7 @@ function setRecordingControls(recording) {
   element("recording-start").disabled = !canStart;
   element("recording-stop").disabled = !canStop;
   element("recordings-refresh").disabled = recordingsRefreshInProgress;
+  updateRecordingPaginationControls();
 }
 
 function renderRecording(recording, available = true) {
@@ -357,83 +563,160 @@ function playSavedRecording(identifier) {
   });
 }
 
-function renderRecordings(inventory) {
+function recordingsPageCount(entries = recordingEntries) {
+  return Math.max(1, Math.ceil(entries.length / RECORDINGS_PAGE_SIZE));
+}
+
+function normalizedRecordingPageIndex(value, entries = recordingEntries) {
+  const numeric = Number.isFinite(value) ? Math.trunc(value) : 0;
+  return Math.min(Math.max(0, numeric), recordingsPageCount(entries) - 1);
+}
+
+function recordingPageEntries(entries, pageIndex) {
+  const normalized = normalizedRecordingPageIndex(pageIndex, entries);
+  const start = normalized * RECORDINGS_PAGE_SIZE;
+  return entries.slice(start, start + RECORDINGS_PAGE_SIZE);
+}
+
+function updateRecordingPaginationControls() {
+  const pageCount = recordingsPageCount();
+  recordingPageIndex = normalizedRecordingPageIndex(recordingPageIndex);
+  const pageStatus = element("recordings-page-status");
+  const pageStatusText = `Page ${recordingPageIndex + 1} of ${pageCount}`;
+  if (pageStatus.textContent !== pageStatusText) {
+    pageStatus.textContent = pageStatusText;
+  }
+
+  const previous = element("recordings-previous-page");
+  const next = element("recordings-next-page");
+  if (document.activeElement === previous || document.activeElement === next) {
+    recordingPaginationFocusId = document.activeElement.id;
+  }
+
+  previous.disabled = recordingPageIndex === 0;
+  next.disabled =
+    recordingEntries.length === 0 || recordingPageIndex >= pageCount - 1;
+
+  if (recordingPaginationFocusId === null) {
+    return;
+  }
+  const focusedControl = element(recordingPaginationFocusId);
+  if (!focusedControl.disabled) {
+    recordingPaginationFocusId = null;
+    return;
+  }
+
+  const alternate = focusedControl === previous ? next : previous;
+  const refresh = element("recordings-refresh");
+  const focusTarget = !alternate.disabled
+    ? alternate
+    : !refresh.disabled
+      ? refresh
+      : null;
+  if (focusTarget !== null) {
+    focusTarget.focus();
+    recordingPaginationFocusId = null;
+  }
+}
+
+function initializeRecordingPaginationControls() {
+  element("recordings-previous-page").addEventListener("click", () => {
+    recordingPageIndex = normalizedRecordingPageIndex(recordingPageIndex - 1);
+    renderRecordingsPage();
+  });
+  element("recordings-next-page").addEventListener("click", () => {
+    recordingPageIndex = normalizedRecordingPageIndex(recordingPageIndex + 1);
+    renderRecordingsPage();
+  });
+}
+
+function appendRecordingEntry(list, entry) {
+  const identifier = entry.audio;
+  const item = document.createElement("li");
+  item.className = "recording-item";
+
+  const details = document.createElement("div");
+  details.className = "recording-item-details";
+
+  const name = document.createElement("strong");
+  name.className = "technical-value";
+  name.textContent = recordingName(identifier);
+  details.appendChild(name);
+
+  const metadata = document.createElement("span");
+  metadata.className = "recording-item-meta";
+  metadata.textContent =
+    `${formatRecordedAt(entry.recorded_at)} · ${
+      entry.duration_seconds === null || entry.duration_seconds === undefined
+        ? "Unknown duration"
+        : formatDuration(entry.duration_seconds)
+    } · ${formatBytes(entry.audio_size_bytes)}`;
+  details.appendChild(metadata);
+  item.appendChild(details);
+
+  const actions = document.createElement("div");
+  actions.className = "recording-item-actions";
+
+  if (entry.playable === true) {
+    const play = document.createElement("button");
+    play.type = "button";
+    play.className = "recording-action";
+    play.textContent = "Play";
+    play.addEventListener("click", () => {
+      playSavedRecording(identifier);
+    });
+    actions.appendChild(play);
+    actions.appendChild(makeRecordingActionLink("Download", identifier, true));
+  } else {
+    const unavailable = document.createElement("span");
+    unavailable.className = "recording-unavailable";
+    unavailable.textContent = "Not playable";
+    actions.appendChild(unavailable);
+  }
+
+  item.appendChild(actions);
+  list.appendChild(item);
+}
+
+function renderRecordingsPage() {
   const list = element("recordings-list");
+  if (list.contains(document.activeElement)) {
+    element("recordings-refresh").focus();
+  }
   clearChildren(list);
 
-  const entries = Array.isArray(inventory.entries) ? inventory.entries : [];
-  const total = wholeNumber(inventory.total_entries);
-
-  if (entries.length === 0) {
+  if (recordingEntries.length === 0) {
     const empty = document.createElement("li");
     empty.className = "recording-empty";
     empty.textContent = "No finalized recordings are available.";
     list.appendChild(empty);
     element("recordings-message").textContent = "No finalized recordings.";
+    updateRecordingPaginationControls();
     return;
   }
 
   element("recordings-message").textContent =
-    `${entries.length} recent of ${total} finalized recording${
-      total === 1 ? "" : "s"
-    }.`;
-
-  for (const rawEntry of entries) {
-    const entry = record(rawEntry);
-    const identifier =
-      typeof entry.audio === "string" ? entry.audio : "";
-    if (identifier === "") {
-      continue;
-    }
-
-    const item = document.createElement("li");
-    item.className = "recording-item";
-
-    const details = document.createElement("div");
-    details.className = "recording-item-details";
-
-    const name = document.createElement("strong");
-    name.className = "technical-value";
-    name.textContent = recordingName(identifier);
-    details.appendChild(name);
-
-    const metadata = document.createElement("span");
-    metadata.className = "recording-item-meta";
-    metadata.textContent =
-      `${formatRecordedAt(entry.recorded_at)} · ${
-        entry.duration_seconds === null ||
-        entry.duration_seconds === undefined
-          ? "Unknown duration"
-          : formatDuration(entry.duration_seconds)
-      } · ${formatBytes(entry.audio_size_bytes)}`;
-    details.appendChild(metadata);
-    item.appendChild(details);
-
-    const actions = document.createElement("div");
-    actions.className = "recording-item-actions";
-
-    if (entry.playable === true) {
-      const play = document.createElement("button");
-      play.type = "button";
-      play.className = "recording-action";
-      play.textContent = "Play";
-      play.addEventListener("click", () => {
-        playSavedRecording(identifier);
-      });
-      actions.appendChild(play);
-      actions.appendChild(
-        makeRecordingActionLink("Download", identifier, true),
-      );
-    } else {
-      const unavailable = document.createElement("span");
-      unavailable.className = "recording-unavailable";
-      unavailable.textContent = "Not playable";
-      actions.appendChild(unavailable);
-    }
-
-    item.appendChild(actions);
-    list.appendChild(item);
+    `${recordingEntries.length} recent of ${recordingTotalEntries} finalized ` +
+    `recording${recordingTotalEntries === 1 ? "" : "s"}.`;
+  for (const entry of recordingPageEntries(recordingEntries, recordingPageIndex)) {
+    appendRecordingEntry(list, entry);
   }
+  updateRecordingPaginationControls();
+}
+
+function renderRecordings(inventory) {
+  const entries = (Array.isArray(inventory.entries) ? inventory.entries : [])
+    .map((entry) => record(entry))
+    .filter((entry) => typeof entry.audio === "string" && entry.audio !== "");
+  const signature = JSON.stringify(entries);
+  if (signature !== recordingInventorySignature) {
+    recordingPageIndex = 0;
+    recordingInventorySignature = signature;
+  }
+  recordingEntries = entries;
+  recordingTotalEntries = wholeNumber(inventory.total_entries);
+  recordingPageIndex = normalizedRecordingPageIndex(recordingPageIndex);
+  renderRecordingsPage();
 }
 
 async function refreshRecordingStatus() {
@@ -1650,6 +1933,7 @@ element("recording-stop").addEventListener("click", () => {
 element("recordings-refresh").addEventListener("click", () => {
   void refreshRecordings();
 });
+initializeRecordingPaginationControls();
 function performScannerHoldState(scope) {
   const radio = record(currentSnapshot.radio_state);
   const current = radio[`${scope}_hold`];
@@ -1701,7 +1985,9 @@ savedRecordingPlayer.addEventListener("error", () => {
     "Saved recording playback failed.";
 });
 
+initializeWorkspace();
 initializeThemeControl();
+initializeRadioViewControls();
 initializeAudioPlayback();
 renderRecording({}, false);
 setScannerControls();

@@ -8,6 +8,24 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 27.3's responsive web workspace. Scanner, Controls, Audio,
+  Recordings, and Diagnostics now occupy one keyboard-accessible, browser-local
+  pane shell that fits without document or active-pane scrolling at normal zoom
+  in the 390x844, 800x480, 1366x768, and 1920x1080 reference viewports, while an
+  accessibility escape restores scrolling when enlarged text or browser zoom
+  needs it. The stable System theme now uses the established scanner-display
+  hierarchy with automatic Search/Close Call, Weather, and Tone-Out
+  presentations, a persistent Simple or Detail scan fallback, and explicit
+  field-group inspection without dropping any of the 35 radio fields. Recording
+  inventory is paginated, configured zero Tone-Out tones render as **Detect**,
+  and the selected pane is persistent. Add an original, asset-free
+  Pip-Boy-inspired declarative CSS package after Amateur Radio, giving the
+  built-in picker a deterministic six-theme order. A post-theme structural
+  cascade contract keeps valid managed CSS inside the shared viewport shell;
+  missing or mutated managed stylesheets now repair the document, metadata,
+  picker, and stored selection to System and can be explicitly retried. Theme
+  switching, authentication, Home Assistant Ingress, controls, audio,
+  recordings, and single-owner daemon/scanner boundaries remain unchanged.
 - Add the Milestone 27.2 qualified text-waterfall data plane. Exact typed GST,
   PWF, and 240-value GWF handling feeds one demand-driven radio-owned session
   with deterministic rollback, final-consumer stop, interruption/recovery, and

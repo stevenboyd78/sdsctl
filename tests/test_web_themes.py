@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import FrozenInstanceError
 from importlib.resources import files
 from pathlib import Path
@@ -53,13 +54,14 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
     registry = built_in_web_theme_registry()
 
     assert registry.identifiers == BUILT_IN_WEB_THEME_IDS
-    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30, 40)
+    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30, 40, 50)
     assert tuple(theme.label for theme in registry.themes) == (
         "System",
         "LCARS-inspired",
         "Matrix-inspired",
         "First Responder",
         "Amateur Radio",
+        "Pip-Boy-inspired",
     )
     assert registry.require("matrix").stylesheet_url == (
         "assets/themes/matrix/theme.css"
@@ -81,8 +83,8 @@ def test_built_in_web_theme_browser_document_is_deterministic() -> None:
         "themeColors": {"light": "#eef2f7", "dark": "#0d1420"},
     }
     assert payload[-1]["themeColors"] == {
-        "light": "#11100c",
-        "dark": "#11100c",
+        "light": "#071008",
+        "dark": "#071008",
     }
     assert registry.browser_json() == registry.browser_json()
 
@@ -100,9 +102,45 @@ def test_built_in_stylesheets_are_isolated_package_resources() -> None:
         assert "javascript:" not in stylesheet.lower()
         assert "https://" not in stylesheet.lower()
         assert "http://" not in stylesheet.lower()
+        assert re.search(
+            r':root\[data-theme="[^"]+"\]\s+#[0-9a-fA-F]{3,8}\b',
+            stylesheet,
+        ) is None
         for other in registry.identifiers:
             if other != theme.identifier:
                 assert f'data-theme="{other}"' not in stylesheet
+
+
+def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
+    registry = built_in_web_theme_registry()
+    theme = registry.require("pip-boy-inspired")
+    stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+
+    assert theme.label == "Pip-Boy-inspired"
+    assert theme.order == 50
+    assert theme.color_scheme == "dark"
+    assert theme.light_theme_color == "#071008"
+    assert theme.dark_theme_color == "#071008"
+    for selector in (
+        ".workspace-shell",
+        ".workspace-tabs",
+        ".workspace-deck",
+        "[data-workspace-pane]",
+        "#radio-activity-panel",
+        ".radio-field-groups",
+    ):
+        assert selector in stylesheet
+    assert "@media (prefers-reduced-motion: reduce)" in stylesheet
+    assert "@media (forced-colors: active)" in stylesheet
+    for prohibited in (
+        "@import",
+        "url(",
+        "javascript:",
+        "display: none",
+        "visibility: hidden",
+        "[hidden]",
+    ):
+        assert prohibited not in stylesheet.lower()
 
 
 @pytest.mark.parametrize(

@@ -179,6 +179,7 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
         "web/matrix",
         "web/first-responder",
         "web/amateur-radio",
+        "web/pip-boy-inspired",
         "home-assistant/compact",
         "home-assistant/sds200-display",
         "tui/dark",
