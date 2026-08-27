@@ -96,6 +96,25 @@ _THEMES = (
     "amateur-radio",
     "pip-boy-inspired",
 )
+_DEMO_THEME_SETUP_HTML = (
+    "<!doctype html>\n"
+    '<html lang="en">\n'
+    "<head>\n"
+    '  <meta charset="utf-8">\n'
+    "  <title>sdsctl web screenshot setup</title>\n"
+    "</head>\n"
+    "<body>\n"
+    "<script>\n"
+    f"const allowedThemes = Object.freeze({json.dumps(_THEMES)});\n"
+    'const theme = location.pathname.split("/").at(-1);\n'
+    "if (allowedThemes.includes(theme)) {\n"
+    f"  localStorage.setItem({json.dumps(_THEME_STORAGE_KEY)}, theme);\n"
+    "}\n"
+    'location.replace("/");\n'
+    "</script>\n"
+    "</body>\n"
+    "</html>\n"
+)
 _CONTROL_OPERATIONS = (
     "scanner.hold_state",
     "scanner.next",
@@ -565,23 +584,8 @@ def _demo_theme_response(theme: str) -> HTMLResponse:
     if theme not in _THEMES:
         raise HTTPException(status_code=404, detail="unknown demo theme")
 
-    content = (
-        "<!doctype html>\n"
-        '<html lang="en">\n'
-        "<head>\n"
-        '  <meta charset="utf-8">\n'
-        "  <title>sdsctl web screenshot setup</title>\n"
-        "</head>\n"
-        "<body>\n"
-        "<script>\n"
-        f"localStorage.setItem({_THEME_STORAGE_KEY!r}, {theme!r});\n"
-        'location.replace("/");\n'
-        "</script>\n"
-        "</body>\n"
-        "</html>\n"
-    )
     return HTMLResponse(
-        content=content,
+        content=_DEMO_THEME_SETUP_HTML,
         headers={"Cache-Control": "no-store"},
     )
 

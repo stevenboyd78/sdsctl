@@ -168,16 +168,21 @@ def test_demo_theme_route_accepts_only_the_exact_capture_themes() -> None:
     assert demo_routes == ["/__demo/theme/{theme}"]
 
     with TestClient(app) as client:
+        response_bodies = set()
         for theme in _EXPECTED_THEMES:
             response = client.get(f"/__demo/theme/{theme}")
 
             assert response.status_code == 200
             assert response.headers["cache-control"] == "no-store"
-            assert f"localStorage.setItem('sdsctl.web.theme', '{theme}');" in (response.text)
+            response_bodies.add(response.text)
+            assert 'const theme = location.pathname.split("/").at(-1);' in response.text
+            assert "if (allowedThemes.includes(theme))" in response.text
+            assert 'localStorage.setItem("sdsctl.web.theme", theme);' in response.text
             assert 'location.replace("/");' in response.text
 
         unknown = client.get("/__demo/theme/not-a-built-in-theme")
 
+    assert response_bodies == {screenshots._DEMO_THEME_SETUP_HTML}
     assert unknown.status_code == 404
     assert unknown.json() == {"detail": "unknown demo theme"}
 
