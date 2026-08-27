@@ -95,15 +95,24 @@ def test_dashboard_exposes_mode_transition_and_unknown_fallback_hooks() -> None:
     assert "@media (max-width: 42rem)" in stylesheet
 
 
-def test_dashboard_adaptive_profiles_prioritize_without_hiding_fields() -> None:
+def test_dashboard_adaptive_profiles_offer_explicit_field_inspection() -> None:
     dashboard = _asset("dashboard.html")
     script = _asset("dashboard.js")
-    stylesheet = _asset("dashboard.css")
 
     assert 'id="radio-activity-panel"' in dashboard
     assert 'data-screen-kind="unknown"' in dashboard
+    assert 'class="scanner-display-hierarchy"' in dashboard
     for group in ("hierarchy", "rf", "identity", "special"):
         assert dashboard.count(f'data-radio-group="{group}"') == 1
+        assert dashboard.count(f'id="radio-view-{group}"') == 1
+    assert dashboard.count('id="radio-view-auto"') == 1
+    assert dashboard.count('id="radio-scan-fallback-select"') == 1
+
+    hierarchy_start = dashboard.index('class="scanner-display-hierarchy"')
+    hierarchy_end = dashboard.index("</dl>", hierarchy_start)
+    hierarchy = dashboard[hierarchy_start:hierarchy_end]
+    for target in ("radio-system", "radio-department", "radio-channel"):
+        assert f'id="{target}"' in hierarchy
 
     for kind, title in (
         ("scanning", "Now scanning"),
@@ -116,14 +125,21 @@ def test_dashboard_adaptive_profiles_prioritize_without_hiding_fields() -> None:
         assert f'{kind}: "{title}"' in script
 
     assert "function normalizedScreenKind(value)" in script
-    assert 'return typeof value === "string" && value in RADIO_SCREEN_PROFILES' in script
+    assert (
+        'typeof value === "string" && Object.hasOwn(RADIO_SCREEN_PROFILES, value)'
+        in script
+    )
     assert 'element("radio-activity-panel").dataset.screenKind = screenKind;' in script
     assert "renderRadioProfile(radio.screen_kind);" in script
 
-    for kind in ("search", "close_call", "weather", "tone_out"):
-        assert f'[data-screen-kind="{kind}"]' in stylesheet
-    adaptive_styles = stylesheet.split("#radio-activity-panel", 1)[1].split(
-        ".radio-field-group h3",
-        1,
-    )[0]
-    assert "display: none" not in adaptive_styles
+    for contract in (
+        'search: Object.freeze({layout: "search", group: "rf"})',
+        'close_call: Object.freeze({layout: "search", group: "rf"})',
+        'weather: Object.freeze({layout: "weather", group: "special"})',
+        'tone_out: Object.freeze({layout: "tone_out", group: "special"})',
+    ):
+        assert contract in script
+    assert 'const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";' in script
+    assert 'radioScanFallback === "detail" ? "hierarchy" : null' in script
+    assert "element(`radio-group-${fieldGroup}`).hidden = fieldGroup !== group;" in script
+    assert "value = toneOutDisplayValue(value);" in script

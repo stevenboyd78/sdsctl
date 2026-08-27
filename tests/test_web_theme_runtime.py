@@ -78,6 +78,7 @@ def test_runtime_defaults_to_exact_built_in_registry() -> None:
         "matrix",
         "first-responder",
         "amateur-radio",
+        "pip-boy-inspired",
     )
     assert runtime.managed_identifiers == ()
     assert runtime.ignored_managed_entries == 0
@@ -112,6 +113,7 @@ def test_runtime_merges_valid_web_theme_in_manifest_order(tmp_path: Path) -> Non
         "matrix",
         "first-responder",
         "amateur-radio",
+        "pip-boy-inspired",
     )
     assert runtime.managed_identifiers == ("solarized",)
     asset = runtime.require_asset("solarized")
@@ -151,32 +153,61 @@ def test_dashboard_picker_bootstrap_and_route_include_managed_theme(tmp_path: Pa
     css = ':root[data-theme="solarized"] { color: #93a1a1; }\n'
     _write_web_theme(tmp_path, label="Solarized & Night", css=css)
     app = _app(tmp_path)
+    asset = build_web_theme_runtime(tmp_path).require_asset("solarized")
+    assert asset.package_sha256 is not None
 
     with TestClient(app) as client:
         shell = client.get("/")
         bootstrap = client.get("/assets/theme-bootstrap.js")
         stylesheet = client.get("/assets/themes/solarized/theme.css")
+        stylesheet_source = client.get(
+            "/assets/themes/solarized/theme.css"
+            f"?sdsctl_source={asset.package_sha256}"
+        )
+        viewport_stylesheet = client.get("/assets/dashboard-viewport.css")
 
     assert shell.status_code == 200
     assert '<option value="solarized">Solarized &amp; Night</option>' in shell.text
     managed_link = (
         '<link rel="stylesheet" media="not all" '
         'data-sdsctl-managed-theme="solarized" '
-        'href="assets/themes/solarized/theme.css">'
+        'data-sdsctl-managed-theme-href="assets/themes/solarized/theme.css">'
     )
     assert managed_link in shell.text
+    assert 'data-sdsctl-managed-theme="solarized" href=' not in shell.text
     assert shell.text.index(managed_link) < shell.text.index(
+        'href="assets/dashboard-viewport.css"'
+    )
+    assert shell.text.index('href="assets/dashboard-viewport.css"') < shell.text.index(
         'src="assets/theme-bootstrap.js"'
     )
     assert '"solarized"' in bootstrap.text
     assert "MANAGED_THEME_LINKS" in bootstrap.text
-    assert 'link.media = identifier === theme ? "all" : "not all"' in bootstrap.text
+    assert 'const MANAGED_THEMES = new Set(["solarized"])' in bootstrap.text
+    assert 'link.setAttribute(' in bootstrap.text
+    assert 'link.removeAttribute("href")' in bootstrap.text
+    assert bootstrap.text.index('link.addEventListener("error"') < bootstrap.text.index(
+        "const storedSelection = readStoredTheme()"
+    )
     assert stylesheet.status_code == 200
-    assert stylesheet.text == css
+    assert css not in stylesheet.text
+    assert (
+        "@layer sdsctl-viewport-contract, sdsctl-shared, "
+        "sdsctl-managed-theme;"
+    ) in stylesheet.text
+    assert (
+        f'@import url("theme.css?sdsctl_source={asset.package_sha256}") '
+        "layer(sdsctl-managed-theme);"
+    ) in stylesheet.text
+    assert stylesheet_source.status_code == 200
+    assert stylesheet_source.text == css
     assert stylesheet.headers["content-type"].startswith("text/css")
     assert stylesheet.headers["cache-control"] == "no-store"
     assert stylesheet.headers["x-content-type-options"] == "nosniff"
     assert "default-src 'none'" in stylesheet.headers["content-security-policy"]
+    assert viewport_stylesheet.status_code == 200
+    assert "@layer sdsctl-viewport-contract" in viewport_stylesheet.text
+    assert "overflow: hidden !important" in viewport_stylesheet.text
 
 
 def test_browser_bootstrap_enables_only_selected_managed_theme_and_falls_back(
@@ -190,16 +221,43 @@ def test_browser_bootstrap_enables_only_selected_managed_theme_and_falls_back(
         source = client.get("/assets/theme-bootstrap.js").text
     harness = f"""
 "use strict";
-const link = {{ dataset: {{ sdsctlManagedTheme: "solarized" }}, media: "not all" }};
+const listeners = {{}};
+const attributes = new Map();
+const lifecycle = [];
+const link = {{
+  dataset: {{
+    sdsctlManagedTheme: "solarized",
+    sdsctlManagedThemeHref: "assets/themes/solarized/theme.css",
+  }},
+  media: "not all",
+  addEventListener: (event, handler) => {{
+    listeners[event] = handler;
+    lifecycle.push(`listen-${{event}}`);
+  }},
+  hasAttribute: (name) => attributes.has(name),
+  setAttribute: (name, value) => {{
+    attributes.set(name, value);
+    lifecycle.push(`set-${{name}}`);
+  }},
+  removeAttribute: (name) => {{
+    attributes.delete(name);
+    lifecycle.push(`remove-${{name}}`);
+  }},
+}};
 const colorScheme = {{ content: "" }};
 const themeColor = {{ content: "" }};
+const picker = {{ value: "solarized" }};
 let stored = "solarized";
 global.document = {{
   documentElement: {{ dataset: {{}} }},
   querySelectorAll: (selector) =>
     selector === "link[data-sdsctl-managed-theme]" ? [link] : [],
-  querySelector: (selector) =>
-    selector === 'meta[name="color-scheme"]' ? colorScheme : themeColor,
+  querySelector: (selector) => {{
+    if (selector === 'meta[name="color-scheme"]') return colorScheme;
+    if (selector === 'meta[name="theme-color"]') return themeColor;
+    if (selector === "#theme-select") return picker;
+    return null;
+  }},
 }};
 global.window = {{
   localStorage: {{
@@ -212,9 +270,34 @@ eval({json.dumps(source)});
 if (window.sdsctlTheme.current() !== "solarized") throw new Error("stored theme");
 if (document.documentElement.dataset.theme !== "solarized") throw new Error("dataset");
 if (link.media !== "all") throw new Error("managed link not enabled");
+if (!attributes.has("href")) throw new Error("managed href not activated");
+if (lifecycle.indexOf("listen-error") > lifecycle.indexOf("set-href")) {{
+  throw new Error("href activated before error listener");
+}}
+if (picker.value !== "solarized") throw new Error("initial picker");
 if (window.sdsctlTheme.select("missing") !== "system") throw new Error("fallback");
 if (link.media !== "not all") throw new Error("managed link not disabled");
 if (stored !== "system") throw new Error("fallback not persisted");
+if (picker.value !== "system") throw new Error("fallback picker");
+listeners.error();
+if (window.sdsctlTheme.current() !== "system") throw new Error("stale error changed theme");
+if (attributes.has("href")) throw new Error("stale failed managed href retained");
+if (window.sdsctlTheme.select("solarized") !== "solarized") throw new Error("reselect");
+if (!attributes.has("href")) throw new Error("reselect did not request stylesheet");
+if (picker.value !== "solarized") throw new Error("reselected picker");
+listeners.error();
+if (window.sdsctlTheme.current() !== "system") throw new Error("load error fallback");
+if (document.documentElement.dataset.theme !== "system") throw new Error("error dataset");
+if (link.media !== "not all") throw new Error("failed managed link not disabled");
+if (attributes.has("href")) throw new Error("failed managed href retained");
+if (stored !== "system") throw new Error("load error not persisted");
+if (picker.value !== "system") throw new Error("load error picker not repaired");
+if (window.sdsctlTheme.select("solarized") !== "solarized") throw new Error("retry");
+if (!attributes.has("href")) throw new Error("retry href not restored");
+if (link.media !== "all") throw new Error("retry link not enabled");
+listeners.error();
+if (window.sdsctlTheme.current() !== "system") throw new Error("retry fallback");
+if (attributes.has("href")) throw new Error("retry href retained");
 """
 
     completed = subprocess.run(
@@ -226,6 +309,142 @@ if (stored !== "system") throw new Error("fallback not persisted");
     )
 
     assert completed.returncode == 0, completed.stderr
+
+
+def test_browser_bootstrap_repairs_stored_managed_theme_with_missing_link(
+    tmp_path: Path,
+) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is not available")
+    _write_web_theme(tmp_path)
+    with TestClient(_app(tmp_path)) as client:
+        source = client.get("/assets/theme-bootstrap.js").text
+    harness = f"""
+"use strict";
+const colorScheme = {{ content: "" }};
+const themeColor = {{ content: "" }};
+let stored = "solarized";
+global.document = {{
+  documentElement: {{ dataset: {{}} }},
+  querySelectorAll: () => [],
+  querySelector: (selector) => {{
+    if (selector === 'meta[name="color-scheme"]') return colorScheme;
+    if (selector === 'meta[name="theme-color"]') return themeColor;
+    return null;
+  }},
+}};
+global.window = {{
+  localStorage: {{
+    getItem: () => stored,
+    setItem: (_key, value) => {{ stored = value; }},
+  }},
+  matchMedia: () => ({{ matches: false, addEventListener: () => {{}} }}),
+}};
+eval({json.dumps(source)});
+if (window.sdsctlTheme.current() !== "system") throw new Error("missing link fallback");
+if (document.documentElement.dataset.theme !== "system") throw new Error("dataset");
+if (stored !== "system") throw new Error("stored selection not repaired");
+"""
+
+    completed = subprocess.run(
+        [node, "-e", harness],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_managed_stylesheet_cannot_escape_shared_viewport_cascade(
+    tmp_path: Path,
+) -> None:
+    css = """
+@layer sdsctl-viewport-contract {
+  html, body { height: auto !important; overflow: auto !important; }
+}
+:root[data-theme="solarized"] .workspace-shell {
+  display: block !important;
+  height: 200vh !important;
+  overflow: auto !important;
+}
+@media (forced-colors: active) {
+  :root[data-theme="solarized"] button {
+    forced-color-adjust: none !important;
+    color: #fff !important;
+    background: #fff !important;
+    -webkit-text-fill-color: #fff !important;
+    transition: color 2s !important;
+  }
+}
+"""
+    _write_web_theme(tmp_path, css=css)
+    asset = build_web_theme_runtime(tmp_path).require_asset("solarized")
+    assert asset.package_sha256 is not None
+
+    with TestClient(_app(tmp_path)) as client:
+        shell = client.get("/")
+        shared = client.get("/assets/dashboard.css")
+        managed = client.get("/assets/themes/solarized/theme.css")
+        managed_source = client.get(
+            "/assets/themes/solarized/theme.css"
+            f"?sdsctl_source={asset.package_sha256}"
+        )
+        viewport = client.get("/assets/dashboard-viewport.css")
+
+    assert '@import url("dashboard.css?sdsctl_source=1") layer(sdsctl-shared)' in (
+        shared.text
+    )
+    assert css not in managed.text
+    assert "layer(sdsctl-managed-theme)" in managed.text
+    assert managed_source.text == css
+    assert (
+        "@layer sdsctl-viewport-contract, sdsctl-shared, "
+        "sdsctl-managed-theme;"
+    ) in viewport.text
+    for protected in (
+        "height: 100dvh !important",
+        "overflow: hidden !important",
+        "grid-template-rows: auto minmax(0, 1fr) auto !important",
+        "display: none !important",
+        "height: auto !important",
+        "overflow: visible !important",
+        "forced-color-adjust: auto !important",
+        "-webkit-text-fill-color: currentColor !important",
+        "color: ButtonText !important",
+        "background: ButtonFace !important",
+        "color: FieldText !important",
+        "background: Field !important",
+        "color: HighlightText !important",
+        "background: Highlight !important",
+        "transition: none !important",
+    ):
+        assert protected in viewport.text
+    assert shell.text.index('data-sdsctl-managed-theme="solarized"') < (
+        shell.text.index('href="assets/dashboard-viewport.css"')
+    )
+
+
+def test_layer_source_routes_require_exact_internal_tokens(tmp_path: Path) -> None:
+    _write_web_theme(tmp_path)
+
+    with TestClient(_app(tmp_path)) as client:
+        invalid_shared = client.get("/assets/dashboard.css?sdsctl_source=invalid")
+        built_in_source = client.get(
+            "/assets/themes/system/theme.css?sdsctl_source=1"
+        )
+        invalid_managed = client.get(
+            "/assets/themes/solarized/theme.css?sdsctl_source=invalid"
+        )
+
+    assert invalid_shared.status_code == 404
+    assert invalid_shared.json() == {"detail": "Stylesheet source not found."}
+    for response in (built_in_source, invalid_managed):
+        assert response.status_code == 404
+        assert response.json() == {"detail": "Theme asset not found."}
+        assert response.headers["x-content-type-options"] == "nosniff"
 
 
 def test_dashboard_does_not_live_discover_new_package(tmp_path: Path) -> None:

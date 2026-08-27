@@ -21,6 +21,7 @@ LIVE_REPOSITORY_OWNED_FILES = (
     "src/sds200/themes/home-assistant/sds200-display/sds200-display-card.js",
     "docs/releasing.md",
     "wiki/Home.md",
+    "wiki/Web-Dashboard.md",
     "wiki/_Sidebar.md",
 )
 BRANDING_ASSET_NAMES = (

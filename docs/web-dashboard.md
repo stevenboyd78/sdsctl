@@ -17,7 +17,11 @@ Ingress framing policy, and browser-audio compatibility for non-secure Home
 Assistant browser contexts without changing standalone loopback defaults.
 Milestone 26.1 adds a separate password-authenticated native-TLS mode for one
 explicit LAN interface while preserving the default, generic-container, and
-Home Assistant security boundaries.
+Home Assistant security boundaries. Milestone 27.3 replaces the original card
+grid with a viewport-owned Scanner, Controls, Audio, Recordings, and Diagnostics
+workspace, redesigns the stable System theme around the existing adaptive
+scanner-display model, and adds an original Pip-Boy-inspired built-in theme
+without changing daemon ownership, authentication, or Ingress behavior.
 
 ## Architecture
 
@@ -276,9 +280,14 @@ Open the local dashboard after starting the web service:
 http://127.0.0.1:8000/
 ```
 
-Theme selection is presentation-only and browser-local. **System** follows the
-browser or operating-system light/dark preference. The four custom choices are
-deliberately more theatrical while preserving the same dashboard semantics:
+Theme selection is presentation-only and browser-local. The deterministic
+built-in picker order is **System**, **LCARS-inspired**, **Matrix-inspired**,
+**First Responder**, **Amateur Radio**, and **Pip-Boy-inspired**. System follows
+the browser or operating-system light/dark preference and remains the stable
+default and safe fallback. It now frames the shared workspace and prominent
+scanner pane around the established scanner-display proportions, hierarchy,
+status treatment, and adaptive screen profiles. The five custom choices are
+more theatrical while preserving the same dashboard semantics:
 
 - **LCARS-inspired** connects the six operational panels with asymmetric rails,
   segmented console bands, luminous command-deck surfaces, and layered display
@@ -292,8 +301,13 @@ deliberately more theatrical while preserving the same dashboard semantics:
 - **Amateur Radio** frames the dashboard as an SDS200-inspired rack/front panel
   with a scanner display window, tactile controls, rotary hardware, vents,
   chassis depth, and bench-equipment lighting.
+- **Pip-Boy-inspired** uses an original phosphor-green and amber field-terminal
+  treatment with restrained CRT depth, grids, meters, scanlines, and console
+  framing. It contains no game logos, character or corporate artwork,
+  screenshots, sounds, proprietary fonts, copied hardware geometry, or remote
+  resources.
 
-The five choices are built-in packages under the installed
+The six choices are built-in packages under the installed
 `sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
 only a versioned `manifest.json` and its declared `theme.css`. The manifest
 records schema version 1, the `web` interface, stable theme ID, human label,
@@ -302,37 +316,57 @@ theme colors. The registry requires the directory name and manifest ID to match,
 rejects unknown fields and schema versions, and exposes only validated local CSS
 files.
 
-The base `/assets/dashboard.css` contains the shared layout and accessibility
-rules. Theme-owned selectors, design tokens, responsive styling, and decorative
-effects remain inside their package and are served at
-`/assets/themes/<theme-name>/theme.css`. The HTML options, stylesheet links, and
-pre-paint browser metadata are generated from the same immutable ordered
-registry, so they cannot drift into separate hard-coded theme lists.
+The base `/assets/dashboard.css` contains shared presentation, responsive pane
+composition, and accessibility defaults in the `sdsctl-shared` cascade layer.
+Theme-owned selectors, design tokens, and decorative effects remain inside their
+package and are served at `/assets/themes/<theme-name>/theme.css`. Managed CSS is
+confined to the `sdsctl-managed-theme` layer. A final
+`/assets/dashboard-viewport.css` contract owns structural dimensions, pane
+visibility, overflow, semantic-text reachability, compact tab geometry, and the
+accessibility scrolling escape. Its protected declarations cannot be displaced
+by either a built-in or schema-valid managed theme, including managed
+`!important` declarations or attempts to reuse the protected layer name. The
+HTML options, stylesheet links, and pre-paint browser metadata are generated
+from the same immutable ordered registry, so they cannot drift into separate
+hard-coded theme lists.
 
-At desktop-class sizes the custom themes use a dense three-by-two full-screen
-workstation composition with minimal page scrolling. Intermediate widths reflow
-recording telemetry to preserve readable values, while compact and phone layouts
-fall back to conventional scrolling without changing the semantic interface.
-Large displays can expose more of the surrounding instrumentation rather than
-merely enlarging controls.
+The viewport-owned shell exposes five panes: **Scanner**, **Controls**,
+**Audio**, **Recordings**, and **Diagnostics**. At normal browser zoom, the
+document and active pane fit without horizontal or vertical scrolling at the
+390x844 portrait-phone, 800x480 compact-landscape, 1366x768 desktop, and
+1920x1080 full-HD reference viewports. Information that cannot fit concurrently
+uses the named panes, scanner inspection controls, or recording page controls
+instead of an unannounced scrolling region. Large displays scale the workspace
+cleanly. When user text enlargement or browser zoom crosses the compact
+composition's safe boundary, accessibility and content reachability take
+priority and conventional scrolling is deliberately restored.
 
-The same-origin `/assets/theme-bootstrap.js` script runs in the document head
-before `/assets/dashboard.css` and the packaged theme stylesheets. It validates
+The base and packaged theme stylesheets are declared before the same-origin
+`/assets/theme-bootstrap.js` script in the document head. That parser-blocking
+script still runs before the body is parsed and before first paint. It validates
 the stored value against registry-generated metadata, applies the corresponding
-`data-theme` value to the document root before first paint, and updates
-`color-scheme` and `theme-color` metadata. A missing, removed, or malformed
-selection and unavailable local storage safely fall back to **System** while the
-existing `sdsctl.web.theme` storage key and public theme IDs remain compatible.
+`data-theme` value to the document root, and updates `color-scheme` and
+`theme-color` metadata. Managed links remain inert until the bootstrap has
+installed failure handling and selected their ID. A missing, removed, mutated,
+or unloadable stylesheet removes the failed link target and repairs the
+document theme, metadata, visible picker, and stored selection to **System**;
+explicit reselection performs a fresh request. Unavailable local storage also
+falls back safely while the existing `sdsctl.web.theme` key and public theme IDs
+remain compatible.
 The normal dashboard Content Security Policy remains unchanged: inline scripts
 and styles are still forbidden, and no remote fonts, scripts, styles, or theme
 assets are required.
 
-The cinematic layer is a shared `aria-hidden` decorative stage. It is
-pointer-inert and carries no scanner meaning. All themes retain the same labels,
-DOM structure, ARIA state, keyboard focus treatment, responsive behavior, and
-status text; scanner state is never communicated by color alone. Decorative
-animation and transitions are suppressed for `prefers-reduced-motion`, and the
-more expensive effects are disabled in compact layouts.
+The pane selector is a semantic tablist. Pointer selection and the Arrow keys
+activate adjacent panes; Home and End activate the first and last panes. One
+roving tab stop follows the selected pane, and browser-local storage under
+`sdsctl.web.pane` restores that selection. The cinematic layer is a shared
+`aria-hidden` decorative stage. It is pointer-inert and carries no scanner
+meaning. All themes retain the same labels, DOM structure, ARIA state, keyboard
+focus treatment, responsive behavior, and status text; scanner state is never
+communicated by color alone. Decorative animation and transitions are suppressed
+for `prefers-reduced-motion`, and forced-color users receive the shared semantic
+workspace without decorative staging.
 
 Milestone 26.13 provides the explicit local-directory lifecycle with staging
 validation, collision policy, rollback, removal, and recovery. Milestone 26.14
@@ -348,6 +382,9 @@ presentation-capable, so operators must inspect it before installation even
 though CSP, path, schema, size, and digest controls remain enforced. Home
 Assistant and TUI themes remain separate inactive renderer adapters under their
 own interface directories; `gui` stays reserved until a desktop renderer exists.
+Valid managed web themes use the same five-pane layout and lifecycle. Theme
+switching preserves the selected pane and does not interrupt live state, form or
+control state, browser audio, recording state, or the meaning of keyboard focus.
 
 Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
 real packaged demo application and Google Chrome. All five themes rendered at
@@ -396,7 +433,22 @@ not contain live scanner identifiers, locations, or recordings.
 
 ![Amateur Radio theme at 1920x1080](assets/web-dashboard/theme-amateur-radio-1920x1080.png)
 
-### Compact responsive example — 1366x768
+### Pip-Boy-inspired — 1920x1080
+
+![Pip-Boy-inspired theme at 1920x1080](assets/web-dashboard/theme-pip-boy-inspired-1920x1080.png)
+
+### Portrait-phone reference — 390x844 at DPR2
+
+![System theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-system-390x844-dpr2.png)
+
+The DPR2 capture has a 390x844 CSS viewport and a validated 780x1688 physical
+PNG. It exercises the phone composition without changing the layout breakpoint.
+
+### Compact-landscape reference — 800x480
+
+![Pip-Boy-inspired theme at 800x480](assets/web-dashboard/theme-pip-boy-inspired-800x480.png)
+
+### Desktop reference — 1366x768
 
 ![Amateur Radio theme at 1366x768](assets/web-dashboard/theme-amateur-radio-1366x768.png)
 
@@ -407,11 +459,69 @@ Chromium and the web dependencies available:
 python scripts/generate_web_dashboard_screenshots.py
 ```
 
-The helper starts a loopback-only demo instance of the real application, selects
-each theme through same-origin browser-local state, uses an isolated Chrome
-profile per capture, enforces a bounded capture timeout, validates the written
-PNG dimensions, and shuts the demo server down when capture is complete. None of
-that demo behavior is part of the shipped `sdsctl web` service.
+The helper requires Node.js 24 or newer, starts a loopback-only demo instance of
+the real application, selects each theme through same-origin browser-local state,
+and uses an isolated Chrome profile per capture. Its dependency-free Node bridge
+reuses the browser audit's Chrome DevTools Protocol client to set the declared
+width, height, and DPR as the exact CSS viewport, force reduced motion before
+navigation, and verify `innerWidth`, `innerHeight`, `devicePixelRatio`, and the
+visual viewport. It waits for dashboard state, fonts, and stable animation
+frames, then captures only that viewport through `Page.captureScreenshot` and
+returns the corresponding outer HTML. The Python helper accepts the staged PNG
+only when that HTML contains the expected theme, authoritative fictional scanner
+and recording values, pagination state, and fixed update clock. It then validates
+the complete PNG chunk structure, CRCs, compressed scanlines, and DPR-scaled
+physical dimensions before atomically publishing the image and shutting the demo
+server down. It never derives a CSS viewport from Chrome's outer-window size.
+None of that demo behavior is part of the shipped `sdsctl web` service.
+
+Verify the exact nine-file generator, asset-directory, canonical-guide, and raw
+default-branch wiki reference contract without opening Chrome:
+
+```bash
+python scripts/generate_web_dashboard_screenshots.py --verify-gallery
+```
+
+CI and release validation capture the System desktop reference twice with the
+same Chrome executable and compare its PNG bytes; maintainers may select any
+other named image in the same mode. Both runs use temporary output and profile
+directories, so this does not rewrite the checked-in gallery or impose pixel
+equality across Chrome versions:
+
+```bash
+python scripts/generate_web_dashboard_screenshots.py \
+  --verify-repeatability \
+  --only theme-system-1920x1080.png
+```
+
+Run the screenshot-free real-Chrome acceptance matrix before closing responsive
+workspace or theme changes:
+
+```bash
+node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
+```
+
+The audit reuses the same fictional demo service and one isolated Chrome
+session. It resizes that session through all four reference CSS viewports and
+DPR transitions, exercises every built-in theme and all five panes, drives
+recording pagination and focus, reveals all 35 radio fields, and probes adaptive
+screen mappings, reduced motion, forced colors/high contrast, the browser-zoom
+scrolling escape, accessibility-tree semantics, and an Ingress-style URL
+prefix. At the constrained 800x480 reference viewport it also uses trusted
+browser Tab and Shift+Tab input across every pane and theme, comparing traversal
+with an independent inventory of rendered enabled semantic controls. Every
+scanner matrix case selects both Simple and Detail and applies the same
+geometry, clipping, and readability checks to scanning, search, Close Call,
+weather, Tone-Out, and unknown automatic presentations.
+
+Normal and forced-color checks use browser-computed foreground, opacity, and
+ancestor-composited background colors. The audit applies the WCAG 2.x AA text
+contrast floors: 4.5:1 for ordinary text and 3:1 only for text at least 24 CSS
+pixels, or at least 18.66 CSS pixels with a bold weight. This standards-derived
+floor is shared by authoritative visible radio values and enabled control text;
+themes do not receive individual tolerances. The audit writes no gallery
+images. Use `--help` for executable overrides or `--list` to inspect the
+120-case matrix without opening Chrome.
 
 The browser performs one initial `/api/v1/status` request and opens
 `/api/v1/events` with the same origin. The event response uses
@@ -434,7 +544,7 @@ Later messages retain the existing daemon event kinds and payloads:
 
 ### Shared scanner-state fields
 
-The **Now scanning** panel renders every field in the 35-field
+The **Scanner** pane renders every field in the 35-field
 `RadioStateSnapshot` contract. Its stable labeled groups cover:
 
 - hierarchy names, indexes, and hold state for system, department, site, and
@@ -450,8 +560,10 @@ These values are read-only browser presentation. Browser audio and daemon WAV
 recording remain separate application workflows, and the scanner-native
 recording field does not control either one. The page renders scanner-provided
 values as text without inferring unknown semantics. Integer zero and false-like
-text such as `Off` are retained; null, missing, and empty fields render as
-**Unavailable**.
+text such as `Off` are retained except for configured Tone-Out A and B values:
+numeric zero, including equivalent scanner text, renders as **Detect** because
+zero tells the scanner to identify a received tone. Null, missing, and empty
+fields render as **Unavailable**.
 
 Battery presentation follows the authoritative GSI/PSI field lifecycle: an
 omitted value clears an earlier value, while literal zero remains visible. The
@@ -468,12 +580,18 @@ screens clears values that are no longer present rather than retaining stale
 mode-specific details. Raw `screen` and classified `screen_kind` remain separate
 so an unknown future screen is still visible without being misclassified.
 
-The activity panel uses the normalized `screen_kind` to select a mode-aware
-heading and prioritize its existing detail groups. Search and Close Call place
-RF and special-mode values first; Weather and Tone-Out place special-mode values
-first; scanning and unknown values use the ordinary hierarchy-first order. This
-is presentation only: all 35 shared fields remain rendered and accessible, and
-unknown or future screen values do not hide data.
+The Scanner pane keeps System, Department, and Channel in one prominent stable
+hierarchy. Its **Auto**, **Hierarchy**, **RF**, **Identity**, and **Special**
+controls make every remaining field group explicitly reachable. Auto uses the
+normalized `screen_kind`: Search and Close Call select the RF group and search
+presentation, while Weather and Tone-Out select the Special group and their
+dedicated presentation. Scanning and unknown values use the configurable
+**Simple** or **Detail** scan fallback; Detail initially selects Hierarchy and is
+the safe default. The fallback persists under
+`sdsctl.web.scan-fallback`. Selecting a field group is an inspection choice that
+remains active across scanner updates until **Auto** is chosen again. This is
+presentation only: all 35 shared fields remain rendered and reachable, and
+unknown or future screen values do not discard data.
 
 The browser directly applies complete runtime snapshots, scanner connection
 changes, PSI and radio-state updates, audio snapshots, and recording snapshots.
@@ -499,14 +617,14 @@ The interface presents:
 - daemon-owned recording state, elapsed time, packet and sample totals, audio
   duration, RTP reliability, and current file;
 - a newest-first list of recent finalized recordings with Play and Download
-  actions for compatible WAVs; and
+  actions for compatible WAVs, paginated three entries at a time; and
 - the local time of the most recent applied update.
 
 The interface uses semantic landmarks, definition lists, a skip link, visible
-keyboard focus, status text that does not rely on color alone, responsive
-single-, two-, and three-column layouts, system light and dark modes, and
-reduced-motion behavior. JavaScript updates text through `textContent`; it does
-not render daemon-provided HTML.
+keyboard focus, status text that does not rely on color alone, the semantic
+five-pane tablist, system light and dark modes, reduced-motion and forced-color
+behavior, and the explicit accessibility scrolling escape. JavaScript updates
+text through `textContent`; it does not render daemon-provided HTML.
 
 The HTML, CSS, and JavaScript are package resources served with `no-store`, a
 restrictive Content Security Policy, no-referrer behavior, MIME sniffing
@@ -778,12 +896,17 @@ The dashboard now includes:
   secret-by-environment reference, and revocation of active long-lived
   responses;
 - the `sdsctl web` command;
-- a packaged accessible responsive browser shell;
+- a packaged accessible responsive five-pane browser workspace with persistent
+  pointer and keyboard selection, normal-zoom no-scroll reference layouts, and
+  an enlarged-text/browser-zoom scrolling escape;
 - snapshot-first same-origin Server-Sent Events;
 - validated daemon sequence identifiers and complete JSON event envelopes;
 - direct incremental scanner, radio, PSI, audio, and daemon updates;
 - automatic browser reconnect, two-second polling fallback, and periodic
   authoritative reconciliation;
+- a scanner-display presentation with adaptive Search/Close Call, Weather, and
+  Tone-Out modes, persistent Simple or Detail scan fallback, and explicit
+  Hierarchy, RF, Identity, and Special inspection of all 35 radio fields;
 - scanner, radio-activity, daemon, PSI, audio, and router summaries;
 - explicit Play and Stop browser audio over daemon-owned PCMU with AudioWorklet
   mu-law decoding, bounded buffering, resampling, and loss telemetry;
@@ -791,19 +914,20 @@ The dashboard now includes:
   with live recording and RTP reliability telemetry;
 - ordered `recording.state` browser updates plus active-recording polling and
   reload/reconnect reconciliation;
-- bounded newest-first finalized recording inventory with safe same-origin Play
-  and Download actions through the private recording-file service;
+- bounded newest-first finalized recording inventory, three-entry pagination,
+  and safe same-origin Play and Download actions through the private
+  recording-file service;
 - deterministic browser PCMU and SSE cleanup, including hidden-tab event
   suspension without stopping active audio or daemon-owned recording;
 - active recording survival across browser or web-process disconnects and
   daemon-shutdown finalization before audio runtime teardown;
 - idle disconnected daemon event-client reaping;
 - restrictive static-, event-, audio-, and recording-file response headers;
-- browser-local system-adaptive, LCARS-inspired, Matrix-inspired, First
-  Responder, and Amateur Radio themes over one shared accessible dashboard
-  structure, with immersive full-screen custom-theme staging, compact responsive
-  reflow, reduced-motion handling, CSP-safe pre-paint restoration, and no daemon
-  or scanner state coupling;
+- browser-local System, LCARS-inspired, Matrix-inspired, First Responder,
+  Amateur Radio, and original asset-free Pip-Boy-inspired themes in deterministic
+  order over one shared accessible workspace, with managed-theme compatibility,
+  reduced-motion and forced-color handling, CSP-safe pre-paint restoration, and
+  no daemon or scanner state coupling;
 - deterministic documentation screenshots generated from the real packaged
   dashboard with fictional demo state and bounded native-Chrome capture; and
 - parser, application, event, audio, recording lifecycle, shell, server,

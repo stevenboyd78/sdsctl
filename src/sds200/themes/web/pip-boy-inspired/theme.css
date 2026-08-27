@@ -1,0 +1,466 @@
+/* Original retro-futurist field-terminal built-in web theme. */
+
+:root[data-theme="pip-boy-inspired"] {
+  color-scheme: dark;
+  --background: #030705;
+  --surface: #09130b;
+  --surface-emphasis: #0c1a0f;
+  --text: #c8f7bd;
+  --muted: #91b98a;
+  --border: #3f7041;
+  --accent: #72df68;
+  --accent-strong: #a6ff91;
+  --success: #7be572;
+  --warning: #e4ad50;
+  --danger: #ff8068;
+  --focus: #ffd36c;
+  --shadow:
+    inset 0 0 1.6rem rgb(86 210 80 / 0.045),
+    0 0.65rem 1.5rem rgb(0 0 0 / 0.46);
+  --radius-small: 0.18rem;
+  --radius-large: 0.32rem;
+  --terminal-black: #020503;
+  --terminal-glass: #061008;
+  --terminal-green: #86f176;
+  --terminal-green-dim: #3c8d3c;
+  --terminal-amber: #e4ad50;
+  --terminal-frame: #293429;
+  --terminal-frame-light: #53614d;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+}
+
+:root[data-theme="pip-boy-inspired"] body {
+  background:
+    radial-gradient(
+      circle at 50% -8rem,
+      rgb(114 223 104 / 0.12),
+      transparent 36rem
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 3.95rem,
+      rgb(114 223 104 / 0.018) 3.95rem 4rem
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 3.95rem,
+      rgb(114 223 104 / 0.018) 3.95rem 4rem
+    ),
+    var(--background);
+}
+
+:root[data-theme="pip-boy-inspired"] .site-header,
+:root[data-theme="pip-boy-inspired"] .site-footer {
+  border: 1px solid var(--terminal-frame-light);
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 42%),
+    var(--terminal-frame);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.055),
+    inset 0 -0.25rem 0.7rem rgb(0 0 0 / 0.32),
+    0 0.55rem 1.25rem rgb(0 0 0 / 0.38);
+}
+
+:root[data-theme="pip-boy-inspired"] .site-header {
+  border-left: 0.4rem solid var(--terminal-amber);
+}
+
+:root[data-theme="pip-boy-inspired"] .brand h1,
+:root[data-theme="pip-boy-inspired"] .overview h2,
+:root[data-theme="pip-boy-inspired"] .panel h2 {
+  color: var(--terminal-green);
+  letter-spacing: 0.045em;
+  text-shadow: 0 0 0.65rem rgb(134 241 118 / 0.2);
+  text-transform: uppercase;
+}
+
+:root[data-theme="pip-boy-inspired"] .eyebrow,
+:root[data-theme="pip-boy-inspired"] .panel-kicker,
+:root[data-theme="pip-boy-inspired"] .theme-picker label {
+  color: var(--terminal-amber);
+  letter-spacing: 0.14em;
+}
+
+:root[data-theme="pip-boy-inspired"] .theme-picker select,
+:root[data-theme="pip-boy-inspired"] button,
+:root[data-theme="pip-boy-inspired"] .recording-action {
+  border-color: var(--terminal-green-dim);
+  border-radius: var(--radius-small);
+  color: var(--terminal-green);
+  background:
+    linear-gradient(180deg, rgb(134 241 118 / 0.08), transparent),
+    var(--terminal-glass);
+  box-shadow:
+    inset 0 0 0.65rem rgb(114 223 104 / 0.055),
+    0 0.2rem 0.45rem rgb(0 0 0 / 0.36);
+  text-transform: uppercase;
+}
+
+:root[data-theme="pip-boy-inspired"] button:hover:not(:disabled),
+:root[data-theme="pip-boy-inspired"] .recording-action:hover {
+  border-color: var(--terminal-amber);
+  color: var(--terminal-black);
+  background: var(--terminal-amber);
+}
+
+:root[data-theme="pip-boy-inspired"] .status-badge {
+  border-radius: var(--radius-small);
+  background: var(--terminal-glass);
+  box-shadow:
+    inset 0 0 0.8rem rgb(114 223 104 / 0.08),
+    0 0 0.65rem rgb(114 223 104 / 0.06);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes pip-boy-inspired-signal-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 0.25rem rgb(123 229 114 / 0.18);
+  }
+
+  50% {
+    text-shadow: 0 0 0.75rem rgb(123 229 114 / 0.42);
+  }
+}
+
+:root[data-theme="pip-boy-inspired"] .status-badge[data-state="online"] {
+  animation: pip-boy-inspired-signal-pulse 2.8s ease-in-out infinite;
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-shell {
+  border: 0.18rem solid var(--terminal-frame-light);
+  border-radius: 0.65rem;
+  background:
+    radial-gradient(
+      circle at 0.65rem 0.65rem,
+      #778270 0 0.11rem,
+      #1a211a 0.12rem 0.21rem,
+      transparent 0.22rem
+    ),
+    radial-gradient(
+      circle at calc(100% - 0.65rem) 0.65rem,
+      #778270 0 0.11rem,
+      #1a211a 0.12rem 0.21rem,
+      transparent 0.22rem
+    ),
+    radial-gradient(
+      circle at 0.65rem calc(100% - 0.65rem),
+      #778270 0 0.11rem,
+      #1a211a 0.12rem 0.21rem,
+      transparent 0.22rem
+    ),
+    radial-gradient(
+      circle at calc(100% - 0.65rem) calc(100% - 0.65rem),
+      #778270 0 0.11rem,
+      #1a211a 0.12rem 0.21rem,
+      transparent 0.22rem
+    ),
+    linear-gradient(145deg, #394638, #202820 56%, #161c17);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.09),
+    inset 0 -0.45rem 1.1rem rgb(0 0 0 / 0.42),
+    0 0.9rem 2.2rem rgb(0 0 0 / 0.52);
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-tabs {
+  border: 1px solid #61705b;
+  border-bottom-color: #151b16;
+  border-radius: 0.28rem 0.28rem 0 0;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgb(255 255 255 / 0.025) 0 2px,
+      transparent 2px 6px
+    ),
+    #252f25;
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.065),
+    inset 0 -0.3rem 0.65rem rgb(0 0 0 / 0.3);
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-tabs button,
+:root[data-theme="pip-boy-inspired"] .workspace-tabs [role="tab"] {
+  border: 1px solid var(--terminal-green-dim);
+  color: var(--muted);
+  background: #081009;
+  box-shadow: inset 0 0 0.55rem rgb(114 223 104 / 0.055);
+  letter-spacing: 0.06em;
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-tabs [aria-selected="true"] {
+  border-color: var(--terminal-amber);
+  color: var(--terminal-black);
+  background: var(--terminal-amber);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.2),
+    0 0 0.7rem rgb(228 173 80 / 0.18);
+}
+
+:root[data-theme="pip-boy-inspired"] .radio-view-controls button[aria-pressed="true"] {
+  border-color: var(--terminal-amber);
+  color: var(--terminal-black);
+  background: var(--terminal-amber);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 0.2),
+    0 0 0.7rem rgb(228 173 80 / 0.18);
+}
+
+:root[data-theme="pip-boy-inspired"] .radio-scan-fallback select {
+  border: 1px solid var(--terminal-green-dim);
+  border-radius: var(--radius-small);
+  color: var(--terminal-green);
+  background: var(--terminal-glass);
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-deck {
+  position: relative;
+  border: 0.35rem solid #1b241c;
+  border-radius: 0 0 0.38rem 0.38rem;
+  background:
+    radial-gradient(
+      ellipse at center,
+      rgb(114 223 104 / 0.075),
+      transparent 68%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgb(134 241 118 / 0.018) 0 1px,
+      transparent 1px 4px
+    ),
+    var(--terminal-black);
+  box-shadow:
+    inset 0 0 2.8rem rgb(0 0 0 / 0.78),
+    inset 0 0 0 1px var(--terminal-green-dim);
+}
+
+:root[data-theme="pip-boy-inspired"] .workspace-deck::after {
+  position: absolute;
+  z-index: 4;
+  inset: 0;
+  content: "";
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 3px,
+      rgb(134 241 118 / 0.025) 3px 4px
+    );
+  box-shadow: inset 0 0 2.2rem rgb(0 0 0 / 0.52);
+}
+
+:root[data-theme="pip-boy-inspired"] [data-workspace-pane] {
+  border: 1px solid rgb(60 141 60 / 0.78);
+  border-radius: 0.16rem;
+  background:
+    linear-gradient(120deg, rgb(114 223 104 / 0.035), transparent 22rem),
+    rgb(3 10 5 / 0.94);
+  box-shadow:
+    inset 0 0 1.9rem rgb(114 223 104 / 0.028),
+    0 0 0.8rem rgb(0 0 0 / 0.34);
+}
+
+:root[data-theme="pip-boy-inspired"] .panel {
+  border: 1px solid var(--terminal-green-dim);
+  border-radius: var(--radius-large);
+  background:
+    linear-gradient(180deg, rgb(134 241 118 / 0.035), transparent 8rem),
+    var(--surface);
+  box-shadow:
+    inset 0 0 1.35rem rgb(114 223 104 / 0.025),
+    0 0.45rem 1rem rgb(0 0 0 / 0.4);
+}
+
+:root[data-theme="pip-boy-inspired"] .panel-header,
+:root[data-theme="pip-boy-inspired"] .panel-subsection-header {
+  border-bottom-color: var(--terminal-green-dim);
+  background:
+    linear-gradient(90deg, rgb(114 223 104 / 0.08), transparent 72%);
+}
+
+:root[data-theme="pip-boy-inspired"] .status-list > div,
+:root[data-theme="pip-boy-inspired"] .radio-field-list > div {
+  border-bottom-color: rgb(60 141 60 / 0.58);
+}
+
+:root[data-theme="pip-boy-inspired"] .status-list dt,
+:root[data-theme="pip-boy-inspired"] .radio-field-list dt {
+  color: var(--muted);
+}
+
+:root[data-theme="pip-boy-inspired"] .status-list dd,
+:root[data-theme="pip-boy-inspired"] .radio-field-list dd,
+:root[data-theme="pip-boy-inspired"] .technical-value {
+  color: var(--text);
+  text-shadow: 0 0 0.45rem rgb(134 241 118 / 0.12);
+}
+
+:root[data-theme="pip-boy-inspired"] #radio-activity-panel {
+  border: 0.35rem solid #202a21;
+  outline: 1px solid var(--terminal-green-dim);
+  background:
+    radial-gradient(
+      circle at 86% 18%,
+      transparent 0 2.2rem,
+      rgb(134 241 118 / 0.1) 2.25rem 2.32rem,
+      transparent 2.37rem 4.2rem,
+      rgb(134 241 118 / 0.075) 4.25rem 4.32rem,
+      transparent 4.37rem
+    ),
+    repeating-conic-gradient(
+      from 8deg at 86% 18%,
+      transparent 0 18deg,
+      rgb(134 241 118 / 0.025) 18deg 19deg
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgb(134 241 118 / 0.018) 0 1px,
+      transparent 1px 4px
+    ),
+    var(--terminal-glass);
+  box-shadow:
+    inset 0 0 3rem rgb(0 0 0 / 0.84),
+    inset 0 0 1.1rem rgb(114 223 104 / 0.08),
+    0 0.5rem 1.1rem rgb(0 0 0 / 0.42);
+}
+
+:root[data-theme="pip-boy-inspired"] #radio-activity-panel .panel-header {
+  border-bottom-color: var(--terminal-amber);
+}
+
+:root[data-theme="pip-boy-inspired"] #radio-system {
+  color: var(--terminal-green);
+  text-shadow:
+    0 0 0.35rem rgb(134 241 118 / 0.3),
+    0 0 1rem rgb(114 223 104 / 0.12);
+}
+
+:root[data-theme="pip-boy-inspired"] #radio-channel,
+:root[data-theme="pip-boy-inspired"] #radio-activity-panel:is(
+  [data-screen-kind="weather"],
+  [data-screen-kind="tone_out"]
+) .panel-kicker,
+:root[data-theme="pip-boy-inspired"] #radio-activity-panel:is(
+  [data-screen-kind="search"],
+  [data-screen-kind="close_call"]
+) .panel-kicker {
+  color: var(--terminal-amber);
+}
+
+:root[data-theme="pip-boy-inspired"] .radio-field-groups {
+  border: 1px solid rgb(60 141 60 / 0.56);
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 1.95rem,
+      rgb(134 241 118 / 0.025) 1.95rem 2rem
+    ),
+    repeating-linear-gradient(
+      180deg,
+      transparent 0 1.95rem,
+      rgb(134 241 118 / 0.025) 1.95rem 2rem
+    ),
+    rgb(2 8 4 / 0.62);
+  box-shadow: inset 0 0 1.2rem rgb(0 0 0 / 0.45);
+}
+
+:root[data-theme="pip-boy-inspired"] .radio-field-group,
+:root[data-theme="pip-boy-inspired"] .scanner-control-group,
+:root[data-theme="pip-boy-inspired"] .recording-library,
+:root[data-theme="pip-boy-inspired"] .recording-item {
+  border-color: rgb(60 141 60 / 0.68);
+  background: rgb(7 17 9 / 0.74);
+}
+
+:root[data-theme="pip-boy-inspired"] .radio-field-group h3,
+:root[data-theme="pip-boy-inspired"] .scanner-control-group h3 {
+  color: var(--terminal-amber);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+:root[data-theme="pip-boy-inspired"] .overview {
+  border-left: 0.25rem solid var(--terminal-amber);
+  background:
+    linear-gradient(90deg, rgb(228 173 80 / 0.09), transparent 68%),
+    rgb(4 11 6 / 0.68);
+}
+
+:root[data-theme="pip-boy-inspired"] .site-footer {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-theme="pip-boy-inspired"] *,
+  :root[data-theme="pip-boy-inspired"] *::before,
+  :root[data-theme="pip-boy-inspired"] *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root[data-theme="pip-boy-inspired"] {
+    color-scheme: light dark;
+    --background: Canvas;
+    --surface: Canvas;
+    --surface-emphasis: Canvas;
+    --text: CanvasText;
+    --muted: CanvasText;
+    --border: CanvasText;
+    --accent: LinkText;
+    --accent-strong: LinkText;
+    --success: CanvasText;
+    --warning: CanvasText;
+    --danger: CanvasText;
+    --focus: Highlight;
+  }
+
+  :root[data-theme="pip-boy-inspired"] body,
+  :root[data-theme="pip-boy-inspired"] .site-header,
+  :root[data-theme="pip-boy-inspired"] .site-footer,
+  :root[data-theme="pip-boy-inspired"] .workspace-shell,
+  :root[data-theme="pip-boy-inspired"] .workspace-tabs,
+  :root[data-theme="pip-boy-inspired"] .workspace-deck,
+  :root[data-theme="pip-boy-inspired"] [data-workspace-pane],
+  :root[data-theme="pip-boy-inspired"] .panel,
+  :root[data-theme="pip-boy-inspired"] #radio-activity-panel,
+  :root[data-theme="pip-boy-inspired"] .radio-field-groups,
+  :root[data-theme="pip-boy-inspired"] .radio-field-group {
+    forced-color-adjust: auto;
+    border-color: CanvasText;
+    outline-color: CanvasText;
+    color: CanvasText;
+    background: Canvas;
+    box-shadow: none;
+    text-shadow: none;
+  }
+
+  :root[data-theme="pip-boy-inspired"] .workspace-deck::after {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  :root[data-theme="pip-boy-inspired"] .brand h1,
+  :root[data-theme="pip-boy-inspired"] .overview h2,
+  :root[data-theme="pip-boy-inspired"] .panel h2,
+  :root[data-theme="pip-boy-inspired"] #radio-system,
+  :root[data-theme="pip-boy-inspired"] #radio-channel,
+  :root[data-theme="pip-boy-inspired"] .technical-value {
+    color: CanvasText;
+    text-shadow: none;
+  }
+
+  :root[data-theme="pip-boy-inspired"] .workspace-tabs [aria-selected="true"],
+  :root[data-theme="pip-boy-inspired"]
+    .radio-view-controls button[aria-pressed="true"] {
+    border-color: Highlight;
+    color: HighlightText;
+    background: Highlight;
+    outline: 0.15rem solid Highlight;
+    outline-offset: 0.1rem;
+  }
+}

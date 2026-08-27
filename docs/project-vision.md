@@ -187,28 +187,28 @@ safe saved-WAV playback and download, and browser-local visual presentation.
 
 The web process remains a daemon client and does not open scanner hardware or a
 second RTSP/RTP session. The dashboard also provides capability-negotiated
-semantic scanner controls and browser-local system-adaptive, LCARS-inspired,
-Matrix-inspired, First Responder, and Amateur Radio themes over one shared
-accessible structure. Planned work will preserve the stable `system` identity
-as the browser-local default and safe fallback while redesigning its presentation
-around the established scanner-display hierarchy and automatic screen profiles.
-One shared viewport-owned pane model will keep scanner state, controls, audio,
-recordings, diagnostics, and later the waterfall reachable without document or
-active-pane scrolling at 390x844, 800x480, 1366x768, and 1920x1080 reference
-sizes and larger full-screen viewports.
+semantic scanner controls and browser-local System, LCARS-inspired,
+Matrix-inspired, First Responder, Amateur Radio, and Pip-Boy-inspired themes over
+one shared accessible structure. The stable `system` identity remains the
+browser-local default and safe fallback, with scanner-display hierarchy and
+automatic screen-profile presentation. One shared viewport-owned pane model
+keeps scanner state, controls, audio, recordings, and diagnostics reachable
+without document or active-pane scrolling at normal zoom in the 390x844,
+800x480, 1366x768, and 1920x1080 reference sizes and larger full-screen
+viewports. When text enlargement or browser zoom makes that composition too
+tight, content reachability takes precedence and scrolling is restored.
 
-A planned original Pip-Boy-inspired built-in web theme will reuse that same
-semantic workspace through the existing modular CSS package contract. It may use
-original phosphor, CRT, grid, meter, and field-terminal treatments, but must not
-include game logos, character or corporate artwork, screenshots, sounds,
-proprietary fonts, copied hardware geometry, remote resources, or theme-owned
-JavaScript. System and every built-in or valid managed web theme must use the
-same non-scrolling pane shell rather than substituting theme-owned application
-behavior. Theme staging remains decorative, pointer-inert,
+The original Pip-Boy-inspired built-in reuses that semantic workspace through
+the existing modular CSS package contract. Its phosphor, CRT, grid, meter, and
+field-terminal treatments do not include game logos, character or corporate
+artwork, screenshots, sounds, proprietary fonts, copied hardware geometry,
+remote resources, or theme-owned JavaScript. System and every built-in or valid
+managed web theme use the same pane shell rather than substituting theme-owned
+application behavior. Theme staging remains decorative, pointer-inert,
 reduced-motion aware, and independent of daemon or scanner state. Remaining
-dashboard work includes operational logs, additional shared branding assets,
-and deliberate authentication and transport-security design before any
-supported remote access.
+dashboard work includes the waterfall renderer, operational logs, additional
+shared branding assets, and deliberate trusted-reverse-proxy or public/Internet
+access design beyond the existing authenticated private-LAN mode.
 
 ### Home Assistant
 
@@ -318,38 +318,35 @@ Local speakers directly attached to a Home Assistant OS host are a separate
 device-permission and audio-backend problem and should not be conflated with
 network Home Assistant `media_player` support.
 
-### Future authenticated LAN dashboard access
+### Dashboard access boundaries
 
-The Home Assistant App should retain authenticated Ingress as the default
-dashboard path.
+The Home Assistant App retains authenticated Ingress as its default dashboard
+path. Milestone 26.1 separately provides an explicit native-host LAN mode that
+binds one private, unique-local, or link-local interface, requires
+password-authenticated direct TLS and one exact HTTPS origin, and keeps every
+browser session behind the existing daemon fanout. Default standalone operation
+remains loopback-only. Neither mode creates another scanner control, PSI, or
+RTSP/RTP owner, and the native mode does not weaken the Ingress peer guard.
 
-A future optional LAN-facing dashboard may publish a separate TCP listener while
-remaining only another client of the existing daemon. It must not weaken the
-Ingress peer guard or create another scanner control, PSI, or RTSP/RTP owner.
-
-Before supported LAN exposure, define:
-
-- explicit enable/disable configuration;
-- authentication and access policy;
-- transport-security or trusted reverse-proxy policy;
-- separate published TCP port configuration;
-- safe browser audio/SSE behavior for multiple LAN clients; and
-- regression proof that all browser clients consume daemon fanout rather than
-  opening additional scanner audio sessions.
-
-Simply publishing the existing Ingress port is insufficient because the current
-Ingress listener deliberately trusts only the Supervisor proxy peer.
+Trusted reverse-proxy deployment, wildcard binding, generic-container LAN
+publication, and public/Internet exposure remain unsupported future boundaries.
+Any such design must define proxy identity, forwarded-origin trust,
+authentication, transport security, published-port policy, and multi-client
+audio/SSE behavior without changing single-owner daemon semantics. Simply
+publishing the existing Ingress port is insufficient because that listener
+deliberately trusts only the Supervisor proxy peer.
 
 ### Future GUI and themes
 
 A future desktop GUI may reuse the same services and API.
 
-The web dashboard now provides optional LCARS-inspired, Matrix-inspired, First
-Responder, and Amateur Radio environments over one shared accessible structure
-rather than separate interfaces. They use renderer-specific structural tokens
-and an ARIA-hidden decorative stage for cinematic depth, console geometry,
-terminal fields, dispatch instrumentation, and SDS200-inspired physical details.
-Their selection remains browser-local presentation state and does not alter the
+The web dashboard now provides System, LCARS-inspired, Matrix-inspired, First
+Responder, Amateur Radio, and original Pip-Boy-inspired environments over one
+shared accessible structure rather than separate interfaces. They use
+renderer-specific structural tokens and an ARIA-hidden decorative stage for
+cinematic depth, console geometry, terminal fields, dispatch instrumentation,
+scanner-display presentation, and retro-futurist field-terminal details. Their
+selection remains browser-local presentation state and does not alter the
 renderer-neutral terminal palettes, daemon state, scanner ownership, or API
 behavior. Future desktop interfaces may reuse the same semantic services while
 choosing their own renderer-specific design tokens.
@@ -364,7 +361,10 @@ Modular theme packaging uses the interface-scoped hierarchy
 built-in implementation by extracting the five existing web themes into
 versioned manifest plus declarative CSS packages with deterministic validation,
 same-origin delivery, compatible pre-paint fallback, and unchanged accessible
-rendering. Milestone 26.11 extends that boundary to the byte-identical compact
+rendering. Milestone 27.3 adds the sixth Pip-Boy-inspired package and moves all
+built-in and valid managed web themes onto the shared five-pane workspace while
+preserving the existing package and activation contracts. Milestone 26.11
+extends that boundary to the byte-identical compact
 and SDS200 Display Home Assistant modules. Their versioned manifests and
 validated registry drive the existing flat App installation paths without
 changing custom elements, resource URLs, configuration, or rendering. Milestone

@@ -636,15 +636,17 @@ update incrementally. Two-second status polling remains active when live events
 are unavailable, and a periodic authoritative status read reconciles the
 browser with daemon state.
 
-The activity panel presents the complete 35-field renderer-neutral radio state:
+The **Scanner** pane presents the complete 35-field renderer-neutral radio state:
 hierarchy names, indexes, and holds; channel identity; RF and service context;
 talkgroup and unit identifiers; receiver levels; optional raw SDS100 battery
 telemetry; signal, RSSI, P25, mute, and scanner-recording state; and Search,
 Close Call, Weather/SAME, and Tone-Out details. Every authoritative update
 replaces the complete browser projection so values from a previous screen are
 cleared instead of leaking into a new mode. Literal `0` and false-like scanner
-text remain visible; only absent values are shown as **Unavailable**. The raw
-battery value has no host-inferred unit, percentage, range, or charging meaning.
+text remain visible except that a configured zero Tone-Out A or B value is shown
+as **Detect**, matching the scanner's tone-detection behavior. Only absent values
+are shown as **Unavailable**. The raw battery value has no host-inferred unit,
+percentage, range, or charging meaning.
 
 Press **Play audio** to create one independent browser PCMU subscription. The
 browser receives the daemon's validated PCMU v1 frames unchanged, decodes G.711
@@ -660,7 +662,9 @@ recordings survive browser reloads and web-process disconnects. **Stop** finaliz
 the WAV and adjacent metadata sidecar, refreshes the newest-first recording
 inventory, and enables same-origin **Play** and **Download** actions for playable
 completed recordings. Saved playback reads through the private daemon
-recording-file service and does not create a browser PCMU subscription.
+recording-file service and does not create a browser PCMU subscription. The
+bounded inventory is paginated three entries at a time so its controls remain
+reachable within the viewport-owned workspace.
 
 Browser hold buttons are desired-state controls. An unheld scope offers
 **Hold system**, **Hold department**, **Hold site**, or **Hold channel**; an
@@ -671,18 +675,39 @@ verified SDS200 front-panel-key gesture when needed, and waits for the target
 hold field to converge before returning success. The compatibility indexed
 `scanner.hold` API remains available separately.
 
-The interface retains keyboard focus, responsive compact behavior, reduced-motion
-support, and text-only rendering of daemon values. The **Theme** selector offers
-the system-adaptive dashboard plus immersive LCARS-inspired, Matrix-inspired,
-First Responder, and Amateur Radio environments. On desktop-class viewports the
-custom themes become dense full-screen workstations while preserving the same
-accessible structure and semantic scanner state; smaller displays reflow into a
-compact presentation instead of using a separate interface. The selection is
-browser-local, is restored before the dashboard stylesheet paints, and does not
-change daemon or scanner state. All five choices are independently packaged
-under the interface-scoped `sds200/themes/web/<theme-name>/` hierarchy with a
-validated versioned manifest and declarative stylesheet; the shared dashboard
-layout contains no theme-owned selectors. The
+The responsive workspace has five panes: **Scanner**, **Controls**, **Audio**,
+**Recordings**, and **Diagnostics**. Its tablist supports pointer activation and
+the Arrow keys plus Home and End, and the selected pane is restored from the
+browser-local `sdsctl.web.pane` value. The Scanner pane keeps the prominent
+System/Department/Channel hierarchy visible and offers **Auto**, **Hierarchy**,
+**RF**, **Identity**, and **Special** inspection views. Auto follows the
+normalized scanner screen: Search and Close Call select RF details, while
+Weather and Tone-Out select special-mode details. Scanning and unknown screens
+use the browser-local Simple or Detail fallback stored as
+`sdsctl.web.scan-fallback`; explicit inspection remains selected until **Auto**
+is chosen again.
+
+At normal browser zoom, the document and active pane fit without horizontal or
+vertical scrolling at the 390x844, 800x480, 1366x768, and 1920x1080 reference
+viewports. At enlarged text or browser zoom, reachability takes priority and the
+layout deliberately restores conventional scrolling. Keyboard focus,
+reduced-motion and forced-color behavior, and text-only rendering of daemon
+values remain available in both compositions.
+
+The **Theme** selector uses this same shell for the deterministic built-in order
+**System**, **LCARS-inspired**, **Matrix-inspired**, **First Responder**,
+**Amateur Radio**, and **Pip-Boy-inspired**. System remains the system-adaptive
+default and safe fallback, now styled around the established scanner-display
+layout. Pip-Boy-inspired is an original retro-futurist field-terminal treatment
+implemented with local declarative CSS; it contains no game artwork, logos,
+screenshots, sounds, proprietary fonts, copied hardware geometry, or remote
+resources. Theme selection is browser-local, is restored before the dashboard
+stylesheet paints, and does not change daemon or scanner state. All six choices
+are independently packaged under the interface-scoped
+`sds200/themes/web/<theme-name>/` hierarchy with a validated versioned manifest
+and declarative stylesheet; valid managed web themes use the same shared
+workspace and safe System fallback, and the shared dashboard layout contains no
+theme-owned selectors. The
 [web dashboard guide](docs/web-dashboard.md#theme-gallery) includes generated
 captures of every theme using deterministic fictional demo data.
 

@@ -50,6 +50,12 @@ extras, hashes, regeneration, and automated maintenance.
 
 ## 2. Run validation
 
+Install Node.js 24 or newer as well as the Python development dependencies. The
+browser audit and deterministic screenshot generator share the repository's
+dependency-free Chrome DevTools Protocol client; screenshot capture verifies the
+exact requested CSS width, height, and DPR instead of relying on Chrome
+outer-window dimensions.
+
 ```bash
 python -m pip install -e ".[dev]"
 
@@ -57,14 +63,27 @@ ruff check .
 mypy src/sds200
 pytest --cov=sds200 --cov-report=term-missing
 python scripts/check_docs.py
+python scripts/generate_web_dashboard_screenshots.py --verify-gallery
+node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
+python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png
 git diff --check
 
 python -m pytest -q tests/test_home_assistant_app_packaging.py
 
 rm -rf build dist
 python -m build
+python scripts/generate_web_dashboard_screenshots.py --verify-sdist dist
 python -m twine check dist/*
 ```
+
+The representative repeatability gate captures the System 1920x1080 reference
+twice with the same Chrome executable and runner, using temporary profiles and
+output directories. It detects nondeterminism within one release environment
+without comparing pixels across Chrome versions or rewriting checked-in images.
+The source-distribution check then requires unique regular-file copies of the
+verified gallery, its canonical documentation and wiki references, and the web
+dashboard generator, internal CDP capture bridge, and browser-audit scripts;
+their archived bytes must exactly match the checkout used for the build.
 
 Inspect the built wheel:
 

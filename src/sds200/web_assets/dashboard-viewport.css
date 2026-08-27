@@ -1,0 +1,941 @@
+/*
+ * Shared viewport and pane geometry.
+ *
+ * Theme styles load in the later sdsctl-managed-theme layer (or, for trusted
+ * built-ins, outside a layer). Important declarations in this first layer win
+ * over either form, including theme-authored !important declarations. Keep
+ * visual tokens, colors, borders, shadows, and decorative positioning out of
+ * this contract so themes retain presentation ownership.
+ */
+@layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;
+
+@layer sdsctl-viewport-contract {
+  :root {
+    --content-width: 96rem !important;
+    --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    --pane-padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
+  }
+
+  html {
+    height: 100% !important;
+    overflow: hidden !important;
+  }
+
+  body {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  [hidden] {
+    display: none !important;
+  }
+
+  .workspace-pane[hidden],
+  .radio-field-group[hidden] {
+    display: none !important;
+  }
+
+  .site-header,
+  .dashboard,
+  .site-footer {
+    width: min(calc(100% - clamp(0.75rem, 2.4vw, 2rem)), 96rem) !important;
+    min-width: 0 !important;
+    margin-inline: auto !important;
+  }
+
+  .site-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    padding-block: clamp(0.35rem, 1.2vh, 0.85rem) !important;
+  }
+
+  .brand,
+  .overview > div,
+  .workspace-tabs,
+  .radio-view-controls,
+  .radio-view-controls [role="group"],
+  .scanner-display-hierarchy,
+  .scanner-display-row,
+  .scanner-display-hierarchy > div,
+  .primary-value,
+  .secondary-value,
+  .scanner-display-value,
+  .scanner-display-hierarchy dd,
+  .radio-summary,
+  .radio-summary > div,
+  .radio-field-groups,
+  .radio-field-group,
+  .radio-field-list,
+  .radio-field-list > div,
+  .scanner-control-group,
+  .recording-list,
+  .recording-item {
+    min-width: 0 !important;
+  }
+
+  .brand h1,
+  .subtitle,
+  .overview h2,
+  .dashboard-message,
+  .workspace-tabs [role="tab"],
+  .radio-view-controls button,
+  .recordings-pagination button,
+  .panel h2,
+  .panel-subsection-header h2,
+  .recording-library-header h2,
+  .status-list dt,
+  .status-list dd,
+  .audio-playback-status,
+  .scanner-control-status,
+  .recording-status,
+  .recordings-message,
+  .recording-item-details strong,
+  .recording-item-meta,
+  .site-footer p {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+  }
+
+  .primary-value,
+  .secondary-value,
+  .scanner-display-value,
+  .scanner-display-hierarchy dd {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+    font-size: clamp(0.82rem, 2.15vmin, 1.25rem) !important;
+    line-height: 1.08 !important;
+  }
+
+  .scanner-display-hierarchy .secondary-value {
+    min-height: 0 !important;
+  }
+
+  .radio-summary dt,
+  .radio-summary dd {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+  }
+
+  .radio-field-list dt,
+  .radio-field-list dd {
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
+    font-size: clamp(0.7rem, 1.25vmin, 0.8rem) !important;
+    line-height: 1.1 !important;
+  }
+
+  .header-actions {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    flex: 0 0 auto !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .dashboard {
+    position: relative !important;
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    padding-bottom: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    overflow: hidden !important;
+  }
+
+  .dashboard > noscript {
+    position: absolute !important;
+    z-index: 6 !important;
+    inset: clamp(3rem, 12vh, 7rem) var(--pane-padding) auto !important;
+  }
+
+  .overview {
+    display: flex !important;
+    align-items: end !important;
+    justify-content: space-between !important;
+    min-width: 0 !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    margin: 0 !important;
+    padding-bottom: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .dashboard-message {
+    max-width: 48% !important;
+  }
+
+  .workspace-shell {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    overflow: hidden !important;
+  }
+
+  .workspace-tabs {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    gap: clamp(0.2rem, 0.8vw, 0.55rem) !important;
+  }
+
+  .workspace-tabs [role="tab"] {
+    min-width: 0 !important;
+    min-height: 2.2rem !important;
+    padding: clamp(0.32rem, 0.8vmin, 0.55rem) clamp(0.2rem, 1vw, 0.8rem) !important;
+  }
+
+  .workspace-deck.dashboard-grid {
+    position: relative !important;
+    display: block !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .workspace-pane {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .workspace-pane > .panel,
+  .recordings-layout > .panel,
+  .diagnostics-layout > .panel {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .panel {
+    min-width: 0 !important;
+    min-height: 0 !important;
+    padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
+    overflow: hidden !important;
+  }
+
+  #radio-activity-panel {
+    display: grid !important;
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) !important;
+    gap: clamp(0.25rem, 0.85vmin, 0.7rem) !important;
+  }
+
+  #radio-activity-panel .panel-header {
+    display: flex !important;
+    align-items: end !important;
+    justify-content: space-between !important;
+    gap: var(--space-3) !important;
+  }
+
+  .radio-view-controls {
+    display: flex !important;
+    align-items: end !important;
+    justify-content: space-between !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .radio-view-controls [role="group"] {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    flex: 1 1 auto !important;
+    gap: clamp(0.15rem, 0.55vw, 0.4rem) !important;
+  }
+
+  .radio-scan-fallback {
+    display: grid !important;
+    flex: 0 0 auto !important;
+    gap: 0.15rem !important;
+  }
+
+  .scanner-display-hierarchy {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .scanner-display-row,
+  .scanner-display-hierarchy > div {
+    display: grid !important;
+    align-content: center !important;
+    gap: 0.1rem !important;
+    padding: clamp(0.3rem, 0.85vmin, 0.65rem) !important;
+  }
+
+  .radio-summary {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    margin: 0 !important;
+  }
+
+  .radio-summary > div {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    align-content: center !important;
+    gap: 0.08rem !important;
+    padding: clamp(0.2rem, 0.55vmin, 0.45rem) !important;
+  }
+
+  .radio-field-groups {
+    display: grid !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .radio-field-group {
+    min-height: 0 !important;
+    padding: clamp(0.3rem, 0.85vmin, 0.7rem) !important;
+    overflow: hidden !important;
+  }
+
+  .radio-field-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 7.5rem), 1fr)) !important;
+    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .scanner-controls-panel {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+    align-content: start !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .scanner-controls-panel > .panel-header,
+  .scanner-control-status,
+  .scanner-connection-actions {
+    grid-column: 1 / -1 !important;
+  }
+
+  .browser-audio-panel {
+    display: grid !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+    align-content: start !important;
+    max-width: 62rem !important;
+    margin-inline: auto !important;
+  }
+
+  .browser-audio-panel .status-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .recordings-layout {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr) !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    overflow: hidden !important;
+  }
+
+  .recording-capture-panel,
+  .recording-library-panel {
+    display: grid !important;
+    grid-area: auto !important;
+    grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+  }
+
+  .recording-telemetry {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    min-height: 0 !important;
+    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .recording-library-panel .recording-library {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) auto auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .recording-list {
+    display: grid !important;
+    grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .recording-item {
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .recording-item-actions {
+    flex: 0 0 auto !important;
+  }
+
+  .recordings-pagination {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .diagnostics-layout,
+  #pane-diagnostics > .scanner-panel {
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+  }
+
+  .scanner-panel {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    gap: 0 clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .scanner-panel > .panel-header {
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+  }
+
+  .scanner-panel > .status-list {
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+  }
+
+  .scanner-panel > .panel-subsection {
+    grid-column: 2 !important;
+    grid-row: 1 / span 2 !important;
+  }
+
+  .site-footer {
+    display: flex !important;
+    align-items: center !important;
+    min-width: 0 !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+    overflow: hidden !important;
+  }
+
+  @media (max-width: 44rem) and (min-height: 28rem) {
+    .site-header {
+      align-items: flex-end !important;
+    }
+
+    .workspace-tabs {
+      grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+    }
+
+    .workspace-tabs [role="tab"] {
+      min-height: 2.05rem !important;
+      padding-inline: 0.12rem !important;
+      overflow: visible !important;
+      text-overflow: clip !important;
+      white-space: normal !important;
+    }
+
+    .workspace-tabs [role="tab"]:nth-child(-n + 3) {
+      grid-column: span 2 !important;
+    }
+
+    .workspace-tabs [role="tab"]:nth-child(n + 4) {
+      grid-column: span 3 !important;
+    }
+
+    .radio-view-controls {
+      align-items: stretch !important;
+      flex-direction: column !important;
+      gap: 0.25rem !important;
+    }
+
+    .radio-scan-fallback {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+    }
+
+    .scanner-display-hierarchy {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-display-row,
+    .scanner-display-hierarchy > div {
+      grid-template-columns: minmax(4.5rem, 0.45fr) minmax(0, 1fr) !important;
+      align-items: baseline !important;
+      padding-block: 0.22rem !important;
+    }
+
+    .radio-field-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .radio-field-list dt,
+    .radio-field-list dd {
+      line-height: 1 !important;
+    }
+
+    .radio-field-group {
+      padding-block: 0.2rem !important;
+    }
+
+    .recording-item {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      grid-template-rows: auto auto !important;
+      align-items: center !important;
+      gap: 0 0.2rem !important;
+    }
+
+    .recording-item-details {
+      display: contents !important;
+    }
+
+    .recording-item-details strong {
+      grid-column: 1 / -1 !important;
+      grid-row: 1 !important;
+    }
+
+    .recording-item-meta {
+      grid-column: 1 !important;
+      grid-row: 2 !important;
+    }
+
+    .recording-item-actions {
+      grid-column: 2 !important;
+      grid-row: 2 !important;
+      width: auto !important;
+      flex-wrap: nowrap !important;
+    }
+
+    .recording-action {
+      min-width: 3.5rem !important;
+    }
+
+    .scanner-controls-panel {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-controls-panel > .panel-header,
+    .scanner-control-status,
+    .scanner-connection-actions {
+      grid-column: 1 !important;
+    }
+
+    .recordings-layout {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: minmax(0, 0.68fr) minmax(0, 1.32fr) !important;
+    }
+
+    .recording-capture-panel .panel-header,
+    .recording-library-panel .panel-header {
+      margin-right: 0 !important;
+    }
+
+    .recording-library-header {
+      align-items: center !important;
+      flex-direction: row !important;
+    }
+
+    .recording-capture-panel .panel-header,
+    .recording-library-header > div {
+      display: flex !important;
+      align-items: baseline !important;
+      gap: 0.4rem !important;
+    }
+
+    .recording-capture-panel .panel-kicker,
+    .recording-library-header .panel-kicker {
+      margin-bottom: 0 !important;
+    }
+
+    .recording-telemetry {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .recording-telemetry > div {
+      grid-template-columns: minmax(0, 1fr) auto !important;
+      align-items: start !important;
+      gap: 0.15rem !important;
+    }
+
+    .recording-telemetry dt,
+    .recording-telemetry dd {
+      line-height: 1 !important;
+    }
+
+    .recordings-message {
+      margin-block: 0.1rem !important;
+    }
+
+    .recordings-pagination button {
+      padding-block: 0.16rem !important;
+    }
+
+    .saved-playback audio {
+      height: 1.7rem !important;
+    }
+
+    .scanner-panel {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: auto auto auto !important;
+    }
+
+    .scanner-panel > .panel-header,
+    .scanner-panel > .status-list,
+    .scanner-panel > .panel-subsection {
+      grid-column: 1 !important;
+    }
+
+    .scanner-panel > .panel-header {
+      grid-row: 1 !important;
+    }
+
+    .scanner-panel > .status-list {
+      grid-row: 2 !important;
+    }
+
+    .scanner-panel > .panel-subsection {
+      grid-row: 3 !important;
+    }
+  }
+
+  @media (max-height: 38rem) and (min-height: 28rem) {
+    .site-header {
+      padding-block: 0.25rem !important;
+    }
+
+    .overview {
+      padding-bottom: 0.25rem !important;
+    }
+
+    .workspace-shell {
+      gap: 0.25rem !important;
+    }
+
+    .workspace-tabs [role="tab"] {
+      min-height: 1.8rem !important;
+      padding-block: 0.2rem !important;
+    }
+
+    .panel {
+      padding: 0.45rem !important;
+    }
+
+    .radio-view-controls button,
+    .scanner-display-row,
+    .scanner-display-hierarchy > div,
+    .radio-summary > div,
+    .radio-field-group {
+      padding-block: 0.2rem !important;
+    }
+
+    .radio-field-list dt,
+    .radio-field-list dd {
+      line-height: 1 !important;
+    }
+  }
+
+  @media (min-width: 44.01rem) and (max-height: 38rem) and (min-height: 28rem) {
+    .overview h2 {
+      padding-top: 0.15rem !important;
+    }
+
+    #radio-activity-panel {
+      grid-template-columns: minmax(0, 1.2fr) minmax(17rem, 0.8fr) !important;
+      grid-template-rows: auto auto auto minmax(0, 1fr) !important;
+    }
+
+    #radio-activity-panel > .panel-header,
+    #radio-activity-panel > .radio-view-controls {
+      grid-column: 1 / -1 !important;
+    }
+
+    #radio-activity-panel > .scanner-display-hierarchy {
+      grid-column: 1 !important;
+      grid-row: 3 !important;
+    }
+
+    #radio-activity-panel > .radio-summary {
+      grid-column: 1 !important;
+      grid-row: 4 !important;
+    }
+
+    #radio-activity-panel > .radio-field-groups {
+      grid-column: 2 !important;
+      grid-row: 3 / 5 !important;
+    }
+
+    #radio-activity-panel[data-active-radio-group="none"]
+      > .scanner-display-hierarchy,
+    #radio-activity-panel[data-active-radio-group="none"] > .radio-summary {
+      grid-column: 1 / -1 !important;
+    }
+
+    .recording-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+    }
+
+    .recording-item {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+  }
+
+  /* At enlarged text or browser zoom, reachability overrides no-scroll. */
+  @media (max-height: 27.99rem), (max-width: 21.99rem) {
+    html {
+      height: auto !important;
+      overflow: auto !important;
+    }
+
+    body {
+      display: block !important;
+      height: auto !important;
+      min-height: 100dvh !important;
+      overflow: visible !important;
+    }
+
+    .site-header,
+    .dashboard,
+    .site-footer {
+      overflow: visible !important;
+    }
+
+    .site-header,
+    .overview,
+    .site-footer {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+
+    .header-actions {
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+    }
+
+    .dashboard,
+    .workspace-shell {
+      display: block !important;
+    }
+
+    .workspace-shell {
+      overflow: visible !important;
+    }
+
+    .dashboard-message {
+      max-width: none !important;
+      text-align: left !important;
+      white-space: normal !important;
+    }
+
+    .workspace-tabs {
+      position: sticky !important;
+      z-index: 5 !important;
+      top: 0 !important;
+    }
+
+    .workspace-deck.dashboard-grid,
+    .workspace-pane,
+    .workspace-pane > .panel,
+    .recordings-layout,
+    .recordings-layout > .panel {
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+
+    .recordings-layout {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-display-row,
+    .scanner-display-hierarchy > div {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-display-hierarchy {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-panel {
+      grid-template-columns: 1fr !important;
+      grid-template-rows: auto auto auto !important;
+    }
+
+    .scanner-panel > .panel-header,
+    .scanner-panel > .status-list,
+    .scanner-panel > .panel-subsection {
+      grid-column: 1 !important;
+    }
+
+    .scanner-panel > .panel-header {
+      grid-row: 1 !important;
+      margin-right: 0 !important;
+    }
+
+    .scanner-panel > .status-list {
+      grid-row: 2 !important;
+    }
+
+    .scanner-panel > .panel-subsection {
+      grid-row: 3 !important;
+      margin-top: 0.25rem !important;
+      padding: 0.25rem 0 0 !important;
+      border-left: 0 !important;
+    }
+
+    .recording-library-panel .recording-library,
+    .recording-list {
+      height: auto !important;
+      grid-template-rows: none !important;
+      overflow: visible !important;
+    }
+
+    .recording-item,
+    .saved-playback {
+      height: auto !important;
+      overflow: visible !important;
+    }
+
+    .saved-playback audio {
+      width: 100% !important;
+      max-width: 100% !important;
+    }
+
+    .radio-field-groups,
+    .radio-field-group {
+      overflow: visible !important;
+    }
+  }
+
+  /*
+   * Forced-color presentation is part of the shared accessibility contract.
+   * Keep this in the first cascade layer so built-in and managed themes cannot
+   * leave author colors or text fill on browser-supplied system surfaces.
+   */
+  @media (forced-colors: active) {
+    :root {
+      color-scheme: light dark !important;
+      --background: Canvas !important;
+      --surface: Canvas !important;
+      --surface-emphasis: Canvas !important;
+      --text: CanvasText !important;
+      --muted: CanvasText !important;
+      --border: CanvasText !important;
+      --accent: LinkText !important;
+      --accent-strong: Highlight !important;
+      --success: CanvasText !important;
+      --warning: CanvasText !important;
+      --danger: CanvasText !important;
+      --focus: Highlight !important;
+    }
+
+    body,
+    body * {
+      forced-color-adjust: auto !important;
+      color: CanvasText !important;
+      -webkit-text-fill-color: currentColor !important;
+      text-shadow: none !important;
+    }
+
+    .site-header,
+    .site-footer,
+    .workspace-shell,
+    .workspace-tabs,
+    .workspace-deck,
+    .workspace-pane,
+    .panel,
+    .panel-subsection,
+    .scanner-display-hierarchy,
+    .radio-summary,
+    .radio-field-group,
+    .scanner-control-group,
+    .recording-library,
+    .recording-item {
+      border-color: CanvasText !important;
+      background: Canvas !important;
+      box-shadow: none !important;
+    }
+
+    a[href] {
+      color: LinkText !important;
+      -webkit-text-fill-color: LinkText !important;
+    }
+
+    button,
+    [role="button"],
+    [role="tab"],
+    .recording-action {
+      border-color: ButtonText !important;
+      color: ButtonText !important;
+      background: ButtonFace !important;
+      box-shadow: none !important;
+      -webkit-text-fill-color: ButtonText !important;
+    }
+
+    select,
+    input,
+    textarea {
+      border-color: FieldText !important;
+      color: FieldText !important;
+      background: Field !important;
+      box-shadow: none !important;
+      -webkit-text-fill-color: FieldText !important;
+    }
+
+    .workspace-tabs [role="tab"][aria-selected="true"],
+    .radio-view-controls button[aria-pressed="true"] {
+      border-color: Highlight !important;
+      color: HighlightText !important;
+      background: Highlight !important;
+      -webkit-text-fill-color: HighlightText !important;
+    }
+
+    .skip-link {
+      border: 1px solid HighlightText !important;
+      color: HighlightText !important;
+      background: Highlight !important;
+      -webkit-text-fill-color: HighlightText !important;
+    }
+
+    a,
+    button,
+    select,
+    input,
+    textarea,
+    [role="button"],
+    [role="tab"],
+    .recording-action {
+      animation: none !important;
+      transition: none !important;
+    }
+
+    a:focus-visible,
+    button:focus-visible,
+    select:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible,
+    [role="button"]:focus-visible,
+    [role="tab"]:focus-visible {
+      outline-color: Highlight !important;
+    }
+
+    .theme-stage {
+      display: none !important;
+    }
+  }
+}

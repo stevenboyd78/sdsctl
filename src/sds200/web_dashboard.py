@@ -50,6 +50,9 @@ WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_FORBIDDEN_DETAIL = (
 )
 
 _WEB_ASSET_PACKAGE = "sds200.web_assets"
+_WEB_STYLESHEET_CASCADE_LAYERS = (
+    "sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme"
+)
 _WEB_RESPONSE_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
@@ -392,8 +395,32 @@ def create_web_dashboard_app(
         include_in_schema=False,
         response_class=Response,
     )
-    def stylesheet() -> Response:
+    def stylesheet(sdsctl_source: str | None = None) -> Response:
+        if sdsctl_source is None:
+            return Response(
+                content=(
+                    f"@layer {_WEB_STYLESHEET_CASCADE_LAYERS};\n"
+                    '@import url("dashboard.css?sdsctl_source=1") '
+                    "layer(sdsctl-shared);\n"
+                ),
+                media_type="text/css",
+                headers=dict(_WEB_RESPONSE_HEADERS),
+            )
+        if sdsctl_source != "1":
+            raise HTTPException(
+                status_code=404,
+                detail="Stylesheet source not found.",
+                headers=dict(_WEB_RESPONSE_HEADERS),
+            )
         return _asset_response("dashboard.css", media_type="text/css")
+
+    @app.get(
+        "/assets/dashboard-viewport.css",
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def viewport_stylesheet() -> Response:
+        return _asset_response("dashboard-viewport.css", media_type="text/css")
 
     @app.get(
         "/assets/theme-bootstrap.js",
@@ -412,7 +439,11 @@ def create_web_dashboard_app(
         include_in_schema=False,
         response_class=Response,
     )
-    def theme_stylesheet(theme_id: str, asset_name: str) -> Response:
+    def theme_stylesheet(
+        theme_id: str,
+        asset_name: str,
+        sdsctl_source: str | None = None,
+    ) -> Response:
         try:
             asset = web_theme_runtime.require_asset(theme_id)
         except WebThemeError as exc:
@@ -435,8 +466,38 @@ def create_web_dashboard_app(
                 detail="Theme asset not found.",
                 headers=dict(_WEB_RESPONSE_HEADERS),
             ) from exc
+        response_content: bytes | str
+        if asset.origin == "built-in":
+            if sdsctl_source is not None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Theme asset not found.",
+                    headers=dict(_WEB_RESPONSE_HEADERS),
+                )
+            response_content = content
+        else:
+            if asset.package_sha256 is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Theme asset not found.",
+                    headers=dict(_WEB_RESPONSE_HEADERS),
+                )
+            if sdsctl_source is None:
+                response_content = (
+                    f"@layer {_WEB_STYLESHEET_CASCADE_LAYERS};\n"
+                    f'@import url("{asset_name}?sdsctl_source='
+                    f'{asset.package_sha256}") layer(sdsctl-managed-theme);\n'
+                )
+            elif sdsctl_source == asset.package_sha256:
+                response_content = content
+            else:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Theme asset not found.",
+                    headers=dict(_WEB_RESPONSE_HEADERS),
+                )
         return Response(
-            content=content,
+            content=response_content,
             media_type="text/css",
             headers=dict(_WEB_RESPONSE_HEADERS),
         )
@@ -739,17 +800,22 @@ def _asset_response(name: str, *, media_type: str) -> Response:
 
 @cache
 def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
-    stylesheet_links = "\n".join(
+    theme_stylesheet_links = "\n".join(
         (
             f'  <link rel="stylesheet" href="{asset.manifest.stylesheet_url}">'
             if asset.origin == "built-in"
             else (
                 '  <link rel="stylesheet" media="not all" '
                 f'data-sdsctl-managed-theme="{asset.manifest.identifier}" '
-                f'href="{asset.manifest.stylesheet_url}">'
+                'data-sdsctl-managed-theme-href="'
+                f'{asset.manifest.stylesheet_url}">'
             )
         )
         for asset in runtime.assets
+    )
+    stylesheet_links = (
+        f"{theme_stylesheet_links}\n"
+        '  <link rel="stylesheet" href="assets/dashboard-viewport.css">'
     )
     options = "\n".join(
         (
@@ -767,9 +833,20 @@ def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
 
 @cache
 def _theme_bootstrap_script(runtime: WebThemeRuntimeRegistry) -> str:
-    return _read_web_asset("theme-bootstrap.js").replace(
-        "__SDSCTL_WEB_THEME_MANIFESTS__",
-        runtime.registry.browser_json(),
+    return (
+        _read_web_asset("theme-bootstrap.js")
+        .replace(
+            "__SDSCTL_WEB_THEME_MANIFESTS__",
+            runtime.registry.browser_json(),
+        )
+        .replace(
+            "__SDSCTL_MANAGED_WEB_THEME_IDS__",
+            json.dumps(
+                runtime.managed_identifiers,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ),
+        )
     )
 
 

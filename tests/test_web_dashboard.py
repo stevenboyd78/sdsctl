@@ -477,10 +477,23 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="scanner-hold-site-state"' in response.text
     assert 'id="scanner-hold-channel-state"' in response.text
     assert 'aria-describedby="scanner-hold-channel-state"' in response.text
-    assert response.text.count('aria-pressed="false"') == 4
+    for scope in ("system", "department", "site", "channel"):
+        hold_button = response.text.index(f'id="scanner-hold-{scope}"')
+        hold_state = response.text.index(
+            f'id="scanner-hold-{scope}-state"', hold_button
+        )
+        assert 'aria-pressed="false"' in response.text[hold_button:hold_state]
     assert 'id="scanner-previous"' in response.text
     assert 'id="scanner-next"' in response.text
     assert 'id="scanner-reconnect"' in response.text
+    for pane in ("scanner", "controls", "audio", "recordings", "diagnostics"):
+        assert f'data-workspace-tab="{pane}"' in response.text
+        assert f'data-workspace-pane="{pane}"' in response.text
+    assert response.text.count('role="tab"') == 5
+    assert response.text.count('role="tabpanel"') == 5
+    assert 'class="scanner-display-hierarchy"' in response.text
+    assert 'id="radio-view-auto"' in response.text
+    assert 'id="radio-scan-fallback-select"' in response.text
     assert "media-src 'self'" in response.headers["content-security-policy"]
     assert "Milestone 20.2" not in response.text
     assert 'href="assets/favicon.svg"' in response.text
@@ -491,6 +504,10 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert '<option value="matrix">Matrix-inspired</option>' in response.text
     assert '<option value="first-responder">First Responder</option>' in response.text
     assert '<option value="amateur-radio">Amateur Radio</option>' in response.text
+    assert (
+        '<option value="pip-boy-inspired">Pip-Boy-inspired</option>'
+        in response.text
+    )
     assert 'src="assets/theme-bootstrap.js"' in response.text
     assert 'href="assets/dashboard.css"' in response.text
     for theme in (
@@ -499,12 +516,16 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         "matrix",
         "first-responder",
         "amateur-radio",
+        "pip-boy-inspired",
     ):
         assert f'href="assets/themes/{theme}/theme.css"' in response.text
     assert response.text.index('href="assets/dashboard.css"') < response.text.index(
         'href="assets/themes/system/theme.css"'
     )
-    assert response.text.index('href="assets/themes/amateur-radio/theme.css"') < (
+    assert response.text.index('href="assets/themes/pip-boy-inspired/theme.css"') < (
+        response.text.index('href="assets/dashboard-viewport.css"')
+    )
+    assert response.text.index('href="assets/dashboard-viewport.css"') < (
         response.text.index('src="assets/theme-bootstrap.js"')
     )
     assert 'src="assets/dashboard.js"' in response.text
@@ -521,6 +542,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     with TestClient(app) as client:
         shell = client.get("/")
         stylesheet = client.get("/assets/dashboard.css")
+        stylesheet_source = client.get("/assets/dashboard.css?sdsctl_source=1")
+        viewport_stylesheet = client.get("/assets/dashboard-viewport.css")
         theme_stylesheets = {
             theme: client.get(f"/assets/themes/{theme}/theme.css")
             for theme in (
@@ -529,6 +552,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
                 "matrix",
                 "first-responder",
                 "amateur-radio",
+                "pip-boy-inspired",
             )
         }
         theme_bootstrap = client.get("/assets/theme-bootstrap.js")
@@ -540,6 +564,12 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert stylesheet.status_code == 200
     assert stylesheet.headers["content-type"].startswith("text/css")
     assert stylesheet.headers["cache-control"] == "no-store"
+    assert stylesheet_source.status_code == 200
+    assert viewport_stylesheet.status_code == 200
+    assert (
+        '@import url("dashboard.css?sdsctl_source=1") layer(sdsctl-shared)'
+        in stylesheet.text
+    )
     assert all(response.status_code == 200 for response in theme_stylesheets.values())
     assert all(
         response.headers["content-type"].startswith("text/css")
@@ -550,145 +580,105 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         for response in theme_stylesheets.values()
     )
     all_stylesheets = "\n".join(
-        [stylesheet.text, *(response.text for response in theme_stylesheets.values())]
+        [
+            stylesheet_source.text,
+            viewport_stylesheet.text,
+            *(response.text for response in theme_stylesheets.values()),
+        ]
     )
-    assert ':root[data-theme=' not in stylesheet.text
-    assert "--content-width:" in all_stylesheets
-    assert "@media (prefers-reduced-motion: reduce)" in all_stylesheets
-    assert ".recording-panel" in all_stylesheets
-    assert ".scanner-controls" in all_stylesheets
-    assert ".scanner-control-status" in all_stylesheets
-    assert ".scanner-hold-control" in all_stylesheets
-    assert ".scanner-hold-state" in all_stylesheets
-    assert ".scanner-hold-state[hidden]" in all_stylesheets
-    assert ".scanner-hold-active" not in all_stylesheets
-    assert "#scanner-previous," not in all_stylesheets
-    assert "#scanner-reconnect," in all_stylesheets
-    assert ".recording-list" in all_stylesheets
-    assert ".saved-playback" in all_stylesheets
-    assert ':root[data-theme="lcars"]' in all_stylesheets
-    assert ':root[data-theme="matrix"]' in all_stylesheets
-    assert ':root[data-theme="first-responder"]' in all_stylesheets
-    assert ':root[data-theme="amateur-radio"]' in all_stylesheets
-    assert ".theme-picker" in all_stylesheets
-    assert "@keyframes matrix-grid-drift" in all_stylesheets
-    assert "animation: matrix-grid-drift 18s linear infinite" in all_stylesheets
-    assert ':root[data-theme="lcars"] .site-header::before' in all_stylesheets
-    assert ':root[data-theme="matrix"] .panel::before' in all_stylesheets
-    assert ':root[data-theme="first-responder"] .panel::after' in all_stylesheets
-    assert ':root[data-theme="amateur-radio"] .site-header::after' in all_stylesheets
-    assert "animation-duration: 0.01ms !important" in all_stylesheets
-    assert "animation-iteration-count: 1 !important" in all_stylesheets
-    assert "--content-width: 220rem" in all_stylesheets
-    assert "@media (min-width: 100rem)" in all_stylesheets
-    assert "@media (max-width: 56rem)" in all_stylesheets
-    assert "grid-template-columns: repeat(4, minmax(0, 1fr))" in all_stylesheets
-    assert ':root[data-theme="matrix"] .panel-header::before' in all_stylesheets
-    assert ':root[data-theme="first-responder"] .status-badge' in all_stylesheets
-    assert ':root[data-theme="amateur-radio"] #radio-system' in all_stylesheets
+    assert ':root[data-theme=' not in stylesheet_source.text
+    for hook in (
+        ".workspace-shell",
+        ".workspace-tabs",
+        ".workspace-deck.dashboard-grid",
+        ".workspace-pane",
+        ".scanner-display-hierarchy",
+        ".radio-view-controls",
+        ".recordings-layout",
+        ".diagnostics-layout",
+        ".recordings-pagination",
+    ):
+        assert hook in stylesheet_source.text
+        assert hook in viewport_stylesheet.text
+    assert "[hidden]" in stylesheet_source.text
+    assert "display: none !important" in stylesheet_source.text
+    assert "grid-template-columns: repeat(5, minmax(0, 1fr))" in (
+        stylesheet_source.text
+    )
+    assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
+    assert "grid-area: auto" in stylesheet_source.text
+    assert "height: 100dvh" in stylesheet_source.text
+    assert "overflow: hidden" in stylesheet_source.text
+    assert "@media (max-height: 27.99rem), (max-width: 21.99rem)" in (
+        stylesheet_source.text
+    )
+    assert "overflow: visible" in stylesheet_source.text
+    assert "@media (forced-colors: active)" in stylesheet_source.text
+    assert "@layer sdsctl-viewport-contract" in viewport_stylesheet.text
+    for forced_color_contract in (
+        "forced-color-adjust: auto !important",
+        "-webkit-text-fill-color: currentColor !important",
+        "color: ButtonText !important",
+        "background: ButtonFace !important",
+        "color: FieldText !important",
+        "background: Field !important",
+        "color: HighlightText !important",
+        "background: Highlight !important",
+        "transition: none !important",
+    ):
+        assert forced_color_contract in viewport_stylesheet.text
+
+    theme_text = {
+        identifier: response.text
+        for identifier, response in theme_stylesheets.items()
+    }
+    for identifier, text in theme_text.items():
+        assert f':root[data-theme="{identifier}"]' in text
+        for hook in (
+            ".workspace-shell",
+            ".workspace-tabs",
+            ".workspace-deck",
+            "[data-workspace-pane]",
+            ".radio-view-controls",
+        ):
+            assert hook in text
+        assert "@media (prefers-reduced-motion: reduce)" in text
+        assert "@media (forced-colors: active)" in text
+        assert ".dashboard-grid > .panel" not in text
+        assert ".panel:nth-child" not in text
+        assert "overflow-y: auto" not in text
+        assert "height: 100dvh" not in text
+
+    for decorative_text in (
+        'content: "> "',
+        'content: "01 10 01"',
+        'content: "▰ "',
+        'content: "● "',
+    ):
+        assert decorative_text not in all_stylesheets
+
+    assert "--scanner-display:" in theme_text["system"]
+    assert "--scanner-display-ink:" in theme_text["system"]
     assert (
-        ':root[data-theme="amateur-radio"] .dashboard-grid '
-        '> .scanner-controls-panel::before'
-        in all_stylesheets
+        ':root[data-theme="system"] '
+        ".recordings-pagination button:hover:not(:disabled)"
+        in theme_text["system"]
     )
-    assert "@media (min-width: 64rem) and (min-height: 36rem)" in all_stylesheets
-    assert "height: 100dvh" in all_stylesheets
-    assert "grid-template-rows: repeat(2, minmax(0, 1fr))" in all_stylesheets
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr))" in all_stylesheets
-    assert "minmax(0, 0.9fr)" in all_stylesheets
-    assert "minmax(0, 1.08fr)" in all_stylesheets
-    assert "minmax(0, 1.02fr)" in all_stylesheets
-    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in all_stylesheets
-    assert "overflow-y: auto" in all_stylesheets
-    assert "grid-template-rows: auto auto auto minmax(0, 1fr)" in all_stylesheets
-    assert "--lcars-panel:" in all_stylesheets
-    assert ':root[data-theme="lcars"] .dashboard-grid::before' in all_stylesheets
-    assert ':root[data-theme="lcars"] .dashboard-grid::after' in all_stylesheets
-    assert "var(--lcars-panel-soft)" in all_stylesheets
-    assert (
-        ':root[data-theme="lcars"] .dashboard-grid::before,'
-        in all_stylesheets
-    )
-    assert "content: none;" in all_stylesheets
-    assert "overflow-x: hidden;" in all_stylesheets
-    assert "width: min(27%, 8.5rem);" in all_stylesheets
-    assert "--term-accent:" in all_stylesheets
-    assert ':root[data-theme="matrix"] .dashboard-grid > .panel::after' in all_stylesheets
-    assert "color-mix(in srgb, var(--term-accent)" in all_stylesheets
-    assert ':root[data-theme="matrix"] .scanner-control-group::after' in all_stylesheets
-    assert "--dispatch-accent:" in all_stylesheets
-    assert (
-        ':root[data-theme="first-responder"] .dashboard-grid > .panel::before'
-        in all_stylesheets
-    )
-    assert (
-        ':root[data-theme="first-responder"] .scanner-control-group::before'
-        in all_stylesheets
-    )
-    assert "--radio-accent:" in all_stylesheets
-    assert (
-        ':root[data-theme="amateur-radio"] .panel-emphasis .primary-value'
-        in all_stylesheets
-    )
-    assert (
-        ':root[data-theme="amateur-radio"] .dashboard-grid '
-        '> .scanner-controls-panel::before'
-        in all_stylesheets
-    )
-    assert "conic-gradient(" in all_stylesheets
-    assert (
-        "@media (min-width: 64rem) and (max-width: 90rem) "
-        "and (min-height: 36rem)"
-        in all_stylesheets
-    )
-    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in all_stylesheets
-    assert ':root[data-theme="amateur-radio"] .recording-telemetry dd' in all_stylesheets
+    assert "color: var(--background);" in stylesheet_source.text
+    assert "color: var(--background);" in theme_text["system"]
+    assert "--lcars-panel:" in theme_text["lcars"]
+    assert "--term-accent:" in theme_text["matrix"]
+    assert "--dispatch-accent:" in theme_text["first-responder"]
+    assert "--radio-accent:" in theme_text["amateur-radio"]
+    assert "--terminal-green:" in theme_text["pip-boy-inspired"]
+    assert "--terminal-amber:" in theme_text["pip-boy-inspired"]
+    assert "@import" not in theme_text["pip-boy-inspired"]
+    assert "url(" not in theme_text["pip-boy-inspired"]
 
     assert "theme-stage" in shell.text
     assert 'aria-hidden="true"' in shell.text
     assert "theme-stage-h" in shell.text
     assert ".theme-stage {" in all_stylesheets
-    assert "@keyframes matrix-stage-fall" in all_stylesheets
-    assert "@keyframes dispatch-radar-sweep" in all_stylesheets
-    assert "@keyframes radio-display-scan" in all_stylesheets
-    assert ':root[data-theme="lcars"] .theme-stage-a' in all_stylesheets
-    assert ':root[data-theme="matrix"] .theme-stage-g' in all_stylesheets
-    assert (
-        ':root[data-theme="first-responder"] .theme-stage-c'
-        in all_stylesheets
-    )
-    assert (
-        ':root[data-theme="amateur-radio"] .theme-stage-e'
-        in all_stylesheets
-    )
-    assert "contain: paint;" in all_stylesheets
-    assert ".site-header {\n  position: relative;\n  z-index: 3;\n}" in all_stylesheets
-    assert (
-        ".dashboard,\n.site-footer {\n  position: relative;\n  z-index: 1;\n}"
-        in all_stylesheets
-    )
-    assert ".skip-link {\n  z-index: 10;\n}" in all_stylesheets
-    assert (
-        ".site-footer,\n.skip-link {\n  position: relative;"
-        not in all_stylesheets
-    )
-
-    assert "@keyframes cinematic-bloom-breathe" in all_stylesheets
-    assert "@keyframes cinematic-scan-pass" in all_stylesheets
-    assert "@keyframes cinematic-alert-wash" in all_stylesheets
-    assert "@keyframes cinematic-meter-scan" in all_stylesheets
-    assert ':root[data-theme="lcars"] .theme-stage-g::after' in all_stylesheets
-    assert ':root[data-theme="matrix"] .theme-stage-a::before' in all_stylesheets
-    assert (
-        ':root[data-theme="first-responder"] .theme-stage-a::after'
-        in all_stylesheets
-    )
-    assert (
-        ':root[data-theme="amateur-radio"] .panel-emphasis::after'
-        in all_stylesheets
-    )
-    assert "perspective: 44rem;" in all_stylesheets
-    assert "backdrop-filter: blur(0.55px);" in all_stylesheets
 
     assert theme_bootstrap.status_code == 200
     assert theme_bootstrap.headers["content-type"].startswith(
@@ -1695,29 +1685,27 @@ def test_dashboard_layout_uses_dedicated_recording_library_panel() -> None:
 
     assert dashboard.count('id="scanner-reconnect"') == 1
 
-    scanner_start = dashboard.index(
-        '<section class="panel scanner-panel"'
-    )
-    activity_start = dashboard.index(
-        '<section class="panel panel-emphasis"',
-        scanner_start,
-    )
-    scanner_panel = dashboard[scanner_start:activity_start]
+    diagnostics_start = dashboard.index('id="pane-diagnostics"')
+    scanner_start = dashboard.index('id="pane-scanner"', diagnostics_start)
+    controls_start = dashboard.index('id="pane-controls"', scanner_start)
+    audio_start = dashboard.index('id="pane-audio"', controls_start)
+    recordings_start = dashboard.index('id="pane-recordings"', audio_start)
+    deck_end = dashboard.index("</div>\n    </div>\n  </main>", recordings_start)
 
-    assert 'id="scanner-reconnect"' in scanner_panel
-    assert 'id="runtime-title"' in scanner_panel
-    assert 'id="daemon-state"' in scanner_panel
+    diagnostics_pane = dashboard[diagnostics_start:scanner_start]
+    scanner_pane = dashboard[scanner_start:controls_start]
+    controls_pane = dashboard[controls_start:audio_start]
+    recordings_pane = dashboard[recordings_start:deck_end]
 
-    controls_start = dashboard.index(
-        '<section class="panel scanner-controls-panel"'
-    )
-    browser_audio_start = dashboard.index(
-        '<section class="panel browser-audio-panel"',
-        controls_start,
-    )
-    controls_panel = dashboard[controls_start:browser_audio_start]
-    assert 'id="scanner-reconnect"' not in controls_panel
-
-    assert 'class="panel recording-capture-panel"' in dashboard
-    assert 'class="panel recording-library-panel"' in dashboard
-    assert 'id="recordings-title"' in dashboard
+    assert 'id="runtime-title"' in diagnostics_pane
+    assert 'id="daemon-state"' in diagnostics_pane
+    assert 'id="scanner-reconnect"' not in diagnostics_pane
+    assert 'id="radio-activity-panel"' in scanner_pane
+    assert 'id="scanner-reconnect"' in controls_pane
+    assert 'id="runtime-title"' not in controls_pane
+    assert 'class="recordings-layout"' in recordings_pane
+    assert 'class="panel recording-capture-panel"' in recordings_pane
+    assert 'class="panel recording-library-panel"' in recordings_pane
+    assert 'id="recordings-title"' in recordings_pane
+    assert 'id="recordings-previous-page"' in recordings_pane
+    assert 'id="recordings-next-page"' in recordings_pane

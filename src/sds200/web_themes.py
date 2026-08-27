@@ -20,6 +20,7 @@ BUILT_IN_WEB_THEME_IDS = (
     "matrix",
     "first-responder",
     "amateur-radio",
+    "pip-boy-inspired",
 )
 
 _IDENTIFIER_PATTERN = re.compile(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*\Z")
