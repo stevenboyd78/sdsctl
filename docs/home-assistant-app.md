@@ -124,6 +124,14 @@ Dashboard assets, API requests, Server-Sent Events, browser audio, scanner
 controls, Swagger/ReDoc assets, saved recording playback, and recording downloads
 derive their URLs from the active Ingress prefix rather than assuming `/`.
 
+If an SSE response fails, including when an App restart temporarily produces a
+terminal Ingress proxy response, the dashboard closes that EventSource and owns
+one tracked two-second recreation timer for the same prefixed URL. Two-second
+status polling remains active until the replacement EventSource opens, whose
+first event supplies its authoritative snapshot. Hiding or leaving the page
+cancels the pending retry so a later visibility restoration creates exactly one
+stream.
+
 Long-lived SSE and audio responses are compatible with Home Assistant Ingress
 streaming.
 
@@ -730,7 +738,7 @@ Milestone 27.2 physical qualification completed on August 26, 2026, using a
 direct isolated branch daemon on the development host against the LAN-connected
 SDS200 running firmware 1.26.01. The Home Assistant host ran amd64 Home Assistant
 OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7, and Docker
-29.7.2.
+29.6.2.
 
 The repository-managed App was deliberately stopped before the direct daemon
 claimed the scanner, and both installed Local Apps remained stopped. This
@@ -753,3 +761,71 @@ code was not staged or deployed into Home Assistant OS, so this evidence does
 not claim that the new waterfall socket or polling code ran inside the 0.22.0
 App image. Home Assistant argv parity remains host-tested, and Milestone 27.4
 must perform its own branch-image Ingress acceptance before closure.
+
+### Milestone 27.3 responsive web-workspace development acceptance
+
+Milestone 27.3 physical development acceptance completed on August 26–27,
+2026, using isolated source-built Local Apps at version 0.22.0. The primary
+workspace App came from exact merged commit
+`db2e6c0a8ce748b4e84f0dc231c7cbfbdb8f27e5`; the ordered-event repair was then
+built from exact closure commit
+`dca445e73c8c227c2c35c00ac763f0108c7c8586`. These were development builds, not
+the published v0.22.0 repository image. The amd64 host ran Home Assistant OS
+18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7, and Docker
+29.6.2 against an SDS200 running firmware 1.26.01. Only the selected acceptance
+App ran while physical tests were active, preserving one daemon,
+scanner-control, PSI, and RTSP/RTP owner.
+
+The acceptance run confirmed:
+
+- System, LCARS-inspired, Matrix-inspired, First Responder, Amateur Radio, and
+  Pip-Boy-inspired appeared in deterministic order over the shared Scanner,
+  Controls, Audio, Recordings, and Diagnostics panes. System and
+  Pip-Boy-inspired were visually inspected through live Ingress; theme, pane,
+  and Detail fallback selection survived a complete reload. The deterministic
+  Chrome audit, rather than the physical run, covers every one of the 120
+  theme-by-viewport-by-pane reference cases;
+- Simple and Detail both worked as the scanning fallback. Auto mapped Quick
+  Search to normalized `search` and RF, Close Call to `close_call` and RF, raw
+  `wx_alert` to normalized `weather` and Special, and Tone-Out to Special. The
+  explicit Hierarchy, RF, Identity, and Special views made all 35 field labels
+  reachable while applicable live values updated;
+- configured nonzero Tone-Out values updated live as the scanner advanced
+  between entries. A separate zero-tone entry rendered `Detect` / `Detect`,
+  preserving the distinction between configured frequencies and scanner
+  tone-identification mode;
+- starting prior-residue System, Department, and Site holds were authoritatively
+  released. Channel Hold was set on one valid selection, Next moved away,
+  Previous returned to the exact selection, and Channel Hold was released.
+  Reconnect completed and the final authoritative state had System, Department,
+  Site, and Channel holds Off. One request reached the stable
+  `control_unavailable` boundary while the scanner selection changed; later
+  control and reconnect attempts succeeded;
+- browser audio Play delivered advancing packets, Stop released the browser
+  client, and daemon-owned audio remained the sole scanner RTSP/RTP session.
+  Queue-loss telemetry stayed at zero while limited physical RTP gap telemetry
+  remained visible rather than being hidden;
+- daemon recording finalized a 1,972,524-byte WAV (1.9 MiB in the UI). It became
+  newest in a nine-file, three-page inventory, played and paused through the
+  saved-WAV control, and downloaded byte-identical to Home Assistant media
+  storage;
+- the first App restart repopulated authoritative state through status polling,
+  but its EventSource encountered a terminal Ingress failure and ordered events
+  resumed only after a full reload. The closure repair replaced native retry
+  ownership with one tracked two-second recreation timer. A deliberate stopped-
+  App interval longer than ten seconds then forced repeated unavailable-backend
+  attempts; after restart, the same untouched Ingress document recovered live
+  ordered events and continued applying changing radio state. A second normal
+  restart preserved a non-persistent focus marker in that same document and
+  recovered without reload. Each shutdown could cancel the one open long-lived
+  response at the documented two-second graceful deadline; and
+- final cleanup restored the System theme, Auto/Detail scanning presentation,
+  normal scanning, all four holds Off, stopped browser audio, idle recording,
+  and the repository-managed App as sole owner. Both exact Local Apps remain
+  installed but stopped, and the persistent nine-recording inventory remains
+  available through the repository App.
+
+This source-built development run validates the physical Milestone 27.3 branch
+and closure-repair behavior. It does not establish that the published v0.22.0
+repository image contains the unreleased workspace, and it does not replace a
+later tagged repository-managed release acceptance.

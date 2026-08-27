@@ -42,6 +42,7 @@ const RADIO_FIELD_GROUPS = Object.freeze([
 let currentSnapshot = {};
 let currentDaemonHello = {};
 let eventSource = null;
+let eventStreamRestartTimer = null;
 let eventStreamConnected = false;
 let lastEventSequence = null;
 let daemonEventGeneration = 0;
@@ -1269,13 +1270,47 @@ async function refreshStatus() {
   }
 }
 
-function stopEventStream() {
-  if (eventSource !== null) {
-    eventSource.close();
-    eventSource = null;
+function clearEventStreamRestartTimer() {
+  if (eventStreamRestartTimer !== null) {
+    window.clearTimeout(eventStreamRestartTimer);
+    eventStreamRestartTimer = null;
   }
+}
+
+function scheduleEventStreamRestart(source) {
+  if (eventSource !== source) {
+    return;
+  }
+
+  eventSource = null;
   eventStreamConnected = false;
   lastEventSequence = null;
+  source.close();
+
+  if (
+    document.hidden ||
+    typeof EventSource === "undefined" ||
+    eventStreamRestartTimer !== null
+  ) {
+    return;
+  }
+
+  eventStreamRestartTimer = window.setTimeout(() => {
+    eventStreamRestartTimer = null;
+    startEventStream();
+  }, FALLBACK_REFRESH_INTERVAL_MS);
+}
+
+function stopEventStream() {
+  clearEventStreamRestartTimer();
+
+  const source = eventSource;
+  eventSource = null;
+  eventStreamConnected = false;
+  lastEventSequence = null;
+  if (source !== null) {
+    source.close();
+  }
 }
 
 function startEventStream() {
@@ -1285,13 +1320,20 @@ function startEventStream() {
     return;
   }
 
-  eventSource = new EventSource(webUrl("api/v1/events"));
+  const source = new EventSource(webUrl("api/v1/events"));
+  eventSource = source;
 
-  eventSource.onopen = () => {
+  source.onopen = () => {
+    if (eventSource !== source) {
+      return;
+    }
     eventStreamConnected = true;
   };
 
-  eventSource.onmessage = (message) => {
+  source.onmessage = (message) => {
+    if (eventSource !== source) {
+      return;
+    }
     try {
       const envelope = JSON.parse(message.data);
       if (record(envelope) !== envelope) {
@@ -1300,17 +1342,18 @@ function startEventStream() {
       eventStreamConnected = true;
       applyDaemonEvent(envelope, message);
     } catch {
-      eventStreamConnected = false;
-      stopEventStream();
+      scheduleEventStreamRestart(source);
       void refreshStatus();
-      window.setTimeout(startEventStream, FALLBACK_REFRESH_INTERVAL_MS);
     }
   };
 
-  eventSource.onerror = () => {
-    eventStreamConnected = false;
+  source.onerror = () => {
+    if (eventSource !== source) {
+      return;
+    }
     element("dashboard-message").textContent =
       "Live events are reconnecting; status polling remains active.";
+    scheduleEventStreamRestart(source);
   };
 }
 

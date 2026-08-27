@@ -26,6 +26,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   picker, and stored selection to System and can be explicitly retried. Theme
   switching, authentication, Home Assistant Ingress, controls, audio,
   recordings, and single-owner daemon/scanner boundaries remain unchanged.
+  Physical Home Assistant OS 18.2 acceptance against SDS200 firmware 1.26.01
+  exercised every theme and pane, adaptive Search, Close Call, Weather, and
+  Tone-Out presentation, all semantic controls and field groups, browser audio,
+  recording pagination, saved playback/download, reload persistence, App
+  restart, and final sole-owner restoration.
 - Add the Milestone 27.2 qualified text-waterfall data plane. Exact typed GST,
   PWF, and 240-value GWF handling feeds one demand-driven radio-owned session
   with deterministic rollback, final-consumer stop, interruption/recovery, and
@@ -38,6 +43,20 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Make browser ordered-event recovery explicit and duplicate-free. A terminal
+  EventSource error now closes the failed source, resets its sequence checkpoint,
+  and schedules exactly one same-origin stream recreation after two seconds;
+  stale callbacks, hidden pages, page teardown, malformed messages, and direct
+  restarts cannot create overlapping sources or timers. Status polling remains
+  active until the replacement EventSource opens, whose first event supplies a
+  fresh authoritative snapshot.
+  Physical Home Assistant Ingress acceptance deliberately held the App stopped
+  for more than ten seconds, then verified that the unchanged page recovered
+  ordered updates without reload; a second normal App restart preserved the same
+  document and recovered again. Deterministic gallery capture now holds its demo
+  transport in one inert-open state and verifies an unchanged visible status
+  message, preventing retry and polling schedules from racing the PNG
+  repeatability gate without weakening browser event-stream coverage.
 - Complete Milestone 27.2.2 audio-lifecycle and release-integrity hardening.
   Fanout and dynamic-router destinations now receive PCM through independent
   bounded workers, so producer paths never wait for destination code; overflow

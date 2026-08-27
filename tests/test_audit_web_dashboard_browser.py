@@ -152,6 +152,10 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
     assert "captureDashboardScreenshot" in helper_source
     for contract in (
         "export async function captureDashboardScreenshot",
+        'cdp.send("Page.addScriptToEvaluateOnNewDocument"',
+        'Object.defineProperty(globalThis, "EventSource"',
+        "__sdsctlScreenshotEventSource",
+        "__sdsctlScreenshotMessageStability",
         'cdp.send("Emulation.setDeviceMetricsOverride"',
         'cdp.send("Emulation.setEmulatedMedia"',
         'cdp.send("Page.captureScreenshot"',
@@ -160,6 +164,9 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         "outerHTML !== finalOuterHTML",
     ):
         assert contract in audit_source
+    assert audit_source.index(
+        'cdp.send("Page.addScriptToEvaluateOnNewDocument"'
+    ) < audit_source.index("await navigate(cdp, captureUrl")
 
 
 def test_internal_capture_bridge_rejects_bad_arguments_without_opening_chrome() -> None:

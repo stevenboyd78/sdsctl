@@ -302,6 +302,13 @@ def test_capture_readiness_requires_complete_authoritative_demo_dom() -> None:
         ready.replace('data-state="online"', 'data-state="loading"'),
         capture,
     )
+    assert not screenshots._capture_dom_is_ready(
+        ready.replace(
+            "Daemon and scanner status are available.",
+            "Live events are reconnecting; status polling remains active.",
+        ),
+        capture,
+    )
     for expected in screenshots._READY_TEXT.values():
         assert not screenshots._capture_dom_is_ready(
             ready.replace(expected, "not ready", 1),

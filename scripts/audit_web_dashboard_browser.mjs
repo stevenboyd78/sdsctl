@@ -80,6 +80,7 @@ const RADIO_FIELD_IDS = Object.freeze([
 ]);
 
 const DEFAULT_TIMEOUT_MS = 20_000;
+const SCREENSHOT_STATUS_MESSAGE = "Daemon and scanner status are available.";
 const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
@@ -1980,6 +1981,58 @@ export async function captureDashboardScreenshot({
       cdp.send("Runtime.enable"),
       cdp.send("Network.enable"),
     ]);
+
+    // The screenshot demo intentionally has no daemon event client. Letting the
+    // production EventSource reach that 503 would race its two-second restart
+    // against fallback status polling and give the visual capture two valid
+    // status messages. This capture-only inert source opens asynchronously,
+    // performs no network I/O, and leaves the initial REST status as the sole
+    // writer of the deterministic screenshot state. The full browser audit and
+    // dashboard behavior tests continue to use the real EventSource lifecycle.
+    await cdp.send("Page.addScriptToEvaluateOnNewDocument", {
+      source: `(() => {
+        const state = {closes: 0, instances: 0, opens: 0, urls: []};
+        Object.defineProperty(globalThis, "__sdsctlScreenshotEventSource", {
+          configurable: false,
+          enumerable: false,
+          value: state,
+          writable: false,
+        });
+
+        class ScreenshotEventSource {
+          constructor(url) {
+            this.onerror = null;
+            this.onmessage = null;
+            this.onopen = null;
+            this.readyState = 0;
+            this.url = String(url);
+            this.withCredentials = false;
+            state.instances += 1;
+            state.urls.push(this.url);
+            queueMicrotask(() => {
+              if (this.readyState !== 0) return;
+              this.readyState = 1;
+              state.opens += 1;
+              if (typeof this.onopen === "function") {
+                this.onopen(new Event("open"));
+              }
+            });
+          }
+
+          close() {
+            if (this.readyState === 2) return;
+            this.readyState = 2;
+            state.closes += 1;
+          }
+        }
+
+        Object.defineProperty(globalThis, "EventSource", {
+          configurable: true,
+          value: ScreenshotEventSource,
+          writable: true,
+        });
+      })();`,
+    });
     const pageFailures = [];
     cdp.on("Runtime.exceptionThrown", (event) => {
       const description =
@@ -1997,6 +2050,33 @@ export async function captureDashboardScreenshot({
     const captureUrl = `${baseUrl}/__demo/theme/${encodeURIComponent(theme)}`;
     await navigate(cdp, captureUrl, timeoutMs, {installAuditLibrary: false});
     await setViewport(cdp, viewport);
+    const initialMessage = await evaluate(
+      cdp,
+      `(() => {
+        const target = document.querySelector("#dashboard-message");
+        if (target === null) return null;
+        const state = {
+          initialMessage: target.textContent.trim(),
+          mutations: 0,
+        };
+        const observer = new MutationObserver((records) => {
+          state.mutations += records.length;
+        });
+        observer.observe(target, {characterData: true, childList: true, subtree: true});
+        Object.defineProperty(globalThis, "__sdsctlScreenshotMessageStability", {
+          configurable: false,
+          enumerable: false,
+          value: {observer, state},
+          writable: false,
+        });
+        return state.initialMessage;
+      })()`,
+    );
+    if (initialMessage !== SCREENSHOT_STATUS_MESSAGE) {
+      throw new Error(
+        `capture reached an unexpected initial dashboard message: ${initialMessage}`,
+      );
+    }
     if (settleMs > 0) {
       await delay(settleMs);
       await waitForDashboard(cdp, timeoutMs);
@@ -2028,6 +2108,48 @@ export async function captureDashboardScreenshot({
       throw new Error(
         `capture viewport/media mismatch: expected ${width}x${height}` +
           `@${deviceScaleFactor} reduced motion, received ${JSON.stringify(geometry)}`,
+      );
+    }
+
+    const captureState = await evaluate(
+      cdp,
+      `(() => {
+        const eventSource = globalThis.__sdsctlScreenshotEventSource;
+        const message = globalThis.__sdsctlScreenshotMessageStability?.state;
+        return {
+          eventSource: eventSource === undefined ? null : {
+            closes: eventSource.closes,
+            instances: eventSource.instances,
+            opens: eventSource.opens,
+            urls: [...eventSource.urls],
+          },
+          message: message === undefined ? null : {
+            current: document.querySelector("#dashboard-message")?.textContent?.trim() ?? null,
+            initial: message.initialMessage,
+            mutations: message.mutations,
+          },
+        };
+      })()`,
+    );
+    const expectedEventUrl = `${baseUrl.replace(/\/+$/, "")}/api/v1/events`;
+    if (
+      captureState.eventSource?.instances !== 1 ||
+      captureState.eventSource?.opens !== 1 ||
+      captureState.eventSource?.closes !== 0 ||
+      captureState.eventSource?.urls?.length !== 1 ||
+      captureState.eventSource.urls[0] !== expectedEventUrl
+    ) {
+      throw new Error(
+        `capture EventSource shim lifecycle mismatch: ${JSON.stringify(captureState.eventSource)}`,
+      );
+    }
+    if (
+      captureState.message?.initial !== SCREENSHOT_STATUS_MESSAGE ||
+      captureState.message?.current !== SCREENSHOT_STATUS_MESSAGE ||
+      captureState.message?.mutations !== 0
+    ) {
+      throw new Error(
+        `capture dashboard message was not stable: ${JSON.stringify(captureState.message)}`,
       );
     }
 

@@ -79,6 +79,26 @@ captures, package contents, documentation, distribution builds, and the complete
 static and test suite. Physical acceptance must use the existing SDS200 single-
 owner guard and restore the repository Home Assistant App and normal scanning.
 
+Physical development acceptance completed on August 26–27, 2026, through Home
+Assistant Ingress against an SDS200 running firmware 1.26.01. The initial
+isolated Local App was built from exact merged commit `db2e6c0`; a restart run
+then exposed a terminal browser EventSource failure that left authoritative
+two-second status polling active but required a page reload before ordered
+events resumed. Exact closure commit `dca445e` replaced that native-retry
+assumption with one tracked, duplicate-free two-second stream-recreation timer.
+
+The source-built Apps exercised all six built-in themes, all five panes, both
+scan fallbacks, every adaptive Search, Close Call, Weather, and Tone-Out group,
+the five field-inspection choices, semantic scanner controls, browser audio,
+daemon recording, three-entry pagination, saved playback and download, reload
+persistence, and normal restart. A deliberate stopped-App interval exceeding
+ten seconds forced repeated failed reconnects; the same Ingress document then
+recovered a new authoritative ordered stream without reload after the App
+returned, and a second normal restart preserved the document and recovered
+again. Final cleanup left all four holds Off, normal scanning active, both
+isolated Local Apps installed but stopped, and the repository-managed App as the
+sole daemon, scanner-control, PSI, and RTSP/RTP owner.
+
 Do not add copied manufacturer or game assets, theme JavaScript, remote fonts or
 resources, automatic theme downloads, a GUI theme, a new Home Assistant card, a
 TUI layout, a waterfall daemon consumer, scanner mode navigation, or theme-owned
@@ -667,6 +687,10 @@ is collected.
   built-in web theme. Every built-in theme uses the shared accessible Scanner,
   Controls, Audio, Recordings, and Diagnostics panes without document or active-
   pane scrolling at 390x844, 800x480, 1366x768, and 1920x1080 reference sizes.
+  Physical Home Assistant OS acceptance exercised the complete live workspace,
+  adaptive screens, controls, audio and recording workflows, reload behavior,
+  explicit duplicate-free ordered-event recreation across App outages, and
+  final repository-App ownership restoration.
 - Milestone 27.4: responsive theme-aware web spectrum and rolling-waterfall
   workspace inside the shared viewport shell, with authenticated bounded demand,
   immediate CSS/Canvas recoloring, relative-data labeling, and loss telemetry.
