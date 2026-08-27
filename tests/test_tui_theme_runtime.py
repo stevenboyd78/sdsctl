@@ -6,12 +6,15 @@ from pathlib import Path
 
 import pytest
 
+import sds200.tui_theme_runtime as tui_theme_runtime
 from sds200 import cli, resolve_configuration_paths
 from sds200.rich_cli import palette_for_name
 from sds200.state import RadioStateSnapshot
 from sds200.theme import DEFAULT_DARK_THEME
+from sds200.theme_lifecycle import ThemeLifecycleError
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_theme_runtime import build_tui_theme_runtime
+from sds200.tui_themes import TuiThemeError
 
 FIXTURE = Path(__file__).parent / "fixtures" / "replay" / "sds100-tui.jsonl"
 
@@ -107,6 +110,72 @@ def test_runtime_merges_managed_theme_and_retains_immutable_startup_data(
 
     assert asset.stylesheet == original_stylesheet
     assert asset.manifest.palette.resolve("text.primary").foreground == original_foreground
+
+
+def test_runtime_rejects_exact_ninth_entry_after_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _write_tui_theme(tmp_path)
+    real_validate = tui_theme_runtime.validate_theme_package
+    real_bounded_names = tui_theme_runtime._bounded_package_names
+    state = {"mutated": False, "bounded": False}
+
+    def mutate_after_validation(source: Path):
+        validated = real_validate(source)
+        if source == package and not state["mutated"]:
+            for index in range(6):
+                (package / f"late-{index}.txt").write_text("late", encoding="utf-8")
+            state["mutated"] = True
+        return validated
+
+    def observe_bounded_names(descriptor: int) -> tuple[str, ...]:
+        state["bounded"] = True
+        return real_bounded_names(descriptor)
+
+    monkeypatch.setattr(
+        tui_theme_runtime,
+        "validate_theme_package",
+        mutate_after_validation,
+    )
+    monkeypatch.setattr(
+        tui_theme_runtime,
+        "_bounded_package_names",
+        observe_bounded_names,
+    )
+
+    runtime = build_tui_theme_runtime(tmp_path)
+
+    assert state == {"mutated": True, "bounded": True}
+    assert runtime.managed_identifiers == ()
+    assert runtime.ignored_managed_entries == 1
+
+
+def test_runtime_translates_bounded_enumeration_failure_to_tui_theme_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _write_tui_theme(tmp_path)
+    validated = tui_theme_runtime.validate_theme_package(package)
+    runtime = build_tui_theme_runtime(tmp_path)
+    asset = runtime.require_asset("solarized")
+    assert validated.summary.sha256 is not None
+
+    def fail_bounded_enumeration(_descriptor: int) -> tuple[str, ...]:
+        raise ThemeLifecycleError("injected bounded enumeration failure")
+
+    monkeypatch.setattr(
+        tui_theme_runtime,
+        "_bounded_package_names",
+        fail_bounded_enumeration,
+    )
+
+    with pytest.raises(TuiThemeError):
+        tui_theme_runtime._secure_stylesheet(
+            tmp_path,
+            asset.manifest,
+            validated.summary.sha256,
+        )
 
 
 @pytest.mark.parametrize(

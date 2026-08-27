@@ -53,9 +53,7 @@ def test_python_distribution_package_and_entry_point_remain_compatible() -> None
 
     assert project["project"]["name"] == "sds200"
     assert (REPOSITORY_ROOT / "src" / "sds200" / "__init__.py").is_file()
-    assert project["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == [
-        "src/sds200"
-    ]
+    assert project["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"] == ["src/sds200"]
     assert project["tool"]["mypy"]["packages"] == ["sds200"]
     assert project["project"]["scripts"]["sdsctl"] == "sds200.cli:main"
 
@@ -80,10 +78,7 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
     assert _quoted_yaml_scalar(manifest, "name") == "sds200"
     assert _quoted_yaml_scalar(manifest, "slug") == "sds200"
     assert _quoted_yaml_scalar(manifest, "panel_title") == "sds200"
-    assert (
-        _quoted_yaml_scalar(manifest, "image")
-        == "ghcr.io/stevenboyd78/sds200-home-assistant"
-    )
+    assert _quoted_yaml_scalar(manifest, "image") == "ghcr.io/stevenboyd78/sds200-home-assistant"
     assert _quoted_yaml_scalar(workflow, "IMAGE_NAME") == "sds200-home-assistant"
     assert 'HOME_ASSISTANT_LOVELACE_CARD_FILENAME = "sds200-card.js"' in lovelace_installer
     assert (
@@ -94,10 +89,7 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
         'HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"'
         in lovelace_installer
     )
-    assert (
-        '"/local/sds200/sds200-display-card.js"'
-        in lovelace_installer
-    )
+    assert '"/local/sds200/sds200-display-card.js"' in lovelace_installer
 
 
 def test_generic_container_documentation_preserves_local_image_tag() -> None:
@@ -123,32 +115,47 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_3_theme_workspace_contract() -> None:
+def test_roadmap_records_active_milestone_27_3_1_theme_snapshot_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
-    active_milestone = roadmap.split(
-        "## Active milestone", 1
-    )[1].split(
+    active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.3 — Responsive web workspace and Pip-Boy-inspired theme",
-        "Milestone 27.2.2 is closed after independently reproducing",
-        "browser renderer remains owned by Milestone 27.4",
-        "`system` as the stable theme ID, picker order zero, browser-local default",
-        "Simple, Detail, Search/Close Call, Weather, and Tone-Out",
-        "Scanner, Controls, Audio, Recordings, and Diagnostics panes",
-        "`themes/web/pip-boy-inspired/`",
-        "picker label `Pip-Boy-inspired`",
-        "local declarative CSS",
-        "Apply the same shared viewport shell",
-        "390x844, 800x480, 1366x768, and 1920x1080",
-        "At user text enlargement or browser zoom, accessibility",
-        "all existing controls and all 35 radio fields",
-        "Do not add copied manufacturer or game assets",
+        "### Milestone 27.3.1 — Managed-theme source-snapshot hardening",
+        "Milestone 27.3 is closed",
+        "open the explicitly selected unpacked source directory once",
+        "one logical aggregate package byte budget",
+        "actual source bytes",
+        "private validation snapshot",
+        "same-filesystem publication stage",
+        "descriptor-relative no-follow access",
+        "source-directory replacement",
+        "same-size content mutation",
+        "no parser or interface validator consumes the live source tree",
+        "exact-digest activation or reapproval gates",
+        "durable implementation-review ledger",
+        "Do not implement Broadcastify TLS",
+        "Milestone 27.4 waterfall renderer",
     ):
         assert required in active_milestone or required in normalized_active_milestone
+
+
+def test_roadmap_preserves_closed_milestone_27_3_physical_acceptance() -> None:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    normalized_roadmap = " ".join(roadmap.split())
+
+    for required in (
+        "Milestone 27.3 completed one responsive viewport-owned web workspace",
+        "all six built-in themes, all five panes",
+        "SDS200 running firmware 1.26.01",
+        "exact merged commit `db2e6c0`",
+        "Exact closure commit `dca445e`",
+        "all four holds Off",
+        "normal scanning active",
+    ):
+        assert required in roadmap or required in normalized_roadmap
 
 
 def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> None:
@@ -184,9 +191,7 @@ def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> No
 
 def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
-    active_milestone = roadmap.split(
-        "## Active milestone", 1
-    )[1].split(
+    active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
     milestone_group = roadmap.split(
@@ -228,9 +233,7 @@ def test_web_guide_records_milestone_26_1_physical_acceptance() -> None:
 def test_branding_asset_paths_use_sdsctl_identity() -> None:
     for asset_name in BRANDING_ASSET_NAMES:
         assert (REPOSITORY_ROOT / "docs" / "assets" / f"sdsctl-{asset_name}").is_file()
-        assert not (
-            REPOSITORY_ROOT / "docs" / "assets" / f"sds200-python-{asset_name}"
-        ).exists()
+        assert not (REPOSITORY_ROOT / "docs" / "assets" / f"sds200-python-{asset_name}").exists()
 
 
 def test_readme_uses_sdsctl_logo_path() -> None:
@@ -279,10 +282,6 @@ def test_v022_release_documentation_names_current_generic_image() -> None:
     assert 'python -m pip install --upgrade "sds200==0.22.0"' in installation
     assert "docker pull theboyd78/sdsctl:0.22.0" in installation
     assert (
-        "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built"
-        in installation
+        "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
-    assert (
-        "compatibility-sensitive `sds200` name, slug, and GHCR image identity"
-        in installation
-    )
+    assert "compatibility-sensitive `sds200` name, slug, and GHCR image identity" in installation

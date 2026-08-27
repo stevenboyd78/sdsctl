@@ -11,6 +11,7 @@ from .exceptions import SDS200Error
 from .theme_lifecycle import (
     THEME_MANIFEST_FILENAME,
     THEME_PACKAGE_MAX_BYTES,
+    _bounded_package_names,
     discover_theme_inventory,
     validate_theme_package,
 )
@@ -50,9 +51,7 @@ class TuiThemeRuntimeRegistry:
     @property
     def managed_identifiers(self) -> tuple[str, ...]:
         return tuple(
-            asset.manifest.identifier
-            for asset in self.assets
-            if asset.origin == "managed"
+            asset.manifest.identifier for asset in self.assets if asset.origin == "managed"
         )
 
     def require_asset(self, identifier: str) -> TuiThemeRuntimeAsset:
@@ -61,9 +60,7 @@ class TuiThemeRuntimeRegistry:
             if asset.manifest.identifier == normalized:
                 return asset
         choices = ", ".join(self.registry.identifiers)
-        raise TuiThemeError(
-            f"unknown terminal theme {identifier!r}; available themes: {choices}"
-        )
+        raise TuiThemeError(f"unknown terminal theme {identifier!r}; available themes: {choices}")
 
 
 def _directory_flags() -> int:
@@ -141,12 +138,13 @@ def _secure_stylesheet(
             dir_fd=interface_descriptor,
         )
         descriptors.append(package_descriptor)
+        directory_status = os.fstat(package_descriptor)
         expected_files = {
             THEME_MANIFEST_FILENAME,
             manifest.palette_filename,
             manifest.stylesheet,
         }
-        if set(os.listdir(package_descriptor)) != expected_files:
+        if set(_bounded_package_names(package_descriptor)) != expected_files:
             raise TuiThemeError("managed TUI theme package contents changed after discovery")
         contents: dict[str, bytes] = {}
         total_bytes = 0
@@ -166,12 +164,29 @@ def _secure_stylesheet(
             digest.update(content)
         if digest.hexdigest() != expected_digest:
             raise TuiThemeError("managed TUI theme package changed after discovery")
+        if set(_bounded_package_names(package_descriptor)) != expected_files:
+            raise TuiThemeError("managed TUI theme package changed while being read")
+        final_directory_status = os.fstat(package_descriptor)
+        if (
+            directory_status.st_dev,
+            directory_status.st_ino,
+            directory_status.st_mtime_ns,
+            directory_status.st_ctime_ns,
+        ) != (
+            final_directory_status.st_dev,
+            final_directory_status.st_ino,
+            final_directory_status.st_mtime_ns,
+            final_directory_status.st_ctime_ns,
+        ):
+            raise TuiThemeError("managed TUI theme package changed while being read")
         try:
             return contents[manifest.stylesheet].decode("utf-8")
         except UnicodeDecodeError as exc:
             raise TuiThemeError("managed TUI stylesheet is not UTF-8 text") from exc
     except TuiThemeError:
         raise
+    except SDS200Error as exc:
+        raise TuiThemeError("managed TUI theme asset is unavailable") from exc
     except OSError as exc:
         raise TuiThemeError("managed TUI theme asset is unavailable") from exc
     finally:
@@ -219,9 +234,7 @@ def build_tui_theme_runtime(
         try:
             expected_path = managed_root / "tui" / summary.identifier
             if summary.path != expected_path:
-                raise TuiThemeError(
-                    "managed TUI theme package path is outside its interface root"
-                )
+                raise TuiThemeError("managed TUI theme package path is outside its interface root")
             validated = validate_theme_package(summary.path)
             if not isinstance(validated.manifest, TuiThemeManifest):
                 raise TuiThemeError("managed theme package is not a TUI theme")

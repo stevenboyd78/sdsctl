@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -106,9 +108,10 @@ def test_activation_writes_private_ledger_and_verified_module(tmp_path: Path) ->
     record = _activate(root, target, digest)
 
     assert record.package_sha256 == digest
-    assert record.target_path.read_bytes() == (
-        root / "home-assistant" / record.identifier / record.installed_filename
-    ).read_bytes()
+    assert (
+        record.target_path.read_bytes()
+        == (root / "home-assistant" / record.identifier / record.installed_filename).read_bytes()
+    )
     assert record.target_path.stat().st_mode & 0o777 == 0o644
     ledger = root / HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME
     assert ledger.stat().st_mode & 0o777 == 0o600
@@ -116,6 +119,64 @@ def test_activation_writes_private_ledger_and_verified_module(tmp_path: Path) ->
     inventory = home_assistant_activation_inventory(root)
     assert inventory.valid is True
     assert [status.state for status in inventory.statuses] == ["current"]
+
+
+def test_activation_deploys_only_authoritative_snapshot_module(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, target, digest = _installed(tmp_path)
+    package = root / "home-assistant" / "custom-home-assistant"
+    live_module = package / "custom-home-assistant.js"
+    snapshot_module = live_module.read_bytes()
+    real_snapshot = activation._validated_open_theme_source_snapshot
+    mutated = False
+
+    @contextmanager
+    def mutate_live_package_after_snapshot(opened: object):
+        nonlocal mutated
+        with real_snapshot(opened) as snapshot:  # type: ignore[arg-type]
+            assert snapshot.image.sha256 == digest
+            live_module.write_bytes(snapshot_module + b"\n// raced live package\n")
+            mutated = True
+            yield snapshot
+
+    monkeypatch.setattr(
+        activation,
+        "_validated_open_theme_source_snapshot",
+        mutate_live_package_after_snapshot,
+    )
+
+    record = _activate(root, target, digest)
+
+    assert mutated
+    assert live_module.read_bytes() != snapshot_module
+    assert record.package_sha256 == digest
+    assert record.module_sha256 == hashlib.sha256(snapshot_module).hexdigest()
+    assert record.target_path.read_bytes() == snapshot_module
+
+
+def test_activation_and_status_reject_symlinked_managed_interface(
+    tmp_path: Path,
+) -> None:
+    root, target, digest = _installed(tmp_path)
+    record = _activate(root, target, digest)
+    interface = root / "home-assistant"
+    retained_interface = tmp_path / "retained-home-assistant"
+    interface.rename(retained_interface)
+    try:
+        interface.symlink_to(retained_interface, target_is_directory=True)
+    except OSError as error:
+        pytest.skip(f"symbolic links are unavailable: {error}")
+
+    with pytest.raises(ThemeLifecycleError):
+        _activate(root, target, digest)
+
+    assert record.target_path.exists()
+    inventory = home_assistant_activation_inventory(root)
+    assert inventory.valid is True
+    assert len(inventory.statuses) == 1
+    assert inventory.statuses[0].state == "stale-package"
 
 
 @pytest.mark.parametrize("trust", [None, "yes"])

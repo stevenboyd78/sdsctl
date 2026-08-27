@@ -11,98 +11,117 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.3 — Responsive web workspace and Pip-Boy-inspired theme
+### Milestone 27.3.1 — Managed-theme source-snapshot hardening
 
-Milestone 27.2.2 is closed after independently reproducing and resolving the
-remaining applicable audio-lifecycle and release-integrity findings from the
-post-milestone implementation review. The physically qualified Milestone 27.2
-waterfall data plane remains unchanged, and its browser renderer remains owned
-by Milestone 27.4.
+Milestone 27.3 is closed with its responsive web workspace, stable redesigned
+System default, modular Pip-Boy-inspired theme, deterministic browser acceptance,
+and physical Home Assistant OS qualification. Its implementation and physical
+evidence are retained in the closed Milestone 27.3 history below.
 
-Milestone 27.3 converts the existing web dashboard into one responsive viewport-
-owned workspace while preserving its authoritative daemon-client boundary,
-authenticated session and Home Assistant Ingress behavior, all existing fields
-and controls, browser audio, recording workflows, and theme lifecycle.
+A post-milestone static review raised a remaining file-mutation race at the
+Milestone 26.13 managed-theme install and replacement source boundary. Treat the
+review and its draft guidance as a lead rather than implementation authority:
+independently reproduce the applicable condition, record its disposition, and
+change only the managed-theme lifecycle and security boundary required to close
+it, without expanding into renderer, scanner, or activation-contract work.
 
-Keep `system` as the stable theme ID, picker order zero, browser-local default,
-and safe fallback so existing stored selections and managed-theme failure
-behavior require no migration. Redesign its presentation around the established
-SDS200 Display card hierarchy: one prominent scanner-display pane with Simple,
-Detail, Search/Close Call, Weather, and Tone-Out presentations driven by the
-existing normalized screen kind and the same configurable scan fallback. Build
-that presentation in the web renderer; do not load the Home Assistant custom-
-element module or duplicate Home Assistant entity state.
+Milestone 27.3.1 must open the explicitly selected unpacked source directory
+once and snapshot it before parsing a manifest or applying an interface schema.
+Enumerate and open candidate entries relative to that retained directory
+descriptor, use no-follow semantics for every directory and file boundary, and
+accept only the existing regular-file package shape. A pathname validation must
+never be followed by an unguarded pathname reopen for hashing, copying, parsing,
+or publication.
 
-The System presentation remains system-adaptive for light and dark preferences
-while using scanner-display proportions, hierarchy, status strip, and mode-aware
-field selection. Keep the complete web feature set reachable through one shared
-keyboard-accessible pane model rather than permanently hiding it or shrinking it
-below readability. Scanner, Controls, Audio, Recordings, and Diagnostics panes
-use semantic HTML, explicit labels, predictable focus movement, and browser-
-local presentation state. The future Waterfall pane may be reserved structurally
-but must not connect to the daemon or render waterfall data in this milestone.
+Apply one logical aggregate package byte budget to the complete candidate
+snapshot rather than independent per-file allowances. Charge actual source
+bytes as they are read, require private-stage writes to match the same per-file
+and package totals without resetting or double-counting the budget, and fail
+before an unexpectedly growing file can consume bytes beyond it. Copy in
+bounded chunks to a newly created private validation snapshot, hash the exact
+bytes retained there, and use only those snapshotted bytes for manifest parsing,
+interface-specific validation, and digest reporting. Installation must copy
+that exact validated snapshot into a second newly created private same-filesystem
+publication stage and verify it before atomic rename. Do not parse or validate
+the concurrently mutable source tree and then copy it as a separate operation.
 
-Add one built-in package under `themes/web/pip-boy-inspired/` with stable ID
-`pip-boy-inspired`, picker label `Pip-Boy-inspired`, and order 50 after Amateur
-Radio. Use an original retro-futurist field-terminal presentation with phosphor-
-green or amber semantic tokens, restrained CRT depth, grid or radar
-instrumentation, scanline effects, and hardware-console framing. Do not use
-`Fallout` in the package ID or copy game logos, character or corporate artwork,
-screenshots, sounds, proprietary fonts, copied hardware geometry, or other game
-assets. The package remains local declarative CSS under the existing manifest,
-CSP, digest, and managed-theme rules.
+Retain and compare directory and file identity and regular-file metadata at the
+descriptor boundaries needed to reject source-root replacement, entry
+substitution, unlink/relink races, size changes, truncation, and growth during
+the snapshot. Recheck both the private validation snapshot and same-filesystem
+publication stage through descriptor-relative no-follow access so the validated
+package is exactly the package made visible. Any identity, shape, byte-count,
+digest, or budget mismatch must remove only the private stages, preserve the
+previous installed package during replacement, and leave unrelated managed and
+built-in packages untouched.
 
-Apply the same shared viewport shell to System, LCARS-inspired, Matrix-inspired,
-First Responder, Amateur Radio, Pip-Boy-inspired, and valid managed web themes.
-At normal browser zoom, the document and active pane must fit without horizontal
-or vertical scrolling at 390x844, 800x480, 1366x768, and 1920x1080, and scale
-cleanly to larger full-screen viewports. Information that cannot fit concurrently
-must remain available through explicit pane or page controls rather than being
-clipped, reduced below readability, or placed in an unannounced scroll region.
-At user text enlargement or browser zoom, accessibility and content reachability
-take precedence over the decorative no-scroll composition.
+Authenticate private publication stages with fresh 128-bit tokens plus persisted
+interface, package, device, and inode bindings. Give removal records independent
+128-bit token repeated in the filename and payload, bind the exact target device
+and inode, and retain the observed record-directory identity during the active
+attempt. Make recovery artifact-specific: remove a complete matching stage or
+removal record, or the narrowly safe empty pre-record states; preserve populated
+unrecorded or malformed stages, duplicate removal records, orphaned or
+mismatched tombstones, and incompatible or ambiguous states. Treat every
+detached purge entry as unauthenticated across process restarts and require
+explicit operator reconciliation rather than inferring permission to delete it.
+Qualify the parent filesystem before publishing a previously absent managed root
+or interface, then create it through a retained randomized candidate and atomic
+no-replace rename.
 
-Theme switching must preserve the selected pane, live scanner state, form and
-control state, browser audio, recording state, and focus meaning. System
-fallback, first-paint selection, managed-theme activation, same-origin delivery,
-CSP, `nosniff`, reduced-motion, forced-colors/high-contrast behavior, and state
-meaning independent of color must remain intact.
+State the local concurrency boundary exactly. The protected operation covers
+untrusted package contents and cooperating lifecycle commands under the lock;
+it must reject link substitution of that lock, recheck configured root and
+interface bindings, and never overwrite an observed unknown entry. It does not
+claim isolation from hostile code running as the same operating-system account
+with permission to rename the managed hierarchy between individual filesystem
+syscalls. Operator documentation must require account or operating-system
+isolation when local code is mutually untrusted.
 
-Acceptance must cover every automatic scanner screen transition, Simple and
-Detail scan fallback, configured and zero/detect Tone-Out values, all existing
-controls and all 35 radio fields, recording pagination, pane navigation by
-pointer and keyboard, focus restoration, direct authenticated web sessions,
-Home Assistant Ingress prefixing, sign-out and restart, every built-in theme at
-every reference viewport, device-pixel-ratio and resize changes, reduced motion,
-high contrast, missing and mutated managed-theme fallback, gallery/reference
-captures, package contents, documentation, distribution builds, and the complete
-static and test suite. Physical acceptance must use the existing SDS200 single-
-owner guard and restore the repository Home Assistant App and normal scanning.
+Preserve established public command and package semantics: the existing web CSS,
+Home Assistant JavaScript, and TUI palette/TCSS schemas; built-in precedence;
+managed inventory ordering and invalid-entry isolation; explicit install,
+replace, and removal inputs; web and TUI activation and fallback behavior; and
+Home Assistant deployment semantics. Failure, interruption, rollback, cleanup,
+and recovery handling may be strengthened, and managed mutation may acquire the
+explicit Linux no-replace support gate required by this security boundary. Home
+Assistant packages remain executable untrusted browser code: the distinct
+install/replace executable-code acknowledgement and exact-digest activation or
+reapproval gates remain mandatory and must not be weakened, inferred, or
+satisfied by successful snapshot validation.
 
-Physical development acceptance completed on August 26–27, 2026, through Home
-Assistant Ingress against an SDS200 running firmware 1.26.01. The initial
-isolated Local App was built from exact merged commit `db2e6c0`; a restart run
-then exposed a terminal browser EventSource failure that left authoritative
-two-second status polling active but required a page reload before ordered
-events resumed. Exact closure commit `dca445e` replaced that native-retry
-assumption with one tracked, duplicate-free two-second stream-recreation timer.
+Host-independent acceptance must use deterministic race injection and cover
+source-directory replacement, same-name file replacement, same-size content
+mutation, truncation and growth during reads, symlink swaps at every reachable
+level, special files, changed directory membership, short reads, exact aggregate
+budget boundaries and one-byte overflow, stage mutation, iterative cleanup,
+filesystem-qualified atomic no-replace publication, authenticated stage and
+removal records, empty-versus-partial interruption recovery, unauthenticated
+purge preservation, identity-bound removal recovery, replacement rollback,
+hardlinked-lock rejection, configured-path rebinding detection, and concurrent
+lifecycle exclusion. Tests must prove that hashes describe the exact published
+staged bytes and that no parser or interface validator consumes the live source
+tree. Run unchanged web, Home Assistant, and TUI theme lifecycle and activation
+regression contracts, the complete static and test suite, documentation checks,
+and distribution validation. No physical scanner or Home Assistant OS acceptance
+is required because this slice changes neither renderer behavior nor scanner
+ownership.
 
-The source-built Apps exercised all six built-in themes, all five panes, both
-scan fallbacks, every adaptive Search, Close Call, Weather, and Tone-Out group,
-the five field-inspection choices, semantic scanner controls, browser audio,
-daemon recording, three-entry pagination, saved playback and download, reload
-persistence, and normal restart. A deliberate stopped-App interval exceeding
-ten seconds forced repeated failed reconnects; the same Ingress document then
-recovered a new authoritative ordered stream without reload after the App
-returned, and a second normal restart preserved the document and recovered
-again. Final cleanup left all four holds Off, normal scanning active, both
-isolated Local Apps installed but stopped, and the repository-managed App as the
-sole daemon, scanner-control, PSI, and RTSP/RTP owner.
+Update the managed-theme operator and package-author documentation to describe
+the consistent source snapshot, package-wide byte budget, concurrent-mutation
+rejection, private-stage validation, and unchanged executable-code trust
+boundary. Maintain a durable implementation-review ledger that identifies each
+review finding, its independently established evidence, and an explicit
+implemented, already-resolved, deferred, rejected, or not-applicable disposition.
+The ledger must distinguish the one finding owned by this milestone from other
+review items and must not imply that accepting a review package accepted or
+implemented every proposal in it.
 
-Do not add copied manufacturer or game assets, theme JavaScript, remote fonts or
-resources, automatic theme downloads, a GUI theme, a new Home Assistant card, a
-TUI layout, a waterfall daemon consumer, scanner mode navigation, or theme-owned
-scanner controls.
+Do not implement Broadcastify TLS, add or change dependency locking, begin the
+Milestone 27.4 waterfall renderer, or add a theme, card, pane, layout, selector,
+GUI, or other UI feature. Do not change package schemas, activation identities,
+scanner or daemon behavior, remote download/catalog behavior, or the existing
+Home Assistant executable-code trust model.
 
 ## Deferred hardware validation
 
@@ -681,16 +700,34 @@ is collected.
   nonblocking per-sink ownership, safe single-owner WAV finalization, current
   version documentation, reviewed workflow and image pins, and a measured
   non-regressive coverage floor.
-- Milestone 27.3: one responsive viewport-owned web workspace, with the stable
-  system-adaptive `system` default and fallback theme redesigned around the
-  existing scanner-display hierarchy and a modular original Pip-Boy-inspired
+- Milestone 27.3 completed one responsive viewport-owned web workspace, with the
+  stable system-adaptive `system` default and fallback theme redesigned around
+  the existing scanner-display hierarchy and a modular original Pip-Boy-inspired
   built-in web theme. Every built-in theme uses the shared accessible Scanner,
   Controls, Audio, Recordings, and Diagnostics panes without document or active-
   pane scrolling at 390x844, 800x480, 1366x768, and 1920x1080 reference sizes.
-  Physical Home Assistant OS acceptance exercised the complete live workspace,
-  adaptive screens, controls, audio and recording workflows, reload behavior,
-  explicit duplicate-free ordered-event recreation across App outages, and
-  final repository-App ownership restoration.
+  Physical development acceptance completed on August 26–27, 2026, through Home
+  Assistant Ingress against an SDS200 running firmware 1.26.01. The initial
+  isolated Local App used exact merged commit `db2e6c0`; a restart exposed a
+  terminal native EventSource retry that left authoritative two-second polling
+  active but required a page reload before ordered events resumed. Exact closure
+  commit `dca445e` added one tracked duplicate-free two-second stream-recreation
+  timer. Source-built Apps exercised all six built-in themes, all five panes,
+  both scan fallbacks, Search, Close Call, Weather, and configured and detecting
+  Tone-Out presentations, all five field-inspection choices, semantic scanner
+  controls, browser audio, daemon recording, pagination, saved playback and
+  download, reload persistence, and restart. The same Ingress document recovered
+  without reload after a deliberate stopped-App interval longer than ten seconds
+  and again after a normal restart. Final cleanup left all four holds Off,
+  normal scanning active, both isolated Local Apps installed but stopped, and
+  the repository-managed App as the sole daemon, scanner-control, PSI, and
+  RTSP/RTP owner.
+- Milestone 27.3.1: bounded managed-theme source-snapshot hardening with one
+  retained source-directory identity, descriptor-relative no-follow reads, one
+  aggregate package byte budget, exact staged-byte hashing, private-stage-only
+  parsing and validation, adversarial mutation coverage, unchanged interface
+  semantics and Home Assistant executable-code trust gates, and a durable
+  implementation-review disposition ledger.
 - Milestone 27.4: responsive theme-aware web spectrum and rolling-waterfall
   workspace inside the shared viewport shell, with authenticated bounded demand,
   immediate CSS/Canvas recoloring, relative-data labeling, and loss telemetry.
