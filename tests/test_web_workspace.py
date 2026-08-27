@@ -338,8 +338,37 @@ const document = {
 
 const themeSelect = add("theme-select");
 let selectedTheme = "system";
+const eventSources = [];
+let nextTimeoutId = 1;
+const timeouts = new Map();
+
+class FakeEventSource {
+  constructor(url) {
+    this.url = url;
+    this.closed = false;
+    this.closeCount = 0;
+    this.onopen = null;
+    this.onmessage = null;
+    this.onerror = null;
+    eventSources.push(this);
+  }
+
+  close() {
+    this.closed = true;
+    this.closeCount += 1;
+  }
+}
+
 const window = {
   localStorage: workingStorage,
+  setTimeout(callback, delay) {
+    const id = nextTimeoutId++;
+    timeouts.set(id, {callback, delay});
+    return id;
+  },
+  clearTimeout(id) {
+    timeouts.delete(id);
+  },
   sdsctlTheme: {
     current() {
       return selectedTheme;
@@ -351,6 +380,7 @@ const window = {
 };
 globalThis.document = document;
 globalThis.window = window;
+globalThis.EventSource = FakeEventSource;
 """
 
     assertions = r"""
@@ -462,6 +492,88 @@ assert.equal(radioInspectionView, "auto");
 assert.equal(fallbackSelect.value, preservedFallback);
 assert.equal(audioPlaybackActive, true);
 assert.equal(document.activeElement, preservedFocus);
+
+add("dashboard-message");
+startEventStream();
+assert.equal(eventSources.length, 1);
+const firstEventSource = eventSources[0];
+assert.equal(
+  firstEventSource.url,
+  "https://example.test/ingress/api/v1/events",
+);
+assert.equal(eventSource, firstEventSource);
+assert.equal(eventStreamConnected, false);
+assert.equal(eventSources.filter((source) => !source.closed).length, 1);
+
+firstEventSource.onopen();
+assert.equal(eventStreamConnected, true);
+lastEventSequence = 417;
+firstEventSource.onerror();
+assert.equal(firstEventSource.closed, true);
+assert.equal(firstEventSource.closeCount, 1);
+assert.equal(eventSource, null);
+assert.equal(eventStreamConnected, false);
+assert.equal(lastEventSequence, null);
+assert.equal(timeouts.size, 1);
+const firstRestartId = [...timeouts.keys()][0];
+assert.equal(timeouts.get(firstRestartId).delay, FALLBACK_REFRESH_INTERVAL_MS);
+firstEventSource.onerror();
+firstEventSource.onmessage({data: "not-json"});
+assert.equal(timeouts.size, 1);
+assert.equal(firstEventSource.closeCount, 1);
+
+const firstRestart = timeouts.get(firstRestartId).callback;
+timeouts.delete(firstRestartId);
+firstRestart();
+assert.equal(eventSources.length, 2);
+const secondEventSource = eventSources[1];
+assert.equal(eventSource, secondEventSource);
+assert.equal(eventSources.filter((source) => !source.closed).length, 1);
+firstEventSource.onopen();
+assert.equal(eventStreamConnected, false);
+
+secondEventSource.onerror();
+assert.equal(secondEventSource.closed, true);
+assert.equal(timeouts.size, 1);
+const secondRestartId = [...timeouts.keys()][0];
+const secondRestart = timeouts.get(secondRestartId).callback;
+timeouts.delete(secondRestartId);
+secondRestart();
+assert.equal(eventSources.length, 3);
+const thirdEventSource = eventSources[2];
+thirdEventSource.onopen();
+assert.equal(eventStreamConnected, true);
+assert.equal(eventSources.filter((source) => !source.closed).length, 1);
+
+const originalRefreshStatus = refreshStatus;
+refreshStatus = async () => {};
+thirdEventSource.onmessage({data: "not-json"});
+assert.equal(thirdEventSource.closed, true);
+assert.equal(eventSource, null);
+assert.equal(eventStreamConnected, false);
+assert.equal(timeouts.size, 1);
+refreshStatus = originalRefreshStatus;
+
+startEventStream();
+assert.equal(timeouts.size, 0);
+assert.equal(eventSources.length, 4);
+const fourthEventSource = eventSources[3];
+assert.equal(eventSource, fourthEventSource);
+assert.equal(eventSources.filter((source) => !source.closed).length, 1);
+fourthEventSource.onerror();
+assert.equal(timeouts.size, 1);
+stopEventStream();
+assert.equal(timeouts.size, 0);
+assert.equal(eventSources.filter((source) => !source.closed).length, 0);
+document.hidden = true;
+startEventStream();
+assert.equal(eventSources.length, 4);
+document.hidden = false;
+startEventStream();
+assert.equal(eventSources.length, 5);
+assert.equal(eventSources.filter((source) => !source.closed).length, 1);
+stopEventStream();
+assert.equal(eventSources.filter((source) => !source.closed).length, 0);
 
 add("recordings-list");
 add("recordings-message");
