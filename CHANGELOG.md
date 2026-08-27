@@ -53,7 +53,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   Physical Home Assistant Ingress acceptance deliberately held the App stopped
   for more than ten seconds, then verified that the unchanged page recovered
   ordered updates without reload; a second normal App restart preserved the same
-  document and recovered again.
+  document and recovered again. Deterministic gallery capture now holds its demo
+  transport in one inert-open state and verifies an unchanged visible status
+  message, preventing retry and polling schedules from racing the PNG
+  repeatability gate without weakening browser event-stream coverage.
 - Complete Milestone 27.2.2 audio-lifecycle and release-integrity hardening.
   Fanout and dynamic-router destinations now receive PCM through independent
   bounded workers, so producer paths never wait for destination code; overflow

@@ -136,6 +136,7 @@ _MAX_PNG_DECODED_BYTES = 128 * 1024 * 1024
 _MAX_REQUIRED_TEXT_BYTES = 4 * 1024 * 1024
 _MAX_SDIST_MEMBERS = 10_000
 _READY_TEXT = {
+    "dashboard-message": "Daemon and scanner status are available.",
     "status-badge": "Connected",
     "daemon-state": "running",
     "scanner-model": "SDS200",
