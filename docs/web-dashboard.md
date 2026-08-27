@@ -406,6 +406,27 @@ identity, receiver, and special-mode groups remained available. Browser audio,
 recording finalization and inventory, restart recovery, themes, controls, and
 the single-owner boundary remained healthy throughout the bounded run.
 
+Milestone 27.3 responsive-workspace acceptance completed on August 26–27,
+2026, through Home Assistant Ingress against the same SDS200 firmware. Isolated
+Apps built from exact merged commit `db2e6c0` and reconnect closure commit
+`dca445e` rendered all six built-in themes over the five-pane shell, preserved
+theme, pane, and Simple/Detail fallback choices across reload, and followed
+Quick Search, Close Call, Weather, configured Tone-Out, and zero-tone detection
+through the normalized Auto groups. Every semantic scanner control, explicit
+field group, browser-audio lifecycle, daemon recording, three-entry pagination,
+saved playback, and byte-identical download was exercised while one App remained
+the sole scanner and audio owner.
+
+The first restart exposed a terminal EventSource failure: two-second status
+polling recovered authoritative state, but ordered events required a full page
+reload. The closure repair added explicit duplicate-free stream recreation. A
+deliberate stopped-App interval exceeding ten seconds then forced repeated
+unavailable-backend attempts; the same untouched Ingress document recovered a
+new ordered snapshot and continuing radio updates after the App returned. A
+second normal restart preserved the document and recovered again. Bounded
+shutdown cancellation of the one open long-lived response remained consistent
+with the documented two-second graceful deadline.
+
 ## Theme gallery
 
 These documentation captures render the real packaged dashboard and stylesheet
@@ -601,11 +622,15 @@ recording state. Destination-health events trigger an authoritative
 reconciliation because the displayed router summary is broader than one
 subscriber transition.
 
-When the event stream disconnects, the browser's `EventSource` reconnects
-automatically. Two-second `/api/v1/status` polling remains active while the
-event stream is unavailable. A status request also runs every 30 seconds during
-healthy streaming to reconcile the incremental browser state with the
-authoritative daemon snapshot.
+When the event stream disconnects, the dashboard closes the failed
+`EventSource`, clears its sequence checkpoint, and schedules exactly one new
+same-origin stream after two seconds. This explicit recreation also survives a
+terminal proxy HTTP response that native EventSource retry would not revisit.
+Source-identity guards ignore stale callbacks, and visibility or page teardown
+cancels pending work before a later start creates one stream. Two-second
+`/api/v1/status` polling remains active while the event stream is unavailable.
+A status request also runs every 30 seconds during healthy streaming to
+reconcile incremental browser state with the authoritative daemon snapshot.
 
 The interface presents:
 
@@ -815,10 +840,11 @@ message as other daemon-backed endpoints. Private socket paths and low-level
 exception details are not included.
 
 After HTTP streaming begins, a later daemon disconnect or protocol failure ends
-that SSE response and closes the local event client. The browser reconnects to
-obtain a new authoritative snapshot boundary. The web service does not invent
-event replay, skip daemon sequence validation, or translate a gap into partial
-browser state.
+that SSE response and closes the local event client. The dashboard closes its
+corresponding browser source and constructs one replacement after the tracked
+two-second delay to obtain a new authoritative snapshot boundary. The web
+service does not invent event replay, skip daemon sequence validation, or
+translate a gap into partial browser state.
 
 The audio route connects to `pcmu.sock` before starting its HTTP response. An
 absent, refused, inaccessible, incompatible, or malformed initial PCMU
@@ -902,8 +928,8 @@ The dashboard now includes:
 - snapshot-first same-origin Server-Sent Events;
 - validated daemon sequence identifiers and complete JSON event envelopes;
 - direct incremental scanner, radio, PSI, audio, and daemon updates;
-- automatic browser reconnect, two-second polling fallback, and periodic
-  authoritative reconciliation;
+- tracked duplicate-free browser stream recreation, two-second polling fallback,
+  and periodic authoritative reconciliation;
 - a scanner-display presentation with adaptive Search/Close Call, Weather, and
   Tone-Out modes, persistent Simple or Detail scan fallback, and explicit
   Hierarchy, RF, Identity, and Special inspection of all 35 radio fields;
