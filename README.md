@@ -301,7 +301,8 @@ inactive until their exact digest is explicitly approved and deployed to an
 operator-selected `www/sds200` directory; resource registration remains manual.
 See
 [Theme package management](docs/themes.md) for the package-author contract,
-recovery behavior, activation details, JSON output, and trust boundaries.
+recovery behavior, activation details, JSON output, Linux mutation requirements,
+and the trusted local-account concurrency boundary.
 
 ### Favorites Workspace editor
 
@@ -1142,6 +1143,8 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and
 - [Supported scanner models](docs/supported-models.md)
 - [Capability and field-parity audit](docs/capability-field-parity-audit.md)
 - [Favorites Workspace editor](docs/favorites-workspace-editor.md)
+- [Theme package management](docs/themes.md)
+- [Implementation review disposition ledger](docs/implementation-review-ledger.md)
 - [Control transports](docs/transports.md)
 - [LAN discovery and profiles](docs/discovery-and-profiles.md)
 - [Layered application configuration](docs/configuration.md)

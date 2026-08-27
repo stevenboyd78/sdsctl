@@ -3,7 +3,12 @@
 Milestone 26.13 provides a local managed lifecycle for third-party theme
 packages. Milestones 26.14 and 26.15 consume that inventory for web CSS and
 terminal palettes and TCSS respectively. Milestone 26.16 adds explicit,
-digest-pinned deployment for executable Home Assistant JavaScript.
+digest-pinned deployment for executable Home Assistant JavaScript. Milestone
+27.3.1 hardens validation and installation around one consistent source
+snapshot without changing any package schema, identity, or activation behavior.
+The external review finding that led to this work and every other finding from
+that review are tracked in the
+[implementation review disposition ledger](implementation-review-ledger.md).
 
 ## Managed directory
 
@@ -25,7 +30,8 @@ the installed Python distribution and cannot be shadowed, replaced, or removed.
 
 ## Validate and inspect
 
-Validate one unpacked local package without writing:
+Validate one unpacked local package without changing its source or managed
+inventory:
 
 ```bash
 sdsctl themes validate /absolute/path/to/themes/web/my-theme
@@ -55,17 +61,112 @@ sdsctl themes install /absolute/path/to/themes/web/my-theme
 The source directory name must exactly match the manifest `id`. Sources inside
 the managed root, URLs, archives, nested directories, symlinks, special files,
 undeclared files, unsupported schemas, oversized packages, and registry
-collisions are rejected. The package is copied to a private same-filesystem
-staging directory, validated again, assigned private directory and file modes,
-and published by rename.
+collisions are rejected. A package may contain at most eight top-level regular
+files and at most 4 MiB across the complete package.
 
-Installation opens the source directory and every declared entry
-descriptor-relatively without following symlinks, requires stable file identity
-across inspection and copy, and compares the complete private-stage digest with
-the validated source digest before publication. These checks are the
-source-replacement race boundary. A pathname-only recursive directory copy is
-deliberately not substituted because it would not provide the same identity and
-digest guarantees.
+Every managed-package validation, including explicit `validate`, `install`, and
+inventory discovery, opens the selected source directory once and retains that
+descriptor and its identity. Entries are enumerated, inspected, and opened
+relative to that descriptor with no-follow semantics. The lifecycle then reads
+in bounded chunks and copies the exact bytes into a new private validation
+snapshot before it parses `manifest.json` or invokes a web, Home Assistant, or
+TUI schema validator. The 4 MiB allowance is one package-wide budget charged
+from the actual bytes read; it is not reset for each file or reused as an
+independent write allowance. A size seen during initial inventory does not
+authorize later growth.
+
+Source directory identity, membership, file identity, regular-file type, link
+count, size, modification time, metadata-change time, actual read total, and
+private-snapshot contents are checked across acquisition. Replacement,
+same-name substitution, same-size mutation, truncation, growth, a symlink swap,
+or a membership change therefore rejects the operation and removes only the
+private snapshot. Interface parsing and the reported SHA-256 digest consume the
+private snapshot, never a fresh pathname read from the concurrently mutable
+source tree. `validate` removes that snapshot when it returns and does not write
+to the managed theme root.
+
+Installation uses a second private stage inside the destination interface
+directory. It copies the already validated snapshot into that same-filesystem
+publication stage with the same descriptor-relative no-follow and aggregate-
+byte checks, verifies that its files, manifest, and digest are identical, assigns
+private directory and file modes, and only then publishes through an atomic
+no-replace rename. Before recovery or staging begins, mutation qualifies both
+the collision and success behavior of that primitive on the managed interface's
+actual filesystem. A destination entry that appears concurrently is therefore
+never overwritten, even when it is an empty directory. The published directory
+is reopened and compared with the exact staged image before replacement rollback
+is discarded. These two stages separate consistent source validation from
+atomic same-filesystem publication. A pathname-only recursive directory copy is
+deliberately not substituted because it would not provide the same identity,
+byte-budget, digest, or destination-collision guarantees.
+
+When the configured managed root or interface does not yet exist, the lifecycle
+first qualifies no-replace directory renames on its parent filesystem. It then
+creates the directory under a fresh 128-bit-token candidate name, retains and
+verifies that exact empty directory, and publishes it to the configured name
+with no-replace semantics. Root, interface, stage, and package bindings are
+rechecked through the transaction. Operator diagnostics always report the
+configured path; retained `/proc/self/fd` paths are an internal Linux mechanism
+and are not reconciliation instructions.
+
+Managed mutation currently requires Linux `renameat2(RENAME_NOREPLACE)` plus
+descriptor-relative open, stat, rename, unlink, rmdir, and directory enumeration
+support. An unsupported kernel or target filesystem fails before publishing a
+new configured root or interface, staging, or moving a public package. The
+lifecycle attempts to remove each exact verified-empty capability probe; if the
+required detach primitive is itself unavailable, or an artifact is no longer
+exact and empty, the artifact may remain and requires reconciliation. Read-only
+theme validation and inventory discovery retain their separate descriptor-
+support gate and do not require the mutation probe.
+
+If an unrecognized concurrent entry replaces the exact publication target,
+recovery does not recursively delete it. The entry is detached without following
+links and preserved at `.sdsctl-conflict-<id>` while the previous valid package
+is restored. Further mutation of that identity is blocked until the operator
+inspects the conflict and explicitly removes or relocates it.
+
+Publication stages use
+`.sdsctl-stage-<id>--<128-bit-token>/.sdsctl-stage.json`; the record binds the
+interface, identity, token, device, and inode to that exact directory. Before
+retaining a package for removal, the lifecycle creates a separately randomized
+`.sdsctl-removal-record-<id>--<128-bit-token>` directory. Its record binds the
+interface, identity, filename token, and exact target device and inode; the
+record directory's observed identity is retained and rechecked during the
+current operation. Recovery deletes a removal tombstone—including an
+intentionally invalid package—only when the matching record and target identity
+are complete and exact.
+
+Recovery is artifact-specific. A valid recorded stage is an authenticated
+abandoned publication and is removed. A correctly token-shaped stage that is
+still completely empty may be removed as an interruption before record creation;
+a populated unrecorded stage or malformed/mismatched stage record is preserved.
+An empty incomplete removal-record directory is removed only when no tombstone
+exists and the original target still exists. Multiple removal records for one
+identity, an orphaned tombstone, a mismatched recorded tombstone, incompatible
+stage/rollback/removal state, and ambiguous target-plus-rollback state are all
+preserved and block mutation for explicit operator reconciliation.
+
+Managed-root private transaction trees are removed one entry at a time through
+iterative, retained descriptor-relative traversal rather than a fresh recursive
+pathname. Cleanup first detaches the exact verified identity to a fresh
+`.sdsctl-purge-<128-bit-token>` name. A purge entry has no transaction record,
+so any purge discovered by a later mutation is deliberately treated as
+unauthenticated: it is preserved, reported at its configured operator path, and
+blocks automatic recovery. When the public target is absent, recovery validates
+a saved rollback package's complete schema, interface, identity, image, and
+digest before promotion. If a valid public target and a valid rollback both
+exist, recovery preserves both rather than guessing which copy to delete.
+
+The lifecycle lock serializes cooperating `sdsctl` mutation commands and rejects
+symbolic-link or hard-link substitution of the lock. This boundary assumes that
+the managed root is not concurrently renamed or rewritten by another process
+with the same operating-system account and filesystem permissions. The identity
+gates detect observed accidental or non-cooperating changes and avoid
+overwriting unknown entries, but they are not a sandbox against hostile
+same-account code that can monitor and replace configured or freshly randomized
+private names between individual filesystem syscalls. Keep the managed root
+private to the trusted account that runs `sdsctl`; use a separate account or
+stronger operating-system isolation for mutually untrusted local code.
 
 Replacing an existing managed identity is always explicit:
 
@@ -74,13 +175,16 @@ sdsctl themes install --replace /absolute/path/to/themes/web/my-theme
 ```
 
 The previous directory remains as a private rollback until the replacement and
-post-publication inventory validate. An interrupted later lifecycle operation
-recovers a saved rollback and removes abandoned staging or removal tombstones
-while holding the lifecycle lock.
+post-publication inventory validate. A later lifecycle operation automatically
+recovers a lone validated rollback when its public target is absent, removes a
+valid authenticated stage or recorded removal tombstone, and applies only the
+artifact-specific empty pre-record cleanup described above, all while holding
+the lifecycle lock. Ambiguous states and unauthenticated purge entries remain
+preserved and require explicit operator reconciliation.
 
 Home Assistant theme modules are executable JavaScript in the browser. Schema
-validation cannot make third-party code safe. Review the complete source and
-then provide the separate trust acknowledgement:
+and snapshot validation cannot make third-party code safe. Review the complete
+source and then provide the separate trust acknowledgement:
 
 ```bash
 sdsctl themes install \
@@ -91,6 +195,9 @@ sdsctl themes install \
 Installation makes the package discoverable but does not deploy or approve its
 module. Replacing an active package leaves the deployed bytes unchanged and
 marks its activation stale until the new complete package digest is approved.
+The install or replace acknowledgement and the later exact-digest activation or
+reapproval are distinct gates. A valid snapshot never supplies, infers, or
+weakens either gate.
 
 ## Remove and recover
 
@@ -101,8 +208,10 @@ target cannot be inferred:
 sdsctl themes remove web my-theme --confirm web/my-theme
 ```
 
-The operation first renames only that managed directory to a private tombstone,
-then deletes it. Built-ins are never valid removal targets. An invalid managed
+The operation first creates and verifies the randomized transaction record that
+binds the requested target identity. It then renames only that exact managed
+directory to the private tombstone, deletes the tombstone, and finally removes
+the record. Built-ins are never valid removal targets. An invalid managed
 directory can still be removed by its valid directory identity, preserving a
 recovery path when its manifest cannot be parsed. A Home Assistant package with
 any activation record cannot be removed until every target is explicitly

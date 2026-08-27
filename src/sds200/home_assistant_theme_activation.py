@@ -20,8 +20,11 @@ from .theme_lifecycle import (
     THEME_FILE_MODE,
     ThemeLifecycleError,
     _absolute_root,
+    _assert_open_directory_binding,
     _lifecycle_lock,
-    validate_theme_package,
+    _open_package_directory,
+    _open_package_directory_relative,
+    _validated_open_theme_source_snapshot,
 )
 
 HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME: Final = ".home-assistant-activations.json"
@@ -51,9 +54,7 @@ _RECORD_FIELDS: Final = frozenset(
 )
 _SHA256_LENGTH: Final = 64
 _IDENTIFIER_PATTERN: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
-_JAVASCRIPT_FILENAME_PATTERN: Final = re.compile(
-    r"[a-z0-9]+(?:-[a-z0-9]+)*\.js\Z"
-)
+_JAVASCRIPT_FILENAME_PATTERN: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\.js\Z")
 _STAGE_PREFIX: Final = ".sdsctl-ha-stage-"
 _ROLLBACK_PREFIX: Final = ".sdsctl-ha-rollback-"
 
@@ -192,96 +193,48 @@ def _read_regular_file(directory: int, name: str, *, label: str) -> bytes:
     return content
 
 
-def _package_digest(files: dict[str, bytes]) -> str:
-    digest = hashlib.sha256()
-    for name in sorted(files):
-        encoded_name = name.encode("utf-8")
-        content = files[name]
-        digest.update(len(encoded_name).to_bytes(4, "big"))
-        digest.update(encoded_name)
-        digest.update(len(content).to_bytes(8, "big"))
-        digest.update(content)
-    return digest.hexdigest()
-
-
 def _secure_package(
     root: Path,
     identifier: str,
 ) -> tuple[HomeAssistantThemeManifest, str, bytes, str]:
     package_path = root / "home-assistant" / identifier
-    try:
-        package_identity = package_path.lstat()
-    except OSError as exc:
-        raise ThemeLifecycleError("managed Home Assistant package is not accessible") from exc
-    if not stat.S_ISDIR(package_identity.st_mode):
-        raise ThemeLifecycleError("managed Home Assistant package must be a real directory")
-    validated = validate_theme_package(package_path)
-    if validated.summary.interface != "home-assistant":
-        raise ThemeLifecycleError("activation requires a Home Assistant theme package")
-    if not isinstance(validated.manifest, HomeAssistantThemeManifest):
-        raise ThemeLifecycleError("managed package has the wrong manifest type")
-    manifest = validated.manifest
-
-    try:
-        root_descriptor = os.open(root, _directory_flags())
-    except OSError as exc:
-        raise ThemeLifecycleError("managed theme root cannot be securely opened") from exc
-    try:
-        interface_descriptor = os.open(
-            "home-assistant", _directory_flags(), dir_fd=root_descriptor
-        )
-        try:
-            package_descriptor = os.open(
-                identifier, _directory_flags(), dir_fd=interface_descriptor
-            )
-            try:
-                opened_identity = os.fstat(package_descriptor)
-                if (opened_identity.st_dev, opened_identity.st_ino) != (
-                    package_identity.st_dev,
-                    package_identity.st_ino,
-                ):
-                    raise ThemeLifecycleError(
-                        "managed Home Assistant package identity changed during approval"
+    interface_path = root / "home-assistant"
+    with _open_package_directory(root) as root_directory:
+        with _open_package_directory_relative(
+            root_directory,
+            "home-assistant",
+            interface_path,
+        ) as interface_directory:
+            with _open_package_directory_relative(
+                interface_directory,
+                identifier,
+                package_path,
+            ) as package_directory:
+                with _validated_open_theme_source_snapshot(package_directory) as snapshot:
+                    validated = snapshot.package
+                    if validated.summary.interface != "home-assistant":
+                        raise ThemeLifecycleError(
+                            "activation requires a Home Assistant theme package"
+                        )
+                    if not isinstance(validated.manifest, HomeAssistantThemeManifest):
+                        raise ThemeLifecycleError("managed package has the wrong manifest type")
+                    manifest = validated.manifest
+                    digest = snapshot.image.sha256
+                    if digest != validated.summary.sha256:
+                        raise ThemeLifecycleError(
+                            "managed Home Assistant snapshot digest is inconsistent"
+                        )
+                    module = snapshot.image.require_file(manifest.module)
+                    result = (
+                        manifest,
+                        digest,
+                        module,
+                        hashlib.sha256(module).hexdigest(),
                     )
-                names = sorted(os.listdir(package_descriptor))
-                expected = sorted(("manifest.json", manifest.module))
-                if names != expected:
-                    raise ThemeLifecycleError(
-                        "Home Assistant theme package contains undeclared content"
-                    )
-                files = {
-                    name: _read_regular_file(
-                        package_descriptor,
-                        name,
-                        label=f"managed Home Assistant package file {name!r}",
-                    )
-                    for name in names
-                }
-            finally:
-                os.close(package_descriptor)
-        finally:
-            os.close(interface_descriptor)
-    finally:
-        os.close(root_descriptor)
-
-    digest = _package_digest(files)
-    try:
-        final_identity = package_path.lstat()
-    except OSError as exc:
-        raise ThemeLifecycleError(
-            "managed Home Assistant package identity changed during approval"
-        ) from exc
-    if (final_identity.st_dev, final_identity.st_ino) != (
-        package_identity.st_dev,
-        package_identity.st_ino,
-    ):
-        raise ThemeLifecycleError(
-            "managed Home Assistant package identity changed during approval"
-        )
-    if digest != validated.summary.sha256:
-        raise ThemeLifecycleError("managed theme package changed during secure approval")
-    module = files[manifest.module]
-    return manifest, digest, module, hashlib.sha256(module).hexdigest()
+                _assert_open_directory_binding(package_directory)
+            _assert_open_directory_binding(interface_directory)
+        _assert_open_directory_binding(root_directory)
+    return result
 
 
 def _require_sha256(value: object, *, field: str) -> str:
@@ -335,9 +288,7 @@ def _parse_record(value: object) -> HomeAssistantActivationRecord:
         raise ThemeLifecycleError("activation ledger module identity is invalid")
     custom_element = _require_text(value["custom_element"], field="custom_element")
     if _IDENTIFIER_PATTERN.fullmatch(custom_element) is None:
-        raise ThemeLifecycleError(
-            "activation ledger custom_element must be lowercase kebab-case"
-        )
+        raise ThemeLifecycleError("activation ledger custom_element must be lowercase kebab-case")
     return HomeAssistantActivationRecord(
         interface="home-assistant",
         identifier=identifier,
@@ -355,12 +306,8 @@ def _validate_records(
 ) -> tuple[HomeAssistantActivationRecord, ...]:
     keys = [(str(record.target_directory), record.identifier) for record in records]
     targets = [(str(record.target_directory), record.installed_filename) for record in records]
-    custom_elements = [
-        (str(record.target_directory), record.custom_element) for record in records
-    ]
-    resource_urls = [
-        (str(record.target_directory), record.resource_url) for record in records
-    ]
+    custom_elements = [(str(record.target_directory), record.custom_element) for record in records]
+    resource_urls = [(str(record.target_directory), record.resource_url) for record in records]
     for values, label in (
         (keys, "activation identities"),
         (targets, "target filenames"),
@@ -377,10 +324,22 @@ def _validate_records(
     )
 
 
-def _read_ledger(root: Path) -> tuple[HomeAssistantActivationRecord, ...]:
+def _read_ledger(
+    root: Path,
+    *,
+    root_descriptor: int | None = None,
+) -> tuple[HomeAssistantActivationRecord, ...]:
     ledger = root / HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME
     try:
-        ledger_status = ledger.lstat()
+        ledger_status = (
+            ledger.lstat()
+            if root_descriptor is None
+            else os.stat(
+                HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME,
+                dir_fd=root_descriptor,
+                follow_symlinks=False,
+            )
+        )
     except FileNotFoundError:
         return ()
     except OSError as exc:
@@ -389,10 +348,13 @@ def _read_ledger(root: Path) -> tuple[HomeAssistantActivationRecord, ...]:
         raise ThemeLifecycleError("Home Assistant activation ledger must be a regular file")
     if stat.S_IMODE(ledger_status.st_mode) & 0o077:
         raise ThemeLifecycleError("Home Assistant activation ledger must have private permissions")
-    try:
-        root_descriptor = os.open(root, _directory_flags())
-    except OSError as exc:
-        raise ThemeLifecycleError("managed theme root cannot be securely opened") from exc
+    opened_root_descriptor: int | None = None
+    if root_descriptor is None:
+        try:
+            opened_root_descriptor = os.open(root, _directory_flags())
+        except OSError as exc:
+            raise ThemeLifecycleError("managed theme root cannot be securely opened") from exc
+        root_descriptor = opened_root_descriptor
     try:
         content, opened_status = _read_regular_file_snapshot(
             root_descriptor,
@@ -400,7 +362,8 @@ def _read_ledger(root: Path) -> tuple[HomeAssistantActivationRecord, ...]:
             label="Home Assistant activation ledger",
         )
     finally:
-        os.close(root_descriptor)
+        if opened_root_descriptor is not None:
+            os.close(opened_root_descriptor)
     if (opened_status.st_dev, opened_status.st_ino) != (
         ledger_status.st_dev,
         ledger_status.st_ino,
@@ -460,9 +423,7 @@ def _write_ledger(root: Path, records: tuple[HomeAssistantActivationRecord, ...]
         except FileNotFoundError:
             existing_status = None
         if existing_status is not None and not stat.S_ISREG(existing_status.st_mode):
-            raise ThemeLifecycleError(
-                "Home Assistant activation ledger must remain a regular file"
-            )
+            raise ThemeLifecycleError("Home Assistant activation ledger must remain a regular file")
         os.replace(
             temporary_name,
             HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME,
@@ -596,9 +557,7 @@ def activate_home_assistant_theme(
     target = _validate_target_directory(target_directory)
 
     with _lifecycle_lock(managed_root):
-        manifest, package_sha256, module, module_sha256 = _secure_package(
-            managed_root, identifier
-        )
+        manifest, package_sha256, module, module_sha256 = _secure_package(managed_root, identifier)
         if confirmed_sha256 != package_sha256:
             raise ThemeLifecycleError(
                 "activation confirmation must exactly match the current package SHA-256: "
@@ -651,8 +610,7 @@ def activate_home_assistant_theme(
                 stage = _stage_target(target_descriptor, manifest.installed_filename, module)
                 if current is not None:
                     rollback = (
-                        f"{_ROLLBACK_PREFIX}{manifest.installed_filename}-"
-                        f"{secrets.token_hex(8)}"
+                        f"{_ROLLBACK_PREFIX}{manifest.installed_filename}-{secrets.token_hex(8)}"
                     )
                     os.rename(
                         manifest.installed_filename,
@@ -879,14 +837,19 @@ def home_assistant_activation_inventory(root: Path) -> HomeAssistantActivationIn
     return HomeAssistantActivationInventory(managed_root, ledger, statuses)
 
 
-def ensure_home_assistant_theme_inactive(root: Path, identifier: str) -> None:
+def ensure_home_assistant_theme_inactive(
+    root: Path,
+    identifier: str,
+    *,
+    root_descriptor: int | None = None,
+) -> None:
     """Reject removal when any strict ledger record pins the managed identity.
 
     The caller must already hold the managed lifecycle lock.
     """
 
     identifier = _require_identifier(identifier)
-    records = _read_ledger(root)
+    records = _read_ledger(root, root_descriptor=root_descriptor)
     if any(record.identifier == identifier for record in records):
         raise ThemeLifecycleError(
             "managed Home Assistant theme is active; deactivate every target before removal"

@@ -101,6 +101,38 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Security
 
+- Harden managed-theme validation and installation around a consistent two-stage
+  source snapshot. Validation now retains one source-directory identity, opens
+  entries descriptor-relatively without following links, charges actual reads to
+  one aggregate package byte budget, and parses and hashes only a private
+  snapshot. Installation copies those exact validated bytes into a separately
+  verified same-filesystem publication stage before a filesystem-qualified
+  atomic no-replace rename, rejecting
+  directory or file replacement, same-size mutation, truncation, growth,
+  membership changes, special files, premature EOF, and stage mutation with
+  descriptor-bound cleanup and replacement rollback. Unknown concurrent target
+  substitutions, including empty destination directories, are preserved in an
+  operator-visible conflict quarantine rather than overwritten or recursively
+  deleted. Randomized publication stages persist token, interface, package,
+  device, and inode bindings. Independently randomized removal records bind the
+  exact target device and inode and retain their observed directory identity
+  during the active attempt. Recovery applies artifact-specific complete-record
+  and empty pre-record rules; malformed or populated unrecorded stages,
+  duplicate or mismatched removal state, and unauthenticated detached-purge
+  entries are preserved and block mutation for operator reconciliation. Removal
+  writes identity-bound transaction evidence before retention, interrupted rollback
+  recovery validates the package identity and schema before promotion, and
+  iterative descriptor cleanup handles deep invalid trees without recursive path
+  traversal or false success. Previously absent managed roots and interfaces are
+  published from retained randomized candidates only after filesystem
+  qualification. The lifecycle lock rejects link substitution, configured paths
+  remain operator-facing in diagnostics, and documentation states the trusted
+  same-account concurrency boundary. Web, Home Assistant, and TUI schemas and
+  activation semantics remain unchanged, including both explicit Home Assistant
+  executable-code trust gates. Add a durable
+  [implementation review disposition ledger](docs/implementation-review-ledger.md)
+  that treats the supplied review as untrusted input and records every finding
+  as implemented, already resolved, deferred, rejected, or not applicable.
 - Bound peer-controlled RTSP response framing to 64 KiB through the header
   terminator and 4 MiB of declared body by default, reject an oversized declared
   length before any additional body receive, close framing, read, and CSeq

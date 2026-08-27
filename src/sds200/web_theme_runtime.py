@@ -11,6 +11,7 @@ from .exceptions import SDS200Error
 from .theme_lifecycle import (
     THEME_MANIFEST_FILENAME,
     THEME_PACKAGE_MAX_BYTES,
+    _bounded_package_names,
     discover_theme_inventory,
     validate_theme_package,
 )
@@ -52,9 +53,7 @@ class WebThemeRuntimeRegistry:
     @property
     def managed_identifiers(self) -> tuple[str, ...]:
         return tuple(
-            asset.manifest.identifier
-            for asset in self.assets
-            if asset.origin == "managed"
+            asset.manifest.identifier for asset in self.assets if asset.origin == "managed"
         )
 
     def require_asset(self, identifier: str) -> WebThemeRuntimeAsset:
@@ -140,7 +139,7 @@ def _package_bytes(
         descriptors.append(package_descriptor)
         directory_status = os.fstat(package_descriptor)
         expected_files = {THEME_MANIFEST_FILENAME, manifest.stylesheet}
-        if set(os.listdir(package_descriptor)) != expected_files:
+        if set(_bounded_package_names(package_descriptor)) != expected_files:
             raise WebThemeError("managed web theme package contents changed after startup")
         contents: dict[str, bytes] = {}
         total_bytes = 0
@@ -178,6 +177,8 @@ def _package_bytes(
         )
     except WebThemeError:
         raise
+    except SDS200Error as exc:
+        raise WebThemeError("managed web theme asset is unavailable") from exc
     except OSError as exc:
         raise WebThemeError("managed web theme asset is unavailable") from exc
     finally:

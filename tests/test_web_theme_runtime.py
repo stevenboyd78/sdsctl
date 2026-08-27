@@ -7,14 +7,17 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+import sds200.web_theme_runtime as web_runtime
+from sds200.theme_lifecycle import ThemeLifecycleError
 from sds200.web_dashboard import create_web_dashboard_app
 from sds200.web_theme_runtime import (
     build_web_theme_runtime,
     read_web_theme_stylesheet,
 )
+from sds200.web_themes import WebThemeError
 
 
 class ForbiddenDaemonClient:
@@ -55,8 +58,7 @@ def _write_web_theme(
         encoding="utf-8",
     )
     (package / "theme.css").write_text(
-        css
-        or f':root[data-theme="{identifier}"] {{ --surface: #002b36; }}\n',
+        css or f':root[data-theme="{identifier}"] {{ --surface: #002b36; }}\n',
         encoding="utf-8",
     )
     return package
@@ -122,6 +124,90 @@ def test_runtime_merges_valid_web_theme_in_manifest_order(tmp_path: Path) -> Non
     assert read_web_theme_stylesheet(asset) == (package / "theme.css").read_bytes()
 
 
+def test_runtime_rejects_exact_ninth_entry_after_discovery(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package = _write_web_theme(tmp_path)
+    real_validate = web_runtime.validate_theme_package
+    real_bounded_names = web_runtime._bounded_package_names
+    state = {"mutated": False, "bounded": False}
+
+    def mutate_after_validation(source: Path):
+        validated = real_validate(source)
+        if source == package and not state["mutated"]:
+            for index in range(7):
+                (package / f"late-{index}.txt").write_text("late", encoding="utf-8")
+            state["mutated"] = True
+        return validated
+
+    def observe_bounded_names(descriptor: int) -> tuple[str, ...]:
+        state["bounded"] = True
+        return real_bounded_names(descriptor)
+
+    monkeypatch.setattr(web_runtime, "validate_theme_package", mutate_after_validation)
+    monkeypatch.setattr(web_runtime, "_bounded_package_names", observe_bounded_names)
+
+    runtime = build_web_theme_runtime(tmp_path)
+
+    assert state == {"mutated": True, "bounded": True}
+    assert runtime.managed_identifiers == ()
+    assert runtime.ignored_managed_entries == 1
+
+
+def test_runtime_translates_bounded_enumeration_failure_to_web_theme_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_web_theme(tmp_path)
+    asset = build_web_theme_runtime(tmp_path).require_asset("solarized")
+
+    def fail_bounded_enumeration(_descriptor: int) -> tuple[str, ...]:
+        raise ThemeLifecycleError("injected bounded enumeration failure")
+
+    monkeypatch.setattr(
+        web_runtime,
+        "_bounded_package_names",
+        fail_bounded_enumeration,
+    )
+
+    with pytest.raises(WebThemeError):
+        read_web_theme_stylesheet(asset)
+
+
+def test_managed_route_returns_404_for_bounded_enumeration_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_web_theme(tmp_path)
+    app = _app(tmp_path)
+    asset = build_web_theme_runtime(tmp_path).require_asset("solarized")
+    assert asset.package_sha256 is not None
+
+    def fail_bounded_enumeration(_descriptor: int) -> tuple[str, ...]:
+        raise ThemeLifecycleError("injected bounded enumeration failure")
+
+    monkeypatch.setattr(
+        web_runtime,
+        "_bounded_package_names",
+        fail_bounded_enumeration,
+    )
+    endpoint = next(
+        route.endpoint
+        for route in app.routes
+        if getattr(route, "path", None) == "/assets/themes/{theme_id}/{asset_name}"
+    )
+
+    with pytest.raises(HTTPException) as captured:
+        endpoint("solarized", "theme.css", asset.package_sha256)
+
+    assert captured.value.status_code == 404
+    assert captured.value.detail == "Theme asset not found."
+    assert captured.value.headers is not None
+    assert captured.value.headers["Cache-Control"] == "no-store"
+    assert captured.value.headers["X-Content-Type-Options"] == "nosniff"
+
+
 def test_runtime_isolates_malformed_and_cross_interface_entries(tmp_path: Path) -> None:
     _write_web_theme(tmp_path)
     malformed = tmp_path / "web" / "broken"
@@ -161,8 +247,7 @@ def test_dashboard_picker_bootstrap_and_route_include_managed_theme(tmp_path: Pa
         bootstrap = client.get("/assets/theme-bootstrap.js")
         stylesheet = client.get("/assets/themes/solarized/theme.css")
         stylesheet_source = client.get(
-            "/assets/themes/solarized/theme.css"
-            f"?sdsctl_source={asset.package_sha256}"
+            f"/assets/themes/solarized/theme.css?sdsctl_source={asset.package_sha256}"
         )
         viewport_stylesheet = client.get("/assets/dashboard-viewport.css")
 
@@ -175,16 +260,14 @@ def test_dashboard_picker_bootstrap_and_route_include_managed_theme(tmp_path: Pa
     )
     assert managed_link in shell.text
     assert 'data-sdsctl-managed-theme="solarized" href=' not in shell.text
-    assert shell.text.index(managed_link) < shell.text.index(
-        'href="assets/dashboard-viewport.css"'
-    )
+    assert shell.text.index(managed_link) < shell.text.index('href="assets/dashboard-viewport.css"')
     assert shell.text.index('href="assets/dashboard-viewport.css"') < shell.text.index(
         'src="assets/theme-bootstrap.js"'
     )
     assert '"solarized"' in bootstrap.text
     assert "MANAGED_THEME_LINKS" in bootstrap.text
     assert 'const MANAGED_THEMES = new Set(["solarized"])' in bootstrap.text
-    assert 'link.setAttribute(' in bootstrap.text
+    assert "link.setAttribute(" in bootstrap.text
     assert 'link.removeAttribute("href")' in bootstrap.text
     assert bootstrap.text.index('link.addEventListener("error"') < bootstrap.text.index(
         "const storedSelection = readStoredTheme()"
@@ -192,8 +275,7 @@ def test_dashboard_picker_bootstrap_and_route_include_managed_theme(tmp_path: Pa
     assert stylesheet.status_code == 200
     assert css not in stylesheet.text
     assert (
-        "@layer sdsctl-viewport-contract, sdsctl-shared, "
-        "sdsctl-managed-theme;"
+        "@layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;"
     ) in stylesheet.text
     assert (
         f'@import url("theme.css?sdsctl_source={asset.package_sha256}") '
@@ -389,20 +471,16 @@ def test_managed_stylesheet_cannot_escape_shared_viewport_cascade(
         shared = client.get("/assets/dashboard.css")
         managed = client.get("/assets/themes/solarized/theme.css")
         managed_source = client.get(
-            "/assets/themes/solarized/theme.css"
-            f"?sdsctl_source={asset.package_sha256}"
+            f"/assets/themes/solarized/theme.css?sdsctl_source={asset.package_sha256}"
         )
         viewport = client.get("/assets/dashboard-viewport.css")
 
-    assert '@import url("dashboard.css?sdsctl_source=1") layer(sdsctl-shared)' in (
-        shared.text
-    )
+    assert '@import url("dashboard.css?sdsctl_source=1") layer(sdsctl-shared)' in (shared.text)
     assert css not in managed.text
     assert "layer(sdsctl-managed-theme)" in managed.text
     assert managed_source.text == css
     assert (
-        "@layer sdsctl-viewport-contract, sdsctl-shared, "
-        "sdsctl-managed-theme;"
+        "@layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;"
     ) in viewport.text
     for protected in (
         "height: 100dvh !important",
@@ -432,12 +510,8 @@ def test_layer_source_routes_require_exact_internal_tokens(tmp_path: Path) -> No
 
     with TestClient(_app(tmp_path)) as client:
         invalid_shared = client.get("/assets/dashboard.css?sdsctl_source=invalid")
-        built_in_source = client.get(
-            "/assets/themes/system/theme.css?sdsctl_source=1"
-        )
-        invalid_managed = client.get(
-            "/assets/themes/solarized/theme.css?sdsctl_source=invalid"
-        )
+        built_in_source = client.get("/assets/themes/system/theme.css?sdsctl_source=1")
+        invalid_managed = client.get("/assets/themes/solarized/theme.css?sdsctl_source=invalid")
 
     assert invalid_shared.status_code == 404
     assert invalid_shared.json() == {"detail": "Stylesheet source not found."}
