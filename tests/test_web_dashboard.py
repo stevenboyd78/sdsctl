@@ -1146,6 +1146,47 @@ def test_web_dashboard_streams_validated_daemon_waterfall_records() -> None:
     assert waterfall_client.closed is True
 
 
+def test_web_dashboard_streams_waterfall_records_as_server_sent_events() -> None:
+    checkpoint = waterfall_record(
+        17,
+        DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+        {"state": "running"},
+    )
+    frame = waterfall_record(
+        18,
+        DaemonWaterfallRecordKind.GWF,
+        {
+            "source_sequence": 1,
+            "values": [str(index) for index in range(240)],
+            "responses_dropped": 0,
+            "overflows": 0,
+            "source_received_at": "2026-08-28T00:00:00+00:00",
+        },
+    )
+    waterfall_client = FakeDaemonWaterfallClient(
+        records=[checkpoint, frame]
+    )
+    app = create_web_dashboard_app(
+        FakeDaemonApiClient,
+        waterfall_client_factory=lambda: waterfall_client,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/waterfall",
+            headers={"Accept": "text/event-stream"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.text == (
+        f"id: 17\ndata: {checkpoint.to_json_line().decode()}\n"
+        f"id: 18\ndata: {frame.to_json_line().decode()}\n"
+    )
+    assert waterfall_client.receive_calls == 3
+    assert waterfall_client.closed is True
+
+
 def test_web_dashboard_waterfall_cancellation_releases_daemon_demand() -> None:
     checkpoint = waterfall_record(
         41,

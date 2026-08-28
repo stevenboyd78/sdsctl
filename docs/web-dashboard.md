@@ -404,12 +404,17 @@ control state, browser audio, recording state, or the meaning of keyboard focus.
 ### Waterfall workspace
 
 Opening **Waterfall** starts the authenticated same-origin
-`GET /api/v1/waterfall` NDJSON response. The browser requires the same strict
-protocol, version, checkpoint-first ordering, contiguous sequence, and bounded
-record shape as the private client. Each GWF frame must contain exactly 240 raw
-strings that convert to finite numbers. Malformed, incomplete, oversized,
-non-finite, or out-of-order input closes the browser stream, clears live state,
-and retries only while the pane remains visible.
+`GET /api/v1/waterfall` response. The endpoint retains NDJSON for API clients;
+the dashboard requests the same JSON records as standards-compliant
+Server-Sent Events. This negotiated browser representation prevents Home
+Assistant Core Ingress from applying JSON-stream compression that can delay
+incremental records, while preserving the existing NDJSON contract. The
+browser requires the same strict protocol, version, checkpoint-first ordering,
+contiguous sequence, and bounded record shape as the private client. Each GWF
+frame must contain exactly 240 raw strings that convert to finite numbers.
+Malformed, incomplete, oversized, non-finite, or out-of-order input closes the
+browser stream, clears live state, and retries only while the pane remains
+visible.
 
 The upper Canvas shows the newest 240-bin relative spectrum. The lower Canvas
 retains at most 240 normalized frames and draws the newest row at the bottom.
@@ -782,7 +787,7 @@ shutdown continues.
 | `GET` | `/api/v1/snapshot` | Authoritative daemon runtime snapshot |
 | `GET` | `/api/v1/events` | Snapshot-first ordered daemon Server-Sent Events |
 | `GET` | `/api/v1/audio` | Validated daemon-owned PCMU v1 binary frame stream |
-| `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON stream |
+| `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON or negotiated SSE stream |
 | `POST` | `/api/v1/scanner/hold/{scope}` | Set desired system, department, site, or channel hold state |
 | `POST` | `/api/v1/scanner/next` | Move to the next documented current channel selection |
 | `POST` | `/api/v1/scanner/previous` | Move to the previous documented current channel selection |

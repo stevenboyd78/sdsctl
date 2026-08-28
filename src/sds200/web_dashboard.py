@@ -12,7 +12,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Literal, Protocol, TypeAlias
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -812,13 +812,22 @@ def create_web_dashboard_app(
         "/api/v1/waterfall",
         responses={
             200: {
-                "content": {"application/x-ndjson": {}},
+                "content": {
+                    "application/x-ndjson": {},
+                    "text/event-stream": {},
+                },
                 "description": "Validated ordered daemon waterfall records",
             },
         },
     )
-    def waterfall() -> StreamingResponse:
-        return _waterfall_stream_response(waterfall_client_factory)
+    def waterfall(request: Request) -> StreamingResponse:
+        return _waterfall_stream_response(
+            waterfall_client_factory,
+            server_sent_events=(
+                "text/event-stream"
+                in request.headers.get("accept", "").lower()
+            ),
+        )
 
     return app
 
@@ -1248,6 +1257,8 @@ def _audio_stream_response(
 
 def _waterfall_stream_response(
     waterfall_client_factory: DaemonWaterfallClientFactory | None,
+    *,
+    server_sent_events: bool = False,
 ) -> StreamingResponse:
     if waterfall_client_factory is None:
         raise HTTPException(
@@ -1272,8 +1283,16 @@ def _waterfall_stream_response(
         ) from None
 
     return StreamingResponse(
-        content=_iter_daemon_waterfall(client, first_record),
-        media_type="application/x-ndjson",
+        content=_iter_daemon_waterfall(
+            client,
+            first_record,
+            server_sent_events=server_sent_events,
+        ),
+        media_type=(
+            "text/event-stream"
+            if server_sent_events
+            else "application/x-ndjson"
+        ),
         headers=dict(_WATERFALL_STREAM_RESPONSE_HEADERS),
     )
 
@@ -1337,12 +1356,23 @@ async def _iter_daemon_audio(
 async def _iter_daemon_waterfall(
     client: DaemonWaterfallClientLike,
     first_record: DaemonWaterfallRecord,
+    *,
+    server_sent_events: bool = False,
 ) -> AsyncIterator[bytes]:
+    def encode(record: DaemonWaterfallRecord) -> bytes:
+        if not server_sent_events:
+            return record.to_json_line()
+        return (
+            f"id: {record.sequence}\ndata: ".encode()
+            + record.to_json_line()
+            + b"\n"
+        )
+
     try:
-        yield first_record.to_json_line()
+        yield encode(first_record)
         while True:
             record = await asyncio.to_thread(client.receive)
-            yield record.to_json_line()
+            yield encode(record)
     except (SDS200Error, OSError) as error:
         logger.warning(
             "web dashboard daemon waterfall stream ended error_type=%s",

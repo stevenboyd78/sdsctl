@@ -20,6 +20,8 @@ const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
 const RECORDINGS_PAGE_SIZE = 3;
 const WATERFALL_PROTOCOL = "sdsctl.waterfall";
 const WATERFALL_VERSION = 1;
+const WATERFALL_NDJSON_MEDIA_TYPE = "application/x-ndjson";
+const WATERFALL_SSE_MEDIA_TYPE = "text/event-stream";
 const WATERFALL_BIN_COUNT = 240;
 const WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
 const WATERFALL_HISTORY_CAPACITY = 240;
@@ -452,7 +454,29 @@ function applyWaterfallRecord(value) {
   }
 }
 
-async function consumeWaterfallBody(reader, generation) {
+function waterfallPayloadLine(line, mediaType) {
+  if (mediaType === WATERFALL_NDJSON_MEDIA_TYPE) {
+    if (line.length === 0) {
+      throw new Error("Waterfall record size is invalid.");
+    }
+    return line;
+  }
+  if (mediaType !== WATERFALL_SSE_MEDIA_TYPE) {
+    throw new Error("Waterfall response media type is unsupported.");
+  }
+  if (line.length === 0 || line.startsWith(":")) {
+    return null;
+  }
+  if (line.startsWith("id:")) {
+    return null;
+  }
+  if (!line.startsWith("data:")) {
+    throw new Error("Waterfall event field is unsupported.");
+  }
+  return line.slice(5).trimStart();
+}
+
+async function consumeWaterfallBody(reader, generation, mediaType) {
   const decoder = new TextDecoder("utf-8", {fatal: true});
   let pending = "";
   while (generation === waterfallGeneration) {
@@ -472,10 +496,16 @@ async function consumeWaterfallBody(reader, generation) {
     while (newline >= 0) {
       const line = pending.slice(0, newline);
       pending = pending.slice(newline + 1);
-      if (line.length === 0 || line.length > WATERFALL_MAX_LINE_CHARACTERS) {
+      if (line.length > WATERFALL_MAX_LINE_CHARACTERS) {
         throw new Error("Waterfall record size is invalid.");
       }
-      applyWaterfallRecord(JSON.parse(line));
+      const payload = waterfallPayloadLine(line, mediaType);
+      if (payload !== null) {
+        if (payload.length === 0 || payload.length > WATERFALL_MAX_LINE_CHARACTERS) {
+          throw new Error("Waterfall record size is invalid.");
+        }
+        applyWaterfallRecord(JSON.parse(payload));
+      }
       newline = pending.indexOf("\n");
     }
   }
@@ -491,7 +521,7 @@ async function startWaterfallStream() {
   waterfallAbortController = controller;
   try {
     const response = await fetch(webUrl("api/v1/waterfall"), {
-      headers: {Accept: "application/x-ndjson"},
+      headers: {Accept: WATERFALL_SSE_MEDIA_TYPE},
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
@@ -502,6 +532,13 @@ async function startWaterfallStream() {
     if (generation !== waterfallGeneration) {
       return;
     }
+    const mediaType = (response.headers.get("content-type") || "")
+      .split(";", 1)[0]
+      .trim()
+      .toLowerCase();
+    if (![WATERFALL_SSE_MEDIA_TYPE, WATERFALL_NDJSON_MEDIA_TYPE].includes(mediaType)) {
+      throw new Error("Waterfall response media type is unsupported.");
+    }
     waterfallConnected = true;
     setWaterfallStatus(
       waterfallPaused ? "paused" : "live",
@@ -511,7 +548,7 @@ async function startWaterfallStream() {
     );
     const reader = response.body.getReader();
     waterfallReader = reader;
-    await consumeWaterfallBody(reader, generation);
+    await consumeWaterfallBody(reader, generation, mediaType);
   } catch (error) {
     if (generation !== waterfallGeneration || controller.signal.aborted) {
       return;

@@ -491,6 +491,20 @@ assert.equal(waterfallRecord({
   kind: "session.checkpoint",
   payload: {},
 }).sequence, 7);
+assert.equal(
+  waterfallPayloadLine('{"sequence":7}', WATERFALL_NDJSON_MEDIA_TYPE),
+  '{"sequence":7}',
+);
+assert.equal(
+  waterfallPayloadLine('data: {"sequence":7}', WATERFALL_SSE_MEDIA_TYPE),
+  '{"sequence":7}',
+);
+assert.equal(waterfallPayloadLine('id: 7', WATERFALL_SSE_MEDIA_TYPE), null);
+assert.equal(waterfallPayloadLine('', WATERFALL_SSE_MEDIA_TYPE), null);
+assert.throws(
+  () => waterfallPayloadLine('retry: 2000', WATERFALL_SSE_MEDIA_TYPE),
+  /event field is unsupported/,
+);
 assert.throws(
   () => waterfallRecord({
     protocol: "sdsctl.waterfall",
