@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
-from struct import unpack
+from struct import pack, unpack
 from typing import Self
 from urllib.error import URLError
 from urllib.request import urlopen
@@ -103,6 +103,15 @@ _THEMES = (
     "amateur-radio",
     "pip-boy-inspired",
 )
+_WORKSPACE_PANES = (
+    "scanner",
+    "controls",
+    "waterfall",
+    "audio",
+    "recordings",
+    "diagnostics",
+)
+_WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane"
 _DEMO_THEME_SETUP_HTML = (
     "<!doctype html>\n"
     '<html lang="en">\n'
@@ -113,9 +122,14 @@ _DEMO_THEME_SETUP_HTML = (
     "<body>\n"
     "<script>\n"
     f"const allowedThemes = Object.freeze({json.dumps(_THEMES)});\n"
+    f"const allowedPanes = Object.freeze({json.dumps(_WORKSPACE_PANES)});\n"
     'const theme = location.pathname.split("/").at(-1);\n'
+    'const pane = new URLSearchParams(location.search).get("pane");\n'
     "if (allowedThemes.includes(theme)) {\n"
     f"  localStorage.setItem({json.dumps(_THEME_STORAGE_KEY)}, theme);\n"
+    "}\n"
+    "if (allowedPanes.includes(pane)) {\n"
+    f"  localStorage.setItem({json.dumps(_WORKSPACE_PANE_STORAGE_KEY)}, pane);\n"
     "}\n"
     'location.replace("/");\n'
     "</script>\n"
@@ -154,6 +168,15 @@ _READY_TEXT = {
     "last-update": "8/8/2026, 3:12:00 PM",
 }
 _READY_LAST_UPDATE = "2026-08-08T21:12:00.000Z"
+_READY_WATERFALL_TEXT = {
+    "waterfall-status": "Live relative waterfall data.",
+    "waterfall-session-state": "running",
+    "waterfall-frame-rate": "20.0 fps",
+    "waterfall-sequence": "33",
+    "waterfall-queue-loss": "0 records",
+    "waterfall-overflows": "0",
+    "waterfall-poll-failures": "0",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,42 +186,34 @@ class Capture:
     width: int
     height: int
     device_scale_factor: int = 1
+    pane: str = "scanner"
 
 
-CAPTURES = (
-    Capture("theme-system-1920x1080.png", "system", 1920, 1080),
-    Capture("theme-system-390x844-dpr2.png", "system", 390, 844, 2),
-    Capture("theme-lcars-1920x1080.png", "lcars", 1920, 1080),
-    Capture("theme-matrix-1920x1080.png", "matrix", 1920, 1080),
+_REFERENCE_VIEWPORTS = (
+    ("1920x1080", 1920, 1080, 1),
+    ("1366x768", 1366, 768, 1),
+    ("800x480", 800, 480, 1),
+    ("390x844-dpr2", 390, 844, 2),
+)
+
+CAPTURES = tuple(
+    Capture(f"theme-{theme}-{suffix}.png", theme, width, height, dpr)
+    for theme in _THEMES
+    for suffix, width, height, dpr in _REFERENCE_VIEWPORTS
+) + (
     Capture(
-        "theme-first-responder-1920x1080.png",
-        "first-responder",
+        "theme-system-waterfall-1920x1080.png",
+        "system",
         1920,
         1080,
+        pane="waterfall",
     ),
     Capture(
-        "theme-amateur-radio-1920x1080.png",
-        "amateur-radio",
-        1920,
-        1080,
-    ),
-    Capture(
-        "theme-amateur-radio-1366x768.png",
-        "amateur-radio",
-        1366,
-        768,
-    ),
-    Capture(
-        "theme-pip-boy-inspired-1920x1080.png",
-        "pip-boy-inspired",
-        1920,
-        1080,
-    ),
-    Capture(
-        "theme-pip-boy-inspired-800x480.png",
+        "theme-pip-boy-inspired-waterfall-800x480.png",
         "pip-boy-inspired",
         800,
         480,
+        pane="waterfall",
     ),
 )
 
@@ -209,9 +224,13 @@ class _CaptureDomParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.theme: str | None = None
+        self.workspace_pane: str | None = None
         self.status_state: str | None = None
         self.attributes: dict[str, dict[str, str]] = {}
-        self.text: dict[str, list[str]] = {element_id: [] for element_id in _READY_TEXT}
+        self.text: dict[str, list[str]] = {
+            element_id: []
+            for element_id in (*_READY_TEXT, *_READY_WATERFALL_TEXT)
+        }
         self._stack: list[tuple[str, str | None]] = []
 
     def handle_starttag(
@@ -222,6 +241,7 @@ class _CaptureDomParser(HTMLParser):
         values = {name: value or "" for name, value in attributes}
         if tag == "html":
             self.theme = values.get("data-theme")
+            self.workspace_pane = values.get("data-workspace-pane")
 
         element_id = values.get("id")
         target = element_id if element_id in self.text else None
@@ -256,9 +276,16 @@ def _capture_dom_is_ready(output: str | bytes, capture: Capture) -> bool:
     except Exception:
         return False
 
-    if parser.theme != capture.theme or parser.status_state != "online":
+    if (
+        parser.theme != capture.theme
+        or parser.workspace_pane != capture.pane
+        or parser.status_state != "online"
+    ):
         return False
-    for element_id, expected in _READY_TEXT.items():
+    expected_text = dict(_READY_TEXT)
+    if capture.pane == "waterfall":
+        expected_text.update(_READY_WATERFALL_TEXT)
+    for element_id, expected in expected_text.items():
         observed = " ".join("".join(parser.text[element_id]).split())
         if observed != expected:
             return False
@@ -490,6 +517,9 @@ class DemoDaemonWaterfallClient:
         self._sequence = 0
 
     def receive(self) -> DaemonWaterfallRecord:
+        if self._sequence >= 33:
+            self._closed.wait()
+            raise DaemonDisconnectedError("demo waterfall stream closed")
         if self._sequence > 0 and self._closed.wait(0.05):
             raise DaemonDisconnectedError("demo waterfall stream closed")
         if self._closed.is_set():
@@ -640,11 +670,13 @@ def _control_result(operation: str) -> dict[str, object]:
     }
 
 
-def _demo_theme_response(theme: str) -> HTMLResponse:
+def _demo_theme_response(theme: str, pane: str = "scanner") -> HTMLResponse:
     """Return a fixed screenshot-setup page for one repository-defined theme."""
 
     if theme not in _THEMES:
         raise HTTPException(status_code=404, detail="unknown demo theme")
+    if pane not in _WORKSPACE_PANES:
+        raise HTTPException(status_code=404, detail="unknown demo pane")
 
     return HTMLResponse(
         content=_DEMO_THEME_SETUP_HTML,
@@ -665,8 +697,8 @@ def create_demo_app() -> FastAPI:
         include_in_schema=False,
         response_class=HTMLResponse,
     )
-    def select_demo_theme(theme: str) -> HTMLResponse:
-        return _demo_theme_response(theme)
+    def select_demo_theme(theme: str, pane: str = "scanner") -> HTMLResponse:
+        return _demo_theme_response(theme, pane)
 
     @app.get(
         _DEMO_CLOCK_PATH,
@@ -762,8 +794,37 @@ def _capture_viewport_is_exact(viewport: object, capture: Capture) -> bool:
         and close("visualWidth", capture.width, 0.01)
         and close("visualHeight", capture.height, 0.01)
         and close("visualScale", 1, 0.001)
+        and viewport.get("colorScheme") == "light"
+        and viewport.get("forcedColors") == "none"
+        and viewport.get("contrast") == "no-preference"
         and viewport.get("reducedMotion") is True
     )
+
+
+def _valid_waterfall_canvas_stability(value: object) -> bool:
+    if not isinstance(value, dict) or value.get("stable") is not True:
+        return False
+    attempts = value.get("attempts")
+    if not isinstance(attempts, int) or isinstance(attempts, bool) or attempts < 2:
+        return False
+    if value.get("sequence") != "33" or value.get("state") != "live":
+        return False
+    canvases = value.get("canvases")
+    if not isinstance(canvases, list) or len(canvases) != 2:
+        return False
+    for expected_id, canvas in zip(
+        ("waterfall-spectrum", "waterfall-history"),
+        canvases,
+        strict=True,
+    ):
+        if not isinstance(canvas, dict) or canvas.get("id") != expected_id:
+            return False
+        if not re.fullmatch(r"[0-9a-f]{64}", str(canvas.get("digest", ""))):
+            return False
+        for dimension in (canvas.get("width"), canvas.get("height")):
+            if not isinstance(dimension, int) or isinstance(dimension, bool) or dimension <= 0:
+                return False
+    return True
 
 
 def _capture(
@@ -776,6 +837,7 @@ def _capture(
     output_dir: Path,
     virtual_time_ms: int,
     capture_timeout_seconds: float,
+    diagnostics: dict[str, object] | None = None,
 ) -> Path:
     if Path(capture.filename).name != capture.filename:
         raise RuntimeError(f"capture filename must be a basename: {capture.filename}")
@@ -800,6 +862,8 @@ def _capture(
         str(profile_dir),
         "--theme",
         capture.theme,
+        "--pane",
+        capture.pane,
         "--width",
         str(capture.width),
         "--height",
@@ -860,12 +924,48 @@ def _capture(
                 "Node/CDP screenshot capture did not use the exact requested CSS "
                 f"viewport for {capture.filename}: {viewport!r}"
             )
+        screenshot_attempts = result.get("screenshotAttempts")
+        if (
+            not isinstance(screenshot_attempts, int)
+            or isinstance(screenshot_attempts, bool)
+            or screenshot_attempts < 2
+        ):
+            raise RuntimeError(
+                "Node/CDP screenshot capture did not prove compositor stability for "
+                f"{capture.filename}: {screenshot_attempts!r}"
+            )
+        waterfall_canvas = result.get("waterfallCanvas")
+        if capture.pane == "waterfall":
+            if not _valid_waterfall_canvas_stability(waterfall_canvas):
+                raise RuntimeError(
+                    "Node/CDP screenshot capture did not prove waterfall canvas stability "
+                    f"for {capture.filename}: {waterfall_canvas!r}"
+                )
+        elif waterfall_canvas is not None:
+            raise RuntimeError(
+                "Node/CDP screenshot capture returned unexpected waterfall canvas state "
+                f"for {capture.filename}"
+            )
+        if diagnostics is not None:
+            diagnostics.update(
+                {
+                    "screenshot_attempts": screenshot_attempts,
+                    "viewport": viewport,
+                    "waterfall_canvas": waterfall_canvas,
+                }
+            )
         if not _valid_screenshot(staging, capture):
             raise RuntimeError(f"CDP did not create a valid screenshot: {staging}")
         if result.get("pngBytes") != staging.stat().st_size:
             raise RuntimeError(
                 f"CDP reported an inconsistent PNG byte count for {capture.filename}"
             )
+        chrome_png = _read_regular_file(staging, _MAX_PNG_FILE_BYTES)
+        if chrome_png is None:
+            raise RuntimeError(f"cannot read captured Chrome PNG: {staging}")
+        staging.write_bytes(_canonicalize_chrome_png(chrome_png))
+        if not _valid_screenshot(staging, capture):
+            raise RuntimeError(f"PNG canonicalization failed for {capture.filename}")
 
         os.replace(staging, destination)
     finally:
@@ -1045,6 +1145,119 @@ def _png_dimensions(path: Path) -> tuple[int, int] | None:
     return _png_dimensions_bytes(content)
 
 
+def _png_chunk(chunk_type: bytes, data: bytes) -> bytes:
+    checksum = zlib.crc32(data, zlib.crc32(chunk_type)) & 0xFFFFFFFF
+    return pack(">I", len(data)) + chunk_type + data + pack(">I", checksum)
+
+
+def _paeth_predictor(left: int, above: int, upper_left: int) -> int:
+    estimate = left + above - upper_left
+    left_distance = abs(estimate - left)
+    above_distance = abs(estimate - above)
+    upper_left_distance = abs(estimate - upper_left)
+    if left_distance <= above_distance and left_distance <= upper_left_distance:
+        return left
+    if above_distance <= upper_left_distance:
+        return above
+    return upper_left
+
+
+def _canonicalize_chrome_png(content: bytes) -> bytes:
+    """Return deterministic PNG bytes for one validated Chrome RGB/RGBA capture."""
+
+    dimensions = _png_dimensions_bytes(content)
+    if dimensions is None:
+        raise RuntimeError("Chrome returned an invalid PNG")
+
+    offset = len(_PNG_SIGNATURE)
+    ihdr = b""
+    compressed_parts: list[bytes] = []
+    while offset < len(content):
+        chunk_length = unpack(">I", content[offset : offset + 4])[0]
+        chunk_type = content[offset + 4 : offset + 8]
+        chunk_data_start = offset + 8
+        chunk_data_end = chunk_data_start + chunk_length
+        chunk_data = content[chunk_data_start:chunk_data_end]
+        if chunk_type == b"IHDR":
+            ihdr = chunk_data
+        elif chunk_type == b"IDAT":
+            compressed_parts.append(chunk_data)
+        elif chunk_type == b"IEND":
+            break
+        offset = chunk_data_end + 4
+
+    width, height, bit_depth, color_type, compression, filtering, interlace = unpack(
+        ">IIBBBBB", ihdr
+    )
+    if (
+        (width, height) != dimensions
+        or bit_depth != 8
+        or color_type not in {2, 6}
+        or compression != 0
+        or filtering != 0
+        or interlace != 0
+    ):
+        raise RuntimeError(
+            "Chrome PNG canonicalization requires non-interlaced 8-bit RGB or RGBA"
+        )
+
+    bytes_per_pixel = 3 if color_type == 2 else 4
+    row_bytes = width * bytes_per_pixel
+    decoded = zlib.decompress(b"".join(compressed_parts))
+    if len(decoded) != (row_bytes + 1) * height:
+        raise RuntimeError("Chrome PNG decoded to an unexpected scanline length")
+
+    raw_rows: list[bytes] = []
+    previous = bytes(row_bytes)
+    stride = row_bytes + 1
+    for row_index in range(height):
+        start = row_index * stride
+        filter_type = decoded[start]
+        filtered = decoded[start + 1 : start + stride]
+        reconstructed = bytearray(row_bytes)
+        for index, value in enumerate(filtered):
+            left = reconstructed[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            above = previous[index]
+            upper_left = previous[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            if filter_type == 0:
+                predictor = 0
+            elif filter_type == 1:
+                predictor = left
+            elif filter_type == 2:
+                predictor = above
+            elif filter_type == 3:
+                predictor = (left + above) // 2
+            elif filter_type == 4:
+                predictor = _paeth_predictor(left, above, upper_left)
+            else:
+                raise RuntimeError(f"Chrome PNG used unsupported filter {filter_type}")
+            reconstructed[index] = (value + predictor) & 0xFF
+        row = bytes(reconstructed)
+        raw_rows.append(row)
+        previous = row
+
+    canonical_scanlines = bytearray()
+    previous = bytes(row_bytes)
+    for row in raw_rows:
+        canonical_scanlines.append(4)
+        for index, value in enumerate(row):
+            left = row[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            above = previous[index]
+            upper_left = previous[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            canonical_scanlines.append(
+                (value - _paeth_predictor(left, above, upper_left)) & 0xFF
+            )
+        previous = row
+
+    compressed = zlib.compress(bytes(canonical_scanlines), level=9)
+    return (
+        _PNG_SIGNATURE
+        + _png_chunk(b"IHDR", ihdr)
+        + _png_chunk(b"IDAT", compressed)
+        + _png_chunk(b"IEND", b"")
+    )
+
+
 def _valid_screenshot(path: Path, capture: Capture) -> bool:
     dimensions = _png_dimensions(path)
     if dimensions is None:
@@ -1067,8 +1280,8 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     errors: list[str] = []
     expected_filenames = tuple(capture.filename for capture in CAPTURES)
     expected_filename_set = set(expected_filenames)
-    if len(CAPTURES) != 9:
-        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 9")
+    if len(CAPTURES) != 26:
+        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 26")
     if len(expected_filename_set) != len(expected_filenames):
         errors.append("CAPTURES contains duplicate filenames")
 
@@ -1114,7 +1327,7 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     except OSError as error:
         errors.append(f"cannot inspect {_GALLERY_GUIDE}: {error}")
         guide_targets = ()
-    if len(guide_targets) != 9 or set(guide_targets) != expected_guide_targets:
+    if len(guide_targets) != len(CAPTURES) or set(guide_targets) != expected_guide_targets:
         errors.append(
             "canonical guide PNG references do not name each authoritative "
             "gallery asset exactly once"
@@ -1132,7 +1345,7 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     except OSError as error:
         errors.append(f"cannot inspect {_GALLERY_WIKI}: {error}")
         wiki_targets = ()
-    if len(wiki_targets) != 9 or set(wiki_targets) != expected_wiki_targets:
+    if len(wiki_targets) != len(CAPTURES) or set(wiki_targets) != expected_wiki_targets:
         errors.append(
             "wiki PNG references do not name each authoritative raw-main gallery asset exactly once"
         )
@@ -1380,11 +1593,14 @@ def _verify_capture_repeatability(
     """Capture twice in one environment without touching the checked-in gallery."""
 
     destinations: list[Path] = []
+    diagnostics: list[dict[str, object]] = []
     for run in ("first", "second"):
         profile_dir = profile_root / f"capture-{capture_index:02d}-{run}"
         output_dir = scratch_root / f"capture-{capture_index:02d}-{run}"
         profile_dir.mkdir()
         output_dir.mkdir()
+        capture_diagnostics: dict[str, object] = {}
+        diagnostics.append(capture_diagnostics)
         destinations.append(
             _capture(
                 chrome=chrome,
@@ -1395,6 +1611,7 @@ def _verify_capture_repeatability(
                 output_dir=output_dir,
                 virtual_time_ms=virtual_time_ms,
                 capture_timeout_seconds=capture_timeout_seconds,
+                diagnostics=capture_diagnostics,
             )
         )
 
@@ -1402,7 +1619,8 @@ def _verify_capture_repeatability(
     if first_digest != second_digest:
         raise RuntimeError(
             "same-Chrome repeatability check produced different PNG bytes for "
-            f"{capture.filename}: {first_digest} != {second_digest}"
+            f"{capture.filename}: {first_digest} != {second_digest}; "
+            f"first diagnostics={diagnostics[0]!r}; second diagnostics={diagnostics[1]!r}"
         )
     return first_digest
 
@@ -1460,6 +1678,7 @@ def _generate(args: argparse.Namespace) -> None:
                         )
                         print(
                             f"Repeatable {capture.theme:16} "
+                            f"{capture.pane:11} "
                             f"{capture.width}x{capture.height} "
                             f"DPR {capture.device_scale_factor}: sha256={digest}"
                         )
@@ -1481,6 +1700,7 @@ def _generate(args: argparse.Namespace) -> None:
                     size = destination.stat().st_size
                     print(
                         f"Captured {capture.theme:16} "
+                        f"{capture.pane:11} "
                         f"{capture.width}x{capture.height} "
                         f"DPR {capture.device_scale_factor}: "
                         f"{destination} ({size} bytes)"
@@ -1588,6 +1808,7 @@ def main() -> None:
             print(
                 f"{capture.filename}: "
                 f"theme={capture.theme} "
+                f"pane={capture.pane} "
                 f"viewport={capture.width}x{capture.height} "
                 f"device-scale-factor={capture.device_scale_factor}"
             )
@@ -1598,7 +1819,10 @@ def main() -> None:
             _verify_gallery_contract()
         except RuntimeError as error:
             raise SystemExit(str(error)) from error
-        print("Web dashboard gallery contract passed for 9 authoritative PNG files.")
+        print(
+            "Web dashboard gallery contract passed for "
+            f"{len(CAPTURES)} authoritative PNG files."
+        )
         return
 
     if args.verify_sdist is not None:

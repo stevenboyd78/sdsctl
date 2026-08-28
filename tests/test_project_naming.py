@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_4_waterfall_contract() -> None:
+def test_roadmap_records_active_milestone_27_5_release_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,18 +123,17 @@ def test_roadmap_records_active_milestone_27_4_waterfall_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.4 — Responsive theme-aware web spectrum",
-        "physically qualified, renderer-neutral text-waterfall data plane",
-        "same-origin, authenticated, size-bounded streaming route",
-        "last consumer triggers scanner cleanup",
-        "bounded Canvas-based spectrum and rolling waterfall surface",
-        "uncalibrated/relative-data labeling",
-        "must not claim calibrated power, dB, signal strength",
-        "shared semantic visualization tokens",
-        "fit the active viewport up to full screen without document or panel scrolling",
-        "pause/resume display, clear-history, and full-screen controls",
-        "authenticated route denial",
-        "Do not add binary `GW2`",
+        "### Milestone 27.5 — v0.23.0 release",
+        "Milestone 27.4 is closed",
+        "feature-frozen v0.23.0 release candidate",
+        "Synchronize the Python package, import version, and Home Assistant App at 0.23.0",
+        "Milestone 27.4 changelog and Home Assistant acceptance records are now present",
+        "System desktop Waterfall capture",
+        "compact Pip-Boy-inspired Waterfall capture",
+        "complete Python 3.11 through 3.14 test matrix",
+        "Only one genuine matching `v0.23.0` tag",
+        "Do not add a Home Assistant waterfall card",
+        "private local Favorites validation corpus remain outside the release",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
@@ -155,7 +154,26 @@ def test_roadmap_preserves_closed_milestone_27_3_physical_acceptance() -> None:
         assert required in roadmap or required in normalized_roadmap
 
 
-def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> None:
+def test_home_assistant_guide_records_milestone_27_4_physical_acceptance() -> None:
+    guide = _read("docs/home-assistant-app.md")
+    normalized_guide = " ".join(guide.split())
+
+    for required in (
+        "### Milestone 27.4 authenticated waterfall development acceptance",
+        "`223303b2bec9a42b48641d90d4f39bc962bcdc0b`",
+        "Home Assistant OS 18.2",
+        "SDS200 running firmware 1.26.01",
+        "exactly 240 hexadecimal source strings",
+        "same-origin event-stream framing",
+        "pause/resume froze only display updates",
+        "restored the repository-managed App as the sole daemon",
+        "No scanner identifiers, programmed frequencies, raw waterfall captures",
+        "published v0.23.0 image still requires the separate repository-managed release acceptance",
+    ):
+        assert required in guide or required in normalized_guide
+
+
+def test_roadmap_records_completed_milestone_27_4_web_waterfall_boundary() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     milestone_group = roadmap.split(
         "### Milestone 27 — Adaptive scanner screens, hardening, and waterfall workspace",
@@ -164,26 +182,16 @@ def test_roadmap_preserves_planned_milestone_27_4_web_waterfall_contract() -> No
     normalized_group = " ".join(milestone_group.split())
 
     for required in (
-        "#### Planned Milestone 27.4 contract",
-        "Milestone 27.2 is closed with a physically qualified",
-        "SDS200 running firmware 1.26.01",
-        "`GWF,1,ON` is a one-frame get rather than sustained publication",
-        "polls it at a conservative 250 ms interval",
-        "return to normal scanning",
-        "existing web service without changing the trust boundary",
-        "same-origin, authenticated, size-bounded streaming route",
-        "last consumer triggers scanner cleanup",
-        "bounded Canvas-based spectrum and rolling-waterfall surface",
-        "uncalibrated/relative-data labeling",
-        "must not claim calibrated power, dB, signal strength",
-        "shared semantic visualization tokens",
-        "fit the active viewport up to full screen without document or panel scrolling",
-        "pause/resume display, clear-history, and full-screen controls",
-        "authenticated route denial",
-        "Do not add binary `GW2`",
-        "a Home Assistant waterfall card, TUI/GUI rendering",
+        "Milestone 27.4: responsive theme-aware web spectrum",
+        "same-origin direct and Home Assistant Ingress streaming",
+        "exact hexadecimal 240-value validation",
+        "relative and uncalibrated labeling",
+        "lifecycle controls",
+        "deterministic cleanup",
+        "physical branch-image acceptance",
     ):
         assert required in milestone_group or required in normalized_group
+    assert "#### Planned Milestone 27.4 contract" not in milestone_group
 
 
 def test_roadmap_preserves_completed_milestone_26_1_security_boundary() -> None:
@@ -264,21 +272,21 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v022_release_documentation_names_current_generic_image() -> None:
+def test_v023_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
     for document in (readme, deployment):
-        assert "v0.22.0" in document
-        assert "theboyd78/sdsctl:0.22.0" in document
+        assert "v0.23.0" in document
+        assert "theboyd78/sdsctl:0.23.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.22.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.22.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.22.0" in installation
+    assert "## Upgrade to v0.23.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.23.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.23.0" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
-    assert "compatibility-sensitive `sds200` name, slug, and GHCR image identity" in installation
+    assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation

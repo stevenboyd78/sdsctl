@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 
 import {
+  PANES,
   THEMES,
   captureDashboardScreenshot,
 } from "./audit_web_dashboard_browser.mjs";
@@ -22,6 +23,7 @@ Required options:
   --chrome PATH        Chrome/Chromium executable
   --profile-dir PATH   Empty isolated Chrome profile directory
   --theme ID           Built-in dashboard theme ID
+  --pane ID            Dashboard workspace pane ID
   --width N            Exact CSS viewport width
   --height N           Exact CSS viewport height
   --dpr N              Exact device scale factor
@@ -58,6 +60,7 @@ function parseArguments(argv) {
       "--dpr",
       "--height",
       "--output",
+      "--pane",
       "--profile-dir",
       "--settle-ms",
       "--theme",
@@ -84,6 +87,7 @@ function parseArguments(argv) {
     "--dpr",
     "--height",
     "--output",
+    "--pane",
     "--profile-dir",
     "--theme",
     "--width",
@@ -107,6 +111,10 @@ function parseArguments(argv) {
   if (!THEMES.includes(theme)) {
     throw new Error(`--theme must name one built-in theme: ${THEMES.join(", ")}`);
   }
+  const pane = values.get("--pane");
+  if (!PANES.includes(pane)) {
+    throw new Error(`--pane must name one workspace pane: ${PANES.join(", ")}`);
+  }
   const outputPath = path.resolve(values.get("--output"));
   if (path.extname(outputPath).toLowerCase() !== ".png") {
     throw new Error("--output must end in .png");
@@ -120,6 +128,7 @@ function parseArguments(argv) {
       minimum: 1,
     }),
     outputPath,
+    pane,
     profileDirectory: path.resolve(values.get("--profile-dir")),
     settleMs: parseNumber("--settle-ms", values.get("--settle-ms") ?? "0", {
       integer: true,

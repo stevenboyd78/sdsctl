@@ -65,7 +65,10 @@ pytest --cov=sds200 --cov-report=term-missing
 python scripts/check_docs.py
 python scripts/generate_web_dashboard_screenshots.py --verify-gallery
 node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
-python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png
+python scripts/generate_web_dashboard_screenshots.py --verify-repeatability \
+  --only theme-system-1920x1080.png \
+  --only theme-system-waterfall-1920x1080.png \
+  --only theme-pip-boy-inspired-waterfall-800x480.png
 git diff --check
 
 python -m pytest -q tests/test_home_assistant_app_packaging.py
@@ -76,10 +79,11 @@ python scripts/generate_web_dashboard_screenshots.py --verify-sdist dist
 python -m twine check dist/*
 ```
 
-The representative repeatability gate captures the System 1920x1080 reference
-twice with the same Chrome executable and runner, using temporary profiles and
-output directories. It detects nondeterminism within one release environment
-without comparing pixels across Chrome versions or rewriting checked-in images.
+The representative repeatability gate captures the System scanner reference and
+both desktop and compact Waterfall references twice with the same Chrome
+executable and runner, using temporary profiles and output directories. It
+detects nondeterminism within one release environment without comparing pixels
+across Chrome versions or rewriting checked-in images.
 The source-distribution check then requires unique regular-file copies of the
 verified gallery, its canonical documentation and wiki references, and the web
 dashboard generator, internal CDP capture bridge, and browser-audit scripts;

@@ -4,7 +4,7 @@
  * Run the Milestone 27.4 dashboard acceptance matrix in one real Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
- * It writes no screenshots; the nine-image documentation gallery remains the
+ * It writes no screenshots; the 26-image documentation gallery remains the
  * responsibility of generate_web_dashboard_screenshots.py.
  */
 
@@ -457,6 +457,90 @@ async function frames(cdp, count = 2) {
       requestAnimationFrame(next);
     })`,
   );
+}
+
+async function waterfallCanvasFingerprint(cdp) {
+  return evaluate(
+    cdp,
+    `(async () => {
+      if (typeof renderWaterfallCanvases !== "function") {
+        return {error: "waterfall renderer is unavailable"};
+      }
+      renderWaterfallCanvases();
+      await new Promise((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(resolve));
+      });
+
+      const canvases = [];
+      for (const id of ["waterfall-spectrum", "waterfall-history"]) {
+        const canvas = document.getElementById(id);
+        if (!(canvas instanceof HTMLCanvasElement)) {
+          return {error: "missing canvas #" + id};
+        }
+        const context = canvas.getContext("2d");
+        if (context === null || canvas.width <= 0 || canvas.height <= 0) {
+          return {error: "unpainted canvas #" + id};
+        }
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+        const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", pixels));
+        canvases.push({
+          digest: Array.from(digest, (value) => value.toString(16).padStart(2, "0")).join(""),
+          height: canvas.height,
+          id,
+          width: canvas.width,
+        });
+      }
+      return {
+        canvases,
+        sequence: document.querySelector("#waterfall-sequence")?.textContent?.trim() ?? null,
+        state: document.querySelector("#waterfall-status")?.dataset.state ?? null,
+      };
+    })()`,
+  );
+}
+
+async function waitForWaterfallCanvasStability(cdp, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  let attempts = 0;
+  let previous = null;
+  let state = null;
+  while (Date.now() < deadline) {
+    state = await waterfallCanvasFingerprint(cdp);
+    attempts += 1;
+    if (state?.error !== undefined) {
+      throw new Error(`waterfall canvas readiness failed: ${state.error}`);
+    }
+    const serialized = JSON.stringify(state);
+    if (serialized === previous) {
+      return {...state, attempts, stable: true};
+    }
+    previous = serialized;
+  }
+  throw new Error(
+    `waterfall canvases did not become pixel-stable after ${attempts} attempts: ` +
+      JSON.stringify(state),
+  );
+}
+
+async function captureStableScreenshot(cdp) {
+  let previous = null;
+  for (let attempts = 1; attempts <= 5; attempts += 1) {
+    await frames(cdp);
+    const screenshot = await cdp.send("Page.captureScreenshot", {
+      captureBeyondViewport: false,
+      format: "png",
+      fromSurface: true,
+      optimizeForSpeed: false,
+    });
+    if (typeof screenshot.data !== "string" || screenshot.data.length === 0) {
+      throw new Error("Page.captureScreenshot returned no PNG data");
+    }
+    if (screenshot.data === previous) {
+      return {attempts, data: screenshot.data};
+    }
+    previous = screenshot.data;
+  }
+  throw new Error("dashboard compositor did not produce two identical consecutive PNGs");
 }
 
 async function waitForDashboard(cdp, timeoutMs) {
@@ -1952,6 +2036,7 @@ export async function captureDashboardScreenshot({
   deviceScaleFactor,
   height,
   outputPath,
+  pane,
   profileDirectory,
   settleMs = 0,
   theme,
@@ -1959,6 +2044,9 @@ export async function captureDashboardScreenshot({
   width,
 }) {
   requireNode24();
+  if (!PANES.includes(pane)) {
+    throw new Error(`capture pane must name one workspace pane: ${PANES.join(", ")}`);
+  }
   const viewport = {
     dpr: deviceScaleFactor,
     height,
@@ -2045,10 +2133,16 @@ export async function captureDashboardScreenshot({
 
     await setViewport(cdp, viewport);
     await cdp.send("Emulation.setEmulatedMedia", {
-      features: [{name: "prefers-reduced-motion", value: "reduce"}],
+      features: [
+        {name: "forced-colors", value: "none"},
+        {name: "prefers-color-scheme", value: "light"},
+        {name: "prefers-contrast", value: "no-preference"},
+        {name: "prefers-reduced-motion", value: "reduce"},
+      ],
       media: "screen",
     });
-    const captureUrl = `${baseUrl}/__demo/theme/${encodeURIComponent(theme)}`;
+    const captureUrl = `${baseUrl}/__demo/theme/${encodeURIComponent(theme)}` +
+      `?pane=${encodeURIComponent(pane)}`;
     await navigate(cdp, captureUrl, timeoutMs, {installAuditLibrary: false});
     await setViewport(cdp, viewport);
     const initialMessage = await evaluate(
@@ -2082,8 +2176,39 @@ export async function captureDashboardScreenshot({
       await delay(settleMs);
       await waitForDashboard(cdp, timeoutMs);
     }
+    const paneState = await evaluate(
+      cdp,
+      `(() => ({
+        pane: document.documentElement.dataset.workspacePane ?? null,
+        waterfallSequence: document.querySelector("#waterfall-sequence")?.textContent?.trim() ?? null,
+        waterfallState: document.querySelector("#waterfall-status")?.dataset.state ?? null,
+      }))()`,
+    );
+    if (
+      paneState.pane !== pane ||
+      (pane === "waterfall" &&
+        (paneState.waterfallSequence !== "33" || paneState.waterfallState !== "live"))
+    ) {
+      throw new Error(
+        `capture pane did not reach deterministic readiness: ${JSON.stringify(paneState)}`,
+      );
+    }
     await evaluate(cdp, "document.fonts?.ready ?? Promise.resolve(true)");
     await frames(cdp);
+
+    // The demo emits its fixed 32 waterfall frames at a real 50 ms cadence,
+    // so scheduler jitter can vary the measured rate by one tenth between
+    // otherwise identical captures. Freeze only that derived demo label after
+    // the final frame; production rendering and browser acceptance remain
+    // untouched, while the checked-in PNG becomes byte-repeatable.
+    let waterfallCanvas = null;
+    if (pane === "waterfall") {
+      await evaluate(
+        cdp,
+        'document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps"',
+      );
+      waterfallCanvas = await waitForWaterfallCanvasStability(cdp, timeoutMs);
+    }
 
     const geometry = await evaluate(
       cdp,
@@ -2094,6 +2219,11 @@ export async function captureDashboardScreenshot({
         visualWidth: visualViewport?.width ?? null,
         visualHeight: visualViewport?.height ?? null,
         visualScale: visualViewport?.scale ?? null,
+        colorScheme: matchMedia("(prefers-color-scheme: light)").matches ? "light" : "other",
+        forcedColors: matchMedia("(forced-colors: none)").matches ? "none" : "active",
+        contrast: matchMedia("(prefers-contrast: no-preference)").matches
+          ? "no-preference"
+          : "other",
         reducedMotion: matchMedia("(prefers-reduced-motion: reduce)").matches,
       }))()`,
     );
@@ -2104,6 +2234,9 @@ export async function captureDashboardScreenshot({
       Math.abs(geometry.visualWidth - width) > 0.01 ||
       Math.abs(geometry.visualHeight - height) > 0.01 ||
       Math.abs(geometry.visualScale - 1) > 0.001 ||
+      geometry.colorScheme !== "light" ||
+      geometry.forcedColors !== "none" ||
+      geometry.contrast !== "no-preference" ||
       geometry.reducedMotion !== true
     ) {
       throw new Error(
@@ -2155,12 +2288,7 @@ export async function captureDashboardScreenshot({
     }
 
     const outerHTML = await evaluate(cdp, "document.documentElement.outerHTML");
-    const screenshot = await cdp.send("Page.captureScreenshot", {
-      captureBeyondViewport: false,
-      format: "png",
-      fromSurface: true,
-      optimizeForSpeed: false,
-    });
+    const screenshot = await captureStableScreenshot(cdp);
     const finalOuterHTML = await evaluate(cdp, "document.documentElement.outerHTML");
     if (outerHTML !== finalOuterHTML) {
       throw new Error("dashboard DOM changed while its screenshot frame was captured");
@@ -2168,15 +2296,14 @@ export async function captureDashboardScreenshot({
     if (pageFailures.length > 0) {
       throw new Error(`dashboard raised browser exceptions: ${pageFailures.join(" | ")}`);
     }
-    if (typeof screenshot.data !== "string" || screenshot.data.length === 0) {
-      throw new Error("Page.captureScreenshot returned no PNG data");
-    }
     const png = Buffer.from(screenshot.data, "base64");
     await writeFile(outputPath, png);
     return {
       outerHTML: finalOuterHTML,
       pngBytes: png.length,
+      screenshotAttempts: screenshot.attempts,
       viewport: geometry,
+      waterfallCanvas,
     };
   } finally {
     cdp?.close();
@@ -2262,7 +2389,7 @@ async function run(options) {
 
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
-    console.log("Screenshots: disabled (the nine-image gallery is unchanged)");
+    console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);

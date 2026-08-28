@@ -6,8 +6,25 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-28
+
 ### Added
 
+- Add Milestone 27.4's authenticated, theme-aware Waterfall workspace as the
+  sixth responsive web pane. A visible authenticated pane creates bounded
+  demand on the daemon's private local waterfall service; hiding it, navigating
+  away, disconnecting, or closing the final consumer releases that demand.
+  Direct and Home Assistant Ingress sessions receive strict same-origin SSE,
+  preserve ordered loss and lifecycle telemetry, and decode exact hexadecimal
+  240-value GWF records without exposing the Unix socket or opening another
+  scanner transport. Canvas renders a relative, explicitly uncalibrated
+  spectrum and rolling history with pause/resume, clear-history, and full-screen
+  controls, immediate theme recoloring, valid GST frequency context, raw-source
+  preservation, responsive no-scroll geometry, and deterministic
+  error/reconnect cleanup. The shared header now uses balanced internal padding,
+  centers connection state, and right-aligns theme selection. Binary GW2,
+  calibrated RF or FFT claims, tuning, persistent history, Home Assistant/TUI/
+  GUI renderers, and public waterfall exposure remain deferred.
 - Add Milestone 27.3's responsive web workspace. Scanner, Controls, Audio,
   Recordings, and Diagnostics now occupy one keyboard-accessible, browser-local
   pane shell that fits without document or active-pane scrolling at normal zoom
@@ -54,9 +71,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   for more than ten seconds, then verified that the unchanged page recovered
   ordered updates without reload; a second normal App restart preserved the same
   document and recovered again. Deterministic gallery capture now holds its demo
-  transport in one inert-open state and verifies an unchanged visible status
-  message, preventing retry and polling schedules from racing the PNG
-  repeatability gate without weakening browser event-stream coverage.
+  transport in one inert-open state, verifies an unchanged visible status
+  message, pins canonical documentation media preferences, requires stable
+  Waterfall Canvas pixels and consecutive compositor frames, and
+  deterministically re-encodes validated Chrome pixels. The authoritative
+  gallery now provides the same Full HD, desktop, compact/Raspberry Pi, and DPR2
+  phone review set for all six themes plus two Waterfall references, so all 26
+  files can expose responsive layout and formatting regressions without
+  cross-process PNG encoding creating false failures or weakening browser
+  event-stream coverage. The first complete phone review exposed long theme
+  names competing with the brand and status; phone-width headers now use one
+  compact brand row above a shared connection-status and theme-selector row,
+  with the supporting subtitle and visible selector label removed only from
+  that narrow presentation. Every built-in label remains complete while more
+  height is returned to the working pane and desktop and compact geometry stay
+  unchanged.
 - Complete Milestone 27.2.2 audio-lifecycle and release-integrity hardening.
   Fanout and dynamic-router destinations now receive PCM through independent
   bounded workers, so producer paths never wait for destination code; overflow
@@ -71,7 +100,7 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   multi-architecture base digest, Dependabot covers both Dockerfile roots as
   well as Python and GitHub Actions dependencies, and CI and release validation
   enforce the shared measured 86 percent coverage floor. The README project
-  status now agrees with the current v0.22.0 release metadata and scope.
+  status was aligned with the then-current v0.22.0 release metadata and scope.
   Dependency locking remains explicitly deferred to a separately designed
   cross-Python reproducible-build milestone rather than freezing this public
   library's supported ranges to one development environment.
@@ -1352,7 +1381,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.2...v0.21.0
 [0.20.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.1...v0.20.2

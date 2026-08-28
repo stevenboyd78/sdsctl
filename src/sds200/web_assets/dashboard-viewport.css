@@ -48,11 +48,11 @@
   }
 
   .site-header {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
     align-items: center !important;
-    justify-content: space-between !important;
     gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
-    padding-block: clamp(0.35rem, 1.2vh, 0.85rem) !important;
+    padding: clamp(0.35rem, 1.2vh, 0.85rem) !important;
   }
 
   .brand,
@@ -148,8 +148,13 @@
     display: flex !important;
     align-items: center !important;
     justify-content: flex-end !important;
+    justify-self: end !important;
     flex: 0 0 auto !important;
     gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .site-header > .status-badge {
+    justify-self: center !important;
   }
 
   .dashboard {
@@ -516,7 +521,7 @@
 
   @media (max-width: 44rem) and (min-height: 28rem) {
     .site-header {
-      align-items: flex-end !important;
+      align-items: center !important;
     }
 
     .workspace-tabs {
@@ -737,6 +742,68 @@
     }
   }
 
+  @media (max-width: 26rem) and (min-height: 28rem) {
+    .site-header {
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr) !important;
+      grid-template-rows: auto auto !important;
+      align-items: center !important;
+      column-gap: 0.4rem !important;
+      row-gap: 0.3rem !important;
+    }
+
+    .site-header .brand {
+      grid-column: 1 / -1 !important;
+      grid-row: 1 !important;
+      width: 100% !important;
+    }
+
+    .site-header .brand .subtitle {
+      display: none !important;
+    }
+
+    .site-header .brand h1 {
+      overflow-wrap: normal !important;
+      white-space: nowrap !important;
+      font-size: clamp(1.2rem, 6vw, 1.5rem) !important;
+    }
+
+    .site-header > .status-badge {
+      grid-column: 1 !important;
+      grid-row: 2 !important;
+      justify-self: center !important;
+    }
+
+    .site-header .header-actions {
+      grid-column: 2 !important;
+      grid-row: 2 !important;
+      width: 100% !important;
+      justify-self: stretch !important;
+    }
+
+    .site-header .theme-picker {
+      width: 100% !important;
+      justify-items: stretch !important;
+    }
+
+    .site-header .theme-picker label {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .site-header .theme-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
+  }
+
   @media (max-height: 38rem) and (min-height: 28rem) {
     .site-header {
       padding-block: 0.25rem !important;
@@ -820,7 +887,7 @@
     }
 
     .waterfall-panel {
-      grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.38fr) !important;
+      grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.42fr) !important;
       grid-template-rows: auto auto minmax(0, 1fr) auto !important;
     }
 
@@ -840,6 +907,18 @@
       grid-column: 2 !important;
       grid-row: 3 !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .waterfall-telemetry > div {
+      grid-template-columns: max-content minmax(0, 1fr) !important;
+    }
+
+    .waterfall-telemetry dt,
+    .waterfall-telemetry dd {
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      overflow-wrap: normal !important;
+      white-space: nowrap !important;
     }
   }
 
@@ -870,9 +949,14 @@
       flex-direction: column !important;
     }
 
+    .site-header {
+      display: flex !important;
+    }
+
     .header-actions {
       align-items: stretch !important;
       justify-content: flex-start !important;
+      justify-self: auto !important;
     }
 
     .dashboard,
