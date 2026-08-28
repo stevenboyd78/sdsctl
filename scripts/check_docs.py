@@ -6,6 +6,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
+WIKI_SOURCE_DIRECTORY = ROOT / "wiki"
 
 REQUIRED_FILES = (
     Path("README.md"),
@@ -47,7 +48,7 @@ def markdown_files() -> tuple[Path, ...]:
     )
 
 
-def local_link_target(markdown: Path, raw_target: str) -> Path | None:
+def markdown_link_path(raw_target: str) -> str | None:
     target = raw_target.strip()
     if target.startswith("<") and target.endswith(">"):
         target = target[1:-1]
@@ -56,7 +57,12 @@ def local_link_target(markdown: Path, raw_target: str) -> Path | None:
         return None
 
     target = unquote(target.split("#", 1)[0])
-    if not target:
+    return target or None
+
+
+def local_link_target(markdown: Path, raw_target: str) -> Path | None:
+    target = markdown_link_path(raw_target)
+    if target is None:
         return None
 
     resolved = (markdown.parent / target).resolve()
@@ -64,7 +70,25 @@ def local_link_target(markdown: Path, raw_target: str) -> Path | None:
         resolved.relative_to(ROOT)
     except ValueError as exc:
         raise ValueError(f"{markdown.relative_to(ROOT)} links outside the repository") from exc
+
+    if markdown.parent == WIKI_SOURCE_DIRECTORY and not resolved.suffix:
+        wiki_source = resolved.with_suffix(".md")
+        if wiki_source.is_file():
+            return wiki_source
+
     return resolved
+
+
+def uses_raw_wiki_markdown_route(markdown: Path, raw_target: str) -> bool:
+    if markdown.parent != WIKI_SOURCE_DIRECTORY:
+        return False
+
+    target = markdown_link_path(raw_target)
+    if target is None or not target.endswith(".md"):
+        return False
+
+    resolved = (markdown.parent / target).resolve()
+    return resolved.parent == WIKI_SOURCE_DIRECTORY
 
 
 def main() -> int:
@@ -89,6 +113,11 @@ def main() -> int:
     for markdown in markdown_files():
         text = markdown.read_text(encoding="utf-8")
         for raw_target in MARKDOWN_LINK.findall(text):
+            if uses_raw_wiki_markdown_route(markdown, raw_target):
+                errors.append(
+                    f"{markdown.relative_to(ROOT)} uses a raw Markdown wiki route: "
+                    f"{raw_target}; use an extensionless wiki page link"
+                )
             try:
                 target = local_link_target(markdown, raw_target)
             except ValueError as exc:
