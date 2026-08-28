@@ -79,6 +79,24 @@ _MANAGED_BORDER_STYLES: Final = frozenset(
 )
 
 
+# Precompiled rule pattern used by managed stylesheet validation and
+# cached selector patterns per screen class to avoid recompiling regexes
+# on every validation call.
+_RULE_PATTERN: Final = re.compile(r"\s*([^{}]+)\{([^{}]*)\}", re.DOTALL)
+
+from functools import lru_cache as _lru_cache
+
+@_lru_cache(maxsize=32)
+def _selector_pattern_for(screen_class: str) -> re.Pattern[str]:
+"""Return a compiled selector regex for a given Screen.<screen_class>.
+
+Caching avoids recompiling the same pattern for repeated validations.
+"""
+return re.compile(
+    rf"Screen\.{re.escape(screen_class)}"
+    r"(?:\s+(?:[.#][A-Za-z_][A-Za-z0-9_-]*))*\Z"
+)
+
 class TuiThemeError(SDS200Error):
     """Raised when a TUI theme package is invalid."""
 
@@ -408,17 +426,13 @@ def validate_managed_tui_theme_stylesheet(
     if "$" in without_comments:
         raise TuiThemeError("managed TUI stylesheet must not declare variables")
 
-    selector_pattern = re.compile(
-        rf"Screen\.{re.escape(screen_class)}"
-        r"(?:\s+(?:[.#][A-Za-z_][A-Za-z0-9_-]*))*\Z"
-    )
+    selector_pattern = _selector_pattern_for(screen_class)
     position = 0
     rule_count = 0
-    rule_pattern = re.compile(r"\s*([^{}]+)\{([^{}]*)\}", re.DOTALL)
     while position < len(without_comments):
         if not without_comments[position:].strip():
             break
-        match = rule_pattern.match(without_comments, position)
+        match = _RULE_PATTERN.match(without_comments, position)
         if match is None:
             raise TuiThemeError("managed TUI stylesheet must contain simple rules only")
         selectors, body = match.groups()
