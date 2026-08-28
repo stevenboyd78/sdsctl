@@ -45,8 +45,9 @@ waterfall surface rather than a 240-cell table. Canvas is the high-frequency
 raster boundary, while adjacent semantic HTML exposes connection state,
 uncalibrated/relative-data labeling, GST context, frame rate, frame age,
 sequence, cumulative queue loss, overflow, poll failures, and session
-transitions. Malformed, non-finite, incomplete, oversized, or out-of-order data
-must fail closed without freezing the dashboard or retaining stale live state.
+transitions. Malformed, non-hexadecimal, incomplete, oversized, or out-of-order
+data must fail closed without freezing the dashboard or retaining stale live
+state.
 
 The visualization may scale observed numeric values into a clearly labeled
 relative display but must not claim calibrated power, dB, signal strength, or
