@@ -18,9 +18,16 @@ const AUDIO_FALLBACK_SCRIPT_BUFFER_SIZE = 1024;
 const WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane";
 const RADIO_SCAN_FALLBACK_STORAGE_KEY = "sdsctl.web.scan-fallback";
 const RECORDINGS_PAGE_SIZE = 3;
+const WATERFALL_PROTOCOL = "sdsctl.waterfall";
+const WATERFALL_VERSION = 1;
+const WATERFALL_BIN_COUNT = 240;
+const WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
+const WATERFALL_HISTORY_CAPACITY = 240;
+const WATERFALL_RECONNECT_DELAY_MS = 2000;
 const WORKSPACE_PANES = Object.freeze([
   "scanner",
   "controls",
+  "waterfall",
   "audio",
   "recordings",
   "diagnostics",
@@ -62,6 +69,22 @@ let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
 let recordingInventorySignature = "";
 let recordingPaginationFocusId = null;
+
+let waterfallGeneration = 0;
+let waterfallAbortController = null;
+let waterfallReader = null;
+let waterfallReconnectTimer = null;
+let waterfallConnected = false;
+let waterfallPaused = false;
+let waterfallLastSequence = null;
+let waterfallLastFrameAt = null;
+let waterfallFrameTimes = [];
+let waterfallHistory = [];
+let waterfallLatestFrame = null;
+let waterfallCheckpoint = {};
+let waterfallQueueLoss = 0;
+let waterfallOverflows = 0;
+let waterfallTransitions = 0;
 
 let audioPlaybackGeneration = 0;
 let audioPlaybackActive = false;
@@ -140,6 +163,7 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   if (focus) {
     element(`pane-tab-${pane}`).focus();
   }
+  reconcileWaterfallDemand();
 }
 
 function initializeWorkspace() {
@@ -194,7 +218,495 @@ function initializeThemeControl() {
   select.addEventListener("change", () => {
     controller.select(select.value);
     select.value = controller.current();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(renderWaterfallCanvases);
+    });
   });
+}
+
+function waterfallDemanded() {
+  return activeWorkspacePane === "waterfall" && !document.hidden;
+}
+
+function setWaterfallStatus(state, message) {
+  const status = element("waterfall-status");
+  status.dataset.state = state;
+  status.textContent = message;
+}
+
+function clearWaterfallReconnectTimer() {
+  if (waterfallReconnectTimer !== null) {
+    window.clearTimeout(waterfallReconnectTimer);
+    waterfallReconnectTimer = null;
+  }
+}
+
+function resetWaterfallLiveState({clearHistory = true} = {}) {
+  waterfallConnected = false;
+  waterfallLastSequence = null;
+  waterfallLastFrameAt = null;
+  waterfallFrameTimes = [];
+  waterfallLatestFrame = null;
+  waterfallCheckpoint = {};
+  waterfallQueueLoss = 0;
+  waterfallOverflows = 0;
+  waterfallTransitions = 0;
+  if (clearHistory) {
+    waterfallHistory = [];
+  }
+  element("waterfall-session-state").textContent = "Idle";
+  for (const name of ["lower", "center", "upper", "marker"]) {
+    element(`waterfall-frequency-${name}`).textContent = "Unavailable";
+  }
+  element("waterfall-frame-rate").textContent = "0.0 fps";
+  element("waterfall-frame-age").textContent = "Unavailable";
+  element("waterfall-sequence").textContent = "Unavailable";
+  element("waterfall-queue-loss").textContent = "0 records";
+  element("waterfall-overflows").textContent = "0";
+  element("waterfall-poll-failures").textContent = "0";
+  element("waterfall-transitions").textContent = "0";
+  element("waterfall-raw-values").textContent = "Unavailable";
+  renderWaterfallCanvases();
+}
+
+function stopWaterfallStream({clearHistory = true, status = "Idle"} = {}) {
+  waterfallGeneration += 1;
+  clearWaterfallReconnectTimer();
+  const controller = waterfallAbortController;
+  waterfallAbortController = null;
+  if (controller !== null) {
+    controller.abort();
+  }
+  const reader = waterfallReader;
+  waterfallReader = null;
+  if (reader !== null) {
+    void reader.cancel().catch(() => {});
+  }
+  resetWaterfallLiveState({clearHistory});
+  setWaterfallStatus("idle", status);
+}
+
+function scheduleWaterfallReconnect(generation) {
+  if (!waterfallDemanded() || generation !== waterfallGeneration) {
+    return;
+  }
+  clearWaterfallReconnectTimer();
+  waterfallReconnectTimer = window.setTimeout(() => {
+    waterfallReconnectTimer = null;
+    if (waterfallDemanded() && generation === waterfallGeneration) {
+      void startWaterfallStream();
+    }
+  }, WATERFALL_RECONNECT_DELAY_MS);
+}
+
+function nonnegativeInteger(value, name) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Waterfall ${name} is invalid.`);
+  }
+  return value;
+}
+
+function waterfallRecord(value) {
+  if (record(value) !== value) {
+    throw new Error("Waterfall record is not an object.");
+  }
+  if (value.protocol !== WATERFALL_PROTOCOL || value.version !== WATERFALL_VERSION) {
+    throw new Error("Waterfall protocol is unsupported.");
+  }
+  if (!Number.isSafeInteger(value.sequence) || value.sequence <= 0) {
+    throw new Error("Waterfall sequence is invalid.");
+  }
+  if (typeof value.observed_at !== "string" || !Number.isFinite(Date.parse(value.observed_at))) {
+    throw new Error("Waterfall timestamp is invalid.");
+  }
+  if (typeof value.kind !== "string" || record(value.payload) !== value.payload) {
+    throw new Error("Waterfall record shape is invalid.");
+  }
+  if (waterfallLastSequence === null) {
+    if (value.kind !== "session.checkpoint") {
+      throw new Error("Waterfall stream did not begin with a checkpoint.");
+    }
+  } else if (value.sequence !== waterfallLastSequence + 1) {
+    throw new Error("Waterfall record sequence is not contiguous.");
+  }
+  waterfallLastSequence = value.sequence;
+  return value;
+}
+
+function validFrequencyMetadata(status) {
+  const fields = [
+    status.lower_frequency,
+    status.center_frequency,
+    status.upper_frequency,
+    status.marker_frequency,
+  ];
+  if (!fields.every((value) => typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value))) {
+    return null;
+  }
+  const numbers = fields.map(Number);
+  const markerPosition = Number(status.marker_position);
+  if (
+    !numbers.every(Number.isFinite) ||
+    !(numbers[0] < numbers[1] && numbers[1] < numbers[2]) ||
+    numbers[3] < numbers[0] ||
+    numbers[3] > numbers[2] ||
+    !Number.isInteger(markerPosition) ||
+    markerPosition < 0 ||
+    markerPosition >= WATERFALL_BIN_COUNT
+  ) {
+    return null;
+  }
+  return {fields, markerPosition};
+}
+
+function applyWaterfallSnapshot(snapshot) {
+  if (record(snapshot) !== snapshot) {
+    throw new Error("Waterfall session snapshot is invalid.");
+  }
+  waterfallCheckpoint = snapshot;
+  const state = typeof snapshot.state === "string" ? snapshot.state : "Unavailable";
+  element("waterfall-session-state").textContent = state;
+  const failures = nonnegativeInteger(snapshot.gwf_poll_failures, "poll failures");
+  element("waterfall-poll-failures").textContent = String(failures);
+  const status = record(snapshot.waterfall_status);
+  const frequencies = validFrequencyMetadata(status);
+  const frequencyValues = frequencies === null
+    ? ["Unavailable", "Unavailable", "Unavailable", "Unavailable"]
+    : frequencies.fields;
+  for (const [index, name] of ["lower", "center", "upper", "marker"].entries()) {
+    element(`waterfall-frequency-${name}`).textContent = frequencyValues[index];
+  }
+}
+
+function normalizeWaterfallValues(values) {
+  if (!Array.isArray(values) || values.length !== WATERFALL_BIN_COUNT) {
+    throw new Error("Waterfall frame must contain exactly 240 values.");
+  }
+  const raw = values.map((value) => {
+    if (typeof value !== "string") {
+      throw new Error("Waterfall values must remain source strings.");
+    }
+    return value;
+  });
+  const numeric = raw.map(Number);
+  if (!numeric.every(Number.isFinite)) {
+    throw new Error("Waterfall frame contains a non-finite value.");
+  }
+  const minimum = Math.min(...numeric);
+  const maximum = Math.max(...numeric);
+  const span = maximum - minimum;
+  return {
+    raw,
+    normalized: numeric.map((value) => span === 0 ? 0.5 : (value - minimum) / span),
+  };
+}
+
+function applyWaterfallRecord(value) {
+  const envelope = waterfallRecord(value);
+  element("waterfall-sequence").textContent = String(envelope.sequence);
+  if (envelope.kind === "session.checkpoint") {
+    applyWaterfallSnapshot(envelope.payload);
+    return;
+  }
+  if (envelope.kind === "session.transition") {
+    const snapshot = record(envelope.payload.snapshot);
+    applyWaterfallSnapshot(snapshot);
+    waterfallTransitions += 1;
+    element("waterfall-transitions").textContent = String(waterfallTransitions);
+    return;
+  }
+  if (envelope.kind === "waterfall.pwf") {
+    return;
+  }
+  if (envelope.kind !== "waterfall.gwf") {
+    throw new Error("Waterfall record kind is unsupported.");
+  }
+
+  const frame = normalizeWaterfallValues(envelope.payload.values);
+  waterfallQueueLoss = nonnegativeInteger(envelope.payload.responses_dropped, "queue loss");
+  waterfallOverflows = nonnegativeInteger(envelope.payload.overflows, "overflow count");
+  waterfallLastFrameAt = Date.parse(envelope.payload.source_received_at);
+  if (!Number.isFinite(waterfallLastFrameAt)) {
+    throw new Error("Waterfall source timestamp is invalid.");
+  }
+  const now = performance.now();
+  waterfallFrameTimes.push(now);
+  waterfallFrameTimes = waterfallFrameTimes.filter((time) => now - time <= 5000);
+  const duration = waterfallFrameTimes.length > 1
+    ? (waterfallFrameTimes.at(-1) - waterfallFrameTimes[0]) / 1000
+    : 0;
+  const rate = duration > 0 ? (waterfallFrameTimes.length - 1) / duration : 0;
+  element("waterfall-frame-rate").textContent = `${rate.toFixed(1)} fps`;
+  element("waterfall-queue-loss").textContent = `${waterfallQueueLoss} records`;
+  element("waterfall-overflows").textContent = String(waterfallOverflows);
+  element("waterfall-raw-values").textContent = frame.raw.join(",");
+  updateWaterfallFrameAge();
+
+  if (!waterfallPaused) {
+    waterfallLatestFrame = frame.normalized;
+    waterfallHistory.push(frame.normalized);
+    if (waterfallHistory.length > WATERFALL_HISTORY_CAPACITY) {
+      waterfallHistory.shift();
+    }
+    renderWaterfallCanvases();
+  }
+}
+
+async function consumeWaterfallBody(reader, generation) {
+  const decoder = new TextDecoder("utf-8", {fatal: true});
+  let pending = "";
+  while (generation === waterfallGeneration) {
+    const result = await reader.read();
+    if (result.done) {
+      pending += decoder.decode();
+      if (pending.length !== 0) {
+        throw new Error("Waterfall stream ended with an incomplete record.");
+      }
+      throw new Error("Waterfall stream ended.");
+    }
+    pending += decoder.decode(result.value, {stream: true});
+    if (pending.length > WATERFALL_MAX_LINE_CHARACTERS && !pending.includes("\n")) {
+      throw new Error("Waterfall record exceeds the browser size limit.");
+    }
+    let newline = pending.indexOf("\n");
+    while (newline >= 0) {
+      const line = pending.slice(0, newline);
+      pending = pending.slice(newline + 1);
+      if (line.length === 0 || line.length > WATERFALL_MAX_LINE_CHARACTERS) {
+        throw new Error("Waterfall record size is invalid.");
+      }
+      applyWaterfallRecord(JSON.parse(line));
+      newline = pending.indexOf("\n");
+    }
+  }
+}
+
+async function startWaterfallStream() {
+  if (!waterfallDemanded()) {
+    return;
+  }
+  stopWaterfallStream({status: "Connecting to the waterfall stream…"});
+  const generation = waterfallGeneration;
+  const controller = new AbortController();
+  waterfallAbortController = controller;
+  try {
+    const response = await fetch(webUrl("api/v1/waterfall"), {
+      headers: {Accept: "application/x-ndjson"},
+      cache: "no-store",
+      credentials: "same-origin",
+      signal: controller.signal,
+    });
+    if (!response.ok || response.body === null) {
+      throw new Error(response.ok ? "Waterfall response omitted its body." : `Waterfall stream unavailable (${response.status}).`);
+    }
+    if (generation !== waterfallGeneration) {
+      return;
+    }
+    waterfallConnected = true;
+    setWaterfallStatus(
+      waterfallPaused ? "paused" : "live",
+      waterfallPaused
+        ? "Display paused; scanner data continues to be consumed."
+        : "Live relative waterfall data.",
+    );
+    const reader = response.body.getReader();
+    waterfallReader = reader;
+    await consumeWaterfallBody(reader, generation);
+  } catch (error) {
+    if (generation !== waterfallGeneration || controller.signal.aborted) {
+      return;
+    }
+    resetWaterfallLiveState();
+    const message = error instanceof Error ? error.message : "Waterfall stream failed.";
+    setWaterfallStatus("error", `${message} Reconnecting…`);
+    scheduleWaterfallReconnect(generation);
+  } finally {
+    if (generation === waterfallGeneration) {
+      waterfallReader = null;
+      waterfallAbortController = null;
+      waterfallConnected = false;
+    }
+  }
+}
+
+function reconcileWaterfallDemand() {
+  if (typeof document === "undefined" || document.getElementById("waterfall-status") === null) {
+    return;
+  }
+  if (waterfallDemanded()) {
+    if (!waterfallConnected && waterfallAbortController === null && waterfallReconnectTimer === null) {
+      void startWaterfallStream();
+    }
+  } else if (waterfallConnected || waterfallAbortController !== null || waterfallReconnectTimer !== null) {
+    stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
+  }
+}
+
+function waterfallPalette() {
+  const styles = getComputedStyle(element("waterfall-panel"));
+  return {
+    background: styles.getPropertyValue("--waterfall-background").trim() || "#07111c",
+    grid: styles.getPropertyValue("--waterfall-grid").trim() || "#31516a",
+    spectrum: styles.getPropertyValue("--waterfall-spectrum").trim() || "#42d7ff",
+    marker: styles.getPropertyValue("--waterfall-marker").trim() || "#ffcf4a",
+    history: styles.getPropertyValue("--waterfall-history").trim() || "#42d7ff",
+  };
+}
+
+function resizeCanvas(canvas) {
+  const ratio = Math.max(1, window.devicePixelRatio || 1);
+  const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+  const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
+  return {width, height, ratio};
+}
+
+function renderWaterfallCanvases() {
+  const spectrum = element("waterfall-spectrum");
+  const history = element("waterfall-history");
+  if (spectrum.clientWidth === 0 || history.clientWidth === 0) {
+    return;
+  }
+  const palette = waterfallPalette();
+  const spectrumSize = resizeCanvas(spectrum);
+  const spectrumContext = spectrum.getContext("2d");
+  spectrumContext.fillStyle = palette.background;
+  spectrumContext.fillRect(0, 0, spectrumSize.width, spectrumSize.height);
+  spectrumContext.strokeStyle = palette.grid;
+  spectrumContext.lineWidth = spectrumSize.ratio;
+  for (let index = 1; index < 4; index += 1) {
+    const y = spectrumSize.height * index / 4;
+    spectrumContext.beginPath();
+    spectrumContext.moveTo(0, y);
+    spectrumContext.lineTo(spectrumSize.width, y);
+    spectrumContext.stroke();
+  }
+  if (waterfallLatestFrame !== null) {
+    spectrumContext.strokeStyle = palette.spectrum;
+    spectrumContext.lineWidth = 2 * spectrumSize.ratio;
+    spectrumContext.beginPath();
+    waterfallLatestFrame.forEach((value, index) => {
+      const x = index * spectrumSize.width / (WATERFALL_BIN_COUNT - 1);
+      const y = spectrumSize.height - value * (spectrumSize.height - 2 * spectrumSize.ratio);
+      if (index === 0) {
+        spectrumContext.moveTo(x, y);
+      } else {
+        spectrumContext.lineTo(x, y);
+      }
+    });
+    spectrumContext.stroke();
+  }
+
+  const historySize = resizeCanvas(history);
+  const historyContext = history.getContext("2d");
+  historyContext.fillStyle = palette.background;
+  historyContext.fillRect(0, 0, historySize.width, historySize.height);
+  if (waterfallHistory.length !== 0) {
+    const rowHeight = historySize.height / WATERFALL_HISTORY_CAPACITY;
+    const startRow = WATERFALL_HISTORY_CAPACITY - waterfallHistory.length;
+    historyContext.fillStyle = palette.history;
+    waterfallHistory.forEach((frame, rowIndex) => {
+      const y = (startRow + rowIndex) * rowHeight;
+      frame.forEach((value, binIndex) => {
+        historyContext.globalAlpha = 0.08 + value * 0.92;
+        const x1 = binIndex * historySize.width / WATERFALL_BIN_COUNT;
+        const x2 = (binIndex + 1) * historySize.width / WATERFALL_BIN_COUNT;
+        historyContext.fillRect(x1, y, Math.max(1, x2 - x1), Math.max(1, rowHeight));
+      });
+    });
+    historyContext.globalAlpha = 1;
+  }
+  const frequencies = validFrequencyMetadata(record(waterfallCheckpoint.waterfall_status));
+  if (frequencies !== null) {
+    for (const [canvas, size] of [[spectrum, spectrumSize], [history, historySize]]) {
+      const context = canvas.getContext("2d");
+      const x = frequencies.markerPosition * size.width / (WATERFALL_BIN_COUNT - 1);
+      context.strokeStyle = palette.marker;
+      context.lineWidth = size.ratio;
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, size.height);
+      context.stroke();
+    }
+  }
+}
+
+function updateWaterfallFrameAge() {
+  const target = element("waterfall-frame-age");
+  if (waterfallLastFrameAt === null) {
+    target.textContent = "Unavailable";
+    return;
+  }
+  target.textContent = `${Math.max(0, (Date.now() - waterfallLastFrameAt) / 1000).toFixed(1)} s`;
+}
+
+function initializeWaterfallWorkspace() {
+  element("waterfall-pause").addEventListener("click", () => {
+    waterfallPaused = !waterfallPaused;
+    const button = element("waterfall-pause");
+    button.setAttribute("aria-pressed", String(waterfallPaused));
+    button.textContent = waterfallPaused ? "Resume display" : "Pause display";
+    setWaterfallStatus(
+      waterfallPaused ? "paused" : (waterfallConnected ? "live" : "idle"),
+      waterfallPaused
+        ? "Display paused; scanner data continues to be consumed."
+        : (waterfallConnected ? "Live relative waterfall data." : "Waterfall display resumed."),
+    );
+  });
+  element("waterfall-clear").addEventListener("click", () => {
+    waterfallHistory = [];
+    waterfallLatestFrame = null;
+    renderWaterfallCanvases();
+  });
+  const fullscreenButton = element("waterfall-fullscreen");
+  if (
+    typeof element("waterfall-panel").requestFullscreen !== "function" ||
+    typeof document.exitFullscreen !== "function"
+  ) {
+    fullscreenButton.disabled = true;
+    fullscreenButton.title = "Full-screen display is unavailable in this browser.";
+  }
+  fullscreenButton.addEventListener("click", async () => {
+    const panel = element("waterfall-panel");
+    if (document.fullscreenElement === panel) {
+      await document.exitFullscreen();
+    } else {
+      await panel.requestFullscreen();
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    element("waterfall-fullscreen").textContent = document.fullscreenElement === element("waterfall-panel")
+      ? "Exit full screen"
+      : "Full screen";
+    renderWaterfallCanvases();
+  });
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(renderWaterfallCanvases);
+    observer.observe(element("waterfall-panel"));
+  } else {
+    window.addEventListener("resize", renderWaterfallCanvases);
+  }
+  if (typeof MutationObserver === "function") {
+    const themeObserver = new MutationObserver(renderWaterfallCanvases);
+    themeObserver.observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+  }
+  if (typeof window.matchMedia === "function") {
+    for (const query of [
+      "(prefers-color-scheme: dark)",
+      "(forced-colors: active)",
+      "(prefers-contrast: more)",
+    ]) {
+      const media = window.matchMedia(query);
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", renderWaterfallCanvases);
+      }
+    }
+  }
+  window.setInterval(updateWaterfallFrameAge, 1000);
+  resetWaterfallLiveState();
 }
 
 function record(value) {
@@ -1948,6 +2460,7 @@ function initializeAudioPlayback() {
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     stopEventStream();
+    stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
     return;
   }
 
@@ -1955,10 +2468,12 @@ document.addEventListener("visibilitychange", () => {
   void refreshRecordingStatus();
   void refreshRecordings();
   startEventStream();
+  reconcileWaterfallDemand();
 });
 
 window.addEventListener("pagehide", () => {
   stopEventStream();
+  stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
   element("saved-recording-player").pause();
 });
@@ -2028,6 +2543,7 @@ savedRecordingPlayer.addEventListener("error", () => {
     "Saved recording playback failed.";
 });
 
+initializeWaterfallWorkspace();
 initializeWorkspace();
 initializeThemeControl();
 initializeRadioViewControls();

@@ -92,9 +92,9 @@ information in this image represents a real system.*
   diagnostics
 - Optional default-loopback daemon-backed HTTP service with a separate explicit
   password-authenticated native-TLS LAN mode, versioned health, status,
-  snapshot, typed scanner-control, and OpenAPI endpoints, self-hosted Swagger UI
-  and ReDoc, and redacted daemon failures without third-party browser asset
-  requests
+  snapshot, typed scanner-control, bounded relative waterfall, and OpenAPI
+  endpoints, self-hosted Swagger UI and ReDoc, and redacted daemon failures
+  without third-party browser asset requests
 - Home Assistant App packaging that supervises the existing daemon and dashboard,
   uses Supervisor MQTT service discovery and authenticated Ingress, stores
   recordings in configurable Home Assistant media storage, and publishes a fixed
@@ -677,8 +677,8 @@ verified SDS200 front-panel-key gesture when needed, and waits for the target
 hold field to converge before returning success. The compatibility indexed
 `scanner.hold` API remains available separately.
 
-The responsive workspace has five panes: **Scanner**, **Controls**, **Audio**,
-**Recordings**, and **Diagnostics**. Its tablist supports pointer activation and
+The responsive workspace has six panes: **Scanner**, **Controls**,
+**Waterfall**, **Audio**, **Recordings**, and **Diagnostics**. Its tablist supports pointer activation and
 the Arrow keys plus Home and End, and the selected pane is restored from the
 browser-local `sdsctl.web.pane` value. The Scanner pane keeps the prominent
 System/Department/Channel hierarchy visible and offers **Auto**, **Hierarchy**,
@@ -688,6 +688,14 @@ Weather and Tone-Out select special-mode details. Scanning and unknown screens
 use the browser-local Simple or Detail fallback stored as
 `sdsctl.web.scan-fallback`; explicit inspection remains selected until **Auto**
 is chosen again.
+
+Opening **Waterfall** creates one authenticated same-origin subscription to the
+private daemon waterfall service. The browser validates checkpoint-first,
+contiguous, size-bounded NDJSON and renders each exact 240-string GWF frame as a
+relative spectrum plus at most 240 rolling Canvas rows. It labels the data as
+uncalibrated, never claims dB or RF power, and shows GST frequency metadata only
+when its complete axis is structurally valid. Pause freezes only the display;
+hiding or leaving the pane aborts the stream and releases daemon demand.
 
 At normal browser zoom, the document and active pane fit without horizontal or
 vertical scrolling at the 390x844, 800x480, 1366x768, and 1920x1080 reference

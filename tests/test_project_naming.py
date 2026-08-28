@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_3_1_theme_snapshot_contract() -> None:
+def test_roadmap_records_active_milestone_27_4_waterfall_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,21 +123,18 @@ def test_roadmap_records_active_milestone_27_3_1_theme_snapshot_contract() -> No
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.3.1 — Managed-theme source-snapshot hardening",
-        "Milestone 27.3 is closed",
-        "open the explicitly selected unpacked source directory once",
-        "one logical aggregate package byte budget",
-        "actual source bytes",
-        "private validation snapshot",
-        "same-filesystem publication stage",
-        "descriptor-relative no-follow access",
-        "source-directory replacement",
-        "same-size content mutation",
-        "no parser or interface validator consumes the live source tree",
-        "exact-digest activation or reapproval gates",
-        "durable implementation-review ledger",
-        "Do not implement Broadcastify TLS",
-        "Milestone 27.4 waterfall renderer",
+        "### Milestone 27.4 — Responsive theme-aware web spectrum",
+        "physically qualified, renderer-neutral text-waterfall data plane",
+        "same-origin, authenticated, size-bounded streaming route",
+        "last consumer triggers scanner cleanup",
+        "bounded Canvas-based spectrum and rolling waterfall surface",
+        "uncalibrated/relative-data labeling",
+        "must not claim calibrated power, dB, signal strength",
+        "shared semantic visualization tokens",
+        "fit the active viewport up to full screen without document or panel scrolling",
+        "pause/resume display, clear-history, and full-screen controls",
+        "authenticated route denial",
+        "Do not add binary `GW2`",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

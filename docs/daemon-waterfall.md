@@ -5,9 +5,11 @@ Unix-domain socket. The daemon remains the only scanner owner. Local consumers
 never open another scanner transport and never send `GST`, `PWF`, or `GWF`
 directly.
 
-This is the renderer-neutral data plane for the future web waterfall workspace.
-It does not add a browser waterfall, scanner tuning, mode navigation, MQTT FFT
-state, public TCP access, or binary `GW2` handling.
+This is the renderer-neutral data plane used by the Milestone 27.4 web
+waterfall workspace. The authenticated web adapter creates one validating local
+client only while the pane is visible and forwards canonical records through a
+same-origin bounded NDJSON response. It does not add scanner tuning, mode
+navigation, MQTT FFT state, public TCP access, or binary `GW2` handling.
 
 ## Scanner protocol boundary
 

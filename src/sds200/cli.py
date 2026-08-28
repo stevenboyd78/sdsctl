@@ -1580,12 +1580,21 @@ def build_parser(
         ),
     )
     web.add_argument(
+        "--daemon-waterfall-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit daemon waterfall socket path; otherwise use "
+            "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    web.add_argument(
         "--daemon-timeout",
         type=_positive_float,
         default=DAEMON_API_CLIENT_DEFAULT_TIMEOUT,
         metavar="SECONDS",
         help=(
-            "Daemon API, event, PCMU, and recording-file connection "
+            "Daemon API, event, PCMU, recording-file, and waterfall connection "
             f"timeout (default: {DAEMON_API_CLIENT_DEFAULT_TIMEOUT})"
         ),
     )
@@ -1637,6 +1646,16 @@ def build_parser(
         help=(
             "Maximum accepted completed recording size "
             f"(default: {DAEMON_RECORDING_FILE_CLIENT_DEFAULT_MAX_CONTENT_BYTES})"
+        ),
+    )
+    web.add_argument(
+        "--daemon-waterfall-max-record-bytes",
+        type=_positive_integer,
+        default=None,
+        metavar="BYTES",
+        help=(
+            "Maximum accepted daemon waterfall record size "
+            f"(default: {DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES})"
         ),
     )
     web.add_argument(
@@ -4454,6 +4473,11 @@ def _run_web(
         environ=environ,
         configuration_paths=paths,
     )
+    waterfall_location = resolve_daemon_waterfall_socket_location(
+        args.daemon_waterfall_socket_path,
+        environ=environ,
+        configuration_paths=paths,
+    )
     timeout = args.daemon_timeout
     max_response_bytes = (
         DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
@@ -4480,6 +4504,11 @@ def _run_web(
         if args.daemon_recording_file_max_content_bytes is None
         else args.daemon_recording_file_max_content_bytes
     )
+    max_waterfall_record_bytes = (
+        DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES
+        if args.daemon_waterfall_max_record_bytes is None
+        else args.daemon_waterfall_max_record_bytes
+    )
     if max_pcmu_frame_bytes < PCMU_STREAM_HEADER_BYTES:
         raise ValueError(
             "--daemon-pcmu-max-frame-bytes must be at least "
@@ -4489,6 +4518,12 @@ def _run_web(
         raise ValueError(
             "--daemon-pcmu-max-frame-bytes must not exceed the browser "
             f"stream limit of {PCMU_STREAM_DEFAULT_MAX_FRAME_BYTES}."
+        )
+    if max_waterfall_record_bytes > DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES:
+        raise ValueError(
+            "--daemon-waterfall-max-record-bytes must not exceed the browser "
+            "stream limit of "
+            f"{DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES}."
         )
 
     def api_client_factory() -> DaemonApiClient:
@@ -4520,11 +4555,19 @@ def _run_web(
             max_content_bytes=max_recording_file_content_bytes,
         )
 
+    def waterfall_client_factory() -> DaemonWaterfallClient:
+        return DaemonWaterfallClient(
+            waterfall_location,
+            timeout=timeout,
+            max_record_bytes=max_waterfall_record_bytes,
+        )
+
     app = create_web_dashboard_app(
         api_client_factory,
         event_client_factory,
         pcmu_client_factory,
         recording_file_client_factory,
+        waterfall_client_factory,
         home_assistant_ingress=args.home_assistant_ingress,
         lan_authentication=lan_authentication,
         managed_theme_root=paths.theme_dir,

@@ -678,6 +678,11 @@ select:focus-visible,
   --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem);
   --pane-padding: clamp(0.55rem, 1.35vmin, 1.15rem);
   --content-width: 96rem;
+  --waterfall-background: #07111c;
+  --waterfall-grid: #31516a;
+  --waterfall-spectrum: #42d7ff;
+  --waterfall-marker: #ffcf4a;
+  --waterfall-history: #42d7ff;
 }
 
 html {
@@ -801,7 +806,7 @@ body {
 
 .workspace-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: clamp(0.2rem, 0.8vw, 0.55rem);
   min-width: 0;
 }
@@ -864,6 +869,164 @@ body {
   min-height: 0;
   padding: var(--pane-padding);
   overflow: hidden;
+}
+
+.waterfall-panel {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  gap: clamp(0.25rem, 0.8vmin, 0.65rem);
+  color: var(--text);
+  background: var(--surface);
+}
+
+.waterfall-panel:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  padding: clamp(0.75rem, 2vmin, 1.5rem);
+}
+
+.waterfall-header,
+.waterfall-controls,
+.waterfall-visuals,
+.waterfall-telemetry,
+.waterfall-raw {
+  min-width: 0;
+}
+
+.waterfall-header,
+.waterfall-controls,
+.waterfall-raw {
+  display: flex;
+  align-items: center;
+}
+
+.waterfall-header {
+  justify-content: space-between;
+  gap: var(--workspace-gap);
+}
+
+.waterfall-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: clamp(0.2rem, 0.6vmin, 0.45rem);
+}
+
+.waterfall-controls button {
+  min-height: 2rem;
+  padding: clamp(0.25rem, 0.65vmin, 0.5rem) clamp(0.4rem, 1vmin, 0.8rem);
+  font-size: clamp(0.64rem, 1.35vmin, 0.82rem);
+}
+
+.waterfall-status,
+.waterfall-disclaimer,
+.waterfall-raw {
+  margin: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: clamp(0.64rem, 1.35vmin, 0.82rem);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.waterfall-status,
+.waterfall-disclaimer {
+  overflow: visible;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.waterfall-status[data-state="live"] {
+  color: var(--success);
+}
+
+.waterfall-status[data-state="error"] {
+  color: var(--danger);
+}
+
+.waterfall-visuals {
+  display: grid;
+  grid-template-rows: minmax(5rem, 0.38fr) minmax(7rem, 0.62fr);
+  gap: clamp(0.25rem, 0.7vmin, 0.55rem);
+  min-height: 0;
+}
+
+.waterfall-plot {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  margin: 0;
+}
+
+.waterfall-plot figcaption {
+  padding-bottom: 0.15rem;
+  color: var(--muted);
+  font-size: clamp(0.58rem, 1.2vmin, 0.75rem);
+}
+
+.waterfall-plot canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid var(--waterfall-grid);
+  background: var(--waterfall-background);
+}
+
+.waterfall-telemetry {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  background: var(--border);
+}
+
+.waterfall-telemetry > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr);
+  gap: 0.3rem;
+  min-width: 0;
+  padding: clamp(0.16rem, 0.45vmin, 0.32rem);
+  background: var(--surface);
+}
+
+.waterfall-telemetry dt,
+.waterfall-telemetry dd {
+  min-width: 0;
+  margin: 0;
+  overflow: visible;
+  font-size: clamp(0.58rem, 1.2vmin, 0.75rem);
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.waterfall-telemetry dt {
+  color: var(--muted);
+}
+
+.waterfall-telemetry dd {
+  color: var(--text);
+}
+
+.waterfall-raw {
+  gap: 0.35rem;
+}
+
+.waterfall-raw span {
+  flex: 0 0 auto;
+}
+
+.waterfall-raw output {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-header,
@@ -1380,6 +1543,20 @@ body {
     grid-column: span 3;
   }
 
+  .waterfall-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .waterfall-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .waterfall-telemetry {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .radio-view-controls {
     align-items: stretch;
     flex-direction: column;
@@ -1441,7 +1618,7 @@ body {
     grid-template-rows: auto auto;
     align-items: center;
     gap: 0 0.2rem;
-    padding: 0.18rem;
+    padding: 0.1rem;
   }
 
   .recording-item-details {
@@ -1457,8 +1634,8 @@ body {
   .recording-item-meta {
     grid-column: 1;
     grid-row: 2;
-    font-size: 0.68rem;
-    line-height: 1.05;
+    font-size: 0.62rem;
+    line-height: 1;
   }
 
   .recording-item-actions {
@@ -1471,8 +1648,10 @@ body {
   .recording-action {
     flex: 0 1 auto;
     min-width: 3.5rem;
-    padding: 0.16rem 0.32rem;
+    min-height: 1.35rem;
+    padding: 0.08rem 0.25rem;
     font-size: 0.62rem;
+    line-height: 1;
   }
 
   .scanner-controls-panel {
@@ -1487,7 +1666,11 @@ body {
 
   .recordings-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 0.68fr) minmax(0, 1.32fr);
+    grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr);
+  }
+
+  .recordings-layout > .panel {
+    padding: 0.35rem;
   }
 
   .recording-capture-panel .panel-header,
@@ -1514,11 +1697,16 @@ body {
   }
 
   .recording-status {
-    margin-block: 0.15rem;
+    margin-block: 0;
+  }
+
+  .recording-controls button {
+    min-height: 1.5rem;
+    padding-block: 0.1rem;
   }
 
   .recording-telemetry {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0 0.25rem;
   }
 
@@ -1526,17 +1714,22 @@ body {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
     gap: 0.15rem;
-    padding-block: 0.08rem;
+    padding-block: 0;
   }
 
   .recording-telemetry dt,
   .recording-telemetry dd {
-    font-size: 0.66rem;
+    font-size: 0.6rem;
     line-height: 1;
   }
 
   .recordings-message {
-    margin-block: 0.1rem;
+    margin-block: 0;
+  }
+
+  .recording-list {
+    gap: 0.1rem;
+    margin-top: 0.1rem;
   }
 
   .recordings-pagination button {
@@ -1705,6 +1898,34 @@ body {
 
   .saved-playback audio {
     height: 1.7rem;
+  }
+}
+
+@media (max-height: 35rem) and (min-width: 44.01rem) {
+  .waterfall-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.38fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .waterfall-header,
+  .waterfall-status,
+  .waterfall-disclaimer {
+    grid-column: 1 / -1;
+  }
+
+  .waterfall-visuals {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .waterfall-telemetry {
+    grid-column: 2;
+    grid-row: 3;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .waterfall-raw {
+    grid-column: 1 / -1;
   }
 }
 

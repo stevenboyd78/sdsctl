@@ -74,6 +74,12 @@
   .radio-field-list,
   .radio-field-list > div,
   .scanner-control-group,
+  .waterfall-panel,
+  .waterfall-header,
+  .waterfall-controls,
+  .waterfall-visuals,
+  .waterfall-telemetry,
+  .waterfall-raw,
   .recording-list,
   .recording-item {
     min-width: 0 !important;
@@ -185,7 +191,7 @@
 
   .workspace-tabs {
     display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     gap: clamp(0.2rem, 0.8vw, 0.55rem) !important;
   }
 
@@ -226,6 +232,84 @@
     min-height: 0 !important;
     padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
     overflow: hidden !important;
+  }
+
+  .waterfall-panel {
+    display: grid !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto !important;
+    gap: clamp(0.25rem, 0.8vmin, 0.65rem) !important;
+  }
+
+  .waterfall-panel:fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  .waterfall-header,
+  .waterfall-controls,
+  .waterfall-raw {
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  .waterfall-header {
+    justify-content: space-between !important;
+    gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
+  }
+
+  .waterfall-controls {
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+  }
+
+  .waterfall-visuals {
+    display: grid !important;
+    grid-template-rows: minmax(5rem, 0.38fr) minmax(7rem, 0.62fr) !important;
+    min-height: 0 !important;
+  }
+
+  .waterfall-plot {
+    display: grid !important;
+    grid-template-rows: auto minmax(0, 1fr) !important;
+    min-height: 0 !important;
+  }
+
+  .waterfall-plot canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .waterfall-telemetry {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .waterfall-telemetry > div {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.75fr) minmax(0, 1.25fr) !important;
+    min-width: 0 !important;
+  }
+
+  .waterfall-raw output {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .waterfall-status,
+  .waterfall-disclaimer,
+  .waterfall-telemetry dt,
+  .waterfall-telemetry dd {
+    min-width: 0 !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    white-space: normal !important;
   }
 
   #radio-activity-panel {
@@ -455,6 +539,20 @@
       grid-column: span 3 !important;
     }
 
+    .waterfall-header {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+
+    .waterfall-controls {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .waterfall-telemetry {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
     .radio-view-controls {
       align-items: stretch !important;
       flex-direction: column !important;
@@ -497,6 +595,7 @@
       grid-template-rows: auto auto !important;
       align-items: center !important;
       gap: 0 0.2rem !important;
+      padding: 0.1rem !important;
     }
 
     .recording-item-details {
@@ -511,6 +610,8 @@
     .recording-item-meta {
       grid-column: 1 !important;
       grid-row: 2 !important;
+      font-size: 0.62rem !important;
+      line-height: 1 !important;
     }
 
     .recording-item-actions {
@@ -522,6 +623,9 @@
 
     .recording-action {
       min-width: 3.5rem !important;
+      min-height: 1.35rem !important;
+      padding: 0.08rem 0.25rem !important;
+      line-height: 1 !important;
     }
 
     .scanner-controls-panel {
@@ -536,7 +640,11 @@
 
     .recordings-layout {
       grid-template-columns: 1fr !important;
-      grid-template-rows: minmax(0, 0.68fr) minmax(0, 1.32fr) !important;
+      grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr) !important;
+    }
+
+    .recordings-layout > .panel {
+      padding: 0.35rem !important;
     }
 
     .recording-capture-panel .panel-header,
@@ -562,18 +670,35 @@
     }
 
     .recording-telemetry {
-      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
     }
 
     .recording-telemetry > div {
       grid-template-columns: minmax(0, 1fr) auto !important;
       align-items: start !important;
       gap: 0.15rem !important;
+      padding-block: 0 !important;
     }
 
     .recording-telemetry dt,
     .recording-telemetry dd {
+      font-size: 0.6rem !important;
       line-height: 1 !important;
+    }
+
+    .recording-status,
+    .recordings-message {
+      margin-block: 0 !important;
+    }
+
+    .recording-controls button {
+      min-height: 1.5rem !important;
+      padding-block: 0.1rem !important;
+    }
+
+    .recording-list {
+      gap: 0.1rem !important;
+      margin-top: 0.1rem !important;
     }
 
     .recordings-message {
@@ -692,6 +817,29 @@
     .recording-item {
       align-items: stretch !important;
       flex-direction: column !important;
+    }
+
+    .waterfall-panel {
+      grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.38fr) !important;
+      grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+    }
+
+    .waterfall-header,
+    .waterfall-status,
+    .waterfall-disclaimer,
+    .waterfall-raw {
+      grid-column: 1 / -1 !important;
+    }
+
+    .waterfall-visuals {
+      grid-column: 1 !important;
+      grid-row: 3 !important;
+    }
+
+    .waterfall-telemetry {
+      grid-column: 2 !important;
+      grid-row: 3 !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
   }
 
@@ -842,6 +990,11 @@
       --warning: CanvasText !important;
       --danger: CanvasText !important;
       --focus: Highlight !important;
+      --waterfall-background: Canvas !important;
+      --waterfall-grid: CanvasText !important;
+      --waterfall-spectrum: LinkText !important;
+      --waterfall-marker: Highlight !important;
+      --waterfall-history: LinkText !important;
     }
 
     body,
@@ -865,7 +1018,9 @@
     .radio-field-group,
     .scanner-control-group,
     .recording-library,
-    .recording-item {
+    .recording-item,
+    .waterfall-panel,
+    .waterfall-plot canvas {
       border-color: CanvasText !important;
       background: Canvas !important;
       box-shadow: none !important;

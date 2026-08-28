@@ -45,7 +45,7 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
     assert completed.returncode == 0
     assert completed.stderr == ""
     for contract in (
-        "all 120 built-in",
+        "all 144 built-in",
         "writes no PNGs",
         "enlarged-text",
         "pagination-focus",
@@ -67,8 +67,8 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     assert completed.stderr == ""
     lines = completed.stdout.splitlines()
     cases = lines[:-1]
-    assert len(cases) == 120
-    assert lines[-1] == "Matrix cases: 120; screenshots written: 0"
+    assert len(cases) == 144
+    assert lines[-1] == "Matrix cases: 144; screenshots written: 0"
 
     themes = {
         "system",
@@ -87,6 +87,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
     panes = {
         "pane=scanner",
         "pane=controls",
+        "pane=waterfall",
         "pane=audio",
         "pane=recordings",
         "pane=diagnostics",
@@ -101,7 +102,7 @@ def test_browser_audit_list_is_the_complete_cartesian_matrix() -> None:
         token for line in cases for token in line.split() if token.startswith("viewport=")
     } == viewports
     assert {token for line in cases for token in line.split() if token.startswith("pane=")} == panes
-    assert len(set(cases)) == 120
+    assert len(set(cases)) == 144
 
 
 def test_browser_audit_rejects_invalid_arguments_without_opening_chrome() -> None:

@@ -22,6 +22,10 @@ grid with a viewport-owned Scanner, Controls, Audio, Recordings, and Diagnostics
 workspace, redesigns the stable System theme around the existing adaptive
 scanner-display model, and adds an original Pip-Boy-inspired built-in theme
 without changing daemon ownership, authentication, or Ingress behavior.
+Milestone 27.4 adds a sixth Waterfall pane over the private validated daemon
+waterfall stream. Its bounded Canvas renderer remains explicitly relative and
+uncalibrated and creates scanner demand only while the visible pane has an
+authenticated browser consumer.
 
 ## Architecture
 
@@ -40,15 +44,16 @@ Then start the web service in a separate terminal:
 sdsctl web
 ```
 
-The web process resolves all four private daemon sockets used by the dashboard:
+The web process resolves all five private daemon sockets used by the dashboard:
 
 - `daemon.sock` supplies bounded request-response status, recording operations,
   and inventory reads;
 - `events.sock` supplies the authoritative snapshot-first ordered event stream;
 - `pcmu.sock` supplies accepted RTP PCMU packets for explicit browser playback;
-  and
 - `recordings.sock` supplies finalized WAV bytes by daemon inventory-relative
-  identifier.
+  identifier; and
+- `waterfall.sock` supplies ordered, validated session checkpoints,
+  transitions, PWF records, and 240-value GWF frames on demand.
 
 Their default locations are under `$XDG_RUNTIME_DIR/sdsctl`, with the existing
 user-state fallback when `XDG_RUNTIME_DIR` is unavailable.
@@ -60,7 +65,8 @@ sdsctl web \
   --daemon-socket-path /run/user/1000/sdsctl/daemon.sock \
   --daemon-event-socket-path /run/user/1000/sdsctl/events.sock \
   --daemon-pcmu-socket-path /run/user/1000/sdsctl/pcmu.sock \
-  --daemon-recording-file-socket-path /run/user/1000/sdsctl/recordings.sock
+  --daemon-recording-file-socket-path /run/user/1000/sdsctl/recordings.sock \
+  --daemon-waterfall-socket-path /run/user/1000/sdsctl/waterfall.sock
 ```
 
 Every browser event connection creates an independent local
@@ -85,6 +91,15 @@ The web service passes only daemon inventory-relative identifiers to
 `DaemonRecordingFileClient`; it never opens recording filesystem paths itself.
 The daemon recording-file service revalidates the inventory entry and securely
 reopens it before streaming bytes.
+
+Every visible Waterfall pane creates one independent `DaemonWaterfallClient`.
+The local client enforces the `sdsctl.waterfall` protocol and version, requires
+an initial session checkpoint, rejects sequence gaps, and accepts no record
+larger than the configured bound. Hiding the pane, hiding or leaving the page,
+or losing the stream aborts the same-origin response and closes that private
+client. Closing the daemon session's final consumer releases shared demand and
+performs the existing GWF/PWF cleanup; the web process never sends scanner
+waterfall commands and never exposes the Unix socket path to the browser.
 
 ## Installation
 
@@ -330,8 +345,8 @@ HTML options, stylesheet links, and pre-paint browser metadata are generated
 from the same immutable ordered registry, so they cannot drift into separate
 hard-coded theme lists.
 
-The viewport-owned shell exposes five panes: **Scanner**, **Controls**,
-**Audio**, **Recordings**, and **Diagnostics**. At normal browser zoom, the
+The viewport-owned shell exposes six panes: **Scanner**, **Controls**,
+**Waterfall**, **Audio**, **Recordings**, and **Diagnostics**. At normal browser zoom, the
 document and active pane fit without horizontal or vertical scrolling at the
 390x844 portrait-phone, 800x480 compact-landscape, 1366x768 desktop, and
 1920x1080 full-HD reference viewports. Information that cannot fit concurrently
@@ -382,9 +397,39 @@ presentation-capable, so operators must inspect it before installation even
 though CSP, path, schema, size, and digest controls remain enforced. Home
 Assistant and TUI themes remain separate inactive renderer adapters under their
 own interface directories; `gui` stays reserved until a desktop renderer exists.
-Valid managed web themes use the same five-pane layout and lifecycle. Theme
+Valid managed web themes use the same six-pane layout and lifecycle. Theme
 switching preserves the selected pane and does not interrupt live state, form or
 control state, browser audio, recording state, or the meaning of keyboard focus.
+
+### Waterfall workspace
+
+Opening **Waterfall** starts the authenticated same-origin
+`GET /api/v1/waterfall` NDJSON response. The browser requires the same strict
+protocol, version, checkpoint-first ordering, contiguous sequence, and bounded
+record shape as the private client. Each GWF frame must contain exactly 240 raw
+strings that convert to finite numbers. Malformed, incomplete, oversized,
+non-finite, or out-of-order input closes the browser stream, clears live state,
+and retries only while the pane remains visible.
+
+The upper Canvas shows the newest 240-bin relative spectrum. The lower Canvas
+retains at most 240 normalized frames and draws the newest row at the bottom.
+Normalization is per frame and is only a presentation transform: the latest 240
+source strings remain preserved in the adjacent raw output, and the UI does not
+label the values as power, dB, RSSI, or calibrated FFT magnitude. Lower, center,
+upper, and marker values appear only when all four GST frequency strings and the
+marker position form a structurally valid axis; otherwise those fields remain
+unavailable and the plots retain bin position only.
+
+Adjacent semantic HTML reports session state, frequency metadata, frame rate,
+frame age, stream sequence, cumulative queue loss, overflow, poll failures, and
+session-transition count. **Pause display** freezes Canvas history while the
+browser continues consuming data; it does not pause the scanner protocol.
+**Clear history** clears only browser memory. **Full screen** uses the browser
+Full Screen API when available. Canvas backing dimensions follow the rendered
+CSS size and device pixel ratio, and resize or theme changes redraw the bounded
+history from memory. Base visualization tokens keep every built-in and managed
+theme legible; System and Pip-Boy-inspired define deliberate spectrum, grid,
+marker, history, and unavailable-state palettes.
 
 Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
 real packaged demo application and Google Chrome. All five themes rendered at
@@ -524,7 +569,7 @@ node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
 
 The audit reuses the same fictional demo service and one isolated Chrome
 session. It resizes that session through all four reference CSS viewports and
-DPR transitions, exercises every built-in theme and all five panes, drives
+DPR transitions, exercises every built-in theme and all six panes, drives
 recording pagination and focus, reveals all 35 radio fields, and probes adaptive
 screen mappings, reduced motion, forced colors/high contrast, the browser-zoom
 scrolling escape, accessibility-tree semantics, and an Ingress-style URL
@@ -542,7 +587,7 @@ pixels, or at least 18.66 CSS pixels with a bold weight. This standards-derived
 floor is shared by authoritative visible radio values and enabled control text;
 themes do not receive individual tolerances. The audit writes no gallery
 images. Use `--help` for executable overrides or `--list` to inspect the
-120-case matrix without opening Chrome.
+144-case matrix without opening Chrome.
 
 The browser performs one initial `/api/v1/status` request and opens
 `/api/v1/events` with the same origin. The event response uses
@@ -737,6 +782,7 @@ shutdown continues.
 | `GET` | `/api/v1/snapshot` | Authoritative daemon runtime snapshot |
 | `GET` | `/api/v1/events` | Snapshot-first ordered daemon Server-Sent Events |
 | `GET` | `/api/v1/audio` | Validated daemon-owned PCMU v1 binary frame stream |
+| `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON stream |
 | `POST` | `/api/v1/scanner/hold/{scope}` | Set desired system, department, site, or channel hold state |
 | `POST` | `/api/v1/scanner/next` | Move to the next documented current channel selection |
 | `POST` | `/api/v1/scanner/previous` | Move to the previous documented current channel selection |
@@ -881,22 +927,25 @@ undeliverable remainder.
 --daemon-event-socket-path PATH
 --daemon-pcmu-socket-path PATH
 --daemon-recording-file-socket-path PATH
+--daemon-waterfall-socket-path PATH
 --daemon-timeout SECONDS
 --daemon-max-response-bytes BYTES
 --daemon-max-event-bytes BYTES
 --daemon-pcmu-max-endpoint-bytes BYTES
 --daemon-pcmu-max-frame-bytes BYTES
 --daemon-recording-file-max-content-bytes BYTES
+--daemon-waterfall-max-record-bytes BYTES
 --listen-address ADDRESS
 --listen-port PORT
 --no-access-log
 ```
 
-The daemon timeout defaults to five seconds and applies to API, event, PCMU, and
-recording-file connection establishment. The response, event, PCMU endpoint,
-PCMU frame, and recording-file content limits default to the existing daemon
-client contracts. Browser PCMU frame size must be at least the fixed 82-byte
-header and cannot exceed 131,072 bytes.
+The daemon timeout defaults to five seconds and applies to API, event, PCMU,
+recording-file, and waterfall connection establishment. The response, event,
+PCMU endpoint, PCMU frame, recording-file content, and waterfall record limits
+default to the existing daemon client contracts. Browser PCMU frame size must be
+at least the fixed 82-byte header and cannot exceed 131,072 bytes. The waterfall
+record limit defaults to 64 KiB and may be lowered for a stricter deployment.
 
 Disable the HTTP access log when a supervising service supplies request logging:
 

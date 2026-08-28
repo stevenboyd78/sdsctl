@@ -1,6 +1,11 @@
 /* Original retro-futurist field-terminal built-in web theme. */
 
 :root[data-theme="pip-boy-inspired"] {
+  --waterfall-background: #020b05;
+  --waterfall-grid: #174f2c;
+  --waterfall-spectrum: #66ff8f;
+  --waterfall-marker: #f3c969;
+  --waterfall-history: #39e56c;
   color-scheme: dark;
   --background: #030705;
   --surface: #09130b;

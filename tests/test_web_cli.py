@@ -97,6 +97,22 @@ class FakeDaemonPcmuClient:
         self.instances.append(self)
 
 
+class FakeDaemonWaterfallClient:
+    instances: list[FakeDaemonWaterfallClient] = []
+
+    def __init__(
+        self,
+        location: DaemonSocketLocation,
+        *,
+        timeout: float,
+        max_record_bytes: int,
+    ) -> None:
+        self.location = location
+        self.timeout = timeout
+        self.max_record_bytes = max_record_bytes
+        self.instances.append(self)
+
+
 def test_web_parser_uses_loopback_defaults() -> None:
     args = cli.build_parser().parse_args(["web"])
 
@@ -113,12 +129,14 @@ def test_web_parser_uses_loopback_defaults() -> None:
     assert args.daemon_event_socket_path is None
     assert args.daemon_pcmu_socket_path is None
     assert args.daemon_recording_file_socket_path is None
+    assert args.daemon_waterfall_socket_path is None
     assert args.daemon_timeout == 5.0
     assert args.daemon_max_response_bytes is None
     assert args.daemon_max_event_bytes is None
     assert args.daemon_pcmu_max_endpoint_bytes is None
     assert args.daemon_pcmu_max_frame_bytes is None
     assert args.daemon_recording_file_max_content_bytes is None
+    assert args.daemon_waterfall_max_record_bytes is None
     assert args.listen_address is None
     assert args.listen_port == WEB_DASHBOARD_DEFAULT_PORT
     assert args.access_log is True
@@ -193,6 +211,8 @@ def test_web_parser_accepts_explicit_local_options() -> None:
             "/tmp/sdsctl/pcmu.sock",
             "--daemon-recording-file-socket-path",
             "/tmp/sdsctl/recordings.sock",
+            "--daemon-waterfall-socket-path",
+            "/tmp/sdsctl/waterfall.sock",
             "--daemon-timeout",
             "2.5",
             "--daemon-max-response-bytes",
@@ -205,6 +225,8 @@ def test_web_parser_accepts_explicit_local_options() -> None:
             "65536",
             "--daemon-recording-file-max-content-bytes",
             "1048576",
+            "--daemon-waterfall-max-record-bytes",
+            "32768",
             "--listen-address",
             "::1",
             "--listen-port",
@@ -219,12 +241,16 @@ def test_web_parser_accepts_explicit_local_options() -> None:
     assert args.daemon_recording_file_socket_path == Path(
         "/tmp/sdsctl/recordings.sock"
     )
+    assert args.daemon_waterfall_socket_path == Path(
+        "/tmp/sdsctl/waterfall.sock"
+    )
     assert args.daemon_timeout == 2.5
     assert args.daemon_max_response_bytes == 8192
     assert args.daemon_max_event_bytes == 4096
     assert args.daemon_pcmu_max_endpoint_bytes == 2048
     assert args.daemon_pcmu_max_frame_bytes == 65536
     assert args.daemon_recording_file_max_content_bytes == 1048576
+    assert args.daemon_waterfall_max_record_bytes == 32768
     assert args.listen_address == "::1"
     assert args.listen_port == 8123
     assert args.access_log is False
@@ -266,6 +292,25 @@ def test_web_cli_rejects_pcmu_frame_limits_outside_browser_contract(
     assert message in capsys.readouterr().err
 
 
+def test_web_cli_rejects_waterfall_record_limit_above_browser_contract(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = cli.main(
+        [
+            "web",
+            "--daemon-waterfall-max-record-bytes",
+            "65537",
+        ],
+        environ={},
+    )
+
+    assert result == 2
+    assert (
+        "--daemon-waterfall-max-record-bytes must not exceed the browser "
+        "stream limit of 65536"
+    ) in capsys.readouterr().err
+
+
 def test_web_cli_builds_daemon_clients_and_runs_server(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -274,10 +319,12 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
     FakeDaemonEventClient.instances.clear()
     FakeDaemonPcmuClient.instances.clear()
     FakeDaemonRecordingFileClient.instances.clear()
+    FakeDaemonWaterfallClient.instances.clear()
     captured_api_factories: list[Callable[[], object]] = []
     captured_event_factories: list[Callable[[], object]] = []
     captured_pcmu_factories: list[Callable[[], object]] = []
     captured_recording_file_factories: list[Callable[[], object]] = []
+    captured_waterfall_factories: list[Callable[[], object]] = []
     captured_theme_roots: list[Path] = []
     app = object()
     captured_ingress_modes: list[bool] = []
@@ -288,6 +335,7 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         event_client_factory: Callable[[], object],
         pcmu_client_factory: Callable[[], object],
         recording_file_client_factory: Callable[[], object],
+        waterfall_client_factory: Callable[[], object],
         *,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
@@ -302,6 +350,7 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         captured_recording_file_factories.append(
             recording_file_client_factory
         )
+        captured_waterfall_factories.append(waterfall_client_factory)
         captured_ingress_modes.append(home_assistant_ingress)
         return app
 
@@ -341,6 +390,11 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
         FakeDaemonRecordingFileClient,
     )
     monkeypatch.setattr(
+        cli,
+        "DaemonWaterfallClient",
+        FakeDaemonWaterfallClient,
+    )
+    monkeypatch.setattr(
         web_dashboard,
         "create_web_dashboard_app",
         fake_create_app,
@@ -351,6 +405,7 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
     event_socket_path = tmp_path / "events.sock"
     pcmu_socket_path = tmp_path / "pcmu.sock"
     recording_file_socket_path = tmp_path / "recordings.sock"
+    waterfall_socket_path = tmp_path / "waterfall.sock"
     result = cli.main(
         [
             "web",
@@ -362,6 +417,8 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
             str(pcmu_socket_path),
             "--daemon-recording-file-socket-path",
             str(recording_file_socket_path),
+            "--daemon-waterfall-socket-path",
+            str(waterfall_socket_path),
             "--daemon-timeout",
             "2.5",
             "--daemon-max-response-bytes",
@@ -374,6 +431,8 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
             "65536",
             "--daemon-recording-file-max-content-bytes",
             "1048576",
+            "--daemon-waterfall-max-record-bytes",
+            "32768",
             "--listen-address",
             "localhost",
             "--listen-port",
@@ -391,11 +450,13 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
     assert len(captured_event_factories) == 1
     assert len(captured_pcmu_factories) == 1
     assert len(captured_recording_file_factories) == 1
+    assert len(captured_waterfall_factories) == 1
 
     daemon_client = captured_api_factories[0]()
     event_client = captured_event_factories[0]()
     pcmu_client = captured_pcmu_factories[0]()
     recording_file_client = captured_recording_file_factories[0]()
+    waterfall_client = captured_waterfall_factories[0]()
 
     assert isinstance(daemon_client, FakeDaemonApiClient)
     assert daemon_client.location.path == socket_path
@@ -425,6 +486,12 @@ def test_web_cli_builds_daemon_clients_and_runs_server(
     assert recording_file_client.timeout == 2.5
     assert recording_file_client.max_content_bytes == 1048576
 
+    assert isinstance(waterfall_client, FakeDaemonWaterfallClient)
+    assert waterfall_client.location.path == waterfall_socket_path
+    assert waterfall_client.location.source.value == "explicit"
+    assert waterfall_client.timeout == 2.5
+    assert waterfall_client.max_record_bytes == 32768
+
 
 def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
     monkeypatch: pytest.MonkeyPatch,
@@ -439,6 +506,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
         event_client_factory: Callable[[], object],
         pcmu_client_factory: Callable[[], object],
         recording_file_client_factory: Callable[[], object],
+        waterfall_client_factory: Callable[[], object],
         *,
         home_assistant_ingress: bool = False,
         lan_authentication: WebDashboardAuthentication | None = None,
@@ -449,6 +517,7 @@ def test_web_cli_home_assistant_ingress_binds_wildcard_and_enables_guard(
             event_client_factory,
             pcmu_client_factory,
             recording_file_client_factory,
+            waterfall_client_factory,
         )
         assert lan_authentication is None
         assert managed_theme_root is not None
