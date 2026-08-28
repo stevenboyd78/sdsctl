@@ -411,13 +411,15 @@ Assistant Core Ingress from applying JSON-stream compression that can delay
 incremental records, while preserving the existing NDJSON contract. The
 browser requires the same strict protocol, version, checkpoint-first ordering,
 contiguous sequence, and bounded record shape as the private client. Each GWF
-frame must contain exactly 240 raw strings that convert to finite numbers.
-Malformed, incomplete, oversized, non-finite, or out-of-order input closes the
-browser stream, clears live state, and retries only while the pane remains
-visible.
+frame must contain exactly 240 raw, non-empty hexadecimal strings. Malformed,
+incomplete, oversized, non-hexadecimal, or out-of-order input closes the browser
+stream, clears live state, and retries only while the pane remains visible.
 
-The upper Canvas shows the newest 240-bin relative spectrum. The lower Canvas
-retains at most 240 normalized frames and draws the newest row at the bottom.
+The upper Canvas shows the newest 240-bin relative spectrum. The renderer parses
+each validated source token as a base-16 code, then normalizes that frame's code
+range for presentation only; this does not claim dB, RSSI, power, or another
+calibrated magnitude. The lower Canvas retains at most 240 normalized frames and
+draws the newest row at the bottom.
 Normalization is per frame and is only a presentation transform: the latest 240
 source strings remain preserved in the adjacent raw output, and the UI does not
 label the values as power, dB, RSSI, or calibrated FFT magnitude. Lower, center,

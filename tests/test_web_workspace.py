@@ -522,13 +522,19 @@ assert.deepEqual(normalizedWaterfall.raw, exactWaterfallValues);
 assert.equal(normalizedWaterfall.normalized.length, 240);
 assert.equal(normalizedWaterfall.normalized[0], 0);
 assert.equal(normalizedWaterfall.normalized[239], 1);
+const physicalHexWaterfall = normalizeWaterfallValues([
+  "6c", "58", "3a", ...Array.from({length: 237}, () => "3a"),
+]);
+assert.equal(physicalHexWaterfall.raw[0], "6c");
+assert.equal(physicalHexWaterfall.normalized[0], 1);
+assert.equal(physicalHexWaterfall.normalized[2], 0);
 assert.throws(
   () => normalizeWaterfallValues(exactWaterfallValues.slice(1)),
   /exactly 240 values/,
 );
 assert.throws(
   () => normalizeWaterfallValues([...exactWaterfallValues.slice(0, 239), "NaN"]),
-  /non-finite value/,
+  /non-hexadecimal value/,
 );
 assert.equal(validFrequencyMetadata({
   lower_frequency: "1540000",

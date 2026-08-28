@@ -149,9 +149,12 @@ mode, multi-client fanout, final-client stop, and socket removal.
 Physical Milestone 27.2 qualification completed on August 26, 2026, over the
 LAN control transport with an SDS200 running firmware 1.26.01 and manually
 placed in its available Waterfall mode. The scanner returned typed GST metadata,
-`PWF,OK`, and GWF lines containing 240 values plus the trailing separator. Five
-bounded direct requests returned one fresh frame each, establishing the
-request/response behavior instead of sustained GWF push behavior.
+`PWF,OK`, and GWF lines containing 240 lowercase hexadecimal strings plus the
+trailing separator. Five bounded direct requests returned one fresh frame each,
+establishing the request/response behavior instead of sustained GWF push
+behavior. A bounded Milestone 27.4 follow-up capture on August 28, 2026,
+reconfirmed that token shape for the web renderer without assigning magnitude
+or calibration semantics to the hexadecimal syntax.
 
 A ten-second daemon-client run received 30 GWF frames in order, each exactly 240
 values wide, with no client drop or overflow. Overlapping clients shared one

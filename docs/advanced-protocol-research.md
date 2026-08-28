@@ -276,19 +276,20 @@ The physical observations establish only these additional facts:
 - `PWF,1,ON` returned the one-field `PWF,OK` line on the tested firmware;
 - each `GWF,1,ON` request returned one fresh text frame rather than enabling an
   ongoing push stream;
-- each physical GWF line held exactly 240 values followed by a trailing comma,
-  represented losslessly as a terminal empty packet field while the typed value
-  tuple remains exactly 240 entries; and
+- each physical GWF line held exactly 240 lowercase hexadecimal value strings
+  followed by a trailing comma, represented losslessly as a terminal empty
+  packet field while the typed value tuple remains exactly 240 entries; and
 - recurring 250 ms daemon polling, overlapping consumers, PSI interleaving,
   scanner reconnect, final-consumer stop, and daemon restart completed within
   bounded runs while preserving a single scanner owner.
 
 The renderer-neutral session tolerates fewer than three consecutive GWF request
 misses and records attempt/failure telemetry. This is a reliability policy, not
-a claim about a scanner-specified cadence. The observed values remain raw and
-uninterpreted: no magnitude, dB, color, calibrated power, or universal firmware
-semantics are established. Raw physical captures contain scanner programming and
-frequency data and are not repository fixtures.
+a claim about a scanner-specified cadence. The observed hexadecimal syntax does
+not establish a numeric FFT scale. Values remain raw and uninterpreted: no
+magnitude, dB, color, calibrated power, or universal firmware semantics are
+established. Raw physical captures contain scanner programming and frequency
+data and are not repository fixtures.
 
 ## Milestone 27.2.1 protocol-hardening evidence
 

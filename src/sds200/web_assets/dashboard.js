@@ -390,9 +390,11 @@ function normalizeWaterfallValues(values) {
     }
     return value;
   });
-  const numeric = raw.map(Number);
-  if (!numeric.every(Number.isFinite)) {
-    throw new Error("Waterfall frame contains a non-finite value.");
+  const numeric = raw.map((value) => (
+    /^[0-9a-f]+$/i.test(value) ? Number.parseInt(value, 16) : Number.NaN
+  ));
+  if (!numeric.every(Number.isSafeInteger)) {
+    throw new Error("Waterfall frame contains a non-hexadecimal value.");
   }
   const minimum = Math.min(...numeric);
   const maximum = Math.max(...numeric);
