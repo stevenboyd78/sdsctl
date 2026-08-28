@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 0.23.0
+
+- Track the sdsctl v0.23.0 release while preserving the App name, slug, image
+  identity, MQTT identities, installed card resources, and single-owner
+  boundary.
+- Add the authenticated Home Assistant Ingress path for the demand-driven
+  Waterfall pane and private daemon waterfall service. The responsive web
+  workspace renders exact hexadecimal GWF records as explicitly relative,
+  uncalibrated spectrum and history data without adding MQTT waterfall entities,
+  scanner tuning, or a Home Assistant waterfall card.
+- Package the responsive six-pane web workspace, the original
+  Pip-Boy-inspired built-in web theme, ordered-event recovery, and managed-theme
+  source-snapshot hardening. Scanner controls, browser audio, recording,
+  finalized playback, and downloads retain their established interfaces.
 - Add one fixed read-only Screen Kind MQTT Discovery sensor and an opt-in Auto
   SDS200 Display layout. Auto selects Search/Close Call, Weather, or Tone-Out
   presentation from the normalized scanner state and uses a configured Simple

@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.23.0]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.22.0...v0.23.0"
+        in changelog
+    )
+    assert (
         "[0.22.0]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.21.0...v0.22.0"
         in changelog
@@ -92,5 +97,26 @@ def test_current_release_changelog_covers_v022_feature_groups() -> None:
         "managed web-theme activation",
         "managed terminal-theme activation",
         "managed Home Assistant theme activation",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_release_changelog_covers_v023_feature_groups() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.23.0] - ")
+    end = changelog.index("\n## [0.22.0]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "adaptive scanner screen-profile parity",
+        "qualified text-waterfall data plane",
+        "audio-lifecycle and release-integrity hardening",
+        "responsive web workspace",
+        "Pip-Boy-inspired",
+        "managed-theme validation and installation",
+        "authenticated, theme-aware Waterfall workspace",
+        "hexadecimal 240-value GWF records",
+        "explicitly uncalibrated spectrum and rolling history",
     ):
         assert required in release or required in normalized

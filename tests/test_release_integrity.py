@@ -191,7 +191,9 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     audit_command = "node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000"
     repeatability_command = (
         "python scripts/generate_web_dashboard_screenshots.py --verify-repeatability "
-        "--only theme-system-1920x1080.png"
+        "--only theme-system-1920x1080.png "
+        "--only theme-system-waterfall-1920x1080.png "
+        "--only theme-pip-boy-inspired-waterfall-800x480.png"
     )
     build_command = "python -m build"
     sdist_gallery_command = (
@@ -224,9 +226,10 @@ def test_ci_and_release_workflows_share_the_measured_coverage_floor() -> None:
     assert 'python-version: "3.14"' in _read(".github/workflows/release.yml")
 
     releasing = _read("docs/releasing.md")
+    normalized_releasing = " ".join(releasing.replace("\\\n", " ").split())
     assert gallery_command in releasing
     assert audit_command in releasing
-    assert repeatability_command in releasing
+    assert repeatability_command in normalized_releasing
     assert sdist_gallery_command in releasing
 
 

@@ -161,6 +161,41 @@ before changing network or MQTT settings.
 The Local App workflow under `/addons` remains available for development but is
 not required for normal release installation.
 
+## Upgrade to v0.23.0
+
+v0.23.0 freezes Milestones 27.1 through 27.4: adaptive scanner-screen
+presentation, the qualified private text-waterfall service, protocol and audio
+lifecycle hardening, the responsive six-pane web workspace, the original
+Pip-Boy-inspired web theme, managed-theme source-snapshot hardening, and the
+authenticated relative spectrum and rolling-waterfall pane. Waterfall values are
+explicitly uncalibrated, the web pane creates demand only while visible, and no
+Home Assistant waterfall card, scanner tuning, public waterfall transport, or
+persistent waterfall history is included.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the Python package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.23.0"
+sdsctl --version
+```
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.23.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release, but
+the exact version tag is recommended for controlled deployments. Repository-root
+`compose.yaml` and `compose.usb.yaml` remain source-built and do not switch
+automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.23.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, and bundled card custom elements. Upgrade the repository-managed App
+through Home Assistant after the matching release images have published.
+
 ## Upgrade to v0.22.0
 
 v0.22.0 freezes Milestones 26.1 through 26.16: authenticated direct-TLS LAN

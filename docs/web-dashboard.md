@@ -568,16 +568,18 @@ default-branch wiki reference contract without opening Chrome:
 python scripts/generate_web_dashboard_screenshots.py --verify-gallery
 ```
 
-CI and release validation capture the System desktop reference twice with the
-same Chrome executable and compare its PNG bytes; maintainers may select any
-other named image in the same mode. Both runs use temporary output and profile
-directories, so this does not rewrite the checked-in gallery or impose pixel
-equality across Chrome versions:
+CI and release validation capture the System scanner reference and both
+Waterfall references twice with the same Chrome executable and compare each
+image's PNG bytes. Maintainers may select any other named image in the same mode.
+Both runs use temporary output and profile directories, so this does not rewrite
+the checked-in gallery or impose pixel equality across Chrome versions:
 
 ```bash
 python scripts/generate_web_dashboard_screenshots.py \
   --verify-repeatability \
-  --only theme-system-1920x1080.png
+  --only theme-system-1920x1080.png \
+  --only theme-system-waterfall-1920x1080.png \
+  --only theme-pip-boy-inspired-waterfall-800x480.png
 ```
 
 Run the screenshot-free real-Chrome acceptance matrix before closing responsive

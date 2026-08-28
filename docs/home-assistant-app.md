@@ -575,12 +575,39 @@ That evidence is the historical Milestone 20.11 baseline. The three post-v0.20.1
 Home Assistant slices require one tagged repository-managed acceptance run before
 v0.20.2 release completion.
 
-### v0.22.0 release acceptance gate
+### v0.23.0 release acceptance gate
 
-After the genuine v0.22.0 tag publishes the amd64, aarch64, and generic
+After the genuine v0.23.0 tag publishes the amd64, aarch64, and generic
 multi-architecture App images, upgrade or install the repository-managed App and
-record the exact HAOS, Core, Supervisor, Docker, and SDS200 firmware versions.
-The release gate must confirm:
+record the exact platform and scanner versions used. The release gate must
+confirm:
+
+- the App reports 0.23.0 and uses the matching published image without a Local
+  App or development-source ambiguity;
+- all twenty-four fixed MQTT Discovery components are present, including Screen
+  Kind and the v0.22.0 field and Tone-Out sensors;
+- all six built-in themes remain available through the responsive six-pane
+  workspace, and Auto presentation follows scanning and special scanner modes;
+- opening the authenticated Waterfall pane starts explicitly relative,
+  uncalibrated data; its display controls remain responsive; and leaving the pane
+  releases private daemon demand;
+- the waterfall surface reports lifecycle and loss telemetry, recolors with theme
+  changes, and recovers after an App restart;
+- both bundled card modules, semantic controls, browser audio, recording,
+  finalized playback, downloads, ordered-event recovery, and persistent
+  recordings remain healthy; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, waterfall polling, and audio.
+
+No Home Assistant waterfall card or MQTT waterfall entity is part of v0.23.0.
+Managed third-party Home Assistant theme activation remains an explicit host CLI
+workflow, and the App must continue installing only its two bundled modules.
+
+### v0.22.0 release acceptance contract
+
+The v0.22.0 tagged repository-managed acceptance contract required the amd64,
+aarch64, and generic multi-architecture App images plus exact platform and
+scanner-version evidence. It required confirmation that:
 
 - the App reports 0.22.0 and uses the matching published image without a Local
   App or development-source ambiguity;

@@ -61,7 +61,7 @@ jobs:
           python scripts/check_docs.py
           python scripts/generate_web_dashboard_screenshots.py --verify-gallery
           node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
-          python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png
+          python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png --only theme-system-waterfall-1920x1080.png --only theme-pip-boy-inspired-waterfall-800x480.png
 
       - name: Build distributions
         run: |

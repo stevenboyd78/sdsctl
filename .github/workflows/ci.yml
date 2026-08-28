@@ -77,7 +77,7 @@ jobs:
         run: node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
 
       - name: Same-Chrome screenshot repeatability
-        run: python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png
+        run: python scripts/generate_web_dashboard_screenshots.py --verify-repeatability --only theme-system-1920x1080.png --only theme-system-waterfall-1920x1080.png --only theme-pip-boy-inspired-waterfall-800x480.png
 
       - name: Build distributions
         run: python -m build

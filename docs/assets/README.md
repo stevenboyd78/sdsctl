@@ -81,10 +81,10 @@ packaged dashboard or generator and regenerate the gallery together. Run
 `python scripts/generate_web_dashboard_screenshots.py --verify-gallery` to verify
 the exact generator, local asset, canonical documentation, and raw-main wiki
 reference set without opening Chrome. CI and release validation run
-`--verify-repeatability --only theme-system-1920x1080.png` after the browser
-audit; the mode captures selected names twice into temporary directories with
-one Chrome executable and does not require pixel identity across Chrome
-versions.
+`--verify-repeatability` after the browser audit for the System scanner capture
+and both Waterfall captures; the mode captures selected names twice into
+temporary directories with one Chrome executable and does not require pixel
+identity across Chrome versions.
 The reviewed `wiki/Web-Dashboard.md` page embeds this same default-branch image
 set rather than keeping a second wiki-only copy, so documentation and wiki
 captures remain synchronized after publication.

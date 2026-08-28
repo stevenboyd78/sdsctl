@@ -680,20 +680,14 @@ is collected.
   implementation-review disposition ledger.
 - Milestone 27.4: responsive theme-aware web spectrum and rolling-waterfall
   workspace inside the shared viewport shell, with authenticated bounded demand,
-  immediate CSS/Canvas recoloring, relative-data labeling, and loss telemetry.
+  same-origin direct and Home Assistant Ingress streaming, exact hexadecimal
+  240-value validation, immediate CSS/Canvas recoloring, relative and
+  uncalibrated labeling, lifecycle controls, loss telemetry, deterministic
+  cleanup, and physical branch-image acceptance.
 - Milestone 27.5: v0.23.0 release closure for the complete adaptive-screen,
   hardening, responsive-workspace, and authenticated-waterfall sequence, including
   final documentation imagery, public artifact verification, and published Home
   Assistant App acceptance.
-
-#### Planned Milestone 27.5 contract
-
-Freeze runtime scope, synchronize all 0.23.0 version and changelog surfaces,
-complete Milestone 27.4 acceptance documentation and deterministic Waterfall
-gallery evidence, validate every static, test, browser, documentation,
-distribution, container, and release-integrity gate, and publish only from one
-genuine matching tag. Independently verify public artifacts and the published
-repository-managed Home Assistant App before declaring v0.23.0 complete.
 
 ### Milestone 28 — Favorites Workspace and assisted RadioReference product integration
 
