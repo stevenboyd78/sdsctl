@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Run the Milestone 27.3 dashboard acceptance matrix in one real Chrome.
+ * Run the Milestone 27.4 dashboard acceptance matrix in one real Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
  * It writes no screenshots; the nine-image documentation gallery remains the
@@ -36,6 +36,7 @@ export const VIEWPORTS = Object.freeze([
 export const PANES = Object.freeze([
   "scanner",
   "controls",
+  "waterfall",
   "audio",
   "recordings",
   "diagnostics",
@@ -84,8 +85,8 @@ const SCREENSHOT_STATUS_MESSAGE = "Daemon and scanner status are available.";
 const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
-Run the deterministic Milestone 27.3 browser acceptance audit in one local
-Chrome/Chromium session. The audit writes no PNGs. It covers all 120 built-in
+Run the deterministic Milestone 27.4 browser acceptance audit in one local
+Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
 theme × reference CSS viewport × workspace pane cases, plus media-preference,
 enlarged-text, pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA
 contrast, complete adaptive-presentation, DPR-transition, and prefixed-URL
@@ -96,7 +97,7 @@ Options:
   --python PATH       Python used for the demo server (repo .venv by default)
   --base-url URL      Audit an already-running demo server instead of starting one
   --timeout-ms N      Startup and CDP operation timeout (default: 20000)
-  --list              List the 120 matrix cases without opening Chrome
+  --list              List the 144 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
 The default command requires Node.js 24 or newer, starts the existing fictional-data server from
@@ -1043,8 +1044,8 @@ function browserAuditLibrary() {
     );
     const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
     const visible = panes.filter((pane) => !pane.hidden && rendered(pane));
-    if (tabs.length !== 5 || panes.length !== 5) {
-      failures.push(`expected five tabs and panes; found ${tabs.length} and ${panes.length}`);
+    if (tabs.length !== 6 || panes.length !== 6) {
+      failures.push(`expected six tabs and panes; found ${tabs.length} and ${panes.length}`);
     }
     if (selected.length !== 1 || selected[0]?.dataset.workspaceTab !== expectedPane) {
       failures.push(`selected tab does not match ${expectedPane}`);
@@ -1534,9 +1535,9 @@ async function auditAccessibility(cdp, collector, context, expectedPane) {
     node.properties?.find((candidate) => candidate.name === propertyName)?.value?.value;
   const failures = [];
   const tabs = exposed.filter((node) => role(node) === "tab");
-  const expectedTabNames = ["scanner", "controls", "audio", "recordings", "diagnostics"];
-  if (tabs.length !== 5) {
-    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of five`);
+  const expectedTabNames = ["scanner", "controls", "waterfall", "audio", "recordings", "diagnostics"];
+  if (tabs.length !== 6) {
+    failures.push(`accessibility tree exposes ${tabs.length} tabs instead of six`);
   }
   if (
     JSON.stringify(tabs.map(normalizedName).sort()) !==

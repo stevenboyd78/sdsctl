@@ -143,6 +143,8 @@ def test_home_assistant_web_command_enables_ingress_and_private_clients() -> Non
         "/run/sdsctl/pcmu.sock",
         "--daemon-recording-file-socket-path",
         "/run/sdsctl/recordings.sock",
+        "--daemon-waterfall-socket-path",
+        "/run/sdsctl/waterfall.sock",
         "--listen-port",
         str(HOME_ASSISTANT_APP_INGRESS_PORT),
     )

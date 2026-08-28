@@ -98,6 +98,15 @@
           data-workspace-tab="controls"
         >Controls</button>
         <button
+          id="pane-tab-waterfall"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-waterfall"
+          tabindex="-1"
+          data-workspace-tab="waterfall"
+        >Waterfall</button>
+        <button
           id="pane-tab-audio"
           type="button"
           role="tab"
@@ -358,6 +367,74 @@
           </section>
         </div>
       </section>
+        </section>
+
+        <section
+          id="pane-waterfall"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-waterfall"
+          data-workspace-pane="waterfall"
+          hidden
+        >
+          <section
+            id="waterfall-panel"
+            class="panel waterfall-panel"
+            aria-labelledby="waterfall-title"
+          >
+            <header class="panel-header waterfall-header">
+              <div>
+                <p class="panel-kicker">Relative scanner data</p>
+                <h2 id="waterfall-title">Spectrum and rolling waterfall</h2>
+              </div>
+              <div class="waterfall-controls" role="group" aria-label="Waterfall display controls">
+                <button id="waterfall-pause" type="button" aria-pressed="false">Pause display</button>
+                <button id="waterfall-clear" type="button">Clear history</button>
+                <button id="waterfall-fullscreen" type="button">Full screen</button>
+              </div>
+            </header>
+
+            <p
+              id="waterfall-status"
+              class="waterfall-status"
+              role="status"
+              aria-live="polite"
+            >Open this pane to start the waterfall stream.</p>
+
+            <div class="waterfall-visuals" aria-label="Relative spectrum and rolling waterfall plots">
+              <figure class="waterfall-plot spectrum-plot">
+                <figcaption>Relative spectrum · 240 bins</figcaption>
+                <canvas id="waterfall-spectrum" aria-label="Current relative 240-bin spectrum"></canvas>
+              </figure>
+              <figure class="waterfall-plot history-plot">
+                <figcaption>Rolling relative history · newest at bottom</figcaption>
+                <canvas id="waterfall-history" aria-label="Rolling relative waterfall history"></canvas>
+              </figure>
+            </div>
+
+            <dl class="waterfall-telemetry">
+              <div><dt>Session</dt><dd id="waterfall-session-state">Idle</dd></div>
+              <div><dt>Lower</dt><dd id="waterfall-frequency-lower">Unavailable</dd></div>
+              <div><dt>Center</dt><dd id="waterfall-frequency-center">Unavailable</dd></div>
+              <div><dt>Upper</dt><dd id="waterfall-frequency-upper">Unavailable</dd></div>
+              <div><dt>Marker</dt><dd id="waterfall-frequency-marker">Unavailable</dd></div>
+              <div><dt>Frame rate</dt><dd id="waterfall-frame-rate">0.0 fps</dd></div>
+              <div><dt>Frame age</dt><dd id="waterfall-frame-age">Unavailable</dd></div>
+              <div><dt>Sequence</dt><dd id="waterfall-sequence">Unavailable</dd></div>
+              <div><dt>Queue loss</dt><dd id="waterfall-queue-loss">0 records</dd></div>
+              <div><dt>Overflows</dt><dd id="waterfall-overflows">0</dd></div>
+              <div><dt>Poll failures</dt><dd id="waterfall-poll-failures">0</dd></div>
+              <div><dt>Transitions</dt><dd id="waterfall-transitions">0</dd></div>
+            </dl>
+
+            <p class="waterfall-disclaimer">
+              Relative, uncalibrated scanner values. This display does not report dB, RF power, or signal strength.
+            </p>
+            <div class="waterfall-raw" title="Latest source strings preserved exactly as received">
+              <span>Raw 240 values:</span>
+              <output id="waterfall-raw-values">Unavailable</output>
+            </div>
+          </section>
         </section>
 
         <section

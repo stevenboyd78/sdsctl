@@ -307,11 +307,12 @@ def test_unauthenticated_requests_never_reach_daemon_or_stream_factories() -> No
         status = client.get("/api/v1/status")
         events = client.get("/api/v1/events")
         audio = client.get("/api/v1/audio")
+        waterfall = client.get("/api/v1/waterfall")
         recording = client.get("/api/v1/recordings/file/example.wav")
 
     assert shell.status_code == 302
     assert shell.headers["location"] == "/auth/login"
-    for response in (health, status, events, audio, recording):
+    for response in (health, status, events, audio, waterfall, recording):
         assert response.status_code == 401
         assert response.json() == {"detail": WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL}
         assert response.headers["cache-control"] == "no-store"

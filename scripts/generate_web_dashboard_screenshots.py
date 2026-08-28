@@ -15,10 +15,12 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import threading
 import time
 import zlib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from struct import unpack
@@ -31,6 +33,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from sds200.daemon_waterfall_protocol import (
+    DaemonWaterfallRecord,
+    DaemonWaterfallRecordKind,
+)
+from sds200.exceptions import DaemonDisconnectedError
 from sds200.web_dashboard import create_web_dashboard_app
 
 _THEME_STORAGE_KEY = "sdsctl.web.theme"
@@ -475,6 +482,60 @@ class DemoDaemonApiClient:
         return _control_result("scanner.reconnect")
 
 
+class DemoDaemonWaterfallClient:
+    """Deterministic bounded-rate waterfall source for browser acceptance."""
+
+    def __init__(self) -> None:
+        self._closed = threading.Event()
+        self._sequence = 0
+
+    def receive(self) -> DaemonWaterfallRecord:
+        if self._sequence > 0 and self._closed.wait(0.05):
+            raise DaemonDisconnectedError("demo waterfall stream closed")
+        if self._closed.is_set():
+            raise DaemonDisconnectedError("demo waterfall stream closed")
+        self._sequence += 1
+        observed_at = datetime(2026, 8, 8, 21, 12, tzinfo=UTC)
+        if self._sequence == 1:
+            return DaemonWaterfallRecord(
+                sequence=1,
+                observed_at=observed_at,
+                kind=DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+                payload={
+                    "state": "running",
+                    "gwf_poll_failures": 0,
+                    "waterfall_status": {
+                        "lower_frequency": "1540000",
+                        "center_frequency": "1550000",
+                        "upper_frequency": "1560000",
+                        "marker_frequency": "1555500",
+                        "marker_position": "120",
+                    },
+                },
+            )
+
+        phase = (self._sequence - 2) % 80
+        values = [
+            str(12 + ((index + phase) % 80))
+            for index in range(240)
+        ]
+        return DaemonWaterfallRecord(
+            sequence=self._sequence,
+            observed_at=observed_at,
+            kind=DaemonWaterfallRecordKind.GWF,
+            payload={
+                "source_sequence": self._sequence - 1,
+                "values": values,
+                "responses_dropped": 0,
+                "overflows": 0,
+                "source_received_at": observed_at.isoformat(),
+            },
+        )
+
+    def close(self) -> None:
+        self._closed.set()
+
+
 class _DemoUrlPrefixMiddleware:
     """Expose the demo dashboard behind one deterministic URL prefix."""
 
@@ -594,7 +655,10 @@ def _demo_theme_response(theme: str) -> HTMLResponse:
 def create_demo_app() -> FastAPI:
     """Return the production dashboard wired to deterministic fake data."""
 
-    app = create_web_dashboard_app(DemoDaemonApiClient)
+    app = create_web_dashboard_app(
+        DemoDaemonApiClient,
+        waterfall_client_factory=DemoDaemonWaterfallClient,
+    )
 
     @app.get(
         "/__demo/theme/{theme}",

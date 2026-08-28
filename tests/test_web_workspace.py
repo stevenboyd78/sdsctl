@@ -11,7 +11,14 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 ASSET_ROOT = REPOSITORY_ROOT / "src" / "sds200" / "web_assets"
-WORKSPACE_PANES = ("scanner", "controls", "audio", "recordings", "diagnostics")
+WORKSPACE_PANES = (
+    "scanner",
+    "controls",
+    "waterfall",
+    "audio",
+    "recordings",
+    "diagnostics",
+)
 
 
 @dataclass(frozen=True)
@@ -140,6 +147,12 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
             "scanner-next",
         ),
         "pane-audio": ("audio-play", "audio-stop", "audio-source"),
+        "pane-waterfall": (
+            "waterfall-spectrum",
+            "waterfall-history",
+            "waterfall-pause",
+            "waterfall-fullscreen",
+        ),
         "pane-recordings": (
             "recording-start",
             "recordings-list",
@@ -293,7 +306,7 @@ function add(id, dataset = {}) {
   return node;
 }
 
-const paneNames = ["scanner", "controls", "audio", "recordings", "diagnostics"];
+const paneNames = ["scanner", "controls", "waterfall", "audio", "recordings", "diagnostics"];
 const workspaceTabs = paneNames.map((pane) => add(`pane-tab-${pane}`, {
   workspaceTab: pane,
 }));
@@ -361,6 +374,9 @@ class FakeEventSource {
 
 const window = {
   localStorage: workingStorage,
+  requestAnimationFrame() {
+    return 1;
+  },
   setTimeout(callback, delay) {
     const id = nextTimeoutId++;
     timeouts.set(id, {callback, delay});
@@ -386,22 +402,22 @@ globalThis.EventSource = FakeEventSource;
     assertions = r"""
 initializeWorkspace();
 assert.equal(activeWorkspacePane, "audio");
-assert.equal(workspaceTabs[2].attributes["aria-selected"], "true");
-assert.equal(workspacePanels[2].hidden, false);
+assert.equal(workspaceTabs[3].attributes["aria-selected"], "true");
+assert.equal(workspacePanels[3].hidden, false);
 assert.equal(workspacePanels[0].hidden, true);
 assert.equal(document.documentElement.hidden, false);
 
-const endEvent = workspaceTabs[2].dispatch("keydown", {key: "End"});
+const endEvent = workspaceTabs[3].dispatch("keydown", {key: "End"});
 assert.equal(endEvent.defaultPrevented, true);
 assert.equal(activeWorkspacePane, "diagnostics");
-assert.equal(document.activeElement, workspaceTabs[4]);
+assert.equal(document.activeElement, workspaceTabs[5]);
 assert.equal(storageValues.get("sdsctl.web.pane"), "diagnostics");
 assert.equal(document.documentElement.hidden, false);
-workspaceTabs[4].dispatch("keydown", {key: "ArrowRight"});
+workspaceTabs[5].dispatch("keydown", {key: "ArrowRight"});
 assert.equal(activeWorkspacePane, "scanner");
 workspaceTabs[0].dispatch("keydown", {key: "ArrowLeft"});
 assert.equal(activeWorkspacePane, "diagnostics");
-workspaceTabs[4].dispatch("keydown", {key: "Home"});
+workspaceTabs[5].dispatch("keydown", {key: "Home"});
 assert.equal(activeWorkspacePane, "scanner");
 activateWorkspacePane("not-a-pane");
 assert.equal(activeWorkspacePane, "scanner");
@@ -465,6 +481,76 @@ assert.equal(toneOutDisplayValue("0"), "Detect");
 assert.equal(toneOutDisplayValue("0.000 Hz"), "Detect");
 assert.equal(toneOutDisplayValue("67.0"), "67.0");
 assert.equal(toneOutDisplayValue(67), 67);
+
+waterfallLastSequence = null;
+assert.equal(waterfallRecord({
+  protocol: "sdsctl.waterfall",
+  version: 1,
+  sequence: 7,
+  observed_at: "2026-08-28T00:00:00Z",
+  kind: "session.checkpoint",
+  payload: {},
+}).sequence, 7);
+assert.equal(
+  waterfallPayloadLine('{"sequence":7}', WATERFALL_NDJSON_MEDIA_TYPE),
+  '{"sequence":7}',
+);
+assert.equal(
+  waterfallPayloadLine('data: {"sequence":7}', WATERFALL_SSE_MEDIA_TYPE),
+  '{"sequence":7}',
+);
+assert.equal(waterfallPayloadLine('id: 7', WATERFALL_SSE_MEDIA_TYPE), null);
+assert.equal(waterfallPayloadLine('', WATERFALL_SSE_MEDIA_TYPE), null);
+assert.throws(
+  () => waterfallPayloadLine('retry: 2000', WATERFALL_SSE_MEDIA_TYPE),
+  /event field is unsupported/,
+);
+assert.throws(
+  () => waterfallRecord({
+    protocol: "sdsctl.waterfall",
+    version: 1,
+    sequence: 9,
+    observed_at: "2026-08-28T00:00:01Z",
+    kind: "waterfall.gwf",
+    payload: {},
+  }),
+  /sequence is not contiguous/,
+);
+const exactWaterfallValues = Array.from({length: 240}, (_, index) => String(index));
+const normalizedWaterfall = normalizeWaterfallValues(exactWaterfallValues);
+assert.deepEqual(normalizedWaterfall.raw, exactWaterfallValues);
+assert.equal(normalizedWaterfall.normalized.length, 240);
+assert.equal(normalizedWaterfall.normalized[0], 0);
+assert.equal(normalizedWaterfall.normalized[239], 1);
+const physicalHexWaterfall = normalizeWaterfallValues([
+  "6c", "58", "3a", ...Array.from({length: 237}, () => "3a"),
+]);
+assert.equal(physicalHexWaterfall.raw[0], "6c");
+assert.equal(physicalHexWaterfall.normalized[0], 1);
+assert.equal(physicalHexWaterfall.normalized[2], 0);
+assert.throws(
+  () => normalizeWaterfallValues(exactWaterfallValues.slice(1)),
+  /exactly 240 values/,
+);
+assert.throws(
+  () => normalizeWaterfallValues([...exactWaterfallValues.slice(0, 239), "NaN"]),
+  /non-hexadecimal value/,
+);
+assert.equal(validFrequencyMetadata({
+  lower_frequency: "1540000",
+  center_frequency: "1550000",
+  upper_frequency: "1560000",
+  marker_frequency: "1555500",
+  marker_position: "120",
+}).markerPosition, 120);
+assert.equal(validFrequencyMetadata({
+  lower_frequency: "1540000",
+  center_frequency: "not-a-frequency",
+  upper_frequency: "1560000",
+  marker_frequency: "1555500",
+  marker_position: "120",
+}), null);
+
 for (const target of Object.values(RADIO_STATE_FIELD_TARGETS)) {
   if (!nodes.has(target)) {
     add(target);

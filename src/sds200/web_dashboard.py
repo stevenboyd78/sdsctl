@@ -12,7 +12,7 @@ from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Literal, Protocol, TypeAlias
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -25,6 +25,7 @@ from .daemon_recording_file_client import (
     DaemonRecordingFileRequestError,
 )
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
+from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
@@ -92,6 +93,12 @@ _EVENT_STREAM_RESPONSE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
 }
 _AUDIO_STREAM_RESPONSE_HEADERS = {
+    "Cache-Control": "no-store",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+    "X-Content-Type-Options": "nosniff",
+}
+_WATERFALL_STREAM_RESPONSE_HEADERS = {
     "Cache-Control": "no-store",
     "Connection": "keep-alive",
     "X-Accel-Buffering": "no",
@@ -245,12 +252,26 @@ class DaemonRecordingFileClientLike(Protocol):
         """Open one finalized recording by inventory-relative identifier."""
 
 
+class DaemonWaterfallClientLike(Protocol):
+    """Minimum validated daemon waterfall client contract for the web service."""
+
+    def receive(self) -> DaemonWaterfallRecord:
+        """Receive one validated, ordered daemon waterfall record."""
+
+    def close(self) -> None:
+        """Close the daemon waterfall connection and release its demand."""
+
+
 DaemonApiClientFactory: TypeAlias = Callable[[], DaemonApiClientContext]
 DaemonEventClientFactory: TypeAlias = Callable[[], DaemonEventClientLike]
 DaemonPcmuClientFactory: TypeAlias = Callable[[], DaemonPcmuClientLike]
 DaemonRecordingFileClientFactory: TypeAlias = Callable[
     [],
     DaemonRecordingFileClientLike,
+]
+DaemonWaterfallClientFactory: TypeAlias = Callable[
+    [],
+    DaemonWaterfallClientLike,
 ]
 _DaemonQuery: TypeAlias = Callable[
     [DaemonApiClientLike],
@@ -321,6 +342,7 @@ def create_web_dashboard_app(
     recording_file_client_factory: (
         DaemonRecordingFileClientFactory | None
     ) = None,
+    waterfall_client_factory: DaemonWaterfallClientFactory | None = None,
     *,
     home_assistant_ingress: bool = False,
     lan_authentication: WebDashboardAuthentication | None = None,
@@ -340,6 +362,13 @@ def create_web_dashboard_app(
     ):
         raise TypeError(
             "Daemon recording-file client factory must be callable or None."
+        )
+    if (
+        waterfall_client_factory is not None
+        and not callable(waterfall_client_factory)
+    ):
+        raise TypeError(
+            "Daemon waterfall client factory must be callable or None."
         )
     if type(home_assistant_ingress) is not bool:
         raise TypeError(
@@ -627,6 +656,7 @@ def create_web_dashboard_app(
                 "scanner_reconnect": "/api/v1/scanner/reconnect",
                 "snapshot": "/api/v1/snapshot",
                 "status": "/api/v1/status",
+                "waterfall": "/api/v1/waterfall",
             },
         }
 
@@ -777,6 +807,27 @@ def create_web_dashboard_app(
     )
     def audio() -> StreamingResponse:
         return _audio_stream_response(pcmu_client_factory)
+
+    @app.get(
+        "/api/v1/waterfall",
+        responses={
+            200: {
+                "content": {
+                    "application/x-ndjson": {},
+                    "text/event-stream": {},
+                },
+                "description": "Validated ordered daemon waterfall records",
+            },
+        },
+    )
+    def waterfall(request: Request) -> StreamingResponse:
+        return _waterfall_stream_response(
+            waterfall_client_factory,
+            server_sent_events=(
+                "text/event-stream"
+                in request.headers.get("accept", "").lower()
+            ),
+        )
 
     return app
 
@@ -1204,6 +1255,48 @@ def _audio_stream_response(
     )
 
 
+def _waterfall_stream_response(
+    waterfall_client_factory: DaemonWaterfallClientFactory | None,
+    *,
+    server_sent_events: bool = False,
+) -> StreamingResponse:
+    if waterfall_client_factory is None:
+        raise HTTPException(
+            status_code=503,
+            detail=WEB_DASHBOARD_UNAVAILABLE_DETAIL,
+        )
+
+    client: DaemonWaterfallClientLike | None = None
+    try:
+        client = waterfall_client_factory()
+        first_record = client.receive()
+    except (SDS200Error, OSError) as error:
+        if client is not None:
+            client.close()
+        logger.warning(
+            "web dashboard daemon waterfall connection failed error_type=%s",
+            error.__class__.__name__,
+        )
+        raise HTTPException(
+            status_code=503,
+            detail=WEB_DASHBOARD_UNAVAILABLE_DETAIL,
+        ) from None
+
+    return StreamingResponse(
+        content=_iter_daemon_waterfall(
+            client,
+            first_record,
+            server_sent_events=server_sent_events,
+        ),
+        media_type=(
+            "text/event-stream"
+            if server_sent_events
+            else "application/x-ndjson"
+        ),
+        headers=dict(_WATERFALL_STREAM_RESPONSE_HEADERS),
+    )
+
+
 async def _iter_recording_file(
     download: DaemonRecordingFileDownload,
 ) -> AsyncIterator[bytes]:
@@ -1260,6 +1353,35 @@ async def _iter_daemon_audio(
         client.close()
 
 
+async def _iter_daemon_waterfall(
+    client: DaemonWaterfallClientLike,
+    first_record: DaemonWaterfallRecord,
+    *,
+    server_sent_events: bool = False,
+) -> AsyncIterator[bytes]:
+    def encode(record: DaemonWaterfallRecord) -> bytes:
+        if not server_sent_events:
+            return record.to_json_line()
+        return (
+            f"id: {record.sequence}\ndata: ".encode()
+            + record.to_json_line()
+            + b"\n"
+        )
+
+    try:
+        yield encode(first_record)
+        while True:
+            record = await asyncio.to_thread(client.receive)
+            yield encode(record)
+    except (SDS200Error, OSError) as error:
+        logger.warning(
+            "web dashboard daemon waterfall stream ended error_type=%s",
+            error.__class__.__name__,
+        )
+    finally:
+        client.close()
+
+
 def _encode_server_sent_event(event: DaemonEvent) -> bytes:
     payload = json.dumps(
         event.as_dict(),
@@ -1292,6 +1414,8 @@ __all__ = [
     "DaemonPcmuClientLike",
     "DaemonRecordingFileClientFactory",
     "DaemonRecordingFileClientLike",
+    "DaemonWaterfallClientFactory",
+    "DaemonWaterfallClientLike",
     "WEB_DASHBOARD_API_PROTOCOL",
     "WEB_DASHBOARD_API_VERSION",
     "WEB_DASHBOARD_UNAVAILABLE_DETAIL",

@@ -1,6 +1,11 @@
 /* System-adaptive scanner-display presentation. Layout belongs to dashboard.css. */
 
 :root[data-theme="system"] {
+  --waterfall-background: #061521;
+  --waterfall-grid: #315d78;
+  --waterfall-spectrum: #42d7ff;
+  --waterfall-marker: #ffd24a;
+  --waterfall-history: #35c7ff;
   color-scheme: light dark;
   --background: #eef2f7;
   --surface: #ffffff;

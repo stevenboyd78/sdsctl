@@ -16,6 +16,10 @@ from sds200 import __version__
 from sds200.daemon_events import DaemonEvent, DaemonEventKind
 from sds200.daemon_recording_file_client import DaemonRecordingFileRequestError
 from sds200.daemon_recording_file_protocol import RecordingFileResponseStatus
+from sds200.daemon_waterfall_protocol import (
+    DaemonWaterfallRecord,
+    DaemonWaterfallRecordKind,
+)
 from sds200.exceptions import (
     DaemonDisconnectedError,
     DaemonRequestError,
@@ -308,6 +312,59 @@ class BlockingDaemonPcmuClient:
         self.release_receive.set()
 
 
+class FakeDaemonWaterfallClient:
+    def __init__(
+        self,
+        *,
+        records: list[DaemonWaterfallRecord] | None = None,
+        error: BaseException | None = None,
+    ) -> None:
+        self.records = list(records or [])
+        self.error = error
+        self.receive_calls = 0
+        self.closed = False
+
+    def receive(self) -> DaemonWaterfallRecord:
+        self.receive_calls += 1
+        if self.error is not None:
+            raise self.error
+        if self.records:
+            return self.records.pop(0)
+        raise DaemonDisconnectedError("test waterfall stream completed")
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class BlockingDaemonWaterfallClient:
+    def __init__(self) -> None:
+        self.receive_started = threading.Event()
+        self.release_receive = threading.Event()
+        self.closed = False
+
+    def receive(self) -> DaemonWaterfallRecord:
+        self.receive_started.set()
+        self.release_receive.wait(timeout=5.0)
+        raise DaemonDisconnectedError("test waterfall stream cancelled")
+
+    def close(self) -> None:
+        self.closed = True
+        self.release_receive.set()
+
+
+def waterfall_record(
+    sequence: int,
+    kind: DaemonWaterfallRecordKind,
+    payload: Mapping[str, object],
+) -> DaemonWaterfallRecord:
+    return DaemonWaterfallRecord(
+        sequence=sequence,
+        observed_at=datetime(2026, 8, 28, tzinfo=UTC),
+        kind=kind,
+        payload=payload,
+    )
+
+
 def pcmu_delivery(
     stream_sequence: int,
     payload: bytes,
@@ -373,6 +430,20 @@ def test_web_dashboard_requires_callable_recording_file_client_factory() -> None
             FakeDaemonApiClient,
             FakeDaemonEventClient,
             FakeDaemonPcmuClient,
+            object(),  # type: ignore[arg-type]
+        )
+
+
+def test_web_dashboard_requires_callable_waterfall_client_factory() -> None:
+    with pytest.raises(
+        TypeError,
+        match="Daemon waterfall client factory must be callable or None",
+    ):
+        create_web_dashboard_app(
+            FakeDaemonApiClient,
+            FakeDaemonEventClient,
+            FakeDaemonPcmuClient,
+            FakeDaemonRecordingFileClient,
             object(),  # type: ignore[arg-type]
         )
 
@@ -486,11 +557,24 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="scanner-previous"' in response.text
     assert 'id="scanner-next"' in response.text
     assert 'id="scanner-reconnect"' in response.text
-    for pane in ("scanner", "controls", "audio", "recordings", "diagnostics"):
+    for pane in (
+        "scanner",
+        "waterfall",
+        "controls",
+        "audio",
+        "recordings",
+        "diagnostics",
+    ):
         assert f'data-workspace-tab="{pane}"' in response.text
         assert f'data-workspace-pane="{pane}"' in response.text
-    assert response.text.count('role="tab"') == 5
-    assert response.text.count('role="tabpanel"') == 5
+    assert response.text.count('role="tab"') == 6
+    assert response.text.count('role="tabpanel"') == 6
+    assert 'id="waterfall-spectrum"' in response.text
+    assert 'id="waterfall-history"' in response.text
+    assert 'id="waterfall-pause"' in response.text
+    assert 'id="waterfall-clear"' in response.text
+    assert 'id="waterfall-fullscreen"' in response.text
+    assert "Relative, uncalibrated scanner values" in response.text
     assert 'class="scanner-display-hierarchy"' in response.text
     assert 'id="radio-view-auto"' in response.text
     assert 'id="radio-scan-fallback-select"' in response.text
@@ -596,13 +680,16 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         ".radio-view-controls",
         ".recordings-layout",
         ".diagnostics-layout",
+        ".waterfall-panel",
+        ".waterfall-visuals",
+        ".waterfall-telemetry",
         ".recordings-pagination",
     ):
         assert hook in stylesheet_source.text
         assert hook in viewport_stylesheet.text
     assert "[hidden]" in stylesheet_source.text
     assert "display: none !important" in stylesheet_source.text
-    assert "grid-template-columns: repeat(5, minmax(0, 1fr))" in (
+    assert "grid-template-columns: repeat(6, minmax(0, 1fr))" in (
         stylesheet_source.text
     )
     assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
@@ -705,6 +792,13 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "FALLBACK_REFRESH_INTERVAL_MS" in script.text
     assert "RECONCILE_INTERVAL_MS" in script.text
     assert 'fetch(webUrl("api/v1/audio")' in script.text
+    assert 'fetch(webUrl("api/v1/waterfall")' in script.text
+    assert "WATERFALL_BIN_COUNT = 240" in script.text
+    assert "WATERFALL_HISTORY_CAPACITY = 240" in script.text
+    assert "Waterfall record sequence is not contiguous" in script.text
+    assert "stopWaterfallStream" in script.text
+    assert "ResizeObserver" in script.text
+    assert "MutationObserver" in script.text
     assert 'audioWorklet.addModule(' in script.text
     assert 'webUrl("assets/audio-worklet.js")' in script.text
     assert "new AudioWorkletNode" in script.text
@@ -831,6 +925,7 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
         "scanner_reconnect": "/api/v1/scanner/reconnect",
         "snapshot": "/api/v1/snapshot",
         "status": "/api/v1/status",
+        "waterfall": "/api/v1/waterfall",
     }
 
 
@@ -993,6 +1088,160 @@ def test_web_dashboard_events_require_configured_factory() -> None:
 
     with TestClient(app) as client:
         response = client.get("/api/v1/events")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": WEB_DASHBOARD_UNAVAILABLE_DETAIL}
+
+
+def test_web_dashboard_streams_validated_daemon_waterfall_records() -> None:
+    checkpoint = waterfall_record(
+        17,
+        DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+        {
+            "state": "running",
+            "gwf_poll_failures": 0,
+            "waterfall_status": {
+                "lower_frequency": "1540000",
+                "center_frequency": "1550000",
+                "upper_frequency": "1560000",
+                "marker_frequency": "1555500",
+                "marker_position": "120",
+            },
+        },
+    )
+    frame = waterfall_record(
+        18,
+        DaemonWaterfallRecordKind.GWF,
+        {
+            "source_sequence": 1,
+            "values": [str(index) for index in range(240)],
+            "responses_dropped": 0,
+            "overflows": 0,
+            "source_received_at": "2026-08-28T00:00:00+00:00",
+        },
+    )
+    waterfall_client = FakeDaemonWaterfallClient(
+        records=[checkpoint, frame]
+    )
+    app = create_web_dashboard_app(
+        FakeDaemonApiClient,
+        waterfall_client_factory=lambda: waterfall_client,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/waterfall")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith(
+        "application/x-ndjson"
+    )
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["x-accel-buffering"] == "no"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert [json.loads(line) for line in response.text.splitlines()] == [
+        checkpoint.as_dict(),
+        frame.as_dict(),
+    ]
+    assert waterfall_client.receive_calls == 3
+    assert waterfall_client.closed is True
+
+
+def test_web_dashboard_streams_waterfall_records_as_server_sent_events() -> None:
+    checkpoint = waterfall_record(
+        17,
+        DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+        {"state": "running"},
+    )
+    frame = waterfall_record(
+        18,
+        DaemonWaterfallRecordKind.GWF,
+        {
+            "source_sequence": 1,
+            "values": [str(index) for index in range(240)],
+            "responses_dropped": 0,
+            "overflows": 0,
+            "source_received_at": "2026-08-28T00:00:00+00:00",
+        },
+    )
+    waterfall_client = FakeDaemonWaterfallClient(
+        records=[checkpoint, frame]
+    )
+    app = create_web_dashboard_app(
+        FakeDaemonApiClient,
+        waterfall_client_factory=lambda: waterfall_client,
+    )
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/v1/waterfall",
+            headers={"Accept": "text/event-stream"},
+        )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert response.text == (
+        f"id: 17\ndata: {checkpoint.to_json_line().decode()}\n"
+        f"id: 18\ndata: {frame.to_json_line().decode()}\n"
+    )
+    assert waterfall_client.receive_calls == 3
+    assert waterfall_client.closed is True
+
+
+def test_web_dashboard_waterfall_cancellation_releases_daemon_demand() -> None:
+    checkpoint = waterfall_record(
+        41,
+        DaemonWaterfallRecordKind.SESSION_CHECKPOINT,
+        {"state": "running"},
+    )
+    waterfall_client = BlockingDaemonWaterfallClient()
+
+    async def exercise() -> None:
+        iterator = web_dashboard._iter_daemon_waterfall(
+            waterfall_client,
+            checkpoint,
+        )
+        assert await anext(iterator) == checkpoint.to_json_line()
+        pending = asyncio.create_task(anext(iterator))
+        receive_started = await asyncio.to_thread(
+            waterfall_client.receive_started.wait,
+            1.0,
+        )
+        assert receive_started is True
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await pending
+
+    asyncio.run(exercise())
+
+    assert waterfall_client.closed is True
+
+
+def test_web_dashboard_redacts_initial_waterfall_connection_failures() -> None:
+    waterfall_client = FakeDaemonWaterfallClient(
+        error=DaemonUnavailableError(
+            "Daemon waterfall socket was not found: "
+            "/private/sdsctl/waterfall.sock"
+        )
+    )
+    app = create_web_dashboard_app(
+        FakeDaemonApiClient,
+        waterfall_client_factory=lambda: waterfall_client,
+    )
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/waterfall")
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": WEB_DASHBOARD_UNAVAILABLE_DETAIL}
+    assert "/private/sdsctl/waterfall.sock" not in response.text
+    assert waterfall_client.closed is True
+
+
+def test_web_dashboard_waterfall_requires_configured_factory() -> None:
+    app = create_web_dashboard_app(FakeDaemonApiClient)
+
+    with TestClient(app) as client:
+        response = client.get("/api/v1/waterfall")
 
     assert response.status_code == 503
     assert response.json() == {"detail": WEB_DASHBOARD_UNAVAILABLE_DETAIL}
@@ -1662,6 +1911,7 @@ def test_web_dashboard_serves_local_interactive_docs_without_daemon() -> None:
     assert "/api/v1/redoc" not in openapi_response.json()["paths"]
     assert "/api/v1/events" in openapi_response.json()["paths"]
     assert "/api/v1/audio" in openapi_response.json()["paths"]
+    assert "/api/v1/waterfall" in openapi_response.json()["paths"]
     assert "/api/v1/recording" in openapi_response.json()["paths"]
     assert "/api/v1/scanner/hold/{scope}" in openapi_response.json()["paths"]
     assert "/api/v1/scanner/next" in openapi_response.json()["paths"]

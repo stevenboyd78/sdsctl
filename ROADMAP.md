@@ -11,117 +11,82 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.3.1 — Managed-theme source-snapshot hardening
+### Milestone 27.4 — Responsive theme-aware web spectrum and rolling-waterfall workspace inside shared viewport
 
-Milestone 27.3 is closed with its responsive web workspace, stable redesigned
-System default, modular Pip-Boy-inspired theme, deterministic browser acceptance,
-and physical Home Assistant OS qualification. Its implementation and physical
-evidence are retained in the closed Milestone 27.3 history below.
+Milestone 27.2 is closed with a physically qualified, renderer-neutral
+text-waterfall data plane. A LAN-connected SDS200 running firmware 1.26.01
+returned the typed `GST` checkpoint, a one-field `PWF,OK` response, and 240-value
+`GWF` frames with the specification-defined trailing separator. On this firmware,
+`GWF,1,ON` is a one-frame get rather than sustained publication, so the single
+daemon-owned session polls it at a conservative 250 ms interval while demand
+exists and tolerates fewer than three consecutive misses.
 
-A post-milestone static review raised a remaining file-mutation race at the
-Milestone 26.13 managed-theme install and replacement source boundary. Treat the
-review and its draft guidance as a lead rather than implementation authority:
-independently reproduce the applicable condition, record its disposition, and
-change only the managed-theme lifecycle and security boundary required to close
-it, without expanding into renderer, scanner, or activation-contract work.
+Time- and record-bounded physical runs validated repeated and overlapping local
+clients, ordered isolated fanout, zero observed client loss or overflow,
+interleaved PSI, scanner reconnect with interrupted/starting/running recovery,
+daemon restart, last-client stop, both cleanup wires, private socket removal,
+and return to normal scanning. The repository Home Assistant App was stopped to
+preserve one scanner owner during direct branch qualification, then restored and
+verified through its authenticated Ingress dashboard and live MQTT entities.
+Raw programming and frequency data remain outside the repository.
 
-Milestone 27.3.1 must open the explicitly selected unpacked source directory
-once and snapshot it before parsing a manifest or applying an interface schema.
-Enumerate and open candidate entries relative to that retained directory
-descriptor, use no-follow semantics for every directory and file boundary, and
-accept only the existing regular-file package shape. A pathname validation must
-never be followed by an unguarded pathname reopen for hashing, copying, parsing,
-or publication.
+Milestone 27.4 fills the shared Waterfall pane by integrating that private local
+stream into the existing web service without changing the trust boundary. The web
+process may connect to `waterfall.sock` only after the current session or Home
+Assistant Ingress authentication succeeds, and it exposes waterfall records only
+through a same-origin, authenticated, size-bounded streaming route. A browser
+must never receive the Unix socket path, open another scanner transport, or send
+`GST`, `PWF`, or `GWF` commands. Opening the workspace creates demand; hiding,
+navigating away, signing out, disconnecting, or shutting down releases it
+deterministically so the last consumer triggers scanner cleanup.
 
-Apply one logical aggregate package byte budget to the complete candidate
-snapshot rather than independent per-file allowances. Charge actual source
-bytes as they are read, require private-stage writes to match the same per-file
-and package totals without resetting or double-counting the budget, and fail
-before an unexpectedly growing file can consume bytes beyond it. Copy in
-bounded chunks to a newly created private validation snapshot, hash the exact
-bytes retained there, and use only those snapshotted bytes for manifest parsing,
-interface-specific validation, and digest reporting. Installation must copy
-that exact validated snapshot into a second newly created private same-filesystem
-publication stage and verify it before atomic rename. Do not parse or validate
-the concurrently mutable source tree and then copy it as a separate operation.
+Render the 240-bin frames with a bounded Canvas-based spectrum and rolling
+waterfall surface rather than a 240-cell table. Canvas is the high-frequency
+raster boundary, while adjacent semantic HTML exposes connection state,
+uncalibrated/relative-data labeling, GST context, frame rate, frame age,
+sequence, cumulative queue loss, overflow, poll failures, and session
+transitions. Malformed, non-hexadecimal, incomplete, oversized, or out-of-order
+data must fail closed without freezing the dashboard or retaining stale live
+state.
 
-Retain and compare directory and file identity and regular-file metadata at the
-descriptor boundaries needed to reject source-root replacement, entry
-substitution, unlink/relink races, size changes, truncation, and growth during
-the snapshot. Recheck both the private validation snapshot and same-filesystem
-publication stage through descriptor-relative no-follow access so the validated
-package is exactly the package made visible. Any identity, shape, byte-count,
-digest, or budget mismatch must remove only the private stages, preserve the
-previous installed package during replacement, and leave unrelated managed and
-built-in packages untouched.
+The visualization may scale observed numeric values into a clearly labeled
+relative display but must not claim calibrated power, dB, signal strength, or
+documented FFT magnitude semantics. Preserve the raw 240 strings below that
+presentation boundary. Use lower, center, upper, and marker frequency metadata
+only when their typed GST fields are structurally valid; otherwise show bin
+position without inventing an RF axis. Do not derive scanner tuning or mode
+navigation from pointer or touch input.
 
-Authenticate private publication stages with fresh 128-bit tokens plus persisted
-interface, package, device, and inode bindings. Give removal records independent
-128-bit token repeated in the filename and payload, bind the exact target device
-and inode, and retain the observed record-directory identity during the active
-attempt. Make recovery artifact-specific: remove a complete matching stage or
-removal record, or the narrowly safe empty pre-record states; preserve populated
-unrecorded or malformed stages, duplicate removal records, orphaned or
-mismatched tombstones, and incompatible or ambiguous states. Treat every
-detached purge entry as unauthenticated across process restarts and require
-explicit operator reconciliation rather than inferring permission to delete it.
-Qualify the parent filesystem before publishing a previously absent managed root
-or interface, then create it through a retained randomized candidate and atomic
-no-replace rename.
+Use shared semantic visualization tokens with safe base defaults. System and
+Pip-Boy-inspired provide deliberate spectrum, grid, marker, history, warning,
+and unavailable-state colors; every other built-in and managed theme remains
+legible through the defaults. Theme changes recolor both CSS and existing Canvas
+history immediately without restarting or duplicating the daemon subscription.
+The pane must fit the active viewport up to full screen without document or panel
+scrolling at 390x844, 800x480, 1366x768, and 1920x1080.
 
-State the local concurrency boundary exactly. The protected operation covers
-untrusted package contents and cooperating lifecycle commands under the lock;
-it must reject link substitution of that lock, recheck configured root and
-interface bindings, and never overwrite an observed unknown entry. It does not
-claim isolation from hostile code running as the same operating-system account
-with permission to rename the managed hierarchy between individual filesystem
-syscalls. Operator documentation must require account or operating-system
-isolation when local code is mutually untrusted.
+Include keyboard-accessible pause/resume display, clear-history, and
+full-screen controls; reduced-motion, high-contrast, resize, visibility,
+reconnect, and empty/error states remain usable. Display pause may freeze
+rendering but must not be described as pausing the scanner protocol.
 
-Preserve established public command and package semantics: the existing web CSS,
-Home Assistant JavaScript, and TUI palette/TCSS schemas; built-in precedence;
-managed inventory ordering and invalid-entry isolation; explicit install,
-replace, and removal inputs; web and TUI activation and fallback behavior; and
-Home Assistant deployment semantics. Failure, interruption, rollback, cleanup,
-and recovery handling may be strengthened, and managed mutation may acquire the
-explicit Linux no-replace support gate required by this security boundary. Home
-Assistant packages remain executable untrusted browser code: the distinct
-install/replace executable-code acknowledgement and exact-digest activation or
-reapproval gates remain mandatory and must not be weakened, inferred, or
-satisfied by successful snapshot validation.
+Acceptance must cover authenticated route denial, Ingress prefixing, demand and
+last-consumer cleanup, strict stream validation, reconnect and sequence-gap
+handling, bounded rolling history, resize and device-pixel-ratio behavior,
+theme switching, accessibility status, background-tab cleanup, browser and
+daemon restart, responsive viewport references, existing dashboard/audio/recording
+regression behavior, documentation, distribution builds, and the complete static
+and test suite. Physical acceptance uses the SDS200 single-owner guard and
+confirms normal scanner and repository App restoration through the branch image.
 
-Host-independent acceptance must use deterministic race injection and cover
-source-directory replacement, same-name file replacement, same-size content
-mutation, truncation and growth during reads, symlink swaps at every reachable
-level, special files, changed directory membership, short reads, exact aggregate
-budget boundaries and one-byte overflow, stage mutation, iterative cleanup,
-filesystem-qualified atomic no-replace publication, authenticated stage and
-removal records, empty-versus-partial interruption recovery, unauthenticated
-purge preservation, identity-bound removal recovery, replacement rollback,
-hardlinked-lock rejection, configured-path rebinding detection, and concurrent
-lifecycle exclusion. Tests must prove that hashes describe the exact published
-staged bytes and that no parser or interface validator consumes the live source
-tree. Run unchanged web, Home Assistant, and TUI theme lifecycle and activation
-regression contracts, the complete static and test suite, documentation checks,
-and distribution validation. No physical scanner or Home Assistant OS acceptance
-is required because this slice changes neither renderer behavior nor scanner
-ownership.
+Do not add binary `GW2`, high-rate MQTT entities, public waterfall sockets,
+persistent waterfall history, calibrated FFT or RF-power claims, scanner tuning,
+Waterfall-mode navigation, automatic scanner-screen switching, a Home Assistant
+waterfall card, TUI/GUI rendering, Internet-facing access, or new
+third-party JavaScript dependencies. Later milestones may reuse this renderer
+contract in other interfaces only after their own lifecycle and performance
+boundaries are defined.
 
-Update the managed-theme operator and package-author documentation to describe
-the consistent source snapshot, package-wide byte budget, concurrent-mutation
-rejection, private-stage validation, and unchanged executable-code trust
-boundary. Maintain a durable implementation-review ledger that identifies each
-review finding, its independently established evidence, and an explicit
-implemented, already-resolved, deferred, rejected, or not-applicable disposition.
-The ledger must distinguish the one finding owned by this milestone from other
-review items and must not imply that accepting a review package accepted or
-implemented every proposal in it.
-
-Do not implement Broadcastify TLS, add or change dependency locking, begin the
-Milestone 27.4 waterfall renderer, or add a theme, card, pane, layout, selector,
-GUI, or other UI feature. Do not change package schemas, activation identities,
-scanner or daemon behavior, remote download/catalog behavior, or the existing
-Home Assistant executable-code trust model.
 
 ## Deferred hardware validation
 
