@@ -172,6 +172,7 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         "outerHTML !== finalOuterHTML",
         "screenshotAttempts: screenshot.attempts",
         "waterfallCanvas",
+        'style.transform = "translateZ(0)"',
     ):
         assert contract in audit_source
     assert audit_source.index(
