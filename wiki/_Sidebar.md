@@ -1,8 +1,8 @@
 ## sdsctl
 
-- [Home](Home.md)
-- [Installation](Installation.md)
-- [Troubleshooting](Troubleshooting.md)
+- [Home](Home)
+- [Installation](Installation)
+- [Troubleshooting](Troubleshooting)
 
 ### Canonical guides
 
@@ -10,7 +10,7 @@
 - [Supported models](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
 - [Textual TUI](https://github.com/stevenboyd78/sdsctl/blob/main/docs/tui.md)
 - [Network audio](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
-- [Web dashboard](Web-Dashboard.md)
+- [Web dashboard](Web-Dashboard)
 - [Home Assistant App](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
 - [Operational logging](https://github.com/stevenboyd78/sdsctl/blob/main/docs/logging.md)
 - [Daemon deployment](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-deployment.md)

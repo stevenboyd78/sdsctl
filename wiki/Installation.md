@@ -370,4 +370,4 @@ and does not open scanner hardware directly.
   [network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md).
 - Read the canonical
   [web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md).
-- Open [Troubleshooting](Troubleshooting.md) when discovery or startup fails.
+- Open [Troubleshooting](Troubleshooting) when discovery or startup fails.

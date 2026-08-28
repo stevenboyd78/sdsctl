@@ -14,8 +14,8 @@ The project is not affiliated with or endorsed by Uniden.
 
 ## Start here
 
-- [Installation](Installation.md) — install the package and optional features.
-- [Troubleshooting](Troubleshooting.md) — diagnose USB, network, TUI, and audio
+- [Installation](Installation) — install the package and optional features.
+- [Troubleshooting](Troubleshooting) — diagnose USB, network, TUI, and audio
   problems.
 - [Repository README](https://github.com/stevenboyd78/sdsctl/blob/main/README.md)
   — canonical overview, examples, and project status.
@@ -25,7 +25,7 @@ The project is not affiliated with or endorsed by Uniden.
   — full-screen monitoring, controls, recording, and playback.
 - [Network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
   — SDS200 playback, recording, Broadcastify, and Asterisk integration.
-- [Web dashboard](Web-Dashboard.md) — visual guide to the responsive five-pane
+- [Web dashboard](Web-Dashboard) — visual guide to the responsive five-pane
   workspace, six themes, live monitoring, controls, audio, and recordings.
 - [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
   — repository installation, Ingress, scanner controls, audio, persistent
@@ -101,7 +101,7 @@ connection. Current browser workflows include ordered live updates, explicit
 audio playback, daemon-owned recording, and safe playback/download of finalized
 recordings.
 
-See the visual [Web dashboard](Web-Dashboard.md) page for the workspace and theme
+See the visual [Web dashboard](Web-Dashboard) page for the workspace and theme
 gallery, and the canonical
 [web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md)
 for security boundaries and exact behavior.
@@ -152,7 +152,7 @@ for configuration and security details.
 
 ## Getting help
 
-Review [Troubleshooting](Troubleshooting.md) first. Reproducible bugs and
+Review [Troubleshooting](Troubleshooting) first. Reproducible bugs and
 feature requests belong in
 [GitHub Issues](https://github.com/stevenboyd78/sdsctl/issues). Include
 the package version or commit, Python and operating-system versions, scanner
