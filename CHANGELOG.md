@@ -6,6 +6,18 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Redesign the web Controls pane around four explicit System, Department, Site,
+  and Channel scope cards. Each card keeps its complete current target visible,
+  reports `Held`, `Not held`, or `Unavailable` independently of color, and
+  provides Previous, desired-state Hold/Release, and Next actions. Scoped
+  navigation resolves only authoritative scanner indexes to the existing typed
+  `SYS`, `DEPT`, `SITE`, `TGID`, or `CFREQ` daemon operations; the original
+  unscoped Previous/Next HTTP routes remain channel aliases. Shared viewport
+  protections keep the controls non-scrolling at all four reference sizes and
+  preserve the enlarged-text reachability escape across all six themes.
+
 ## [0.23.0] - 2026-08-28
 
 ### Added

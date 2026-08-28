@@ -25,7 +25,7 @@ The project is not affiliated with or endorsed by Uniden.
   — full-screen monitoring, controls, recording, and playback.
 - [Network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
   — SDS200 playback, recording, Broadcastify, and Asterisk integration.
-- [Web dashboard](Web-Dashboard) — visual guide to the responsive five-pane
+- [Web dashboard](Web-Dashboard) — visual guide to the responsive six-pane
   workspace, six themes, live monitoring, controls, audio, and recordings.
 - [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
   — repository installation, Ingress, scanner controls, audio, persistent

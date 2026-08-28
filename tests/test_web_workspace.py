@@ -143,7 +143,10 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
         "pane-controls": (
             "scanner-control-status",
             "scanner-reconnect",
+            "scanner-current-system",
             "scanner-hold-system",
+            "scanner-next-system",
+            "scanner-current-channel",
             "scanner-next",
         ),
         "pane-audio": ("audio-play", "audio-stop", "audio-source"),

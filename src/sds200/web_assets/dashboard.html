@@ -466,14 +466,21 @@
           </button>
         </div>
 
-        <div class="scanner-control-group">
+        <div class="scanner-control-group scanner-hold-group">
           <h3>Hold / release</h3>
-          <div class="scanner-controls">
-            <span class="scanner-hold-control">
+          <div class="scanner-hold-grid">
+            <div class="scanner-hold-scope" role="group" aria-label="System hold">
+              <div class="scanner-hold-current">
+                <span class="scanner-hold-current-label">Current system</span>
+                <output id="scanner-current-system" class="scanner-hold-current-value">
+                  Unavailable
+                </output>
+              </div>
+              <div class="scanner-hold-action scanner-controls">
               <button
                 id="scanner-hold-system"
                 type="button"
-                aria-describedby="scanner-hold-system-state"
+                aria-describedby="scanner-current-system scanner-hold-system-state"
                 aria-pressed="false"
                 disabled
               >
@@ -482,16 +489,42 @@
               <span
                 id="scanner-hold-system-state"
                 class="scanner-hold-state"
-                hidden
+                data-state="unknown"
               >
-                Held
+                Unavailable
               </span>
-            </span>
-            <span class="scanner-hold-control">
+              <button
+                id="scanner-previous-system"
+                type="button"
+                aria-label="Previous system"
+                title="Previous system"
+                disabled
+              >
+                Previous
+              </button>
+              <button
+                id="scanner-next-system"
+                type="button"
+                aria-label="Next system"
+                title="Next system"
+                disabled
+              >
+                Next
+              </button>
+              </div>
+            </div>
+            <div class="scanner-hold-scope" role="group" aria-label="Department hold">
+              <div class="scanner-hold-current">
+                <span class="scanner-hold-current-label">Current department</span>
+                <output id="scanner-current-department" class="scanner-hold-current-value">
+                  Unavailable
+                </output>
+              </div>
+              <div class="scanner-hold-action scanner-controls">
               <button
                 id="scanner-hold-department"
                 type="button"
-                aria-describedby="scanner-hold-department-state"
+                aria-describedby="scanner-current-department scanner-hold-department-state"
                 aria-pressed="false"
                 disabled
               >
@@ -500,16 +533,42 @@
               <span
                 id="scanner-hold-department-state"
                 class="scanner-hold-state"
-                hidden
+                data-state="unknown"
               >
-                Held
+                Unavailable
               </span>
-            </span>
-            <span class="scanner-hold-control">
+              <button
+                id="scanner-previous-department"
+                type="button"
+                aria-label="Previous department"
+                title="Previous department"
+                disabled
+              >
+                Previous
+              </button>
+              <button
+                id="scanner-next-department"
+                type="button"
+                aria-label="Next department"
+                title="Next department"
+                disabled
+              >
+                Next
+              </button>
+              </div>
+            </div>
+            <div class="scanner-hold-scope" role="group" aria-label="Site hold">
+              <div class="scanner-hold-current">
+                <span class="scanner-hold-current-label">Current site</span>
+                <output id="scanner-current-site" class="scanner-hold-current-value">
+                  Unavailable
+                </output>
+              </div>
+              <div class="scanner-hold-action scanner-controls">
               <button
                 id="scanner-hold-site"
                 type="button"
-                aria-describedby="scanner-hold-site-state"
+                aria-describedby="scanner-current-site scanner-hold-site-state"
                 aria-pressed="false"
                 disabled
               >
@@ -518,16 +577,42 @@
               <span
                 id="scanner-hold-site-state"
                 class="scanner-hold-state"
-                hidden
+                data-state="unknown"
               >
-                Held
+                Unavailable
               </span>
-            </span>
-            <span class="scanner-hold-control">
+              <button
+                id="scanner-previous-site"
+                type="button"
+                aria-label="Previous site"
+                title="Previous site"
+                disabled
+              >
+                Previous
+              </button>
+              <button
+                id="scanner-next-site"
+                type="button"
+                aria-label="Next site"
+                title="Next site"
+                disabled
+              >
+                Next
+              </button>
+              </div>
+            </div>
+            <div class="scanner-hold-scope" role="group" aria-label="Channel hold">
+              <div class="scanner-hold-current">
+                <span class="scanner-hold-current-label">Current channel</span>
+                <output id="scanner-current-channel" class="scanner-hold-current-value">
+                  Unavailable
+                </output>
+              </div>
+              <div class="scanner-hold-action scanner-controls">
               <button
                 id="scanner-hold-channel"
                 type="button"
-                aria-describedby="scanner-hold-channel-state"
+                aria-describedby="scanner-current-channel scanner-hold-channel-state"
                 aria-pressed="false"
                 disabled
               >
@@ -536,23 +621,30 @@
               <span
                 id="scanner-hold-channel-state"
                 class="scanner-hold-state"
-                hidden
+                data-state="unknown"
               >
-                Held
+                Unavailable
               </span>
-            </span>
-          </div>
-        </div>
-
-        <div class="scanner-control-group">
-          <h3>Channel</h3>
-          <div class="scanner-controls">
-            <button id="scanner-previous" type="button" disabled>
-              Previous channel
-            </button>
-            <button id="scanner-next" type="button" disabled>
-              Next channel
-            </button>
+              <button
+                id="scanner-previous"
+                type="button"
+                aria-label="Previous channel"
+                title="Previous channel"
+                disabled
+              >
+                Previous
+              </button>
+              <button
+                id="scanner-next"
+                type="button"
+                aria-label="Next channel"
+                title="Next channel"
+                disabled
+              >
+                Next
+              </button>
+              </div>
+            </div>
           </div>
         </div>
 

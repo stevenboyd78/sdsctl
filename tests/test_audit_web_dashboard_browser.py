@@ -124,6 +124,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "modifiers: reverse ? 8 : 0",
         "minimumTextContrast = 4.5",
         "minimumLargeTextContrast = 3",
+        "controlContext",
+        "current ${scope} hold state",
         "presentationGeometryFailures",
         "hierarchyFieldAlignmentFailures",
         '["simple", "scanning", "scanning", "Now scanning", "simple", "none"]',

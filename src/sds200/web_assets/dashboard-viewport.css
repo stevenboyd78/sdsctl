@@ -74,6 +74,11 @@
   .radio-field-list,
   .radio-field-list > div,
   .scanner-control-group,
+  .scanner-hold-grid,
+  .scanner-hold-scope,
+  .scanner-hold-current,
+  .scanner-hold-current-value,
+  .scanner-hold-action,
   .waterfall-panel,
   .waterfall-header,
   .waterfall-controls,
@@ -412,6 +417,37 @@
     grid-column: 1 / -1 !important;
   }
 
+  .scanner-hold-group {
+    grid-column: 1 / -1 !important;
+  }
+
+  .scanner-hold-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: clamp(0.25rem, 0.75vmin, 0.6rem) !important;
+  }
+
+  .scanner-hold-scope {
+    overflow: hidden !important;
+  }
+
+  .scanner-hold-current {
+    padding: clamp(0.25rem, 0.7vmin, 0.55rem) clamp(0.35rem, 0.9vmin, 0.75rem) !important;
+  }
+
+  .scanner-hold-action {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1.25fr) auto minmax(0, 0.8fr) minmax(0, 0.55fr) !important;
+    align-items: center !important;
+    gap: clamp(0.25rem, 0.75vmin, 0.6rem) !important;
+    padding: clamp(0.25rem, 0.7vmin, 0.55rem) !important;
+  }
+
+  .scanner-hold-action button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
   .browser-audio-panel {
     display: grid !important;
     grid-template-rows: auto auto auto minmax(0, 1fr) !important;
@@ -643,6 +679,49 @@
       grid-column: 1 !important;
     }
 
+    .scanner-hold-grid {
+      grid-template-columns: 1fr !important;
+      gap: 0.2rem !important;
+    }
+
+    .scanner-hold-current {
+      padding: 0.18rem 0.35rem !important;
+    }
+
+    .scanner-hold-current-label {
+      font-size: 0.58rem !important;
+      line-height: 1 !important;
+    }
+
+    .scanner-hold-current-value {
+      margin-top: 0.08rem !important;
+      overflow: visible !important;
+      font-size: 0.7rem !important;
+      line-height: 1.05 !important;
+      text-overflow: clip !important;
+      overflow-wrap: normal !important;
+      white-space: nowrap !important;
+    }
+
+    .scanner-hold-action {
+      gap: 0.2rem !important;
+      padding: 0.18rem !important;
+    }
+
+    .scanner-hold-action button {
+      min-height: 1.55rem !important;
+      padding: 0.15rem 0.3rem !important;
+      font-size: 0.65rem !important;
+      line-height: 1 !important;
+    }
+
+    .scanner-hold-state {
+      min-width: 4.5rem !important;
+      padding: 0.12rem 0.3rem !important;
+      font-size: 0.62rem !important;
+      line-height: 1 !important;
+    }
+
     .recordings-layout {
       grid-template-columns: 1fr !important;
       grid-template-rows: minmax(0, 0.7fr) minmax(0, 1.3fr) !important;
@@ -826,6 +905,58 @@
       padding: 0.45rem !important;
     }
 
+    .scanner-hold-grid {
+      gap: 0.2rem !important;
+    }
+
+    .scanner-hold-group {
+      padding: 0.25rem !important;
+    }
+
+    .scanner-hold-group h3 {
+      margin-bottom: 0.2rem !important;
+      font-size: 0.7rem !important;
+      line-height: 1 !important;
+    }
+
+    .scanner-hold-current {
+      padding: 0.15rem 0.3rem !important;
+    }
+
+    .scanner-hold-current-label {
+      font-size: 0.55rem !important;
+      line-height: 1 !important;
+    }
+
+    .scanner-hold-current-value {
+      margin-top: 0.05rem !important;
+      overflow: visible !important;
+      font-size: 0.66rem !important;
+      line-height: 1 !important;
+      text-overflow: clip !important;
+      overflow-wrap: normal !important;
+      white-space: nowrap !important;
+    }
+
+    .scanner-hold-action {
+      gap: 0.15rem !important;
+      padding: 0.12rem !important;
+    }
+
+    .scanner-hold-action button {
+      min-height: 1.35rem !important;
+      padding: 0.08rem 0.2rem !important;
+      font-size: 0.6rem !important;
+      line-height: 1 !important;
+    }
+
+    .scanner-hold-state {
+      min-width: 4.2rem !important;
+      padding: 0.08rem 0.2rem !important;
+      font-size: 0.58rem !important;
+      line-height: 1 !important;
+    }
+
     .radio-view-controls button,
     .scanner-display-row,
     .scanner-display-hierarchy > div,
@@ -1001,6 +1132,14 @@
 
     .scanner-display-hierarchy {
       grid-template-columns: 1fr !important;
+    }
+
+    .scanner-hold-action {
+      grid-template-columns: 1fr !important;
+    }
+
+    .scanner-hold-state {
+      width: 100% !important;
     }
 
     .scanner-panel {

@@ -18,8 +18,8 @@ Assistant browser contexts without changing standalone loopback defaults.
 Milestone 26.1 adds a separate password-authenticated native-TLS mode for one
 explicit LAN interface while preserving the default, generic-container, and
 Home Assistant security boundaries. Milestone 27.3 replaces the original card
-grid with a viewport-owned Scanner, Controls, Audio, Recordings, and Diagnostics
-workspace, redesigns the stable System theme around the existing adaptive
+grid with a viewport-owned Scanner, Controls, Waterfall, Audio, Recordings, and
+Diagnostics workspace, redesigns the stable System theme around the existing adaptive
 scanner-display model, and adds an original Pip-Boy-inspired built-in theme
 without changing daemon ownership, authentication, or Ingress behavior.
 Milestone 27.4 adds a sixth Waterfall pane over the private validated daemon
@@ -749,7 +749,7 @@ The interface presents:
 
 The interface uses semantic landmarks, definition lists, a skip link, visible
 keyboard focus, status text that does not rely on color alone, the semantic
-five-pane tablist, system light and dark modes, reduced-motion and forced-color
+six-pane tablist, system light and dark modes, reduced-motion and forced-color
 behavior, and the explicit accessibility scrolling escape. JavaScript updates
 text through `textContent`; it does not render daemon-provided HTML.
 
@@ -841,8 +841,10 @@ shutdown continues.
 | `GET` | `/api/v1/audio` | Validated daemon-owned PCMU v1 binary frame stream |
 | `GET` | `/api/v1/waterfall` | Validated ordered daemon waterfall NDJSON or negotiated SSE stream |
 | `POST` | `/api/v1/scanner/hold/{scope}` | Set desired system, department, site, or channel hold state |
-| `POST` | `/api/v1/scanner/next` | Move to the next documented current channel selection |
-| `POST` | `/api/v1/scanner/previous` | Move to the previous documented current channel selection |
+| `POST` | `/api/v1/scanner/next` | Compatibility alias for the next current channel selection |
+| `POST` | `/api/v1/scanner/next/{scope}` | Move to the next current system, department, site, or channel selection |
+| `POST` | `/api/v1/scanner/previous` | Compatibility alias for the previous current channel selection |
+| `POST` | `/api/v1/scanner/previous/{scope}` | Move to the previous current system, department, site, or channel selection |
 | `POST` | `/api/v1/scanner/reconnect` | Request one bounded daemon-owned scanner reconnect |
 | `GET` | `/api/v1/recording` | Current daemon-owned recording snapshot |
 | `POST` | `/api/v1/recording/start` | Start one daemon-owned WAV recording |
@@ -875,15 +877,17 @@ Scanner controls are deliberately narrow browser operations rather than a raw
 scanner-command passthrough. Browser hold requests never provide raw `HLD` or
 `KEY` values: `POST /api/v1/scanner/hold/{scope}` accepts exactly one JSON field,
 `{"held": true}` or `{"held": false}`, and forwards the semantic scope plus
-desired state to daemon `scanner.hold_state`. The daemon performs an
+desired state to daemon `scanner.hold_state`. Previous and Next resolve the
+current authoritative indexes to the documented `SYS`, `DEPT`, `SITE`, `TGID`,
+or `CFREQ` target; the original unscoped routes remain channel aliases. The daemon performs an
 authoritative `GSI` read before deciding whether a verified key gesture is
-needed. Channel next/previous still resolve the current documented selection
-from the daemon snapshot and never accept raw `NXT` or `PRV` targets from the
+needed. Scoped navigation resolves the current documented selection from the
+daemon snapshot and never accepts raw `NXT` or `PRV` targets from the
 browser.
 
 `GET /api/v1/status` already carries the negotiated daemon `hello` result. The
 browser enables semantic hold controls only when the daemon advertises
-`scanner.hold_state`; channel navigation and reconnect continue to negotiate
+`scanner.hold_state`; scoped navigation and reconnect continue to negotiate
 `scanner.next`, `scanner.previous`, and `scanner.reconnect` independently.
 Controls additionally require a running runtime and connected scanner. A new
 hold requires a usable current selection, while release remains available when
@@ -893,12 +897,18 @@ continue to reject that sentinel.
 
 Hold controls reflect authoritative PSI/GSI hold fields. An unheld scope renders
 `Hold system`, `Hold department`, `Hold site`, or `Hold channel`; an active scope
-keeps its separate `Held` indicator and changes the button to the corresponding
-`Release` action with `aria-pressed="true"`. The daemon no-ops an already
+changes the button to the corresponding `Release` action with
+`aria-pressed="true"`. Each scope keeps the current System, Department, Site, or
+Channel directly above its action and always presents a separate `Held`,
+`Not held`, or `Unavailable` state. The action's accessible description includes
+both that current target and state. The daemon no-ops an already
 satisfied desired state, otherwise executes the complete verified SDS200 gesture
 under the mutation lock and polls authoritative `GSI` until only the requested
 hold field converges. This target-field convergence deliberately tolerates the
 temporary unrelated field inconsistencies observed after the Site Hold gesture.
+Previous and Next are available beside every scope through the same bounded
+typed navigation operations. Department navigation includes the current System
+index required by the scanner protocol.
 Reconnect remains available while the scanner is disconnected when the running
 daemon advertises bounded reconnect support.
 
@@ -1028,7 +1038,7 @@ The dashboard now includes:
   secret-by-environment reference, and revocation of active long-lived
   responses;
 - the `sdsctl web` command;
-- a packaged accessible responsive five-pane browser workspace with persistent
+- a packaged accessible responsive six-pane browser workspace with persistent
   pointer and keyboard selection, normal-zoom no-scroll reference layouts, and
   an enlarged-text/browser-zoom scrolling escape;
 - snapshot-first same-origin Server-Sent Events;
