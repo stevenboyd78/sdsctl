@@ -103,6 +103,15 @@ _THEMES = (
     "amateur-radio",
     "pip-boy-inspired",
 )
+_WORKSPACE_PANES = (
+    "scanner",
+    "controls",
+    "waterfall",
+    "audio",
+    "recordings",
+    "diagnostics",
+)
+_WORKSPACE_PANE_STORAGE_KEY = "sdsctl.web.pane"
 _DEMO_THEME_SETUP_HTML = (
     "<!doctype html>\n"
     '<html lang="en">\n'
@@ -113,9 +122,14 @@ _DEMO_THEME_SETUP_HTML = (
     "<body>\n"
     "<script>\n"
     f"const allowedThemes = Object.freeze({json.dumps(_THEMES)});\n"
+    f"const allowedPanes = Object.freeze({json.dumps(_WORKSPACE_PANES)});\n"
     'const theme = location.pathname.split("/").at(-1);\n'
+    'const pane = new URLSearchParams(location.search).get("pane");\n'
     "if (allowedThemes.includes(theme)) {\n"
     f"  localStorage.setItem({json.dumps(_THEME_STORAGE_KEY)}, theme);\n"
+    "}\n"
+    "if (allowedPanes.includes(pane)) {\n"
+    f"  localStorage.setItem({json.dumps(_WORKSPACE_PANE_STORAGE_KEY)}, pane);\n"
     "}\n"
     'location.replace("/");\n'
     "</script>\n"
@@ -154,6 +168,15 @@ _READY_TEXT = {
     "last-update": "8/8/2026, 3:12:00 PM",
 }
 _READY_LAST_UPDATE = "2026-08-08T21:12:00.000Z"
+_READY_WATERFALL_TEXT = {
+    "waterfall-status": "Live relative waterfall data.",
+    "waterfall-session-state": "running",
+    "waterfall-frame-rate": "20.0 fps",
+    "waterfall-sequence": "33",
+    "waterfall-queue-loss": "0 records",
+    "waterfall-overflows": "0",
+    "waterfall-poll-failures": "0",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -163,6 +186,7 @@ class Capture:
     width: int
     height: int
     device_scale_factor: int = 1
+    pane: str = "scanner"
 
 
 CAPTURES = (
@@ -200,6 +224,20 @@ CAPTURES = (
         800,
         480,
     ),
+    Capture(
+        "theme-system-waterfall-1920x1080.png",
+        "system",
+        1920,
+        1080,
+        pane="waterfall",
+    ),
+    Capture(
+        "theme-pip-boy-inspired-waterfall-800x480.png",
+        "pip-boy-inspired",
+        800,
+        480,
+        pane="waterfall",
+    ),
 )
 
 
@@ -209,9 +247,13 @@ class _CaptureDomParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.theme: str | None = None
+        self.workspace_pane: str | None = None
         self.status_state: str | None = None
         self.attributes: dict[str, dict[str, str]] = {}
-        self.text: dict[str, list[str]] = {element_id: [] for element_id in _READY_TEXT}
+        self.text: dict[str, list[str]] = {
+            element_id: []
+            for element_id in (*_READY_TEXT, *_READY_WATERFALL_TEXT)
+        }
         self._stack: list[tuple[str, str | None]] = []
 
     def handle_starttag(
@@ -222,6 +264,7 @@ class _CaptureDomParser(HTMLParser):
         values = {name: value or "" for name, value in attributes}
         if tag == "html":
             self.theme = values.get("data-theme")
+            self.workspace_pane = values.get("data-workspace-pane")
 
         element_id = values.get("id")
         target = element_id if element_id in self.text else None
@@ -256,9 +299,16 @@ def _capture_dom_is_ready(output: str | bytes, capture: Capture) -> bool:
     except Exception:
         return False
 
-    if parser.theme != capture.theme or parser.status_state != "online":
+    if (
+        parser.theme != capture.theme
+        or parser.workspace_pane != capture.pane
+        or parser.status_state != "online"
+    ):
         return False
-    for element_id, expected in _READY_TEXT.items():
+    expected_text = dict(_READY_TEXT)
+    if capture.pane == "waterfall":
+        expected_text.update(_READY_WATERFALL_TEXT)
+    for element_id, expected in expected_text.items():
         observed = " ".join("".join(parser.text[element_id]).split())
         if observed != expected:
             return False
@@ -490,6 +540,9 @@ class DemoDaemonWaterfallClient:
         self._sequence = 0
 
     def receive(self) -> DaemonWaterfallRecord:
+        if self._sequence >= 33:
+            self._closed.wait()
+            raise DaemonDisconnectedError("demo waterfall stream closed")
         if self._sequence > 0 and self._closed.wait(0.05):
             raise DaemonDisconnectedError("demo waterfall stream closed")
         if self._closed.is_set():
@@ -640,11 +693,13 @@ def _control_result(operation: str) -> dict[str, object]:
     }
 
 
-def _demo_theme_response(theme: str) -> HTMLResponse:
+def _demo_theme_response(theme: str, pane: str = "scanner") -> HTMLResponse:
     """Return a fixed screenshot-setup page for one repository-defined theme."""
 
     if theme not in _THEMES:
         raise HTTPException(status_code=404, detail="unknown demo theme")
+    if pane not in _WORKSPACE_PANES:
+        raise HTTPException(status_code=404, detail="unknown demo pane")
 
     return HTMLResponse(
         content=_DEMO_THEME_SETUP_HTML,
@@ -665,8 +720,8 @@ def create_demo_app() -> FastAPI:
         include_in_schema=False,
         response_class=HTMLResponse,
     )
-    def select_demo_theme(theme: str) -> HTMLResponse:
-        return _demo_theme_response(theme)
+    def select_demo_theme(theme: str, pane: str = "scanner") -> HTMLResponse:
+        return _demo_theme_response(theme, pane)
 
     @app.get(
         _DEMO_CLOCK_PATH,
@@ -800,6 +855,8 @@ def _capture(
         str(profile_dir),
         "--theme",
         capture.theme,
+        "--pane",
+        capture.pane,
         "--width",
         str(capture.width),
         "--height",
@@ -1067,8 +1124,8 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     errors: list[str] = []
     expected_filenames = tuple(capture.filename for capture in CAPTURES)
     expected_filename_set = set(expected_filenames)
-    if len(CAPTURES) != 9:
-        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 9")
+    if len(CAPTURES) != 11:
+        errors.append(f"CAPTURES contains {len(CAPTURES)} entries instead of 11")
     if len(expected_filename_set) != len(expected_filenames):
         errors.append("CAPTURES contains duplicate filenames")
 
@@ -1114,7 +1171,7 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     except OSError as error:
         errors.append(f"cannot inspect {_GALLERY_GUIDE}: {error}")
         guide_targets = ()
-    if len(guide_targets) != 9 or set(guide_targets) != expected_guide_targets:
+    if len(guide_targets) != 11 or set(guide_targets) != expected_guide_targets:
         errors.append(
             "canonical guide PNG references do not name each authoritative "
             "gallery asset exactly once"
@@ -1132,7 +1189,7 @@ def _gallery_contract_errors(root: Path = _REPOSITORY_ROOT) -> tuple[str, ...]:
     except OSError as error:
         errors.append(f"cannot inspect {_GALLERY_WIKI}: {error}")
         wiki_targets = ()
-    if len(wiki_targets) != 9 or set(wiki_targets) != expected_wiki_targets:
+    if len(wiki_targets) != 11 or set(wiki_targets) != expected_wiki_targets:
         errors.append(
             "wiki PNG references do not name each authoritative raw-main gallery asset exactly once"
         )
@@ -1460,6 +1517,7 @@ def _generate(args: argparse.Namespace) -> None:
                         )
                         print(
                             f"Repeatable {capture.theme:16} "
+                            f"{capture.pane:11} "
                             f"{capture.width}x{capture.height} "
                             f"DPR {capture.device_scale_factor}: sha256={digest}"
                         )
@@ -1481,6 +1539,7 @@ def _generate(args: argparse.Namespace) -> None:
                     size = destination.stat().st_size
                     print(
                         f"Captured {capture.theme:16} "
+                        f"{capture.pane:11} "
                         f"{capture.width}x{capture.height} "
                         f"DPR {capture.device_scale_factor}: "
                         f"{destination} ({size} bytes)"
@@ -1588,6 +1647,7 @@ def main() -> None:
             print(
                 f"{capture.filename}: "
                 f"theme={capture.theme} "
+                f"pane={capture.pane} "
                 f"viewport={capture.width}x{capture.height} "
                 f"device-scale-factor={capture.device_scale_factor}"
             )
@@ -1598,7 +1658,7 @@ def main() -> None:
             _verify_gallery_contract()
         except RuntimeError as error:
             raise SystemExit(str(error)) from error
-        print("Web dashboard gallery contract passed for 9 authoritative PNG files.")
+        print("Web dashboard gallery contract passed for 11 authoritative PNG files.")
         return
 
     if args.verify_sdist is not None:

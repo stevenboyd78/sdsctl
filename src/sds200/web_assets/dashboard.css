@@ -55,9 +55,9 @@ select:focus-visible,
   margin-inline: auto;
 }
 .site-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-5);
   padding-block: var(--space-6) var(--space-5);
 }
@@ -65,11 +65,14 @@ select:focus-visible,
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  justify-self: end;
   gap: var(--space-4);
 }
 .theme-picker {
   display: grid;
+  justify-items: end;
   gap: var(--space-1);
+  text-align: right;
 }
 .theme-picker label {
   color: var(--muted);
@@ -115,6 +118,7 @@ select:focus-visible,
 }
 .status-badge {
   flex: 0 0 auto;
+  justify-self: center;
   min-width: 7.5rem;
   padding: var(--space-3) var(--space-4);
   border: 0.125rem solid currentcolor;
@@ -513,10 +517,10 @@ select:focus-visible,
     flex-direction: column;
   }
 .site-header {
-    padding-top: var(--space-5);
-  }
+  padding-top: var(--space-5);
+}
 .status-badge {
-    align-self: flex-start;
+    align-self: center;
   }
 .dashboard-message {
     text-align: left;
@@ -561,7 +565,7 @@ select:focus-visible,
     flex-direction: column;
   }
 .theme-picker {
-    align-self: flex-start;
+    align-self: flex-end;
   }
 }
 .theme-stage {

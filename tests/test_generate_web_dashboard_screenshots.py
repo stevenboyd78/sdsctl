@@ -27,15 +27,24 @@ _EXPECTED_THEMES = (
     "pip-boy-inspired",
 )
 _EXPECTED_CAPTURES = (
-    ("theme-system-1920x1080.png", "system", 1920, 1080, 1),
-    ("theme-system-390x844-dpr2.png", "system", 390, 844, 2),
-    ("theme-lcars-1920x1080.png", "lcars", 1920, 1080, 1),
-    ("theme-matrix-1920x1080.png", "matrix", 1920, 1080, 1),
-    ("theme-first-responder-1920x1080.png", "first-responder", 1920, 1080, 1),
-    ("theme-amateur-radio-1920x1080.png", "amateur-radio", 1920, 1080, 1),
-    ("theme-amateur-radio-1366x768.png", "amateur-radio", 1366, 768, 1),
-    ("theme-pip-boy-inspired-1920x1080.png", "pip-boy-inspired", 1920, 1080, 1),
-    ("theme-pip-boy-inspired-800x480.png", "pip-boy-inspired", 800, 480, 1),
+    ("theme-system-1920x1080.png", "system", 1920, 1080, 1, "scanner"),
+    ("theme-system-390x844-dpr2.png", "system", 390, 844, 2, "scanner"),
+    ("theme-lcars-1920x1080.png", "lcars", 1920, 1080, 1, "scanner"),
+    ("theme-matrix-1920x1080.png", "matrix", 1920, 1080, 1, "scanner"),
+    ("theme-first-responder-1920x1080.png", "first-responder", 1920, 1080, 1, "scanner"),
+    ("theme-amateur-radio-1920x1080.png", "amateur-radio", 1920, 1080, 1, "scanner"),
+    ("theme-amateur-radio-1366x768.png", "amateur-radio", 1366, 768, 1, "scanner"),
+    ("theme-pip-boy-inspired-1920x1080.png", "pip-boy-inspired", 1920, 1080, 1, "scanner"),
+    ("theme-pip-boy-inspired-800x480.png", "pip-boy-inspired", 800, 480, 1, "scanner"),
+    ("theme-system-waterfall-1920x1080.png", "system", 1920, 1080, 1, "waterfall"),
+    (
+        "theme-pip-boy-inspired-waterfall-800x480.png",
+        "pip-boy-inspired",
+        800,
+        480,
+        1,
+        "waterfall",
+    ),
 )
 
 
@@ -55,14 +64,14 @@ def _png(width: int, height: int, *, pixel: bytes = b"\x00\x00\x00") -> bytes:
     )
 
 
-def _ready_dom(theme: str = "system") -> str:
+def _ready_dom(theme: str = "system", pane: str = "scanner") -> str:
     values = "".join(
         f'<div id="{element_id}">{value}</div>'
         for element_id, value in screenshots._READY_TEXT.items()
         if element_id not in {"last-update", "status-badge"}
     )
     return (
-        f'<!doctype html><html data-theme="{theme}"><body>'
+        f'<!doctype html><html data-theme="{theme}" data-workspace-pane="{pane}"><body>'
         '<div id="status-badge" data-state="online">Connected</div>'
         f"{values}"
         f'<time id="last-update" datetime="{screenshots._READY_LAST_UPDATE}">'
@@ -112,6 +121,7 @@ def test_capture_inventory_covers_every_theme_and_reference_viewport() -> None:
                 capture.width,
                 capture.height,
                 capture.device_scale_factor,
+                capture.pane,
             )
             for capture in screenshots.CAPTURES
         )
@@ -123,7 +133,8 @@ def test_capture_inventory_covers_every_theme_and_reference_viewport() -> None:
     full_hd_counts = Counter(
         capture.theme
         for capture in screenshots.CAPTURES
-        if (capture.width, capture.height, capture.device_scale_factor) == (1920, 1080, 1)
+        if capture.pane == "scanner"
+        and (capture.width, capture.height, capture.device_scale_factor) == (1920, 1080, 1)
     )
     assert full_hd_counts == Counter({theme: 1 for theme in _EXPECTED_THEMES})
 
@@ -135,7 +146,7 @@ def test_capture_inventory_covers_every_theme_and_reference_viewport() -> None:
             capture.device_scale_factor,
         )
         for capture in screenshots.CAPTURES
-        if (capture.width, capture.height) != (1920, 1080)
+        if capture.pane == "scanner" and (capture.width, capture.height) != (1920, 1080)
     }
     assert reference_captures == {
         ("system", 390, 844, 2),
@@ -178,13 +189,18 @@ def test_demo_theme_route_accepts_only_the_exact_capture_themes() -> None:
             assert 'const theme = location.pathname.split("/").at(-1);' in response.text
             assert "if (allowedThemes.includes(theme))" in response.text
             assert 'localStorage.setItem("sdsctl.web.theme", theme);' in response.text
+            assert "if (allowedPanes.includes(pane))" in response.text
+            assert 'localStorage.setItem("sdsctl.web.pane", pane);' in response.text
             assert 'location.replace("/");' in response.text
 
         unknown = client.get("/__demo/theme/not-a-built-in-theme")
+        unknown_pane = client.get("/__demo/theme/system?pane=not-a-workspace-pane")
 
     assert response_bodies == {screenshots._DEMO_THEME_SETUP_HTML}
     assert unknown.status_code == 404
     assert unknown.json() == {"detail": "unknown demo theme"}
+    assert unknown_pane.status_code == 404
+    assert unknown_pane.json() == {"detail": "unknown demo pane"}
 
 
 def test_demo_inventory_exercises_real_recording_pagination() -> None:
@@ -364,6 +380,7 @@ def test_capture_uses_same_frame_dom_readiness_and_reduced_motion(
     assert _command_value(observed_command, "--width") == "6"
     assert _command_value(observed_command, "--height") == "4"
     assert _command_value(observed_command, "--dpr") == "1"
+    assert _command_value(observed_command, "--pane") == "scanner"
     assert _command_value(observed_command, "--settle-ms") == "2500"
     assert staged_destination is not None
     assert staged_destination.parent == output
@@ -551,6 +568,34 @@ def test_demo_theme_response_rejects_untrusted_script_input() -> None:
         screenshots._demo_theme_response("system');alert('unexpected")
 
     assert error.value.status_code == 404
+    with pytest.raises(HTTPException) as error:
+        screenshots._demo_theme_response("system", "waterfall');alert('unexpected")
+
+    assert error.value.status_code == 404
+
+
+def test_waterfall_capture_readiness_requires_stable_live_frame() -> None:
+    capture = screenshots.Capture(
+        "waterfall.png",
+        "system",
+        8,
+        6,
+        pane="waterfall",
+    )
+    ready = _ready_dom(pane="waterfall").replace(
+        "</body>",
+        "".join(
+            f'<div id="{element_id}">{value}</div>'
+            for element_id, value in screenshots._READY_WATERFALL_TEXT.items()
+        )
+        + "</body>",
+    )
+
+    assert screenshots._capture_dom_is_ready(ready, capture)
+    assert not screenshots._capture_dom_is_ready(
+        ready.replace(">33<", ">32<", 1),
+        capture,
+    )
 
 
 def test_capture_selection_preserves_inventory_order_and_rejects_unknown() -> None:
@@ -735,7 +780,7 @@ def test_gallery_rejects_missing_symlink_directory_and_nonregular_images(
 def test_source_distribution_requires_exact_regular_checkout_copies(
     tmp_path: Path,
 ) -> None:
-    root = "sds200-0.22.0"
+    root = "sds200-0.23.0"
     source_contents = {
         relative_name: path.read_bytes()
         for relative_name, path in screenshots._required_sdist_sources().items()
@@ -768,16 +813,16 @@ def test_source_distribution_requires_exact_regular_checkout_copies(
                 archive.addfile(info, io.BytesIO(data))
         return distribution
 
-    complete = write_distribution("sds200-0.22.0.tar.gz", source_contents)
+    complete = write_distribution("sds200-0.23.0.tar.gz", source_contents)
     assert screenshots._verify_source_distribution(complete) == complete
 
     fake_payloads = {member: member.encode("utf-8") for member in source_contents}
-    forged = write_distribution("sds200-0.22.0-forged.tar.gz", fake_payloads)
+    forged = write_distribution("sds200-0.23.0-forged.tar.gz", fake_payloads)
     with pytest.raises(RuntimeError, match="has size|does not exactly match"):
         screenshots._verify_source_distribution(forged)
 
     missing = write_distribution(
-        "sds200-0.22.0-missing.tar.gz",
+        "sds200-0.23.0-missing.tar.gz",
         {
             member: content
             for member, content in source_contents.items()
@@ -790,14 +835,14 @@ def test_source_distribution_requires_exact_regular_checkout_copies(
     stale_contents = dict(source_contents)
     stale_contents["docs/assets/web-dashboard/stale.png"] = b"stale"
     unexpected = write_distribution(
-        "sds200-0.22.0-unexpected.tar.gz",
+        "sds200-0.23.0-unexpected.tar.gz",
         stale_contents,
     )
     with pytest.raises(RuntimeError, match="unexpected="):
         screenshots._verify_source_distribution(unexpected)
 
     duplicate = write_distribution(
-        "sds200-0.22.0-duplicate.tar.gz",
+        "sds200-0.23.0-duplicate.tar.gz",
         source_contents,
         duplicate="docs/web-dashboard.md",
     )
@@ -805,7 +850,7 @@ def test_source_distribution_requires_exact_regular_checkout_copies(
         screenshots._verify_source_distribution(duplicate)
 
     nonregular = write_distribution(
-        "sds200-0.22.0-nonregular.tar.gz",
+        "sds200-0.23.0-nonregular.tar.gz",
         source_contents,
         nonregular="scripts/audit_web_dashboard_browser.mjs",
     )
@@ -818,7 +863,7 @@ def test_source_distribution_requires_exact_regular_checkout_copies(
     corrupted_png[-1] ^= 0x01
     corrupted_contents[png_name] = bytes(corrupted_png)
     corrupted = write_distribution(
-        "sds200-0.22.0-corrupted-png.tar.gz",
+        "sds200-0.23.0-corrupted-png.tar.gz",
         corrupted_contents,
     )
     with pytest.raises(RuntimeError, match="PNG is invalid"):
@@ -830,7 +875,7 @@ def test_source_distribution_requires_exact_regular_checkout_copies(
     mutated_docs[0] ^= 0x01
     mutated_contents[docs_name] = bytes(mutated_docs)
     mutated = write_distribution(
-        "sds200-0.22.0-mutated-docs.tar.gz",
+        "sds200-0.23.0-mutated-docs.tar.gz",
         mutated_contents,
     )
     with pytest.raises(RuntimeError, match="does not exactly match"):

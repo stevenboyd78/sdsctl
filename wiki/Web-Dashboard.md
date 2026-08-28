@@ -88,6 +88,21 @@ priority and conventional scrolling returns.
 
 ![Amateur Radio theme at 1366x768](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-amateur-radio-1366x768.png)
 
+## Waterfall references
+
+The Waterfall pane uses the daemon-owned private waterfall service only while a
+visible authenticated browser consumer exists. Its spectrum and rolling history
+are relative and uncalibrated; they do not claim dB, RF-power, or documented FFT
+magnitude semantics.
+
+### System Waterfall at 1920x1080
+
+![System theme Waterfall pane at 1920x1080](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-system-waterfall-1920x1080.png)
+
+### Pip-Boy-inspired Waterfall at 800x480
+
+![Pip-Boy-inspired theme Waterfall pane at 800x480](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/web-dashboard/theme-pip-boy-inspired-waterfall-800x480.png)
+
 ## Security boundary
 
 - Standalone operation remains loopback-only unless private-LAN mode is

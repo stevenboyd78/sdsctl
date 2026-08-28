@@ -583,6 +583,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'href="assets/favicon.svg"' in response.text
     assert 'type="image/svg+xml"' in response.text
     assert 'id="theme-select"' in response.text
+    assert response.text.index('class="brand"') < response.text.index(
+        'id="status-badge"'
+    ) < response.text.index('class="header-actions"')
     assert '<option value="system">System</option>' in response.text
     assert '<option value="lcars">LCARS-inspired</option>' in response.text
     assert '<option value="matrix">Matrix-inspired</option>' in response.text
@@ -693,9 +696,23 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         stylesheet_source.text
     )
     assert "grid-template-rows: auto minmax(0, 1fr)" in stylesheet_source.text
+    assert "minmax(19rem, 0.42fr)" in viewport_stylesheet.text
+    assert "grid-template-columns: max-content minmax(0, 1fr)" in (
+        viewport_stylesheet.text
+    )
+    assert "white-space: nowrap !important" in viewport_stylesheet.text
     assert "grid-area: auto" in stylesheet_source.text
     assert "height: 100dvh" in stylesheet_source.text
     assert "overflow: hidden" in stylesheet_source.text
+    assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)" in (
+        stylesheet_source.text
+    )
+    assert "justify-self: end" in stylesheet_source.text
+    assert "justify-self: center" in stylesheet_source.text
+    assert "justify-items: end" in stylesheet_source.text
+    assert "padding: clamp(0.35rem, 1.2vh, 0.85rem) !important" in (
+        viewport_stylesheet.text
+    )
     assert "@media (max-height: 27.99rem), (max-width: 21.99rem)" in (
         stylesheet_source.text
     )

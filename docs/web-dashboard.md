@@ -525,6 +525,19 @@ PNG. It exercises the phone composition without changing the layout breakpoint.
 
 ![Amateur Radio theme at 1366x768](assets/web-dashboard/theme-amateur-radio-1366x768.png)
 
+### System Waterfall — 1920x1080
+
+![System theme Waterfall pane at 1920x1080](assets/web-dashboard/theme-system-waterfall-1920x1080.png)
+
+### Pip-Boy-inspired Waterfall — 800x480
+
+![Pip-Boy-inspired theme Waterfall pane at 800x480](assets/web-dashboard/theme-pip-boy-inspired-waterfall-800x480.png)
+
+The Waterfall captures use the same bounded deterministic fictional stream as
+the browser audit. They exercise the real authenticated web adapter, Canvas
+spectrum and rolling history, relative-data labeling, lifecycle telemetry, and
+theme tokens without including live scanner frequencies or programming.
+
 Regenerate the checked-in gallery from a repository checkout with Chrome or
 Chromium and the web dependencies available:
 
@@ -548,7 +561,7 @@ physical dimensions before atomically publishing the image and shutting the demo
 server down. It never derives a CSS viewport from Chrome's outer-window size.
 None of that demo behavior is part of the shipped `sdsctl web` service.
 
-Verify the exact nine-file generator, asset-directory, canonical-guide, and raw
+Verify the exact eleven-file generator, asset-directory, canonical-guide, and raw
 default-branch wiki reference contract without opening Chrome:
 
 ```bash

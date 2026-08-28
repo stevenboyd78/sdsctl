@@ -4,7 +4,7 @@
  * Run the Milestone 27.4 dashboard acceptance matrix in one real Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
- * It writes no screenshots; the nine-image documentation gallery remains the
+ * It writes no screenshots; the eleven-image documentation gallery remains the
  * responsibility of generate_web_dashboard_screenshots.py.
  */
 
@@ -1952,6 +1952,7 @@ export async function captureDashboardScreenshot({
   deviceScaleFactor,
   height,
   outputPath,
+  pane,
   profileDirectory,
   settleMs = 0,
   theme,
@@ -1959,6 +1960,9 @@ export async function captureDashboardScreenshot({
   width,
 }) {
   requireNode24();
+  if (!PANES.includes(pane)) {
+    throw new Error(`capture pane must name one workspace pane: ${PANES.join(", ")}`);
+  }
   const viewport = {
     dpr: deviceScaleFactor,
     height,
@@ -2048,7 +2052,8 @@ export async function captureDashboardScreenshot({
       features: [{name: "prefers-reduced-motion", value: "reduce"}],
       media: "screen",
     });
-    const captureUrl = `${baseUrl}/__demo/theme/${encodeURIComponent(theme)}`;
+    const captureUrl = `${baseUrl}/__demo/theme/${encodeURIComponent(theme)}` +
+      `?pane=${encodeURIComponent(pane)}`;
     await navigate(cdp, captureUrl, timeoutMs, {installAuditLibrary: false});
     await setViewport(cdp, viewport);
     const initialMessage = await evaluate(
@@ -2082,8 +2087,37 @@ export async function captureDashboardScreenshot({
       await delay(settleMs);
       await waitForDashboard(cdp, timeoutMs);
     }
+    const paneState = await evaluate(
+      cdp,
+      `(() => ({
+        pane: document.documentElement.dataset.workspacePane ?? null,
+        waterfallSequence: document.querySelector("#waterfall-sequence")?.textContent?.trim() ?? null,
+        waterfallState: document.querySelector("#waterfall-status")?.dataset.state ?? null,
+      }))()`,
+    );
+    if (
+      paneState.pane !== pane ||
+      (pane === "waterfall" &&
+        (paneState.waterfallSequence !== "33" || paneState.waterfallState !== "live"))
+    ) {
+      throw new Error(
+        `capture pane did not reach deterministic readiness: ${JSON.stringify(paneState)}`,
+      );
+    }
     await evaluate(cdp, "document.fonts?.ready ?? Promise.resolve(true)");
     await frames(cdp);
+
+    // The demo emits its fixed 32 waterfall frames at a real 50 ms cadence,
+    // so scheduler jitter can vary the measured rate by one tenth between
+    // otherwise identical captures. Freeze only that derived demo label after
+    // the final frame; production rendering and browser acceptance remain
+    // untouched, while the checked-in PNG becomes byte-repeatable.
+    if (pane === "waterfall") {
+      await evaluate(
+        cdp,
+        'document.querySelector("#waterfall-frame-rate").textContent = "20.0 fps"',
+      );
+    }
 
     const geometry = await evaluate(
       cdp,
@@ -2262,7 +2296,7 @@ async function run(options) {
 
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
-    console.log("Screenshots: disabled (the nine-image gallery is unchanged)");
+    console.log("Screenshots: disabled (the eleven-image gallery is unchanged)");
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);
