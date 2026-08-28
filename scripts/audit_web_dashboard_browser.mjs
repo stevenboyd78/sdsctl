@@ -2287,6 +2287,17 @@ export async function captureDashboardScreenshot({
       );
     }
 
+    if (pane === "waterfall") {
+      // Give the rounded waterfall workspace one stable local paint origin.
+      // Without this visually inert capture-only layer, Chrome may tile the
+      // same fractional edges from different origins across fresh profiles.
+      await evaluate(
+        cdp,
+        'document.querySelector(".workspace-shell").style.transform = "translateZ(0)"',
+      );
+      await frames(cdp);
+    }
+
     const outerHTML = await evaluate(cdp, "document.documentElement.outerHTML");
     const screenshot = await captureStableScreenshot(cdp);
     const finalOuterHTML = await evaluate(cdp, "document.documentElement.outerHTML");

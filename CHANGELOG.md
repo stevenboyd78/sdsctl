@@ -74,14 +74,17 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   transport in one inert-open state, verifies an unchanged visible status
   message, pins canonical documentation media preferences, requires stable
   Waterfall Canvas pixels and consecutive compositor frames, and
-  deterministically re-encodes validated Chrome pixels. The authoritative
-  gallery now provides the same Full HD, desktop, compact/Raspberry Pi, and DPR2
-  phone review set for all six themes plus two Waterfall references, so all 26
-  files can expose responsive layout and formatting regressions without
-  cross-process PNG encoding creating false failures or weakening browser
-  event-stream coverage. The first complete phone review exposed long theme
-  names competing with the brand and status; phone-width headers now use one
-  compact brand row above a shared connection-status and theme-selector row,
+  deterministically re-encodes validated Chrome pixels. Waterfall captures also
+  assign the rounded workspace a visually inert, capture-only local paint layer
+  so fractional edge tiles remain byte-repeatable across isolated Chrome
+  profiles. The authoritative gallery now provides the same Full HD, desktop,
+  compact/Raspberry Pi, and DPR2 phone review set for all six themes plus two
+  Waterfall references, so all 26 files can expose responsive layout and
+  formatting regressions without cross-process PNG encoding creating false
+  failures or weakening browser event-stream coverage. The first complete phone
+  review exposed long theme names competing with the brand and status;
+  phone-width headers now use one compact brand row above a shared connection
+  status and theme-selector row,
   with the supporting subtitle and visible selector label removed only from
   that narrow presentation. Every built-in label remains complete while more
   height is returned to the working pane and desktop and compact geometry stay
