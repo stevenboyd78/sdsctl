@@ -41,11 +41,17 @@ contract validation before any release tag exists.
 The missing Milestone 27.4 changelog and Home Assistant acceptance records are
 now present, and the stale duplicated planned contract has been replaced with
 the final completed boundary, including the physical hexadecimal input contract.
-The deterministic documentation gallery now includes a System desktop Waterfall
-capture and a compact Pip-Boy-inspired Waterfall capture generated from the real
-packaged dashboard and fictional private-data-free state. Keep exact viewport,
-device-pixel-ratio, repeatability, canonical-documentation, reviewed-wiki, and
-wheel/source-distribution evidence enforced.
+The deterministic documentation gallery now provides the same Full HD, desktop,
+compact/Raspberry Pi, and DPR2 phone review set for all six built-in themes.
+The matrix also retains a System desktop Waterfall capture and a compact
+Pip-Boy-inspired Waterfall capture generated from the real packaged dashboard
+and fictional private-data-free state. The capture boundary fixes canonical
+media preferences, requires stable Waterfall
+Canvas pixels and compositor frames, and deterministically re-encodes validated
+Chrome pixels so cross-process PNG encoding cannot create a false release-gate
+failure. Keep exact viewport, device-pixel-ratio, repeatability,
+canonical-documentation, reviewed-wiki, and wheel/source-distribution evidence
+enforced for all 26 images.
 
 Run Ruff, mypy, the complete Python 3.11 through 3.14 test matrix with the shared
 86 percent coverage floor, documentation checks, the browser matrix, deterministic

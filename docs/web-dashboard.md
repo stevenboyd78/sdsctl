@@ -486,44 +486,76 @@ through `create_web_dashboard_app()`. The screenshot helper supplies determinist
 fictional daemon, scanner, radio, recording, and reliability state; the images do
 not contain live scanner identifiers, locations, or recordings.
 
-### System — 1920x1080
+Each built-in theme has the same ordered four-viewport review set: 1920x1080
+Full HD, 1366x768 desktop, 800x480 compact landscape/Raspberry Pi display, and
+390x844 portrait phone at DPR2. The phone PNGs are validated at 780x1688
+physical pixels. This complete matrix makes wrapping, alignment, clipping,
+spacing, responsive reflow, and intentional theme differences directly
+comparable between releases. At phone width, the header uses one compact brand
+row above a shared connection-status and theme-selector row. The supporting
+subtitle and visible `Theme` label are omitted from that narrow presentation
+while the selector retains its accessible name, so long theme names remain
+complete and more height stays available to the working pane.
+
+### System
 
 ![System theme at 1920x1080](assets/web-dashboard/theme-system-1920x1080.png)
 
-### LCARS-inspired — 1920x1080
+![System theme at 1366x768](assets/web-dashboard/theme-system-1366x768.png)
 
-![LCARS-inspired theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
-
-### Matrix-inspired — 1920x1080
-
-![Matrix-inspired theme at 1920x1080](assets/web-dashboard/theme-matrix-1920x1080.png)
-
-### First Responder — 1920x1080
-
-![First Responder theme at 1920x1080](assets/web-dashboard/theme-first-responder-1920x1080.png)
-
-### Amateur Radio — 1920x1080
-
-![Amateur Radio theme at 1920x1080](assets/web-dashboard/theme-amateur-radio-1920x1080.png)
-
-### Pip-Boy-inspired — 1920x1080
-
-![Pip-Boy-inspired theme at 1920x1080](assets/web-dashboard/theme-pip-boy-inspired-1920x1080.png)
-
-### Portrait-phone reference — 390x844 at DPR2
+![System theme at 800x480](assets/web-dashboard/theme-system-800x480.png)
 
 ![System theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-system-390x844-dpr2.png)
 
-The DPR2 capture has a 390x844 CSS viewport and a validated 780x1688 physical
-PNG. It exercises the phone composition without changing the layout breakpoint.
+### LCARS-inspired
 
-### Compact-landscape reference — 800x480
+![LCARS-inspired theme at 1920x1080](assets/web-dashboard/theme-lcars-1920x1080.png)
+
+![LCARS-inspired theme at 1366x768](assets/web-dashboard/theme-lcars-1366x768.png)
+
+![LCARS-inspired theme at 800x480](assets/web-dashboard/theme-lcars-800x480.png)
+
+![LCARS-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-lcars-390x844-dpr2.png)
+
+### Matrix-inspired
+
+![Matrix-inspired theme at 1920x1080](assets/web-dashboard/theme-matrix-1920x1080.png)
+
+![Matrix-inspired theme at 1366x768](assets/web-dashboard/theme-matrix-1366x768.png)
+
+![Matrix-inspired theme at 800x480](assets/web-dashboard/theme-matrix-800x480.png)
+
+![Matrix-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-matrix-390x844-dpr2.png)
+
+### First Responder
+
+![First Responder theme at 1920x1080](assets/web-dashboard/theme-first-responder-1920x1080.png)
+
+![First Responder theme at 1366x768](assets/web-dashboard/theme-first-responder-1366x768.png)
+
+![First Responder theme at 800x480](assets/web-dashboard/theme-first-responder-800x480.png)
+
+![First Responder theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-first-responder-390x844-dpr2.png)
+
+### Amateur Radio
+
+![Amateur Radio theme at 1920x1080](assets/web-dashboard/theme-amateur-radio-1920x1080.png)
+
+![Amateur Radio theme at 1366x768](assets/web-dashboard/theme-amateur-radio-1366x768.png)
+
+![Amateur Radio theme at 800x480](assets/web-dashboard/theme-amateur-radio-800x480.png)
+
+![Amateur Radio theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-amateur-radio-390x844-dpr2.png)
+
+### Pip-Boy-inspired
+
+![Pip-Boy-inspired theme at 1920x1080](assets/web-dashboard/theme-pip-boy-inspired-1920x1080.png)
+
+![Pip-Boy-inspired theme at 1366x768](assets/web-dashboard/theme-pip-boy-inspired-1366x768.png)
 
 ![Pip-Boy-inspired theme at 800x480](assets/web-dashboard/theme-pip-boy-inspired-800x480.png)
 
-### Desktop reference — 1366x768
-
-![Amateur Radio theme at 1366x768](assets/web-dashboard/theme-amateur-radio-1366x768.png)
+![Pip-Boy-inspired theme at a 390x844 CSS viewport and DPR2](assets/web-dashboard/theme-pip-boy-inspired-390x844-dpr2.png)
 
 ### System Waterfall — 1920x1080
 
@@ -549,19 +581,22 @@ The helper requires Node.js 24 or newer, starts a loopback-only demo instance of
 the real application, selects each theme through same-origin browser-local state,
 and uses an isolated Chrome profile per capture. Its dependency-free Node bridge
 reuses the browser audit's Chrome DevTools Protocol client to set the declared
-width, height, and DPR as the exact CSS viewport, force reduced motion before
-navigation, and verify `innerWidth`, `innerHeight`, `devicePixelRatio`, and the
-visual viewport. It waits for dashboard state, fonts, and stable animation
-frames, then captures only that viewport through `Page.captureScreenshot` and
-returns the corresponding outer HTML. The Python helper accepts the staged PNG
-only when that HTML contains the expected theme, authoritative fictional scanner
-and recording values, pagination state, and fixed update clock. It then validates
-the complete PNG chunk structure, CRCs, compressed scanlines, and DPR-scaled
-physical dimensions before atomically publishing the image and shutting the demo
-server down. It never derives a CSS viewport from Chrome's outer-window size.
-None of that demo behavior is part of the shipped `sdsctl web` service.
+width, height, and DPR as the exact CSS viewport; pin canonical light color,
+normal contrast, forced-colors-off, and reduced-motion media before navigation;
+and verify `innerWidth`, `innerHeight`, `devicePixelRatio`, and the visual
+viewport. It waits for dashboard state, fonts, consecutive pixel-identical
+Waterfall Canvas frames, and consecutive byte-identical compositor captures,
+then returns the corresponding outer HTML. The Python helper accepts the staged
+PNG only when that HTML contains the expected theme, authoritative fictional
+scanner and recording values, pagination state, and fixed update clock. It
+validates the complete PNG chunk structure, CRCs, compressed scanlines, and
+DPR-scaled physical dimensions, then reconstructs and deterministically
+re-encodes Chrome's RGB/RGBA pixels before atomically publishing the image and
+shutting the demo server down. It never derives a CSS viewport from Chrome's
+outer-window size. None of that demo behavior is part of the shipped `sdsctl
+web` service.
 
-Verify the exact eleven-file generator, asset-directory, canonical-guide, and raw
+Verify the exact 26-file generator, asset-directory, canonical-guide, and raw
 default-branch wiki reference contract without opening Chrome:
 
 ```bash

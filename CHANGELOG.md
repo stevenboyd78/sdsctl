@@ -71,9 +71,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   for more than ten seconds, then verified that the unchanged page recovered
   ordered updates without reload; a second normal App restart preserved the same
   document and recovered again. Deterministic gallery capture now holds its demo
-  transport in one inert-open state and verifies an unchanged visible status
-  message, preventing retry and polling schedules from racing the PNG
-  repeatability gate without weakening browser event-stream coverage.
+  transport in one inert-open state, verifies an unchanged visible status
+  message, pins canonical documentation media preferences, requires stable
+  Waterfall Canvas pixels and consecutive compositor frames, and
+  deterministically re-encodes validated Chrome pixels. The authoritative
+  gallery now provides the same Full HD, desktop, compact/Raspberry Pi, and DPR2
+  phone review set for all six themes plus two Waterfall references, so all 26
+  files can expose responsive layout and formatting regressions without
+  cross-process PNG encoding creating false failures or weakening browser
+  event-stream coverage. The first complete phone review exposed long theme
+  names competing with the brand and status; phone-width headers now use one
+  compact brand row above a shared connection-status and theme-selector row,
+  with the supporting subtitle and visible selector label removed only from
+  that narrow presentation. Every built-in label remains complete while more
+  height is returned to the working pane and desktop and compact geometry stay
+  unchanged.
 - Complete Milestone 27.2.2 audio-lifecycle and release-integrity hardening.
   Fanout and dynamic-router destinations now receive PCM through independent
   bounded workers, so producer paths never wait for destination code; overflow

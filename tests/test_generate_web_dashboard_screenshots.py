@@ -26,16 +26,17 @@ _EXPECTED_THEMES = (
     "amateur-radio",
     "pip-boy-inspired",
 )
-_EXPECTED_CAPTURES = (
-    ("theme-system-1920x1080.png", "system", 1920, 1080, 1, "scanner"),
-    ("theme-system-390x844-dpr2.png", "system", 390, 844, 2, "scanner"),
-    ("theme-lcars-1920x1080.png", "lcars", 1920, 1080, 1, "scanner"),
-    ("theme-matrix-1920x1080.png", "matrix", 1920, 1080, 1, "scanner"),
-    ("theme-first-responder-1920x1080.png", "first-responder", 1920, 1080, 1, "scanner"),
-    ("theme-amateur-radio-1920x1080.png", "amateur-radio", 1920, 1080, 1, "scanner"),
-    ("theme-amateur-radio-1366x768.png", "amateur-radio", 1366, 768, 1, "scanner"),
-    ("theme-pip-boy-inspired-1920x1080.png", "pip-boy-inspired", 1920, 1080, 1, "scanner"),
-    ("theme-pip-boy-inspired-800x480.png", "pip-boy-inspired", 800, 480, 1, "scanner"),
+_EXPECTED_VIEWPORTS = (
+    ("1920x1080", 1920, 1080, 1),
+    ("1366x768", 1366, 768, 1),
+    ("800x480", 800, 480, 1),
+    ("390x844-dpr2", 390, 844, 2),
+)
+_EXPECTED_CAPTURES = tuple(
+    (f"theme-{theme}-{suffix}.png", theme, width, height, dpr, "scanner")
+    for theme in _EXPECTED_THEMES
+    for suffix, width, height, dpr in _EXPECTED_VIEWPORTS
+) + (
     ("theme-system-waterfall-1920x1080.png", "system", 1920, 1080, 1, "waterfall"),
     (
         "theme-pip-boy-inspired-waterfall-800x480.png",
@@ -64,12 +65,37 @@ def _png(width: int, height: int, *, pixel: bytes = b"\x00\x00\x00") -> bytes:
     )
 
 
+def test_chrome_png_canonicalization_converges_distinct_compression_streams() -> None:
+    first = _png(8, 6, pixel=b"\x12\x34\x56")
+    header = pack(">IIBBBBB", 8, 6, 8, 2, 0, 0, 0)
+    rows = b"".join(b"\x00" + b"\x12\x34\x56" * 8 for _row in range(6))
+    second = (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", header)
+        + _png_chunk(b"IDAT", zlib.compress(rows, level=1))
+        + _png_chunk(b"IEND", b"")
+    )
+
+    assert first != second
+    assert screenshots._canonicalize_chrome_png(first) == (
+        screenshots._canonicalize_chrome_png(second)
+    )
+    assert screenshots._png_dimensions_bytes(
+        screenshots._canonicalize_chrome_png(first)
+    ) == (8, 6)
+
+
 def _ready_dom(theme: str = "system", pane: str = "scanner") -> str:
     values = "".join(
         f'<div id="{element_id}">{value}</div>'
         for element_id, value in screenshots._READY_TEXT.items()
         if element_id not in {"last-update", "status-badge"}
     )
+    if pane == "waterfall":
+        values += "".join(
+            f'<div id="{element_id}">{value}</div>'
+            for element_id, value in screenshots._READY_WATERFALL_TEXT.items()
+        )
     return (
         f'<!doctype html><html data-theme="{theme}" data-workspace-pane="{pane}"><body>'
         '<div id="status-badge" data-state="online">Connected</div>'
@@ -85,7 +111,9 @@ def _capture_result(
     png_bytes: int,
     *,
     outer_html: str | None = None,
+    screenshot_attempts: object = 2,
     viewport: dict[str, object] | None = None,
+    waterfall_canvas: object | None = None,
 ) -> str:
     exact_viewport: dict[str, object] = {
         "width": capture.width,
@@ -94,15 +122,45 @@ def _capture_result(
         "visualWidth": capture.width,
         "visualHeight": capture.height,
         "visualScale": 1,
+        "colorScheme": "light",
+        "forcedColors": "none",
+        "contrast": "no-preference",
         "reducedMotion": True,
     }
     if viewport is not None:
         exact_viewport.update(viewport)
+    if capture.pane == "waterfall" and waterfall_canvas is None:
+        waterfall_canvas = {
+            "attempts": 2,
+            "canvases": [
+                {
+                    "digest": "0" * 64,
+                    "height": capture.height,
+                    "id": "waterfall-spectrum",
+                    "width": capture.width,
+                },
+                {
+                    "digest": "1" * 64,
+                    "height": capture.height,
+                    "id": "waterfall-history",
+                    "width": capture.width,
+                },
+            ],
+            "sequence": "33",
+            "stable": True,
+            "state": "live",
+        }
     return json.dumps(
         {
-            "outerHTML": outer_html if outer_html is not None else _ready_dom(capture.theme),
+            "outerHTML": (
+                outer_html
+                if outer_html is not None
+                else _ready_dom(capture.theme, capture.pane)
+            ),
             "pngBytes": png_bytes,
+            "screenshotAttempts": screenshot_attempts,
             "viewport": exact_viewport,
+            "waterfallCanvas": waterfall_canvas,
         }
     )
 
@@ -149,9 +207,10 @@ def test_capture_inventory_covers_every_theme_and_reference_viewport() -> None:
         if capture.pane == "scanner" and (capture.width, capture.height) != (1920, 1080)
     }
     assert reference_captures == {
-        ("system", 390, 844, 2),
-        ("pip-boy-inspired", 800, 480, 1),
-        ("amateur-radio", 1366, 768, 1),
+        (theme, width, height, dpr)
+        for theme in _EXPECTED_THEMES
+        for _suffix, width, height, dpr in _EXPECTED_VIEWPORTS
+        if (width, height) != (1920, 1080)
     }
 
 
@@ -387,7 +446,7 @@ def test_capture_uses_same_frame_dom_readiness_and_reduced_motion(
     assert staged_destination != destination
     assert staged_destination.suffix == ".png"
     assert _command_value(observed_command, "--output") == str(staged_destination)
-    assert destination.read_bytes() == _png(6, 4)
+    assert destination.read_bytes() == screenshots._canonicalize_chrome_png(_png(6, 4))
     assert set(output.iterdir()) == {destination}
 
 
@@ -514,7 +573,7 @@ def test_capture_atomically_replaces_symlink_without_touching_its_target(
 
     assert result == destination
     assert not destination.is_symlink()
-    assert destination.read_bytes() == _png(6, 4)
+    assert destination.read_bytes() == screenshots._canonicalize_chrome_png(_png(6, 4))
     assert symlink_target.read_bytes() == target_content
     assert set(output.iterdir()) == {destination}
 
@@ -582,20 +641,90 @@ def test_waterfall_capture_readiness_requires_stable_live_frame() -> None:
         6,
         pane="waterfall",
     )
-    ready = _ready_dom(pane="waterfall").replace(
-        "</body>",
-        "".join(
-            f'<div id="{element_id}">{value}</div>'
-            for element_id, value in screenshots._READY_WATERFALL_TEXT.items()
-        )
-        + "</body>",
-    )
+    ready = _ready_dom(pane="waterfall")
 
     assert screenshots._capture_dom_is_ready(ready, capture)
     assert not screenshots._capture_dom_is_ready(
         ready.replace(">33<", ">32<", 1),
         capture,
     )
+
+
+def test_waterfall_canvas_stability_requires_two_exact_live_canvas_digests() -> None:
+    stable: dict[str, object] = {
+        "attempts": 2,
+        "canvases": [
+            {
+                "digest": "a" * 64,
+                "height": 240,
+                "id": "waterfall-spectrum",
+                "width": 1200,
+            },
+            {
+                "digest": "b" * 64,
+                "height": 480,
+                "id": "waterfall-history",
+                "width": 1200,
+            },
+        ],
+        "sequence": "33",
+        "stable": True,
+        "state": "live",
+    }
+
+    assert screenshots._valid_waterfall_canvas_stability(stable)
+    for mutation in (
+        {**stable, "attempts": 1},
+        {**stable, "sequence": "32"},
+        {**stable, "stable": False},
+        {**stable, "state": "idle"},
+        {**stable, "canvases": stable["canvases"][:1]},  # type: ignore[index]
+        {
+            **stable,
+            "canvases": [
+                {**stable["canvases"][0], "digest": "not-a-digest"},  # type: ignore[index]
+                stable["canvases"][1],  # type: ignore[index]
+            ],
+        },
+    ):
+        assert not screenshots._valid_waterfall_canvas_stability(mutation)
+
+
+def test_capture_rejects_unproven_compositor_stability(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capture = screenshots.Capture("capture.png", "system", 6, 4)
+    profile = tmp_path / "profile"
+    output = tmp_path / "output"
+    profile.mkdir()
+    output.mkdir()
+
+    def run(command: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        staged = Path(_command_value(command, "--output"))
+        content = _png(6, 4)
+        staged.write_bytes(content)
+        return subprocess.CompletedProcess(
+            command,
+            0,
+            stdout=_capture_result(capture, len(content), screenshot_attempts=1),
+        )
+
+    monkeypatch.setattr(screenshots.subprocess, "run", run)
+
+    with pytest.raises(RuntimeError, match="did not prove compositor stability"):
+        screenshots._capture(
+            chrome="chrome",
+            node="node",
+            profile_dir=profile,
+            base_url="http://127.0.0.1:8000",
+            capture=capture,
+            output_dir=output,
+            virtual_time_ms=2500,
+            capture_timeout_seconds=20.0,
+        )
+
+    assert tuple(output.iterdir()) == ()
 
 
 def test_capture_selection_preserves_inventory_order_and_rejects_unknown() -> None:

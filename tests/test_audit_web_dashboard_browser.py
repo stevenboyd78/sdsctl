@@ -157,12 +157,21 @@ def test_internal_capture_bridge_documents_and_enforces_exact_cdp_viewports() ->
         'Object.defineProperty(globalThis, "EventSource"',
         "__sdsctlScreenshotEventSource",
         "__sdsctlScreenshotMessageStability",
+        "waitForWaterfallCanvasStability",
+        'context.getImageData(0, 0, canvas.width, canvas.height).data',
+        'crypto.subtle.digest("SHA-256", pixels)',
+        "captureStableScreenshot",
         'cdp.send("Emulation.setDeviceMetricsOverride"',
         'cdp.send("Emulation.setEmulatedMedia"',
+        '{name: "prefers-color-scheme", value: "light"}',
+        '{name: "forced-colors", value: "none"}',
+        '{name: "prefers-contrast", value: "no-preference"}',
         'cdp.send("Page.captureScreenshot"',
         "captureBeyondViewport: false",
         "document.documentElement.outerHTML",
         "outerHTML !== finalOuterHTML",
+        "screenshotAttempts: screenshot.attempts",
+        "waterfallCanvas",
     ):
         assert contract in audit_source
     assert audit_source.index(

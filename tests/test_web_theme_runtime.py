@@ -498,6 +498,12 @@ def test_managed_stylesheet_cannot_escape_shared_viewport_cascade(
         "color: HighlightText !important",
         "background: Highlight !important",
         "transition: none !important",
+        "grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr) !important",
+        "grid-template-rows: auto auto !important",
+        "grid-column: 1 / -1 !important",
+        "justify-self: stretch !important",
+        "clip: rect(0, 0, 0, 0) !important",
+        "white-space: nowrap !important",
     ):
         assert protected in viewport.text
     assert shell.text.index('data-sdsctl-managed-theme="solarized"') < (

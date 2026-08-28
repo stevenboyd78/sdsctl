@@ -70,14 +70,17 @@ or Chromium and the web dependencies installed:
 
 The helper requires Node.js 24 or newer and starts a temporary loopback-only demo
 application. For each isolated Chrome profile, its dependency-free CDP bridge
-sets and verifies the exact declared CSS width, height, and DPR, forces reduced
-motion, and waits for dashboard state, fonts, and stable frames. It captures only
-that viewport and returns the authoritative outer HTML; Python then verifies the
-ready DOM plus complete PNG structure, CRCs, compressed scanlines, and DPR-scaled
-physical dimensions before atomically publishing the image. Chrome outer-window
-dimensions are not used as a viewport proxy. The helper shuts the server down
-when generation completes. Do not edit generated PNG files manually; update the
-packaged dashboard or generator and regenerate the gallery together. Run
+sets and verifies the exact declared CSS width, height, and DPR; pins canonical
+light color, normal contrast, forced-colors-off, and reduced-motion media; and
+waits for dashboard state, fonts, stable Waterfall Canvas pixels, and consecutive
+identical compositor frames. It captures only that viewport and returns the
+authoritative outer HTML; Python then verifies the ready DOM plus complete PNG
+structure, CRCs, compressed scanlines, and DPR-scaled physical dimensions before
+reconstructing and deterministically re-encoding Chrome's pixels and atomically
+publishing the image. Chrome outer-window dimensions are not used as a viewport
+proxy. The helper shuts the server down when generation completes. Do not edit
+generated PNG files manually; update the packaged dashboard or generator and
+regenerate the gallery together. Run
 `python scripts/generate_web_dashboard_screenshots.py --verify-gallery` to verify
 the exact generator, local asset, canonical documentation, and raw-main wiki
 reference set without opening Chrome. CI and release validation run

@@ -742,6 +742,68 @@
     }
   }
 
+  @media (max-width: 26rem) and (min-height: 28rem) {
+    .site-header {
+      grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr) !important;
+      grid-template-rows: auto auto !important;
+      align-items: center !important;
+      column-gap: 0.4rem !important;
+      row-gap: 0.3rem !important;
+    }
+
+    .site-header .brand {
+      grid-column: 1 / -1 !important;
+      grid-row: 1 !important;
+      width: 100% !important;
+    }
+
+    .site-header .brand .subtitle {
+      display: none !important;
+    }
+
+    .site-header .brand h1 {
+      overflow-wrap: normal !important;
+      white-space: nowrap !important;
+      font-size: clamp(1.35rem, 7vw, 1.7rem) !important;
+    }
+
+    .site-header > .status-badge {
+      grid-column: 1 !important;
+      grid-row: 2 !important;
+      justify-self: center !important;
+    }
+
+    .site-header .header-actions {
+      grid-column: 2 !important;
+      grid-row: 2 !important;
+      width: 100% !important;
+      justify-self: stretch !important;
+    }
+
+    .site-header .theme-picker {
+      width: 100% !important;
+      justify-items: stretch !important;
+    }
+
+    .site-header .theme-picker label {
+      position: absolute !important;
+      width: 1px !important;
+      height: 1px !important;
+      padding: 0 !important;
+      margin: -1px !important;
+      overflow: hidden !important;
+      clip: rect(0, 0, 0, 0) !important;
+      white-space: nowrap !important;
+      border: 0 !important;
+    }
+
+    .site-header .theme-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: none !important;
+    }
+  }
+
   @media (max-height: 38rem) and (min-height: 28rem) {
     .site-header {
       padding-block: 0.25rem !important;

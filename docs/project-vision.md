@@ -51,6 +51,43 @@ adds read-only detection of known legacy profile locations while preserving thei
 existing defaults. It does not move or rewrite user data; any future migration
 requires an explicit compatibility plan.
 
+## Post-v1.0 scanner-family expansion
+
+Broader Uniden scanner-family compatibility is an unscheduled post-v1.0 product
+direction. Pre-v1.0 work should finish and stabilize the SDS100, SDS150, and
+SDS200 experience rather than expand the hardware matrix. A model listed here is
+not supported until its behavior appears in a released changelog with explicit
+capabilities, regression coverage, documentation, and representative physical
+validation.
+
+The BCD436HP and BCD536HP are the leading research candidates. Uniden's SDS
+Series Remote Command Specification V2.00 states that it was created from the
+[BCDx36HP Remote Command Specification V1.05][bcdx36hp-remote], and the families
+share a substantial command and XML scanner-state foundation. Future work may
+reuse model-neutral state, presentation, Favorites Workspace, recording, and
+interface services, but must not infer support for SDS-only commands or fields.
+BCD536HP Wi-Fi control and audio require their own reviewed transport rather than
+being treated as SDS200 native UDP behavior.
+
+Later candidates may include HomePatrol models with the required control
+capabilities, the BCD325P2/BCD996P2 DMA family, BCD160DN/BCD260DN conventional
+digital models, BC125AT-class conventional scanners, and older documented XT/T
+families. Each distinct family requires evidence-led protocol comparison and a
+separate assessment of transport, command framing, state projection, memory
+hierarchy, programming storage, audio, firmware limits, licensing, and physical
+hardware availability. Compatibility with unrelated Uniden product categories
+is outside this direction.
+
+Any expansion should preserve explicit model capabilities and fail-closed model
+detection. Protocol, transport, storage, audio, and presentation adapters should
+remain separable so that a new scanner family can feed shared interfaces without
+weakening SDS behavior or opening competing scanner sessions. Favorites editing
+or scanner writes require a representative private-data-free corpus, lossless
+round-trip evidence, model-specific backup and restore acceptance, and physical
+validation before write support is advertised.
+
+[bcdx36hp-remote]: https://info.uniden.com/twiki/pub/UnidenMan4/BCD536HPFirmwareUpdate/BCDx36HP_RemoteCommand_Specification_V1_05.pdf
+
 ## Architectural principles
 
 ### Model-neutral domain services
