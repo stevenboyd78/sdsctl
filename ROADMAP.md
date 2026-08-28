@@ -38,14 +38,14 @@ README, canonical documentation, and reviewed wiki source; and run the complete
 static, test, browser, documentation, distribution, container, and release-
 contract validation before any release tag exists.
 
-Add the missing Milestone 27.4 changelog and Home Assistant acceptance records.
-Replace the stale duplicated planned contract with the final completed boundary,
-including the physical hexadecimal input contract. Extend the deterministic
-documentation gallery with a System desktop Waterfall capture and a compact
-Pip-Boy-inspired Waterfall capture generated from the real packaged dashboard
-and fictional private-data-free state. Keep exact viewport, device-pixel-ratio,
-repeatability, canonical-documentation, reviewed-wiki, and wheel/source-
-distribution evidence enforced.
+The missing Milestone 27.4 changelog and Home Assistant acceptance records are
+now present, and the stale duplicated planned contract has been replaced with
+the final completed boundary, including the physical hexadecimal input contract.
+The deterministic documentation gallery now includes a System desktop Waterfall
+capture and a compact Pip-Boy-inspired Waterfall capture generated from the real
+packaged dashboard and fictional private-data-free state. Keep exact viewport,
+device-pixel-ratio, repeatability, canonical-documentation, reviewed-wiki, and
+wheel/source-distribution evidence enforced.
 
 Run Ruff, mypy, the complete Python 3.11 through 3.14 test matrix with the shared
 86 percent coverage floor, documentation checks, the browser matrix, deterministic

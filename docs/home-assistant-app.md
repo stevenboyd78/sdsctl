@@ -856,3 +856,45 @@ This source-built development run validates the physical Milestone 27.3 branch
 and closure-repair behavior. It does not establish that the published v0.22.0
 repository image contains the unreleased workspace, and it does not replace a
 later tagged repository-managed release acceptance.
+
+### Milestone 27.4 authenticated waterfall development acceptance
+
+Milestone 27.4 physical development acceptance completed on August 28, 2026,
+using an isolated source-built Local App from exact closure commit
+`223303b2bec9a42b48641d90d4f39bc962bcdc0b`. This was a development build at
+version 0.22.0, not a published v0.23.0 image. The amd64 host ran Home Assistant
+OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7, and Docker
+29.6.2 against an SDS200 running firmware 1.26.01. Only the selected acceptance
+App ran during the bounded test, preserving one daemon, scanner-control, PSI,
+waterfall-polling, and RTSP/RTP owner.
+
+The acceptance run confirmed:
+
+- the App passed its private `waterfall.sock` path explicitly to the Ingress web
+  child, and opening the authenticated Waterfall pane created daemon demand
+  without exposing a scanner transport or local socket path to the browser;
+- the Ingress route used same-origin event-stream framing that remained
+  consumable through the Home Assistant proxy, while the direct route retained
+  its bounded newline-delimited compatibility;
+- real scanner GWF frames contained exactly 240 hexadecimal source strings and
+  the renderer validated and decoded that contract without interpreting the
+  values as decimal or publishing raw physical captures;
+- the spectrum, rolling history, raw-value line, valid GST frequency context,
+  frame rate and age, ordered sequence, queue loss, overflows, poll failures,
+  and session transitions updated live while remaining explicitly relative and
+  uncalibrated;
+- pause/resume froze only display updates, clear-history reset the bounded Canvas
+  history, full-screen remained usable, and theme changes recolored the existing
+  spectrum and history without restarting the private daemon subscription;
+- the Waterfall pane remained fully visible in the tested Ingress viewport,
+  leaving and reopening it released and recreated demand, and reconnect and App
+  restart restored live rendering through the authenticated path; and
+- final cleanup returned the scanner to normal operation, stopped the isolated
+  development App, and restored the repository-managed App as the sole daemon,
+  scanner-control, PSI, and RTSP/RTP audio owner.
+
+No scanner identifiers, programmed frequencies, raw waterfall captures, audio,
+credentials, or private network details are retained in the repository. This
+source-built run validates the Milestone 27.4 branch boundary; the later
+published v0.23.0 image still requires the separate repository-managed release
+acceptance gate above.

@@ -127,7 +127,7 @@ def test_roadmap_records_active_milestone_27_5_release_contract() -> None:
         "Milestone 27.4 is closed",
         "feature-frozen v0.23.0 release candidate",
         "Synchronize the Python package, import version, and Home Assistant App at 0.23.0",
-        "Add the missing Milestone 27.4 changelog and Home Assistant acceptance records",
+        "Milestone 27.4 changelog and Home Assistant acceptance records are now present",
         "System desktop Waterfall capture",
         "compact Pip-Boy-inspired Waterfall capture",
         "complete Python 3.11 through 3.14 test matrix",
@@ -152,6 +152,25 @@ def test_roadmap_preserves_closed_milestone_27_3_physical_acceptance() -> None:
         "normal scanning active",
     ):
         assert required in roadmap or required in normalized_roadmap
+
+
+def test_home_assistant_guide_records_milestone_27_4_physical_acceptance() -> None:
+    guide = _read("docs/home-assistant-app.md")
+    normalized_guide = " ".join(guide.split())
+
+    for required in (
+        "### Milestone 27.4 authenticated waterfall development acceptance",
+        "`223303b2bec9a42b48641d90d4f39bc962bcdc0b`",
+        "Home Assistant OS 18.2",
+        "SDS200 running firmware 1.26.01",
+        "exactly 240 hexadecimal source strings",
+        "same-origin event-stream framing",
+        "pause/resume froze only display updates",
+        "restored the repository-managed App as the sole daemon",
+        "No scanner identifiers, programmed frequencies, raw waterfall captures",
+        "published v0.23.0 image still requires the separate repository-managed release acceptance",
+    ):
+        assert required in guide or required in normalized_guide
 
 
 def test_roadmap_records_completed_milestone_27_4_web_waterfall_boundary() -> None:
