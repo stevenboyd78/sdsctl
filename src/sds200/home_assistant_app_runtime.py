@@ -202,6 +202,7 @@ def build_home_assistant_web_command(
         )
 
     program = _require_executable(executable)
+    assert paths.waterfall_socket is not None
     return (
         program,
         "web",
@@ -214,6 +215,8 @@ def build_home_assistant_web_command(
         os.fspath(paths.pcmu_socket),
         "--daemon-recording-file-socket-path",
         os.fspath(paths.recording_file_socket),
+        "--daemon-waterfall-socket-path",
+        os.fspath(paths.waterfall_socket),
         "--listen-port",
         str(ingress_port),
     )
