@@ -503,6 +503,7 @@ def test_managed_stylesheet_cannot_escape_shared_viewport_cascade(
         "grid-column: 1 / -1 !important",
         "justify-self: stretch !important",
         "clip: rect(0, 0, 0, 0) !important",
+        "font-size: clamp(1.2rem, 6vw, 1.5rem) !important",
         "white-space: nowrap !important",
     ):
         assert protected in viewport.text

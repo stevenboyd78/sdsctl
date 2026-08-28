@@ -764,7 +764,7 @@
     .site-header .brand h1 {
       overflow-wrap: normal !important;
       white-space: nowrap !important;
-      font-size: clamp(1.35rem, 7vw, 1.7rem) !important;
+      font-size: clamp(1.2rem, 6vw, 1.5rem) !important;
     }
 
     .site-header > .status-badge {
