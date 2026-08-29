@@ -602,6 +602,36 @@ Before live validation:
 Live validation should be a separate operator-controlled step and must not be
 part of the normal automated test suite.
 
+### Milestone 28.1 live qualification evidence
+
+An operator-approved read-only qualification on 2026-08-28 exercised the
+documented HTTPS SOAP endpoint with `getTrsTalkgroups` for public RadioReference
+system `12042`. The reviewed request used `sid=12042`, `tgCid=0`, `tgTag=0`, and
+`tgDec=0`. Credentials were resolved from owner-only private files, used only in
+memory, and never copied into commands, output, fixtures, logs, provenance, or
+the repository.
+
+The provider returned HTTP success, a well-formed SOAP document within the 4 MiB
+byte ceiling, no SOAP Fault, and no excess reference graph. Its 31,508 XML
+elements exceeded the decoder's former 20,000-element ceiling. Live talkgroup
+records also used content-free `xsi:nil` values for `tgSubfleet` and `tgSlot`,
+and nested `tag` records contained `tagId` without `tagDescr`. The decoder now
+uses a still-bounded 65,536-element ceiling, represents those two nullable
+talkgroup fields as `None`, and permits ID-only tags only in the nested
+talkgroup-tag path. Complete top-level `getTag` records still require
+`tagDescr`; nil elements with content and unrelated nil/shape changes remain
+invalid.
+
+After those narrow compatibility changes, the production source, HTTPS exchange,
+SOAP decoder, observation mapper, provenance lifecycle, refresh service, editor
+controller, and immutable preview presentation completed successfully. The
+result contained normalized observations and preview records. Before/after
+digests proved the copied Favorites corpus byte-for-byte unchanged, and the
+missing private provenance file remained missing. This evidence qualifies only
+the reviewed `getTrsTalkgroups` request used here; it does not establish live
+acceptance of the other observation operations, provider deletion semantics,
+automatic synchronization, or write acceptance.
+
 ## MyRR boundary
 
 MyRR remains outside this milestone. Do not infer that the documented database
@@ -615,7 +645,8 @@ private endpoints.
 
 The completed renderer-neutral RadioReference foundation still does not include:
 
-- live authenticated RadioReference provider qualification/validation;
+- live authenticated qualification of reviewed operations other than the
+  Milestone 28.1 `getTrsTalkgroups` request recorded above;
 - provider-to-SDS template or hierarchy construction beyond the four reviewed
   conventional/talkgroup mappings documented above;
 - implicit scanner record creation from provider objects;

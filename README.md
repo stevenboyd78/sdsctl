@@ -325,8 +325,10 @@ full token is supplied in a separate confirmation step. Execution uses only the
 existing verified copied-tree or USB executor and displays backup, rollback,
 report, recovery, and fresh-reload evidence. See the
 [Favorites Workspace editor guide](docs/favorites-workspace-editor.md) for the
-supported Name Tag and leaf operations, USB host-state boundary, and deliberate
-non-goals.
+supported Name Tag and leaf operations, USB host-state boundary, and optional
+explicit RadioReference refresh. RadioReference credentials are supplied only
+through named environment variables; its result is a read-only classified
+preview and cannot mutate Favorites data or provenance in this milestone.
 
 With an explicit SDS200 network host, opt in to WAV recording and use `R` to start
 or stop the one-shot recording session:

@@ -936,6 +936,86 @@ def test_decode_talkgroup_supports_local_href_arrays() -> None:
     )
 
 
+def test_decode_talkgroup_preserves_live_nullable_and_id_only_evidence() -> None:
+    talkgroup = _item(
+        "<tgId>20</tgId>"
+        "<tgDec>12345</tgDec>"
+        '<tgSubfleet xsi:nil="true" />'
+        "<tgLtr>0</tgLtr>"
+        '<tgSlot xsi:nil="1" />'
+        "<tgDescr>Operations</tgDescr>"
+        "<tgAlpha>Ops</tgAlpha>"
+        "<tgMode>D</tgMode>"
+        "<enc>0</enc>"
+        f"{_array_member('tags', 'tag', _item('<tagId>2</tagId>', type_name='tag'), count=1)}"
+        "<tgCid>30</tgCid>"
+        "<tgSort>1</tgSort>"
+        "<tgDate>2026-08-13T09:21:04Z</tgDate>",
+        type_name="Talkgroup",
+    )
+    response = _array_response(
+        RadioReferenceWsdlOperation.GET_TRUNKED_TALKGROUPS,
+        "Talkgroup",
+        talkgroup,
+        count=1,
+    )
+
+    decoded = RadioReferenceSoapDecoder().decode(
+        RadioReferenceWsdlOperation.GET_TRUNKED_TALKGROUPS,
+        response,
+    )
+
+    assert isinstance(decoded, tuple)
+    assert decoded[0].subfleet is None
+    assert decoded[0].slot is None
+    assert decoded[0].tags == (RadioReferenceTag(tag_id=2, description=None),)
+
+
+def test_talkgroup_nullable_string_rejects_nil_with_content() -> None:
+    talkgroup = _item(
+        "<tgId>20</tgId>"
+        "<tgDec>12345</tgDec>"
+        '<tgSubfleet xsi:nil="true">unexpected</tgSubfleet>'
+        "<tgLtr>0</tgLtr>"
+        "<tgSlot></tgSlot>"
+        "<tgDescr>Operations</tgDescr>"
+        "<tgAlpha>Ops</tgAlpha>"
+        "<tgMode>D</tgMode>"
+        "<enc>0</enc>"
+        f"{_array_member('tags', 'tag')}"
+        "<tgCid>30</tgCid>"
+        "<tgSort>1</tgSort>"
+        "<tgDate>2026-08-13T09:21:04Z</tgDate>",
+        type_name="Talkgroup",
+    )
+
+    with pytest.raises(RadioReferenceError):
+        RadioReferenceSoapDecoder().decode(
+            RadioReferenceWsdlOperation.GET_TRUNKED_TALKGROUPS,
+            _array_response(
+                RadioReferenceWsdlOperation.GET_TRUNKED_TALKGROUPS,
+                "Talkgroup",
+                talkgroup,
+                count=1,
+            ),
+        )
+
+
+def test_top_level_tag_still_requires_description() -> None:
+    response = _array_response(
+        RadioReferenceWsdlOperation.GET_TAG,
+        "tag",
+        _item("<tagId>2</tagId>", type_name="tag"),
+        count=1,
+    )
+
+    with pytest.raises(RadioReferenceError):
+        RadioReferenceSoapDecoder().decode(
+            RadioReferenceWsdlOperation.GET_TAG,
+            response,
+        )
+
+
 @pytest.mark.parametrize(
     ("operation", "item_type", "item", "expected_type"),
     (
@@ -1453,6 +1533,24 @@ def test_decoder_enforces_element_count_bound() -> None:
 
     with pytest.raises(RadioReferenceError):
         decoder.decode(RadioReferenceWsdlOperation.GET_TAG, response)
+
+
+def test_decoder_default_element_bound_accepts_large_bounded_response() -> None:
+    count = 7_000
+    response = _array_response(
+        RadioReferenceWsdlOperation.GET_TAG,
+        "tag",
+        _tag_item() * count,
+        count=count,
+    )
+
+    assert len(response) < RADIOREFERENCE_SOAP_DEFAULT_MAX_DOCUMENT_BYTES
+    decoded = RadioReferenceSoapDecoder().decode(
+        RadioReferenceWsdlOperation.GET_TAG,
+        response,
+    )
+
+    assert len(decoded) == count
 
 
 def test_decoder_rejects_duplicate_reference_ids() -> None:

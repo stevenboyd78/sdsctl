@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_27_5_release_contract() -> None:
+def test_roadmap_records_active_milestone_28_1_preview_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,17 +123,20 @@ def test_roadmap_records_active_milestone_27_5_release_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 27.5 — v0.23.0 release",
-        "Milestone 27.4 is closed",
-        "feature-frozen v0.23.0 release candidate",
-        "Synchronize the Python package, import version, and Home Assistant App at 0.23.0",
-        "Milestone 27.4 changelog and Home Assistant acceptance records are now present",
-        "System desktop Waterfall capture",
-        "compact Pip-Boy-inspired Waterfall capture",
-        "complete Python 3.11 through 3.14 test matrix",
-        "Only one genuine matching `v0.23.0` tag",
-        "Do not add a Home Assistant waterfall card",
-        "private local Favorites validation corpus remain outside the release",
+        "### Milestone 28.1 — Explicit RadioReference refresh and read-only Favorites preview",
+        "Milestone 27.5 is closed with v0.23.0 published",
+        "one explicit operator-initiated RadioReference refresh",
+        "environment-variable references for the application key and password",
+        "Merely opening the editor must not resolve secrets",
+        "Permit at most one refresh in flight",
+        "fresh Favorites snapshot must equal the editor's exact durable baseline",
+        "disable refresh while edits exist",
+        "`added`, `replaced`, `removed`, `unchanged`, `local_only`, and `conflict`",
+        "stable redacted RadioReference error boundary",
+        "does not reconcile provider evidence with unreviewed in-memory edits",
+        "Do not add local versus external decisions",
+        "Private credentials, provider payloads, and the local SDS200 Favorites "
+        "validation corpus remain outside the repository",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

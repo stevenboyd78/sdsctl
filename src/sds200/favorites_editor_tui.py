@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import threading
+from contextlib import suppress
 from typing import Any, ClassVar
 
 from textual.app import App, ComposeResult
@@ -16,6 +18,12 @@ from .favorites_editor import (
     FavoritesEditorRecordReference,
     FavoritesEditorReview,
     FavoritesEditorSession,
+)
+from .favorites_editor_external_preview import (
+    FavoritesEditorExternalPreviewController,
+    FavoritesEditorExternalPreviewError,
+    FavoritesEditorExternalPreviewSnapshot,
+    FavoritesEditorExternalPreviewState,
 )
 from .favorites_navigation import FavoritesNavigationNode, FavoritesNavigationPath
 
@@ -71,6 +79,46 @@ def _review_text(review: FavoritesEditorReview) -> str:
     return "\n".join(rows)
 
 
+def _external_preview_text(
+    snapshot: FavoritesEditorExternalPreviewSnapshot | None,
+) -> str:
+    if snapshot is None:
+        return "RadioReference preview: not configured"
+    rows = [f"RadioReference preview: {snapshot.state.value}"]
+    if snapshot.error is not None:
+        rows.append(f"Failure: {snapshot.error}")
+    if snapshot.stale_reason is not None:
+        rows.append(f"Stale: {snapshot.stale_reason}")
+    presentation = snapshot.presentation
+    if presentation is None:
+        rows.append("No provider read has been requested.")
+        return "\n".join(rows)
+    rows.extend(
+        (
+            f"Source: {presentation.provider} / {presentation.dataset}",
+            f"Refresh: {presentation.started_at} -> {presentation.completed_at}",
+            f"Observations: {presentation.observation_count}",
+            "Classifications: "
+            + ", ".join(f"{name}={count}" for name, count in presentation.counts),
+        )
+    )
+    for index, record in enumerate(presentation.records, start=1):
+        rows.append(
+            f"[{index}] {record.kind} local={record.local_target} "
+            f"external={record.external_record_id} observed={record.observed_at} "
+            f"revision={record.revision}"
+        )
+        if not record.fields:
+            rows.append("    fields: none")
+        for field in record.fields:
+            rows.append(
+                f"    {field.name}: {field.kind}; ownership={field.ownership}; "
+                f"local={field.local_value!r}; external_state={field.external_state}; "
+                f"external={field.external_value!r}"
+            )
+    return "\n".join(rows)
+
+
 class FavoritesEditorApp(App[None]):
     """Full-screen local Favorites browser, editor, and write reviewer."""
 
@@ -81,10 +129,13 @@ class FavoritesEditorApp(App[None]):
     #detail-column { width: 1fr; padding: 0 1; }
     #favorites-tree, #records-tree { height: 1fr; }
     #search-results { height: 5; border: solid $secondary; padding: 0 1; }
-    #detail, #diagnostics, #plan, #status { border: solid $secondary; padding: 0 1; }
+    #detail, #diagnostics, #plan, #external-preview, #status {
+        border: solid $secondary; padding: 0 1;
+    }
     #detail { min-height: 7; }
     #diagnostics { min-height: 5; }
     #plan { min-height: 6; }
+    #external-preview { min-height: 5; }
     #status { min-height: 4; }
     #controls { height: auto; }
     #edit-name, #confirmation { margin: 1 0 0 0; }
@@ -96,14 +147,29 @@ class FavoritesEditorApp(App[None]):
         Binding("ctrl+r", "reset_edits", "Reset"),
         Binding("ctrl+p", "review", "Review"),
         Binding("ctrl+x", "execute", "Execute"),
+        Binding("ctrl+g", "external_refresh", "RR refresh"),
         Binding("/", "focus_search", "Search"),
     ]
 
-    def __init__(self, session: FavoritesEditorSession) -> None:
+    def __init__(
+        self,
+        session: FavoritesEditorSession,
+        external_preview: FavoritesEditorExternalPreviewController | None = None,
+    ) -> None:
         super().__init__()
         if not isinstance(session, FavoritesEditorSession):
             raise TypeError("Favorites editor TUI requires FavoritesEditorSession.")
         self.session = session
+        if external_preview is not None and not isinstance(
+            external_preview,
+            FavoritesEditorExternalPreviewController,
+        ):
+            raise TypeError(
+                "Favorites editor external preview must be "
+                "FavoritesEditorExternalPreviewController or None."
+            )
+        self.external_preview = external_preview
+        self._external_refresh_thread: threading.Thread | None = None
         self.selected_path: FavoritesNavigationPath | None = None
         self.selected_record: FavoritesEditorRecordReference | None = None
 
@@ -122,6 +188,13 @@ class FavoritesEditorApp(App[None]):
                 yield Static("Select a Favorites record.", id="detail")
                 yield Static("Diagnostics", id="diagnostics")
                 yield Static(_plan_text(self.session), id="plan")
+                yield Static(
+                    _external_preview_text(
+                        None if self.external_preview is None else self.external_preview.snapshot()
+                    ),
+                    id="external-preview",
+                )
+                yield Button("Refresh RadioReference preview", id="external-refresh")
                 yield Input(placeholder="New Name Tag", id="edit-name")
                 with Horizontal(id="controls"):
                     yield Button("Rename", id="rename")
@@ -143,6 +216,11 @@ class FavoritesEditorApp(App[None]):
         self._rebuild_record_tree()
         self._refresh_diagnostics()
         self._refresh_detail()
+        self._refresh_external_preview()
+
+    def on_unmount(self) -> None:
+        if self.external_preview is not None:
+            self.external_preview.cancel()
 
     def _append_tree_node(self, tree_node: Any, node: FavoritesNavigationNode) -> None:
         child = tree_node.add(
@@ -207,6 +285,28 @@ class FavoritesEditorApp(App[None]):
     def _set_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
 
+    def _refresh_external_preview(self) -> None:
+        snapshot = (
+            None if self.external_preview is None else self.external_preview.snapshot()
+        )
+        self.query_one("#external-preview", Static).update(
+            _external_preview_text(snapshot)
+        )
+        button = self.query_one("#external-refresh", Button)
+        button.disabled = (
+            self.external_preview is None
+            or self.session.has_changes
+            or (
+                snapshot is not None
+                and snapshot.state is FavoritesEditorExternalPreviewState.REFRESHING
+            )
+        )
+
+    def _invalidate_external_preview(self, reason: str) -> None:
+        if self.external_preview is not None:
+            self.external_preview.invalidate(reason)
+        self._refresh_external_preview()
+
     def _refresh_detail(self) -> None:
         if self.selected_record is not None:
             try:
@@ -258,6 +358,7 @@ class FavoritesEditorApp(App[None]):
         self.query_one("#plan", Static).update(_plan_text(self.session))
 
     def _after_edit(self, preferred: FavoritesNavigationPath | None, message: str) -> None:
+        self._invalidate_external_preview("Favorites editor state changed")
         self.query_one("#confirmation", Input).value = ""
         self._rebuild_tree(preferred)
         self._rebuild_record_tree()
@@ -300,6 +401,7 @@ class FavoritesEditorApp(App[None]):
             "reset": self.action_reset_edits,
             "review": self.action_review,
             "execute": self.action_execute,
+            "external-refresh": self.action_external_refresh,
         }
         action = actions.get(event.button.id or "")
         if action is not None:
@@ -365,6 +467,47 @@ class FavoritesEditorApp(App[None]):
             "All in-memory edits discarded." if changed else "No edits to reset.",
         )
 
+    def action_external_refresh(self) -> None:
+        if self.external_preview is None:
+            self._set_status("RadioReference preview is not configured.")
+            return
+        if (
+            self._external_refresh_thread is not None
+            and self._external_refresh_thread.is_alive()
+        ):
+            self._set_status("A RadioReference refresh is already in progress.")
+            return
+        if self.session.has_changes:
+            self._invalidate_external_preview("unreviewed in-memory Favorites edits")
+            self._set_status(
+                "RadioReference refresh is unavailable while unreviewed edits exist."
+            )
+            return
+        self.query_one("#external-refresh", Button).disabled = True
+        self.query_one("#external-preview", Static).update(
+            "RadioReference preview: refreshing\nOne explicit provider read is in progress."
+        )
+        self._external_refresh_thread = threading.Thread(
+            target=self._run_external_refresh,
+            name="favorites-radioreference-refresh",
+            daemon=True,
+        )
+        self._external_refresh_thread.start()
+        self.set_timer(0.05, self._poll_external_refresh)
+
+    def _run_external_refresh(self) -> None:
+        assert self.external_preview is not None
+        with suppress(FavoritesEditorExternalPreviewError):
+            self.external_preview.refresh()
+
+    def _poll_external_refresh(self) -> None:
+        thread = self._external_refresh_thread
+        if thread is not None and thread.is_alive():
+            self.set_timer(0.05, self._poll_external_refresh)
+            return
+        self._external_refresh_thread = None
+        self._refresh_external_preview()
+
     def action_review(self) -> None:
         try:
             review = self.session.review()
@@ -390,6 +533,7 @@ class FavoritesEditorApp(App[None]):
         self._rebuild_tree(self.selected_path)
         self._rebuild_record_tree()
         self._refresh_diagnostics()
+        self._invalidate_external_preview("Favorites write completed and baseline reloaded")
         self._set_status(self._execution_text(execution))
 
     @staticmethod
@@ -425,10 +569,13 @@ class FavoritesEditorApp(App[None]):
         )
 
 
-def run_favorites_editor(session: FavoritesEditorSession) -> None:
+def run_favorites_editor(
+    session: FavoritesEditorSession,
+    external_preview: FavoritesEditorExternalPreviewController | None = None,
+) -> None:
     """Run the local interactive editor without opening scanner control."""
 
-    FavoritesEditorApp(session).run()
+    FavoritesEditorApp(session, external_preview).run()
 
 
 __all__ = ["FavoritesEditorApp", "run_favorites_editor"]

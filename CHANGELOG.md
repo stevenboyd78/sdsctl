@@ -8,6 +8,29 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 28.1's optional RadioReference refresh to the local Favorites
+  Textual editor. One explicit copied-tree or freshly qualified USB source can
+  be paired with non-secret account settings, environment-variable secret
+  references, one reviewed observation request/dataset, and one canonical
+  provenance path. Opening the editor remains passive. Each button or `Ctrl+G`
+  action performs one bounded read only after a fresh local snapshot exactly
+  matches the durable editor baseline and no unreviewed edits exist. The
+  renderer-neutral controller serializes refreshes, closes each fresh lifecycle,
+  redacts failures, retains prior evidence on failure or cancellation, and
+  invalidates results after editor/source transitions. The read-only TUI shows
+  provider/dataset identity, times, revisions, all six record classifications,
+  exact local/external targets, and field ownership, values, absence, and
+  unmapped evidence. No preview action mutates Favorites bytes or publishes
+  provenance; acceptance and write-plan composition remain deferred.
+  Operator-approved live qualification against RadioReference system `12042`
+  exercised `getTrsTalkgroups` with all category, tag, and decimal filters. The
+  production decoder now retains a bounded 65,536-element ceiling beneath its
+  independent 4 MiB document limit, preserves live content-free `xsi:nil`
+  talkgroup subfleet and slot evidence as `None`, and accepts ID-only nested
+  talkgroup tags without weakening the complete top-level tag contract. The
+  complete provider-to-preview path returned normalized observations and preview
+  records while before/after validation proved the copied Favorites tree
+  unchanged and no provenance file created.
 - Redesign the web Controls pane around four explicit System, Department, Site,
   and Channel scope cards. Each card keeps its complete current target visible,
   reports `Held`, `Not held`, or `Unavailable` independently of color, and
