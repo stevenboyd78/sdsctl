@@ -13,6 +13,7 @@ from sds200.home_assistant_lovelace import (
     HOME_ASSISTANT_LOVELACE_CARD_FILENAME,
     HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME,
     HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL,
+    HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME,
     install_home_assistant_lovelace_cards,
     install_home_assistant_lovelace_display_card,
 )
@@ -92,7 +93,7 @@ def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
     )
 
 
-def test_install_cards_installs_both_packaged_assets(
+def test_install_cards_installs_all_packaged_assets(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
@@ -103,10 +104,18 @@ def test_install_cards_installs_both_packaged_assets(
 
     compact = tmp_path / HOME_ASSISTANT_LOVELACE_CARD_FILENAME
     display = tmp_path / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
+    waterfall = tmp_path / HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME
 
-    assert install_home_assistant_lovelace_cards() == (compact, display)
+    assert install_home_assistant_lovelace_cards() == (
+        compact,
+        display,
+        waterfall,
+    )
     assert compact.read_text(encoding="utf-8") == compact_card_text()
     assert display.read_text(encoding="utf-8") == display_card_text()
+    assert waterfall.read_text(encoding="utf-8").startswith(
+        '"use strict";\n'
+    )
 
 
 def test_display_card_packaged_asset_is_importable() -> None:

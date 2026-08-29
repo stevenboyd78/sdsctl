@@ -15,6 +15,7 @@ HOME_ASSISTANT_THEME_MANIFEST_FILENAME: Final = "manifest.json"
 BUILT_IN_HOME_ASSISTANT_THEME_IDS: Final = (
     "compact",
     "sds200-display",
+    "waterfall",
 )
 
 _MANIFEST_FIELDS: Final = frozenset(

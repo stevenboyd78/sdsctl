@@ -25,6 +25,14 @@ HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH = (
 HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL = (
     "/local/sds200/sds200-display-card.js"
 )
+HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME = "sds200-waterfall-card.js"
+HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_PATH = (
+    HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY
+    / HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME
+)
+HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL = (
+    "/local/sds200/sds200-waterfall-card.js"
+)
 _HOME_ASSISTANT_LOVELACE_CARD_MODE = 0o644
 
 
@@ -126,8 +134,18 @@ def install_home_assistant_lovelace_display_card(
     )
 
 
-def install_home_assistant_lovelace_cards() -> tuple[Path, Path]:
-    """Install both first-party Home Assistant Lovelace card assets."""
+def install_home_assistant_lovelace_waterfall_card(
+    destination: str | Path = HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_PATH,
+) -> Path:
+    """Atomically install the authenticated waterfall card asset."""
+    return _install_home_assistant_lovelace_asset(
+        destination,
+        filename=HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME,
+    )
+
+
+def install_home_assistant_lovelace_cards() -> tuple[Path, Path, Path]:
+    """Install all first-party Home Assistant Lovelace card assets."""
     installed = tuple(
         _install_home_assistant_lovelace_asset(
             HOME_ASSISTANT_LOVELACE_CARD_DIRECTORY / theme.installed_filename,
@@ -135,11 +153,11 @@ def install_home_assistant_lovelace_cards() -> tuple[Path, Path]:
         )
         for theme in built_in_home_assistant_theme_registry().themes
     )
-    if len(installed) != 2:
+    if len(installed) != 3:
         raise HomeAssistantThemeError(
-            "built-in Home Assistant compatibility set must contain two modules"
+            "built-in Home Assistant compatibility set must contain three modules"
         )
-    return installed[0], installed[1]
+    return installed[0], installed[1], installed[2]
 
 
 __all__ = [
@@ -150,7 +168,11 @@ __all__ = [
     "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME",
     "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_PATH",
     "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL",
+    "HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME",
+    "HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_PATH",
+    "HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL",
     "install_home_assistant_lovelace_card",
     "install_home_assistant_lovelace_cards",
     "install_home_assistant_lovelace_display_card",
+    "install_home_assistant_lovelace_waterfall_card",
 ]

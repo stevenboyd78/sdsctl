@@ -19,6 +19,7 @@ LIVE_REPOSITORY_OWNED_FILES = (
     "src/sds200/daemon_mqtt_home_assistant.py",
     "src/sds200/themes/home-assistant/compact/sds200-card.js",
     "src/sds200/themes/home-assistant/sds200-display/sds200-display-card.js",
+    "src/sds200/themes/home-assistant/waterfall/sds200-waterfall-card.js",
     "docs/releasing.md",
     "wiki/Home.md",
     "wiki/Web-Dashboard.md",
@@ -90,6 +91,11 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
         in lovelace_installer
     )
     assert '"/local/sds200/sds200-display-card.js"' in lovelace_installer
+    assert (
+        'HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME = "sds200-waterfall-card.js"'
+        in lovelace_installer
+    )
+    assert '"/local/sds200/sds200-waterfall-card.js"' in lovelace_installer
 
 
 def test_generic_container_documentation_preserves_local_image_tag() -> None:
@@ -120,7 +126,11 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
-    normalized_active_milestone = " ".join(active_milestone.split())
+    normalized_roadmap = " ".join(roadmap.split())
+
+    assert "### Milestone 29.1 — Responsive Home Assistant waterfall card" in (
+        active_milestone
+    )
 
     for required in (
         "### Milestone 28 complete — v0.24.0 release candidate",
@@ -137,10 +147,9 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
         "Only one genuine matching `v0.24.0` tag may publish",
         "Workflow success alone is not release acceptance",
         "Milestone 29.1",
-        "not activated until v0.24.0 public release closure",
         "waiting dependency-update pull requests remain separate",
     ):
-        assert required in active_milestone or required in normalized_active_milestone
+        assert required in roadmap or required in normalized_roadmap
 
 
 def test_roadmap_preserves_closed_milestone_27_3_physical_acceptance() -> None:

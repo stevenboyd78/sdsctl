@@ -803,18 +803,24 @@ from a browser context where AudioWorklet is unavailable, the dashboard falls
 back to a compatible Web Audio processor while preserving the same daemon-owned
 PCMU stream.
 
-The App installs the unchanged compact **SDS200 Scanner** Lovelace card plus an
-additive **SDS200 Display** card. The display card offers five explicit
+The App installs the unchanged compact **SDS200 Scanner** Lovelace card, the
+additive **SDS200 Display** card, and an authenticated **SDS200 Waterfall** card.
+The display card offers five explicit
 scanner-style layouts plus an opt-in automatic layout, three palettes, and a 4:3
 viewport-fit option. Automatic mode uses the fixed Screen Kind entity to select
 Search/Close Call, Weather, or Tone-Out presentation and a configured Simple or
 Detail scanning fallback. Numeric zero configured for a Tone-Out tone is shown
-as `Detect` while the entity retains the scanner text. Register both
-`/local/sds200/sds200-card.js` and
-`/local/sds200/sds200-display-card.js` as JavaScript Modules when using both
-cards. Their byte-identical sources are independently packaged under
-`sds200/themes/home-assistant/compact/` and
-`sds200/themes/home-assistant/sds200-display/`; versioned manifests and one
+as `Detect` while the entity retains the scanner text. The waterfall card uses
+Home Assistant-authenticated App Ingress to render the existing daemon's
+relative, uncalibrated spectrum stream with bounded Canvas history; it adds no
+scanner transport or high-rate MQTT entities. Register the desired resources:
+`/local/sds200/sds200-card.js`,
+`/local/sds200/sds200-display-card.js`, and
+`/local/sds200/sds200-waterfall-card.js` as JavaScript Modules. Their
+byte-identical sources are independently packaged under
+`sds200/themes/home-assistant/compact/`,
+`sds200/themes/home-assistant/sds200-display/`, and
+`sds200/themes/home-assistant/waterfall/`; versioned manifests and one
 validated immutable registry drive App installation without changing those
 public URLs or enabling third-party discovery.
 

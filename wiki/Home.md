@@ -125,15 +125,24 @@ scanner controls: System, Department, Site, and Channel Hold
 switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
 App keeps the generic daemon MQTT request-envelope command input disabled.
 
-The App installs two first-party read-only Lovelace resources:
+The App installs three first-party Lovelace resources:
 `/local/sds200/sds200-card.js` for the unchanged compact **SDS200 Scanner** card
-and `/local/sds200/sds200-display-card.js` for **SDS200 Display**. Register each
+and `/local/sds200/sds200-display-card.js` for **SDS200 Display**, plus
+`/local/sds200/sds200-waterfall-card.js` for **SDS200 Waterfall**. Register each
 desired resource once under **Settings > Dashboards > Resources** as a JavaScript
 Module. The display card provides five explicit scanner-style layouts plus an
 opt-in Auto layout, three palettes, and a viewport-bounded 4:3 fit. Auto uses
 Screen Kind with a configurable Simple or Detail scanning fallback.
-Scanner controls remain standard Home Assistant entities rather than a
-transport inside either card.
+The waterfall card uses authenticated App Ingress for the daemon's relative,
+uncalibrated spectrum stream, with bounded responsive Canvas history and no
+entity, URL, credential, or scanner-address configuration. Scanner controls
+remain standard Home Assistant entities rather than a transport inside a card.
+
+Deterministic fictional-data reference captures are available for
+[desktop](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-1920x1080.png),
+[800×480 wall panel](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-800x480.png),
+and [390×844 phone](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-390x844-dpr2.png)
+presentations. The captures contain no private Home Assistant or scanner data.
 
 See the canonical
 [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)

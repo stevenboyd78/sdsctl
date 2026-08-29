@@ -296,20 +296,26 @@ distribution path on Home Assistant OS.
 6. Confirm the Configuration page renders the translated scanner host, MQTT topic
    prefix, and recording-directory names/descriptions; verify the default
    recording directory resolves below `/media`.
-7. Confirm `/local/sds200/sds200-card.js` and
-   `/local/sds200/sds200-display-card.js` are available, register each as a
-   JavaScript Module when needed, and verify **SDS200 Scanner** and **SDS200
-   Display** appear in the card picker with working graphical editors and
-   read-only state rendering. Exercise all five explicit display layouts, Auto
+7. Confirm `/local/sds200/sds200-card.js`,
+   `/local/sds200/sds200-display-card.js`, and
+   `/local/sds200/sds200-waterfall-card.js` are available, register each as a
+   JavaScript Module when needed, and verify **SDS200 Scanner**, **SDS200
+   Display**, and **SDS200 Waterfall** appear in the card picker with working
+   graphical editors and read-only rendering. Exercise all five explicit display
+   layouts, Auto
    with every supported Screen Kind and both scan fallbacks, all three palettes,
    and both fit modes; confirm viewport fit has no internal overflow at 390-pixel
-   phone, 800x480, and 1920x1080 reference sizes.
+   phone, 800x480, and 1920x1080 reference sizes. Exercise one and multiple live
+   waterfall cards at all three sizes, each bounded density and palette, pause,
+   resume, clear, hidden and removed-card cleanup, final-lease release, and App
+   restart recovery. Confirm exactly one running App is required and no private
+   Ingress value, URL, credential, or scanner address enters card configuration.
 8. Confirm the discovered SDS200 device exposes twenty-four components: seventeen
    state/diagnostic components plus four Hold switches and Previous Channel,
    Next Channel, and Reconnect Scanner buttons. Confirm the optional Site,
    Frequency, Modulation, Service Type, and configured Tone-Out Tone A and Tone B
    sensors follow field availability; Screen Kind falls back to `unknown`; and
-   zero tones render as `Detect` in both cards.
+   zero tones render as `Detect` in both entity cards.
 9. Exercise all four Hold scopes when meaningful, Previous and Next with a valid
    current channel selection, and Reconnect Scanner. Confirm Home Assistant state
    remains authoritative after each action and the App does not enable the

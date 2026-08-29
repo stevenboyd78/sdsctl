@@ -167,11 +167,12 @@ namespace should be limited to trusted Home Assistant publishers.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs two first-party read-only SDS200 cards:
+The Home Assistant App installs three first-party SDS200 cards:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
+/homeassistant/www/sds200/sds200-waterfall-card.js
 ```
 
 Home Assistant serves them to the frontend as:
@@ -179,11 +180,13 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js
 /local/sds200/sds200-display-card.js
+/local/sds200/sds200-waterfall-card.js
 ```
 
-The two byte-identical modules are independently packaged under
+The three byte-identical modules are independently packaged under
 `sds200/themes/home-assistant/compact/` and
-`sds200/themes/home-assistant/sds200-display/`. Versioned manifests and one
+`sds200/themes/home-assistant/sds200-display/`, and
+`sds200/themes/home-assistant/waterfall/`. Versioned manifests and one
 validated immutable built-in registry drive their ordered installation while
 preserving the same flat installed filenames and public URLs. The App does not
 scan user-writable theme directories or discover third-party packages.
@@ -192,7 +195,8 @@ Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. **SDS200 Scanner** remains the
 unchanged compact card. **SDS200 Display** adds Simple, Detail, Search/Close
 Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
-Black palettes.
+Black palettes. **SDS200 Waterfall** adds a bounded responsive Canvas view of
+the authenticated App's relative, uncalibrated waterfall stream.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -200,19 +204,22 @@ available.
 
 The automatic `/local` delivery requires the App to map Home Assistant's
 configuration directory read/write. That filesystem permission is broader than
-the two card files: the container can technically write elsewhere in the Home
+the three card files: the container can technically write elsewhere in the Home
 Assistant configuration tree while it is running. The SDS200 installer
 deliberately limits its own behavior to creating `www/sds200` when necessary and
-creating or replacing only the two card files listed above. It does not edit
+creating or replacing only the three card files listed above. It does not edit
 Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
 Failure to install or update the optional cards is isolated from the scanner
 runtime. The App logs a warning and continues starting the daemon and web
 dashboard.
 
-Both cards intentionally avoid calls to the App, daemon, scanner, MQTT broker,
-or Home Assistant APIs. They subscribe only to Home Assistant's supported
-`states` data context through the frontend `context-request` mechanism.
+The compact and display cards subscribe only to Home Assistant's supported
+`states` context. The read-only waterfall card uses Home Assistant's
+authenticated frontend context to create and validate an App Ingress session;
+it does not open a scanner transport, publish high-rate MQTT data, or accept
+URLs, credentials, scanner addresses, or private Ingress identifiers in its
+configuration.
 
 After registering the resource, add **SDS200 Scanner** from the Home Assistant
 card picker. The card uses Home Assistant's built-in graphical form editor.
@@ -298,6 +305,34 @@ The compact card includes optional Tone A and Tone B detail rows, and the
 `tone_out` display layout presents both configured values. Numeric zero with an
 optional `Hz` suffix is displayed as `Detect`; the entity retains the raw
 scanner text and other nonempty values are shown unchanged.
+
+For the live spectrum presentation, register the waterfall resource and add
+**SDS200 Waterfall** from the picker. It needs no entity configuration. The
+graphical editor exposes only bounded presentation options; equivalent YAML is:
+
+```yaml
+type: custom:sds200-waterfall-card
+title: SDS200 Waterfall
+density: standard
+palette: theme
+history: 120
+show_scale: true
+show_telemetry: true
+start_paused: false
+```
+
+`density` is `compact`, `standard`, or `tall`; `palette` is `theme`, `cyan`,
+`green`, `amber`, or `monochrome`; and `history` is 60, 120, or 240 frames. The
+card requires exactly one running SDS200 App discovered through Home Assistant.
+No running App is unavailable, and multiple running SDS200 Apps fail closed so
+the card cannot silently select the wrong scanner owner.
+
+Visible card instances hold independent demand leases over the daemon's single
+shared scanner-side waterfall session. Hiding, removing, or disconnecting a card
+aborts its stream; releasing the final live card stops waterfall demand. Pause
+freezes only visual history and remains connected. Authentication and transport
+loss use bounded reconnect delays, and the card stores no authentication or
+Ingress material in configuration or browser storage.
 
 ## Troubleshooting
 

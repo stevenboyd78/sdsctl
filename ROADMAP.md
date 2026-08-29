@@ -708,6 +708,37 @@ is collected.
 
 ### Milestone 28 — Favorites Workspace and assisted RadioReference product integration
 
+#### Milestone 28 complete — v0.24.0 release candidate record
+
+Milestones 28.1 through 28.4 are closed at the pre-tag boundary. They completed
+an explicit credentialed RadioReference refresh, exact read-only
+preview, reviewed field and record decisions, deterministic assisted write
+planning, separately confirmed guarded execution, and release publication.
+Private operator acceptance completed on August 29, 2026. A credentialed
+`getTrsTalkgroups` refresh against public RadioReference system `12042` proved
+the bounded preview, a copied-tree import proved the complete guarded execution
+path, and a controlled injected post-mutation failure proved exact reverse
+recovery with fail-closed cross-store reconciliation.
+
+Physical acceptance used an SDS100 running firmware 1.26.01 in USB Mass Storage
+mode on x86-64 Ubuntu 26.04.1 LTS with Python 3.14.4 and Docker 29.7.2. One
+reviewed minimal insertion and its separately reviewed inverse proved the
+forward/inverse digest chain closed, restored active provenance through canonical empty
+to its original absent state, synchronized the filesystem, and safely unmounted
+the removable volume. The preserved 118-field `F-List` record retained its
+unvalidated-extra-fields diagnostic while exact comparison proved the catalog
+bytes unchanged. This does not claim separate physical SDS200 USB acceptance.
+
+All credentials, provider payloads, local programming values, confirmation
+tokens, provenance content, private paths, and private-derived hashes remained
+outside the repository and public documentation. Release surfaces were
+synchronized for 0.24.0 and retained the shared 86 percent coverage floor. Only
+one genuine matching `v0.24.0` tag may publish. Workflow success alone is not
+release acceptance. Milestone 29.1 activated only after that
+public release closure. The external review message remains separate, and
+waiting dependency-update pull requests remain separate unless their reviewed
+state changes.
+
 - Milestone 28.1: explicit user-initiated RadioReference refresh and read-only
   preview inside the local Favorites editor. Reuse the existing production HTTPS
   source and renderer-neutral synchronization service; show observation time,

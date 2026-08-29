@@ -64,18 +64,21 @@ def test_built_in_home_assistant_theme_registry_is_ordered_and_immutable() -> No
     registry = built_in_home_assistant_theme_registry()
 
     assert registry.identifiers == BUILT_IN_HOME_ASSISTANT_THEME_IDS
-    assert tuple(theme.order for theme in registry.themes) == (0, 10)
+    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20)
     assert tuple(theme.label for theme in registry.themes) == (
         "SDS200 Scanner",
         "SDS200 Display",
+        "SDS200 Waterfall",
     )
     assert tuple(theme.custom_element for theme in registry.themes) == (
         "sds200-card",
         "sds200-display-card",
+        "sds200-waterfall-card",
     )
     assert tuple(theme.resource_url for theme in registry.themes) == (
         "/local/sds200/sds200-card.js",
         "/local/sds200/sds200-display-card.js",
+        "/local/sds200/sds200-waterfall-card.js",
     )
 
     with pytest.raises(FrozenInstanceError):
@@ -94,6 +97,7 @@ def test_built_in_modules_preserve_pre_extraction_bytes() -> None:
     assert hashes == {
         "compact": "0c6c09d7c127f358f58b192c6709e5983dffe0a02199f23f20ae46f13ce8d10d",
         "sds200-display": "9b73390b49064dfd250384eb5e726a20e10514e46c5904e074a2c0890609bd80",
+        "waterfall": "e90c786843bf2e27557eb0b1d43918cc118eea587278fbff4806356388988dcf",
     }
 
 
