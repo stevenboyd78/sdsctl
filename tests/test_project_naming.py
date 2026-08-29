@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_28_4_release_contract() -> None:
+def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,19 +123,22 @@ def test_roadmap_records_active_milestone_28_4_release_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 28.4 — v0.24.0 release and assisted-synchronization closure",
-        "Milestone 28.3 is closed after merging pull request 201",
-        "feature-frozen v0.24.0 release candidate",
-        "First use a disposable private copy of representative Favorites media",
-        "Exercise recovery without risking physical media",
-        "perform one minimal reversible physical SDS200 USB operation",
-        "finish at their accepted baseline",
-        "record only sanitized facts in tracked documentation",
-        "synchronize the Python package, import version, and Home Assistant App at 0.24.0",
+        "### Milestone 28 complete — v0.24.0 release candidate",
+        "Milestones 28.1 through 28.4 are closed at the pre-tag boundary",
+        "exact read-only preview",
+        "Private operator acceptance completed on August 29, 2026",
+        "`getTrsTalkgroups` refresh against public RadioReference system `12042`",
+        "controlled injected post-mutation failure",
+        "SDS100 running firmware 1.26.01 in USB Mass Storage mode",
+        "118-field `F-List` record",
+        "All credentials, provider payloads, local programming values",
+        "synchronized for 0.24.0",
         "shared 86 percent coverage floor",
         "Only one genuine matching `v0.24.0` tag may publish",
         "Workflow success alone is not release acceptance",
-        "The external implementation-review message and waiting dependency-update pull requests remain separate",
+        "Milestone 29.1",
+        "not activated until v0.24.0 public release closure",
+        "waiting dependency-update pull requests remain separate",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 
@@ -274,21 +277,45 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v023_release_documentation_names_current_generic_image() -> None:
+def test_v024_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
     for document in (readme, deployment):
-        assert "v0.23.0" in document
-        assert "theboyd78/sdsctl:0.23.0" in document
+        assert "v0.24.0" in document
+        assert "theboyd78/sdsctl:0.24.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.23.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.23.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.23.0" in installation
+    assert "## Upgrade to v0.24.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.24.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.24.0" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
     assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation
+
+
+def test_milestone_28_4_records_sanitized_physical_acceptance() -> None:
+    roadmap = ROADMAP.read_text(encoding="utf-8")
+    guide = _read("docs/favorites-workspace-editor.md")
+    research = _read("docs/favorites-format-research.md")
+    normalized = " ".join((roadmap + guide + research).split())
+
+    for required in (
+        "Milestone 28 complete — v0.24.0 release candidate",
+        "August 29, 2026",
+        "SDS100 running firmware 1.26.01",
+        "USB Mass Storage mode",
+        "Ubuntu 26.04.1 LTS",
+        "Python 3.14.4",
+        "Docker 29.7.2",
+        "forward/inverse digest chain closed",
+        "original absent state",
+        "safely unmounted",
+        "118-field `F-List`",
+        "catalog bytes unchanged",
+        "does not claim separate physical SDS200 USB acceptance",
+    ):
+        assert required in roadmap or required in guide or required in normalized

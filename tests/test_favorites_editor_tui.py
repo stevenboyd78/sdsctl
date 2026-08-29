@@ -4,6 +4,7 @@ import asyncio
 from dataclasses import replace
 from pathlib import Path
 
+from textual.containers import Grid, Vertical
 from textual.widgets import Button, Input, Static, Tree
 
 from sds200 import (
@@ -89,6 +90,44 @@ def test_tui_mounts_complete_tree_and_searches_names(tmp_path: Path) -> None:
 
             results = str(app.query_one("#search-results", Static).render())
             assert "Synthetic Dispatch" in results
+
+    asyncio.run(exercise())
+
+
+def test_tui_assisted_controls_remain_labeled_at_constrained_size(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        app = _app(tmp_path)
+
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+
+            guidance = str(app.query_one("#external-import-guidance", Static).render())
+            assert "select one compatible local C-Freq or TGID template" in guidance
+
+            field_controls = app.query_one("#external-field-controls", Grid)
+            record_controls = app.query_one("#external-record-controls", Vertical)
+            assert field_controls.region.height >= 3
+            assert record_controls.region.height >= 18
+
+            for control_id in (
+                "external-use",
+                "external-local",
+                "external-detach",
+                "external-import-prepare",
+                "external-import-adopt",
+                "external-ignore",
+                "external-delete",
+                "external-keep-record",
+                "external-detach-record",
+            ):
+                button = app.query_one(f"#{control_id}", Button)
+                assert button.region.height >= 3
+                assert button.region.width == record_controls.content_region.width or (
+                    control_id in {"external-use", "external-local", "external-detach"}
+                    and button.region.width > 0
+                )
 
     asyncio.run(exercise())
 
@@ -237,7 +276,7 @@ def test_tui_assisted_decisions_are_explicit_unexecuted_and_clearable(
             assert "Unresolved supported decisions: 0" in plan
             assert "Favorites bytes changed: no" in plan
             assert "Provenance changed: no" in plan
-            assert "cannot execute in Milestone 28.2" in status
+            assert "Review the exact assisted plan separately before execution" in status
             assert not session.has_changes
             assert storage.value is baseline
             assert not (tmp_path / "provenance.json").exists()
@@ -302,7 +341,11 @@ def test_tui_import_requires_exact_preparation_before_adoption(tmp_path: Path) -
             assert "Decisions: 1" in adopted
             assert "Unresolved supported decisions: 0" in adopted
             assert "Favorites bytes changed: yes" in adopted
-            assert "Prepared import: none" in preparation
+            assert "Prepared import: none pending" in preparation
+            assert "moves into the aggregate decision count" in preparation
+            assert "cleared to prevent duplicate adoption" in str(
+                app.query_one("#status", Static).render()
+            )
             assert storage.value is baseline
             assert not session.has_changes
             assert not (tmp_path / "provenance.json").exists()

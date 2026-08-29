@@ -694,6 +694,29 @@ the reviewed `getTrsTalkgroups` request used here; it does not establish live
 acceptance of the other observation operations, provider deletion semantics,
 automatic synchronization, or write acceptance.
 
+### Milestone 28.4 guarded execution acceptance
+
+Private operator acceptance on 2026-08-29 reused the documented
+`getTrsTalkgroups` operation and public RadioReference system `12042`, narrowed
+to one reviewed supported observation without retaining its programming value.
+A disposable copied-tree run proved explicit decisions, inert exact review,
+full-token confirmation, verified backup/staging/activation/readback,
+conditional provenance publication, lifecycle/session adoption, and single-use
+invalidation. A controlled post-mutation failure separately proved reverse
+execution through the same backend, exact baseline readback, preserved primary
+and recovery evidence, and fail-closed cross-store reconciliation.
+
+Only after those gates passed did a minimal reversible physical SDS100 USB Mass
+Storage run exercise the same production editor and durable writer. The reviewed
+forward insertion and separately reviewed inverse deletion both completed with
+exact Favorites and provenance readback, retained off-media durable evidence,
+and no required recovery. Independent verification proved the final Favorites
+tree and active provenance matched their pre-test baselines exactly before the
+filesystem was synchronized and safely unmounted. This acceptance qualifies the
+explicit assisted workflow for the reviewed operation and mappings; it does not
+establish provider deletion semantics, automatic synchronization, arbitrary
+mapping, web/Home Assistant execution, or physical SDS200 USB behavior.
+
 ## MyRR boundary
 
 MyRR remains outside this milestone. Do not infer that the documented database
@@ -712,9 +735,8 @@ The completed renderer-neutral RadioReference foundation still does not include:
 - provider-to-SDS template or hierarchy construction beyond the four reviewed
   conventional/talkgroup mappings documented above;
 - implicit scanner record creation from provider objects;
-- implicit arbitrary-field, record-creation/removal, or merge acceptance;
-- physical reversible USB acceptance of aggregate assisted execution, deferred
-  to Milestone 28.4 release closure;
+- implicit arbitrary-field, hierarchy construction, or unreviewed merge
+  acceptance beyond the explicit supported decisions;
 - renderer-specific CLI/web/Home Assistant assisted-import or execution UI;
 - automatic daemon or non-editor renderer startup wiring of the
   renderer-neutral lifecycle or assisted-synchronization service;

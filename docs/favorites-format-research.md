@@ -9,7 +9,9 @@ write path.
 The current evidence set consists of:
 
 - Uniden SDS100/200 File Specification v1.08, dated 2025-10-16; and
-- a copied `BCDx36HP` storage tree from an SDS200 running firmware 1.26.01.
+- a copied `BCDx36HP` storage tree from an SDS200 running firmware 1.26.01; and
+- a reversible physical USB Mass Storage acceptance run against an SDS100
+  running firmware 1.26.01 on August 29, 2026.
 
 The scanner copy is private research input. Raw user programming data must not be
 committed as repository fixtures. Automated tests should use sanitized synthetic
@@ -84,6 +86,20 @@ That gives 61 observed systems: 42 conventional and 19 trunked.
 
 Real scanner output contains structures that must not be rejected merely because
 they exceed the reviewed field tables.
+
+### `F-List`
+
+The physical SDS100 acceptance catalog contained an `F-List` record with 118
+tab-separated fields including the command, while the currently validated
+documented shape has 117. The schema therefore retained its conservative
+`unvalidated_extra_fields` diagnostic instead of claiming semantics for the
+additional position.
+
+The complete catalog bytes remained unchanged through the independently verified
+forward and inverse USB operations, and the final mounted Favorites tree matched
+the immutable pre-test baseline exactly. This proves lossless preservation and
+round-trip compatibility for the observed shape; it does not establish the
+meaning or general model/firmware applicability of the additional field.
 
 ### `T-Freq`
 

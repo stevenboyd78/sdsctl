@@ -545,7 +545,7 @@ See the
 
 The generic release workflow publishes amd64 and arm64 images for genuine
 matching release tags. v0.21.0 established that publication path; the current
-v0.23.0 version-selected release image is `theboyd78/sdsctl:0.23.0`, and
+v0.24.0 version-selected release image is `theboyd78/sdsctl:0.24.0`, and
 `theboyd78/sdsctl:latest` tracks the newest successfully published release.
 Prefer an exact version tag for controlled upgrades. Registry tags remain mutable;
 use a separately verified manifest digest when cryptographic immutability is
@@ -1202,19 +1202,24 @@ documented separately in pull requests and release notes.
 
 ## Project status
 
-Version `0.23.0` adds evidence-backed adaptive scanner-screen presentation, a
-qualified private text-waterfall service, the responsive six-pane web workspace,
-the original Pip-Boy-inspired web theme, independently reproduced protocol and
-audio hardening, and an authenticated theme-aware relative spectrum and rolling-
-waterfall pane. The release retains the authenticated direct-TLS LAN boundary,
-remote daemon-backed CLI and TUI operation, interactive Favorites Workspace,
-responsive Home Assistant display cards, and modular built-in and managed
-third-party themes delivered by v0.22.0. Loopback access remains the default,
-waterfall values remain explicitly uncalibrated, and the daemon remains the sole
-owner of scanner control, PSI, waterfall polling, and RTSP/RTP audio. SDS100 and
-SDS200 control support is hardware-validated. SDS150 support is implemented and
-fixture-tested, with physical validation deferred until representative hardware
-is available. API compatibility is not guaranteed until version 1.0.
+Version `0.24.0` completes the explicit assisted RadioReference workflow inside
+the local Favorites Workspace editor: one credentialed refresh, exact read-only
+preview, reviewed field and record decisions, deterministic write planning, and
+full-token-confirmed copied-tree or freshly qualified USB execution with verified
+readback, conditional provenance publication, and cross-store recovery. It also
+adds complete current-target context plus Previous, Hold/Release, and Next actions
+for all four web control scopes. The release retains v0.23.0's responsive six-pane
+workspace, adaptive scanner screens, authenticated relative Waterfall, six themes,
+browser audio, and recording, together with the direct-TLS LAN boundary and remote
+daemon-backed CLI/TUI support. Synchronization remains explicit and local—not
+scheduled, background, silent, or exposed through web, Home Assistant, or MQTT.
+Loopback access remains the default, waterfall values remain explicitly
+uncalibrated, and the daemon remains the sole owner of scanner control, PSI,
+waterfall polling, and RTSP/RTP audio. SDS100 and SDS200 control support is
+hardware-validated; v0.24.0 additionally completed reversible physical SDS100 USB
+Favorites acceptance. SDS150 support is implemented and fixture-tested, with
+physical validation deferred until representative hardware is available. API
+compatibility is not guaranteed until version 1.0.
 
 See [CHANGELOG.md](CHANGELOG.md) for development history,
 [ROADMAP.md](ROADMAP.md) for ordered work, and
