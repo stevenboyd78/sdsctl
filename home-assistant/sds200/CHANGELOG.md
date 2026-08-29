@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.24.0
+
+- Track the sdsctl v0.24.0 release while preserving the App name, slug, image
+  identity, MQTT identities, installed card resources, and single-owner
+  boundary. The local Favorites editor and its explicit RadioReference workflow
+  are not exposed through Home Assistant or MQTT.
+- Package the redesigned authenticated Controls pane with complete current
+  System, Department, Site, and Channel context, independent held-state text,
+  and Previous, desired-state Hold/Release, and Next actions for every scope.
+  Existing typed daemon operations, browser audio, recording, Waterfall,
+  responsive themes, and both bundled card modules retain their established
+  interfaces.
+
 ## 0.23.0
 
 - Track the sdsctl v0.23.0 release while preserving the App name, slug, image

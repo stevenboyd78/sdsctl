@@ -600,6 +600,32 @@ stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
 dashboard reported `Connected`; the repository App was therefore restored as
 the sole scanner owner.
 
+### v0.24.0 release acceptance gate
+
+After the genuine v0.24.0 tag publishes the amd64, aarch64, and generic
+multi-architecture App images, upgrade or install the repository-managed App and
+record the exact platform and scanner versions used. The release gate must
+confirm:
+
+- the App reports 0.24.0 and uses the matching published image without a Local
+  App or development-source ambiguity;
+- all twenty-four fixed MQTT Discovery components, both bundled card modules,
+  all six built-in themes, and the responsive six-pane workspace remain healthy;
+- the Controls pane retains complete current System, Department, Site, and
+  Channel context plus independent held-state text and Previous, desired-state
+  Hold/Release, and Next actions for every scope;
+- authenticated Waterfall demand and cleanup, semantic controls, browser audio,
+  recording, finalized playback, downloads, ordered-event recovery, and
+  persistent recordings retain their established behavior; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, waterfall polling, and audio.
+
+The local Favorites editor's credentialed RadioReference preview, planning, and
+guarded execution workflow is not exposed through Home Assistant Ingress, MQTT,
+or the App. No Home Assistant waterfall card or MQTT waterfall entity is part of
+v0.24.0; those remain Milestone 29 work. Published-image acceptance remains
+required even though the post-v0.23.0 scoped Controls development run passed.
+
 ### v0.23.0 release acceptance gate
 
 After the genuine v0.23.0 tag publishes the amd64, aarch64, and generic

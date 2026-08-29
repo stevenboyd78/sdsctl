@@ -6,8 +6,28 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-29
+
 ### Added
 
+- Close Milestone 28 with private operator acceptance of the complete assisted-
+  synchronization boundary. A credentialed `getTrsTalkgroups` refresh against
+  public RadioReference system `12042` proved the explicit read-only preview;
+  reviewed assisted decisions and a full confirmation token then drove exact
+  copied-tree backup, staging, activation, readback, conditional provenance
+  publication, lifecycle adoption, and single-use invalidation. Controlled
+  copied-tree failure injection proved exact reverse recovery after mutation.
+  Reversible physical SDS100 USB qualification on firmware 1.26.01 proved one
+  minimal forward record insertion and separately reviewed inverse through the
+  production editor and durable writer, including sole-owner and removable-media
+  qualification, retained backups and reports, exact preactivation and
+  postactivation checks, unmanaged-media preservation, absent versus empty
+  provenance handling, byte-identical final Favorites and provenance baselines,
+  filesystem synchronization, and safe unmount. A real preserved 118-field
+  `F-List` row remains conservatively diagnosed as unvalidated because its extra
+  field semantics are not yet evidenced. The constrained Textual layout now
+  keeps external fields and structural record decisions reachable and explains
+  that an adopted import moved into the aggregate plan rather than disappearing.
 - Add Milestone 28.3's guarded execution path for one exact aggregate assisted
   RadioReference plan. A separate assisted review derives a full deterministic
   confirmation token bound to the requested copied-tree or USB target, exact
@@ -1465,7 +1485,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.20.2...v0.21.0

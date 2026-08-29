@@ -161,6 +161,45 @@ before changing network or MQTT settings.
 The Local App workflow under `/addons` remains available for development but is
 not required for normal release installation.
 
+## Upgrade to v0.24.0
+
+v0.24.0 freezes Milestones 28.1 through 28.4: one explicit credentialed
+RadioReference refresh in the local Favorites Workspace editor, an exact
+read-only preview, reviewed assisted field and record decisions, deterministic
+write planning, and full-token-confirmed copied-tree or freshly qualified USB
+execution with verified readback, conditional provenance publication, and exact
+cross-store recovery. Synchronization remains local, explicit, user-initiated,
+and one-shot; it is not automatic, scheduled, silent, or exposed through the web
+dashboard, Home Assistant, or MQTT. The release also provides complete current
+target context and Previous, Hold/Release, and Next controls for System,
+Department, Site, and Channel in the responsive web Controls pane.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the Python package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.24.0"
+sdsctl --version
+```
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.24.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release, but
+the exact version tag is recommended for controlled deployments. Repository-root
+`compose.yaml` and `compose.usb.yaml` remain source-built and do not switch
+automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.24.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, and bundled card custom elements. Upgrade the repository-managed App
+through Home Assistant after the matching release images have published. The
+local RadioReference-assisted Favorites workflow is not an App or Ingress
+feature.
+
 ## Upgrade to v0.23.0
 
 v0.23.0 freezes Milestones 27.1 through 27.4: adaptive scanner-screen

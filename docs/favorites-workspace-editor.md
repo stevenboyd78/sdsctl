@@ -249,6 +249,37 @@ manifest, operation report, provenance path, reconciliation outcome, and
 recovery evidence without writing tokens, provenance, provider payloads, or
 local programming values to logs.
 
+## Milestone 28.4 physical acceptance
+
+Reversible physical acceptance completed on August 29, 2026, using an SDS100
+running firmware 1.26.01 in USB Mass Storage mode on an x86-64 Ubuntu 26.04.1 LTS
+host with Python 3.14.4 and Docker 29.7.2. The production editor freshly
+qualified the writable removable VFAT target and USB ancestry, retained all
+durable state in an owner-only host directory outside scanner media, required a
+sole scanner/media owner, and started from an independently recorded immutable
+private baseline.
+
+One reviewed minimal import completed through full-token confirmation with
+verified backup, staging, preactivation, postactivation, unmanaged-media
+preservation, durable operation report, provenance publication, and exact
+Favorites/provenance readback. A separately reviewed acceptance-only inverse
+used the linked provenance identity to plan one deletion without claiming that
+RadioReference removed the real record. Its backup matched the forward active
+state, its staging and final mounted Favorites matched the immutable pre-test
+baseline, and active provenance returned through canonical empty to its original
+absent state. Both operations completed without requiring recovery; independent
+verification closed the exact forward/inverse chain, the filesystem was
+synchronized, and the SDS100 volume was safely unmounted.
+
+The real catalog contained a preserved 118-field `F-List` shape where the
+currently validated documented shape has 117 fields. The editor retained the
+conservative unvalidated-extra-fields warning, and independent comparison proved
+the catalog bytes unchanged. This is evidence of lossless compatibility, not of
+the additional field's semantics or separate physical SDS200 USB acceptance.
+Credentials, provider content, scanner programming values, confirmation tokens,
+provenance, operation identities, artifacts, private paths, and private-derived
+hashes remain untracked.
+
 ## Deliberate limits
 
 The editor does not expose arbitrary positional fields, hierarchy or catalog
@@ -257,5 +288,6 @@ mutation, daemon or web execution, Home Assistant Ingress execution, or
 automatic/background synchronization. Assisted execution remains a local,
 explicit, one-shot copied-tree or freshly qualified USB workflow. Use only
 copied data you can recover or scanner media for which the verified backup and
-rollback artifacts are acceptable. Physical reversible USB execution acceptance
-remains part of Milestone 28.4 release closure.
+rollback artifacts are acceptable. The completed SDS100 acceptance does not
+waive fresh qualification, review, confirmation, backup, and exact-readback
+requirements for later operations.

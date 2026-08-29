@@ -8,7 +8,7 @@ from typing import Any, ClassVar
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding, BindingType
-from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.containers import Grid, Horizontal, Vertical, VerticalScroll
 from textual.widgets import Button, Footer, Header, Input, Static, Tree
 
 from .favorites_comparison import FavoritesComparisonAmbiguity, FavoritesComparisonSource
@@ -162,8 +162,9 @@ def _external_prepared_import_text(
 ) -> str:
     if decision is None:
         return (
-            "Prepared import: none\n"
-            "Select an exact local template and prepare an import before adoption."
+            "Prepared import: none pending\n"
+            "Select an exact local template to prepare a proposal. After adoption, "
+            "the proposal moves into the aggregate decision count and is cleared here."
         )
     anchor = decision.anchor
     template = decision.template
@@ -201,7 +202,7 @@ class FavoritesEditorApp(App[None]):
     #favorites-tree, #records-tree { height: 1fr; }
     #search-results { height: 5; border: solid $secondary; padding: 0 1; }
     #detail, #diagnostics, #plan, #external-preview, #external-plan,
-    #external-import-preview, #status {
+    #external-import-guidance, #external-import-preview, #status {
         border: solid $secondary; padding: 0 1;
     }
     #detail { min-height: 7; }
@@ -211,7 +212,17 @@ class FavoritesEditorApp(App[None]):
     #external-plan { min-height: 7; }
     #external-import-preview { min-height: 5; }
     #status { min-height: 4; }
-    #controls { height: auto; }
+    #external-field-controls {
+        height: auto;
+        grid-size: 3;
+        grid-columns: 1fr 1fr 1fr;
+        grid-gutter: 0 1;
+    }
+    #external-record-controls, #controls { height: auto; }
+    #external-field-controls Button, #external-record-controls Button {
+        width: 1fr;
+        margin: 0;
+    }
     #edit-name, #confirmation, #external-confirmation { margin: 1 0 0 0; }
     Button { margin: 0 1 0 0; }
     """
@@ -279,6 +290,11 @@ class FavoritesEditorApp(App[None]):
                 )
                 yield Button("Refresh RadioReference preview", id="external-refresh")
                 yield Static(_external_plan_text(None), id="external-plan")
+                yield Static(
+                    "For an added record, select one compatible local C-Freq or TGID "
+                    "template in the left tree before preparing an import.",
+                    id="external-import-guidance",
+                )
                 yield Input(
                     placeholder="RadioReference preview record number (for example 1)",
                     id="external-record-index",
@@ -287,11 +303,11 @@ class FavoritesEditorApp(App[None]):
                     placeholder="Mapped field: name, frequency, or talkgroup_decimal",
                     id="external-field",
                 )
-                with Horizontal(id="external-field-controls"):
+                with Grid(id="external-field-controls"):
                     yield Button("Use external", id="external-use")
                     yield Button("Keep local", id="external-local")
                     yield Button("Detach field", id="external-detach")
-                with Horizontal(id="external-record-controls"):
+                with Vertical(id="external-record-controls"):
                     yield Button(
                         "Prepare import after selected template",
                         id="external-import-prepare",
@@ -758,7 +774,7 @@ class FavoritesEditorApp(App[None]):
         self._set_status(
             "Assisted decision adopted in memory. "
             f"Unresolved: {plan.unresolved_decisions}. "
-            "This assisted plan cannot execute in Milestone 28.2."
+            "Review the exact assisted plan separately before execution."
         )
 
     def _choose_external_field(
@@ -848,6 +864,10 @@ class FavoritesEditorApp(App[None]):
             return
         self._external_prepared_import = None
         self._refresh_external_preview()
+        self._set_status(
+            "Prepared import adopted into the aggregate assisted plan. "
+            "The temporary proposal was cleared to prevent duplicate adoption."
+        )
 
     def action_external_clear(self) -> None:
         try:

@@ -1939,4 +1939,4 @@ __all__ = [
     "present_favorites_editor_external_preview",
 ]
 
-__version__ = "0.23.0"
+__version__ = "0.24.0"
