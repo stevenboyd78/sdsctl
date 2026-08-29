@@ -415,6 +415,17 @@ def _environment_variable_name(value: str) -> str:
     return value
 
 
+def _name_integer_parameter(value: str) -> tuple[str, int]:
+    name, separator, raw_integer = value.partition("=")
+    if not separator or not name or name.strip() != name:
+        raise argparse.ArgumentTypeError("parameter must use NAME=INTEGER")
+    try:
+        parsed = int(raw_integer)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("parameter must use NAME=INTEGER") from error
+    return (name, parsed)
+
+
 def _audio_device(value: str) -> str | int:
     try:
         return int(value)
@@ -1930,6 +1941,57 @@ def build_parser(
             "Private canonical host directory for USB backup, rollback, and "
             "operation artifacts (default: XDG state directory)"
         ),
+    )
+    favorites_edit.add_argument(
+        "--radioreference-preview",
+        action="store_true",
+        help="Enable explicit, read-only RadioReference refresh in the editor",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-username",
+        metavar="USERNAME",
+        help="RadioReference account username (never the password)",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-application-key-env",
+        type=_environment_variable_name,
+        metavar="VARIABLE",
+        help="Environment-variable name containing the RadioReference application key",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-password-env",
+        type=_environment_variable_name,
+        metavar="VARIABLE",
+        help="Environment-variable name containing the RadioReference password",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-provenance",
+        type=Path,
+        metavar="FILE",
+        help="Explicit private external-provenance JSON file",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-dataset",
+        metavar="IDENTIFIER",
+        help="Stable operator-selected identity for this reviewed provider dataset",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-operation",
+        choices=(
+            "getSubcatFreqs",
+            "getCountyFreqsByTag",
+            "getAgencyFreqsByTag",
+            "getTrsTalkgroups",
+        ),
+        metavar="OPERATION",
+        help="One reviewed RadioReference observation operation",
+    )
+    favorites_edit.add_argument(
+        "--radioreference-parameter",
+        action="append",
+        type=_name_integer_parameter,
+        metavar="NAME=INTEGER",
+        help="Exact WSDL parameter in reviewed order; repeat for each parameter",
     )
     subparsers.add_parser(
         "capabilities",
@@ -4867,6 +4929,41 @@ def _run_favorites_editor(
     if args.favorites_action != "edit":
         raise ValueError(f"Unsupported Favorites action: {args.favorites_action!r}")
 
+    radioreference_values = {
+        "--radioreference-username": args.radioreference_username,
+        "--radioreference-application-key-env": (
+            args.radioreference_application_key_env
+        ),
+        "--radioreference-password-env": args.radioreference_password_env,
+        "--radioreference-provenance": args.radioreference_provenance,
+        "--radioreference-dataset": args.radioreference_dataset,
+        "--radioreference-operation": args.radioreference_operation,
+    }
+    parameters = tuple(args.radioreference_parameter or ())
+    if not args.radioreference_preview:
+        supplied = tuple(
+            name for name, value in radioreference_values.items() if value is not None
+        )
+        if supplied or parameters:
+            raise ValueError(
+                "RadioReference preview options require --radioreference-preview."
+            )
+    else:
+        missing_options = tuple(
+            name for name, value in radioreference_values.items() if value is None
+        )
+        if missing_options:
+            raise ValueError(
+                "RadioReference preview requires: "
+                + ", ".join(missing_options)
+                + "."
+            )
+        if not parameters:
+            raise ValueError(
+                "RadioReference preview requires at least one "
+                "--radioreference-parameter NAME=INTEGER."
+            )
+
     if args.copied_tree is not None:
         if args.usb_host_state is not None:
             raise ValueError("--usb-host-state is only valid with --usb.")
@@ -4885,7 +4982,57 @@ def _run_favorites_editor(
             host_state_directory=host_state,
         )
 
-    run_favorites_editor(session)
+    if not args.radioreference_preview:
+        run_favorites_editor(session)
+        return 0
+
+    from .favorites_editor_external_preview import (
+        FavoritesEditorExternalPreviewController,
+        FavoritesEditorRadioReferenceRefreshOwnerFactory,
+    )
+    from .favorites_external import FavoritesExternalSourceIdentity
+    from .favorites_external_assisted_sync import (
+        RadioReferenceAssistedSynchronizationSourceFactory,
+    )
+    from .radioreference import (
+        RADIOREFERENCE_PROVIDER,
+        RadioReferenceConfiguration,
+        RadioReferenceCredential,
+    )
+    from .radioreference_http import RadioReferenceHttpsSoapExchangeFactory
+    from .radioreference_records import RadioReferenceWsdlOperation
+    from .radioreference_session import RadioReferenceObservationRequestPlan
+
+    credential = RadioReferenceCredential(
+        username=args.radioreference_username,
+        application_key_environment_variable=(
+            args.radioreference_application_key_env
+        ),
+        password_environment_variable=args.radioreference_password_env,
+    )
+    request_plan = RadioReferenceObservationRequestPlan(
+        source=FavoritesExternalSourceIdentity(
+            RADIOREFERENCE_PROVIDER,
+            args.radioreference_dataset,
+        ),
+        operation=RadioReferenceWsdlOperation(args.radioreference_operation),
+        parameters=parameters,
+    )
+    secret_resolver = None if environ is None else environ.__getitem__
+    source_factory = RadioReferenceAssistedSynchronizationSourceFactory(
+        configuration=RadioReferenceConfiguration(credential),
+        request_plan=request_plan,
+        exchange_factory=RadioReferenceHttpsSoapExchangeFactory(),
+        secret_resolver=secret_resolver,
+    )
+    provenance_path = args.radioreference_provenance.expanduser().resolve(strict=False)
+    owner_factory = FavoritesEditorRadioReferenceRefreshOwnerFactory(
+        storage=session.storage,
+        provenance_path=provenance_path,
+        source_factory=source_factory,
+    )
+    controller = FavoritesEditorExternalPreviewController(session, owner_factory)
+    run_favorites_editor(session, controller)
     return 0
 
 

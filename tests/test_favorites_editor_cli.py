@@ -4,7 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from sds200 import ConfigurationPaths, cli, favorites_editor, favorites_editor_tui
+from sds200 import (
+    ConfigurationPaths,
+    cli,
+    favorites_editor,
+    favorites_editor_external_preview,
+    favorites_editor_tui,
+)
 
 
 def _paths(tmp_path: Path) -> ConfigurationPaths:
@@ -143,3 +149,179 @@ def test_copied_tree_rejects_usb_host_state(
 
     assert result == 2
     assert "--usb-host-state is only valid with --usb" in capsys.readouterr().err
+
+
+def test_radioreference_preview_parser_retains_only_non_secret_configuration(
+    tmp_path: Path,
+) -> None:
+    args = cli.build_parser().parse_args(
+        [
+            "favorites",
+            "edit",
+            "--copied-tree",
+            str(tmp_path),
+            "--radioreference-preview",
+            "--radioreference-username",
+            "operator",
+            "--radioreference-application-key-env",
+            "RR_APP_KEY",
+            "--radioreference-password-env",
+            "RR_PASSWORD",
+            "--radioreference-provenance",
+            str(tmp_path / "private" / "provenance.json"),
+            "--radioreference-dataset",
+            "county-49-fire",
+            "--radioreference-operation",
+            "getCountyFreqsByTag",
+            "--radioreference-parameter",
+            "ctid=49",
+            "--radioreference-parameter",
+            "tag=4",
+        ]
+    )
+
+    assert args.radioreference_preview is True
+    assert args.radioreference_username == "operator"
+    assert args.radioreference_application_key_env == "RR_APP_KEY"
+    assert args.radioreference_password_env == "RR_PASSWORD"
+    assert args.radioreference_parameter == [("ctid", 49), ("tag", 4)]
+
+
+def test_radioreference_preview_dispatch_is_lazy_and_passes_controller(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: dict[str, object] = {}
+
+    class Session:
+        storage = object()
+
+    session = Session()
+
+    def controller(value: object, factory: object) -> object:
+        observed["controller_session"] = value
+        observed["owner_factory"] = factory
+        return "controller"
+
+    def run_editor(value: object, external: object) -> None:
+        observed["session"] = value
+        observed["external"] = external
+
+    monkeypatch.setattr(
+        favorites_editor,
+        "open_favorites_copied_tree_editor",
+        lambda path: session,
+    )
+    monkeypatch.setattr(favorites_editor_tui, "run_favorites_editor", run_editor)
+    monkeypatch.setattr(
+        favorites_editor_external_preview,
+        "FavoritesEditorExternalPreviewController",
+        controller,
+    )
+
+    result = cli.main(
+        [
+            "favorites",
+            "edit",
+            "--copied-tree",
+            str(tmp_path),
+            "--radioreference-preview",
+            "--radioreference-username",
+            "operator",
+            "--radioreference-application-key-env",
+            "RR_APP_KEY",
+            "--radioreference-password-env",
+            "RR_PASSWORD",
+            "--radioreference-provenance",
+            str(tmp_path / "provenance.json"),
+            "--radioreference-dataset",
+            "subcategory-123",
+            "--radioreference-operation",
+            "getSubcatFreqs",
+            "--radioreference-parameter",
+            "scid=123",
+        ],
+        environ={},
+    )
+
+    assert result == 0
+    assert observed["controller_session"] is session
+    assert observed["session"] is session
+    assert observed["external"] == "controller"
+    owner_factory = observed["owner_factory"]
+    assert isinstance(
+        owner_factory,
+        favorites_editor_external_preview.FavoritesEditorRadioReferenceRefreshOwnerFactory,
+    )
+    assert owner_factory.provenance_path == (tmp_path / "provenance.json").resolve()
+    source_factory = owner_factory.source_factory
+    assert source_factory.configuration.credential.username == "operator"
+    assert source_factory.configuration.credential.password_environment_variable == (
+        "RR_PASSWORD"
+    )
+    assert source_factory.request_plan.parameters == (("scid", 123),)
+
+
+def test_radioreference_options_require_explicit_enablement(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    result = cli.main(
+        [
+            "favorites",
+            "edit",
+            "--copied-tree",
+            str(tmp_path),
+            "--radioreference-username",
+            "operator",
+        ]
+    )
+
+    assert result == 2
+    assert "require --radioreference-preview" in capsys.readouterr().err
+
+
+def test_radioreference_preview_rejects_incomplete_or_misordered_plan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(
+        favorites_editor,
+        "open_favorites_copied_tree_editor",
+        lambda path: type("Session", (), {"storage": object()})(),
+    )
+    common = [
+        "favorites",
+        "edit",
+        "--copied-tree",
+        str(tmp_path),
+        "--radioreference-preview",
+        "--radioreference-username",
+        "operator",
+        "--radioreference-application-key-env",
+        "RR_APP_KEY",
+        "--radioreference-password-env",
+        "RR_PASSWORD",
+        "--radioreference-provenance",
+        str(tmp_path / "provenance.json"),
+        "--radioreference-dataset",
+        "county-49-fire",
+    ]
+
+    assert cli.main(common) == 2
+    assert "--radioreference-operation" in capsys.readouterr().err
+
+    result = cli.main(
+        [
+            *common,
+            "--radioreference-operation",
+            "getCountyFreqsByTag",
+            "--radioreference-parameter",
+            "tag=4",
+            "--radioreference-parameter",
+            "ctid=49",
+        ]
+    )
+    assert result == 2
+    assert "exactly match reviewed WSDL order" in capsys.readouterr().err

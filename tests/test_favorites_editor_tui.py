@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from textual.widgets import Input, Static, Tree
+from textual.widgets import Button, Input, Static, Tree
 
 from sds200 import (
     FavoritesEditorSession,
@@ -15,6 +15,7 @@ from sds200 import (
     FavoritesWritePlan,
 )
 from sds200.favorites_editor_tui import FavoritesEditorApp
+from tests.test_favorites_editor_external_preview import _controller, _observation
 
 _FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "favorites"
 
@@ -119,5 +120,67 @@ def test_tui_reset_discards_without_writing(tmp_path: Path) -> None:
             assert app.session.node(path).name == "Synthetic Channel"
             assert not app.session.has_changes
             assert "discarded" in str(app.query_one("#status", Static).render())
+
+    asyncio.run(exercise())
+
+
+def test_tui_external_refresh_is_explicit_and_renders_complete_preview(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        session, _storage, source, factory, controller = _controller(
+            tmp_path,
+            (_observation(),),
+        )
+        app = FavoritesEditorApp(session, controller)
+
+        async with app.run_test(size=(160, 60)) as pilot:
+            assert factory.calls == 0
+            assert source.calls == 0
+            button = app.query_one("#external-refresh", Button)
+            assert not button.disabled
+
+            app.action_external_refresh()
+            for _attempt in range(20):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if source.calls == 1 and not button.disabled:
+                    break
+
+            rendered = str(app.query_one("#external-preview", Static).render())
+            assert source.calls == 1
+            assert "RadioReference preview: succeeded" in rendered
+            assert "radioreference / county-49-fire" in rendered
+            assert "added=1" in rendered
+            assert "external=frequency-100" in rendered
+            assert "Fire Dispatch" in rendered
+
+    asyncio.run(exercise())
+
+
+def test_tui_edit_invalidates_preview_and_disables_refresh(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        session, _storage, source, _factory, controller = _controller(
+            tmp_path,
+            (_observation(),),
+        )
+        app = FavoritesEditorApp(session, controller)
+
+        async with app.run_test(size=(160, 60)) as pilot:
+            app.action_external_refresh()
+            for _attempt in range(20):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if source.calls == 1:
+                    break
+            app.selected_path = FavoritesNavigationPath((2, 2, 4, 5))
+            app.query_one("#edit-name", Input).value = "Edited after refresh"
+            app.action_rename()
+            await pilot.pause()
+
+            rendered = str(app.query_one("#external-preview", Static).render())
+            assert "RadioReference preview: stale" in rendered
+            assert "Favorites editor state changed" in rendered
+            assert app.query_one("#external-refresh", Button).disabled
 
     asyncio.run(exercise())
