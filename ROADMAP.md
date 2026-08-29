@@ -93,6 +93,19 @@ Committed fixtures must be synthetic or sanitized and must not expose local
 names, frequencies, talkgroup or unit identifiers, account data, or location
 information.
 
+Operator-approved live acceptance on 2026-08-28 used the documented HTTPS SOAP
+service and `getTrsTalkgroups` for public RadioReference system `12042`, with
+zero-valued category, tag, and decimal filters selecting all talkgroups. The
+reviewed response remained within the 4 MiB document and reference limits but
+contained 31,508 XML elements, proving the former 20,000-element ceiling too low
+for a valid statewide dataset. A still-bounded 65,536-element ceiling plus
+narrow support for content-free `xsi:nil` talkgroup subfleet/slot fields and
+ID-only nested talkgroup tags allowed the complete production refresh and
+preview path to succeed. Guarded before/after validation proved the copied
+Favorites tree byte-for-byte unchanged and the missing provenance path still
+missing. No credentials, provider payloads, or private Favorites values entered
+the repository or validation transcript.
+
 Milestone 28.1 ends at read-only observation and presentation. Do not add local
 versus external decisions, field acceptance, record import or removal planning,
 Favorites write execution, provenance publication, automatic refresh, MyRR

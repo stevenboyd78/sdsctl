@@ -346,6 +346,11 @@ def _require_xsd_string(value: str, *, label: str) -> None:
         raise TypeError(f"{label} must be a string.")
 
 
+def _require_optional_xsd_string(value: str | None, *, label: str) -> None:
+    if value is not None:
+        _require_xsd_string(value, label=label)
+
+
 def _require_xsd_decimal(value: Decimal, *, label: str) -> None:
     if type(value) is not Decimal:
         raise TypeError(f"{label} must be Decimal for xsd:decimal.")
@@ -403,11 +408,11 @@ class RadioReferenceTag:
     """Provider tag record."""
 
     tag_id: int
-    description: str
+    description: str | None
 
     def __post_init__(self) -> None:
         _require_xsd_int(self.tag_id, label="tag ID")
-        _require_xsd_string(self.description, label="tag description")
+        _require_optional_xsd_string(self.description, label="tag description")
 
 
 @dataclass(frozen=True, slots=True)
@@ -747,9 +752,9 @@ class RadioReferenceTalkgroup:
 
     talkgroup_id: int
     decimal: int
-    subfleet: str
+    subfleet: str | None
     ltr: bool
-    slot: str
+    slot: str | None
     description: str
     alpha_tag: str
     mode: str
@@ -762,9 +767,9 @@ class RadioReferenceTalkgroup:
     def __post_init__(self) -> None:
         _require_xsd_int(self.talkgroup_id, label="talkgroup ID")
         _require_xsd_int(self.decimal, label="talkgroup decimal")
-        _require_xsd_string(self.subfleet, label="talkgroup subfleet")
+        _require_optional_xsd_string(self.subfleet, label="talkgroup subfleet")
         _require_xsd_boolean(self.ltr, label="talkgroup LTR")
-        _require_xsd_string(self.slot, label="talkgroup slot")
+        _require_optional_xsd_string(self.slot, label="talkgroup slot")
         _require_xsd_string(self.description, label="talkgroup description")
         _require_xsd_string(self.alpha_tag, label="talkgroup alpha tag")
         _require_xsd_string(self.mode, label="talkgroup mode")

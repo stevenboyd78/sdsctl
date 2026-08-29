@@ -120,6 +120,16 @@ external record ID, ownership, local value, external value, explicit absence,
 and fields with no reviewed scanner mapping. Empty result sets remain valid and
 still identify the configured provider and dataset.
 
+The read-only production path was operator-qualified on 2026-08-28 with
+`getTrsTalkgroups` for public RadioReference system `12042` and zero-valued
+category, tag, and decimal filters. That statewide response required more than
+the decoder's former 20,000-element ceiling, used content-free `xsi:nil` for
+optional subfleet and slot evidence, and returned nested tag references without
+descriptions. The decoder now preserves those live absences explicitly while
+retaining independent document, element, reference, depth, DTD/entity, namespace,
+and schema guards. This qualification does not claim live coverage for the
+other three reviewed observation operations.
+
 This surface is read-only. It never turns a preview into an acceptance decision,
 write plan, Favorites write, or provenance publication. Rename, duplicate,
 delete, undo, reset, successful write/reload, and source changes invalidate the

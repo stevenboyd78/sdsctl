@@ -55,7 +55,10 @@ RADIOREFERENCE_XML_SCHEMA_INSTANCE_NAMESPACE: Final = (
 )
 
 RADIOREFERENCE_SOAP_DEFAULT_MAX_DOCUMENT_BYTES: Final = 4 * 1024 * 1024
-RADIOREFERENCE_SOAP_DEFAULT_MAX_ELEMENTS: Final = 20_000
+# A reviewed statewide talkgroup response contains more than 31,000 elements.
+# Retain bounded parser work while leaving headroom beneath the independent
+# four-MiB document limit.
+RADIOREFERENCE_SOAP_DEFAULT_MAX_ELEMENTS: Final = 64 * 1024
 RADIOREFERENCE_SOAP_DEFAULT_MAX_REFERENCES: Final = 4_096
 RADIOREFERENCE_SOAP_DEFAULT_MAX_REFERENCE_DEPTH: Final = 64
 
@@ -384,6 +387,23 @@ def _string(
     )
 
 
+def _optional_string(
+    element: ET.Element,
+    context: _Context,
+    trail: tuple[str, ...],
+) -> str | None:
+    if _XSI_NIL not in element.attrib:
+        return _string(element, context, trail)
+    if element.attrib[_XSI_NIL] not in {"1", "true"}:
+        raise _DecodeFailure
+    if "href" in element.attrib or list(element):
+        raise _DecodeFailure
+    if element.text is not None and element.text.strip():
+        raise _DecodeFailure
+    _validate_declared_type(element, "string", context)
+    return None
+
+
 def _integer(
     element: ET.Element,
     context: _Context,
@@ -611,10 +631,39 @@ def _parse_tag(
     )
 
 
+def _parse_tag_reference(
+    element: ET.Element,
+    context: _Context,
+    trail: tuple[str, ...],
+) -> RadioReferenceTag:
+    resolved, resolved_trail = _resolve(element, context, trail)
+    _validate_declared_type(resolved, "tag", context)
+    _require_complex_text(resolved)
+    fields: dict[str, ET.Element] = {}
+    for child in resolved:
+        name = _local_name(child.tag)
+        if name not in {"tagId", "tagDescr"} or name in fields:
+            raise _DecodeFailure
+        fields[name] = child
+    if "tagId" not in fields:
+        raise _DecodeFailure
+    description = (
+        None
+        if "tagDescr" not in fields
+        else _string(fields["tagDescr"], context, resolved_trail)
+    )
+    return RadioReferenceTag(
+        tag_id=_integer(fields["tagId"], context, resolved_trail),
+        description=description,
+    )
+
+
 def _parse_tags(
     element: ET.Element,
     context: _Context,
     trail: tuple[str, ...],
+    *,
+    allow_id_only: bool = False,
 ) -> tuple[RadioReferenceTag, ...]:
     items, trail = _array_items(
         element,
@@ -622,7 +671,8 @@ def _parse_tags(
         trail,
         expected_item_type="tag",
     )
-    return tuple(_parse_tag(item, context, trail) for item in items)
+    parser = _parse_tag_reference if allow_id_only else _parse_tag
+    return tuple(parser(item, context, trail) for item in items)
 
 
 def _parse_mode(
@@ -1242,14 +1292,14 @@ def _parse_talkgroup(
     return RadioReferenceTalkgroup(
         talkgroup_id=_integer(fields["tgId"], context, trail),
         decimal=_integer(fields["tgDec"], context, trail),
-        subfleet=_string(fields["tgSubfleet"], context, trail),
+        subfleet=_optional_string(fields["tgSubfleet"], context, trail),
         ltr=_boolean(fields["tgLtr"], context, trail),
-        slot=_string(fields["tgSlot"], context, trail),
+        slot=_optional_string(fields["tgSlot"], context, trail),
         description=_string(fields["tgDescr"], context, trail),
         alpha_tag=_string(fields["tgAlpha"], context, trail),
         mode=_string(fields["tgMode"], context, trail),
         encryption=_integer(fields["enc"], context, trail),
-        tags=_parse_tags(fields["tags"], context, trail),
+        tags=_parse_tags(fields["tags"], context, trail, allow_id_only=True),
         category_id=_integer(fields["tgCid"], context, trail),
         sort=_integer(fields["tgSort"], context, trail),
         date=_datetime(fields["tgDate"], context, trail),

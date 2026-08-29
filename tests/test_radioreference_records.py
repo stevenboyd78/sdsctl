@@ -309,6 +309,29 @@ def test_provider_string_fields_preserve_empty_and_padded_values() -> None:
     assert RadioReferenceTag(tag_id=2, description="").description == ""
 
 
+def test_provider_optional_live_evidence_preserves_none() -> None:
+    tag = RadioReferenceTag(tag_id=2, description=None)
+    talkgroup = RadioReferenceTalkgroup(
+        talkgroup_id=200,
+        decimal=12345,
+        subfleet=None,
+        ltr=False,
+        slot=None,
+        description="Operations",
+        alpha_tag="Ops",
+        mode="D",
+        encryption=0,
+        tags=(tag,),
+        category_id=30,
+        sort=1,
+        date=_timestamp(),
+    )
+
+    assert tag.description is None
+    assert talkgroup.subfleet is None
+    assert talkgroup.slot is None
+
+
 def test_provider_tuple_fields_reject_mutable_lists() -> None:
     frequency = _frequency()
 
