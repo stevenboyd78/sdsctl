@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from pathlib import Path
 
 from textual.widgets import Button, Input, Static, Tree
@@ -9,6 +10,9 @@ from sds200 import (
     FavoritesEditorSession,
     FavoritesEditorSourceKind,
     FavoritesEditorWriteResult,
+    FavoritesExternalFieldObservation,
+    FavoritesExternalFieldObservationState,
+    FavoritesExternalRecordObservation,
     FavoritesNavigationPath,
     FavoritesStorageDocument,
     FavoritesStorageSnapshot,
@@ -49,6 +53,21 @@ class _ReadOnlyTestStorage:
 def _app(tmp_path: Path) -> FavoritesEditorApp:
     session = FavoritesEditorSession.open(_ReadOnlyTestStorage(tmp_path.resolve()))
     return FavoritesEditorApp(session)
+
+
+def _import_observation() -> FavoritesExternalRecordObservation:
+    observation = _observation()
+    return replace(
+        observation,
+        fields=(
+            *observation.fields,
+            FavoritesExternalFieldObservation(
+                "frequency",
+                FavoritesExternalFieldObservationState.VALUE,
+                "154250000",
+            ),
+        ),
+    )
 
 
 def test_tui_mounts_complete_tree_and_searches_names(tmp_path: Path) -> None:
@@ -182,5 +201,110 @@ def test_tui_edit_invalidates_preview_and_disables_refresh(tmp_path: Path) -> No
             assert "RadioReference preview: stale" in rendered
             assert "Favorites editor state changed" in rendered
             assert app.query_one("#external-refresh", Button).disabled
+
+    asyncio.run(exercise())
+
+
+def test_tui_assisted_decisions_are_explicit_unexecuted_and_clearable(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        session, storage, source, _factory, controller = _controller(
+            tmp_path,
+            (_observation(),),
+        )
+        baseline = storage.value
+        app = FavoritesEditorApp(session, controller)
+
+        async with app.run_test(size=(170, 70)) as pilot:
+            assert app.query_one("#external-ignore", Button).disabled
+            app.action_external_refresh()
+            for _attempt in range(30):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if source.calls == 1 and not app.query_one("#external-ignore", Button).disabled:
+                    break
+
+            app.query_one("#external-record-index", Input).value = "1"
+            app.action_external_ignore()
+            await pilot.pause()
+
+            plan = str(app.query_one("#external-plan", Static).render())
+            status = str(app.query_one("#status", Static).render())
+            assert "Assisted synchronization plan: UNEXECUTED" in plan
+            assert "Decisions: 1" in plan
+            assert "Unresolved supported decisions: 0" in plan
+            assert "Favorites bytes changed: no" in plan
+            assert "Provenance changed: no" in plan
+            assert "cannot execute in Milestone 28.2" in status
+            assert not session.has_changes
+            assert storage.value is baseline
+            assert not (tmp_path / "provenance.json").exists()
+
+            app.action_external_clear()
+            await pilot.pause()
+
+            cleared = str(app.query_one("#external-plan", Static).render())
+            assert "Decisions: 0" in cleared
+            assert "Unresolved supported decisions: 1" in cleared
+            assert "incomplete_decisions" in cleared
+            assert storage.value is baseline
+
+    asyncio.run(exercise())
+
+
+def test_tui_import_requires_exact_preparation_before_adoption(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        session, storage, source, _factory, controller = _controller(
+            tmp_path,
+            (_import_observation(),),
+        )
+        baseline = storage.value
+        app = FavoritesEditorApp(session, controller)
+
+        async with app.run_test(size=(180, 80)) as pilot:
+            app.action_external_refresh()
+            for _attempt in range(30):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if (
+                    source.calls == 1
+                    and not app.query_one("#external-import-prepare", Button).disabled
+                ):
+                    break
+
+            app.selected_path = FavoritesNavigationPath((2, 2, 4, 5))
+            app.query_one("#external-record-index", Input).value = "1"
+            app.action_external_import_prepare()
+            await pilot.pause()
+
+            prepared = str(app.query_one("#external-import-preview", Static).render())
+            plan_before = str(app.query_one("#external-plan", Static).render())
+            assert "Prepared import: NOT ADOPTED" in prepared
+            assert "Provider record: frequency-100" in prepared
+            assert "Insertion anchor: f_000001.hpd:5" in prepared
+            assert "Derived target: f_000001.hpd:6" in prepared
+            assert "Template command: C-Freq" in prepared
+            assert "name@2=external" in prepared
+            assert "frequency@4=external" in prepared
+            assert "Resulting raw record: b'C-Freq" in prepared
+            assert "Decisions: 0" in plan_before
+            assert not app.query_one("#external-import-adopt", Button).disabled
+            assert storage.value is baseline
+            assert not (tmp_path / "provenance.json").exists()
+
+            app.action_external_import_adopt()
+            await pilot.pause()
+
+            adopted = str(app.query_one("#external-plan", Static).render())
+            preparation = str(app.query_one("#external-import-preview", Static).render())
+            assert "Decisions: 1" in adopted
+            assert "Unresolved supported decisions: 0" in adopted
+            assert "Favorites bytes changed: yes" in adopted
+            assert "Prepared import: none" in preparation
+            assert storage.value is baseline
+            assert not session.has_changes
+            assert not (tmp_path / "provenance.json").exists()
+            assert source.calls == 1
 
     asyncio.run(exercise())

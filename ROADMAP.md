@@ -11,109 +11,104 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 28.1 — Explicit RadioReference refresh and read-only Favorites preview
+### Milestone 28.2 — Assisted RadioReference decisions and exact write planning
 
-Milestone 27.5 is closed with v0.23.0 published and independently verified across
-the Python package, GitHub Release, generic multi-architecture container, Home
-Assistant App images, reviewed wiki, clean public installation, and physical
-repository-managed Home Assistant acceptance. Post-release documentation-link
-corrections and the target-aware Web Controls redesign are also merged. The
-Controls work retains complete current System, Department, Site, and Channel
-context beside explicit Hold/Release and Previous/Next actions; physical Home
-Assistant OS 18.2 acceptance against SDS200 firmware 1.26.01 preserved the
-single-owner boundary and restored the repository App afterward.
+Milestone 28.1 is closed after merging the explicit RadioReference refresh and
+complete read-only Favorites preview into `main`. The production path was
+operator-qualified against public RadioReference system `12042` without changing
+the copied Favorites tree or creating provenance, and the merge passed the full
+Python 3.11 through 3.14, documentation, browser, distribution, CodeQL, generic
+container, and Home Assistant App validation matrix.
 
-Milestone 28.1 begins the Favorites Workspace and assisted RadioReference product
-integration sequence. Add one explicit operator-initiated RadioReference refresh
-and a complete read-only preview to the existing local Textual Favorites editor.
-Reuse `RadioReferenceAssistedSynchronizationSourceFactory`,
-`FavoritesExternalProvenanceLifecycle`, and
-`FavoritesExternalAssistedSynchronizationService.refresh()` rather than creating
-another provider, comparison, provenance, or storage implementation.
+Milestone 28.2 turns one current preview into explicit operator-reviewed
+decisions and one exact synchronization plan inside the existing local Textual
+Favorites editor. Reuse `FavoritesExternalAssistedSynchronizationService`, the
+reviewed RadioReference field mappings, exact record templates and bindings,
+provenance lifecycle evidence, pure Favorites editing operations, and
+`plan_favorites_write()` rather than creating another comparison, mapping,
+editing, provenance, or write-planning implementation.
 
-The editor must continue opening exactly one operator-selected copied Favorites
-tree or freshly qualified Linux USB source. RadioReference integration requires
-explicit non-secret account configuration, environment-variable references for
-the application key and password, one reviewed observation request plan and
-dataset identity, and one canonical absolute provenance path. Secret values must
-not be accepted as command-line arguments, stored in editor state, included in
-object representations, rendered in the TUI, or copied into diagnostics and
-errors. Merely opening the editor must not resolve secrets, contact
-RadioReference, or start any refresh work.
+A successful refresh owner and its exact `FavoritesExternalRefreshResult` may
+remain retained only while the editor baseline, source evidence, configured
+provider and dataset, and provenance lifecycle snapshot are unchanged. Planning
+must use that retained result by identity and must never silently reread the
+provider. Re-refresh is another explicit bounded provider operation that replaces
+and closes the prior owner only after a new result is safely adopted. Failure or
+cancellation retains the prior current result when it is still valid. Preview
+invalidation, source change, editor reload, application exit, or replacement
+refresh must deterministically close the retained owner and invalidate every
+dependent decision and plan.
 
-The refresh control performs one bounded provider read only after an explicit
-button or keyboard action. Permit at most one refresh in flight, keep ordinary
-editor browsing responsive, report stable progress, and deterministically close
-the owned provider session on success, failure, cancellation, or application
-exit. A later refresh must be another explicit action; there is no timer,
-startup refresh, retry loop, polling, scheduled task, or background
-synchronization.
+Expose decisions only for the already-reviewed representable mappings:
+conventional `C-Freq` Name and frequency, and trunk `TGID` Name and decimal
+talkgroup identifier. For linked fields, present the exact local value, external
+value or explicit absence, ownership, and conflict evidence before accepting the
+external value, keeping the local value, or detaching that field from future
+provider ownership. Never invent coercions or expose a generic positional-field
+editor for provider data.
 
-The provenance lifecycle's fresh Favorites snapshot must equal the editor's
-exact durable baseline before the preview becomes visible. Reject mismatched,
-foreign, failed, or stale lifecycle evidence rather than comparing provider data
-to a different Favorites tree. Milestone 28.1 does not reconcile provider
-evidence with unreviewed in-memory edits: disable refresh while edits exist, and
-invalidate a retained preview after any rename, duplicate, delete, undo, reset,
-successful write/reload, or source-evidence change. An invalidated preview may
-report why it is stale, but it must not regain current status without another
-explicit provider read.
+For an unbound `added` record, require an explicit compatible local HPD insertion
+anchor, an exact operator-selected record template, and reviewed field bindings
+with at least one externally owned field. Show the complete derived target,
+template command, bindings, and resulting record before adopting an import
+decision. For a provider `removed` record, require an explicit choice between
+deleting the exact supported linked leaf and keeping its local bytes while
+detaching provider ownership. Permit explicit record detach where supported.
+Unmapped evidence, unsupported commands or fields, ambiguous relationships,
+local-only records, and unresolved conflicts remain visible and non-actionable;
+they must never be guessed away.
 
-Render the exact immutable refresh result without converting it into an
-acceptance decision. The preview must identify the provider and dataset, show
-timezone-aware observation times and available revisions, summarize `added`,
-`replaced`, `removed`, `unchanged`, `local_only`, and `conflict` records, and
-allow deterministic inspection of each record and field. Preserve and display
-exact local targets, opaque external identities, field ownership, local and
-external values, explicit provider absence, and evidence that has no reviewed
-scanner mapping. Do not hide conflicts or unmapped fields merely because they
-are not actionable in this milestone.
+Compose all adopted decisions from one immutable baseline into one deterministic
+planning snapshot. The plan must retain the exact refresh result, ordered
+decisions, intended Favorites snapshot, baseline and intended provenance records,
+comparison and schema evidence, blockers, and the existing deterministic
+`FavoritesWritePlan` confirmation identity. Recompute from the baseline after
+every decision rather than incrementally trusting widget state. Equivalent
+ordered decisions must produce byte-for-byte equal Favorites and provenance
+evidence. Contradictory, duplicate, foreign, stale, or no-longer-applicable
+decisions must be rejected or reported as stable blockers.
 
-Provider, HTTP, SOAP, authentication, invalid-response, and cleanup failures must
-remain within the existing stable redacted RadioReference error boundary. The
-TUI may add actionable local context, but it must not expose provider response
-text, request bodies, credential material, environment values, private Favorites
-bytes, or tracebacks. A failed or cancelled refresh retains the unchanged editor
-baseline, intended snapshot, undo history, durable provenance file, and last
-successful preview evidence unless that evidence has independently become stale.
+This milestone is planning-only. It must not call field/name acceptance,
+record-mutation, detach, copied-tree, USB, or provenance-persistence execution
+methods. It must not write Favorites bytes, create or replace provenance, emit a
+durable operation report, or enable the existing confirmed-write action for an
+assisted synchronization plan. The TUI must label the result as unexecuted and
+make incomplete decisions and remaining blockers conspicuous. Ordinary manual
+Favorites editing and its previously verified execution workflow remain
+separate and unchanged.
 
-Keep presentation logic independently testable from Textual widgets and the live
-provider. Deterministic fake services and synthetic Favorites/provenance fixtures
-must cover every record and field classification, sorting, selection, empty and
-large bounded previews, keyboard access, focus behavior, one-in-flight
-serialization, cancellation, redacted failures, baseline mismatch, edit-based
-invalidation, and application shutdown. Existing copied-tree and USB editor
-write tests must prove that merely configuring, refreshing, viewing, or closing
-the preview performs no Favorites or provenance mutation.
+Any ordinary rename, duplicate, delete, undo, reset, manual write/reload, source
+change, new refresh, or provenance evidence change invalidates all assisted
+decisions and their plan. Selection and scrolling do not. An invalidated plan may
+retain a read-only summary for explanation, but it cannot become current again
+without a fresh explicit provider read and new decisions. Closing the editor
+discards the in-memory plan without mutating either durable store.
 
-Credentialed RadioReference acceptance is a separate operator-run integration
-check and is not required by ordinary CI. Private credentials, provider payloads,
-and the local SDS200 Favorites validation corpus remain outside the repository.
-Committed fixtures must be synthetic or sanitized and must not expose local
-names, frequencies, talkgroup or unit identifiers, account data, or location
-information.
+Keep the decision model, composition, and presentation independently testable
+from Textual widgets and the live provider. Synthetic fixtures and deterministic
+fake services must cover each supported field mapping, external versus local and
+detach choices, import template and binding validation, delete versus keep-local,
+multiple compatible decisions, contradictions, incomplete and blocked plans,
+deterministic ordering, stale evidence, refresh replacement, edit-based
+invalidation, keyboard and focus behavior, bounded large previews, and shutdown.
+Copied-tree and USB regression tests must prove that configuring, refreshing,
+deciding, planning, invalidating, or closing performs no Favorites or provenance
+mutation and never invokes a storage executor.
 
-Operator-approved live acceptance on 2026-08-28 used the documented HTTPS SOAP
-service and `getTrsTalkgroups` for public RadioReference system `12042`, with
-zero-valued category, tag, and decimal filters selecting all talkgroups. The
-reviewed response remained within the 4 MiB document and reference limits but
-contained 31,508 XML elements, proving the former 20,000-element ceiling too low
-for a valid statewide dataset. A still-bounded 65,536-element ceiling plus
-narrow support for content-free `xsi:nil` talkgroup subfleet/slot fields and
-ID-only nested talkgroup tags allowed the complete production refresh and
-preview path to succeed. Guarded before/after validation proved the copied
-Favorites tree byte-for-byte unchanged and the missing provenance path still
-missing. No credentials, provider payloads, or private Favorites values entered
-the repository or validation transcript.
+Credentialed RadioReference acceptance remains a separate operator-run check and
+is not required by ordinary CI. Private credentials, provider payloads, local
+Favorites programming, generated plans containing private values, and provenance
+remain outside the repository and validation transcript. Committed fixtures must
+remain synthetic or sanitized.
 
-Milestone 28.1 ends at read-only observation and presentation. Do not add local
-versus external decisions, field acceptance, record import or removal planning,
-Favorites write execution, provenance publication, automatic refresh, MyRR
-scraping, undocumented provider interfaces, FTP writes, daemon/web/Home
-Assistant integration, new scanner sessions, or arbitrary RadioReference-to-SDS
-mappings. Those decisions and exact write-plan composition begin in Milestone
-28.2. The two waiting Dependabot pull requests remain separate unless their own
-reviewed state changes.
+Milestone 28.2 ends with an exact unexecuted assisted synchronization plan. Do not
+add durable Favorites execution, provenance publication, implicit provider reads,
+automatic refresh, polling, scheduled or background synchronization, MyRR
+scraping, undocumented provider interfaces, arbitrary RadioReference mappings,
+writable FTP, daemon/web/Home Assistant integration, or another scanner owner.
+Verified copied-tree and guarded USB execution of the exact reviewed evidence
+belongs to Milestone 28.3. The two waiting Dependabot pull requests remain
+separate unless their own reviewed state changes.
 
 
 ## Deferred hardware validation

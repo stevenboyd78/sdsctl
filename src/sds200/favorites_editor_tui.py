@@ -19,12 +19,26 @@ from .favorites_editor import (
     FavoritesEditorReview,
     FavoritesEditorSession,
 )
+from .favorites_editor_external_planning import (
+    FavoritesEditorExternalDecision,
+    FavoritesEditorExternalFieldChoice,
+    FavoritesEditorExternalFieldDecision,
+    FavoritesEditorExternalPlanningError,
+    FavoritesEditorExternalPlanningSnapshot,
+    FavoritesEditorExternalRecordChoice,
+    FavoritesEditorExternalRecordDecision,
+    plan_favorites_editor_external_decisions,
+    prepare_favorites_editor_external_import_decision,
+)
 from .favorites_editor_external_preview import (
+    FavoritesEditorExternalPlanningContext,
     FavoritesEditorExternalPreviewController,
     FavoritesEditorExternalPreviewError,
     FavoritesEditorExternalPreviewSnapshot,
     FavoritesEditorExternalPreviewState,
 )
+from .favorites_external import FavoritesExternalRecordPreview
+from .favorites_external_assisted_sync import RadioReferenceFavoritesMappedField
 from .favorites_navigation import FavoritesNavigationNode, FavoritesNavigationPath
 
 
@@ -41,8 +55,7 @@ def _plan_text(session: FavoritesEditorSession) -> str:
         if isinstance(item, FavoritesComparisonSource)
     )
     ambiguity_count = sum(
-        isinstance(item, FavoritesComparisonAmbiguity)
-        for item in plan.comparison.items
+        isinstance(item, FavoritesComparisonAmbiguity) for item in plan.comparison.items
     )
     blockers = ", ".join(blocker.value for blocker in plan.blockers) or "none"
     return (
@@ -71,9 +84,7 @@ def _review_text(review: FavoritesEditorReview) -> str:
                 if change.candidate_record is None
                 else f"{change.candidate_source_index}:{change.candidate_record.raw_bytes!r}"
             )
-            rows.append(
-                f"{source} {change.kind.value}: {baseline} -> {candidate}"
-            )
+            rows.append(f"{source} {change.kind.value}: {baseline} -> {candidate}")
     blockers = ", ".join(blocker.value for blocker in review.plan.blockers) or "none"
     rows.append(f"Blockers: {blockers}")
     return "\n".join(rows)
@@ -119,6 +130,61 @@ def _external_preview_text(
     return "\n".join(rows)
 
 
+def _external_plan_text(
+    plan: FavoritesEditorExternalPlanningSnapshot | None,
+) -> str:
+    if plan is None:
+        return (
+            "Assisted synchronization plan: unavailable\n"
+            "Refresh first, then make explicit decisions. No assisted plan can execute."
+        )
+    blockers = ", ".join(blocker.value for blocker in plan.blockers) or "none"
+    return "\n".join(
+        (
+            "Assisted synchronization plan: UNEXECUTED",
+            f"Decisions: {len(plan.decisions)}",
+            f"Unresolved supported decisions: {plan.unresolved_decisions}",
+            f"Favorites bytes changed: {'yes' if plan.has_favorites_changes else 'no'}",
+            f"Provenance changed: {'yes' if plan.has_provenance_changes else 'no'}",
+            f"Write-plan blockers: {blockers}",
+            "Milestone 28.2 cannot write Favorites or publish provenance.",
+        )
+    )
+
+
+def _external_prepared_import_text(
+    decision: FavoritesEditorExternalRecordDecision | None,
+) -> str:
+    if decision is None:
+        return (
+            "Prepared import: none\n"
+            "Select an exact local template and prepare an import before adoption."
+        )
+    anchor = decision.anchor
+    template = decision.template
+    assert anchor is not None
+    assert template is not None
+    identity = decision.preview.external_identity
+    external_record = "unavailable" if identity is None else identity.record_id
+    filename = anchor.filename or "f_list.cfg"
+    bindings = ", ".join(
+        f"{binding.name}@{binding.field_index}={binding.ownership.value}"
+        for binding in decision.bindings
+    )
+    return "\n".join(
+        (
+            "Prepared import: NOT ADOPTED",
+            f"Provider record: {external_record}",
+            f"Insertion anchor: {filename}:{anchor.source_index}",
+            f"Derived target: {filename}:{anchor.source_index + 1}",
+            f"Template command: {template.command}",
+            f"Bindings: {bindings}",
+            f"Resulting raw record: {template.raw_bytes!r}",
+            "Review this evidence, then choose Adopt prepared import.",
+        )
+    )
+
+
 class FavoritesEditorApp(App[None]):
     """Full-screen local Favorites browser, editor, and write reviewer."""
 
@@ -129,13 +195,16 @@ class FavoritesEditorApp(App[None]):
     #detail-column { width: 1fr; padding: 0 1; }
     #favorites-tree, #records-tree { height: 1fr; }
     #search-results { height: 5; border: solid $secondary; padding: 0 1; }
-    #detail, #diagnostics, #plan, #external-preview, #status {
+    #detail, #diagnostics, #plan, #external-preview, #external-plan,
+    #external-import-preview, #status {
         border: solid $secondary; padding: 0 1;
     }
     #detail { min-height: 7; }
     #diagnostics { min-height: 5; }
     #plan { min-height: 6; }
     #external-preview { min-height: 5; }
+    #external-plan { min-height: 7; }
+    #external-import-preview { min-height: 5; }
     #status { min-height: 4; }
     #controls { height: auto; }
     #edit-name, #confirmation { margin: 1 0 0 0; }
@@ -148,6 +217,9 @@ class FavoritesEditorApp(App[None]):
         Binding("ctrl+p", "review", "Review"),
         Binding("ctrl+x", "execute", "Execute"),
         Binding("ctrl+g", "external_refresh", "RR refresh"),
+        Binding("ctrl+e", "external_use", "RR use external"),
+        Binding("ctrl+l", "external_local", "RR keep local"),
+        Binding("ctrl+d", "external_detach", "RR detach field"),
         Binding("/", "focus_search", "Search"),
     ]
 
@@ -169,6 +241,9 @@ class FavoritesEditorApp(App[None]):
                 "FavoritesEditorExternalPreviewController or None."
             )
         self.external_preview = external_preview
+        self._external_decisions: tuple[FavoritesEditorExternalDecision, ...] = ()
+        self._external_plan: FavoritesEditorExternalPlanningSnapshot | None = None
+        self._external_prepared_import: FavoritesEditorExternalRecordDecision | None = None
         self._external_refresh_thread: threading.Thread | None = None
         self.selected_path: FavoritesNavigationPath | None = None
         self.selected_record: FavoritesEditorRecordReference | None = None
@@ -195,6 +270,34 @@ class FavoritesEditorApp(App[None]):
                     id="external-preview",
                 )
                 yield Button("Refresh RadioReference preview", id="external-refresh")
+                yield Static(_external_plan_text(None), id="external-plan")
+                yield Input(
+                    placeholder="RadioReference preview record number (for example 1)",
+                    id="external-record-index",
+                )
+                yield Input(
+                    placeholder="Mapped field: name, frequency, or talkgroup_decimal",
+                    id="external-field",
+                )
+                with Horizontal(id="external-field-controls"):
+                    yield Button("Use external", id="external-use")
+                    yield Button("Keep local", id="external-local")
+                    yield Button("Detach field", id="external-detach")
+                with Horizontal(id="external-record-controls"):
+                    yield Button(
+                        "Prepare import after selected template",
+                        id="external-import-prepare",
+                    )
+                    yield Button("Adopt prepared import", id="external-import-adopt")
+                    yield Button("Ignore added", id="external-ignore")
+                    yield Button("Delete removed", id="external-delete", variant="warning")
+                    yield Button("Keep local record", id="external-keep-record")
+                    yield Button("Detach record", id="external-detach-record")
+                yield Static(
+                    _external_prepared_import_text(None),
+                    id="external-import-preview",
+                )
+                yield Button("Clear assisted decisions", id="external-clear")
                 yield Input(placeholder="New Name Tag", id="edit-name")
                 with Horizontal(id="controls"):
                     yield Button("Rename", id="rename")
@@ -220,7 +323,7 @@ class FavoritesEditorApp(App[None]):
 
     def on_unmount(self) -> None:
         if self.external_preview is not None:
-            self.external_preview.cancel()
+            self.external_preview.close()
 
     def _append_tree_node(self, tree_node: Any, node: FavoritesNavigationNode) -> None:
         child = tree_node.add(
@@ -286,11 +389,14 @@ class FavoritesEditorApp(App[None]):
         self.query_one("#status", Static).update(message)
 
     def _refresh_external_preview(self) -> None:
-        snapshot = (
-            None if self.external_preview is None else self.external_preview.snapshot()
+        snapshot = None if self.external_preview is None else self.external_preview.snapshot()
+        context = (
+            None if self.external_preview is None else self.external_preview.planning_context()
         )
-        self.query_one("#external-preview", Static).update(
-            _external_preview_text(snapshot)
+        self.query_one("#external-preview", Static).update(_external_preview_text(snapshot))
+        self.query_one("#external-plan", Static).update(_external_plan_text(self._external_plan))
+        self.query_one("#external-import-preview", Static).update(
+            _external_prepared_import_text(self._external_prepared_import)
         )
         button = self.query_one("#external-refresh", Button)
         button.disabled = (
@@ -301,8 +407,37 @@ class FavoritesEditorApp(App[None]):
                 and snapshot.state is FavoritesEditorExternalPreviewState.REFRESHING
             )
         )
+        planning_disabled = context is None or self.session.has_changes
+        for control_id in (
+            "external-use",
+            "external-local",
+            "external-detach",
+            "external-import-prepare",
+            "external-import-adopt",
+            "external-ignore",
+            "external-delete",
+            "external-keep-record",
+            "external-detach-record",
+            "external-clear",
+        ):
+            self.query_one(f"#{control_id}", Button).disabled = planning_disabled
+        self.query_one("#external-import-adopt", Button).disabled = (
+            planning_disabled or self._external_prepared_import is None
+        )
+        for input_id in ("external-record-index", "external-field"):
+            self.query_one(f"#{input_id}", Input).disabled = planning_disabled
+
+    def _clear_external_planning(self) -> None:
+        self._external_decisions = ()
+        self._external_plan = None
+        self._external_prepared_import = None
+        self.query_one("#external-plan", Static).update(_external_plan_text(None))
+        self.query_one("#external-import-preview", Static).update(
+            _external_prepared_import_text(None)
+        )
 
     def _invalidate_external_preview(self, reason: str) -> None:
+        self._clear_external_planning()
         if self.external_preview is not None:
             self.external_preview.invalidate(reason)
         self._refresh_external_preview()
@@ -347,10 +482,7 @@ class FavoritesEditorApp(App[None]):
             text = "Diagnostics: none"
         else:
             rows = [f"Diagnostics: {len(diagnostics)}"]
-            rows.extend(
-                f"{item.severity.value}: {item.message}"
-                for item in diagnostics[:8]
-            )
+            rows.extend(f"{item.severity.value}: {item.message}" for item in diagnostics[:8])
             if len(diagnostics) > 8:
                 rows.append(f"… {len(diagnostics) - 8} more")
             text = "\n".join(rows)
@@ -402,6 +534,16 @@ class FavoritesEditorApp(App[None]):
             "review": self.action_review,
             "execute": self.action_execute,
             "external-refresh": self.action_external_refresh,
+            "external-use": self.action_external_use,
+            "external-local": self.action_external_local,
+            "external-detach": self.action_external_detach,
+            "external-import-prepare": self.action_external_import_prepare,
+            "external-import-adopt": self.action_external_import_adopt,
+            "external-ignore": self.action_external_ignore,
+            "external-delete": self.action_external_delete,
+            "external-keep-record": self.action_external_keep_record,
+            "external-detach-record": self.action_external_detach_record,
+            "external-clear": self.action_external_clear,
         }
         action = actions.get(event.button.id or "")
         if action is not None:
@@ -467,22 +609,198 @@ class FavoritesEditorApp(App[None]):
             "All in-memory edits discarded." if changed else "No edits to reset.",
         )
 
+    def _external_context(self) -> FavoritesEditorExternalPlanningContext:
+        if self.external_preview is None:
+            raise FavoritesEditorExternalPlanningError("RadioReference preview is not configured.")
+        context = self.external_preview.planning_context()
+        if context is None:
+            raise FavoritesEditorExternalPlanningError(
+                "Refresh RadioReference before making assisted decisions."
+            )
+        return context
+
+    def _external_selected_preview(
+        self,
+    ) -> tuple[
+        FavoritesEditorExternalPlanningContext,
+        FavoritesExternalRecordPreview,
+    ]:
+        context = self._external_context()
+        raw_index = self.query_one("#external-record-index", Input).value.strip()
+        try:
+            index = int(raw_index)
+        except ValueError:
+            raise FavoritesEditorExternalPlanningError(
+                "Enter a valid one-based RadioReference preview record number."
+            ) from None
+        if index < 1 or index > len(context.result.preview.records):
+            raise FavoritesEditorExternalPlanningError(
+                "RadioReference preview record number is outside the current result."
+            )
+        return context, context.result.preview.records[index - 1]
+
+    def _external_selected_field(self) -> RadioReferenceFavoritesMappedField:
+        value = self.query_one("#external-field", Input).value.strip().lower().replace("-", "_")
+        try:
+            return RadioReferenceFavoritesMappedField(value)
+        except ValueError:
+            raise FavoritesEditorExternalPlanningError(
+                "Mapped field must be name, frequency, or talkgroup_decimal."
+            ) from None
+
+    @staticmethod
+    def _same_external_decision_slot(
+        existing: FavoritesEditorExternalDecision,
+        replacement: FavoritesEditorExternalDecision,
+    ) -> bool:
+        if isinstance(
+            existing,
+            FavoritesEditorExternalFieldDecision,
+        ) and isinstance(replacement, FavoritesEditorExternalFieldDecision):
+            return existing.preview is replacement.preview and existing.field is replacement.field
+        if isinstance(
+            existing,
+            FavoritesEditorExternalRecordDecision,
+        ) and isinstance(replacement, FavoritesEditorExternalRecordDecision):
+            return existing.preview is replacement.preview
+        return False
+
+    def _adopt_external_decision(
+        self,
+        decision: FavoritesEditorExternalDecision,
+    ) -> None:
+        context = self._external_context()
+        decisions = tuple(
+            existing
+            for existing in self._external_decisions
+            if not self._same_external_decision_slot(existing, decision)
+        ) + (decision,)
+        plan = plan_favorites_editor_external_decisions(context, decisions)
+        self._external_decisions = decisions
+        self._external_plan = plan
+        self._refresh_external_preview()
+        self._set_status(
+            "Assisted decision adopted in memory. "
+            f"Unresolved: {plan.unresolved_decisions}. "
+            "This assisted plan cannot execute in Milestone 28.2."
+        )
+
+    def _choose_external_field(
+        self,
+        choice: FavoritesEditorExternalFieldChoice,
+    ) -> None:
+        try:
+            _context, preview = self._external_selected_preview()
+            self._adopt_external_decision(
+                FavoritesEditorExternalFieldDecision(
+                    preview,
+                    self._external_selected_field(),
+                    choice,
+                )
+            )
+        except (FavoritesEditorExternalPlanningError, ValueError) as error:
+            self._set_status(f"Assisted field decision rejected: {error}")
+
+    def action_external_use(self) -> None:
+        self._choose_external_field(FavoritesEditorExternalFieldChoice.EXTERNAL)
+
+    def action_external_local(self) -> None:
+        self._choose_external_field(FavoritesEditorExternalFieldChoice.LOCAL)
+
+    def action_external_detach(self) -> None:
+        self._choose_external_field(FavoritesEditorExternalFieldChoice.DETACHED)
+
+    def _choose_external_record(
+        self,
+        choice: FavoritesEditorExternalRecordChoice,
+    ) -> None:
+        try:
+            _context, preview = self._external_selected_preview()
+            self._adopt_external_decision(FavoritesEditorExternalRecordDecision(preview, choice))
+        except (FavoritesEditorExternalPlanningError, ValueError) as error:
+            self._set_status(f"Assisted record decision rejected: {error}")
+
+    def action_external_ignore(self) -> None:
+        self._choose_external_record(FavoritesEditorExternalRecordChoice.IGNORE)
+
+    def action_external_delete(self) -> None:
+        self._choose_external_record(FavoritesEditorExternalRecordChoice.DELETE)
+
+    def action_external_keep_record(self) -> None:
+        self._choose_external_record(FavoritesEditorExternalRecordChoice.KEEP_LOCAL)
+
+    def action_external_detach_record(self) -> None:
+        self._choose_external_record(FavoritesEditorExternalRecordChoice.DETACHED)
+
+    def action_external_import_prepare(self) -> None:
+        try:
+            context, preview = self._external_selected_preview()
+            reference = self._selected_reference()
+            if reference is not None:
+                anchor = self.session.record_target(reference)
+            else:
+                anchor = self.session.target(self._selected())
+            decision = prepare_favorites_editor_external_import_decision(
+                context,
+                preview,
+                anchor,
+            )
+            # Recompute the exact aggregate form as a final pure validation of the
+            # proposed anchor, template, bindings, result bytes, and write blockers.
+            plan_favorites_editor_external_decisions(context, (decision,))
+            self._external_prepared_import = decision
+            self._refresh_external_preview()
+            self._set_status("Import prepared but not adopted. Review the complete exact evidence.")
+        except (
+            FavoritesEditorError,
+            FavoritesEditorExternalPlanningError,
+            ValueError,
+        ) as error:
+            self._external_prepared_import = None
+            self._refresh_external_preview()
+            self._set_status(f"Assisted import decision rejected: {error}")
+
+    def action_external_import_adopt(self) -> None:
+        decision = self._external_prepared_import
+        if decision is None:
+            self._set_status("Prepare and review an assisted import before adoption.")
+            return
+        try:
+            self._adopt_external_decision(decision)
+        except (FavoritesEditorExternalPlanningError, ValueError) as error:
+            self._set_status(f"Assisted import decision rejected: {error}")
+            return
+        self._external_prepared_import = None
+        self._refresh_external_preview()
+
+    def action_external_clear(self) -> None:
+        try:
+            context = self._external_context()
+            self._external_decisions = ()
+            self._external_prepared_import = None
+            self._external_plan = plan_favorites_editor_external_decisions(
+                context,
+                (),
+            )
+            self._refresh_external_preview()
+            self._set_status(
+                "All assisted decisions cleared. Favorites and provenance are unchanged."
+            )
+        except FavoritesEditorExternalPlanningError as error:
+            self._set_status(f"Assisted decision clearing unavailable: {error}")
+
     def action_external_refresh(self) -> None:
         if self.external_preview is None:
             self._set_status("RadioReference preview is not configured.")
             return
-        if (
-            self._external_refresh_thread is not None
-            and self._external_refresh_thread.is_alive()
-        ):
+        if self._external_refresh_thread is not None and self._external_refresh_thread.is_alive():
             self._set_status("A RadioReference refresh is already in progress.")
             return
         if self.session.has_changes:
             self._invalidate_external_preview("unreviewed in-memory Favorites edits")
-            self._set_status(
-                "RadioReference refresh is unavailable while unreviewed edits exist."
-            )
+            self._set_status("RadioReference refresh is unavailable while unreviewed edits exist.")
             return
+        self._clear_external_planning()
         self.query_one("#external-refresh", Button).disabled = True
         self.query_one("#external-preview", Static).update(
             "RadioReference preview: refreshing\nOne explicit provider read is in progress."
@@ -506,6 +824,13 @@ class FavoritesEditorApp(App[None]):
             self.set_timer(0.05, self._poll_external_refresh)
             return
         self._external_refresh_thread = None
+        if self.external_preview is not None:
+            context = self.external_preview.planning_context()
+            if context is not None:
+                self._external_plan = plan_favorites_editor_external_decisions(
+                    context,
+                    (),
+                )
         self._refresh_external_preview()
 
     def action_review(self) -> None:
