@@ -220,7 +220,7 @@ class FavoritesEditorApp(App[None]):
 
     def on_unmount(self) -> None:
         if self.external_preview is not None:
-            self.external_preview.cancel()
+            self.external_preview.close()
 
     def _append_tree_node(self, tree_node: Any, node: FavoritesNavigationNode) -> None:
         child = tree_node.add(

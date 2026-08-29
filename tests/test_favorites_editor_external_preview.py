@@ -161,8 +161,12 @@ def test_construction_is_passive_and_explicit_refresh_presents_exact_result(
     assert record.revision == "revision-7"
     assert record.fields[0].external_value == "Fire Dispatch"
     assert factory.owners[0].lifecycle.snapshot().state is (
-        FavoritesExternalProvenanceLifecycleState.CLOSED
+        FavoritesExternalProvenanceLifecycleState.ACTIVE
     )
+    context = controller.planning_context()
+    assert context is not None
+    assert context.service is factory.owners[0].service
+    assert context.result.lifecycle_snapshot == context.service.lifecycle_snapshot
 
 
 def test_empty_provider_result_retains_configured_source_identity(tmp_path: Path) -> None:
@@ -233,6 +237,15 @@ def test_failed_refresh_retains_last_success_without_leaking_provider_detail(
     assert failed.state is FavoritesEditorExternalPreviewState.FAILED
     assert failed.presentation is successful.presentation
     assert source.calls == 2
+    context = controller.planning_context()
+    assert context is not None
+    assert context.service is _factory.owners[0].service
+    assert _factory.owners[0].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.ACTIVE
+    )
+    assert _factory.owners[1].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.CLOSED
+    )
 
 
 def test_invalidation_marks_successful_preview_stale(tmp_path: Path) -> None:
@@ -247,6 +260,43 @@ def test_invalidation_marks_successful_preview_stale(tmp_path: Path) -> None:
     assert stale.state is FavoritesEditorExternalPreviewState.STALE
     assert stale.presentation is successful.presentation
     assert stale.stale_reason == "editor reset"
+    assert controller.planning_context() is None
+    assert _factory.owners[0].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.CLOSED
+    )
+
+
+def test_successful_replacement_closes_prior_owner_and_close_releases_current(
+    tmp_path: Path,
+) -> None:
+    _session, _storage, _source, factory, controller = _controller(
+        tmp_path,
+        (_observation(),),
+        (_observation(),),
+    )
+
+    controller.refresh()
+    first_context = controller.planning_context()
+    assert first_context is not None
+    controller.refresh()
+    second_context = controller.planning_context()
+
+    assert second_context is not None
+    assert second_context.service is factory.owners[1].service
+    assert second_context.result is not first_context.result
+    assert factory.owners[0].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.CLOSED
+    )
+    assert factory.owners[1].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.ACTIVE
+    )
+
+    controller.close()
+
+    assert controller.planning_context() is None
+    assert factory.owners[1].lifecycle.snapshot().state is (
+        FavoritesExternalProvenanceLifecycleState.CLOSED
+    )
 
 
 def test_only_one_refresh_can_be_in_flight(tmp_path: Path) -> None:

@@ -411,6 +411,7 @@ from .favorites_editor import (
 )
 from .favorites_editor_external_preview import (
     FavoritesEditorExternalFieldPresentation,
+    FavoritesEditorExternalPlanningContext,
     FavoritesEditorExternalPreviewController,
     FavoritesEditorExternalPreviewError,
     FavoritesEditorExternalPreviewPresentation,
@@ -1407,6 +1408,7 @@ __all__ = [
     "FavoritesEditorError",
     "FavoritesEditorExecution",
     "FavoritesEditorExternalFieldPresentation",
+    "FavoritesEditorExternalPlanningContext",
     "FavoritesEditorExternalPreviewController",
     "FavoritesEditorExternalPreviewError",
     "FavoritesEditorExternalPreviewPresentation",
