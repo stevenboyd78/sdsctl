@@ -6,7 +6,7 @@ import hashlib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol, TypeAlias
+from typing import TYPE_CHECKING, Protocol, TypeAlias
 
 from .favorites_editing import (
     FavoritesRecordSourceKind,
@@ -46,6 +46,11 @@ from .favorites_write_usb import (
     FavoritesUsbWriteExecutionResult,
     execute_favorites_usb_write,
 )
+
+if TYPE_CHECKING:
+    from .favorites_editor_external_execution import (
+        FavoritesEditorExternalDurableExecutionResult,
+    )
 
 
 class FavoritesEditorSourceKind(StrEnum):
@@ -255,6 +260,9 @@ class FavoritesEditorSession:
         self._baseline_snapshot = baseline_snapshot
         self._intended_snapshot = baseline_snapshot
         self._history: tuple[FavoritesStorageSnapshot, ...] = ()
+        self._last_adopted_external_execution_result: (
+            FavoritesEditorExternalDurableExecutionResult | None
+        ) = None
 
     @classmethod
     def open(cls, storage: FavoritesEditorStorage) -> FavoritesEditorSession:
@@ -314,9 +322,7 @@ class FavoritesEditorSession:
         for node in self.nodes():
             if node.path == path:
                 return node
-        raise FavoritesEditorError(
-            f"Favorites navigation path is not present: {path.indexes!r}."
-        )
+        raise FavoritesEditorError(f"Favorites navigation path is not present: {path.indexes!r}.")
 
     def target(self, path: FavoritesNavigationPath) -> FavoritesRecordTarget:
         """Resolve fresh exact record provenance for a current navigation node."""
@@ -462,9 +468,7 @@ class FavoritesEditorSession:
     def delete(self, path: FavoritesNavigationPath) -> None:
         """Delete one supported HPD leaf."""
 
-        self._replace_intended(
-            delete_favorites_record(self._intended_snapshot, self.target(path))
-        )
+        self._replace_intended(delete_favorites_record(self._intended_snapshot, self.target(path)))
 
     def delete_record(self, reference: FavoritesEditorRecordReference) -> None:
         """Delete a supported HPD leaf selected by exact raw provenance."""
@@ -570,6 +574,41 @@ class FavoritesEditorSession:
         self._intended_snapshot = reloaded
         self._history = ()
         return FavoritesEditorExecution(result=result, reloaded_snapshot=reloaded)
+
+    def adopt_external_execution(
+        self,
+        result: FavoritesEditorExternalDurableExecutionResult,
+    ) -> None:
+        """Adopt one exactly verified assisted execution as the new baseline."""
+
+        from .favorites_editor_external_execution import (
+            FavoritesEditorExternalDurableExecutionResult,
+        )
+
+        if type(result) is not FavoritesEditorExternalDurableExecutionResult:
+            raise TypeError("Favorites editor external adoption requires an exact durable result.")
+        if self._last_adopted_external_execution_result is result:
+            if (
+                self._baseline_snapshot == result.observed_snapshot
+                and self._intended_snapshot == result.observed_snapshot
+                and not self._history
+            ):
+                return
+            raise FavoritesEditorError(
+                "Favorites editor no longer matches the adopted assisted execution."
+            )
+        if self.has_changes:
+            raise FavoritesEditorError(
+                "Favorites editor cannot adopt assisted execution over manual edits."
+            )
+        if self._baseline_snapshot != result.plan.write_plan.baseline_snapshot:
+            raise FavoritesEditorError("Favorites editor assisted execution baseline is stale.")
+        if result.observed_snapshot != result.plan.write_plan.intended_snapshot:
+            raise FavoritesEditorError("Favorites editor assisted execution readback is not exact.")
+        self._baseline_snapshot = result.observed_snapshot
+        self._intended_snapshot = result.observed_snapshot
+        self._history = ()
+        self._last_adopted_external_execution_result = result
 
 
 def open_favorites_copied_tree_editor(path: Path) -> FavoritesEditorSession:

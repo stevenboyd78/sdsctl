@@ -8,6 +8,26 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 28.3's guarded execution path for one exact aggregate assisted
+  RadioReference plan. A separate assisted review derives a full deterministic
+  confirmation token bound to the requested copied-tree or USB target, exact
+  refresh/lifecycle evidence, ordered decisions, baseline and intended Favorites
+  bytes, baseline and intended provenance (including absent versus empty), and
+  blockers. Execution freshly verifies the active lifecycle, editor baseline,
+  target, and persisted provenance without rereading RadioReference; delegates a
+  Favorites-changing plan exactly once to the existing copied-tree or USB
+  executor; supports provenance-only publication without a manufactured storage
+  write; independently verifies readback; and adopts the exact result into the
+  lifecycle and editor session. Conditional provenance publication reconciles an
+  uncertain successful return, reverses a verified Favorites write through the
+  same backend when provenance remains at baseline, and otherwise reports typed
+  incomplete recovery with primary and recovery artifacts. Separate Textual
+  review/token/execution controls serialize attempts, retain terminal evidence,
+  consume the refresh after success or failure, and defer close until an active
+  non-cancellable storage transaction reaches a terminal state. Synthetic
+  copied-tree and USB adapter coverage plus a real copied-tree integration test
+  preserve backup, staging, displacement, rollback-manifest, operation-report,
+  and exact-readback behavior.
 - Add Milestone 28.2's explicit, planning-only RadioReference decisions to the
   local Favorites editor. One retained current refresh can now drive reviewed
   conventional `C-Freq` Name/frequency and trunk `TGID` Name/decimal choices,

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .favorites_editor import FavoritesEditorSession, FavoritesEditorStorage
 from .favorites_external import (
@@ -26,6 +26,15 @@ from .favorites_external_provenance_lifecycle import (
 )
 from .favorites_external_refresh import FavoritesExternalRefreshResult
 from .radioreference import RadioReferenceError
+
+if TYPE_CHECKING:
+    from .favorites_editor_external_execution import (
+        FavoritesEditorExternalExecutionResult,
+        FavoritesEditorExternalExecutionReview,
+    )
+    from .favorites_editor_external_planning import (
+        FavoritesEditorExternalPlanningSnapshot,
+    )
 
 
 class FavoritesEditorExternalPreviewState(StrEnum):
@@ -134,12 +143,9 @@ class FavoritesEditorExternalPlanningContext:
         ):
             raise ValueError("External planning context requires an active lifecycle.")
         if any(
-            observation.identity.source != self.source
-            for observation in self.result.observations
+            observation.identity.source != self.source for observation in self.result.observations
         ):
-            raise ValueError(
-                "External planning context observations do not match its source."
-            )
+            raise ValueError("External planning context observations do not match its source.")
 
 
 class FavoritesEditorExternalRefreshOwnerFactory(Protocol):
@@ -167,9 +173,7 @@ class FavoritesEditorRadioReferenceRefreshOwnerFactory:
             self.source_factory,
             RadioReferenceAssistedSynchronizationSourceFactory,
         ):
-            raise TypeError(
-                "RadioReference preview requires the production source factory."
-            )
+            raise TypeError("RadioReference preview requires the production source factory.")
 
     def __call__(self) -> FavoritesEditorExternalRefreshOwner:
         lifecycle = FavoritesExternalProvenanceLifecycle(
@@ -217,9 +221,7 @@ def _record_presentation(
             ownership=field.ownership.value,
             local_value=field.local_value,
             external_state=(
-                "unobserved"
-                if field.external_state is None
-                else field.external_state.value
+                "unobserved" if field.external_state is None else field.external_state.value
             ),
             external_value=field.external_value,
         )
@@ -229,13 +231,9 @@ def _record_presentation(
         kind=record.kind.value,
         local_target=_local_target(record),
         external_record_id="local-only" if identity is None else identity.record_id,
-        observed_at=(
-            "unobserved" if evidence is None else evidence.observed_at.isoformat()
-        ),
+        observed_at=("unobserved" if evidence is None else evidence.observed_at.isoformat()),
         revision=(
-            "unavailable"
-            if evidence is None or evidence.revision is None
-            else evidence.revision
+            "unavailable" if evidence is None or evidence.revision is None else evidence.revision
         ),
         fields=fields,
     )
@@ -255,16 +253,9 @@ def present_favorites_editor_external_preview(
     if not isinstance(source, FavoritesExternalSourceIdentity):
         raise TypeError("Favorites editor preview requires an exact source identity.")
     for label, value in (("started", started_at), ("completed", completed_at)):
-        if (
-            not isinstance(value, datetime)
-            or value.tzinfo is None
-            or value.utcoffset() is None
-        ):
+        if not isinstance(value, datetime) or value.tzinfo is None or value.utcoffset() is None:
             raise ValueError(f"Favorites editor refresh {label} time must be aware.")
-    if any(
-        observation.identity.source != source
-        for observation in result.observations
-    ):
+    if any(observation.identity.source != source for observation in result.observations):
         raise ValueError("External preview observations do not match the configured dataset.")
     counts = tuple(
         (
@@ -312,8 +303,13 @@ class FavoritesEditorExternalPreviewController:
         self._owner_factory = owner_factory
         self._now = now
         self._refresh_lock = threading.Lock()
+        self._execution_lock = threading.Lock()
         self._cancel_requested = threading.Event()
         self._state_lock = threading.RLock()
+        self._execution_active = False
+        self._close_requested = False
+        self._last_execution_result: FavoritesEditorExternalExecutionResult | None = None
+        self._last_execution_error: BaseException | None = None
         self._retained_owner: FavoritesEditorExternalRefreshOwner | None = None
         self._retained_result: FavoritesExternalRefreshResult | None = None
         self._snapshot = FavoritesEditorExternalPreviewSnapshot(
@@ -329,9 +325,9 @@ class FavoritesEditorExternalPreviewController:
         with self._state_lock:
             if (
                 self._session.has_changes
+                and not self._execution_active
                 and self._snapshot.presentation is not None
-                and self._snapshot.state
-                is not FavoritesEditorExternalPreviewState.STALE
+                and self._snapshot.state is not FavoritesEditorExternalPreviewState.STALE
             ):
                 self._release_retained_locked()
                 self._snapshot = FavoritesEditorExternalPreviewSnapshot(
@@ -353,6 +349,8 @@ class FavoritesEditorExternalPreviewController:
         """Return the current exact refresh evidence while its owner remains active."""
 
         with self._state_lock:
+            if self._execution_active:
+                return None
             if self._session.has_changes:
                 self._release_retained_locked()
                 if self._snapshot.presentation is not None:
@@ -360,9 +358,7 @@ class FavoritesEditorExternalPreviewController:
                         state=FavoritesEditorExternalPreviewState.STALE,
                         presentation=self._snapshot.presentation,
                         error=None,
-                        stale_reason=(
-                            "in-memory Favorites edits changed the preview baseline"
-                        ),
+                        stale_reason=("in-memory Favorites edits changed the preview baseline"),
                     )
                 return None
             owner = self._retained_owner
@@ -391,7 +387,8 @@ class FavoritesEditorExternalPreviewController:
         if type(reason) is not str or not reason.strip():
             raise ValueError("External preview invalidation reason must be non-empty.")
         with self._state_lock:
-            self._release_retained_locked()
+            if not self._execution_active:
+                self._release_retained_locked()
             if self._snapshot.presentation is None:
                 self._snapshot = FavoritesEditorExternalPreviewSnapshot(
                     state=FavoritesEditorExternalPreviewState.READY,
@@ -407,6 +404,131 @@ class FavoritesEditorExternalPreviewController:
                     stale_reason=reason,
                 )
             return self._snapshot
+
+    @property
+    def execution_in_progress(self) -> bool:
+        """Return whether one non-cancellable storage transaction is active."""
+
+        with self._state_lock:
+            return self._execution_active
+
+    @property
+    def last_execution_result(self) -> FavoritesEditorExternalExecutionResult | None:
+        """Return retained terminal success evidence, if any."""
+
+        with self._state_lock:
+            return self._last_execution_result
+
+    @property
+    def last_execution_error(self) -> BaseException | None:
+        """Return retained terminal failure evidence, if any."""
+
+        with self._state_lock:
+            return self._last_execution_error
+
+    def _require_current_plan_locked(
+        self,
+        plan: FavoritesEditorExternalPlanningSnapshot,
+    ) -> FavoritesEditorExternalRefreshOwner:
+        from .favorites_editor_external_planning import (
+            FavoritesEditorExternalPlanningSnapshot,
+        )
+
+        if type(plan) is not FavoritesEditorExternalPlanningSnapshot:
+            raise TypeError("Assisted execution requires an exact aggregate plan.")
+        if self._close_requested:
+            raise FavoritesEditorExternalPreviewError(
+                "The RadioReference preview owner is closing."
+            )
+        if self._execution_active:
+            raise FavoritesEditorExternalPreviewError(
+                "An assisted execution is already in progress."
+            )
+        if self._session.has_changes:
+            raise FavoritesEditorExternalPreviewError(
+                "Assisted execution is unavailable while manual edits exist."
+            )
+        owner = self._retained_owner
+        result = self._retained_result
+        if owner is None or result is None or plan.refresh_result is not result:
+            raise FavoritesEditorExternalPreviewError(
+                "Assisted execution plan does not retain the current exact refresh."
+            )
+        if owner.service.lifecycle_snapshot != result.lifecycle_snapshot:
+            raise FavoritesEditorExternalPreviewError(
+                "Assisted execution lifecycle evidence is stale."
+            )
+        if self._session.baseline_snapshot != plan.write_plan.baseline_snapshot:
+            raise FavoritesEditorExternalPreviewError(
+                "Assisted execution plan does not match the editor baseline."
+            )
+        return owner
+
+    def review_external_execution(
+        self,
+        plan: FavoritesEditorExternalPlanningSnapshot,
+    ) -> FavoritesEditorExternalExecutionReview:
+        """Derive a separate full token for the current exact retained plan."""
+
+        from .favorites_editor_external_execution import (
+            review_favorites_editor_external_execution,
+        )
+
+        with self._state_lock:
+            self._require_current_plan_locked(plan)
+            return review_favorites_editor_external_execution(
+                plan,
+                self._session.storage,
+            )
+
+    def execute_external_plan(
+        self,
+        plan: FavoritesEditorExternalPlanningSnapshot,
+        confirmation_token: str,
+    ) -> FavoritesEditorExternalExecutionResult:
+        """Execute once, retain terminal evidence, and consume the refresh owner."""
+
+        from .favorites_editor_external_execution import (
+            execute_favorites_editor_external_plan,
+        )
+
+        if not self._execution_lock.acquire(blocking=False):
+            raise FavoritesEditorExternalPreviewError(
+                "An assisted execution is already in progress."
+            )
+        try:
+            with self._state_lock:
+                owner = self._require_current_plan_locked(plan)
+                self._execution_active = True
+                self._last_execution_result = None
+                self._last_execution_error = None
+            try:
+                result = execute_favorites_editor_external_plan(
+                    plan,
+                    owner.lifecycle,
+                    self._session.storage,
+                    confirmation_token,
+                )
+                self._session.adopt_external_execution(result.durable_result)
+                with self._state_lock:
+                    self._last_execution_result = result
+                return result
+            except BaseException as error:
+                with self._state_lock:
+                    self._last_execution_error = error
+                raise
+            finally:
+                with self._state_lock:
+                    self._execution_active = False
+                    self._release_retained_locked()
+                    self._snapshot = FavoritesEditorExternalPreviewSnapshot(
+                        state=FavoritesEditorExternalPreviewState.STALE,
+                        presentation=self._snapshot.presentation,
+                        error=None,
+                        stale_reason="assisted execution consumed the retained refresh",
+                    )
+        finally:
+            self._execution_lock.release()
 
     def cancel(self) -> FavoritesEditorExternalPreviewSnapshot:
         """Request cancellation and retain any prior immutable presentation."""
@@ -431,14 +553,18 @@ class FavoritesEditorExternalPreviewController:
             )
         owner: FavoritesEditorExternalRefreshOwner | None = None
         try:
+            with self._state_lock:
+                if self._execution_active:
+                    raise FavoritesEditorExternalPreviewError(
+                        "An assisted execution is already in progress."
+                    )
             self._cancel_requested.clear()
             started_at = self._now()
             baseline = self._session.baseline_snapshot
             if self._session.has_changes:
                 self.invalidate("unreviewed in-memory Favorites edits")
                 raise FavoritesEditorExternalPreviewError(
-                    "RadioReference refresh is unavailable while unreviewed Favorites "
-                    "edits exist."
+                    "RadioReference refresh is unavailable while unreviewed Favorites edits exist."
                 )
             with self._state_lock:
                 retained = self._snapshot.presentation
@@ -520,7 +646,9 @@ class FavoritesEditorExternalPreviewController:
 
         self._cancel_requested.set()
         with self._state_lock:
-            self._release_retained_locked()
+            self._close_requested = True
+            if not self._execution_active:
+                self._release_retained_locked()
 
 
 __all__ = [

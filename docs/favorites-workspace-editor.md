@@ -144,11 +144,10 @@ deterministically.
 
 ## Make an assisted synchronization plan
 
-Milestone 28.2 adds explicit decisions beneath the current preview. These
-decisions compose an exact aggregate plan in memory; they do not execute it. The
-panel therefore labels every result `UNEXECUTED` and reports the number of
-decisions, unresolved supported choices, exact Favorites-byte changes, intended
-provenance changes, and blockers.
+Explicit decisions beneath the current preview compose an exact aggregate plan
+in memory. The panel labels every newly composed result `UNEXECUTED` and reports
+the number of decisions, unresolved supported choices, exact Favorites-byte
+changes, intended provenance changes, and blockers.
 
 Enter the preview record index shown by the current result. For a linked
 conventional `C-Freq` or trunked `TGID` record, enter one of the reviewed mapped
@@ -186,9 +185,10 @@ Each action recomputes one renderer-neutral result from the immutable refresh
 baseline and the complete current decision set. Duplicate, contradictory,
 foreign, or stale evidence is rejected. Compatible decisions can be combined,
 and record insertion/deletion rebinding is reflected in the complete intended
-provenance. The resulting `FavoritesWritePlan` is evidence for review only: the
-assisted panel cannot call a copied-tree or USB executor, replace the provenance
-file, emit a durable operation report, or reread RadioReference.
+provenance. The resulting `FavoritesWritePlan` remains inert until the separate
+assisted review and confirmation described below. Planning never calls a
+copied-tree or USB executor, replaces provenance, emits a durable operation
+report, or rereads RadioReference.
 
 ## Review, confirm, and execute
 
@@ -213,12 +213,49 @@ rollback manifest, operation report, recovery status on failure, and whether a
 fresh exact reload matched the reviewed intended snapshot. The reloaded snapshot
 becomes the new baseline only after exact equality is verified.
 
+The assisted path is deliberately separate. Choose `Review exact assisted plan`
+only after all supported decisions are complete. Its full SHA-256 confirmation
+token binds the explicit storage kind and requested path, retained refresh and
+lifecycle, decision order, baseline and intended Favorites, baseline and
+intended provenance (including absent versus empty), and blockers. The token
+field is not prefilled. A token from the ordinary editor, another target,
+another refresh, a reordered plan, or any changed evidence is refused.
+
+Paste that complete token into the assisted confirmation field and choose
+`Execute confirmed assisted plan`. Before mutation, the controller requires the
+same retained refresh object, an active unchanged lifecycle, no ordinary
+in-memory edits, a complete non-no-op plan, exact current provenance, and a
+fresh target snapshot equal to the reviewed baseline. Review and execution do
+not contact RadioReference again.
+
+A Favorites-changing plan delegates exactly once to the selected editor storage
+adapter and then independently reads the target back. A provenance-only plan
+does not invent a storage operation. Intended provenance is published
+conditionally against the exact baseline. If publication returned uncertainly
+but exact intended Favorites and provenance verify, execution succeeds with the
+reconciliation noted. If provenance remains at baseline after a Favorites
+write, the application derives an exact reverse plan, executes it through the
+same backend, and requires baseline readback. Any mixed, unknown, or failed
+recovery state is reported as incomplete while preserving available primary and
+recovery operation evidence.
+
+Success adopts the verified state into both the provenance lifecycle and editor
+session. Success or failure consumes the refresh and clears the plan; retry
+requires a fresh local inspection and provider refresh. Only one assisted
+attempt can run at a time. Closing during its non-cancellable storage
+transaction waits for terminal evidence before releasing the retained
+lifecycle. The screen shows the target, operation ID, backup, staging, rollback
+manifest, operation report, provenance path, reconciliation outcome, and
+recovery evidence without writing tokens, provenance, provider payloads, or
+local programming values to logs.
+
 ## Deliberate limits
 
 The editor does not expose arbitrary positional fields, hierarchy or catalog
-container creation/deletion/reordering, writable FTP, assisted-plan execution or
-provenance publication, live-scanner GLT/FQK mutation, daemon or web access,
-Home Assistant Ingress, or automatic/background synchronization. Milestone 28.3
-owns execution of a separately reviewed assisted plan through the existing
-copied-tree/USB safety boundary. Use only copied data you can recover or scanner
-media for which the verified backup and rollback artifacts are acceptable.
+container creation/deletion/reordering, writable FTP, live-scanner GLT/FQK
+mutation, daemon or web execution, Home Assistant Ingress execution, or
+automatic/background synchronization. Assisted execution remains a local,
+explicit, one-shot copied-tree or freshly qualified USB workflow. Use only
+copied data you can recover or scanner media for which the verified backup and
+rollback artifacts are acceptable. Physical reversible USB execution acceptance
+remains part of Milestone 28.4 release closure.
