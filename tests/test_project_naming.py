@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_28_3_execution_contract() -> None:
+def test_roadmap_records_active_milestone_28_4_release_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,19 +123,19 @@ def test_roadmap_records_active_milestone_28_3_execution_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 28.3 — Guarded assisted-plan execution and provenance publication",
-        "Milestone 28.2 is closed after merging pull request 200",
-        "Execution requires a separate review step and a full deterministic confirmation token",
-        "same current retained refresh result by identity",
-        "delegate exactly once to the editor storage's existing copied-tree or USB executor",
-        "For a provenance-only plan",
-        "Treat provenance publication failure as an explicit cross-store recovery case",
-        "derive an exact reverse `FavoritesWritePlan`",
-        "Only after exact intended Favorites and intended provenance both verify",
-        "Success consumes the refresh owner and invalidates the plan",
-        "Any failed attempt also invalidates the plan",
-        "Expose assisted review and execution as controls separate from the ordinary manual",
-        "Physical reversible USB acceptance remains part of Milestone 28.4 release closure",
+        "### Milestone 28.4 — v0.24.0 release and assisted-synchronization closure",
+        "Milestone 28.3 is closed after merging pull request 201",
+        "feature-frozen v0.24.0 release candidate",
+        "First use a disposable private copy of representative Favorites media",
+        "Exercise recovery without risking physical media",
+        "perform one minimal reversible physical SDS200 USB operation",
+        "finish at their accepted baseline",
+        "record only sanitized facts in tracked documentation",
+        "synchronize the Python package, import version, and Home Assistant App at 0.24.0",
+        "shared 86 percent coverage floor",
+        "Only one genuine matching `v0.24.0` tag may publish",
+        "Workflow success alone is not release acceptance",
+        "The external implementation-review message and waiting dependency-update pull requests remain separate",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

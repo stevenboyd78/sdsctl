@@ -11,93 +11,103 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 28.3 — Guarded assisted-plan execution and provenance publication
+### Milestone 28.4 — v0.24.0 release and assisted-synchronization closure
 
-Milestone 28.2 is closed after merging pull request 200 as commit `74b42ba`.
-The local Favorites editor now retains one current RadioReference refresh,
-requires explicit reviewed field and record decisions, shows a two-stage exact
-import proposal before adoption, and composes one deterministic aggregate plan
-that is conspicuously `UNEXECUTED`. The merge passed the complete local suite and
-the Python 3.11 through 3.14, documentation, real-Chrome, distribution, CodeQL,
-generic-container, and Home Assistant App validation matrix.
+Milestone 28.3 is closed after merging pull request 201 as commit `f03314a`.
+The local Favorites editor now turns one current credentialed RadioReference
+refresh and explicit reviewed decisions into one exact guarded execution. The
+merged path binds its full confirmation token to the requested copied-tree or USB
+target, refresh and lifecycle evidence, ordered decisions, exact Favorites bytes,
+complete provenance including absent versus empty, and blockers. It delegates
+once to the existing verified writer, independently reads back, conditionally
+publishes provenance, reconciles uncertain publication, reverses a verified
+Favorites write when provenance remains at baseline, and retains typed evidence
+when complete recovery cannot be proved. The merge passed the complete local and
+GitHub static, Python 3.11 through 3.14, documentation, browser, distribution,
+CodeQL, generic-container, and Home Assistant App validation matrix.
 
-Milestone 28.3 adds the only supported execution path for that exact aggregate
-plan. Reuse the existing `FavoritesWritePlan`, editor storage adapter, copied-tree
-and USB preflight/execution workflows, conditional provenance publication, and
-provenance lifecycle lock. Do not create another Favorites writer, USB owner,
-comparison engine, provider mapping, or provenance format.
+Milestones 28.1 through 28.3 now form the feature-frozen v0.24.0 release
+candidate: explicit credentialed RadioReference refresh, exact read-only preview,
+reviewed field and record decisions, deterministic assisted write planning,
+copied-tree and modeled USB execution, conditional provenance publication, and
+cross-store recovery. Milestone 28.4 is release closure and private operator
+acceptance, not another runtime feature slice. Do not create another provider,
+mapping, comparison engine, Favorites writer, provenance format, USB owner, or
+interactive surface.
 
-Execution requires a separate review step and a full deterministic confirmation
-token. Bind that token to the explicit storage kind and requested target, exact
-retained refresh and lifecycle evidence, ordered decisions, baseline and intended
-Favorites bytes, baseline and intended provenance including absent versus empty,
-and every blocker. A token from the ordinary manual editor, a prior plan, another
-target, reordered or changed decisions, or replaced refresh evidence must fail.
-Do not prefill, abbreviate, partially match, or silently reuse confirmation.
+Qualify the existing path in a strict sequence. First use a disposable private
+copy of representative Favorites media to prove an exact credentialed refresh,
+reviewed decision set, inert review, full-token confirmation, verified backup,
+staging, activation, independent intended-state readback, conditional provenance
+publication, durable operation report, lifecycle/session adoption, and single-use
+invalidation. Independently compare the source tree before and after preparation
+and keep all provider payloads, credentials, local programming values, tokens,
+provenance, backups, reports, and digests outside the repository and public logs.
 
-Before any mutation, require the same current retained refresh result by identity,
-an active unchanged provenance lifecycle, no ordinary in-memory editor changes,
-a complete assisted decision set, no planning or write blockers, at least one
-Favorites or provenance change, exact current persisted provenance, and a fresh
-storage snapshot equal to the plan baseline. Permit only one execution attempt at
-a time. Review and execution must never reread RadioReference or recompute choices
-from new provider data.
+Exercise recovery without risking physical media. A controlled private copied-
+tree run must prove at least one failure after Favorites mutation, exact
+reconciliation of both durable stores, reverse execution through the same backend
+when provenance remains at baseline, independent baseline readback, preserved
+primary and recovery artifacts, and fail-closed behavior for any mixed or unknown
+state. Existing deterministic tests remain the authoritative coverage for
+uncertain publication and incomplete recovery cases that cannot be induced safely
+in operator acceptance.
 
-For a Favorites-changing plan, delegate exactly once to the editor storage's
-existing copied-tree or USB executor. Retain its operation ID, verified backup,
-staging, rollback manifest, operation report, and recovery evidence. Perform an
-independent fresh read and require byte-for-byte equality with the reviewed
-intended Favorites snapshot before conditionally publishing complete intended
-provenance against the exact persisted baseline. For a provenance-only plan,
-freshly verify the unchanged Favorites baseline and publish provenance without
-manufacturing a storage-write operation. An exact no-change plan is not
-executable.
+Only after copied-tree and recovery acceptance pass, perform one minimal
+reversible physical SDS200 USB operation through the same local editor. Require an
+explicit already-mounted target, fresh mount and USB ancestry qualification, a
+private host-state directory outside scanner media, one sole scanner/media owner,
+a recoverable scanner backup, and an independently recorded private baseline.
+Review the exact planned local and provenance change before pasting the complete
+token. Verify intended readback, durable artifacts, and provenance publication,
+then execute and independently verify an exact inverse operation so the scanner
+Favorites and provenance finish at their accepted baseline. Synchronize and
+release mounted media safely; do not claim acceptance from a modeled adapter,
+copied tree, unverified write, or merely successful process exit.
 
-Treat provenance publication failure as an explicit cross-store recovery case.
-First reconcile whether conditional atomic publication actually left the exact
-intended provenance or the exact baseline. If intended provenance and intended
-Favorites both verify, complete successfully despite an uncertain publication
-return. If provenance remains at the baseline after a verified Favorites change,
-derive an exact reverse `FavoritesWritePlan`, execute it through the same guarded
-storage backend, and require an independent baseline readback. If either durable
-store is neither the exact baseline nor the exact intended state, or reverse
-execution/readback fails, stop with typed incomplete-recovery evidence retaining
-all available primary and recovery operation artifacts. Never guess, delete
-evidence, or report success from partial state.
+Acceptance must record only sanitized facts in tracked documentation: date,
+scanner model and firmware, host operating environment, reviewed provider
+operation and public dataset identity, storage mode, success or refusal class,
+recovery outcome, and proof that final state matched the accepted baseline. Do
+not record account names, secret-reference values, response content, Favorites
+names, frequencies, talkgroups, unit identifiers, absolute private paths,
+confirmation tokens, operation identifiers, artifact names, provenance content,
+or hashes derived from private data. A failure does not authorize an implicit
+retry; inspect the retained evidence and repeat only from a newly qualified
+baseline and explicit new review.
 
-Only after exact intended Favorites and intended provenance both verify may the
-provenance lifecycle and editor session adopt the new baseline. Success consumes
-the refresh owner and invalidates the plan so it cannot execute twice. Any failed
-attempt also invalidates the plan and requires fresh local inspection; retry is
-never implicit. Closing the editor during an active attempt requests no unsafe
-asynchronous cancellation of a storage transaction and must not discard its
-terminal evidence.
+After acceptance, synchronize the Python package, import version, and Home
+Assistant App at 0.24.0; freeze both changelogs; replace the active roadmap with
+the completed Milestone 28 boundary; and reconcile the README, Favorites editor,
+RadioReference, container, release, Home Assistant, and reviewed wiki
+documentation. Extend release-contract tests so the complete v0.24.0 changelog
+must cover the explicit preview, assisted decisions, guarded execution,
+provenance publication and recovery, and physical reversible USB qualification.
 
-Expose assisted review and execution as controls separate from the ordinary
-manual `Review exact plan` and `Execute confirmed plan` actions. Show the exact
-target, decision count, Favorites/provenance change state, confirmation token,
-backend operation artifacts, provenance path, terminal outcome, and recovery
-status. Keep secrets, provider payloads, local programming values, generated
-tokens, provenance, operation reports, and physical-media evidence out of logs,
-fixtures, screenshots, and the repository.
+Run Ruff, strict mypy, the complete Python 3.11 through 3.14 matrix with the
+shared 86 percent coverage floor, documentation checks, real-Chrome and
+repeatability validation, wheel and source-distribution builds, metadata and
+clean-install checks, generic and Home Assistant container validation, CodeQL,
+and every release-integrity gate before any release tag exists. The private
+acceptance corpus and artifacts must not appear in the Git index, distribution,
+container context, screenshots, CI artifacts, or commit history.
 
-Renderer-neutral synthetic tests must cover copied-tree and USB adapters through
-deterministic fakes, Favorites-changing and provenance-only success, absent versus
-empty provenance, stale target/lifecycle/provenance/confirmation refusal,
-concurrent execution refusal, executor failure before and after mutation,
-uncertain-but-successful provenance publication, verified reverse recovery,
-incomplete recovery, exact lifecycle/session adoption, single-use invalidation,
-shutdown behavior, and proof that the provider is never reread. Existing real
-copied-tree integration tests must exercise the actual backup/staging/readback and
-durable-report workflow before private operator acceptance. Physical reversible
-USB acceptance remains part of Milestone 28.4 release closure.
+Only one genuine matching `v0.24.0` tag may publish the Python package, GitHub
+Release, generic multi-architecture image, and Home Assistant App images. After
+tag-gated workflows pass, independently verify the public Git tag and release
+artifacts, clean-install the public PyPI package, inspect published container
+manifests, publish reviewed wiki source, update the Home Assistant repository,
+and perform bounded repository-managed App acceptance against the published
+0.24.0 image. Workflow success alone is not release acceptance.
 
-Milestone 28.3 ends with exact copied-tree and modeled guarded USB execution of
-one reviewed assisted plan. Do not add implicit acceptance, automatic retries,
-scheduled/background synchronization, polling, MyRR scraping, undocumented
-provider interfaces, new mappings, writable FTP, daemon/web/Home Assistant
-execution, or another scanner connection. The two waiting Dependabot pull
-requests remain separate unless their own reviewed state changes.
+Do not add automatic refresh, retries, polling, scheduled or background
+synchronization, silent conflict resolution, MyRR scraping, undocumented or
+private provider interfaces, new mappings, writable FTP, daemon/web/Home
+Assistant execution, another scanner connection, dependency locking, the
+Milestone 29 Home Assistant waterfall card, TUI/GUI waterfall rendering, or GUI
+theme implementation. The external implementation-review message and waiting
+dependency-update pull requests remain separate unless their own reviewed state
+changes.
 
 
 ## Deferred hardware validation
