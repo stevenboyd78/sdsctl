@@ -11,72 +11,96 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 27.5 — v0.23.0 release and adaptive-waterfall sequence closure
+### Milestone 28.1 — Explicit RadioReference refresh and read-only Favorites preview
 
-Milestone 27.4 is closed after integrating the physically qualified private
-text-waterfall data plane into the authenticated web dashboard. The merged
-workspace creates daemon demand only for a visible authenticated Waterfall pane,
-streams bounded same-origin records through direct-session and Home Assistant
-Ingress paths, renders 240 hexadecimal bins as an explicitly relative and
-uncalibrated Canvas spectrum and rolling history, and releases the final client
-deterministically. Physical SDS200 firmware 1.26.01 and Home Assistant OS 18.2
-acceptance covered the Ingress transport corrections, real hexadecimal values,
-responsive rendering, lifecycle controls, reconnect behavior, and restoration of
-the repository App as sole scanner and audio owner.
+Milestone 27.5 is closed with v0.23.0 published and independently verified across
+the Python package, GitHub Release, generic multi-architecture container, Home
+Assistant App images, reviewed wiki, clean public installation, and physical
+repository-managed Home Assistant acceptance. Post-release documentation-link
+corrections and the target-aware Web Controls redesign are also merged. The
+Controls work retains complete current System, Department, Site, and Channel
+context beside explicit Hold/Release and Previous/Next actions; physical Home
+Assistant OS 18.2 acceptance against SDS200 firmware 1.26.01 preserved the
+single-owner boundary and restored the repository App afterward.
 
-Milestones 27.1 through 27.4 now form the feature-frozen v0.23.0 release
-candidate: adaptive scanner-screen presentation, the qualified daemon waterfall
-service, independently reproduced protocol and audio hardening, release-integrity
-gates, the responsive six-pane web workspace, the original Pip-Boy-inspired
-theme, managed-theme source-snapshot hardening, and the authenticated web
-waterfall renderer.
+Milestone 28.1 begins the Favorites Workspace and assisted RadioReference product
+integration sequence. Add one explicit operator-initiated RadioReference refresh
+and a complete read-only preview to the existing local Textual Favorites editor.
+Reuse `RadioReferenceAssistedSynchronizationSourceFactory`,
+`FavoritesExternalProvenanceLifecycle`, and
+`FavoritesExternalAssistedSynchronizationService.refresh()` rather than creating
+another provider, comparison, provenance, or storage implementation.
 
-Milestone 27.5 is release closure rather than another runtime feature slice.
-Synchronize the Python package, import version, and Home Assistant App at 0.23.0;
-freeze both changelogs; close the Milestone 27 roadmap record; reconcile the
-README, canonical documentation, and reviewed wiki source; and run the complete
-static, test, browser, documentation, distribution, container, and release-
-contract validation before any release tag exists.
+The editor must continue opening exactly one operator-selected copied Favorites
+tree or freshly qualified Linux USB source. RadioReference integration requires
+explicit non-secret account configuration, environment-variable references for
+the application key and password, one reviewed observation request plan and
+dataset identity, and one canonical absolute provenance path. Secret values must
+not be accepted as command-line arguments, stored in editor state, included in
+object representations, rendered in the TUI, or copied into diagnostics and
+errors. Merely opening the editor must not resolve secrets, contact
+RadioReference, or start any refresh work.
 
-The missing Milestone 27.4 changelog and Home Assistant acceptance records are
-now present, and the stale duplicated planned contract has been replaced with
-the final completed boundary, including the physical hexadecimal input contract.
-The deterministic documentation gallery now provides the same Full HD, desktop,
-compact/Raspberry Pi, and DPR2 phone review set for all six built-in themes.
-The matrix also retains a System desktop Waterfall capture and a compact
-Pip-Boy-inspired Waterfall capture generated from the real packaged dashboard
-and fictional private-data-free state. The capture boundary fixes canonical
-media preferences, requires stable Waterfall
-Canvas pixels and compositor frames, and deterministically re-encodes validated
-Chrome pixels so cross-process PNG encoding cannot create a false release-gate
-failure. Keep exact viewport, device-pixel-ratio, repeatability,
-canonical-documentation, reviewed-wiki, and wheel/source-distribution evidence
-enforced for all 26 images.
+The refresh control performs one bounded provider read only after an explicit
+button or keyboard action. Permit at most one refresh in flight, keep ordinary
+editor browsing responsive, report stable progress, and deterministically close
+the owned provider session on success, failure, cancellation, or application
+exit. A later refresh must be another explicit action; there is no timer,
+startup refresh, retry loop, polling, scheduled task, or background
+synchronization.
 
-Run Ruff, mypy, the complete Python 3.11 through 3.14 test matrix with the shared
-86 percent coverage floor, documentation checks, the browser matrix, deterministic
-screenshot verification, build and metadata checks, clean-install smoke tests,
-generic and Home Assistant container validation, CodeQL, and all release-
-integrity gates. Physical pre-tag acceptance must preserve the SDS200 single-
-owner guard and restore the repository-managed App after any isolated source-
-built App run.
+The provenance lifecycle's fresh Favorites snapshot must equal the editor's
+exact durable baseline before the preview becomes visible. Reject mismatched,
+foreign, failed, or stale lifecycle evidence rather than comparing provider data
+to a different Favorites tree. Milestone 28.1 does not reconcile provider
+evidence with unreviewed in-memory edits: disable refresh while edits exist, and
+invalidate a retained preview after any rename, duplicate, delete, undo, reset,
+successful write/reload, or source-evidence change. An invalidated preview may
+report why it is stale, but it must not regain current status without another
+explicit provider read.
 
-Only one genuine matching `v0.23.0` tag may publish the Python package, GitHub
-Release, generic multi-architecture image, and Home Assistant App images. After
-tag-gated workflows succeed, verify public artifacts independently, perform a
-clean public-PyPI installation, publish reviewed wiki source, update the Home
-Assistant repository, and complete bounded repository-managed App acceptance
-against the published 0.23.0 image. Workflow success alone is not release
-acceptance.
+Render the exact immutable refresh result without converting it into an
+acceptance decision. The preview must identify the provider and dataset, show
+timezone-aware observation times and available revisions, summarize `added`,
+`replaced`, `removed`, `unchanged`, `local_only`, and `conflict` records, and
+allow deterministic inspection of each record and field. Preserve and display
+exact local targets, opaque external identities, field ownership, local and
+external values, explicit provider absence, and evidence that has no reviewed
+scanner mapping. Do not hide conflicts or unmapped fields merely because they
+are not actionable in this milestone.
 
-Do not add a Home Assistant waterfall card, TUI/GUI waterfall rendering, binary
-`GW2`, persistent waterfall history, calibrated FFT or RF-power claims, scanner
-tuning, public waterfall sockets, Internet-facing access, automatic Favorites or
-RadioReference synchronization, dependency locking, Broadcastify TLS research,
-or new third-party JavaScript. The external implementation-review message and the
-private local Favorites validation corpus remain outside the release and the
-repository. Waiting dependency-update pull requests remain separate unless their
-own reviewed state changes.
+Provider, HTTP, SOAP, authentication, invalid-response, and cleanup failures must
+remain within the existing stable redacted RadioReference error boundary. The
+TUI may add actionable local context, but it must not expose provider response
+text, request bodies, credential material, environment values, private Favorites
+bytes, or tracebacks. A failed or cancelled refresh retains the unchanged editor
+baseline, intended snapshot, undo history, durable provenance file, and last
+successful preview evidence unless that evidence has independently become stale.
+
+Keep presentation logic independently testable from Textual widgets and the live
+provider. Deterministic fake services and synthetic Favorites/provenance fixtures
+must cover every record and field classification, sorting, selection, empty and
+large bounded previews, keyboard access, focus behavior, one-in-flight
+serialization, cancellation, redacted failures, baseline mismatch, edit-based
+invalidation, and application shutdown. Existing copied-tree and USB editor
+write tests must prove that merely configuring, refreshing, viewing, or closing
+the preview performs no Favorites or provenance mutation.
+
+Credentialed RadioReference acceptance is a separate operator-run integration
+check and is not required by ordinary CI. Private credentials, provider payloads,
+and the local SDS200 Favorites validation corpus remain outside the repository.
+Committed fixtures must be synthetic or sanitized and must not expose local
+names, frequencies, talkgroup or unit identifiers, account data, or location
+information.
+
+Milestone 28.1 ends at read-only observation and presentation. Do not add local
+versus external decisions, field acceptance, record import or removal planning,
+Favorites write execution, provenance publication, automatic refresh, MyRR
+scraping, undocumented provider interfaces, FTP writes, daemon/web/Home
+Assistant integration, new scanner sessions, or arbitrary RadioReference-to-SDS
+mappings. Those decisions and exact write-plan composition begin in Milestone
+28.2. The two waiting Dependabot pull requests remain separate unless their own
+reviewed state changes.
 
 
 ## Deferred hardware validation
