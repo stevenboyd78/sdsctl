@@ -11,104 +11,93 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 28.2 — Assisted RadioReference decisions and exact write planning
+### Milestone 28.3 — Guarded assisted-plan execution and provenance publication
 
-Milestone 28.1 is closed after merging the explicit RadioReference refresh and
-complete read-only Favorites preview into `main`. The production path was
-operator-qualified against public RadioReference system `12042` without changing
-the copied Favorites tree or creating provenance, and the merge passed the full
-Python 3.11 through 3.14, documentation, browser, distribution, CodeQL, generic
-container, and Home Assistant App validation matrix.
+Milestone 28.2 is closed after merging pull request 200 as commit `74b42ba`.
+The local Favorites editor now retains one current RadioReference refresh,
+requires explicit reviewed field and record decisions, shows a two-stage exact
+import proposal before adoption, and composes one deterministic aggregate plan
+that is conspicuously `UNEXECUTED`. The merge passed the complete local suite and
+the Python 3.11 through 3.14, documentation, real-Chrome, distribution, CodeQL,
+generic-container, and Home Assistant App validation matrix.
 
-Milestone 28.2 turns one current preview into explicit operator-reviewed
-decisions and one exact synchronization plan inside the existing local Textual
-Favorites editor. Reuse `FavoritesExternalAssistedSynchronizationService`, the
-reviewed RadioReference field mappings, exact record templates and bindings,
-provenance lifecycle evidence, pure Favorites editing operations, and
-`plan_favorites_write()` rather than creating another comparison, mapping,
-editing, provenance, or write-planning implementation.
+Milestone 28.3 adds the only supported execution path for that exact aggregate
+plan. Reuse the existing `FavoritesWritePlan`, editor storage adapter, copied-tree
+and USB preflight/execution workflows, conditional provenance publication, and
+provenance lifecycle lock. Do not create another Favorites writer, USB owner,
+comparison engine, provider mapping, or provenance format.
 
-A successful refresh owner and its exact `FavoritesExternalRefreshResult` may
-remain retained only while the editor baseline, source evidence, configured
-provider and dataset, and provenance lifecycle snapshot are unchanged. Planning
-must use that retained result by identity and must never silently reread the
-provider. Re-refresh is another explicit bounded provider operation that replaces
-and closes the prior owner only after a new result is safely adopted. Failure or
-cancellation retains the prior current result when it is still valid. Preview
-invalidation, source change, editor reload, application exit, or replacement
-refresh must deterministically close the retained owner and invalidate every
-dependent decision and plan.
+Execution requires a separate review step and a full deterministic confirmation
+token. Bind that token to the explicit storage kind and requested target, exact
+retained refresh and lifecycle evidence, ordered decisions, baseline and intended
+Favorites bytes, baseline and intended provenance including absent versus empty,
+and every blocker. A token from the ordinary manual editor, a prior plan, another
+target, reordered or changed decisions, or replaced refresh evidence must fail.
+Do not prefill, abbreviate, partially match, or silently reuse confirmation.
 
-Expose decisions only for the already-reviewed representable mappings:
-conventional `C-Freq` Name and frequency, and trunk `TGID` Name and decimal
-talkgroup identifier. For linked fields, present the exact local value, external
-value or explicit absence, ownership, and conflict evidence before accepting the
-external value, keeping the local value, or detaching that field from future
-provider ownership. Never invent coercions or expose a generic positional-field
-editor for provider data.
+Before any mutation, require the same current retained refresh result by identity,
+an active unchanged provenance lifecycle, no ordinary in-memory editor changes,
+a complete assisted decision set, no planning or write blockers, at least one
+Favorites or provenance change, exact current persisted provenance, and a fresh
+storage snapshot equal to the plan baseline. Permit only one execution attempt at
+a time. Review and execution must never reread RadioReference or recompute choices
+from new provider data.
 
-For an unbound `added` record, require an explicit compatible local HPD insertion
-anchor, an exact operator-selected record template, and reviewed field bindings
-with at least one externally owned field. Show the complete derived target,
-template command, bindings, and resulting record before adopting an import
-decision. For a provider `removed` record, require an explicit choice between
-deleting the exact supported linked leaf and keeping its local bytes while
-detaching provider ownership. Permit explicit record detach where supported.
-Unmapped evidence, unsupported commands or fields, ambiguous relationships,
-local-only records, and unresolved conflicts remain visible and non-actionable;
-they must never be guessed away.
+For a Favorites-changing plan, delegate exactly once to the editor storage's
+existing copied-tree or USB executor. Retain its operation ID, verified backup,
+staging, rollback manifest, operation report, and recovery evidence. Perform an
+independent fresh read and require byte-for-byte equality with the reviewed
+intended Favorites snapshot before conditionally publishing complete intended
+provenance against the exact persisted baseline. For a provenance-only plan,
+freshly verify the unchanged Favorites baseline and publish provenance without
+manufacturing a storage-write operation. An exact no-change plan is not
+executable.
 
-Compose all adopted decisions from one immutable baseline into one deterministic
-planning snapshot. The plan must retain the exact refresh result, ordered
-decisions, intended Favorites snapshot, baseline and intended provenance records,
-comparison and schema evidence, blockers, and the existing deterministic
-`FavoritesWritePlan` confirmation identity. Recompute from the baseline after
-every decision rather than incrementally trusting widget state. Equivalent
-ordered decisions must produce byte-for-byte equal Favorites and provenance
-evidence. Contradictory, duplicate, foreign, stale, or no-longer-applicable
-decisions must be rejected or reported as stable blockers.
+Treat provenance publication failure as an explicit cross-store recovery case.
+First reconcile whether conditional atomic publication actually left the exact
+intended provenance or the exact baseline. If intended provenance and intended
+Favorites both verify, complete successfully despite an uncertain publication
+return. If provenance remains at the baseline after a verified Favorites change,
+derive an exact reverse `FavoritesWritePlan`, execute it through the same guarded
+storage backend, and require an independent baseline readback. If either durable
+store is neither the exact baseline nor the exact intended state, or reverse
+execution/readback fails, stop with typed incomplete-recovery evidence retaining
+all available primary and recovery operation artifacts. Never guess, delete
+evidence, or report success from partial state.
 
-This milestone is planning-only. It must not call field/name acceptance,
-record-mutation, detach, copied-tree, USB, or provenance-persistence execution
-methods. It must not write Favorites bytes, create or replace provenance, emit a
-durable operation report, or enable the existing confirmed-write action for an
-assisted synchronization plan. The TUI must label the result as unexecuted and
-make incomplete decisions and remaining blockers conspicuous. Ordinary manual
-Favorites editing and its previously verified execution workflow remain
-separate and unchanged.
+Only after exact intended Favorites and intended provenance both verify may the
+provenance lifecycle and editor session adopt the new baseline. Success consumes
+the refresh owner and invalidates the plan so it cannot execute twice. Any failed
+attempt also invalidates the plan and requires fresh local inspection; retry is
+never implicit. Closing the editor during an active attempt requests no unsafe
+asynchronous cancellation of a storage transaction and must not discard its
+terminal evidence.
 
-Any ordinary rename, duplicate, delete, undo, reset, manual write/reload, source
-change, new refresh, or provenance evidence change invalidates all assisted
-decisions and their plan. Selection and scrolling do not. An invalidated plan may
-retain a read-only summary for explanation, but it cannot become current again
-without a fresh explicit provider read and new decisions. Closing the editor
-discards the in-memory plan without mutating either durable store.
+Expose assisted review and execution as controls separate from the ordinary
+manual `Review exact plan` and `Execute confirmed plan` actions. Show the exact
+target, decision count, Favorites/provenance change state, confirmation token,
+backend operation artifacts, provenance path, terminal outcome, and recovery
+status. Keep secrets, provider payloads, local programming values, generated
+tokens, provenance, operation reports, and physical-media evidence out of logs,
+fixtures, screenshots, and the repository.
 
-Keep the decision model, composition, and presentation independently testable
-from Textual widgets and the live provider. Synthetic fixtures and deterministic
-fake services must cover each supported field mapping, external versus local and
-detach choices, import template and binding validation, delete versus keep-local,
-multiple compatible decisions, contradictions, incomplete and blocked plans,
-deterministic ordering, stale evidence, refresh replacement, edit-based
-invalidation, keyboard and focus behavior, bounded large previews, and shutdown.
-Copied-tree and USB regression tests must prove that configuring, refreshing,
-deciding, planning, invalidating, or closing performs no Favorites or provenance
-mutation and never invokes a storage executor.
+Renderer-neutral synthetic tests must cover copied-tree and USB adapters through
+deterministic fakes, Favorites-changing and provenance-only success, absent versus
+empty provenance, stale target/lifecycle/provenance/confirmation refusal,
+concurrent execution refusal, executor failure before and after mutation,
+uncertain-but-successful provenance publication, verified reverse recovery,
+incomplete recovery, exact lifecycle/session adoption, single-use invalidation,
+shutdown behavior, and proof that the provider is never reread. Existing real
+copied-tree integration tests must exercise the actual backup/staging/readback and
+durable-report workflow before private operator acceptance. Physical reversible
+USB acceptance remains part of Milestone 28.4 release closure.
 
-Credentialed RadioReference acceptance remains a separate operator-run check and
-is not required by ordinary CI. Private credentials, provider payloads, local
-Favorites programming, generated plans containing private values, and provenance
-remain outside the repository and validation transcript. Committed fixtures must
-remain synthetic or sanitized.
-
-Milestone 28.2 ends with an exact unexecuted assisted synchronization plan. Do not
-add durable Favorites execution, provenance publication, implicit provider reads,
-automatic refresh, polling, scheduled or background synchronization, MyRR
-scraping, undocumented provider interfaces, arbitrary RadioReference mappings,
-writable FTP, daemon/web/Home Assistant integration, or another scanner owner.
-Verified copied-tree and guarded USB execution of the exact reviewed evidence
-belongs to Milestone 28.3. The two waiting Dependabot pull requests remain
-separate unless their own reviewed state changes.
+Milestone 28.3 ends with exact copied-tree and modeled guarded USB execution of
+one reviewed assisted plan. Do not add implicit acceptance, automatic retries,
+scheduled/background synchronization, polling, MyRR scraping, undocumented
+provider interfaces, new mappings, writable FTP, daemon/web/Home Assistant
+execution, or another scanner connection. The two waiting Dependabot pull
+requests remain separate unless their own reviewed state changes.
 
 
 ## Deferred hardware validation
