@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_28_1_preview_contract() -> None:
+def test_roadmap_records_active_milestone_28_2_planning_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,20 +123,21 @@ def test_roadmap_records_active_milestone_28_1_preview_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 28.1 — Explicit RadioReference refresh and read-only Favorites preview",
-        "Milestone 27.5 is closed with v0.23.0 published",
-        "one explicit operator-initiated RadioReference refresh",
-        "environment-variable references for the application key and password",
-        "Merely opening the editor must not resolve secrets",
-        "Permit at most one refresh in flight",
-        "fresh Favorites snapshot must equal the editor's exact durable baseline",
-        "disable refresh while edits exist",
-        "`added`, `replaced`, `removed`, `unchanged`, `local_only`, and `conflict`",
-        "stable redacted RadioReference error boundary",
-        "does not reconcile provider evidence with unreviewed in-memory edits",
-        "Do not add local versus external decisions",
-        "Private credentials, provider payloads, and the local SDS200 Favorites "
-        "validation corpus remain outside the repository",
+        "### Milestone 28.2 — Assisted RadioReference decisions and exact write planning",
+        "Milestone 28.1 is closed after merging the explicit RadioReference refresh",
+        "one current preview into explicit operator-reviewed decisions",
+        "Planning must use that retained result by identity",
+        "Failure or cancellation retains the prior current result",
+        "conventional `C-Freq` Name and frequency",
+        "trunk `TGID` Name and decimal talkgroup identifier",
+        "explicit compatible local HPD insertion anchor",
+        "exact operator-selected record template",
+        "Compose all adopted decisions from one immutable baseline",
+        "This milestone is planning-only",
+        "must not write Favorites bytes, create or replace provenance",
+        "TUI must label the result as unexecuted",
+        "Verified copied-tree and guarded USB execution",
+        "belongs to Milestone 28.3",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

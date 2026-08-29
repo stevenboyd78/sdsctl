@@ -8,6 +8,23 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add Milestone 28.2's explicit, planning-only RadioReference decisions to the
+  local Favorites editor. One retained current refresh can now drive reviewed
+  conventional `C-Freq` Name/frequency and trunk `TGID` Name/decimal choices,
+  field-local or detached ownership, explicit record detach, provider-removal
+  delete versus keep-local, unbound-record ignore, and compatible selected-anchor
+  import with a provider-populated exact template and reviewed bindings. A new
+  renderer-neutral aggregate planner recomputes one intended Favorites snapshot,
+  complete intended provenance, schema/comparison evidence, blockers, and exact
+  `FavoritesWritePlan` from the immutable refresh baseline. It supports multiple
+  compatible field decisions, rejects duplicates, contradictions, foreign or
+  stale evidence, and exactly rebinds provenance after structural changes. The
+  Textual panel shows decisions, unresolved supported choices, Favorites and
+  provenance change status, and blockers while labeling every result
+  `UNEXECUTED`. Refresh replacement, edits, reload, invalidation, and exit close
+  retained lifecycle ownership and discard dependent decisions. This milestone
+  exposes no executor: planning never writes copied-tree or USB bytes, creates or
+  replaces provenance, emits durable reports, or rereads the provider.
 - Add Milestone 28.1's optional RadioReference refresh to the local Favorites
   Textual editor. One explicit copied-tree or freshly qualified USB source can
   be paired with non-secret account settings, environment-variable secret
@@ -15,8 +32,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   provenance path. Opening the editor remains passive. Each button or `Ctrl+G`
   action performs one bounded read only after a fresh local snapshot exactly
   matches the durable editor baseline and no unreviewed edits exist. The
-  renderer-neutral controller serializes refreshes, closes each fresh lifecycle,
-  redacts failures, retains prior evidence on failure or cancellation, and
+  renderer-neutral controller serializes refreshes, retains only the current
+  successful lifecycle for later exact planning, closes failed or replaced
+  owners, redacts failures, retains prior evidence on failure or cancellation, and
   invalidates results after editor/source transitions. The read-only TUI shows
   provider/dataset identity, times, revisions, all six record classifications,
   exact local/external targets, and field ownership, values, absence, and

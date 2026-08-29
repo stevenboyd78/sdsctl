@@ -130,22 +130,74 @@ retaining independent document, element, reference, depth, DTD/entity, namespace
 and schema guards. This qualification does not claim live coverage for the
 other three reviewed observation operations.
 
-This surface is read-only. It never turns a preview into an acceptance decision,
-write plan, Favorites write, or provenance publication. Rename, duplicate,
-delete, undo, reset, successful write/reload, and source changes invalidate the
-last result. Refresh is disabled while edits exist. A failed or cancelled read
-retains the previous successful result unless it is already stale, and errors
-use stable redacted classes without provider response text, request bodies,
-environment values, or credential material. Closing the app requests
-cancellation; an already-running bounded transport still owns and closes its
-ephemeral session deterministically.
+The latest successful, current refresh retains its exact result and lifecycle
+for assisted planning. A later successful refresh replaces and closes that
+owner. A failed or cancelled replacement keeps the previous successful result
+unless it is already stale. Rename, duplicate, delete, undo, reset, successful
+write/reload, and source changes invalidate the result, discard its dependent
+decisions, and close its retained lifecycle. Refresh remains disabled while
+unreviewed editor changes exist. Errors use stable redacted classes without
+provider response text, request bodies, environment values, or credential
+material. Closing the app requests cancellation and closes the retained owner;
+an already-running bounded transport still owns and closes its ephemeral session
+deterministically.
+
+## Make an assisted synchronization plan
+
+Milestone 28.2 adds explicit decisions beneath the current preview. These
+decisions compose an exact aggregate plan in memory; they do not execute it. The
+panel therefore labels every result `UNEXECUTED` and reports the number of
+decisions, unresolved supported choices, exact Favorites-byte changes, intended
+provenance changes, and blockers.
+
+Enter the preview record index shown by the current result. For a linked
+conventional `C-Freq` or trunked `TGID` record, enter one of the reviewed mapped
+fields and choose:
+
+- `Use external` to accept the displayed external value and external ownership;
+- `Keep local` to preserve the exact local bytes and make that field locally
+  owned; or
+- `Detach field` to preserve the exact local bytes and remove existing external
+  ownership for that field.
+
+The only accepted field names are `name`, `frequency`, and
+`talkgroup_decimal`. `frequency` applies only to `C-Freq`; `talkgroup_decimal`
+applies only to `TGID`. No arbitrary field, tone, mode, hierarchy, or fallback
+mapping is inferred.
+
+For an unbound added provider record, choose `Ignore added`, or first select a
+compatible existing `C-Freq` or `TGID` row in the hierarchy and choose `Prepare
+import after selected template`. Preparation shows the provider record, exact
+insertion anchor and derived target, template command, reviewed bindings, and
+complete resulting raw record while keeping the proposal explicitly `NOT
+ADOPTED`. Only `Adopt prepared import` adds the reviewed proposal to the decision
+set. The selected row is the insertion anchor and exact record template, while
+only its reviewed Name and frequency or decimal fields are replaced with the
+provider values and bound to the provider observation. The planner does not
+invent Favorites hierarchy.
+
+For a removed or otherwise linked record, choose the applicable explicit record
+action: `Delete removed`, `Keep local record`, or `Detach record`. Keep-local and
+detach preserve the Favorites bytes while changing intended ownership;
+deletion changes the intended Favorites snapshot. `Clear assisted decisions`
+returns to the unchanged refresh baseline.
+
+Each action recomputes one renderer-neutral result from the immutable refresh
+baseline and the complete current decision set. Duplicate, contradictory,
+foreign, or stale evidence is rejected. Compatible decisions can be combined,
+and record insertion/deletion rebinding is reflected in the complete intended
+provenance. The resulting `FavoritesWritePlan` is evidence for review only: the
+assisted panel cannot call a copied-tree or USB executor, replace the provenance
+file, emit a durable operation report, or reread RadioReference.
 
 ## Review, confirm, and execute
 
-`Review exact plan` recomputes `plan_favorites_write()` from the immutable
-baseline and intended snapshots. The screen reports exact record changes,
-comparison ambiguities, schema/write blockers, and a deterministic confirmation
-token bound to the source, baseline, and intended bytes.
+`Review exact plan` recomputes `plan_favorites_write()` from the ordinary manual
+editor session's immutable baseline and intended snapshots. The screen reports
+exact record changes, comparison ambiguities, schema/write blockers, and a
+deterministic confirmation token bound to the source, baseline, and intended
+bytes. It does not consume or execute the separate assisted synchronization
+plan.
 
 Execution is a separate action. Copy the full token into the confirmation field
 and choose `Execute confirmed plan`. Any intervening edit, undo, or reset changes
@@ -164,8 +216,9 @@ becomes the new baseline only after exact equality is verified.
 ## Deliberate limits
 
 The editor does not expose arbitrary positional fields, hierarchy or catalog
-container creation/deletion/reordering, writable FTP, RadioReference acceptance
-or synchronization, live-scanner GLT/FQK mutation, daemon or web access, Home
-Assistant Ingress, or background synchronization. Use only copied data you can
-recover or scanner media for which the verified backup and rollback artifacts
-are acceptable.
+container creation/deletion/reordering, writable FTP, assisted-plan execution or
+provenance publication, live-scanner GLT/FQK mutation, daemon or web access,
+Home Assistant Ingress, or automatic/background synchronization. Milestone 28.3
+owns execution of a separately reviewed assisted plan through the existing
+copied-tree/USB safety boundary. Use only copied data you can recover or scanner
+media for which the verified backup and rollback artifacts are acceptable.

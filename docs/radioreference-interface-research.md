@@ -436,6 +436,40 @@ endpoint qualification. A premium/user credential requirement remains an
 operator and RadioReference policy boundary, not something the application
 bypasses or validates offline.
 
+## Milestone 28.2 assisted-decision and planning boundary
+
+The local Favorites editor now retains the exact latest successful, still-current
+refresh result and its lifecycle owner for explicit assisted decisions. Failed or
+cancelled replacement reads retain the preceding current result; successful
+replacement, source or editor invalidation, reload, and application exit discard
+dependent decisions and close the retained owner. The planner accepts only exact
+preview objects from that retained result, so evidence from a foreign, replaced,
+or stale refresh cannot be mixed into a plan.
+
+The supported field choices remain limited to the reviewed mappings: `C-Freq`
+Name and whole-Hz frequency, and `TGID` Name and canonical decimal talkgroup ID.
+For each actionable field, the operator must explicitly use the external value,
+keep the local bytes and local ownership, or detach existing external ownership.
+For records, the operator must explicitly ignore an unbound addition, import it
+after a selected compatible local template, delete a provider-removed local
+record, keep it locally, or detach it. Import retains the selected anchor and
+exact template and replaces only the two reviewed mapped fields; it does not
+construct or infer Favorites hierarchy.
+
+One pure aggregate planner recomputes the complete intended Favorites snapshot,
+complete intended provenance records, schema/comparison evidence, blockers, and
+exact `FavoritesWritePlan` from the immutable refresh baseline and the complete
+decision set. Multiple compatible decisions compose in one result. Duplicate,
+contradictory, incomplete, foreign, or stale decisions are rejected or reported,
+and structural changes exactly rebind subsequent provenance targets. A
+serialization round trip validates the intended provenance representation.
+
+Every result is explicitly `UNEXECUTED`. This boundary exposes no copied-tree or
+USB executor, never replaces the provenance file, emits no durable operation
+artifact, and performs no additional provider read. Milestone 28.3 owns any
+future execution and provenance publication through the existing reviewed
+confirmation, backup, staging, readback, rollback, and recovery boundary.
+
 ## Intended product use
 
 The project use case is radio/scanner programming assistance: obtain documented
@@ -651,9 +685,11 @@ The completed renderer-neutral RadioReference foundation still does not include:
   conventional/talkgroup mappings documented above;
 - implicit scanner record creation from provider objects;
 - implicit arbitrary-field, record-creation/removal, or merge acceptance;
-- renderer-specific CLI/TUI/web/Home Assistant assisted-import or acceptance UI;
-- automatic application/daemon/renderer startup wiring of the renderer-neutral
-  lifecycle or assisted-synchronization service;
+- assisted-plan execution or provenance publication through copied-tree or USB
+  write boundaries;
+- renderer-specific CLI/web/Home Assistant assisted-import or acceptance UI;
+- automatic daemon or non-editor renderer startup wiring of the
+  renderer-neutral lifecycle or assisted-synchronization service;
 - automatic or scheduled synchronization;
 - MyRR synchronization; or
 - bypassing the existing Favorites editing, validation, planning, backup,
