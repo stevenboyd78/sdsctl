@@ -17,6 +17,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   unscoped Previous/Next HTTP routes remain channel aliases. Shared viewport
   protections keep the controls non-scrolling at all four reference sizes and
   preserve the enlarged-text reachability escape across all six themes.
+  Physical Home Assistant OS 18.2 acceptance on amd64 against SDS200 firmware
+  1.26.01 exercised both navigation directions for all four scopes through an
+  isolated App built from the reviewed source commit. Channel Previous changed
+  the held target from Orem/Lindon Police 1 to Orem Police Car to Car and Next
+  restored it; the temporary Channel hold was then released. System,
+  Department, and Site commands completed in both directions while retaining
+  their authoritative targets under the existing held configuration. The
+  repository App was restored as the connected sole scanner owner afterward.
 
 ## [0.23.0] - 2026-08-28
 

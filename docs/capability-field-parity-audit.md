@@ -190,7 +190,7 @@ safe for control, comparison semantics, or renderer-specific interpretation.
 | Capability | Direct CLI | Standalone TUI | Daemon-client CLI | Daemon TUI | Web | Home Assistant | Finding |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | Hold current system/department/site/channel | Indexed hold plus explicit desired state | Explicit hold/release | Indexed hold plus explicit desired state | Explicit hold/release | Explicit hold/release | Optional discovered hold/release | Covered: Milestone 26.8 direct and daemon-owned physical acceptance complete |
-| Previous/next selection | Typed targets | Current channel only | Typed targets | Current channel only | Current channel | Optional current-channel controls | Covered within each renderer's advertised scope |
+| Previous/next selection | Typed targets | Current channel only | Typed targets | Current channel only | Current system/department/site/channel | Optional current-channel controls | Covered within each renderer's advertised scope; all four Web scopes accepted on SDS200 firmware 1.26.01, with alternate-channel traversal observed physically |
 | Volume/squelch mutation | Exact typed level | Typed bounded control | Exact semantic level | Typed bounded control | — | — | Covered across implemented direct and daemon surfaces; firmware 1.26.01 native-UDP acceptance complete |
 | Scanner reconnect | — | Restart owned transport | Request daemon reconnect | Request daemon reconnect | Request daemon reconnect | Optional discovered daemon reconnect | Covered within each renderer's ownership boundary |
 | Raw scanner command | Explicit escape hatch | — | — | — | — | — | Intentional boundary; raw access is not semantic parity |

@@ -575,6 +575,31 @@ That evidence is the historical Milestone 20.11 baseline. The three post-v0.20.1
 Home Assistant slices require one tagged repository-managed acceptance run before
 v0.20.2 release completion.
 
+### Post-v0.23.0 scoped Controls acceptance
+
+On August 28, 2026, the redesigned Web Controls pane was validated through
+authenticated Ingress on an amd64 Home Assistant OS 18.2 host running Core
+2026.8.3, Supervisor 2026.07.5, and Docker 29.7.2 against an SDS200 running
+firmware 1.26.01. An isolated Local App was built from reviewed source commit
+`fe9fc91219c0dcab07e5379b74a1ecdb9df9f5e7`; the repository App remained stopped
+during the bounded test so the scanner retained exactly one application owner.
+
+The Controls pane visibly presented the current System, Department, Site, and
+Channel, an explicit `Held` or `Not held` state, and Previous, Hold/Release, and
+Next actions for every scope without viewport scrolling. The scanner accepted
+Previous and Next for System, Department, and Site while their authoritative
+targets remained unchanged under the existing held configuration. This proves
+the scoped route, authoritative-index resolution, typed daemon dispatch, and
+completion path for those observed conditions, but does not claim physical
+alternate-item traversal at those three scopes.
+
+For the Channel scope, a temporary hold stabilized Orem/Lindon Police 1.
+Previous visibly selected Orem Police Car to Car, and Next restored Orem/Lindon
+Police 1. The temporary Channel hold was then released. The Local App was
+stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
+dashboard reported `Connected`; the repository App was therefore restored as
+the sole scanner owner.
+
 ### v0.23.0 release acceptance gate
 
 After the genuine v0.23.0 tag publishes the amd64, aarch64, and generic

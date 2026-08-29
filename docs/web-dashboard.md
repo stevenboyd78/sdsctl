@@ -1028,8 +1028,9 @@ The dashboard now includes:
 - a host-independent FastAPI application factory;
 - versioned health, status, snapshot, metadata, event, audio, and OpenAPI routes;
 - redacted daemon-unavailable responses;
-- capability-negotiated browser scanner hold, previous/next channel navigation,
-  and bounded reconnect controls with authoritative selection resolution,
+- capability-negotiated browser scanner hold, previous/next
+  system/department/site/channel navigation, and bounded reconnect controls with
+  authoritative selection resolution,
   mutation serialization, completion reconciliation, and stable redacted errors;
 - a default-loopback Uvicorn adapter with bounded graceful shutdown;
 - explicit password-authenticated direct-TLS LAN activation on one private,
