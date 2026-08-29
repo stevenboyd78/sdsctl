@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
 from .favorites_editing import (
     FavoritesRecordSourceKind,
@@ -40,6 +41,9 @@ from .radioreference_mapping import (
     radioreference_favorites_talkgroup_decimal_mapping,
     radioreference_favorites_talkgroup_name_mapping,
 )
+
+if TYPE_CHECKING:
+    from .favorites_external_refresh import FavoritesExternalRefreshResult
 
 
 class FavoritesEditorExternalPlanningError(ValueError):
@@ -130,7 +134,7 @@ FavoritesEditorExternalDecision = (
 class FavoritesEditorExternalPlanningSnapshot:
     """One exact, unexecuted aggregate synchronization plan."""
 
-    refresh_result: object
+    refresh_result: FavoritesExternalRefreshResult
     decisions: tuple[FavoritesEditorExternalDecision, ...]
     write_plan: FavoritesWritePlan
     baseline_provenance_records: tuple[FavoritesExternalRecordState, ...] | None

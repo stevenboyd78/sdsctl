@@ -19,6 +19,7 @@ from sds200 import (
     FavoritesWritePlan,
 )
 from sds200.favorites_editor_tui import FavoritesEditorApp
+from tests.test_favorites_editor_external_execution import _controller_plan
 from tests.test_favorites_editor_external_preview import _controller, _observation
 
 _FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "favorites"
@@ -306,5 +307,77 @@ def test_tui_import_requires_exact_preparation_before_adoption(tmp_path: Path) -
             assert not session.has_changes
             assert not (tmp_path / "provenance.json").exists()
             assert source.calls == 1
+
+    asyncio.run(exercise())
+
+
+def test_tui_assisted_review_and_execution_are_separate_and_single_use(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        session, controller, plan, storage, factory = _controller_plan(tmp_path)
+        app = FavoritesEditorApp(session, controller)
+
+        async with app.run_test(size=(180, 80)) as pilot:
+            app._external_decisions = plan.decisions
+            app._external_plan = plan
+            app._refresh_external_preview()
+
+            app.action_external_review()
+            await pilot.pause()
+            status = str(app.query_one("#status", Static).render())
+            assert "Exact assisted plan reviewed" in status
+            assert f"Target: {storage.requested_path}" in status
+            assert "Confirmation token:" in status
+            token = controller.review_external_execution(plan).confirmation_token
+            assert app.query_one("#external-confirmation", Input).value == ""
+
+            app.query_one("#external-confirmation", Input).value = token
+            app.action_external_execute()
+            for _attempt in range(100):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if app._external_execution_thread is None:
+                    break
+
+            status = str(app.query_one("#status", Static).render())
+            assisted_plan = str(app.query_one("#external-plan", Static).render())
+            assert "Assisted execution: completed" in status
+            assert "Fresh Favorites and provenance readback" in status
+            assert "Assisted synchronization plan: unavailable" in assisted_plan
+            assert session.baseline_snapshot == storage.value
+            assert controller.planning_context() is None
+            assert factory.source.calls == 1
+
+    asyncio.run(exercise())
+
+
+def test_tui_failed_assisted_confirmation_consumes_and_clears_plan(
+    tmp_path: Path,
+) -> None:
+    async def exercise() -> None:
+        _session, controller, plan, storage, factory = _controller_plan(tmp_path)
+        app = FavoritesEditorApp(_session, controller)
+
+        async with app.run_test(size=(180, 80)) as pilot:
+            app._external_decisions = plan.decisions
+            app._external_plan = plan
+            app._refresh_external_preview()
+            app.query_one("#external-confirmation", Input).value = "0" * 64
+            app.action_external_execute()
+            for _attempt in range(100):
+                await asyncio.sleep(0.01)
+                await pilot.pause()
+                if app._external_execution_thread is None:
+                    break
+
+            status = str(app.query_one("#status", Static).render())
+            assisted_plan = str(app.query_one("#external-plan", Static).render())
+            assert "Assisted execution rejected or failed" in status
+            assert "Recovery: not_required" in status
+            assert "Assisted synchronization plan: unavailable" in assisted_plan
+            assert controller.planning_context() is None
+            assert storage.execution_plans == []
+            assert factory.source.calls == 1
 
     asyncio.run(exercise())

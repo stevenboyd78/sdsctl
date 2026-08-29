@@ -115,7 +115,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_active_milestone_28_2_planning_contract() -> None:
+def test_roadmap_records_active_milestone_28_3_execution_contract() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -123,21 +123,19 @@ def test_roadmap_records_active_milestone_28_2_planning_contract() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
 
     for required in (
-        "### Milestone 28.2 — Assisted RadioReference decisions and exact write planning",
-        "Milestone 28.1 is closed after merging the explicit RadioReference refresh",
-        "one current preview into explicit operator-reviewed decisions",
-        "Planning must use that retained result by identity",
-        "Failure or cancellation retains the prior current result",
-        "conventional `C-Freq` Name and frequency",
-        "trunk `TGID` Name and decimal talkgroup identifier",
-        "explicit compatible local HPD insertion anchor",
-        "exact operator-selected record template",
-        "Compose all adopted decisions from one immutable baseline",
-        "This milestone is planning-only",
-        "must not write Favorites bytes, create or replace provenance",
-        "TUI must label the result as unexecuted",
-        "Verified copied-tree and guarded USB execution",
-        "belongs to Milestone 28.3",
+        "### Milestone 28.3 — Guarded assisted-plan execution and provenance publication",
+        "Milestone 28.2 is closed after merging pull request 200",
+        "Execution requires a separate review step and a full deterministic confirmation token",
+        "same current retained refresh result by identity",
+        "delegate exactly once to the editor storage's existing copied-tree or USB executor",
+        "For a provenance-only plan",
+        "Treat provenance publication failure as an explicit cross-store recovery case",
+        "derive an exact reverse `FavoritesWritePlan`",
+        "Only after exact intended Favorites and intended provenance both verify",
+        "Success consumes the refresh owner and invalidates the plan",
+        "Any failed attempt also invalidates the plan",
+        "Expose assisted review and execution as controls separate from the ordinary manual",
+        "Physical reversible USB acceptance remains part of Milestone 28.4 release closure",
     ):
         assert required in active_milestone or required in normalized_active_milestone
 

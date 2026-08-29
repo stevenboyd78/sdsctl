@@ -470,6 +470,34 @@ artifact, and performs no additional provider read. Milestone 28.3 owns any
 future execution and provenance publication through the existing reviewed
 confirmation, backup, staging, readback, rollback, and recovery boundary.
 
+## Milestone 28.3 guarded assisted execution boundary
+
+One exact aggregate plan can now proceed through a separate assisted review and
+full deterministic confirmation token. The token covers storage kind and
+requested path, exact retained refresh and lifecycle evidence, ordered
+decisions, baseline and intended Favorites bytes, baseline and intended
+provenance with absent distinct from empty, unresolved decisions, and blockers.
+Review is inert, does not prefill the token, and performs no provider read.
+
+Execution requires the same retained refresh by identity, the unchanged active
+lifecycle, an editor with no ordinary in-memory edits, exact persisted
+provenance, and a fresh storage baseline. A Favorites change delegates once to
+the existing copied-tree or USB adapter; a provenance-only plan performs no
+synthetic storage write. Conditional provenance publication is followed by
+exact reconciliation. An uncertain return that left the intended stores
+succeeds, baseline provenance after a Favorites write triggers an exact reverse
+plan through the same backend, and a mixed or unverifiable state produces typed
+incomplete-recovery evidence.
+
+Only exact intended Favorites and provenance permit lifecycle and editor-session
+adoption. Every terminal attempt consumes the refresh and plan, and no retry is
+implicit. The Textual controls keep assisted review and execution separate from
+ordinary manual review and execution. They retain backend and recovery artifacts
+while excluding tokens, provider payloads, provenance, credentials, local
+programming values, and physical-media evidence from repository content and
+logs. RadioReference is never reread during review, execution, reconciliation,
+or recovery.
+
 ## Intended product use
 
 The project use case is radio/scanner programming assistance: obtain documented
@@ -685,9 +713,9 @@ The completed renderer-neutral RadioReference foundation still does not include:
   conventional/talkgroup mappings documented above;
 - implicit scanner record creation from provider objects;
 - implicit arbitrary-field, record-creation/removal, or merge acceptance;
-- assisted-plan execution or provenance publication through copied-tree or USB
-  write boundaries;
-- renderer-specific CLI/web/Home Assistant assisted-import or acceptance UI;
+- physical reversible USB acceptance of aggregate assisted execution, deferred
+  to Milestone 28.4 release closure;
+- renderer-specific CLI/web/Home Assistant assisted-import or execution UI;
 - automatic daemon or non-editor renderer startup wiring of the
   renderer-neutral lifecycle or assisted-synchronization service;
 - automatic or scheduled synchronization;

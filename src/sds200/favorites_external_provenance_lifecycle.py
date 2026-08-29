@@ -36,6 +36,13 @@ from .favorites_external_provenance_storage import (
 from .favorites_storage import FavoritesStorageSnapshot, FavoritesStorageSource
 
 if TYPE_CHECKING:
+    from .favorites_editor import FavoritesEditorStorage
+    from .favorites_editor_external_execution import (
+        FavoritesEditorExternalDurableExecutionResult,
+    )
+    from .favorites_editor_external_planning import (
+        FavoritesEditorExternalPlanningSnapshot,
+    )
     from .favorites_external_provenance_detach import (
         FavoritesExternalRefreshDetachDurableResult,
     )
@@ -77,13 +84,10 @@ class FavoritesExternalProvenanceLifecycleSnapshot:
                 "FavoritesExternalProvenanceLifecycleState."
             )
         if not isinstance(self.provenance_path, Path):
-            raise TypeError(
-                "External Favorites provenance lifecycle path must be pathlib.Path."
-            )
+            raise TypeError("External Favorites provenance lifecycle path must be pathlib.Path.")
         if not self.provenance_path.is_absolute() or not self.provenance_path.name:
             raise ValueError(
-                "External Favorites provenance lifecycle path must identify "
-                "an absolute file."
+                "External Favorites provenance lifecycle path must identify an absolute file."
             )
         if self.favorites_snapshot is not None and not isinstance(
             self.favorites_snapshot,
@@ -93,10 +97,7 @@ class FavoritesExternalProvenanceLifecycleSnapshot:
                 "External Favorites provenance lifecycle Favorites evidence must be "
                 "FavoritesStorageSnapshot or None."
             )
-        if (
-            self.provenance_records is not None
-            and type(self.provenance_records) is not tuple
-        ):
+        if self.provenance_records is not None and type(self.provenance_records) is not tuple:
             raise TypeError(
                 "External Favorites provenance lifecycle records must be "
                 "an immutable tuple or None."
@@ -114,9 +115,7 @@ class FavoritesExternalProvenanceLifecycleSnapshot:
                 "External Favorites provenance lifecycle error must be a string or None."
             )
         if self.last_error is not None and not self.last_error.strip():
-            raise ValueError(
-                "External Favorites provenance lifecycle error must not be empty."
-            )
+            raise ValueError("External Favorites provenance lifecycle error must not be empty.")
 
         if self.state is FavoritesExternalProvenanceLifecycleState.IDLE:
             if (
@@ -189,31 +188,24 @@ class FavoritesExternalProvenanceLifecycle:
         *,
         max_bytes: int = FAVORITES_EXTERNAL_PROVENANCE_DEFAULT_MAX_BYTES,
         max_records: int = FAVORITES_EXTERNAL_PROVENANCE_DEFAULT_MAX_RECORDS,
-        max_fields_per_record: int = (
-            FAVORITES_EXTERNAL_PROVENANCE_DEFAULT_MAX_FIELDS_PER_RECORD
-        ),
+        max_fields_per_record: int = (FAVORITES_EXTERNAL_PROVENANCE_DEFAULT_MAX_FIELDS_PER_RECORD),
     ) -> None:
         read_snapshot = getattr(storage_source, "read_snapshot", None)
         if not callable(read_snapshot):
             raise TypeError(
-                "External Favorites provenance lifecycle requires "
-                "a FavoritesStorageSource."
+                "External Favorites provenance lifecycle requires a FavoritesStorageSource."
             )
         if not isinstance(provenance_path, (str, Path)):
             raise TypeError(
-                "External Favorites provenance lifecycle path must be "
-                "str or pathlib.Path."
+                "External Favorites provenance lifecycle path must be str or pathlib.Path."
             )
         if isinstance(provenance_path, str) and not provenance_path.strip():
-            raise ValueError(
-                "External Favorites provenance lifecycle path must not be empty."
-            )
+            raise ValueError("External Favorites provenance lifecycle path must not be empty.")
 
         resolved_path = Path(provenance_path)
         if not resolved_path.is_absolute() or not resolved_path.name:
             raise ValueError(
-                "External Favorites provenance lifecycle path must identify "
-                "an absolute file."
+                "External Favorites provenance lifecycle path must identify an absolute file."
             )
         _require_positive_limit(
             max_bytes,
@@ -251,6 +243,9 @@ class FavoritesExternalProvenanceLifecycle:
         self._last_adopted_record_mutation_result: (
             FavoritesExternalRefreshRecordMutationDurableResult | None
         ) = None
+        self._last_adopted_editor_external_execution_result: (
+            FavoritesEditorExternalDurableExecutionResult | None
+        ) = None
 
     def snapshot(self) -> FavoritesExternalProvenanceLifecycleSnapshot:
         "Return immutable lifecycle and restoration evidence."
@@ -266,13 +261,11 @@ class FavoritesExternalProvenanceLifecycle:
                 return self._snapshot_locked()
             if self._state is FavoritesExternalProvenanceLifecycleState.CLOSED:
                 raise RuntimeError(
-                    "External Favorites provenance lifecycle is closed "
-                    "and cannot be started."
+                    "External Favorites provenance lifecycle is closed and cannot be started."
                 )
             if self._state is FavoritesExternalProvenanceLifecycleState.FAILED:
                 raise RuntimeError(
-                    "External Favorites provenance lifecycle startup failed "
-                    "and cannot be retried."
+                    "External Favorites provenance lifecycle startup failed and cannot be retried."
                 )
 
             try:
@@ -353,10 +346,7 @@ class FavoritesExternalProvenanceLifecycle:
                     "External Favorites provenance lifecycle path does not match "
                     "the selected refresh baseline."
                 )
-            if (
-                expected_snapshot.favorites_snapshot
-                != plan.write_plan.baseline_snapshot
-            ):
+            if expected_snapshot.favorites_snapshot != plan.write_plan.baseline_snapshot:
                 raise FavoritesExternalProvenanceLifecycleAdvanceError(
                     "External Favorites provenance lifecycle Favorites evidence "
                     "does not match the selected name-acceptance plan."
@@ -375,9 +365,7 @@ class FavoritesExternalProvenanceLifecycle:
                 max_bytes=self.max_bytes,
                 max_records=self.max_records,
                 max_fields_per_record=self.max_fields_per_record,
-                expected_baseline_provenance_records=(
-                    expected_snapshot.provenance_records
-                ),
+                expected_baseline_provenance_records=(expected_snapshot.provenance_records),
             )
             advanced_snapshot = self.advance_after_name_acceptance(durable_result)
             return durable_result, advanced_snapshot
@@ -409,10 +397,7 @@ class FavoritesExternalProvenanceLifecycle:
             if self._last_adopted_name_acceptance_result is result:
                 return self._snapshot_locked()
 
-            if (
-                self._favorites_snapshot
-                != result.execution.plan.write_plan.baseline_snapshot
-            ):
+            if self._favorites_snapshot != result.execution.plan.write_plan.baseline_snapshot:
                 raise FavoritesExternalProvenanceLifecycleAdvanceError(
                     "External Favorites provenance lifecycle Favorites evidence "
                     "does not match the durable name acceptance baseline."
@@ -601,9 +586,7 @@ class FavoritesExternalProvenanceLifecycle:
                 max_bytes=self.max_bytes,
                 max_records=self.max_records,
                 max_fields_per_record=self.max_fields_per_record,
-                expected_baseline_provenance_records=(
-                    expected_snapshot.provenance_records
-                ),
+                expected_baseline_provenance_records=(expected_snapshot.provenance_records),
             )
             advanced_snapshot = self.advance_after_refresh_detach(durable_result)
             return durable_result, advanced_snapshot
@@ -720,8 +703,12 @@ class FavoritesExternalProvenanceLifecycle:
                     "Record mutation provenance baseline does not match the lifecycle."
                 )
             result = execute_favorites_external_refresh_record_mutation_durably(
-                plan, executor, self.storage_source, self.provenance_path,
-                max_bytes=self.max_bytes, max_records=self.max_records,
+                plan,
+                executor,
+                self.storage_source,
+                self.provenance_path,
+                max_bytes=self.max_bytes,
+                max_records=self.max_records,
                 max_fields_per_record=self.max_fields_per_record,
             )
             return result, self.advance_after_record_mutation(result)
@@ -750,8 +737,7 @@ class FavoritesExternalProvenanceLifecycle:
             if self._last_adopted_record_mutation_result is result:
                 if (
                     self._favorites_snapshot == result.observed_snapshot
-                    and self._provenance_records
-                    == result.intended_provenance_records
+                    and self._provenance_records == result.intended_provenance_records
                 ):
                     return self._snapshot_locked()
                 raise FavoritesExternalProvenanceLifecycleAdvanceError(
@@ -769,6 +755,109 @@ class FavoritesExternalProvenanceLifecycle:
             self._favorites_snapshot = result.observed_snapshot
             self._provenance_records = result.intended_provenance_records
             self._last_adopted_record_mutation_result = result
+            return self._snapshot_locked()
+
+    def _execute_editor_external_durably_from_snapshot(
+        self,
+        expected_snapshot: FavoritesExternalProvenanceLifecycleSnapshot,
+        plan: FavoritesEditorExternalPlanningSnapshot,
+        storage: FavoritesEditorStorage,
+        confirmation_token: str,
+    ) -> tuple[
+        FavoritesEditorExternalDurableExecutionResult,
+        FavoritesExternalProvenanceLifecycleSnapshot,
+    ]:
+        """Execute and adopt one aggregate assisted plan under the lifecycle lock."""
+
+        from .favorites_editor_external_execution import (
+            execute_favorites_editor_external_plan_durably,
+        )
+        from .favorites_editor_external_planning import (
+            FavoritesEditorExternalPlanningSnapshot,
+        )
+
+        if type(expected_snapshot) is not FavoritesExternalProvenanceLifecycleSnapshot:
+            raise TypeError("Assisted editor execution requires an exact lifecycle snapshot.")
+        if type(plan) is not FavoritesEditorExternalPlanningSnapshot:
+            raise TypeError("Assisted editor execution requires an exact plan.")
+        with self._lifecycle_lock:
+            if self._state is not FavoritesExternalProvenanceLifecycleState.ACTIVE:
+                raise RuntimeError(
+                    "External Favorites provenance lifecycle must be active "
+                    "to execute an assisted editor plan."
+                )
+            if self._snapshot_locked() != expected_snapshot:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor lifecycle evidence is stale."
+                )
+            if plan.refresh_result.lifecycle_snapshot is not expected_snapshot:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor plan does not retain the exact lifecycle evidence."
+                )
+            if expected_snapshot.provenance_path != self.provenance_path:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor provenance path does not match the lifecycle."
+                )
+            if expected_snapshot.favorites_snapshot != plan.write_plan.baseline_snapshot:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor Favorites baseline does not match the lifecycle."
+                )
+            if expected_snapshot.provenance_records != plan.baseline_provenance_records:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor provenance baseline does not match the lifecycle."
+                )
+            result = execute_favorites_editor_external_plan_durably(
+                plan,
+                storage,
+                confirmation_token,
+                max_bytes=self.max_bytes,
+                max_records=self.max_records,
+                max_fields_per_record=self.max_fields_per_record,
+            )
+            return result, self.advance_after_editor_external_execution(result)
+
+    def advance_after_editor_external_execution(
+        self,
+        result: FavoritesEditorExternalDurableExecutionResult,
+    ) -> FavoritesExternalProvenanceLifecycleSnapshot:
+        """Adopt one exactly verified aggregate assisted execution in memory."""
+
+        from .favorites_editor_external_execution import (
+            FavoritesEditorExternalDurableExecutionResult,
+        )
+
+        if type(result) is not FavoritesEditorExternalDurableExecutionResult:
+            raise TypeError("Assisted editor lifecycle advancement requires an exact result.")
+        with self._lifecycle_lock:
+            if self._state is not FavoritesExternalProvenanceLifecycleState.ACTIVE:
+                raise RuntimeError(
+                    "External Favorites provenance lifecycle must be active "
+                    "to adopt an assisted editor execution."
+                )
+            if self.provenance_path != result.provenance_path:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor execution path does not match the lifecycle."
+                )
+            if self._last_adopted_editor_external_execution_result is result:
+                if (
+                    self._favorites_snapshot == result.observed_snapshot
+                    and self._provenance_records == result.provenance_records
+                ):
+                    return self._snapshot_locked()
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Lifecycle no longer matches the adopted assisted execution."
+                )
+            if self._favorites_snapshot != result.plan.write_plan.baseline_snapshot:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor execution Favorites baseline is stale."
+                )
+            if self._provenance_records != result.plan.baseline_provenance_records:
+                raise FavoritesExternalProvenanceLifecycleAdvanceError(
+                    "Assisted editor execution provenance baseline is stale."
+                )
+            self._favorites_snapshot = result.observed_snapshot
+            self._provenance_records = result.provenance_records
+            self._last_adopted_editor_external_execution_result = result
             return self._snapshot_locked()
 
     def _snapshot_locked(self) -> FavoritesExternalProvenanceLifecycleSnapshot:

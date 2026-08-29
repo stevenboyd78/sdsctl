@@ -19,6 +19,11 @@ from .favorites_editor import (
     FavoritesEditorReview,
     FavoritesEditorSession,
 )
+from .favorites_editor_external_execution import (
+    FavoritesEditorExternalExecutionError,
+    FavoritesEditorExternalExecutionResult,
+    FavoritesEditorExternalExecutionReview,
+)
 from .favorites_editor_external_planning import (
     FavoritesEditorExternalDecision,
     FavoritesEditorExternalFieldChoice,
@@ -147,7 +152,7 @@ def _external_plan_text(
             f"Favorites bytes changed: {'yes' if plan.has_favorites_changes else 'no'}",
             f"Provenance changed: {'yes' if plan.has_provenance_changes else 'no'}",
             f"Write-plan blockers: {blockers}",
-            "Milestone 28.2 cannot write Favorites or publish provenance.",
+            "Review this exact assisted plan separately before execution.",
         )
     )
 
@@ -207,7 +212,7 @@ class FavoritesEditorApp(App[None]):
     #external-import-preview { min-height: 5; }
     #status { min-height: 4; }
     #controls { height: auto; }
-    #edit-name, #confirmation { margin: 1 0 0 0; }
+    #edit-name, #confirmation, #external-confirmation { margin: 1 0 0 0; }
     Button { margin: 0 1 0 0; }
     """
     BINDINGS: ClassVar[list[BindingType]] = [
@@ -245,6 +250,9 @@ class FavoritesEditorApp(App[None]):
         self._external_plan: FavoritesEditorExternalPlanningSnapshot | None = None
         self._external_prepared_import: FavoritesEditorExternalRecordDecision | None = None
         self._external_refresh_thread: threading.Thread | None = None
+        self._external_execution_thread: threading.Thread | None = None
+        self._external_execution_result: FavoritesEditorExternalExecutionResult | None = None
+        self._external_execution_error: BaseException | None = None
         self.selected_path: FavoritesNavigationPath | None = None
         self.selected_record: FavoritesEditorRecordReference | None = None
 
@@ -298,6 +306,20 @@ class FavoritesEditorApp(App[None]):
                     id="external-import-preview",
                 )
                 yield Button("Clear assisted decisions", id="external-clear")
+                yield Button(
+                    "Review exact assisted plan",
+                    id="external-review",
+                    variant="primary",
+                )
+                yield Input(
+                    placeholder="Paste full assisted confirmation token",
+                    id="external-confirmation",
+                )
+                yield Button(
+                    "Execute confirmed assisted plan",
+                    id="external-execute",
+                    variant="error",
+                )
                 yield Input(placeholder="New Name Tag", id="edit-name")
                 with Horizontal(id="controls"):
                     yield Button("Rename", id="rename")
@@ -324,6 +346,9 @@ class FavoritesEditorApp(App[None]):
     def on_unmount(self) -> None:
         if self.external_preview is not None:
             self.external_preview.close()
+        thread = self._external_execution_thread
+        if thread is not None and thread.is_alive():
+            thread.join()
 
     def _append_tree_node(self, tree_node: Any, node: FavoritesNavigationNode) -> None:
         child = tree_node.add(
@@ -399,15 +424,20 @@ class FavoritesEditorApp(App[None]):
             _external_prepared_import_text(self._external_prepared_import)
         )
         button = self.query_one("#external-refresh", Button)
+        executing = (
+            self._external_execution_thread is not None
+            and self._external_execution_thread.is_alive()
+        ) or (self.external_preview is not None and self.external_preview.execution_in_progress)
         button.disabled = (
             self.external_preview is None
             or self.session.has_changes
+            or executing
             or (
                 snapshot is not None
                 and snapshot.state is FavoritesEditorExternalPreviewState.REFRESHING
             )
         )
-        planning_disabled = context is None or self.session.has_changes
+        planning_disabled = context is None or self.session.has_changes or executing
         for control_id in (
             "external-use",
             "external-local",
@@ -424,6 +454,30 @@ class FavoritesEditorApp(App[None]):
         self.query_one("#external-import-adopt", Button).disabled = (
             planning_disabled or self._external_prepared_import is None
         )
+        review_disabled = (
+            planning_disabled
+            or self._external_plan is None
+            or not self._external_plan.is_complete
+            or (
+                not self._external_plan.has_favorites_changes
+                and not self._external_plan.has_provenance_changes
+            )
+        )
+        self.query_one("#external-review", Button).disabled = review_disabled
+        self.query_one("#external-execute", Button).disabled = review_disabled
+        self.query_one("#external-confirmation", Input).disabled = review_disabled
+        for control_id in (
+            "rename",
+            "duplicate",
+            "delete",
+            "undo",
+            "reset",
+            "review",
+            "execute",
+        ):
+            self.query_one(f"#{control_id}", Button).disabled = executing
+        self.query_one("#edit-name", Input).disabled = executing
+        self.query_one("#confirmation", Input).disabled = executing
         for input_id in ("external-record-index", "external-field"):
             self.query_one(f"#{input_id}", Input).disabled = planning_disabled
 
@@ -431,6 +485,7 @@ class FavoritesEditorApp(App[None]):
         self._external_decisions = ()
         self._external_plan = None
         self._external_prepared_import = None
+        self.query_one("#external-confirmation", Input).value = ""
         self.query_one("#external-plan", Static).update(_external_plan_text(None))
         self.query_one("#external-import-preview", Static).update(
             _external_prepared_import_text(None)
@@ -544,6 +599,8 @@ class FavoritesEditorApp(App[None]):
             "external-keep-record": self.action_external_keep_record,
             "external-detach-record": self.action_external_detach_record,
             "external-clear": self.action_external_clear,
+            "external-review": self.action_external_review,
+            "external-execute": self.action_external_execute,
         }
         action = actions.get(event.button.id or "")
         if action is not None:
@@ -552,7 +609,17 @@ class FavoritesEditorApp(App[None]):
     def action_focus_search(self) -> None:
         self.query_one("#search", Input).focus()
 
+    def _manual_action_blocked(self) -> bool:
+        if self.external_preview is not None and self.external_preview.execution_in_progress:
+            self._set_status(
+                "Manual editing is unavailable while assisted execution is in progress."
+            )
+            return True
+        return False
+
     def action_rename(self) -> None:
+        if self._manual_action_blocked():
+            return
         try:
             name = self.query_one("#edit-name", Input).value
             reference = self._selected_reference()
@@ -570,6 +637,8 @@ class FavoritesEditorApp(App[None]):
             self._set_status(f"Rename rejected: {error}")
 
     def action_duplicate(self) -> None:
+        if self._manual_action_blocked():
+            return
         try:
             value = self.query_one("#edit-name", Input).value
             reference = self._selected_reference()
@@ -584,6 +653,8 @@ class FavoritesEditorApp(App[None]):
             self._set_status(f"Create rejected: {error}")
 
     def action_delete(self) -> None:
+        if self._manual_action_blocked():
+            return
         try:
             reference = self._selected_reference()
             if reference is not None:
@@ -599,10 +670,14 @@ class FavoritesEditorApp(App[None]):
             self._set_status(f"Delete rejected: {error}")
 
     def action_undo(self) -> None:
+        if self._manual_action_blocked():
+            return
         changed = self.session.undo()
         self._after_edit(self.selected_path, "Undo applied." if changed else "Nothing to undo.")
 
     def action_reset_edits(self) -> None:
+        if self._manual_action_blocked():
+            return
         changed = self.session.reset()
         self._after_edit(
             self.selected_path,
@@ -678,6 +753,7 @@ class FavoritesEditorApp(App[None]):
         plan = plan_favorites_editor_external_decisions(context, decisions)
         self._external_decisions = decisions
         self._external_plan = plan
+        self.query_one("#external-confirmation", Input).value = ""
         self._refresh_external_preview()
         self._set_status(
             "Assisted decision adopted in memory. "
@@ -778,6 +854,7 @@ class FavoritesEditorApp(App[None]):
             context = self._external_context()
             self._external_decisions = ()
             self._external_prepared_import = None
+            self.query_one("#external-confirmation", Input).value = ""
             self._external_plan = plan_favorites_editor_external_decisions(
                 context,
                 (),
@@ -788,6 +865,138 @@ class FavoritesEditorApp(App[None]):
             )
         except FavoritesEditorExternalPlanningError as error:
             self._set_status(f"Assisted decision clearing unavailable: {error}")
+
+    def action_external_review(self) -> None:
+        if self.external_preview is None or self._external_plan is None:
+            self._set_status("Complete an assisted plan before review.")
+            return
+        try:
+            review = self.external_preview.review_external_execution(self._external_plan)
+        except (
+            FavoritesEditorExternalPreviewError,
+            FavoritesEditorExternalExecutionError,
+        ) as error:
+            self._set_status(f"Assisted review unavailable: {error}")
+            return
+        self._set_status(self._external_review_text(review))
+
+    @staticmethod
+    def _external_review_text(
+        review: FavoritesEditorExternalExecutionReview,
+    ) -> str:
+        plan = review.plan
+        return "\n".join(
+            (
+                "Exact assisted plan reviewed.",
+                f"Target kind: {review.storage_kind}",
+                f"Target: {review.requested_path}",
+                f"Decisions: {len(plan.decisions)}",
+                f"Favorites changed: {'yes' if plan.has_favorites_changes else 'no'}",
+                f"Provenance changed: {'yes' if plan.has_provenance_changes else 'no'}",
+                f"Confirmation token: {review.confirmation_token}",
+            )
+        )
+
+    def action_external_execute(self) -> None:
+        if self.external_preview is None or self._external_plan is None:
+            self._set_status("Complete and review an assisted plan before execution.")
+            return
+        if (
+            self._external_execution_thread is not None
+            and self._external_execution_thread.is_alive()
+        ):
+            self._set_status("An assisted execution is already in progress.")
+            return
+        token = self.query_one("#external-confirmation", Input).value.strip()
+        self._external_execution_result = None
+        self._external_execution_error = None
+        self._external_execution_thread = threading.Thread(
+            target=self._run_external_execution,
+            args=(self._external_plan, token),
+            name="favorites-radioreference-assisted-execution",
+            daemon=True,
+        )
+        self._external_execution_thread.start()
+        self._refresh_external_preview()
+        self._set_status("Assisted execution in progress. Closing will wait for terminal evidence.")
+        self.set_timer(0.05, self._poll_external_execution)
+
+    def _run_external_execution(
+        self,
+        plan: FavoritesEditorExternalPlanningSnapshot,
+        token: str,
+    ) -> None:
+        assert self.external_preview is not None
+        try:
+            self._external_execution_result = self.external_preview.execute_external_plan(
+                plan, token
+            )
+        except BaseException as error:
+            self._external_execution_error = error
+
+    def _poll_external_execution(self) -> None:
+        thread = self._external_execution_thread
+        if thread is not None and thread.is_alive():
+            self.set_timer(0.05, self._poll_external_execution)
+            return
+        self._external_execution_thread = None
+        self.query_one("#external-confirmation", Input).value = ""
+        result = self._external_execution_result
+        error = self._external_execution_error
+        if result is not None:
+            self._clear_external_planning()
+            self._rebuild_tree(self.selected_path)
+            self._rebuild_record_tree()
+            self._refresh_detail()
+            self._refresh_diagnostics()
+            self._set_status(self._external_execution_text(result))
+        elif error is not None:
+            self._clear_external_planning()
+            self._set_status(self._external_execution_error_text(error))
+        else:
+            self._clear_external_planning()
+            self._set_status("Assisted execution ended without terminal evidence.")
+        self._refresh_external_preview()
+
+    @staticmethod
+    def _external_execution_text(
+        result: FavoritesEditorExternalExecutionResult,
+    ) -> str:
+        durable = result.durable_result
+        primary = durable.primary_execution
+        return "\n".join(
+            (
+                f"Assisted execution: {durable.status.value}",
+                f"Target: {getattr(primary, 'target_directory', 'provenance-only')}",
+                f"Operation ID: {getattr(primary, 'operation_id', None) or 'none'}",
+                f"Backup: {getattr(primary, 'backup_directory', None) or 'none'}",
+                f"Staging: {getattr(primary, 'staging_directory', None) or 'none'}",
+                f"Rollback manifest: {getattr(primary, 'rollback_manifest_path', None) or 'none'}",
+                f"Operation report: {getattr(primary, 'operation_report_path', None) or 'none'}",
+                f"Provenance: {durable.provenance_path}",
+                f"Publication reconciled: {'yes' if durable.publication_reconciled else 'no'}",
+                "Fresh Favorites and provenance readback: exact intended state verified",
+            )
+        )
+
+    @staticmethod
+    def _external_execution_error_text(error: BaseException) -> str:
+        recovery = getattr(error, "recovery_status", None)
+        primary = getattr(error, "primary_execution", None)
+        recovered = getattr(error, "recovery_execution", None)
+        return "\n".join(
+            (
+                f"Assisted execution rejected or failed: {error}",
+                f"Recovery: {getattr(recovery, 'value', recovery) or 'unavailable'}",
+                f"Primary operation ID: {getattr(primary, 'operation_id', None) or 'unavailable'}",
+                "Primary operation report: "
+                f"{getattr(primary, 'operation_report_path', None) or 'unavailable'}",
+                "Recovery operation ID: "
+                f"{getattr(recovered, 'operation_id', None) or 'unavailable'}",
+                "Recovery operation report: "
+                f"{getattr(recovered, 'operation_report_path', None) or 'unavailable'}",
+            )
+        )
 
     def action_external_refresh(self) -> None:
         if self.external_preview is None:
@@ -834,6 +1043,8 @@ class FavoritesEditorApp(App[None]):
         self._refresh_external_preview()
 
     def action_review(self) -> None:
+        if self._manual_action_blocked():
+            return
         try:
             review = self.session.review()
         except FavoritesEditorError as error:
@@ -848,6 +1059,8 @@ class FavoritesEditorApp(App[None]):
         )
 
     def action_execute(self) -> None:
+        if self._manual_action_blocked():
+            return
         token = self.query_one("#confirmation", Input).value.strip()
         try:
             execution = self.session.execute(token)

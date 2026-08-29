@@ -327,8 +327,10 @@ report, recovery, and fresh-reload evidence. See the
 [Favorites Workspace editor guide](docs/favorites-workspace-editor.md) for the
 supported Name Tag and leaf operations, USB host-state boundary, and optional
 explicit RadioReference refresh. RadioReference credentials are supplied only
-through named environment variables; its result is a read-only classified
-preview and cannot mutate Favorites data or provenance in this milestone.
+through named environment variables. Its classified preview remains read-only;
+only a complete assisted plan with its own full target-bound confirmation token
+can invoke the same verified copied-tree or USB executor and conditionally
+publish provenance.
 
 With an explicit SDS200 network host, opt in to WAV recording and use `R` to start
 or stop the one-shot recording session:
