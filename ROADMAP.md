@@ -11,83 +11,83 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 28 complete — v0.24.0 release candidate
+### Milestone 29.1 — Responsive Home Assistant waterfall card
 
-Milestones 28.1 through 28.4 are closed at the pre-tag boundary. The local
-Favorites editor now supports one explicit credentialed RadioReference refresh,
-an exact read-only preview, reviewed field and record decisions, deterministic
-assisted write planning, and separately confirmed guarded execution against a
-copied tree or freshly qualified USB target. Full-token confirmation binds the
-target, retained refresh and lifecycle evidence, decisions, exact Favorites
-bytes, complete absent-versus-empty provenance, and blockers. Execution reuses
-the verified storage writer, independently reads back, conditionally publishes
-provenance, reconciles uncertain publication, and retains typed evidence for
-exact reverse recovery or any incomplete cross-store state.
+Milestone 28 is closed with the public v0.24.0 package, generic container image,
+Home Assistant App images, reviewed wiki, GitHub Release, and release metadata
+published and independently validated. Repository-managed Home Assistant OS
+acceptance confirmed the published 0.24.0 App as the sole scanner owner, with
+the authenticated dashboard, semantic controls, audio, recording, finalized
+playback and downloads, MQTT Discovery, both bundled card modules, and all six
+built-in themes healthy. Local validation Apps were then uninstalled and their
+source trees moved into a private recoverable archive outside `/addons`.
 
-Private operator acceptance completed on August 29, 2026. A credentialed
-`getTrsTalkgroups` refresh against public RadioReference system `12042` produced
-an exact bounded preview without changing the source tree. A reviewed copied-
-tree import then proved full-token confirmation, backup, staging, activation,
-readback, provenance publication, durable reports, session adoption, and
-single-use invalidation. A separately controlled injected post-mutation failure
-proved exact reverse execution, independent baseline readback, preserved primary
-and recovery evidence, and fail-closed cross-store reconciliation.
+Milestone 29.1 adds a first-party responsive Home Assistant waterfall card over
+the existing authenticated App and daemon waterfall service. It must not create
+another scanner transport, polling loop, waterfall owner, or audio owner. The
+daemon remains the sole scanner owner, and the existing browser waterfall must
+continue to use the same renderer-neutral relative and uncalibrated data model.
+High-rate waterfall samples must not be published as MQTT state, events, or
+Discovery entities.
 
-Physical acceptance used an SDS100 running firmware 1.26.01 in USB Mass Storage
-mode on an x86-64 Ubuntu 26.04.1 LTS host with Python 3.14.4 and Docker 29.7.2.
-Fresh removable-USB ancestry, writable VFAT mount, sole-owner, recoverable
-backup, private off-media state, and immutable private baseline guards passed.
-One reviewed minimal record insertion completed with verified backup, staging,
-preactivation, postactivation, unmanaged-media preservation, operation report,
-provenance publication, and exact readback. A separately reviewed inverse used
-the same production editor and durable USB backend; its backup matched the
-forward active state and its staging and final mounted Favorites matched the
-immutable pre-test baseline exactly. Both operations completed without requiring
-recovery, the complete forward/inverse digest chain closed, active provenance was
-restored from one record through canonical empty to its original absent state,
-the filesystem was synchronized, and the removable volume was safely unmounted.
-This SDS100 result does not claim separate physical SDS200 USB acceptance.
+The card transport must preserve Home Assistant authentication and App Ingress
+isolation without placing credentials, ingress identifiers, private endpoints,
+or scanner addresses in card configuration, browser storage, logs, diagnostics,
+or error text. Direct unauthenticated access must fail closed. Authentication
+expiry, App restart, transport loss, malformed frames, and version mismatch must
+produce bounded user-visible states and deterministic cleanup rather than an
+implicit reconnect storm or a fallback scanner connection.
 
-The physical SDS100 catalog exposed a preserved 118-field `F-List` record where
-the currently validated documented shape has 117 fields. The conservative
-unvalidated-extra-fields diagnostic remained visible, while independent
-comparison proved the complete catalog bytes unchanged across both operations.
-No semantics are assigned to the additional field until separately reviewed
-evidence supports them.
+Each connected and visible card instance owns an independent demand lease over
+one shared daemon-side waterfall demand. Adding a second card must not start a
+second scanner-side owner. Hiding, disconnecting, removing, or reconfiguring one
+card must release only its lease; releasing the final live lease must stop the
+shared demand. Cleanup must not depend solely on browser unload events: server-
+side expiry and client reconciliation must reap abandoned leases after a bounded
+interval. Dashboard navigation, edit-mode previews, tab visibility changes, Home
+Assistant reconnects, and App restarts must preserve this ownership contract.
 
-All credentials, provider payloads, local programming values, confirmation
-tokens, provenance content, operation identifiers, artifact names, private paths,
-and hashes remain outside the repository and public documentation. Tracked
-acceptance records contain only the date, public provider operation and system
-identity, scanner model and firmware, host environment, storage mode, sanitized
-outcomes, and exact-baseline conclusion.
+The card uses a bounded Canvas renderer that responds to section, masonry,
+panel, wall-display, and phone widths without horizontal scrolling. Retained
+history, frame cadence, device-pixel scaling, decode work, queued samples, and
+repaint work must have explicit limits. Slow or hidden clients may drop stale
+visual frames and expose relative loss or lifecycle telemetry, but may not grow
+memory without bound, block newer data behind obsolete frames, or affect other
+card and web clients.
 
-The Python package, import version, Home Assistant App, README, changelogs,
-canonical documentation, reviewed wiki source, and release-contract tests are
-synchronized for 0.24.0. Ruff, strict mypy, the Python 3.11 through 3.14 test
-matrix with the shared 86 percent coverage floor, documentation, real-Chrome and
-repeatability, distribution, metadata, clean-install, generic-container, Home
-Assistant App, CodeQL, and release-integrity gates must all pass before any tag
-exists. Private acceptance material must remain absent from the Git index,
-distribution, container context, screenshots, CI artifacts, and commit history.
+The graphical card editor must provide safe declarative presentation options
+with accessible defaults, including a title, supported height or density,
+theme-following or reviewed palette selection, and visibility of relative scale
+and lifecycle telemetry. It must not accept arbitrary URLs, credentials, raw
+scanner commands, undocumented waterfall parameters, or unbounded dimensions
+and history. Multiple differently configured cards on one dashboard must remain
+independent at the presentation layer while sharing transport demand correctly.
 
-Only one genuine matching `v0.24.0` tag may publish the Python package, GitHub
-Release, generic multi-architecture image, and Home Assistant App images. After
-tag-gated workflows pass, independently verify the public tag and artifacts,
-clean-install the public PyPI package, inspect published container manifests,
-publish reviewed wiki source, update the Home Assistant repository, and perform
-bounded repository-managed App acceptance against the published 0.24.0 image.
-Workflow success alone is not release acceptance.
+Package the card through the existing Home Assistant App card-installation and
+resource-management boundary. Installation, upgrade, duplicate-resource,
+rollback, and unavailable-App behavior must remain deterministic and must not
+break either existing bundled card module. Add renderer-neutral, transport,
+JavaScript, real-Chrome, packaging, documentation, and release-contract coverage
+in proportion to the new boundary. Documentation and deterministic screenshots
+must cover desktop, Raspberry Pi or wall-panel, and phone presentations without
+including private scanner data or authenticated transport material.
 
-Milestone 29.1, the responsive Home Assistant waterfall card over the existing
-authenticated single-owner service, remains the next planned implementation
-slice and is not activated until v0.24.0 public release closure. Automatic or
-background RadioReference synchronization, silent conflict resolution, MyRR
-scraping, undocumented interfaces, new mappings, writable FTP, daemon/web/Home
-Assistant Favorites execution, another scanner connection, dependency locking,
-TUI/GUI waterfall rendering, and GUI theme implementation remain deferred. The
-external implementation-review message and waiting dependency-update pull
-requests remain separate unless their reviewed state changes.
+Physical Home Assistant OS acceptance must prove one and multiple live cards,
+responsive resizing, theme changes, pause and resume, hidden and removed-card
+cleanup, final-lease release, App restart recovery, and bounded loss behavior
+against the repository's supported scanner service. It must also revalidate the
+authenticated web waterfall, scanner controls, audio, recordings, finalized
+playback and downloads, MQTT Discovery, existing cards, and persistent data.
+Only one deliberately named Local validation App may exist during that run; the
+published repository App must be restored as the sole scanner owner afterward.
+
+Automatic or background RadioReference synchronization, silent conflict
+resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
+writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
+connection, dependency locking, TUI or GUI waterfall rendering, weather-alert
+recording, Home Assistant media-compatible scanner audio, and GUI implementation
+remain deferred. The external implementation-review message and dependency-
+update pull requests remain separate unless their reviewed state changes.
 
 
 ## Deferred hardware validation
