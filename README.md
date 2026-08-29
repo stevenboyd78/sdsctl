@@ -671,7 +671,10 @@ reachable within the viewport-owned workspace.
 Browser hold buttons are desired-state controls. An unheld scope offers
 **Hold system**, **Hold department**, **Hold site**, or **Hold channel**; an
 authoritatively held scope offers the corresponding **Release** action and
-retains its `Held` indicator. The browser sends only the semantic scope and
+retains its current target plus an explicit `Held`, `Not held`, or `Unavailable`
+indicator. Previous and Next are available for each current System, Department,
+Site, and Channel through documented typed scanner targets. The browser sends
+only the semantic scope and
 `held` boolean. The daemon performs the authoritative `GSI` read, executes the
 verified SDS200 front-panel-key gesture when needed, and waits for the target
 hold field to converge before returning success. The compatibility indexed

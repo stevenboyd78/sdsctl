@@ -1049,6 +1049,9 @@ function browserAuditLibrary() {
       "strong",
       ".recording-item-meta",
       ".status-badge",
+      ".scanner-hold-current-label",
+      ".scanner-hold-current-value",
+      ".scanner-hold-state",
     ].join(",");
     for (const element of document.querySelectorAll(selectors)) {
       if (!rendered(element) || element.matches(".skip-link:not(:focus)")) continue;
@@ -1162,6 +1165,43 @@ function browserAuditLibrary() {
       }
     }
     return failures;
+  }
+
+  function controlContext() {
+    const failures = paneState("controls");
+    const expected = {
+      system: ["Demo Metro Public Safety", "Not held", "released"],
+      department: ["Central Dispatch", "Not held", "released"],
+      site: ["Metro Simulcast", "Not held", "released"],
+      channel: ["Dispatch 1 (Demo)", "Held", "held"],
+    };
+    for (const [scope, [currentText, stateText, dataState]] of Object.entries(expected)) {
+      const current = document.querySelector(`#scanner-current-${scope}`);
+      const button = document.querySelector(`#scanner-hold-${scope}`);
+      const state = document.querySelector(`#scanner-hold-${scope}-state`);
+      if (current?.textContent?.trim() !== currentText) {
+        failures.push(`current ${scope} does not expose ${JSON.stringify(currentText)}`);
+      }
+      if (state?.textContent?.trim() !== stateText || state?.dataset.state !== dataState) {
+        failures.push(`current ${scope} hold state does not expose ${JSON.stringify(stateText)}`);
+      }
+      const descriptionIds = button?.getAttribute("aria-describedby")?.split(/\s+/) ?? [];
+      if (
+        !descriptionIds.includes(`scanner-current-${scope}`) ||
+        !descriptionIds.includes(`scanner-hold-${scope}-state`)
+      ) {
+        failures.push(`${scope} hold control is not described by its target and state`);
+      }
+      for (const direction of ["previous", "next"]) {
+        const suffix = scope === "channel" ? "" : `-${scope}`;
+        const navigation = document.querySelector(`#scanner-${direction}${suffix}`);
+        const expectedLabel = `${direction} ${scope}`;
+        if (navigation?.getAttribute("aria-label")?.toLowerCase() !== expectedLabel) {
+          failures.push(`${scope} ${direction} control does not expose its scope`);
+        }
+      }
+    }
+    return {failures};
   }
 
   function normal(expectedPane, expectedTheme) {
@@ -1578,6 +1618,7 @@ function browserAuditLibrary() {
 
   return Object.freeze({
     clearSequentialFocus,
+    controlContext,
     enlargedText,
     focusInventory,
     forcedColors,
@@ -1942,6 +1983,11 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
               cdp,
               `window.__sdsctlBrowserAudit.radioFields(${JSON.stringify(RADIO_FIELD_IDS)})`,
             ),
+          );
+        } else if (pane === "controls") {
+          collector.add(
+            context,
+            await evaluate(cdp, "window.__sdsctlBrowserAudit.controlContext()"),
           );
         } else if (pane === "recordings") {
           await auditPagination(cdp, collector, context);

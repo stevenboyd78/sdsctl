@@ -1408,13 +1408,31 @@ function scannerIndexAvailable(value) {
   return Number.isInteger(value) && value >= 0 && value < 0xffffffff;
 }
 
-function setScannerHoldControl(id, scope, available, held) {
+function setScannerCurrentSelection(scope, value) {
+  const output = element(`scanner-current-${scope}`);
+  const text = displayValue(value);
+  output.textContent = text;
+  output.title = text === "Unavailable" ? "" : text;
+}
+
+function setScannerHoldControl(id, scope, available, known, held) {
   const button = element(id);
   const indicator = element(`${id}-state`);
   button.disabled = !available;
   button.textContent = held ? `Release ${scope}` : `Hold ${scope}`;
   button.setAttribute("aria-pressed", held ? "true" : "false");
-  indicator.hidden = !held;
+  indicator.textContent = !known ? "Unavailable" : held ? "Held" : "Not held";
+  indicator.dataset.state = !known ? "unknown" : held ? "held" : "released";
+}
+
+function scannerNavigationControlId(direction, scope) {
+  return scope === "channel"
+    ? `scanner-${direction}`
+    : `scanner-${direction}-${scope}`;
+}
+
+function setScannerNavigationControl(direction, scope, available) {
+  element(scannerNavigationControlId(direction, scope)).disabled = !available;
 }
 
 function setScannerControls() {
@@ -1429,6 +1447,14 @@ function setScannerControls() {
   const channelAvailable =
     scannerIndexAvailable(radio.channel_index) &&
     ["TGID", "ConvFrequency"].includes(radio.channel_kind);
+  const navigationAvailable = {
+    system: scannerIndexAvailable(radio.system_index),
+    department:
+      scannerIndexAvailable(radio.system_index) &&
+      scannerIndexAvailable(radio.department_index),
+    site: scannerIndexAvailable(radio.site_index),
+    channel: channelAvailable,
+  };
   const systemHeld = radio.system_hold === "On";
   const departmentHeld = radio.department_hold === "On";
   const siteHeld = radio.site_hold === "On";
@@ -1439,6 +1465,11 @@ function setScannerControls() {
   const siteHoldKnown = siteHeld || radio.site_hold === "Off";
   const channelHoldKnown = channelHeld || radio.channel_hold === "Off";
 
+  setScannerCurrentSelection("system", radio.system);
+  setScannerCurrentSelection("department", radio.department);
+  setScannerCurrentSelection("site", radio.site);
+  setScannerCurrentSelection("channel", radio.channel);
+
   setScannerHoldControl(
     "scanner-hold-system",
     "system",
@@ -1446,6 +1477,7 @@ function setScannerControls() {
       canHold &&
       systemHoldKnown &&
       (systemHeld || scannerIndexAvailable(radio.system_index)),
+    systemHoldKnown,
     systemHeld,
   );
   setScannerHoldControl(
@@ -1455,6 +1487,7 @@ function setScannerControls() {
       canHold &&
       departmentHoldKnown &&
       (departmentHeld || scannerIndexAvailable(radio.department_index)),
+    departmentHoldKnown,
     departmentHeld,
   );
   setScannerHoldControl(
@@ -1464,6 +1497,7 @@ function setScannerControls() {
       canHold &&
       siteHoldKnown &&
       (siteHeld || scannerIndexAvailable(radio.site_index)),
+    siteHoldKnown,
     siteHeld,
   );
   setScannerHoldControl(
@@ -1473,18 +1507,21 @@ function setScannerControls() {
       canHold &&
       channelHoldKnown &&
       (channelHeld || channelAvailable),
+    channelHoldKnown,
     channelHeld,
   );
-  element("scanner-next").disabled = !(
-    canSelect &&
-    canNavigateForward &&
-    channelAvailable
-  );
-  element("scanner-previous").disabled = !(
-    canSelect &&
-    canNavigateBackward &&
-    channelAvailable
-  );
+  for (const scope of ["system", "department", "site", "channel"]) {
+    setScannerNavigationControl(
+      "next",
+      scope,
+      canSelect && canNavigateForward && navigationAvailable[scope],
+    );
+    setScannerNavigationControl(
+      "previous",
+      scope,
+      canSelect && canNavigateBackward && navigationAvailable[scope],
+    );
+  }
   element("scanner-reconnect").disabled = !(
     idle &&
     running &&
@@ -2558,12 +2595,20 @@ element("scanner-hold-site").addEventListener("click", () => {
 element("scanner-hold-channel").addEventListener("click", () => {
   performScannerHoldState("channel");
 });
-element("scanner-previous").addEventListener("click", () => {
-  void performScannerControl("previous", "Previous channel");
-});
-element("scanner-next").addEventListener("click", () => {
-  void performScannerControl("next", "Next channel");
-});
+for (const scope of ["system", "department", "site", "channel"]) {
+  for (const direction of ["previous", "next"]) {
+    element(scannerNavigationControlId(direction, scope)).addEventListener(
+      "click",
+      () => {
+        const action = direction === "previous" ? "Previous" : "Next";
+        void performScannerControl(
+          `${direction}/${scope}`,
+          `${action} ${scope}`,
+        );
+      },
+    );
+  }
+}
 element("scanner-reconnect").addEventListener("click", () => {
   void performScannerControl("reconnect", "Reconnect scanner");
 });

@@ -6,8 +6,8 @@
 > is the authoritative reference for configuration, security boundaries, and
 > exact behavior. This page is a visual task-oriented introduction.
 
-The daemon-backed dashboard provides Scanner, Controls, Audio, Recordings, and
-Diagnostics panes in one responsive browser workspace. It remains a client of
+The daemon-backed dashboard provides Scanner, Controls, Waterfall, Audio,
+Recordings, and Diagnostics panes in one responsive browser workspace. It remains a client of
 the existing daemon and does not open a second scanner-control or RTSP/RTP audio
 connection.
 
@@ -34,6 +34,11 @@ Arrow, Home, and End. The browser remembers the selected pane. In the Scanner
 pane, **Auto** follows Search/Close Call, Weather, and Tone-Out screens;
 **Hierarchy**, **RF**, **Identity**, and **Special** provide explicit inspection,
 and Simple or Detail controls the normal-scanning fallback.
+
+The Controls pane places the current System, Department, Site, or Channel
+directly above its Hold or Release action. Each action row also reports
+**Held**, **Not held**, or **Unavailable**, with Previous and Next navigation
+available for that same System, Department, Site, or Channel.
 
 ## Choose a theme
 

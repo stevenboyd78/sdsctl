@@ -30,7 +30,7 @@ from .exceptions import DaemonRequestError, SDS200Error
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
 from .state import RadioStateSnapshot
-from .tui_controls import channel_navigation
+from .tui_controls import HoldScope, hold_selection
 from .web_auth import (
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
@@ -652,7 +652,9 @@ def create_web_dashboard_app(
                 "redoc": "/api/v1/redoc",
                 "scanner_hold": "/api/v1/scanner/hold/{scope}",
                 "scanner_next": "/api/v1/scanner/next",
+                "scanner_next_scope": "/api/v1/scanner/next/{scope}",
                 "scanner_previous": "/api/v1/scanner/previous",
+                "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
                 "scanner_reconnect": "/api/v1/scanner/reconnect",
                 "snapshot": "/api/v1/snapshot",
                 "status": "/api/v1/status",
@@ -698,25 +700,27 @@ def create_web_dashboard_app(
 
     @app.post("/api/v1/scanner/next")
     def scanner_next() -> dict[str, object]:
-        return {
-            **_api_envelope(),
-            "control": _query_scanner_control(
-                api_client_factory,
-                DaemonApiOperation.SCANNER_NEXT,
-                _next_current_channel,
-            ),
-        }
+        return _scanner_navigation_response(
+            api_client_factory,
+            "next",
+            "channel",
+        )
+
+    @app.post("/api/v1/scanner/next/{scope}")
+    def scanner_next_scope(scope: HoldScope) -> dict[str, object]:
+        return _scanner_navigation_response(api_client_factory, "next", scope)
 
     @app.post("/api/v1/scanner/previous")
     def scanner_previous() -> dict[str, object]:
-        return {
-            **_api_envelope(),
-            "control": _query_scanner_control(
-                api_client_factory,
-                DaemonApiOperation.SCANNER_PREVIOUS,
-                _previous_current_channel,
-            ),
-        }
+        return _scanner_navigation_response(
+            api_client_factory,
+            "previous",
+            "channel",
+        )
+
+    @app.post("/api/v1/scanner/previous/{scope}")
+    def scanner_previous_scope(scope: HoldScope) -> dict[str, object]:
+        return _scanner_navigation_response(api_client_factory, "previous", scope)
 
     @app.post("/api/v1/scanner/reconnect")
     def scanner_reconnect() -> dict[str, object]:
@@ -1053,28 +1057,55 @@ def _control_text(value: object) -> str | None:
     return value
 
 
-def _next_current_channel(
+def _next_current_selection(
     client: DaemonApiClientLike,
+    scope: HoldScope,
 ) -> Mapping[str, object]:
-    selection = channel_navigation(
-        _control_radio_state(client.runtime_snapshot())
+    selection = hold_selection(
+        _control_radio_state(client.runtime_snapshot()),
+        scope,
     )
     if selection is None:
         raise _WebControlSelectionError
-    target, first = selection
-    return client.next(target, first)
+    return client.next(selection.target, selection.first, selection.second)
 
 
-def _previous_current_channel(
+def _previous_current_selection(
     client: DaemonApiClientLike,
+    scope: HoldScope,
 ) -> Mapping[str, object]:
-    selection = channel_navigation(
-        _control_radio_state(client.runtime_snapshot())
+    selection = hold_selection(
+        _control_radio_state(client.runtime_snapshot()),
+        scope,
     )
     if selection is None:
         raise _WebControlSelectionError
-    target, first = selection
-    return client.previous(target, first)
+    return client.previous(selection.target, selection.first, selection.second)
+
+
+def _scanner_navigation_response(
+    api_client_factory: DaemonApiClientFactory,
+    direction: Literal["next", "previous"],
+    scope: HoldScope,
+) -> dict[str, object]:
+    if direction == "next":
+        operation = DaemonApiOperation.SCANNER_NEXT
+        resolver = _next_current_selection
+    else:
+        operation = DaemonApiOperation.SCANNER_PREVIOUS
+        resolver = _previous_current_selection
+
+    def control(client: DaemonApiClientLike) -> Mapping[str, object]:
+        return resolver(client, scope)
+
+    return {
+        **_api_envelope(),
+        "control": _query_scanner_control(
+            api_client_factory,
+            operation,
+            control,
+        ),
+    }
 
 
 def _control_request_error_response(

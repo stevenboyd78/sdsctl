@@ -547,15 +547,26 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'id="scanner-hold-department-state"' in response.text
     assert 'id="scanner-hold-site-state"' in response.text
     assert 'id="scanner-hold-channel-state"' in response.text
-    assert 'aria-describedby="scanner-hold-channel-state"' in response.text
     for scope in ("system", "department", "site", "channel"):
+        current = response.text.index(f'id="scanner-current-{scope}"')
         hold_button = response.text.index(f'id="scanner-hold-{scope}"')
         hold_state = response.text.index(
             f'id="scanner-hold-{scope}-state"', hold_button
         )
+        assert current < hold_button < hold_state
+        assert (
+            f'aria-describedby="scanner-current-{scope} '
+            f'scanner-hold-{scope}-state"'
+        ) in response.text[hold_button:hold_state]
         assert 'aria-pressed="false"' in response.text[hold_button:hold_state]
-    assert 'id="scanner-previous"' in response.text
-    assert 'id="scanner-next"' in response.text
+        assert 'data-state="unknown"' in response.text[hold_state:]
+        assert "Unavailable" in response.text[hold_state:]
+    for scope in ("system", "department", "site", "channel"):
+        suffix = "" if scope == "channel" else f"-{scope}"
+        assert f'id="scanner-previous{suffix}"' in response.text
+        assert f'id="scanner-next{suffix}"' in response.text
+        assert f'aria-label="Previous {scope}"' in response.text
+        assert f'aria-label="Next {scope}"' in response.text
     assert 'id="scanner-reconnect"' in response.text
     for pane in (
         "scanner",
@@ -830,6 +841,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert 'performRecordingAction("start")' in script.text
     assert 'performRecordingAction("stop")' in script.text
     assert 'performScannerHoldState("channel")' in script.text
+    assert "scannerNavigationControlId" in script.text
+    assert "`${direction}/${scope}`" in script.text
     assert 'performScannerControl("reconnect", "Reconnect scanner")' in script.text
     assert 'daemonControlSupported("scanner.hold_state")' in script.text
     assert "setScannerHoldControl" in script.text
@@ -837,7 +850,12 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "button.disabled = !available" in script.text
     assert 'button.setAttribute("aria-pressed"' in script.text
     assert "JSON.stringify(body)" in script.text
-    assert "indicator.hidden = !held" in script.text
+    assert "setScannerCurrentSelection" in script.text
+    assert 'setScannerCurrentSelection("system", radio.system)' in script.text
+    assert 'setScannerCurrentSelection("channel", radio.channel)' in script.text
+    assert 'held ? "Held" : "Not held"' in script.text
+    assert 'held ? "held" : "released"' in script.text
+    assert "indicator.hidden = !held" not in script.text
     assert '"scanner-hold-active"' not in script.text
     assert "scannerControlMutationInProgress" in script.text
     assert "initializeThemeControl" in script.text
@@ -938,7 +956,9 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
         "redoc": "/api/v1/redoc",
         "scanner_hold": "/api/v1/scanner/hold/{scope}",
         "scanner_next": "/api/v1/scanner/next",
+        "scanner_next_scope": "/api/v1/scanner/next/{scope}",
         "scanner_previous": "/api/v1/scanner/previous",
+        "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
         "scanner_reconnect": "/api/v1/scanner/reconnect",
         "snapshot": "/api/v1/snapshot",
         "status": "/api/v1/status",
@@ -1422,6 +1442,14 @@ def test_web_dashboard_scanner_controls_resolve_current_snapshot() -> None:
             "/api/v1/scanner/hold/channel",
             json={"held": False},
         )
+        previous_scopes = [
+            client.post(f"/api/v1/scanner/previous/{scope}")
+            for scope in ("system", "department", "site", "channel")
+        ]
+        next_scopes = [
+            client.post(f"/api/v1/scanner/next/{scope}")
+            for scope in ("system", "department", "site", "channel")
+        ]
         previous = client.post("/api/v1/scanner/previous")
         next_response = client.post("/api/v1/scanner/next")
         reconnect = client.post("/api/v1/scanner/reconnect")
@@ -1431,6 +1459,8 @@ def test_web_dashboard_scanner_controls_resolve_current_snapshot() -> None:
         department,
         site,
         channel,
+        *previous_scopes,
+        *next_scopes,
         previous,
         next_response,
         reconnect,
@@ -1443,12 +1473,20 @@ def test_web_dashboard_scanner_controls_resolve_current_snapshot() -> None:
         ("hold_state", "department", False, 4.0),
         ("hold_state", "site", True, 4.0),
         ("hold_state", "channel", False, 4.0),
+        ("previous", "SYS", 100, None, 1, 2.0),
+        ("previous", "DEPT", 200, 100, 1, 2.0),
+        ("previous", "SITE", 300, None, 1, 2.0),
+        ("previous", "TGID", 400, None, 1, 2.0),
+        ("next", "SYS", 100, None, 1, 2.0),
+        ("next", "DEPT", 200, 100, 1, 2.0),
+        ("next", "SITE", 300, None, 1, 2.0),
+        ("next", "TGID", 400, None, 1, 2.0),
         ("previous", "TGID", 400, None, 1, 2.0),
         ("next", "TGID", 400, None, 1, 2.0),
         ("reconnect", 2.0),
     ]
-    assert daemon_client.hello_calls == 7
-    assert daemon_client.snapshot_calls == 2
+    assert daemon_client.hello_calls == 15
+    assert daemon_client.snapshot_calls == 10
 
 
 def test_web_dashboard_rejects_unadvertised_scanner_control() -> None:
@@ -1932,7 +1970,12 @@ def test_web_dashboard_serves_local_interactive_docs_without_daemon() -> None:
     assert "/api/v1/recording" in openapi_response.json()["paths"]
     assert "/api/v1/scanner/hold/{scope}" in openapi_response.json()["paths"]
     assert "/api/v1/scanner/next" in openapi_response.json()["paths"]
+    assert "/api/v1/scanner/next/{scope}" in openapi_response.json()["paths"]
     assert "/api/v1/scanner/previous" in openapi_response.json()["paths"]
+    assert (
+        "/api/v1/scanner/previous/{scope}"
+        in openapi_response.json()["paths"]
+    )
     assert "/api/v1/scanner/reconnect" in openapi_response.json()["paths"]
     assert "/api/v1/recordings" in openapi_response.json()["paths"]
     assert (
