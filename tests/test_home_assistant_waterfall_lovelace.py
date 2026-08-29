@@ -156,6 +156,71 @@ process.stdout.write(JSON.stringify({
     }
 
 
+def test_waterfall_card_parses_ingress_safe_server_sent_events() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const parser = Sds200WaterfallCard.prototype._payloadLine;
+const target = {};
+const accepted = [
+  parser.call(target, "id: 42", SDS200_WATERFALL_SSE_MEDIA_TYPE),
+  parser.call(target, ": keepalive", SDS200_WATERFALL_SSE_MEDIA_TYPE),
+  parser.call(target, "", SDS200_WATERFALL_SSE_MEDIA_TYPE),
+  parser.call(target, "data: {\\\"sequence\\\":42}", SDS200_WATERFALL_SSE_MEDIA_TYPE),
+  parser.call(target, "{\\\"sequence\\\":42}", SDS200_WATERFALL_NDJSON_MEDIA_TYPE),
+];
+const rejected = [];
+for (const [line, mediaType] of [
+  ["event: waterfall", SDS200_WATERFALL_SSE_MEDIA_TYPE],
+  ["", SDS200_WATERFALL_NDJSON_MEDIA_TYPE],
+  ["data: {}", "application/json"],
+]) {
+  try {
+    parser.call(target, line, mediaType);
+  } catch (error) {
+    rejected.push(error.message);
+  }
+}
+process.stdout.write(JSON.stringify({accepted, rejected}));
+"""
+    )
+
+    assert result == {
+        "accepted": [None, None, None, '{"sequence":42}', '{"sequence":42}'],
+        "rejected": [
+            "Waterfall event field is unsupported.",
+            "Waterfall record size is invalid.",
+            "Waterfall stream returned an unsupported format.",
+        ],
+    }
+
+
+def test_waterfall_card_expires_stale_frame_rate_samples() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const card = Object.create(Sds200WaterfallCard.prototype);
+const now = performance.now();
+card._checkpoint = {state: "running"};
+card._frameTimes = [now - 7000, now - 6000];
+card._lastFrameAt = null;
+card._queueLoss = 0;
+card._overflows = 0;
+card._lastSequence = null;
+card._telemetryValues = Object.fromEntries(
+  ["session", "rate", "age", "loss", "sequence"].map(
+    (key) => [key, {textContent: ""}],
+  ),
+);
+card._renderTelemetry();
+process.stdout.write(JSON.stringify({
+  retainedSamples: card._frameTimes.length,
+  rate: card._telemetryValues.rate.textContent,
+}));
+"""
+    )
+
+    assert result == {"retainedSamples": 0, "rate": "0.0 fps"}
+
+
 def test_waterfall_card_discovers_only_sds200_app_panels() -> None:
     result = run_waterfall_card_javascript(
         """
@@ -322,7 +387,9 @@ def test_waterfall_card_uses_current_home_assistant_context_and_ingress_contract
         'endpoint: "/ingress/session"',
         'endpoint: "/ingress/validate_session"',
         'credentials: "same-origin"',
-        'Accept: "application/x-ndjson"',
+        "headers: {Accept: SDS200_WATERFALL_SSE_MEDIA_TYPE}",
+        'SDS200_WATERFALL_SSE_MEDIA_TYPE = "text/event-stream"',
+        'SDS200_WATERFALL_NDJSON_MEDIA_TYPE = "application/x-ndjson"',
         "IntersectionObserver",
         'document.addEventListener("visibilitychange"',
         "controller.abort();",

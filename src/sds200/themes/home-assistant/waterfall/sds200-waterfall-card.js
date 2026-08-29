@@ -6,6 +6,8 @@ const SDS200_WATERFALL_PROTOCOL = "sdsctl.waterfall";
 const SDS200_WATERFALL_VERSION = 1;
 const SDS200_WATERFALL_BIN_COUNT = 240;
 const SDS200_WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
+const SDS200_WATERFALL_NDJSON_MEDIA_TYPE = "application/x-ndjson";
+const SDS200_WATERFALL_SSE_MEDIA_TYPE = "text/event-stream";
 const SDS200_WATERFALL_SESSION_REFRESH_MS = 60 * 1000;
 const SDS200_WATERFALL_RECONNECT_DELAYS_MS = Object.freeze([
   2000,
@@ -1009,7 +1011,7 @@ class Sds200WaterfallCard extends HTMLElement {
       this._releaseAuthentication = releaseAuthentication;
       const streamUrl = await resolveSds200IngressUrl(this._api, this._ui);
       const response = await fetch(streamUrl, {
-        headers: {Accept: "application/x-ndjson"},
+        headers: {Accept: SDS200_WATERFALL_SSE_MEDIA_TYPE},
         cache: "no-store",
         credentials: "same-origin",
         signal: controller.signal,
@@ -1027,7 +1029,8 @@ class Sds200WaterfallCard extends HTMLElement {
         .split(";", 1)[0]
         .trim()
         .toLowerCase();
-      if (mediaType !== "application/x-ndjson") {
+      if (![SDS200_WATERFALL_SSE_MEDIA_TYPE, SDS200_WATERFALL_NDJSON_MEDIA_TYPE]
+        .includes(mediaType)) {
         throw new WaterfallCardError(
           "Waterfall stream returned an unsupported format.",
         );
@@ -1045,7 +1048,7 @@ class Sds200WaterfallCard extends HTMLElement {
       );
       const reader = response.body.getReader();
       this._reader = reader;
-      await this._consume(reader, generation);
+      await this._consume(reader, generation, mediaType);
     } catch (error) {
       if (generation !== this._generation || controller.signal.aborted) {
         return;
@@ -1071,7 +1074,35 @@ class Sds200WaterfallCard extends HTMLElement {
     }
   }
 
-  async _consume(reader, generation) {
+  _payloadLine(line, mediaType) {
+    if (mediaType === SDS200_WATERFALL_NDJSON_MEDIA_TYPE) {
+      if (line.length === 0) {
+        throw new WaterfallCardError(
+          "Waterfall record size is invalid.",
+        );
+      }
+      return line;
+    }
+    if (mediaType !== SDS200_WATERFALL_SSE_MEDIA_TYPE) {
+      throw new WaterfallCardError(
+        "Waterfall stream returned an unsupported format.",
+      );
+    }
+    if (line.length === 0 || line.startsWith(":")) {
+      return null;
+    }
+    if (line.startsWith("id:")) {
+      return null;
+    }
+    if (!line.startsWith("data:")) {
+      throw new WaterfallCardError(
+        "Waterfall event field is unsupported.",
+      );
+    }
+    return line.slice(5).trimStart();
+  }
+
+  async _consume(reader, generation, mediaType) {
     const decoder = new TextDecoder("utf-8", {fatal: true});
     let pending = "";
     while (generation === this._generation) {
@@ -1098,15 +1129,23 @@ class Sds200WaterfallCard extends HTMLElement {
       while (newline >= 0) {
         const line = pending.slice(0, newline);
         pending = pending.slice(newline + 1);
-        if (
-          line.length === 0 ||
-          line.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS
-        ) {
+        if (line.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS) {
           throw new WaterfallCardError(
             "Waterfall record size is invalid.",
           );
         }
-        this._applyRecord(JSON.parse(line));
+        const payload = this._payloadLine(line, mediaType);
+        if (payload !== null) {
+          if (
+            payload.length === 0 ||
+            payload.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS
+          ) {
+            throw new WaterfallCardError(
+              "Waterfall record size is invalid.",
+            );
+          }
+          this._applyRecord(JSON.parse(payload));
+        }
         newline = pending.indexOf("\n");
       }
     }
@@ -1250,6 +1289,10 @@ class Sds200WaterfallCard extends HTMLElement {
     const snapshot = waterfallRecordObject(this._checkpoint);
     this._telemetryValues.session.textContent =
       typeof snapshot.state === "string" ? snapshot.state : "Idle";
+    const now = performance.now();
+    this._frameTimes = this._frameTimes.filter(
+      (time) => now - time <= 5000,
+    );
     const duration = this._frameTimes.length > 1
       ? (this._frameTimes.at(-1) - this._frameTimes[0]) / 1000
       : 0;

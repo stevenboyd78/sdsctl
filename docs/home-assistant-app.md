@@ -529,6 +529,10 @@ level or measurement instrument.
 Ingress authentication is shared between card instances, but stream leases and
 presentation settings remain independent. Authentication expiry, an App restart,
 or a transport interruption produces a visible bounded reconnect state. The card
+requests Server-Sent Events so Home Assistant Ingress forwards each record
+without NDJSON response buffering, while retaining validated NDJSON decoding for
+direct compatibility. It expires its displayed frame-rate sample window even
+when delivery pauses, so stale history cannot be presented as a current rate. It
 does not store authentication material, Ingress identifiers, private endpoints,
 or scanner addresses in configuration, browser storage, diagnostics, or logs.
 
