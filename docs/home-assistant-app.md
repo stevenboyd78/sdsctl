@@ -260,9 +260,11 @@ typed daemon-control boundary. It does not expose raw scanner keys, publish to
 the generic `<mqtt_topic_prefix>/commands` topic, create a response topic, or
 open another scanner/control session.
 
-The bundled Lovelace card remains read-only and transport-free. Scanner controls
-are standard Home Assistant switch and button entities rather than direct card,
-App HTTP, scanner, or MQTT calls.
+The two entity-based Lovelace cards remain read-only and transport-free. Scanner
+controls are standard Home Assistant switch and button entities rather than
+direct card, App HTTP, scanner, or MQTT calls. The separate waterfall card uses
+only authenticated Home Assistant frontend and App Ingress APIs; it never sends
+scanner controls.
 
 ## Installation from the Home Assistant App repository
 
@@ -339,11 +341,12 @@ from the Home Assistant App Logs tab when a failure occurs.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs two first-party read-only SDS200 cards:
+The Home Assistant App installs three first-party SDS200 cards:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
+/homeassistant/www/sds200/sds200-waterfall-card.js
 ```
 
 Home Assistant serves them to the frontend as:
@@ -351,6 +354,7 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js
 /local/sds200/sds200-display-card.js
+/local/sds200/sds200-waterfall-card.js
 ```
 
 The byte-identical source modules are independently packaged inside the Python
@@ -359,6 +363,7 @@ distribution as:
 ```text
 sds200/themes/home-assistant/compact/
 sds200/themes/home-assistant/sds200-display/
+sds200/themes/home-assistant/waterfall/
 ```
 
 Each package contains a versioned manifest and its one declared JavaScript
@@ -375,6 +380,8 @@ Register each URL once in **Settings > Dashboards > Resources** as a
 card remains unchanged. The additive **SDS200 Display** card provides five
 explicit layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—plus
 an opt-in Auto layout, and Color, Black on White, and White on Black palettes.
+The **SDS200 Waterfall** card renders the App's authenticated relative,
+uncalibrated spectrum stream with bounded rolling history.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -382,19 +389,23 @@ available.
 
 The automatic `/local` delivery requires the App to map Home Assistant's
 configuration directory read/write. That filesystem permission is broader than
-the two card files: the container can technically write elsewhere in the Home
+the three card files: the container can technically write elsewhere in the Home
 Assistant configuration tree while it is running. The SDS200 installer
 deliberately limits its own behavior to creating `www/sds200` when necessary and
-creating or replacing only the two card files listed above. It does not edit
+creating or replacing only the three card files listed above. It does not edit
 Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
 Failure to install or update the optional cards is isolated from the scanner
 runtime. The App logs a warning and continues starting the daemon and web
 dashboard.
 
-Both cards intentionally avoid calls to the App, daemon, scanner, MQTT broker,
-or Home Assistant APIs. They subscribe only to Home Assistant's supported
-`states` data context through the frontend `context-request` mechanism.
+The compact and display cards intentionally avoid calls to the App, daemon,
+scanner, MQTT broker, or Home Assistant APIs. They subscribe only to Home
+Assistant's supported `states` data context through the frontend
+`context-request` mechanism. The waterfall card is also read-only, but uses
+Home Assistant's authenticated frontend API context to create and validate an
+Ingress session and then streams from the one running SDS200 App. It never opens
+a scanner transport or publishes high-rate samples through MQTT.
 
 After registering the resource, add **SDS200 Scanner** from the Home Assistant
 card picker. The card uses Home Assistant's built-in graphical form editor.
@@ -483,6 +494,73 @@ The compact card includes optional Tone A and Tone B detail rows, and the
 optional `Hz` suffix is displayed as `Detect`, matching the scanner's
 tone-frequency detection configuration, while nonzero or unrecognized nonempty
 scanner text is shown unchanged. The Home Assistant sensor retains the raw text.
+
+For the live spectrum presentation, add **SDS200 Waterfall** from the picker.
+It does not require entity IDs, a scanner address, an App slug, a private Ingress
+identifier, a URL, or credentials in the card configuration. The graphical
+editor exposes only bounded presentation choices. Equivalent YAML is:
+
+```yaml
+type: custom:sds200-waterfall-card
+title: SDS200 Waterfall
+density: standard  # compact, standard, or tall
+palette: theme  # theme, cyan, green, amber, or monochrome
+history: 120  # 60, 120, or 240 frames
+show_scale: true
+show_telemetry: true
+start_paused: false
+```
+
+The card discovers the SDS200 panel through Home Assistant's frontend context,
+asks Home Assistant for an authenticated App Ingress session, and requires
+exactly one running SDS200 App. No App produces an unavailable state; multiple
+running SDS200 Apps fail closed so the card cannot silently select the wrong
+scanner owner. Stop or uninstall obsolete Local Apps before using it.
+
+Each connected and visible card owns its own demand lease over the daemon's one
+shared waterfall session. Hidden, removed, or disconnected cards abort their
+streams. The last released lease stops scanner-side waterfall demand. **Pause**
+freezes visual history while retaining the live lease; **Clear** removes only
+that card's retained history. History, input lines, reconnect delay, Canvas
+dimensions, device-pixel scaling, queued repaint work, and frame count are
+bounded. The stream is relative and uncalibrated; it is not a calibrated signal
+level or measurement instrument.
+
+Ingress authentication is shared between card instances, but stream leases and
+presentation settings remain independent. Authentication expiry, an App restart,
+or a transport interruption produces a visible bounded reconnect state. The card
+requests Server-Sent Events so Home Assistant Ingress forwards each record
+without NDJSON response buffering, while retaining validated NDJSON decoding for
+direct compatibility. It expires its displayed frame-rate sample window even
+when delivery pauses, so stale history cannot be presented as a current rate. It
+does not store authentication material, Ingress identifiers, private endpoints,
+or scanner addresses in configuration, browser storage, diagnostics, or logs.
+
+### Waterfall card reference presentations
+
+These deterministic Chrome captures use fictional spectrum and frequency data.
+They contain no scanner address, credential, Home Assistant identity, private
+Ingress value, or local programming information.
+
+Desktop, 1920×1080 CSS pixels:
+
+![SDS200 Waterfall card at a 1920 by 1080 desktop viewport](assets/home-assistant/home-assistant-waterfall-1920x1080.png)
+
+Raspberry Pi or wall panel, 800×480 CSS pixels:
+
+![SDS200 Waterfall card at an 800 by 480 panel viewport](assets/home-assistant/home-assistant-waterfall-800x480.png)
+
+Phone, 390×844 CSS pixels at DPR 2:
+
+<img src="assets/home-assistant/home-assistant-waterfall-390x844-dpr2.png" alt="SDS200 Waterfall card at a 390 by 844 phone viewport" width="390">
+
+Regenerate all three through the same real-Chrome lifecycle audit:
+
+```bash
+node scripts/audit_web_dashboard_browser.mjs \
+  --timeout-ms 30000 \
+  --waterfall-screenshot-dir docs/assets/home-assistant
+```
 
 ## Security boundary
 
@@ -949,3 +1027,61 @@ credentials, or private network details are retained in the repository. This
 source-built run validates the Milestone 27.4 branch boundary; the later
 published v0.23.0 image still requires the separate repository-managed release
 acceptance gate above.
+
+### Milestone 29.1 responsive waterfall-card development acceptance
+
+Milestone 29.1 physical development acceptance completed on August 29, 2026,
+using an isolated source-built Local App at version 0.24.0 from exact corrected
+commit `6f18adb3b168dfef16358200787f2c33013a7587`. This was a development
+build, not a newly published repository image. The amd64 host ran Home
+Assistant OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7,
+and Docker 29.7.2 against an SDS200 running firmware 1.26.01. Only the selected
+acceptance App ran while the physical waterfall tests were active, preserving
+one daemon, scanner-control, PSI, waterfall-polling, and RTSP/RTP owner.
+
+The first live card run identified a real Ingress transport defect: requesting
+newline-delimited JSON caused Home Assistant's proxy to buffer many frames and
+then deliver them as a burst. The corrected card requests the already-supported
+same-origin `text/event-stream` representation, parses its bounded `id:` and
+`data:` framing, and retains newline-delimited decoding compatibility for the
+direct route. Its deployed module matched the corrected repository asset at
+SHA-256
+`1401fff2bd67bf4583b866d0eae296a3f0e873425fc138baac32675f7cd29fc2`.
+Direct unauthenticated App access returned HTTP 403.
+
+The corrected acceptance run confirmed:
+
+- two simultaneously visible cards consumed one shared daemon-side demand while
+  advancing independently at approximately three frames per second. Each frame
+  contained the expected 240 relative bins, current frequency context, bounded
+  age and cadence telemetry, and zero client or daemon queue loss;
+- a standard, theme-following card and a compact cyan card rendered side by
+  side. Removing one card expanded the remaining card into the available width,
+  exercising independent density, palette, history, and responsive-width
+  behavior on physical Home Assistant OS. The deterministic Chrome matrix
+  remains the coverage source for every desktop, wall-display, and phone size;
+- pausing one card froze only its presentation while its sequence and current
+  frame age continued advancing. Resume restored live painting, and Clear
+  History rebuilt only that card's bounded history without altering the second
+  card;
+- restarting the Local App moved both cards through an authenticated waiting
+  state and back to fresh ordered frames without a page reload or reconnect
+  storm. Removing the second card left the first healthy; navigating away from
+  the final card released its lease, after which no further scanner-side
+  waterfall polling appeared;
+- returning the scanner to normal scanning restored live System, Department,
+  Site, and Channel state as applicable, with scanner controls ready. The
+  existing Home Assistant connection entity and bundled display cards remained
+  online and updating through MQTT Discovery, with daemon and audio ownership
+  on and recording capture idle; and
+- the persistent ten-recording WAV and metadata inventory remained present.
+  The published v0.24.0 App then restarted as the sole scanner owner with its
+  authenticated dashboard, MQTT state, existing cards, media storage, and
+  normal scanner state healthy.
+
+Final cleanup stopped the Local App, disabled its Ingress panel, restored the
+stable `/local/sds200/sds200-waterfall-card.js` resource URL, removed the
+temporary validation view, and left the published App running as the sole
+owner. No scanner identifiers, programmed frequencies, raw waterfall frames,
+audio, credentials, ingress identifiers, or private network details are
+retained in the repository.

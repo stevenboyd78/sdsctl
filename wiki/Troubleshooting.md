@@ -297,13 +297,14 @@ subject to the daemon's transport capability check.
 
 Confirm the App log did not report a card-installation warning and verify
 `/local/sds200/sds200-card.js` is registered for **SDS200 Scanner**, or
-`/local/sds200/sds200-display-card.js` is registered for **SDS200 Display**, under
+`/local/sds200/sds200-display-card.js` is registered for **SDS200 Display**, or
+`/local/sds200/sds200-waterfall-card.js` is registered for **SDS200 Waterfall**, under
 **Settings > Dashboards > Resources** as a JavaScript Module. If the App created
 Home Assistant's `www` directory for the first time, restart Home Assistant Core
 once before registering the resource.
 
-After registration, the matching card should appear in the card picker. Both
-cards are intentionally read-only; scanner controls are separate standard Home
+After registration, the matching card should appear in the card picker. All
+three cards are intentionally read-only; scanner controls are separate standard Home
 Assistant switch and button entities.
 
 If the SDS200 Display card does not change automatically, select the **Auto**
@@ -311,6 +312,13 @@ layout and configure its Screen Kind entity. Search and Close Call use the Searc
 layout, Weather uses Weather, Tone-Out uses Tone-Out, and scanning or unknown
 values use the configured Simple or Detail scan fallback. Explicit layouts
 intentionally ignore Screen Kind.
+
+If **SDS200 Waterfall** reports that no App is available, start the installed
+SDS200 App and confirm its Ingress panel loads. If it reports multiple running
+Apps, stop or uninstall obsolete Local development Apps so one scanner owner
+remains. The card deliberately has no manual endpoint or credential fallback.
+Authentication or App-restart failures use bounded reconnect delays; removing
+or hiding the card releases its stream lease.
 
 ## Capture detailed diagnostics
 

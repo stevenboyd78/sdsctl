@@ -670,7 +670,7 @@ def run_home_assistant_app(
     options_path: str | Path = HOME_ASSISTANT_APP_OPTIONS_PATH,
     paths: HomeAssistantAppRuntimePaths | None = None,
     environ: Mapping[str, str] | None = None,
-    lovelace_card_installer: Callable[[], Path | tuple[Path, Path]] = (
+    lovelace_card_installer: Callable[[], Path | tuple[Path, ...]] = (
         install_home_assistant_lovelace_cards
     ),
 ) -> int:

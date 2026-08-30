@@ -91,3 +91,25 @@ identity across Chrome versions.
 The reviewed `wiki/Web-Dashboard.md` page embeds this same default-branch image
 set rather than keeping a second wiki-only copy, so documentation and wiki
 captures remain synchronized after publication.
+
+## Home Assistant waterfall card screenshots
+
+The `home-assistant/` directory contains deterministic real-Chrome captures of
+the first-party SDS200 Waterfall card at 1920×1080 desktop, 800×480 Raspberry Pi
+or wall-panel, and 390×844 DPR-2 phone viewports. The fixture supplies only
+fictional relative spectrum and frequency data plus a fictional same-origin
+Ingress path. No scanner address, credential, Home Assistant identity, private
+Ingress value, or local programming information is captured.
+
+Regenerate the complete set from the repository root:
+
+    node scripts/audit_web_dashboard_browser.mjs \
+      --timeout-ms 30000 \
+      --waterfall-screenshot-dir docs/assets/home-assistant
+
+The command first runs the full existing dashboard Chrome audit, waits for the
+bounded card Canvas to reach a stable deterministic sequence at each target
+viewport, requires two identical consecutive compositor frames, writes the
+three PNGs, and then completes the shared-authentication, multi-card, pause,
+visibility, removal, and final-lease cleanup probes. Do not edit these PNGs
+manually; update the card or fictional fixture and regenerate all three together.

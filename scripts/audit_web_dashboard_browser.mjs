@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Run the Milestone 27.4 dashboard acceptance matrix in one real Chrome.
+ * Run the dashboard and Home Assistant waterfall-card acceptance in one Chrome.
  *
  * This intentionally uses only Node built-ins and Chrome DevTools Protocol.
  * It writes no screenshots; the 26-image documentation gallery remains the
@@ -10,7 +10,7 @@
 
 import {spawn} from "node:child_process";
 import {constants as fsConstants} from "node:fs";
-import {access, mkdtemp, rm, writeFile} from "node:fs/promises";
+import {access, mkdir, mkdtemp, rm, writeFile} from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -85,18 +85,22 @@ const SCREENSHOT_STATUS_MESSAGE = "Daemon and scanner status are available.";
 const HELP = `\
 Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
-Run the deterministic Milestone 27.4 browser acceptance audit in one local
+Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
 Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
 theme × reference CSS viewport × workspace pane cases, plus media-preference,
 enlarged-text, pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA
 contrast, complete adaptive-presentation, DPR-transition, and prefixed-URL
-probes.
+probes. It also covers the authenticated waterfall card at desktop, 800x480,
+and phone widths; bounded Canvas sizing; shared authentication; two live cards;
+pause; hide/show; removal; and final-stream cleanup.
 
 Options:
   --chrome PATH       Chrome/Chromium executable (auto-detected by default)
   --python PATH       Python used for the demo server (repo .venv by default)
   --base-url URL      Audit an already-running demo server instead of starting one
   --timeout-ms N      Startup and CDP operation timeout (default: 20000)
+  --waterfall-screenshot-dir PATH
+                      Write three sanitized waterfall-card reference PNGs
   --list              List the 144 matrix cases without opening Chrome
   -h, --help          Show this help and exit
 
@@ -115,6 +119,7 @@ function parseArguments(argv) {
     list: false,
     python: null,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    waterfallScreenshotDirectory: null,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -123,7 +128,13 @@ function parseArguments(argv) {
       options.help = true;
     } else if (argument === "--list") {
       options.list = true;
-    } else if (["--base-url", "--chrome", "--python", "--timeout-ms"].includes(argument)) {
+    } else if ([
+      "--base-url",
+      "--chrome",
+      "--python",
+      "--timeout-ms",
+      "--waterfall-screenshot-dir",
+    ].includes(argument)) {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith("--")) {
         throw new Error(`${argument} requires a value`);
@@ -135,6 +146,8 @@ function parseArguments(argv) {
         options.chrome = value;
       } else if (argument === "--python") {
         options.python = value;
+      } else if (argument === "--waterfall-screenshot-dir") {
+        options.waterfallScreenshotDirectory = path.resolve(value);
       } else {
         options.timeoutMs = Number(value);
       }
@@ -575,14 +588,21 @@ async function waitForDashboard(cdp, timeoutMs) {
   throw new Error(`dashboard did not settle: ${JSON.stringify(state)}`);
 }
 
-async function navigate(cdp, url, timeoutMs, {installAuditLibrary = true} = {}) {
+async function navigate(
+  cdp,
+  url,
+  timeoutMs,
+  {installAuditLibrary = true, waitForDashboardReady = true} = {},
+) {
   const loaded = cdp.waitForEvent("Page.loadEventFired");
   const result = await cdp.send("Page.navigate", {url});
   if (result.errorText !== undefined) {
     throw new Error(`navigation failed: ${result.errorText}`);
   }
   await loaded;
-  await waitForDashboard(cdp, timeoutMs);
+  if (waitForDashboardReady) {
+    await waitForDashboard(cdp, timeoutMs);
+  }
   if (installAuditLibrary) {
     await evaluate(
       cdp,
@@ -2043,6 +2063,287 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   return {caseCount, failures: collector.failures};
 }
 
+async function homeAssistantWaterfallState(cdp) {
+  return evaluate(
+    cdp,
+    `(() => {
+      const cards = Array.from(document.querySelectorAll("sds200-waterfall-card"));
+      return {
+        readyState: document.readyState,
+        fixture: {...(window.__waterfallFixture ?? {})},
+        cards: cards.map((card) => {
+          const root = card.shadowRoot;
+          const surface = root?.querySelector(".surface");
+          const canvases = Array.from(root?.querySelectorAll("canvas") ?? []);
+          const rect = card.getBoundingClientRect();
+          return {
+            connected: card.isConnected,
+            display: getComputedStyle(card).display,
+            height: rect.height,
+            history: card._history?.length ?? null,
+            overflow: card.scrollWidth > card.clientWidth + 1,
+            paused: root?.querySelector("button.pause")?.getAttribute("aria-pressed") ?? null,
+            sequence: root?.querySelector(".telemetry-item:last-child dd")?.textContent?.trim() ?? null,
+            status: root?.querySelector(".status")?.dataset.state ?? null,
+            statusText: root?.querySelector(".status")?.textContent?.trim() ?? null,
+            surfaceWidth: surface?.getBoundingClientRect().width ?? 0,
+            width: rect.width,
+            canvases: canvases.map((canvas) => ({
+              clientHeight: canvas.clientHeight,
+              clientWidth: canvas.clientWidth,
+              height: canvas.height,
+              width: canvas.width,
+            })),
+          };
+        }),
+        documentOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+        viewport: {dpr: devicePixelRatio, height: innerHeight, width: innerWidth},
+      };
+    })()`,
+  );
+}
+
+async function waitForHomeAssistantWaterfall(
+  cdp,
+  timeoutMs,
+  {active, cards, statuses},
+) {
+  const deadline = Date.now() + timeoutMs;
+  let state = null;
+  while (Date.now() < deadline) {
+    state = await homeAssistantWaterfallState(cdp);
+    const actualStatuses = state.cards.map((card) => card.status);
+    if (
+      state.readyState === "complete" &&
+      state.cards.length === cards &&
+      state.fixture.streamsActive === active &&
+      JSON.stringify(actualStatuses) === JSON.stringify(statuses)
+    ) {
+      await frames(cdp);
+      return state;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    "Home Assistant waterfall fixture did not settle: " + JSON.stringify(state),
+  );
+}
+
+async function waitForHomeAssistantWaterfallSequence(cdp, timeoutMs, sequence) {
+  const deadline = Date.now() + timeoutMs;
+  let state = null;
+  while (Date.now() < deadline) {
+    state = await homeAssistantWaterfallState(cdp);
+    if (
+      state.cards.length === 1 &&
+      state.cards[0].status === "live" &&
+      state.cards[0].sequence === String(sequence)
+    ) {
+      await frames(cdp);
+      return state;
+    }
+    await delay(100);
+  }
+  throw new Error(
+    `Home Assistant waterfall did not reach sequence ${sequence}: ` +
+      JSON.stringify(state),
+  );
+}
+
+async function writeHomeAssistantWaterfallScreenshot(
+  cdp,
+  directory,
+  viewport,
+  timeoutMs,
+) {
+  await waitForHomeAssistantWaterfallSequence(cdp, timeoutMs, 33);
+  const screenshot = await captureStableScreenshot(cdp);
+  const filename =
+    `home-assistant-waterfall-${viewport.width}x${viewport.height}` +
+    `${viewport.dpr === 1 ? "" : `-dpr${viewport.dpr}`}.png`;
+  const destination = path.join(directory, filename);
+  await writeFile(destination, Buffer.from(screenshot.data, "base64"));
+  return destination;
+}
+
+function assertHomeAssistantWaterfallGeometry(state, context) {
+  if (state.documentOverflow) {
+    throw new Error(`${context}: waterfall fixture has horizontal document overflow`);
+  }
+  for (const [index, card] of state.cards.entries()) {
+    if (card.display === "none") continue;
+    if (card.overflow || card.width <= 0 || card.surfaceWidth <= 0 || card.height <= 0) {
+      throw new Error(`${context}: card ${index + 1} has invalid responsive geometry`);
+    }
+    if (card.canvases.length !== 2) {
+      throw new Error(`${context}: card ${index + 1} does not expose two canvases`);
+    }
+    for (const canvas of card.canvases) {
+      if (
+        canvas.clientWidth <= 0 ||
+        canvas.clientHeight <= 0 ||
+        canvas.width <= 0 ||
+        canvas.height <= 0 ||
+        canvas.width > 2048 ||
+        canvas.height > 1024
+      ) {
+        throw new Error(
+          `${context}: card ${index + 1} exceeded bounded Canvas geometry ` +
+            JSON.stringify(canvas),
+        );
+      }
+    }
+  }
+}
+
+async function auditHomeAssistantWaterfallCard(
+  cdp,
+  baseUrl,
+  timeoutMs,
+  pageFailures,
+  screenshotDirectory,
+) {
+  const exceptionBaseline = pageFailures.length;
+  const screenshotPaths = [];
+  const desktopViewport = {width: 1920, height: 1080, dpr: 1};
+  await setViewport(cdp, desktopViewport);
+  await navigate(cdp, `${baseUrl}/__demo/home-assistant-waterfall/`, timeoutMs, {
+    installAuditLibrary: false,
+    waitForDashboardReady: false,
+  });
+  let state = await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 1,
+    cards: 1,
+    statuses: ["live"],
+  });
+  assertHomeAssistantWaterfallGeometry(state, "1920x1080@1");
+  if (
+    state.fixture.sessionCreates !== 1 ||
+    state.fixture.infoCalls !== 1 ||
+    state.cards[0].history <= 0 ||
+    state.cards[0].sequence === "Unavailable"
+  ) {
+    throw new Error(`initial waterfall lifecycle is invalid: ${JSON.stringify(state)}`);
+  }
+  if (screenshotDirectory !== null) {
+    screenshotPaths.push(
+      await writeHomeAssistantWaterfallScreenshot(
+        cdp,
+        screenshotDirectory,
+        desktopViewport,
+        timeoutMs,
+      ),
+    );
+  }
+
+  for (const viewport of [
+    {width: 800, height: 480, dpr: 1},
+    {width: 390, height: 844, dpr: 2},
+  ]) {
+    await setViewport(cdp, viewport);
+    state = await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+      active: 1,
+      cards: 1,
+      statuses: ["live"],
+    });
+    assertHomeAssistantWaterfallGeometry(
+      state,
+      `${viewport.width}x${viewport.height}@${viewport.dpr}`,
+    );
+    if (screenshotDirectory !== null) {
+      screenshotPaths.push(
+        await writeHomeAssistantWaterfallScreenshot(
+          cdp,
+          screenshotDirectory,
+          viewport,
+          timeoutMs,
+        ),
+      );
+    }
+  }
+
+  await evaluate(
+    cdp,
+    `window.__waterfallFixture.addCard({
+      title: "Second Waterfall",
+      density: "compact",
+      palette: "amber",
+      history: 60,
+      show_scale: false,
+      show_telemetry: true,
+      start_paused: false,
+    }); true`,
+  );
+  state = await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 2,
+    cards: 2,
+    statuses: ["live", "live"],
+  });
+  if (state.fixture.sessionCreates !== 1 || state.fixture.streamsStarted !== 2) {
+    throw new Error(`multiple cards did not share authentication: ${JSON.stringify(state)}`);
+  }
+
+  await evaluate(
+    cdp,
+    `document.querySelector("sds200-waterfall-card")
+      .shadowRoot.querySelector("button.pause").click(); true`,
+  );
+  state = await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 2,
+    cards: 2,
+    statuses: ["paused", "live"],
+  });
+  if (state.cards[0].paused !== "true") {
+    throw new Error(`pause did not retain the live lease: ${JSON.stringify(state)}`);
+  }
+
+  await evaluate(
+    cdp,
+    `document.querySelectorAll("sds200-waterfall-card")[1].style.display = "none"; true`,
+  );
+  await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 1,
+    cards: 2,
+    statuses: ["paused", "idle"],
+  });
+  await evaluate(
+    cdp,
+    `document.querySelectorAll("sds200-waterfall-card")[1].style.display = "block"; true`,
+  );
+  await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 2,
+    cards: 2,
+    statuses: ["paused", "live"],
+  });
+
+  await evaluate(
+    cdp,
+    `document.querySelector("sds200-waterfall-card").remove(); true`,
+  );
+  await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 1,
+    cards: 1,
+    statuses: ["live"],
+  });
+  await evaluate(
+    cdp,
+    `document.querySelector("sds200-waterfall-card").remove(); true`,
+  );
+  state = await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 0,
+    cards: 0,
+    statuses: [],
+  });
+  if (
+    state.fixture.streamsAborted !== state.fixture.streamsStarted ||
+    state.fixture.uiUnsubscribes !== 2 ||
+    pageFailures.length !== exceptionBaseline
+  ) {
+    throw new Error(`final waterfall cleanup is invalid: ${JSON.stringify(state)}`);
+  }
+  return {screenshotPaths, viewportCases: 3};
+}
+
 async function openChrome(chrome, profileDirectory, remotePort) {
   const child = spawn(
     chrome,
@@ -2446,7 +2747,12 @@ async function run(options) {
 
     console.log(`Chrome: ${chrome}`);
     console.log(`Demo server: ${baseUrl}`);
-    console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
+    if (options.waterfallScreenshotDirectory === null) {
+      console.log("Screenshots: disabled (the 26-image gallery is unchanged)");
+    } else {
+      await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
+      console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
+    }
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);
@@ -2465,11 +2771,23 @@ async function run(options) {
       process.exitCode = 1;
       return;
     }
+    const waterfallCard = await auditHomeAssistantWaterfallCard(
+      cdp,
+      baseUrl,
+      options.timeoutMs,
+      pageFailures,
+      options.waterfallScreenshotDirectory,
+    );
+    for (const screenshotPath of waterfallCard.screenshotPaths) {
+      console.log(`Wrote ${screenshotPath}`);
+    }
     console.log(
       `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
-        "enlarged-text scrolling escape, DPR changes, and prefixed URLs.",
+        "enlarged-text scrolling escape, DPR changes, prefixed URLs, and " +
+        `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
+        "viewports with shared authentication and complete lease cleanup.",
     );
   } finally {
     cdp?.close();

@@ -54,6 +54,11 @@ def test_browser_audit_help_documents_scope_and_dependencies() -> None:
         "adaptive-presentation",
         "DPR-transition",
         "prefixed-URL",
+        "authenticated waterfall card",
+        "two live cards",
+        "final-stream cleanup",
+        "--waterfall-screenshot-dir",
+        "three sanitized waterfall-card reference PNGs",
         "Node.js 24 or newer",
         "No third-party Node package",
     ):
@@ -131,6 +136,12 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         '["simple", "scanning", "scanning", "Now scanning", "simple", "none"]',
         '["detail", "scanning", "scanning", "Now scanning", "detail", "hierarchy"]',
         "`${theme}/forced-colors/${pane}`",
+        "auditHomeAssistantWaterfallCard",
+        "assertHomeAssistantWaterfallGeometry",
+        "state.fixture.sessionCreates !== 1",
+        "state.fixture.streamsAborted !== state.fixture.streamsStarted",
+        "canvas.width > 2048",
+        "canvas.height > 1024",
     ):
         assert contract in source
 

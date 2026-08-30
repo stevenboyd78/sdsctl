@@ -320,7 +320,8 @@ Unrelated files and activation records are preserved.
 Register `/local/sds200/<declared-filename>.js` as a JavaScript module resource
 in Home Assistant manually. These commands do not edit YAML, `.storage`,
 dashboards, Lovelace resources, App options, or Home Assistant Core state. The
-Home Assistant App continues to install only the two bundled first-party cards;
+Home Assistant App installs only the three bundled first-party cards (compact,
+display, and waterfall);
 it does not scan or activate the user-writable managed theme directory.
 
 The lifecycle does not download themes, extract archives, execute scripts, or

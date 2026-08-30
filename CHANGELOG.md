@@ -6,6 +6,18 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add the first-party responsive **SDS200 Waterfall** Home Assistant card over
+  the existing authenticated App Ingress and single-owner daemon waterfall
+  service. Independent visible cards hold separate demand leases over one shared
+  scanner-side session; hidden, removed, and disconnected cards release their
+  streams. The bounded Canvas renderer provides compact, standard, and tall
+  densities; theme, cyan, green, amber, and monochrome palettes; 60, 120, or 240
+  frames of history; relative scale and lifecycle telemetry controls; pause and
+  clear actions; bounded reconnect; and a graphical editor without accepting
+  URLs, credentials, scanner addresses, or private Ingress identifiers.
+
 ## [0.24.0] - 2026-08-29
 
 ### Added

@@ -288,6 +288,65 @@ def test_demo_app_mounts_an_ingress_style_url_prefix() -> None:
     assert status.json()["daemon"]["snapshot"]["scanner_model"] == "SDS200"
 
 
+def test_demo_app_exposes_sanitized_home_assistant_waterfall_fixture() -> None:
+    app = screenshots.create_demo_app()
+    module_source = (
+        Path("src/sds200/themes/home-assistant/waterfall/sds200-waterfall-card.js")
+        .read_bytes()
+    )
+
+    with TestClient(app) as client:
+        fixture = client.get(screenshots._DEMO_HOME_ASSISTANT_WATERFALL_PATH)
+        module = client.get(screenshots._DEMO_HOME_ASSISTANT_WATERFALL_MODULE_PATH)
+        ingress_status = client.get(
+            f"{screenshots._DEMO_HOME_ASSISTANT_INGRESS_PREFIX}/api/v1/status"
+        )
+
+    assert fixture.status_code == 200
+    assert fixture.headers["cache-control"] == "no-store"
+    for required in (
+        "SDS200 Home Assistant waterfall acceptance fixture",
+        "context-request",
+        'endpoint === "/ingress/session"',
+        'endpoint === "/addons/sds200/info"',
+        "streamsStarted",
+        "streamsActive",
+        "streamsAborted",
+        '<script src="/__demo/sds200-waterfall-card.js"></script>',
+    ):
+        assert required in fixture.text
+    assert "scanner_host" not in fixture.text
+    assert "192.168." not in fixture.text
+
+    assert module.status_code == 200
+    assert module.headers["cache-control"] == "no-store"
+    assert module.headers["content-type"].startswith("text/javascript")
+    assert module.content == module_source
+
+    assert ingress_status.status_code == 200
+    assert ingress_status.json()["daemon"]["snapshot"]["scanner_model"] == "SDS200"
+
+
+def test_home_assistant_waterfall_reference_images_are_exact_viewports() -> None:
+    expected = {
+        "home-assistant-waterfall-1920x1080.png": (1920, 1080),
+        "home-assistant-waterfall-800x480.png": (800, 480),
+        "home-assistant-waterfall-390x844-dpr2.png": (780, 1688),
+    }
+    directory = Path("docs/assets/home-assistant")
+
+    assert {path.name for path in directory.glob("*.png")} == set(expected)
+    for filename, dimensions in expected.items():
+        image = directory / filename
+        assert screenshots._png_dimensions_bytes(image.read_bytes()) == dimensions
+
+    guide = Path("docs/home-assistant-app.md").read_text(encoding="utf-8")
+    wiki = Path("wiki/Home.md").read_text(encoding="utf-8")
+    for filename in expected:
+        assert f"assets/home-assistant/{filename}" in guide
+        assert f"docs/assets/home-assistant/{filename}" in wiki
+
+
 def test_demo_clock_is_external_prepaint_only_and_demo_scoped() -> None:
     app = screenshots.create_demo_app()
 

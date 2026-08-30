@@ -1,0 +1,1498 @@
+"use strict";
+
+const SDS200_WATERFALL_CARD_TYPE = "sds200-waterfall-card";
+const SDS200_WATERFALL_CARD_TAG = "sds200-waterfall-card";
+const SDS200_WATERFALL_PROTOCOL = "sdsctl.waterfall";
+const SDS200_WATERFALL_VERSION = 1;
+const SDS200_WATERFALL_BIN_COUNT = 240;
+const SDS200_WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
+const SDS200_WATERFALL_NDJSON_MEDIA_TYPE = "application/x-ndjson";
+const SDS200_WATERFALL_SSE_MEDIA_TYPE = "text/event-stream";
+const SDS200_WATERFALL_SESSION_REFRESH_MS = 60 * 1000;
+const SDS200_WATERFALL_RECONNECT_DELAYS_MS = Object.freeze([
+  2000,
+  4000,
+  8000,
+  16000,
+  30000,
+]);
+const SDS200_WATERFALL_DENSITIES = Object.freeze([
+  Object.freeze({value: "compact", label: "Compact"}),
+  Object.freeze({value: "standard", label: "Standard"}),
+  Object.freeze({value: "tall", label: "Tall"}),
+]);
+const SDS200_WATERFALL_PALETTES = Object.freeze([
+  Object.freeze({value: "theme", label: "Home Assistant theme"}),
+  Object.freeze({value: "cyan", label: "Cyan"}),
+  Object.freeze({value: "green", label: "Green"}),
+  Object.freeze({value: "amber", label: "Amber"}),
+  Object.freeze({value: "monochrome", label: "Monochrome"}),
+]);
+const SDS200_WATERFALL_HISTORY_OPTIONS = Object.freeze([
+  Object.freeze({value: 60, label: "60 frames"}),
+  Object.freeze({value: 120, label: "120 frames"}),
+  Object.freeze({value: 240, label: "240 frames"}),
+]);
+const SDS200_WATERFALL_INGRESS_PATH_PATTERN =
+  /^\/api\/hassio_ingress\/[A-Za-z0-9_-]+\/$/;
+
+function waterfallOptionLabel(options, value) {
+  return options.find((option) => option.value === value)?.label;
+}
+
+function requireWaterfallCardConfig(config) {
+  if (
+    config === null ||
+    typeof config !== "object" ||
+    Array.isArray(config)
+  ) {
+    throw new Error(
+      "SDS200 waterfall card configuration must be an object.",
+    );
+  }
+
+  const supported = new Set([
+    "type",
+    "title",
+    "density",
+    "palette",
+    "history",
+    "show_scale",
+    "show_telemetry",
+    "start_paused",
+  ]);
+  for (const key of Object.keys(config)) {
+    if (!supported.has(key)) {
+      throw new Error(
+        `SDS200 waterfall card option "${key}" is not supported.`,
+      );
+    }
+  }
+
+  if (
+    config.title !== undefined &&
+    typeof config.title !== "string"
+  ) {
+    throw new Error("SDS200 waterfall card title must be text.");
+  }
+  const title =
+    typeof config.title === "string" && config.title.trim()
+      ? config.title.trim()
+      : "SDS200 Waterfall";
+  const density = config.density ?? "standard";
+  const palette = config.palette ?? "theme";
+  const history = config.history ?? 120;
+
+  if (!waterfallOptionLabel(SDS200_WATERFALL_DENSITIES, density)) {
+    throw new Error(
+      `SDS200 waterfall card density "${density}" is not supported.`,
+    );
+  }
+  if (!waterfallOptionLabel(SDS200_WATERFALL_PALETTES, palette)) {
+    throw new Error(
+      `SDS200 waterfall card palette "${palette}" is not supported.`,
+    );
+  }
+  if (!waterfallOptionLabel(SDS200_WATERFALL_HISTORY_OPTIONS, history)) {
+    throw new Error(
+      `SDS200 waterfall card history "${history}" is not supported.`,
+    );
+  }
+
+  const booleans = {};
+  for (const [key, fallback] of [
+    ["show_scale", true],
+    ["show_telemetry", true],
+    ["start_paused", false],
+  ]) {
+    const value = config[key] ?? fallback;
+    if (typeof value !== "boolean") {
+      throw new Error(
+        `SDS200 waterfall card option "${key}" must be boolean.`,
+      );
+    }
+    booleans[key] = value;
+  }
+
+  return Object.freeze({
+    title,
+    density,
+    palette,
+    history,
+    show_scale: booleans.show_scale,
+    show_telemetry: booleans.show_telemetry,
+    start_paused: booleans.start_paused,
+  });
+}
+
+function waterfallRecordObject(value) {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  ) ? value : {};
+}
+
+function waterfallNonnegativeInteger(value, label) {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Waterfall ${label} is invalid.`);
+  }
+  return value;
+}
+
+function normalizeWaterfallFrame(values) {
+  if (
+    !Array.isArray(values) ||
+    values.length !== SDS200_WATERFALL_BIN_COUNT
+  ) {
+    throw new Error("Waterfall frame must contain exactly 240 values.");
+  }
+  const numeric = values.map((value) => {
+    if (
+      typeof value !== "string" ||
+      !/^[0-9a-f]+$/i.test(value)
+    ) {
+      throw new Error(
+        "Waterfall frame contains an invalid hexadecimal value.",
+      );
+    }
+    return Number.parseInt(value, 16);
+  });
+  if (!numeric.every(Number.isSafeInteger)) {
+    throw new Error("Waterfall frame contains an invalid value.");
+  }
+  const minimum = Math.min(...numeric);
+  const maximum = Math.max(...numeric);
+  const span = maximum - minimum;
+  return Float32Array.from(
+    numeric,
+    (value) => span === 0 ? 0.5 : (value - minimum) / span,
+  );
+}
+
+function validWaterfallFrequencies(status) {
+  const source = waterfallRecordObject(status);
+  const fields = [
+    source.lower_frequency,
+    source.center_frequency,
+    source.upper_frequency,
+    source.marker_frequency,
+  ];
+  if (!fields.every(
+    (value) => typeof value === "string" && /^\d+(?:\.\d+)?$/.test(value),
+  )) {
+    return null;
+  }
+  const numbers = fields.map(Number);
+  const markerPosition = Number(source.marker_position);
+  if (
+    !numbers.every(Number.isFinite) ||
+    !(numbers[0] < numbers[1] && numbers[1] < numbers[2]) ||
+    numbers[3] < numbers[0] ||
+    numbers[3] > numbers[2] ||
+    !Number.isInteger(markerPosition) ||
+    markerPosition < 0 ||
+    markerPosition >= SDS200_WATERFALL_BIN_COUNT
+  ) {
+    return null;
+  }
+  return Object.freeze({fields: Object.freeze(fields), markerPosition});
+}
+
+function requestHomeAssistantContext(
+  target,
+  context,
+  callback,
+  {subscribe = false} = {},
+) {
+  const event = new CustomEvent("context-request", {
+    bubbles: true,
+    composed: true,
+    cancelable: true,
+  });
+  event.context = context;
+  event.subscribe = subscribe;
+  event.callback = callback;
+  target.dispatchEvent(event);
+}
+
+class WaterfallCardError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "WaterfallCardError";
+  }
+}
+
+const sds200WaterfallIngressSession = {
+  _api: null,
+  _session: null,
+  _sessionPromise: null,
+  _leases: 0,
+  _refreshTimer: null,
+
+  async acquire(api) {
+    this._leases += 1;
+    this._api = api;
+    let released = false;
+    try {
+      await this._ensure(api);
+    } catch (error) {
+      this._leases -= 1;
+      this._stopRefreshIfUnused();
+      throw error;
+    }
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      this._leases = Math.max(0, this._leases - 1);
+      this._stopRefreshIfUnused();
+    };
+  },
+
+  invalidate() {
+    this._session = null;
+    this._sessionPromise = null;
+  },
+
+  async _ensure(api) {
+    if (this._session !== null) {
+      this._startRefresh();
+      return;
+    }
+    if (this._sessionPromise === null) {
+      this._sessionPromise = this._create(api).finally(() => {
+        this._sessionPromise = null;
+      });
+    }
+    await this._sessionPromise;
+    this._startRefresh();
+  },
+
+  async _create(api) {
+    if (api === null || typeof api.callWS !== "function") {
+      throw new WaterfallCardError(
+        "Home Assistant authentication is unavailable.",
+      );
+    }
+    let response;
+    try {
+      response = await api.callWS({
+        type: "supervisor/api",
+        endpoint: "/ingress/session",
+        method: "post",
+      });
+    } catch {
+      throw new WaterfallCardError(
+        "Home Assistant App authentication is unavailable.",
+      );
+    }
+    const session = waterfallRecordObject(response).session;
+    if (
+      typeof session !== "string" ||
+      !/^[A-Za-z0-9_-]{16,256}$/.test(session)
+    ) {
+      throw new WaterfallCardError(
+        "Home Assistant returned an invalid App session.",
+      );
+    }
+    document.cookie =
+      `ingress_session=${session};path=/api/hassio_ingress/;SameSite=Strict` +
+      (location.protocol === "https:" ? ";Secure" : "");
+    this._session = session;
+  },
+
+  _startRefresh() {
+    if (this._leases === 0 || this._refreshTimer !== null) {
+      return;
+    }
+    this._refreshTimer = window.setInterval(() => {
+      void this._refresh();
+    }, SDS200_WATERFALL_SESSION_REFRESH_MS);
+  },
+
+  async _refresh() {
+    if (
+      this._leases === 0 ||
+      this._api === null ||
+      this._session === null
+    ) {
+      return;
+    }
+    try {
+      await this._api.callWS({
+        type: "supervisor/api",
+        endpoint: "/ingress/validate_session",
+        method: "post",
+        data: {session: this._session},
+      });
+    } catch {
+      this.invalidate();
+      try {
+        await this._ensure(this._api);
+      } catch {
+        this.invalidate();
+      }
+    }
+  },
+
+  _stopRefreshIfUnused() {
+    if (this._leases !== 0) {
+      return;
+    }
+    if (this._refreshTimer !== null) {
+      window.clearInterval(this._refreshTimer);
+      this._refreshTimer = null;
+    }
+    this._api = null;
+    this._session = null;
+    this._sessionPromise = null;
+  },
+};
+
+function sds200PanelSlugs(ui) {
+  const panels = waterfallRecordObject(
+    waterfallRecordObject(ui).panels,
+  );
+  const slugs = [];
+  for (const panel of Object.values(panels)) {
+    const value = waterfallRecordObject(panel);
+    const config = waterfallRecordObject(value.config);
+    const slug = config.addon;
+    const title = value.title;
+    if (
+      value.component_name === "app" &&
+      typeof slug === "string" &&
+      /^[a-z0-9_]+$/.test(slug) &&
+      (
+        slug === "sds200" ||
+        slug.includes("_sds200") ||
+        (typeof title === "string" && /^sds200(?:\s|$)/i.test(title))
+      )
+    ) {
+      slugs.push(slug);
+    }
+  }
+  return [...new Set(slugs)].sort();
+}
+
+async function resolveSds200IngressUrl(api, ui) {
+  if (api === null || typeof api.callWS !== "function") {
+    throw new WaterfallCardError(
+      "Home Assistant authentication is unavailable.",
+    );
+  }
+  const slugs = sds200PanelSlugs(ui);
+  if (slugs.length === 0) {
+    throw new WaterfallCardError(
+      "No sds200 Home Assistant App panel is available.",
+    );
+  }
+
+  const settled = await Promise.allSettled(
+    slugs.map((slug) => api.callWS({
+      type: "supervisor/api",
+      endpoint: `/addons/${slug}/info`,
+      method: "get",
+    })),
+  );
+  const running = [];
+  for (const result of settled) {
+    if (result.status !== "fulfilled") {
+      continue;
+    }
+    const info = waterfallRecordObject(result.value);
+    if (
+      info.state === "started" &&
+      info.ingress === true &&
+      typeof info.ingress_url === "string"
+    ) {
+      const url = new URL(info.ingress_url, location.origin);
+      if (
+        url.origin === location.origin &&
+        SDS200_WATERFALL_INGRESS_PATH_PATTERN.test(url.pathname) &&
+        url.search === "" &&
+        url.hash === ""
+      ) {
+        running.push(url);
+      }
+    }
+  }
+  if (running.length === 0) {
+    throw new WaterfallCardError(
+      "Start the sds200 Home Assistant App to view its waterfall.",
+    );
+  }
+  if (running.length !== 1) {
+    throw new WaterfallCardError(
+      "More than one sds200 Home Assistant App is running.",
+    );
+  }
+  return new URL("api/v1/waterfall", running[0]).toString();
+}
+
+function waterfallNode(documentObject, tag, className, text = null) {
+  const node = documentObject.createElement(tag);
+  node.className = className;
+  if (text !== null) {
+    node.textContent = text;
+  }
+  return node;
+}
+
+class Sds200WaterfallCard extends HTMLElement {
+  static getStubConfig() {
+    return {
+      density: "standard",
+      palette: "theme",
+      history: 120,
+      show_scale: true,
+      show_telemetry: true,
+      start_paused: false,
+    };
+  }
+
+  static getConfigForm() {
+    return {
+      schema: [
+        {name: "title", selector: {text: {}}},
+        {
+          name: "density",
+          required: true,
+          selector: {select: {options: SDS200_WATERFALL_DENSITIES}},
+        },
+        {
+          name: "palette",
+          required: true,
+          selector: {select: {options: SDS200_WATERFALL_PALETTES}},
+        },
+        {
+          name: "history",
+          required: true,
+          selector: {select: {options: SDS200_WATERFALL_HISTORY_OPTIONS}},
+        },
+        {name: "show_scale", selector: {boolean: {}}},
+        {name: "show_telemetry", selector: {boolean: {}}},
+        {name: "start_paused", selector: {boolean: {}}},
+      ],
+      computeLabel: (schema) => ({
+        title: "Title",
+        density: "Card height",
+        palette: "Palette",
+        history: "History depth",
+        show_scale: "Show relative frequency scale",
+        show_telemetry: "Show lifecycle telemetry",
+        start_paused: "Start with display paused",
+      })[schema.name],
+      computeHelper: (schema) => ({
+        history: "Choose one bounded rolling-history capacity.",
+        start_paused: "The authenticated stream still connects while paused.",
+      })[schema.name],
+      assertConfig: (config) => {
+        requireWaterfallCardConfig(config);
+      },
+    };
+  }
+
+  constructor() {
+    super();
+    this._config = requireWaterfallCardConfig({});
+    this._connected = false;
+    this._intersecting = false;
+    this._api = null;
+    this._ui = null;
+    this._uiUnsubscribe = null;
+    this._intersectionObserver = null;
+    this._resizeObserver = null;
+    this._generation = 0;
+    this._controller = null;
+    this._reader = null;
+    this._releaseAuthentication = null;
+    this._retryTimer = null;
+    this._retryIndex = 0;
+    this._streaming = false;
+    this._paused = false;
+    this._history = [];
+    this._latestFrame = null;
+    this._lastSequence = null;
+    this._lastFrameAt = null;
+    this._frameTimes = [];
+    this._checkpoint = {};
+    this._queueLoss = 0;
+    this._overflows = 0;
+    this._transitions = 0;
+    this._paintRequest = null;
+    this._frameAgeTimer = null;
+    this._onVisibilityChange = this._onVisibilityChange.bind(this);
+    this.attachShadow({mode: "open"});
+    this._build();
+  }
+
+  connectedCallback() {
+    if (this._connected) {
+      return;
+    }
+    this._connected = true;
+    document.addEventListener("visibilitychange", this._onVisibilityChange);
+    if (typeof IntersectionObserver === "function") {
+      this._intersectionObserver = new IntersectionObserver((entries) => {
+        const entry = entries.at(-1);
+        this._intersecting = Boolean(
+          entry && entry.isIntersecting && entry.intersectionRatio > 0,
+        );
+        this._reconcileDemand();
+      });
+      this._intersectionObserver.observe(this);
+    } else {
+      this._intersecting = true;
+    }
+    if (typeof ResizeObserver === "function") {
+      this._resizeObserver = new ResizeObserver(() => {
+        this._schedulePaint();
+      });
+      this._resizeObserver.observe(this._surface);
+    }
+    this._frameAgeTimer = window.setInterval(() => {
+      this._renderTelemetry();
+    }, 1000);
+    requestHomeAssistantContext(
+      this,
+      "hassApi",
+      (api) => {
+        this._api = api;
+        this._reconcileDemand();
+      },
+    );
+    requestHomeAssistantContext(
+      this,
+      "hassUi",
+      (ui, unsubscribe) => {
+        this._ui = ui;
+        if (typeof unsubscribe === "function") {
+          this._uiUnsubscribe = unsubscribe;
+        }
+        this._schedulePaint();
+        this._reconcileDemand();
+      },
+      {subscribe: true},
+    );
+    this._render();
+    this._reconcileDemand();
+  }
+
+  disconnectedCallback() {
+    if (!this._connected) {
+      return;
+    }
+    this._connected = false;
+    document.removeEventListener("visibilitychange", this._onVisibilityChange);
+    if (this._intersectionObserver !== null) {
+      this._intersectionObserver.disconnect();
+      this._intersectionObserver = null;
+    }
+    if (this._resizeObserver !== null) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    if (typeof this._uiUnsubscribe === "function") {
+      this._uiUnsubscribe();
+    }
+    this._uiUnsubscribe = null;
+    if (this._frameAgeTimer !== null) {
+      window.clearInterval(this._frameAgeTimer);
+      this._frameAgeTimer = null;
+    }
+    this._stopStream({status: "Disconnected from the dashboard."});
+  }
+
+  setConfig(config) {
+    this._config = requireWaterfallCardConfig(config);
+    this._paused = this._config.start_paused;
+    while (this._history.length > this._config.history) {
+      this._history.shift();
+    }
+    this._render();
+    this._schedulePaint();
+  }
+
+  getCardSize() {
+    return ({compact: 5, standard: 7, tall: 9})[this._config.density];
+  }
+
+  getGridOptions() {
+    return {
+      rows: ({compact: 5, standard: 7, tall: 9})[this._config.density],
+      columns: 12,
+      min_rows: 4,
+      min_columns: 3,
+    };
+  }
+
+  _build() {
+    const root = this.shadowRoot;
+    const style = document.createElement("style");
+    style.textContent = `
+      :host {
+        display: block;
+        min-width: 0;
+        container-type: inline-size;
+      }
+      ha-card {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr) auto auto;
+        gap: 0.75rem;
+        height: var(--sds200-waterfall-card-height);
+        min-height: 0;
+        padding: 1rem;
+        overflow: hidden;
+        box-sizing: border-box;
+        background: var(--ha-card-background, var(--card-background-color));
+        color: var(--primary-text-color);
+      }
+      ha-card[data-density="compact"] {
+        --sds200-waterfall-card-height: min(22rem, calc(100dvh - 5rem));
+      }
+      ha-card[data-density="standard"] {
+        --sds200-waterfall-card-height: min(31rem, calc(100dvh - 5rem));
+      }
+      ha-card[data-density="tall"] {
+        --sds200-waterfall-card-height: min(42rem, calc(100dvh - 5rem));
+      }
+      .header,
+      .actions,
+      .scale,
+      .telemetry {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 0;
+      }
+      .header {
+        justify-content: space-between;
+      }
+      .heading {
+        min-width: 0;
+      }
+      h2,
+      p,
+      dl,
+      dd,
+      dt {
+        margin: 0;
+      }
+      h2 {
+        overflow: hidden;
+        font-size: 1.05rem;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .status {
+        margin-top: 0.15rem;
+        color: var(--secondary-text-color);
+        font-size: 0.78rem;
+        line-height: 1.25;
+      }
+      .status[data-state="live"] {
+        color: var(--success-color, #2e7d32);
+      }
+      .status[data-state="error"] {
+        color: var(--error-color, #b71c1c);
+      }
+      .actions {
+        flex: 0 0 auto;
+      }
+      button {
+        min-height: 2.25rem;
+        border: 1px solid var(--divider-color);
+        border-radius: 0.45rem;
+        padding: 0.35rem 0.7rem;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible {
+        outline: 2px solid var(--primary-color);
+        outline-offset: 2px;
+      }
+      .surface {
+        display: grid;
+        grid-template-rows: minmax(3rem, 1fr) minmax(5rem, 2.2fr);
+        min-height: 0;
+        overflow: hidden;
+        border: 1px solid var(--divider-color);
+        border-radius: 0.45rem;
+        background: #07111c;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        min-height: 0;
+      }
+      .history {
+        border-top: 1px solid var(--divider-color);
+      }
+      .scale {
+        justify-content: space-between;
+        color: var(--secondary-text-color);
+        font-size: 0.72rem;
+      }
+      .scale[hidden],
+      .telemetry[hidden] {
+        display: none;
+      }
+      .scale span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .scale .center {
+        text-align: center;
+      }
+      .scale .upper {
+        text-align: right;
+      }
+      .telemetry {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        color: var(--secondary-text-color);
+        font-size: 0.7rem;
+      }
+      .telemetry div {
+        min-width: 0;
+      }
+      .telemetry dt,
+      .telemetry dd {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .telemetry dt {
+        font-size: 0.62rem;
+        text-transform: uppercase;
+      }
+      .telemetry dd {
+        color: var(--primary-text-color);
+      }
+      @container (max-width: 32rem) {
+        ha-card {
+          gap: 0.5rem;
+          padding: 0.75rem;
+        }
+        .header {
+          align-items: flex-start;
+        }
+        .actions {
+          gap: 0.35rem;
+        }
+        button {
+          min-height: 2rem;
+          padding: 0.25rem 0.45rem;
+          font-size: 0.75rem;
+        }
+        .telemetry {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .telemetry div:nth-child(n + 4) {
+          display: none;
+        }
+      }
+    `;
+    this._card = document.createElement("ha-card");
+    this._header = waterfallNode(document, "header", "header");
+    const heading = waterfallNode(document, "div", "heading");
+    this._title = waterfallNode(document, "h2", "title");
+    this._status = waterfallNode(
+      document,
+      "p",
+      "status",
+      "Waiting for Home Assistant context.",
+    );
+    this._status.setAttribute("role", "status");
+    this._status.setAttribute("aria-live", "polite");
+    heading.append(this._title, this._status);
+    this._actions = waterfallNode(document, "div", "actions");
+    this._pauseButton = waterfallNode(document, "button", "pause", "Pause");
+    this._pauseButton.type = "button";
+    this._pauseButton.addEventListener("click", () => {
+      this._paused = !this._paused;
+      this._render();
+    });
+    this._clearButton = waterfallNode(document, "button", "clear", "Clear");
+    this._clearButton.type = "button";
+    this._clearButton.addEventListener("click", () => {
+      this._history = [];
+      this._latestFrame = null;
+      this._schedulePaint();
+    });
+    this._actions.append(this._pauseButton, this._clearButton);
+    this._header.append(heading, this._actions);
+
+    this._surface = waterfallNode(document, "div", "surface");
+    this._spectrum = waterfallNode(document, "canvas", "spectrum");
+    this._spectrum.setAttribute(
+      "aria-label",
+      "Current relative 240-bin spectrum",
+    );
+    this._historyCanvas = waterfallNode(document, "canvas", "history");
+    this._historyCanvas.setAttribute(
+      "aria-label",
+      "Rolling relative waterfall history",
+    );
+    this._surface.append(this._spectrum, this._historyCanvas);
+
+    this._scale = waterfallNode(document, "div", "scale");
+    this._scaleLower = waterfallNode(document, "span", "lower", "Unavailable");
+    this._scaleCenter = waterfallNode(document, "span", "center", "Unavailable");
+    this._scaleUpper = waterfallNode(document, "span", "upper", "Unavailable");
+    this._scale.append(
+      this._scaleLower,
+      this._scaleCenter,
+      this._scaleUpper,
+    );
+
+    this._telemetry = waterfallNode(document, "dl", "telemetry");
+    this._telemetryValues = {};
+    for (const [key, label] of [
+      ["session", "Session"],
+      ["rate", "Frame rate"],
+      ["age", "Frame age"],
+      ["loss", "Queue loss"],
+      ["sequence", "Sequence"],
+    ]) {
+      const item = waterfallNode(document, "div", "telemetry-item");
+      const term = waterfallNode(document, "dt", "telemetry-label", label);
+      const value = waterfallNode(document, "dd", "telemetry-value", "—");
+      item.append(term, value);
+      this._telemetry.append(item);
+      this._telemetryValues[key] = value;
+    }
+
+    this._card.append(
+      this._header,
+      this._surface,
+      this._scale,
+      this._telemetry,
+    );
+    root.append(style, this._card);
+  }
+
+  _onVisibilityChange() {
+    this._reconcileDemand();
+  }
+
+  _demanded() {
+    return (
+      this._connected &&
+      this._intersecting &&
+      !document.hidden &&
+      this._api !== null &&
+      this._ui !== null
+    );
+  }
+
+  _reconcileDemand() {
+    if (this._demanded()) {
+      if (
+        !this._streaming &&
+        this._controller === null &&
+        this._retryTimer === null
+      ) {
+        void this._startStream();
+      }
+      return;
+    }
+    if (
+      this._streaming ||
+      this._controller !== null ||
+      this._retryTimer !== null
+    ) {
+      this._stopStream({
+        clearHistory: false,
+        status: "Waterfall waits until this card is visible.",
+      });
+    } else if (this._connected) {
+      this._setStatus(
+        "idle",
+        "Waterfall waits until this card is visible.",
+      );
+    }
+  }
+
+  _clearRetry() {
+    if (this._retryTimer !== null) {
+      window.clearTimeout(this._retryTimer);
+      this._retryTimer = null;
+    }
+  }
+
+  _resetLiveState({clearHistory = true} = {}) {
+    this._streaming = false;
+    this._lastSequence = null;
+    this._lastFrameAt = null;
+    this._frameTimes = [];
+    this._latestFrame = null;
+    this._checkpoint = {};
+    this._queueLoss = 0;
+    this._overflows = 0;
+    this._transitions = 0;
+    if (clearHistory) {
+      this._history = [];
+    }
+    this._renderTelemetry();
+    this._schedulePaint();
+  }
+
+  _stopStream({clearHistory = true, status = "Idle"} = {}) {
+    this._generation += 1;
+    this._clearRetry();
+    const controller = this._controller;
+    this._controller = null;
+    if (controller !== null) {
+      controller.abort();
+    }
+    const reader = this._reader;
+    this._reader = null;
+    if (reader !== null) {
+      void reader.cancel().catch(() => {});
+    }
+    const release = this._releaseAuthentication;
+    this._releaseAuthentication = null;
+    if (release !== null) {
+      release();
+    }
+    this._resetLiveState({clearHistory});
+    this._setStatus("idle", status);
+  }
+
+  _scheduleReconnect(generation) {
+    if (!this._demanded() || generation !== this._generation) {
+      return;
+    }
+    this._clearRetry();
+    const index = Math.min(
+      this._retryIndex,
+      SDS200_WATERFALL_RECONNECT_DELAYS_MS.length - 1,
+    );
+    const delay = SDS200_WATERFALL_RECONNECT_DELAYS_MS[index];
+    this._retryIndex = Math.min(
+      this._retryIndex + 1,
+      SDS200_WATERFALL_RECONNECT_DELAYS_MS.length - 1,
+    );
+    this._retryTimer = window.setTimeout(() => {
+      this._retryTimer = null;
+      if (this._demanded() && generation === this._generation) {
+        void this._startStream();
+      }
+    }, delay);
+  }
+
+  async _startStream() {
+    if (!this._demanded()) {
+      return;
+    }
+    this._stopStream({
+      clearHistory: false,
+      status: "Authenticating the waterfall stream…",
+    });
+    const generation = this._generation;
+    const controller = new AbortController();
+    let releaseAuthentication = null;
+    this._controller = controller;
+    try {
+      releaseAuthentication =
+        await sds200WaterfallIngressSession.acquire(this._api);
+      if (generation !== this._generation || controller.signal.aborted) {
+        return;
+      }
+      this._releaseAuthentication = releaseAuthentication;
+      const streamUrl = await resolveSds200IngressUrl(this._api, this._ui);
+      const response = await fetch(streamUrl, {
+        headers: {Accept: SDS200_WATERFALL_SSE_MEDIA_TYPE},
+        cache: "no-store",
+        credentials: "same-origin",
+        signal: controller.signal,
+      });
+      if (!response.ok || response.body === null) {
+        if (response.status === 401 || response.status === 403) {
+          sds200WaterfallIngressSession.invalidate();
+          throw new WaterfallCardError(
+            "Home Assistant App authentication expired.",
+          );
+        }
+        throw new WaterfallCardError("Waterfall stream is unavailable.");
+      }
+      const mediaType = (response.headers.get("content-type") || "")
+        .split(";", 1)[0]
+        .trim()
+        .toLowerCase();
+      if (![SDS200_WATERFALL_SSE_MEDIA_TYPE, SDS200_WATERFALL_NDJSON_MEDIA_TYPE]
+        .includes(mediaType)) {
+        throw new WaterfallCardError(
+          "Waterfall stream returned an unsupported format.",
+        );
+      }
+      if (generation !== this._generation) {
+        return;
+      }
+      this._streaming = true;
+      this._retryIndex = 0;
+      this._setStatus(
+        this._paused ? "paused" : "live",
+        this._paused
+          ? "Display paused; live data continues to be consumed."
+          : "Live relative waterfall data.",
+      );
+      const reader = response.body.getReader();
+      this._reader = reader;
+      await this._consume(reader, generation, mediaType);
+    } catch (error) {
+      if (generation !== this._generation || controller.signal.aborted) {
+        return;
+      }
+      this._resetLiveState({clearHistory: false});
+      const message = error instanceof WaterfallCardError
+        ? error.message
+        : "Waterfall data was rejected.";
+      this._setStatus("error", `${message} Reconnecting…`);
+      this._scheduleReconnect(generation);
+    } finally {
+      if (this._releaseAuthentication === releaseAuthentication) {
+        this._releaseAuthentication = null;
+      }
+      if (releaseAuthentication !== null) {
+        releaseAuthentication();
+      }
+      if (generation === this._generation) {
+        this._reader = null;
+        this._controller = null;
+        this._streaming = false;
+      }
+    }
+  }
+
+  _payloadLine(line, mediaType) {
+    if (mediaType === SDS200_WATERFALL_NDJSON_MEDIA_TYPE) {
+      if (line.length === 0) {
+        throw new WaterfallCardError(
+          "Waterfall record size is invalid.",
+        );
+      }
+      return line;
+    }
+    if (mediaType !== SDS200_WATERFALL_SSE_MEDIA_TYPE) {
+      throw new WaterfallCardError(
+        "Waterfall stream returned an unsupported format.",
+      );
+    }
+    if (line.length === 0 || line.startsWith(":")) {
+      return null;
+    }
+    if (line.startsWith("id:")) {
+      return null;
+    }
+    if (!line.startsWith("data:")) {
+      throw new WaterfallCardError(
+        "Waterfall event field is unsupported.",
+      );
+    }
+    return line.slice(5).trimStart();
+  }
+
+  async _consume(reader, generation, mediaType) {
+    const decoder = new TextDecoder("utf-8", {fatal: true});
+    let pending = "";
+    while (generation === this._generation) {
+      const result = await reader.read();
+      if (result.done) {
+        pending += decoder.decode();
+        if (pending.length !== 0) {
+          throw new WaterfallCardError(
+            "Waterfall stream ended with an incomplete record.",
+          );
+        }
+        throw new WaterfallCardError("Waterfall stream ended.");
+      }
+      pending += decoder.decode(result.value, {stream: true});
+      if (
+        pending.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS &&
+        !pending.includes("\n")
+      ) {
+        throw new WaterfallCardError(
+          "Waterfall record exceeds the size limit.",
+        );
+      }
+      let newline = pending.indexOf("\n");
+      while (newline >= 0) {
+        const line = pending.slice(0, newline);
+        pending = pending.slice(newline + 1);
+        if (line.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS) {
+          throw new WaterfallCardError(
+            "Waterfall record size is invalid.",
+          );
+        }
+        const payload = this._payloadLine(line, mediaType);
+        if (payload !== null) {
+          if (
+            payload.length === 0 ||
+            payload.length > SDS200_WATERFALL_MAX_LINE_CHARACTERS
+          ) {
+            throw new WaterfallCardError(
+              "Waterfall record size is invalid.",
+            );
+          }
+          this._applyRecord(JSON.parse(payload));
+        }
+        newline = pending.indexOf("\n");
+      }
+    }
+  }
+
+  _validatedRecord(value) {
+    if (waterfallRecordObject(value) !== value) {
+      throw new Error("Waterfall record is not an object.");
+    }
+    if (
+      value.protocol !== SDS200_WATERFALL_PROTOCOL ||
+      value.version !== SDS200_WATERFALL_VERSION
+    ) {
+      throw new Error("Waterfall protocol is unsupported.");
+    }
+    if (!Number.isSafeInteger(value.sequence) || value.sequence <= 0) {
+      throw new Error("Waterfall sequence is invalid.");
+    }
+    if (
+      typeof value.observed_at !== "string" ||
+      !Number.isFinite(Date.parse(value.observed_at)) ||
+      typeof value.kind !== "string" ||
+      waterfallRecordObject(value.payload) !== value.payload
+    ) {
+      throw new Error("Waterfall record shape is invalid.");
+    }
+    if (this._lastSequence === null) {
+      if (value.kind !== "session.checkpoint") {
+        throw new Error(
+          "Waterfall stream did not begin with a checkpoint.",
+        );
+      }
+    } else if (value.sequence !== this._lastSequence + 1) {
+      throw new Error("Waterfall record sequence is not contiguous.");
+    }
+    this._lastSequence = value.sequence;
+    return value;
+  }
+
+  _applySnapshot(snapshot) {
+    if (waterfallRecordObject(snapshot) !== snapshot) {
+      throw new Error("Waterfall session snapshot is invalid.");
+    }
+    waterfallNonnegativeInteger(
+      snapshot.gwf_poll_failures,
+      "poll failures",
+    );
+    this._checkpoint = snapshot;
+    this._renderTelemetry();
+    this._renderScale();
+  }
+
+  _applyRecord(value) {
+    const record = this._validatedRecord(value);
+    if (record.kind === "session.checkpoint") {
+      this._applySnapshot(record.payload);
+      return;
+    }
+    if (record.kind === "session.transition") {
+      this._applySnapshot(
+        waterfallRecordObject(record.payload).snapshot,
+      );
+      this._transitions += 1;
+      return;
+    }
+    if (record.kind === "waterfall.pwf") {
+      return;
+    }
+    if (record.kind !== "waterfall.gwf") {
+      throw new Error("Waterfall record kind is unsupported.");
+    }
+
+    const payload = waterfallRecordObject(record.payload);
+    const frame = normalizeWaterfallFrame(payload.values);
+    this._queueLoss = waterfallNonnegativeInteger(
+      payload.responses_dropped,
+      "queue loss",
+    );
+    this._overflows = waterfallNonnegativeInteger(
+      payload.overflows,
+      "overflow count",
+    );
+    this._lastFrameAt = Date.parse(payload.source_received_at);
+    if (!Number.isFinite(this._lastFrameAt)) {
+      throw new Error("Waterfall source timestamp is invalid.");
+    }
+    const now = performance.now();
+    this._frameTimes.push(now);
+    this._frameTimes = this._frameTimes.filter(
+      (time) => now - time <= 5000,
+    );
+    if (!this._paused) {
+      this._latestFrame = frame;
+      this._history.push(frame);
+      while (this._history.length > this._config.history) {
+        this._history.shift();
+      }
+      this._schedulePaint();
+    }
+    this._renderTelemetry();
+  }
+
+  _setStatus(state, message) {
+    this._status.dataset.state = state;
+    this._status.textContent = message;
+  }
+
+  _render() {
+    this._card.dataset.density = this._config.density;
+    this._card.dataset.palette = this._config.palette;
+    this._title.textContent = this._config.title;
+    this._scale.hidden = !this._config.show_scale;
+    this._telemetry.hidden = !this._config.show_telemetry;
+    this._pauseButton.textContent = this._paused ? "Resume" : "Pause";
+    this._pauseButton.setAttribute("aria-pressed", String(this._paused));
+    if (this._streaming) {
+      this._setStatus(
+        this._paused ? "paused" : "live",
+        this._paused
+          ? "Display paused; live data continues to be consumed."
+          : "Live relative waterfall data.",
+      );
+    }
+    this._renderScale();
+    this._renderTelemetry();
+  }
+
+  _renderScale() {
+    const frequencies = validWaterfallFrequencies(
+      waterfallRecordObject(this._checkpoint).waterfall_status,
+    );
+    const values = frequencies === null
+      ? ["Unavailable", "Unavailable", "Unavailable"]
+      : frequencies.fields.slice(0, 3);
+    this._scaleLower.textContent = values[0];
+    this._scaleCenter.textContent = values[1];
+    this._scaleUpper.textContent = values[2];
+  }
+
+  _renderTelemetry() {
+    const snapshot = waterfallRecordObject(this._checkpoint);
+    this._telemetryValues.session.textContent =
+      typeof snapshot.state === "string" ? snapshot.state : "Idle";
+    const now = performance.now();
+    this._frameTimes = this._frameTimes.filter(
+      (time) => now - time <= 5000,
+    );
+    const duration = this._frameTimes.length > 1
+      ? (this._frameTimes.at(-1) - this._frameTimes[0]) / 1000
+      : 0;
+    const rate = duration > 0
+      ? (this._frameTimes.length - 1) / duration
+      : 0;
+    this._telemetryValues.rate.textContent = `${rate.toFixed(1)} fps`;
+    this._telemetryValues.age.textContent = this._lastFrameAt === null
+      ? "Unavailable"
+      : `${Math.max(0, (Date.now() - this._lastFrameAt) / 1000).toFixed(1)} s`;
+    this._telemetryValues.loss.textContent =
+      `${this._queueLoss} / ${this._overflows}`;
+    this._telemetryValues.sequence.textContent =
+      this._lastSequence === null ? "Unavailable" : String(this._lastSequence);
+  }
+
+  _schedulePaint() {
+    if (this._paintRequest !== null) {
+      return;
+    }
+    this._paintRequest = window.requestAnimationFrame(() => {
+      this._paintRequest = null;
+      this._paint();
+    });
+  }
+
+  _palette() {
+    const presets = {
+      cyan: {
+        background: "#07111c",
+        grid: "#31516a",
+        spectrum: "#42d7ff",
+        marker: "#ffcf4a",
+        history: "#42d7ff",
+      },
+      green: {
+        background: "#031108",
+        grid: "#205b32",
+        spectrum: "#66ff8a",
+        marker: "#f6ff73",
+        history: "#37e56d",
+      },
+      amber: {
+        background: "#160e02",
+        grid: "#6b4b1d",
+        spectrum: "#ffbf47",
+        marker: "#fff176",
+        history: "#ff9f1a",
+      },
+      monochrome: {
+        background: "#080808",
+        grid: "#454545",
+        spectrum: "#f2f2f2",
+        marker: "#ffffff",
+        history: "#d0d0d0",
+      },
+    };
+    if (this._config.palette !== "theme") {
+      return presets[this._config.palette];
+    }
+    const styles = getComputedStyle(this);
+    return {
+      background:
+        styles.getPropertyValue("--card-background-color").trim() || "#07111c",
+      grid:
+        styles.getPropertyValue("--divider-color").trim() || "#31516a",
+      spectrum:
+        styles.getPropertyValue("--primary-color").trim() || "#42d7ff",
+      marker:
+        styles.getPropertyValue("--accent-color").trim() || "#ffcf4a",
+      history:
+        styles.getPropertyValue("--primary-color").trim() || "#42d7ff",
+    };
+  }
+
+  _canvasSize(canvas) {
+    const ratio = Math.min(
+      2,
+      Math.max(1, Number(window.devicePixelRatio) || 1),
+    );
+    const width = Math.min(
+      2048,
+      Math.max(1, Math.round(canvas.clientWidth * ratio)),
+    );
+    const height = Math.min(
+      1024,
+      Math.max(1, Math.round(canvas.clientHeight * ratio)),
+    );
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+    }
+    return {width, height, ratio};
+  }
+
+  _paint() {
+    if (
+      this._spectrum.clientWidth === 0 ||
+      this._historyCanvas.clientWidth === 0
+    ) {
+      return;
+    }
+    const palette = this._palette();
+    const spectrumSize = this._canvasSize(this._spectrum);
+    const spectrumContext = this._spectrum.getContext("2d");
+    spectrumContext.fillStyle = palette.background;
+    spectrumContext.fillRect(0, 0, spectrumSize.width, spectrumSize.height);
+    spectrumContext.strokeStyle = palette.grid;
+    spectrumContext.lineWidth = spectrumSize.ratio;
+    for (let index = 1; index < 4; index += 1) {
+      const y = spectrumSize.height * index / 4;
+      spectrumContext.beginPath();
+      spectrumContext.moveTo(0, y);
+      spectrumContext.lineTo(spectrumSize.width, y);
+      spectrumContext.stroke();
+    }
+    if (this._latestFrame !== null) {
+      spectrumContext.strokeStyle = palette.spectrum;
+      spectrumContext.lineWidth = 2 * spectrumSize.ratio;
+      spectrumContext.beginPath();
+      this._latestFrame.forEach((value, index) => {
+        const x = index * spectrumSize.width /
+          (SDS200_WATERFALL_BIN_COUNT - 1);
+        const y = spectrumSize.height - value *
+          (spectrumSize.height - 2 * spectrumSize.ratio);
+        if (index === 0) {
+          spectrumContext.moveTo(x, y);
+        } else {
+          spectrumContext.lineTo(x, y);
+        }
+      });
+      spectrumContext.stroke();
+    }
+
+    const historySize = this._canvasSize(this._historyCanvas);
+    const historyContext = this._historyCanvas.getContext("2d");
+    historyContext.fillStyle = palette.background;
+    historyContext.fillRect(0, 0, historySize.width, historySize.height);
+    if (this._history.length !== 0) {
+      const rowHeight = historySize.height / this._config.history;
+      const startRow = this._config.history - this._history.length;
+      historyContext.fillStyle = palette.history;
+      this._history.forEach((frame, rowIndex) => {
+        const y = (startRow + rowIndex) * rowHeight;
+        frame.forEach((value, binIndex) => {
+          historyContext.globalAlpha = 0.08 + value * 0.92;
+          const x1 = binIndex * historySize.width /
+            SDS200_WATERFALL_BIN_COUNT;
+          const x2 = (binIndex + 1) * historySize.width /
+            SDS200_WATERFALL_BIN_COUNT;
+          historyContext.fillRect(
+            x1,
+            y,
+            Math.max(1, x2 - x1),
+            Math.max(1, rowHeight),
+          );
+        });
+      });
+      historyContext.globalAlpha = 1;
+    }
+
+    const frequencies = validWaterfallFrequencies(
+      waterfallRecordObject(this._checkpoint).waterfall_status,
+    );
+    if (frequencies !== null) {
+      for (const [canvas, size] of [
+        [this._spectrum, spectrumSize],
+        [this._historyCanvas, historySize],
+      ]) {
+        const context = canvas.getContext("2d");
+        const x = frequencies.markerPosition * size.width /
+          (SDS200_WATERFALL_BIN_COUNT - 1);
+        context.strokeStyle = palette.marker;
+        context.lineWidth = size.ratio;
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x, size.height);
+        context.stroke();
+      }
+    }
+  }
+}
+
+window.customCards = window.customCards || [];
+if (!window.customCards.some(
+  (card) => card.type === SDS200_WATERFALL_CARD_TYPE,
+)) {
+  window.customCards.push({
+    type: SDS200_WATERFALL_CARD_TYPE,
+    name: "SDS200 Waterfall",
+    description: "Authenticated responsive relative waterfall from the sds200 App.",
+    preview: true,
+    documentationURL:
+      "https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md",
+  });
+}
+
+if (!customElements.get(SDS200_WATERFALL_CARD_TAG)) {
+  customElements.define(
+    SDS200_WATERFALL_CARD_TAG,
+    Sds200WaterfallCard,
+  );
+}

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Install the first-party `/local/sds200/sds200-waterfall-card.js` resource. The
+  read-only responsive card uses Home Assistant-authenticated App Ingress to
+  render the existing daemon's relative, uncalibrated waterfall stream with
+  bounded history, presentation controls, lifecycle telemetry, independent
+  per-card demand leases, and deterministic cleanup without another scanner
+  connection or high-rate MQTT entities.
+
 ## 0.24.0
 
 - Track the sdsctl v0.24.0 release while preserving the App name, slug, image

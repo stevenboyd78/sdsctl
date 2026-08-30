@@ -231,6 +231,37 @@ def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:
     assert "innerHTML" not in display_text
     assert "callService" not in display_text
 
+    waterfall_card = (
+        card.parent.parent
+        / "waterfall"
+        / "sds200-waterfall-card.js"
+    )
+    assert waterfall_card.is_file()
+    assert (waterfall_card.parent / "manifest.json").is_file()
+    assert not (legacy_assets / "sds200-waterfall-card.js").exists()
+
+    waterfall_text = waterfall_card.read_text(encoding="utf-8")
+    assert (
+        'const SDS200_WATERFALL_CARD_TYPE = "sds200-waterfall-card";'
+        in waterfall_text
+    )
+    assert "window.customCards" in waterfall_text
+    assert "customElements.define" in waterfall_text
+    assert "static getConfigForm()" in waterfall_text
+    assert 'event.context = context;' in waterfall_text
+    assert 'type: "supervisor/api"' in waterfall_text
+    assert 'endpoint: "/ingress/session"' in waterfall_text
+    assert "info.ingress_url" in waterfall_text
+    assert "fetch(streamUrl" in waterfall_text
+    assert "documentObject.createElement(tag)" in waterfall_text
+    assert "innerHTML" not in waterfall_text
+    assert "WebSocket" not in waterfall_text
+    assert "XMLHttpRequest" not in waterfall_text
+    assert "localStorage" not in waterfall_text
+    assert "sessionStorage" not in waterfall_text
+    assert "scanner_host" not in waterfall_text
+    assert "console." not in waterfall_text
+
 
 def test_home_assistant_app_outer_timeout_covers_ordered_child_shutdown() -> None:
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")

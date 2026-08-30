@@ -43,6 +43,13 @@ from sds200.web_dashboard import create_web_dashboard_app
 _THEME_STORAGE_KEY = "sdsctl.web.theme"
 _DEMO_URL_PREFIX = "/__demo/prefix"
 _DEMO_CLOCK_PATH = "/__demo/fixed-clock.js"
+_DEMO_HOME_ASSISTANT_WATERFALL_PATH = "/__demo/home-assistant-waterfall/"
+_DEMO_HOME_ASSISTANT_WATERFALL_MODULE_PATH = (
+    "/__demo/sds200-waterfall-card.js"
+)
+_DEMO_HOME_ASSISTANT_INGRESS_PREFIX = (
+    "/api/hassio_ingress/demo_ingress_token"
+)
 _DEMO_CLOCK_SCRIPT_TAG = '  <script src="__demo/fixed-clock.js"></script>\n'
 _THEME_BOOTSTRAP_SCRIPT_TAG = '  <script src="assets/theme-bootstrap.js"></script>\n'
 _DEMO_CLOCK_JAVASCRIPT = """\
@@ -136,6 +143,128 @@ _DEMO_THEME_SETUP_HTML = (
     "</body>\n"
     "</html>\n"
 )
+_DEMO_HOME_ASSISTANT_WATERFALL_HTML = """\
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SDS200 Home Assistant waterfall acceptance fixture</title>
+  <style>
+    :root {
+      --primary-text-color: #e8eef5;
+      --secondary-text-color: #a9b8c8;
+      --card-background-color: #101923;
+      --ha-card-background: #101923;
+      --primary-color: #42d7ff;
+      --accent-color: #ffcf4a;
+      --divider-color: #31516a;
+    }
+    html, body { margin: 0; min-width: 0; background: #07111c; color: #e8eef5; }
+    main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+  </style>
+</head>
+<body>
+<main id="cards"></main>
+<script src="/__demo/fixed-clock.js"></script>
+<script>
+"use strict";
+window.__waterfallFixture = {
+  sessionCreates: 0,
+  infoCalls: 0,
+  streamsStarted: 0,
+  streamsActive: 0,
+  streamsAborted: 0,
+  uiUnsubscribes: 0,
+};
+const nativeFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const url = String(args[0] instanceof Request ? args[0].url : args[0]);
+  const options = args[1] ?? {};
+  const counted = url.includes("/api/hassio_ingress/") &&
+    url.endsWith("/api/v1/waterfall");
+  if (!counted) {
+    return nativeFetch(...args);
+  }
+  window.__waterfallFixture.streamsStarted += 1;
+  window.__waterfallFixture.streamsActive += 1;
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    window.__waterfallFixture.streamsActive -= 1;
+    window.__waterfallFixture.streamsAborted += 1;
+  };
+  options.signal?.addEventListener("abort", finish, {once: true});
+  try {
+    return await nativeFetch(...args);
+  } catch (error) {
+    finish();
+    throw error;
+  }
+};
+const hassApi = {
+  async callWS(message) {
+    if (message.endpoint === "/ingress/session" && message.method === "post") {
+      window.__waterfallFixture.sessionCreates += 1;
+      return {session: "demo_session_1234567890"};
+    }
+    if (message.endpoint === "/ingress/validate_session") {
+      return {};
+    }
+    if (message.endpoint === "/addons/sds200/info" && message.method === "get") {
+      window.__waterfallFixture.infoCalls += 1;
+      return {
+        state: "started",
+        ingress: true,
+        ingress_url: `${location.origin}/api/hassio_ingress/demo_ingress_token/`,
+      };
+    }
+    throw new Error("unsupported deterministic Home Assistant request");
+  },
+};
+const hassUi = {
+  panels: {
+    sds200: {
+      component_name: "app",
+      title: "sds200",
+      config: {addon: "sds200"},
+    },
+  },
+};
+document.addEventListener("context-request", (event) => {
+  if (event.context === "hassApi") {
+    event.callback(hassApi);
+    event.preventDefault();
+  } else if (event.context === "hassUi") {
+    event.callback(hassUi, () => {
+      window.__waterfallFixture.uiUnsubscribes += 1;
+    });
+    event.preventDefault();
+  }
+});
+</script>
+<script src="/ __WATERFALL_MODULE__"></script>
+<script>
+window.__waterfallFixture.addCard = (config = {}) => {
+  const card = document.createElement("sds200-waterfall-card");
+  card.setConfig(config);
+  document.getElementById("cards").append(card);
+  return card;
+};
+window.__waterfallFixture.addCard({
+  title: "SDS200 Waterfall",
+  density: "standard",
+  palette: "theme",
+  history: 120,
+  show_scale: true,
+  show_telemetry: true,
+  start_paused: false,
+});
+</script>
+</body>
+</html>
+""".replace("/ __WATERFALL_MODULE__", _DEMO_HOME_ASSISTANT_WATERFALL_MODULE_PATH)
 _CONTROL_OPERATIONS = (
     "scanner.hold_state",
     "scanner.next",
@@ -592,6 +721,37 @@ class _DemoUrlPrefixMiddleware:
         await self._app(scope, receive, send)
 
 
+class _DemoHomeAssistantIngressMiddleware:
+    """Route one fictional authenticated Ingress prefix to the demo App."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(
+        self,
+        scope: Scope,
+        receive: Receive,
+        send: Send,
+    ) -> None:
+        path = scope.get("path", "")
+        if scope["type"] in {"http", "websocket"} and (
+            path == _DEMO_HOME_ASSISTANT_INGRESS_PREFIX
+            or path.startswith(f"{_DEMO_HOME_ASSISTANT_INGRESS_PREFIX}/")
+        ):
+            rewritten_scope: Scope = dict(scope)
+            rewritten_path = (
+                path.removeprefix(_DEMO_HOME_ASSISTANT_INGRESS_PREFIX) or "/"
+            )
+            rewritten_scope["path"] = rewritten_path
+            rewritten_scope["raw_path"] = rewritten_path.encode("utf-8")
+            rewritten_scope["root_path"] = (
+                f"{scope.get('root_path', '')}{_DEMO_HOME_ASSISTANT_INGRESS_PREFIX}"
+            )
+            await self._app(rewritten_scope, receive, send)
+            return
+        await self._app(scope, receive, send)
+
+
 class _DemoClockMiddleware:
     """Load a deterministic clock before the packaged dashboard JavaScript."""
 
@@ -712,11 +872,44 @@ def create_demo_app() -> FastAPI:
             headers={"Cache-Control": "no-store"},
         )
 
+    @app.get(
+        _DEMO_HOME_ASSISTANT_WATERFALL_PATH,
+        include_in_schema=False,
+        response_class=HTMLResponse,
+    )
+    def home_assistant_waterfall_fixture() -> HTMLResponse:
+        return HTMLResponse(
+            content=_DEMO_HOME_ASSISTANT_WATERFALL_HTML,
+            headers={"Cache-Control": "no-store"},
+        )
+
+    @app.get(
+        _DEMO_HOME_ASSISTANT_WATERFALL_MODULE_PATH,
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def home_assistant_waterfall_module() -> Response:
+        module = (
+            _REPOSITORY_ROOT
+            / "src"
+            / "sds200"
+            / "themes"
+            / "home-assistant"
+            / "waterfall"
+            / "sds200-waterfall-card.js"
+        )
+        return Response(
+            content=module.read_bytes(),
+            media_type="text/javascript",
+            headers={"Cache-Control": "no-store"},
+        )
+
     # Exercise the same relative asset and API URL behavior used behind a
     # reverse-proxy or Home Assistant Ingress path prefix. This is intentionally
     # demo-only; the middleware changes only the request scope presented to the
     # unmodified production dashboard routes.
     app.add_middleware(_DemoUrlPrefixMiddleware)
+    app.add_middleware(_DemoHomeAssistantIngressMiddleware)
     app.add_middleware(_DemoClockMiddleware)
 
     return app

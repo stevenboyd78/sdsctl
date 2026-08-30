@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "interface": "home-assistant",
+  "id": "waterfall",
+  "label": "SDS200 Waterfall",
+  "order": 20,
+  "module": "sds200-waterfall-card.js",
+  "custom_element": "sds200-waterfall-card",
+  "installed_filename": "sds200-waterfall-card.js",
+  "resource_url": "/local/sds200/sds200-waterfall-card.js"
+}
