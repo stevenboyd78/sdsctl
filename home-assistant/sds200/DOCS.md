@@ -54,6 +54,16 @@ SDS200 RTP audio
 
 Host networking is not required.
 
+## Live scanner audio media source
+
+This App packages, but never automatically installs or activates, a separate
+versioned Home Assistant custom integration for
+`media-source://sdsctl/live`. Installation, update, rollback, and removal are
+explicit digest-confirmed operator actions, and Home Assistant Core must be
+restarted separately. The full security, lifecycle, App DNS identity, exact MP3
+format, playback, and automation contract is documented in
+[`docs/home-assistant-live-audio.md`](../../docs/home-assistant-live-audio.md).
+
 ## Web UI
 
 Use **Open Web UI** from the App page.

@@ -1,0 +1,14 @@
+{
+  "domain": "sdsctl",
+  "name": "sdsctl live scanner audio",
+  "codeowners": ["@stevenboyd78"],
+  "config_flow": true,
+  "dependencies": ["http", "media_source"],
+  "documentation": "https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/stevenboyd78/sdsctl/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

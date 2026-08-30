@@ -21,6 +21,8 @@ from .home_assistant_live_audio_capabilities import (
 )
 
 HOME_ASSISTANT_LIVE_AUDIO_CAPABILITY_ISSUE_PATH = "/v1/live-audio/capabilities"
+HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH = "/v1/live-audio/compatibility"
+HOME_ASSISTANT_LIVE_AUDIO_PROTOCOL_VERSION = 1
 HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER = "x-sdsctl-origin"
 HOME_ASSISTANT_LIVE_AUDIO_STREAM_READ_TIMEOUT = 1.0
 
@@ -71,6 +73,27 @@ def create_home_assistant_live_audio_service(
         openapi_url=None,
     )
 
+    @app.get(HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH)
+    async def compatibility(
+        request: Request,
+        response: Response,
+    ) -> dict[str, object]:
+        secret = _bearer_token(request.headers.get("authorization"))
+        origin = request.headers.get(HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER, "")
+        try:
+            capabilities.authenticate_bridge(secret, origin)
+        except HomeAssistantLiveAudioAuthenticationError as error:
+            raise _authentication_failure() from error
+
+        for name, value in _PRIVATE_RESPONSE_HEADERS.items():
+            response.headers[name] = value
+
+        return {
+            "version": HOME_ASSISTANT_LIVE_AUDIO_PROTOCOL_VERSION,
+            "application_version": __version__,
+            "format": _format_payload(),
+        }
+
     @app.post(HOME_ASSISTANT_LIVE_AUDIO_CAPABILITY_ISSUE_PATH)
     def issue_capability(
         request: Request,
@@ -93,23 +116,14 @@ def create_home_assistant_live_audio_service(
             response.headers[name] = value
 
         return {
-            "version": 1,
+            "version": HOME_ASSISTANT_LIVE_AUDIO_PROTOCOL_VERSION,
             "capability": {
                 "token": capability.token,
                 "method": capability.method,
                 "path": capability.path,
                 "expires_in": capability.expires_in,
             },
-            "format": {
-                "container": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.container,
-                "codec": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.codec,
-                "mime_type": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.mime_type,
-                "sample_rate": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.sample_rate,
-                "channels": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.channels,
-                "bit_rate": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.bit_rate,
-                "seekable": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.seekable,
-                "duration_seconds": (HOME_ASSISTANT_LIVE_AUDIO_FORMAT.duration_seconds),
-            },
+            "format": _format_payload(),
         }
 
     @app.get(
@@ -157,6 +171,19 @@ def create_home_assistant_live_audio_service(
         )
 
     return app
+
+
+def _format_payload() -> dict[str, object]:
+    return {
+        "container": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.container,
+        "codec": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.codec,
+        "mime_type": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.mime_type,
+        "sample_rate": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.sample_rate,
+        "channels": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.channels,
+        "bit_rate": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.bit_rate,
+        "seekable": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.seekable,
+        "duration_seconds": HOME_ASSISTANT_LIVE_AUDIO_FORMAT.duration_seconds,
+    }
 
 
 def _stream_audio(
@@ -224,7 +251,9 @@ def _capacity_failure() -> HTTPException:
 
 __all__ = [
     "HOME_ASSISTANT_LIVE_AUDIO_CAPABILITY_ISSUE_PATH",
+    "HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH",
     "HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER",
+    "HOME_ASSISTANT_LIVE_AUDIO_PROTOCOL_VERSION",
     "HOME_ASSISTANT_LIVE_AUDIO_STREAM_READ_TIMEOUT",
     "create_home_assistant_live_audio_service",
 ]

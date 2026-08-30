@@ -10,6 +10,7 @@ from sds200.home_assistant_live_audio_capabilities import (
 )
 from sds200.home_assistant_live_audio_service import (
     HOME_ASSISTANT_LIVE_AUDIO_CAPABILITY_ISSUE_PATH,
+    HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH,
     HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER,
     create_home_assistant_live_audio_service,
 )
@@ -92,6 +93,44 @@ def _issue(client: TestClient) -> str:
     assert capability["path"] == "/v1/live-audio/stream"
     assert capability["expires_in"] == 30.0
     return capability["token"]
+
+
+def test_private_service_reports_authenticated_compatibility_without_issuing() -> None:
+    client, capabilities, _session = _client()
+
+    response = client.get(
+        HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH,
+        headers={
+            "Authorization": f"Bearer {BRIDGE_SECRET}",
+            HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER: ORIGIN,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store, max-age=0"
+    payload = response.json()
+    assert payload["version"] == 1
+    assert isinstance(payload["application_version"], str)
+    assert payload["application_version"]
+    assert payload["format"]["mime_type"] == "audio/mpeg"
+    assert payload["format"]["seekable"] is False
+    assert payload["format"]["duration_seconds"] is None
+    assert capabilities.snapshot().issued == 0
+
+
+def test_compatibility_requires_exact_private_identity() -> None:
+    client, _capabilities, _session = _client()
+
+    response = client.get(
+        HOME_ASSISTANT_LIVE_AUDIO_COMPATIBILITY_PATH,
+        headers={
+            "Authorization": "Bearer wrong",
+            HOME_ASSISTANT_LIVE_AUDIO_ORIGIN_HEADER: ORIGIN,
+        },
+    )
+
+    assert response.status_code == 401
+    assert BRIDGE_SECRET not in response.text
 
 
 def test_private_service_issues_and_redeems_one_stream() -> None:

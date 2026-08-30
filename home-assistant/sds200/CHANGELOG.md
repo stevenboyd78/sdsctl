@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Package the versioned first-party `sdsctl` Home Assistant custom integration
+  and its explicit digest-confirmed install, update, rollback, recoverable
+  removal, and permanent rollback-discard commands. Normal App startup never
+  writes or activates the integration and never restarts Home Assistant Core.
+- Add the private protocol-versioned Core-to-App live-audio service and the
+  browsable `media-source://sdsctl/live` item. Home Assistant resolves one
+  signed, bounded Core proxy URL with exact `audio/mpeg` type; one-time App
+  capabilities and one shared daemon-owned MP3 encoder remain hidden from the
+  target, MQTT, entities, diagnostics, and browser storage.
 - Install the first-party `/local/sds200/sds200-waterfall-card.js` resource. The
   read-only responsive card uses Home Assistant-authenticated App Ingress to
   render the existing daemon's relative, uncalibrated waterfall stream with
