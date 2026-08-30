@@ -290,6 +290,11 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
         normal_status = client.get("/api/v1/home-assistant/integration")
     assert normal_status.status_code == 404
     assert "home-assistant-integration-title" not in normal_shell.text
+    assert 'id="pane-tab-home-assistant"' not in normal_shell.text
+    assert 'id="pane-home-assistant"' not in normal_shell.text
+    assert "workspace-tabs-with-home-assistant" not in normal_shell.text
+    assert normal_shell.text.count('role="tab"') == 6
+    assert normal_shell.text.count('role="tabpanel"') == 6
 
     ingress = web_dashboard.create_web_dashboard_app(
         forbidden_factory,
@@ -301,9 +306,27 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
 
     assert ingress_shell.status_code == 200
     assert 'id="home-assistant-integration-title"' in ingress_shell.text
-    assert 'class="diagnostics-layout diagnostics-layout-with-integration"' in (
-        ingress_shell.text
-    )
+    assert 'id="pane-tab-home-assistant"' in ingress_shell.text
+    assert 'data-workspace-tab="home-assistant"' in ingress_shell.text
+    assert 'id="pane-home-assistant"' in ingress_shell.text
+    assert 'data-workspace-pane="home-assistant"' in ingress_shell.text
+    assert 'class="workspace-tabs workspace-tabs-with-home-assistant"' in ingress_shell.text
+    assert 'class="diagnostics-layout"' in ingress_shell.text
+    assert "diagnostics-layout-with-integration" not in ingress_shell.text
+    assert ingress_shell.text.count('role="tab"') == 7
+    assert ingress_shell.text.count('role="tabpanel"') == 7
+    home_assistant_pane = ingress_shell.text[
+        ingress_shell.text.index('id="pane-home-assistant"') :
+    ]
+    diagnostics_pane = ingress_shell.text[
+        ingress_shell.text.index('id="pane-diagnostics"') :
+    ]
+    assert home_assistant_pane.index(
+        'id="home-assistant-integration-title"'
+    ) < home_assistant_pane.index('id="pane-diagnostics"')
+    assert 'id="home-assistant-integration-title"' not in diagnostics_pane.split(
+        'id="pane-scanner"', 1
+    )[0]
     assert "docker exec" not in ingress_shell.text
     assert ingress_status.status_code == 200
     assert ingress_status.json() == payload

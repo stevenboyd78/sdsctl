@@ -64,10 +64,18 @@ exact SHA-256 confirmation. The panel reports that Home Assistant Core was not
 restarted or reloaded.
 
 On Home Assistant OS, open the one exact published or deliberately named Local
-sds200 App and choose **Web UI > Diagnostics > Live-audio integration**. Do not
+sds200 App and choose **Web UI > Home Assistant > Live-audio integration**. Do not
 install a Docker client, disable Advanced SSH protection, or give another App
 host-container access. The protected Advanced SSH App does not provide the
 host's general-purpose Docker CLI, and this workflow does not require it.
+
+The **Home Assistant** workspace and its lifecycle API are selected by the
+authenticated request surface, not merely by where sdsctl is installed. They
+exist only on the Supervisor-proxied Ingress listener. A separate directly
+exposed or authenticated-LAN web listener—even when it runs on the same Home
+Assistant host—must use the ordinary six-pane dashboard and does not register
+the integration lifecycle or bridge-key routes. Direct clients are rejected by
+the Ingress listener itself.
 
 The panel displays the packaged, installed, rollback, and bridge-key identities
 without displaying the private bridge key. For a first installation:

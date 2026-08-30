@@ -32,6 +32,7 @@ const WORKSPACE_PANES = Object.freeze([
   "waterfall",
   "audio",
   "recordings",
+  "home-assistant",
   "diagnostics",
 ]);
 const RADIO_INSPECTION_VIEWS = Object.freeze([
@@ -141,7 +142,9 @@ function writeStoredValue(key, value) {
 }
 
 function normalizedWorkspacePane(value) {
-  return typeof value === "string" && WORKSPACE_PANES.includes(value)
+  return typeof value === "string" &&
+    WORKSPACE_PANES.includes(value) &&
+    document.getElementById(`pane-tab-${value}`) !== null
     ? value
     : "scanner";
 }

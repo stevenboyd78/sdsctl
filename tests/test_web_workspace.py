@@ -424,6 +424,8 @@ workspaceTabs[5].dispatch("keydown", {key: "Home"});
 assert.equal(activeWorkspacePane, "scanner");
 activateWorkspacePane("not-a-pane");
 assert.equal(activeWorkspacePane, "scanner");
+activateWorkspacePane("home-assistant");
+assert.equal(activeWorkspacePane, "scanner");
 
 window.localStorage = {
   getItem() { throw new Error("blocked"); },

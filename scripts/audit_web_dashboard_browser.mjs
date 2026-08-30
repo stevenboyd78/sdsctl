@@ -1152,8 +1152,11 @@ function browserAuditLibrary() {
     );
     const selected = tabs.filter((tab) => tab.getAttribute("aria-selected") === "true");
     const visible = panes.filter((pane) => !pane.hidden && rendered(pane));
-    if (tabs.length !== 6 || panes.length !== 6) {
-      failures.push(`expected six tabs and panes; found ${tabs.length} and ${panes.length}`);
+    const expectedCount = document.querySelector("#pane-tab-home-assistant") ? 7 : 6;
+    if (tabs.length !== expectedCount || panes.length !== expectedCount) {
+      failures.push(
+        `expected ${expectedCount} tabs and panes; found ${tabs.length} and ${panes.length}`,
+      );
     }
     if (selected.length !== 1 || selected[0]?.dataset.workspaceTab !== expectedPane) {
       failures.push(`selected tab does not match ${expectedPane}`);
@@ -1278,85 +1281,68 @@ function browserAuditLibrary() {
     return {failures, focusableCount: focus.count};
   }
 
-  function ingressDiagnosticsLayout(expectedColumns) {
+  function ingressDiagnosticsLayout() {
     const failures = paneState("diagnostics");
     const layout = document.querySelector(".diagnostics-layout");
     const scanner = layout?.querySelector(":scope > .scanner-panel");
-    const integration = layout?.querySelector(
-      ":scope > .home-assistant-integration-panel",
-    );
     if (!(layout instanceof HTMLElement)) {
       return {failures: [...failures, "Diagnostics layout is unavailable"]};
     }
     if (!(scanner instanceof HTMLElement)) {
       failures.push("Diagnostics scanner panel is unavailable");
     }
-    if (!(integration instanceof HTMLElement)) {
-      failures.push("Home Assistant integration panel is unavailable");
+    if (layout.querySelector(":scope > .home-assistant-integration-panel") !== null) {
+      failures.push("Diagnostics still contains the Home Assistant integration panel");
     }
-    if (!(scanner instanceof HTMLElement) || !(integration instanceof HTMLElement)) {
+    if (!(scanner instanceof HTMLElement)) {
       return {failures};
     }
 
     const layoutStyle = getComputedStyle(layout);
     const tracks = layoutStyle.gridTemplateColumns.trim().split(/\s+/);
     const scannerStyle = getComputedStyle(scanner);
-    const integrationStyle = getComputedStyle(integration);
     const layoutRect = layout.getBoundingClientRect();
     const scannerRect = scanner.getBoundingClientRect();
-    const integrationRect = integration.getBoundingClientRect();
     if (layoutStyle.display !== "grid") {
       failures.push(`Diagnostics layout display is ${layoutStyle.display}, expected grid`);
     }
-    if (tracks.length !== expectedColumns) {
+    if (tracks.length !== 1) {
       failures.push(
-        `Diagnostics layout exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
+        `Diagnostics layout exposes ${tracks.length} columns instead of one: ` +
           layoutStyle.gridTemplateColumns,
       );
     }
     if (tracks.some((track) => Number.parseFloat(track) <= tolerance)) {
       failures.push(`Diagnostics layout contains a collapsed column: ${tracks.join(" ")}`);
     }
-    for (const [name, style] of [
-      ["scanner", scannerStyle],
-      ["Home Assistant integration", integrationStyle],
-    ]) {
-      if (style.gridArea !== "auto") {
-        failures.push(`${name} panel retains named grid placement ${style.gridArea}`);
-      }
+    if (scannerStyle.gridArea !== "auto") {
+      failures.push(`scanner panel retains named grid placement ${scannerStyle.gridArea}`);
     }
-    if (expectedColumns === 2) {
-      if (Math.abs(scannerRect.top - integrationRect.top) > tolerance) {
-        failures.push("Diagnostics panels are not aligned in one desktop row");
-      }
-      if (scannerRect.right > integrationRect.left + tolerance) {
-        failures.push("Diagnostics desktop panels overlap or appear out of order");
-      }
-      if (scannerRect.width < layoutRect.width * 0.25) {
-        failures.push(`Diagnostics scanner panel collapsed to ${scannerRect.width}px`);
-      }
-      if (integrationRect.width < layoutRect.width * 0.35) {
-        failures.push(
-          `Home Assistant integration panel collapsed to ${integrationRect.width}px`,
-        );
-      }
-    } else {
-      if (Math.abs(scannerRect.left - integrationRect.left) > tolerance) {
-        failures.push("Diagnostics phone panels do not share one column");
-      }
-      if (integrationRect.top < scannerRect.bottom - tolerance) {
-        failures.push("Diagnostics phone panels overlap or appear out of order");
-      }
-      for (const [name, rect] of [
-        ["scanner", scannerRect],
-        ["Home Assistant integration", integrationRect],
-      ]) {
-        if (rect.width < layoutRect.width - tolerance * 2) {
-          failures.push(`${name} panel does not fill the Diagnostics phone column`);
-        }
-      }
+    if (scannerRect.width < layoutRect.width - tolerance * 2) {
+      failures.push("Scanner panel does not fill the Diagnostics workspace");
     }
     return {failures, tracks};
+  }
+
+  function ingressHomeAssistantLayout() {
+    const failures = paneState("home-assistant");
+    const pane = document.querySelector("#pane-home-assistant");
+    const panel = pane?.querySelector(":scope > .home-assistant-integration-panel");
+    if (!(pane instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+      return {failures: [...failures, "Home Assistant workspace is unavailable"]};
+    }
+    const paneRect = pane.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    if (panelRect.width < paneRect.width - tolerance * 2) {
+      failures.push("Home Assistant integration panel does not fill its workspace");
+    }
+    if (panelRect.height < paneRect.height - tolerance * 2) {
+      failures.push("Home Assistant integration panel does not fill its workspace height");
+    }
+    if (document.querySelector("#pane-diagnostics .home-assistant-integration-panel")) {
+      failures.push("Home Assistant integration panel remains inside Diagnostics");
+    }
+    return {failures};
   }
 
   function switchTheme(theme) {
@@ -1725,6 +1711,7 @@ function browserAuditLibrary() {
     focusInventory,
     forcedColors,
     ingressDiagnosticsLayout,
+    ingressHomeAssistantLayout,
     keyboardTabState,
     normal,
     paginationState,
@@ -2141,6 +2128,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   );
 
   let ingressDiagnosticsCases = 0;
+  let ingressHomeAssistantCases = 0;
   await setViewport(cdp, {width: 800, height: 480, dpr: 1});
   await navigate(
     cdp,
@@ -2155,18 +2143,27 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
         `window.__sdsctlBrowserAudit.switchTheme(${JSON.stringify(theme)})`,
       ),
     );
-    for (const [viewport, expectedColumns] of [
-      [{width: 800, height: 480, dpr: 1}, 2],
-      [{width: 390, height: 844, dpr: 2}, 1],
+    for (const viewport of [
+      {width: 800, height: 480, dpr: 1},
+      {width: 390, height: 844, dpr: 2},
     ]) {
-      ingressDiagnosticsCases += 1;
+      ingressHomeAssistantCases += 1;
       await setViewport(cdp, viewport);
+      await activatePane(cdp, "home-assistant");
+      collector.add(
+        `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/ingress-home-assistant`,
+        await evaluate(
+          cdp,
+          "window.__sdsctlBrowserAudit.ingressHomeAssistantLayout()",
+        ),
+      );
+      ingressDiagnosticsCases += 1;
       await activatePane(cdp, "diagnostics");
       collector.add(
         `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/ingress-diagnostics`,
         await evaluate(
           cdp,
-          `window.__sdsctlBrowserAudit.ingressDiagnosticsLayout(${expectedColumns})`,
+          "window.__sdsctlBrowserAudit.ingressDiagnosticsLayout()",
         ),
       );
     }
@@ -2175,7 +2172,12 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   for (const failure of pageFailures) {
     collector.add("browser-runtime", {failures: [failure]});
   }
-  return {caseCount, failures: collector.failures, ingressDiagnosticsCases};
+  return {
+    caseCount,
+    failures: collector.failures,
+    ingressDiagnosticsCases,
+    ingressHomeAssistantCases,
+  };
 }
 
 async function homeAssistantWaterfallState(cdp) {
@@ -2877,6 +2879,11 @@ async function run(options) {
         `internal Ingress Diagnostics count mismatch: ${result.ingressDiagnosticsCases}`,
       );
     }
+    if (result.ingressHomeAssistantCases !== THEMES.length * 2) {
+      throw new Error(
+        `internal Ingress Home Assistant count mismatch: ${result.ingressHomeAssistantCases}`,
+      );
+    }
     if (result.failures.length > 0) {
       console.error(`\nBrowser acceptance failed with ${result.failures.length} finding(s):`);
       const reported = result.failures.slice(0, 200);
@@ -2906,7 +2913,8 @@ async function run(options) {
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 12 " +
-        "Home Assistant Ingress Diagnostics layouts, and " +
+        "Ingress-only Home Assistant workspaces, all 12 read-only Ingress " +
+        "Diagnostics layouts, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with shared authentication and complete lease cleanup.",
     );

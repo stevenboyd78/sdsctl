@@ -941,6 +941,19 @@ def _home_assistant_integration_response(
 
 
 @cache
+def _home_assistant_integration_tab() -> str:
+    return """        <button
+          id="pane-tab-home-assistant"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-home-assistant"
+          tabindex="-1"
+          data-workspace-tab="home-assistant"
+        >Home Assistant</button>"""
+
+
+@cache
 def _home_assistant_integration_panel() -> str:
     return """      <section
         class="panel home-assistant-integration-panel"
@@ -1113,6 +1126,20 @@ def _home_assistant_integration_panel() -> str:
 
 
 @cache
+def _home_assistant_integration_pane() -> str:
+    return f"""        <section
+          id="pane-home-assistant"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-home-assistant"
+          data-workspace-pane="home-assistant"
+          hidden
+        >
+{_home_assistant_integration_panel()}
+        </section>"""
+
+
+@cache
 def _dashboard_shell(
     runtime: WebThemeRuntimeRegistry,
     home_assistant_ingress: bool,
@@ -1144,20 +1171,28 @@ def _dashboard_shell(
     return (
         _read_web_asset("dashboard.html")
         .replace(
-            'class="diagnostics-layout"',
+            'class="workspace-tabs"',
             (
-                'class="diagnostics-layout diagnostics-layout-with-integration"'
+                'class="workspace-tabs workspace-tabs-with-home-assistant"'
                 if home_assistant_ingress
-                else 'class="diagnostics-layout"'
+                else 'class="workspace-tabs"'
             ),
             1,
         )
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
         .replace(
-            "        <!-- SDSCTL_HOME_ASSISTANT_INTEGRATION_PANEL -->",
+            "        <!-- SDSCTL_HOME_ASSISTANT_TAB -->",
             (
-                _home_assistant_integration_panel()
+                _home_assistant_integration_tab()
+                if home_assistant_ingress
+                else ""
+            ),
+        )
+        .replace(
+            "        <!-- SDSCTL_HOME_ASSISTANT_PANE -->",
+            (
+                _home_assistant_integration_pane()
                 if home_assistant_ingress
                 else ""
             ),

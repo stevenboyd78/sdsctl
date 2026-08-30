@@ -205,6 +205,10 @@
     gap: clamp(0.2rem, 0.8vw, 0.55rem) !important;
   }
 
+  .workspace-tabs-with-home-assistant {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+  }
+
   .workspace-tabs [role="tab"] {
     min-width: 0 !important;
     min-height: 2.2rem !important;
@@ -582,6 +586,18 @@
 
     .workspace-tabs [role="tab"]:nth-child(n + 4) {
       grid-column: span 3 !important;
+    }
+
+    .workspace-tabs-with-home-assistant {
+      grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    }
+
+    .workspace-tabs-with-home-assistant [role="tab"]:nth-child(-n + 4) {
+      grid-column: span 3 !important;
+    }
+
+    .workspace-tabs-with-home-assistant [role="tab"]:nth-child(n + 5) {
+      grid-column: span 4 !important;
     }
 
     .waterfall-header {

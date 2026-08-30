@@ -291,9 +291,10 @@ def test_demo_app_mounts_an_ingress_style_url_prefix() -> None:
     assert status.json()["daemon"]["snapshot"]["scanner_model"] == "SDS200"
     assert ingress_shell.status_code == 200
     assert 'id="home-assistant-integration-title"' in ingress_shell.text
-    assert 'class="diagnostics-layout diagnostics-layout-with-integration"' in (
-        ingress_shell.text
-    )
+    assert 'id="pane-tab-home-assistant"' in ingress_shell.text
+    assert 'id="pane-home-assistant"' in ingress_shell.text
+    assert 'class="workspace-tabs workspace-tabs-with-home-assistant"' in ingress_shell.text
+    assert "diagnostics-layout-with-integration" not in ingress_shell.text
     assert "__demo/fixed-clock.js" in ingress_shell.text
 
 
