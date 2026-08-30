@@ -3,8 +3,10 @@ from __future__ import annotations
 import filecmp
 import logging
 import os
+import secrets
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -35,6 +37,7 @@ from .home_assistant_app_runtime import (
     HOME_ASSISTANT_APP_LEGACY_RECORDING_DIRECTORY,
     HomeAssistantAppRuntimePaths,
     build_home_assistant_daemon_command,
+    build_home_assistant_media_command,
     build_home_assistant_web_command,
     default_home_assistant_app_runtime_paths,
 )
@@ -53,6 +56,7 @@ HOME_ASSISTANT_APP_FORCE_STOP_TIMEOUT = 5.0
 HOME_ASSISTANT_APP_SUPERVISOR_POLL_INTERVAL = 0.1
 HOME_ASSISTANT_APP_RUNTIME_DIRECTORY_MODE = 0o700
 HOME_ASSISTANT_APP_RECORDING_DIRECTORY_MODE = 0o755
+HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_SECRET_MODE = 0o600
 
 
 class HomeAssistantAppChildProcess(Protocol):
@@ -102,6 +106,11 @@ class HomeAssistantAppLaunchPlan:
     web_command: tuple[str, ...]
     daemon_environment: Mapping[str, str] = field(repr=False)
     web_environment: Mapping[str, str] = field(repr=False)
+    media_command: tuple[str, ...] = ()
+    media_environment: Mapping[str, str] = field(
+        default_factory=dict,
+        repr=False,
+    )
 
 
 class HomeAssistantAppSignalController:
@@ -269,6 +278,50 @@ def _prepare_runtime_directories(paths: HomeAssistantAppRuntimePaths) -> None:
         paths.recording_directory.chmod(
             HOME_ASSISTANT_APP_RECORDING_DIRECTORY_MODE
         )
+
+
+def prepare_home_assistant_live_audio_bridge_secret(path: Path) -> None:
+    """Create once or validate one persistent private Core-to-App secret."""
+
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise ValueError("Home Assistant live-audio bridge-secret path is invalid.")
+    try:
+        observed = path.lstat()
+    except FileNotFoundError:
+        observed = None
+    if observed is not None:
+        if not stat.S_ISREG(observed.st_mode) or observed.st_mode & 0o077:
+            raise SDS200Error(
+                "Home Assistant live-audio bridge secret must be a mode-0600 regular file."
+            )
+        if not 43 <= observed.st_size <= 512:
+            raise SDS200Error("Home Assistant live-audio bridge secret is invalid.")
+        try:
+            raw = path.read_text(encoding="ascii")
+        except (OSError, UnicodeError) as error:
+            raise SDS200Error(
+                "Home Assistant live-audio bridge secret is invalid."
+            ) from error
+        value = raw[:-1] if raw.endswith("\n") else raw
+        if len(value) < 43 or any(
+            character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+            for character in value
+        ) or raw not in {value, value + "\n"}:
+            raise SDS200Error("Home Assistant live-audio bridge secret is invalid.")
+        return
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(
+        path,
+        os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+        HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_SECRET_MODE,
+    )
+    try:
+        payload = (secrets.token_urlsafe(32) + "\n").encode("ascii")
+        os.write(descriptor, payload)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def migrate_home_assistant_app_recordings(
@@ -443,6 +496,10 @@ def prepare_home_assistant_app_launch_plan(
         options,
         service,
     )
+    assert selected_paths.live_audio_bridge_key is not None
+    prepare_home_assistant_live_audio_bridge_secret(
+        selected_paths.live_audio_bridge_key
+    )
     daemon_environment, web_environment = _child_environments(
         service,
         source_environment,
@@ -459,6 +516,8 @@ def prepare_home_assistant_app_launch_plan(
         web_command=build_home_assistant_web_command(selected_paths),
         daemon_environment=daemon_environment,
         web_environment=web_environment,
+        media_command=build_home_assistant_media_command(selected_paths),
+        media_environment=web_environment,
     )
 
 
@@ -527,6 +586,7 @@ class HomeAssistantAppSupervisor:
 
     def run(self) -> int:
         daemon: HomeAssistantAppChildProcess | None = None
+        media: HomeAssistantAppChildProcess | None = None
         web: HomeAssistantAppChildProcess | None = None
         process_error: BaseException | None = None
 
@@ -540,17 +600,24 @@ class HomeAssistantAppSupervisor:
                 if self.signals.stop_requested:
                     return 0
 
+                if self.launch_plan.media_command:
+                    media = self.process_factory(
+                        self.launch_plan.media_command,
+                        self.launch_plan.media_environment,
+                    )
+
                 web = self.process_factory(
                     self.launch_plan.web_command,
                     self.launch_plan.web_environment,
                 )
-                self._wait_for_stop_or_child_exit(daemon, web)
+                self._wait_for_stop_or_child_exit(daemon, web, media)
             except BaseException as error:
                 process_error = error
             finally:
                 cleanup_errors: list[BaseException] = []
                 for label, child, graceful_timeout in (
                     ("web", web, self.web_stop_timeout),
+                    ("media", media, self.web_stop_timeout),
                     ("daemon", daemon, self.daemon_stop_timeout),
                 ):
                     if child is None:
@@ -618,6 +685,7 @@ class HomeAssistantAppSupervisor:
         self,
         daemon: HomeAssistantAppChildProcess,
         web: HomeAssistantAppChildProcess,
+        media: HomeAssistantAppChildProcess | None = None,
     ) -> None:
         while True:
             if self.signals.stop_requested:
@@ -636,6 +704,14 @@ class HomeAssistantAppSupervisor:
                     "Home Assistant App web process exited unexpectedly "
                     f"with status {web_returncode}."
                 )
+
+            if media is not None:
+                media_returncode = media.poll()
+                if media_returncode is not None:
+                    raise SDS200Error(
+                        "Home Assistant App media process exited unexpectedly "
+                        f"with status {media_returncode}."
+                    )
 
             self.signals.wait(self.supervisor_poll_interval)
 
@@ -722,6 +798,7 @@ __all__ = [
     "HOME_ASSISTANT_APP_DAEMON_READY_POLL_INTERVAL",
     "HOME_ASSISTANT_APP_DAEMON_READY_TIMEOUT",
     "HOME_ASSISTANT_APP_RECORDING_DIRECTORY_MODE",
+    "HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_SECRET_MODE",
     "HOME_ASSISTANT_APP_RUNTIME_DIRECTORY_MODE",
     "HOME_ASSISTANT_APP_SUPERVISOR_POLL_INTERVAL",
     "HOME_ASSISTANT_APP_WEB_STOP_TIMEOUT",
@@ -730,5 +807,6 @@ __all__ = [
     "HomeAssistantAppSignalController",
     "HomeAssistantAppSupervisor",
     "prepare_home_assistant_app_launch_plan",
+    "prepare_home_assistant_live_audio_bridge_secret",
     "run_home_assistant_app",
 ]

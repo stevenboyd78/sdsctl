@@ -82,10 +82,17 @@ from .daemon_events import (
 from .daemon_ipc import (
     DaemonSocketListener,
     resolve_daemon_event_socket_location,
+    resolve_daemon_live_audio_socket_location,
     resolve_daemon_pcmu_socket_location,
     resolve_daemon_recording_file_socket_location,
     resolve_daemon_socket_location,
     resolve_daemon_waterfall_socket_location,
+)
+from .daemon_live_audio_server import (
+    DAEMON_LIVE_AUDIO_DEFAULT_MAX_CLIENTS,
+    DAEMON_LIVE_AUDIO_DEFAULT_SEND_TIMEOUT,
+    DAEMON_LIVE_AUDIO_DEFAULT_SHUTDOWN_TIMEOUT,
+    DaemonLiveAudioServer,
 )
 from .daemon_mqtt import load_daemon_mqtt_configuration
 from .daemon_mqtt_paho import PahoMqttBrokerFactory
@@ -141,6 +148,10 @@ from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
     SDS200Error,
+)
+from .home_assistant_live_audio import (
+    LiveAudioEncoderPipeline,
+    LiveAudioSession,
 )
 from .home_assistant_theme_activation import (
     HomeAssistantActivationInventory,
@@ -1107,6 +1118,37 @@ def build_parser(
             "Explicit absolute Unix PCMU socket path; otherwise use "
             "XDG_RUNTIME_DIR or the user state directory"
         ),
+    )
+    daemon.add_argument(
+        "--live-audio-socket-path",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Enable the shared MP3 service at one explicit absolute "
+            "private Unix socket path"
+        ),
+    )
+    daemon.add_argument(
+        "--live-audio-max-clients",
+        type=_positive_integer,
+        default=DAEMON_LIVE_AUDIO_DEFAULT_MAX_CLIENTS,
+        metavar="COUNT",
+        help=(
+            "Maximum concurrent private MP3 clients "
+            f"(default: {DAEMON_LIVE_AUDIO_DEFAULT_MAX_CLIENTS})"
+        ),
+    )
+    daemon.add_argument(
+        "--live-audio-send-timeout",
+        type=_positive_float,
+        default=DAEMON_LIVE_AUDIO_DEFAULT_SEND_TIMEOUT,
+        metavar="SECONDS",
+    )
+    daemon.add_argument(
+        "--live-audio-shutdown-timeout",
+        type=_positive_float,
+        default=DAEMON_LIVE_AUDIO_DEFAULT_SHUTDOWN_TIMEOUT,
+        metavar="SECONDS",
     )
     daemon.add_argument(
         "--pcmu-queue-capacity",
@@ -3158,6 +3200,15 @@ def _run_daemon(
         environ=environ,
         configuration_paths=resolved_paths,
     )
+    live_audio_socket_location = (
+        None
+        if args.live_audio_socket_path is None
+        else resolve_daemon_live_audio_socket_location(
+            args.live_audio_socket_path,
+            environ=environ,
+            configuration_paths=resolved_paths,
+        )
+    )
     recording_file_socket_location = (
         resolve_daemon_recording_file_socket_location(
             args.recording_file_socket_path,
@@ -3263,6 +3314,8 @@ def _run_daemon(
 
     pcmu_stream: PcmuStream | None = None
     pcmu_server: DaemonPcmuServer | None = None
+    live_audio_session: LiveAudioSession | None = None
+    live_audio_server: DaemonLiveAudioServer | None = None
     mqtt_worker: DaemonMqttWorker | None = None
     destination_coordinator: DaemonDestinationCoordinator | None = None
     destination_reloader: DaemonDestinationReloader | None = None
@@ -3294,6 +3347,19 @@ def _run_daemon(
                 send_timeout=args.pcmu_send_timeout,
                 shutdown_timeout=args.pcmu_shutdown_timeout,
             )
+
+            if live_audio_socket_location is not None:
+                live_audio_session = LiveAudioSession(
+                    LiveAudioEncoderPipeline(router),
+                    max_leases=args.live_audio_max_clients,
+                )
+                live_audio_server = DaemonLiveAudioServer(
+                    DaemonSocketListener(live_audio_socket_location),
+                    live_audio_session,
+                    max_clients=args.live_audio_max_clients,
+                    send_timeout=args.live_audio_send_timeout,
+                    shutdown_timeout=args.live_audio_shutdown_timeout,
+                )
 
             destination_factory = DaemonDestinationFactory(
                 remote_profile_store=RemoteAudioProfileStore(
@@ -3335,6 +3401,12 @@ def _run_daemon(
             except BaseException as cleanup_error:
                 cleanup_errors.append(cleanup_error)
 
+        if live_audio_session is not None:
+            try:
+                live_audio_session.close()
+            except BaseException as cleanup_error:
+                cleanup_errors.append(cleanup_error)
+
         try:
             event_stream.close()
         except BaseException as cleanup_error:
@@ -3349,6 +3421,11 @@ def _run_daemon(
             )
         raise
 
+    live_audio_process_options = (
+        {"live_audio_server": live_audio_server}
+        if live_audio_server is not None
+        else {}
+    )
     if mqtt_worker is None:
         process = DaemonProcess(
             runtime,
@@ -3359,6 +3436,7 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
     else:
@@ -3372,16 +3450,23 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
     result = process.run()
     logger.info(
         "foreground daemon stopped audio_host=%s socket=%s event_socket=%s "
-        "pcmu_socket=%s recording_file_socket=%s waterfall_socket=%s signal=%s",
+        "pcmu_socket=%s live_audio_socket=%s recording_file_socket=%s "
+        "waterfall_socket=%s signal=%s",
         host,
         socket_location.path,
         event_socket_location.path,
         pcmu_socket_location.path,
+        (
+            None
+            if live_audio_socket_location is None
+            else live_audio_socket_location.path
+        ),
         recording_file_socket_location.path,
         waterfall_socket_location.path,
         result.last_signal,

@@ -18,6 +18,7 @@ from .configuration import (
 from .exceptions import DaemonIpcError
 
 DAEMON_EVENT_SOCKET_FILENAME = "events.sock"
+DAEMON_LIVE_AUDIO_SOCKET_FILENAME = "live-audio.sock"
 DAEMON_PCMU_SOCKET_FILENAME = "pcmu.sock"
 DAEMON_RECORDING_FILE_SOCKET_FILENAME = "recordings.sock"
 DAEMON_SOCKET_FILENAME = "daemon.sock"
@@ -183,6 +184,48 @@ def resolve_daemon_pcmu_socket_location(
     )
     return DaemonSocketLocation(
         paths.user_state_dir / DAEMON_PCMU_SOCKET_FILENAME,
+        DaemonSocketSource.USER_STATE,
+    )
+
+
+def resolve_daemon_live_audio_socket_location(
+    socket_path: str | Path | None = None,
+    *,
+    environ: Mapping[str, str] | None = None,
+    configuration_paths: ConfigurationPaths | None = None,
+    home: str | Path | None = None,
+) -> DaemonSocketLocation:
+    """Resolve the private daemon MP3 socket without filesystem changes."""
+
+    if socket_path is not None:
+        if isinstance(socket_path, str) and not socket_path.strip():
+            raise ValueError("Daemon live-audio socket path must not be empty.")
+        return DaemonSocketLocation(
+            Path(socket_path),
+            DaemonSocketSource.EXPLICIT,
+        )
+
+    environment = os.environ if environ is None else environ
+    runtime_value = environment.get("XDG_RUNTIME_DIR")
+    if runtime_value:
+        runtime_root = Path(runtime_value)
+        if not runtime_root.is_absolute():
+            raise ValueError(
+                f"XDG_RUNTIME_DIR must be an absolute path: {runtime_root}"
+            )
+        return DaemonSocketLocation(
+            runtime_root
+            / CONFIG_DIRECTORY_NAME
+            / DAEMON_LIVE_AUDIO_SOCKET_FILENAME,
+            DaemonSocketSource.XDG_RUNTIME,
+        )
+
+    paths = configuration_paths or resolve_configuration_paths(
+        environ=environment,
+        home=home,
+    )
+    return DaemonSocketLocation(
+        paths.user_state_dir / DAEMON_LIVE_AUDIO_SOCKET_FILENAME,
         DaemonSocketSource.USER_STATE,
     )
 

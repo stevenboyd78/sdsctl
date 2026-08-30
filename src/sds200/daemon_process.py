@@ -58,6 +58,12 @@ class _DaemonPcmuServerLike(Protocol):
     def stop(self) -> None: ...
 
 
+class _DaemonLiveAudioServerLike(Protocol):
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+
 class _DaemonWaterfallServerLike(Protocol):
     def start(self) -> None: ...
 
@@ -242,6 +248,7 @@ class DaemonProcess:
         api_server: _DaemonApiServerLike | None = None,
         event_server: _DaemonEventServerLike | None = None,
         pcmu_server: _DaemonPcmuServerLike | None = None,
+        live_audio_server: _DaemonLiveAudioServerLike | None = None,
         waterfall_server: _DaemonWaterfallServerLike | None = None,
         signals: _DaemonSignalControllerLike | None = None,
         poll_interval: float = 0.1,
@@ -268,6 +275,7 @@ class DaemonProcess:
         self.api_server = api_server
         self.event_server = event_server
         self.pcmu_server = pcmu_server
+        self.live_audio_server = live_audio_server
         self.waterfall_server = waterfall_server
         self.signals = signals or DaemonSignalController()
         self.poll_interval = poll_interval
@@ -276,6 +284,7 @@ class DaemonProcess:
         with self.signals:
             event_server_attempted = False
             pcmu_server_attempted = False
+            live_audio_server_attempted = False
             waterfall_server_attempted = False
             runtime_attempted = False
             mqtt_service_attempted = False
@@ -294,6 +303,10 @@ class DaemonProcess:
 
                 runtime_attempted = True
                 self.runtime.start()
+
+                if self.live_audio_server is not None:
+                    live_audio_server_attempted = True
+                    self.live_audio_server.start()
 
                 if self.waterfall_server is not None:
                     waterfall_server_attempted = True
@@ -337,6 +350,7 @@ class DaemonProcess:
                     ),
                     stop_mqtt_service=mqtt_service_attempted,
                     stop_runtime=runtime_attempted,
+                    stop_live_audio_server=live_audio_server_attempted,
                     stop_waterfall_server=waterfall_server_attempted,
                     stop_pcmu_server=pcmu_server_attempted,
                     stop_event_server=event_server_attempted,
@@ -361,6 +375,7 @@ class DaemonProcess:
                     ),
                     stop_mqtt_service=mqtt_service_attempted,
                     stop_runtime=runtime_attempted,
+                    stop_live_audio_server=live_audio_server_attempted,
                     stop_waterfall_server=waterfall_server_attempted,
                     stop_pcmu_server=pcmu_server_attempted,
                     stop_event_server=event_server_attempted,
@@ -419,6 +434,7 @@ class DaemonProcess:
         stop_destination_coordinator: bool,
         stop_mqtt_service: bool,
         stop_runtime: bool,
+        stop_live_audio_server: bool,
         stop_waterfall_server: bool,
         stop_pcmu_server: bool,
         stop_event_server: bool,
@@ -464,6 +480,15 @@ class DaemonProcess:
         if stop_waterfall_server and self.waterfall_server is not None:
             try:
                 self.waterfall_server.stop()
+            except BaseException as error:
+                failures.append(error)
+
+        if (
+            stop_live_audio_server
+            and self.live_audio_server is not None
+        ):
+            try:
+                self.live_audio_server.stop()
             except BaseException as error:
                 failures.append(error)
 
