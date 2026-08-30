@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import Any
 
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.media_player import BrowseError, MediaClass, MediaType
 from homeassistant.components.media_source import (
     BrowseMediaSource,
@@ -23,6 +25,8 @@ from .const import (
     MEDIA_SOURCE_ARTWORK_ROUTE,
 )
 from .playback import PlaybackUnavailable
+
+_ARTWORK_AUTH_EXPIRY = timedelta(days=1)
 
 
 async def async_get_media_source(hass: HomeAssistant) -> SdsctlMediaSource:
@@ -64,8 +68,13 @@ class SdsctlMediaSource(MediaSource):
         self._runtime()
         if item.identifier not in ("", LIVE_IDENTIFIER):
             raise BrowseError("Unknown sdsctl media item.")
+        artwork_url = async_sign_path(
+            self._hass,
+            MEDIA_SOURCE_ARTWORK_ROUTE,
+            _ARTWORK_AUTH_EXPIRY,
+        )
         if item.identifier == LIVE_IDENTIFIER:
-            return _live_item()
+            return _live_item(artwork_url)
         return BrowseMediaSource(
             domain=DOMAIN,
             identifier=None,
@@ -74,9 +83,9 @@ class SdsctlMediaSource(MediaSource):
             title="sdsctl",
             can_play=False,
             can_expand=True,
-            thumbnail=MEDIA_SOURCE_ARTWORK_ROUTE,
+            thumbnail=artwork_url,
             children_media_class=MediaClass.CHANNEL,
-            children=[_live_item()],
+            children=[_live_item(artwork_url)],
         )
 
     def _runtime(self) -> Any:
@@ -87,7 +96,7 @@ class SdsctlMediaSource(MediaSource):
         return runtime
 
 
-def _live_item() -> BrowseMediaSource:
+def _live_item(artwork_url: str) -> BrowseMediaSource:
     return BrowseMediaSource(
         domain=DOMAIN,
         identifier=LIVE_IDENTIFIER,
@@ -96,5 +105,5 @@ def _live_item() -> BrowseMediaSource:
         title="Live scanner audio",
         can_play=True,
         can_expand=False,
-        thumbnail=MEDIA_SOURCE_ARTWORK_ROUTE,
+        thumbnail=artwork_url,
     )

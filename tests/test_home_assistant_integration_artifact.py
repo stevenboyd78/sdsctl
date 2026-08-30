@@ -4,6 +4,7 @@ import asyncio
 import importlib.util
 import sys
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from typing import Any
@@ -129,6 +130,8 @@ def test_client_accepts_only_one_app_alias_and_exact_protocol_shape() -> None:
 def _install_media_source_stubs() -> None:
     homeassistant = ModuleType("homeassistant")
     components = ModuleType("homeassistant.components")
+    http = ModuleType("homeassistant.components.http")
+    http_auth = ModuleType("homeassistant.components.http.auth")
     media_player = ModuleType("homeassistant.components.media_player")
     media_source = ModuleType("homeassistant.components.media_source")
     core = ModuleType("homeassistant.core")
@@ -171,6 +174,12 @@ def _install_media_source_stubs() -> None:
     class HomeAssistant:
         pass
 
+    def async_sign_path(hass: object, path: str, expires: timedelta) -> str:
+        assert hass is not None
+        assert path == "/api/sdsctl/media-source-artwork"
+        assert expires.total_seconds() == 86_400
+        return f"{path}?authSig=test-signature"
+
     media_player.BrowseError = BrowseError  # type: ignore[attr-defined]
     media_player.MediaClass = MediaClass  # type: ignore[attr-defined]
     media_player.MediaType = MediaType  # type: ignore[attr-defined]
@@ -183,10 +192,13 @@ def _install_media_source_stubs() -> None:
     ):
         setattr(media_source, name, value)
     core.HomeAssistant = HomeAssistant  # type: ignore[attr-defined]
+    http_auth.async_sign_path = async_sign_path  # type: ignore[attr-defined]
     sys.modules.update(
         {
             "homeassistant": homeassistant,
             "homeassistant.components": components,
+            "homeassistant.components.http": http,
+            "homeassistant.components.http.auth": http_auth,
             "homeassistant.components.media_player": media_player,
             "homeassistant.components.media_source": media_source,
             "homeassistant.core": core,
@@ -215,10 +227,14 @@ def test_media_source_resolves_only_live_to_a_core_relative_url() -> None:
 
     root = asyncio.run(source.async_browse_media(SimpleNamespace(identifier="")))
     assert root.can_play is False
-    assert root.thumbnail == "/api/sdsctl/media-source-artwork"
+    assert root.thumbnail == (
+        "/api/sdsctl/media-source-artwork?authSig=test-signature"
+    )
     assert root.children[0].media_content_id == "media-source://sdsctl/live"
     assert root.children[0].can_play is True
-    assert root.children[0].thumbnail == "/api/sdsctl/media-source-artwork"
+    assert root.children[0].thumbnail == (
+        "/api/sdsctl/media-source-artwork?authSig=test-signature"
+    )
 
 
 def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:

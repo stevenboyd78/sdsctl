@@ -31,7 +31,7 @@ def _destination(tmp_path: Path) -> Path:
 def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
     image = built_in_home_assistant_integration_image()
 
-    assert image.version == "0.1.1"
+    assert image.version == "0.1.2"
     assert len(image.digest) == 64
     assert image.total_bytes < 512 * 1024
     names = {name for name, _payload in image.files}
@@ -274,5 +274,6 @@ def test_custom_integration_python_sources_compile_without_home_assistant_import
     )
     assert "media-source://sdsctl/live" in dict(image.files)["const.py"].decode()
     assert "SUPERVISOR_TOKEN" not in sources
-    assert "async_sign_path" not in sources
+    assert "async_sign_path" not in dict(image.files)["http.py"].decode()
+    assert "async_sign_path" not in dict(image.files)["playback.py"].decode()
     assert "allow_redirects=False" in sources
