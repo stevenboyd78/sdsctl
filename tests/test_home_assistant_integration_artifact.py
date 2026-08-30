@@ -215,8 +215,10 @@ def test_media_source_resolves_only_live_to_a_core_relative_url() -> None:
 
     root = asyncio.run(source.async_browse_media(SimpleNamespace(identifier="")))
     assert root.can_play is False
+    assert root.thumbnail == "/api/sdsctl/media-source-artwork"
     assert root.children[0].media_content_id == "media-source://sdsctl/live"
     assert root.children[0].can_play is True
+    assert root.children[0].thumbnail == "/api/sdsctl/media-source-artwork"
 
 
 def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:
@@ -237,6 +239,11 @@ def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:
         async def write(self, chunk: bytes) -> None:
             self.chunks.append(chunk)
 
+    class FileResponse:
+        def __init__(self, path: Path, headers: dict[str, str] | None = None) -> None:
+            self.path = path
+            self.headers = headers or {}
+
     class HttpError(Exception):
         def __init__(self, **kwargs: object) -> None:
             self.kwargs = kwargs
@@ -251,6 +258,7 @@ def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:
     aiohttp.ClientError = ClientError  # type: ignore[attr-defined]
     aiohttp.web = SimpleNamespace(  # type: ignore[attr-defined]
         Request=object,
+        FileResponse=FileResponse,
         StreamResponse=StreamResponse,
         HTTPServiceUnavailable=HTTPServiceUnavailable,
         HTTPGone=HTTPGone,
@@ -276,6 +284,29 @@ def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:
         }
     )
     return HTTPGone, HTTPServiceUnavailable
+
+
+def test_artwork_view_is_authenticated_and_serves_the_canonical_packaged_logo() -> None:
+    _reset_package()
+    _install_http_stubs()
+    _load("const")
+
+    client_module = ModuleType(f"{PACKAGE}.client")
+    client_module.SdsctlClientError = RuntimeError  # type: ignore[attr-defined]
+    sys.modules[f"{PACKAGE}.client"] = client_module
+    http = _load("http")
+
+    view = http.SdsctlMediaSourceArtworkView()
+    response = asyncio.run(view.get(SimpleNamespace()))
+
+    assert view.url == "/api/sdsctl/media-source-artwork"
+    assert view.requires_auth is True
+    assert response.path == ARTIFACT_ROOT / "sdsctl-logo.svg"
+    assert response.path.read_bytes() == (
+        Path(__file__).parents[1] / "docs" / "assets" / "sdsctl-logo.svg"
+    ).read_bytes()
+    assert response.headers["Cache-Control"] == "private, max-age=86400"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
 
 
 def test_http_view_redeems_once_streams_and_releases_only_its_lease() -> None:

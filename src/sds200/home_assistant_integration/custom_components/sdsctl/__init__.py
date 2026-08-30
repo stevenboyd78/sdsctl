@@ -22,7 +22,7 @@ from .const import (
     DATA_VIEW_REGISTERED,
     DOMAIN,
 )
-from .http import SdsctlLiveAudioView
+from .http import SdsctlLiveAudioView, SdsctlMediaSourceArtworkView
 from .playback import PlaybackRegistry
 
 
@@ -65,6 +65,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data[DATA_RUNTIME] = runtime
     if not domain_data.get(DATA_VIEW_REGISTERED):
         hass.http.register_view(SdsctlLiveAudioView())
+        hass.http.register_view(SdsctlMediaSourceArtworkView())
         domain_data[DATA_VIEW_REGISTERED] = True
     return True
 

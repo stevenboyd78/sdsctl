@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from aiohttp import ClientError, web
 from homeassistant.components.http import KEY_HASS
 from homeassistant.components.http.view import HomeAssistantView
 
 from .client import SdsctlClientError
-from .const import DATA_RUNTIME, DOMAIN, LIVE_MIME_TYPE, LIVE_PROXY_ROUTE
+from .const import (
+    DATA_RUNTIME,
+    DOMAIN,
+    LIVE_MIME_TYPE,
+    LIVE_PROXY_ROUTE,
+    MEDIA_SOURCE_ARTWORK_ROUTE,
+)
 from .playback import PlaybackUnavailable
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,6 +27,25 @@ _RESPONSE_HEADERS = {
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",
 }
+
+_ARTWORK_HEADERS = {
+    "Cache-Control": "private, max-age=86400",
+    "Referrer-Policy": "no-referrer",
+    "X-Content-Type-Options": "nosniff",
+}
+_ARTWORK_PATH = Path(__file__).with_name("sdsctl-logo.svg")
+
+
+class SdsctlMediaSourceArtworkView(HomeAssistantView):
+    """Serve the canonical packaged logo to authenticated Home Assistant clients."""
+
+    url = MEDIA_SOURCE_ARTWORK_ROUTE
+    name = "api:sdsctl:media-source-artwork"
+    requires_auth = True
+
+    async def get(self, request: web.Request) -> web.FileResponse:
+        del request
+        return web.FileResponse(_ARTWORK_PATH, headers=_ARTWORK_HEADERS)
 
 
 class SdsctlLiveAudioView(HomeAssistantView):

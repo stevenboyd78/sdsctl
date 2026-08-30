@@ -31,7 +31,7 @@ def _destination(tmp_path: Path) -> Path:
 def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
     image = built_in_home_assistant_integration_image()
 
-    assert image.version == "0.1.0"
+    assert image.version == "0.1.1"
     assert len(image.digest) == 64
     assert image.total_bytes < 512 * 1024
     names = {name for name, _payload in image.files}
@@ -44,8 +44,12 @@ def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
         "manifest.json",
         "media_source.py",
         "playback.py",
+        "sdsctl-logo.svg",
         "translations/en.json",
     } <= names
+    assert dict(image.files)["sdsctl-logo.svg"] == (
+        Path(__file__).parents[1] / "docs" / "assets" / "sdsctl-logo.svg"
+    ).read_bytes()
     manifest = json.loads(dict(image.files)["manifest.json"])
     assert manifest["domain"] == "sdsctl"
     assert manifest["version"] == image.version

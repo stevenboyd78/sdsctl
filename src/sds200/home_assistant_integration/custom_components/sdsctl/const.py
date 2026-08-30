@@ -17,6 +17,7 @@ LIVE_MEDIA_SOURCE_ID = "media-source://sdsctl/live"
 LIVE_MIME_TYPE = "audio/mpeg"
 LIVE_PROXY_ROUTE = "/api/sdsctl/live/{playback_id}"
 LIVE_PROXY_PATH_PREFIX = "/api/sdsctl/live"
+MEDIA_SOURCE_ARTWORK_ROUTE = "/api/sdsctl/media-source-artwork"
 
 PLAYBACK_LIFETIME_SECONDS = 30.0
 PLAYBACK_MAX_OUTSTANDING = 16

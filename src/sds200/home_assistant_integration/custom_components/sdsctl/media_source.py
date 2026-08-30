@@ -20,6 +20,7 @@ from .const import (
     LIVE_IDENTIFIER,
     LIVE_MIME_TYPE,
     LIVE_PROXY_PATH_PREFIX,
+    MEDIA_SOURCE_ARTWORK_ROUTE,
 )
 from .playback import PlaybackUnavailable
 
@@ -73,6 +74,7 @@ class SdsctlMediaSource(MediaSource):
             title="sdsctl",
             can_play=False,
             can_expand=True,
+            thumbnail=MEDIA_SOURCE_ARTWORK_ROUTE,
             children_media_class=MediaClass.CHANNEL,
             children=[_live_item()],
         )
@@ -94,4 +96,5 @@ def _live_item() -> BrowseMediaSource:
         title="Live scanner audio",
         can_play=True,
         can_expand=False,
+        thumbnail=MEDIA_SOURCE_ARTWORK_ROUTE,
     )

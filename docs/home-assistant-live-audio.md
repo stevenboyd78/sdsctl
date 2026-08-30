@@ -8,6 +8,11 @@ browsable, playable media-source item:
 media-source://sdsctl/live
 ```
 
+The media browser source and its live child use the repository's canonical
+`docs/assets/sdsctl-logo.svg` artwork. The packaged integration carries an
+exact byte-for-byte copy and serves it only through an authenticated Home
+Assistant route; browsing never depends on an external image host.
+
 The integration does not create a `media_player` entity. Select an existing
 Home Assistant media-player target that can fetch Home Assistant URLs and decode
 a continuous MP3 stream. Output volume and mute remain properties of that target.
@@ -57,7 +62,7 @@ Browser audio also remains a separately started App Ingress client.
 
 ## Artifact identity and deliberate installation
 
-The custom integration is packaged at version `0.1.0`. The App never installs,
+The custom integration is packaged at version `0.1.1`. The App never installs,
 updates, activates, reloads, restarts, or removes it during normal startup. Every
 filesystem mutation below is an explicit authenticated Ingress action with an
 exact SHA-256 confirmation. The panel reports that Home Assistant Core was not

@@ -33,6 +33,7 @@ _ARTIFACT_FILES = (
     "manifest.json",
     "media_source.py",
     "playback.py",
+    "sdsctl-logo.svg",
     "strings.json",
     "translations/en.json",
 )
