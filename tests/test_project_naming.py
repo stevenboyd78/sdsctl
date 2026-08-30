@@ -126,11 +126,19 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
+    normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.1 — Responsive Home Assistant waterfall card" in (
+    assert "### Milestone 29.2 — Home Assistant media-source live scanner audio" in (
         active_milestone
     )
+    for required in (
+        "media-source://sdsctl/live",
+        "does not model the scanner as an output `media_player` entity",
+        "daemon remains the only SDS200 RTSP/RTP owner",
+        "public or anonymous live-audio URLs",
+    ):
+        assert required in normalized_active_milestone
 
     for required in (
         "### Milestone 28 complete — v0.24.0 release candidate",
