@@ -136,6 +136,8 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "internal Ingress Diagnostics count mismatch",
         "ingressHomeAssistantLayout",
         "Home Assistant integration panel does not fill its workspace",
+        "subpanelButtonGeometry",
+        "Home Assistant operator guidance is unreachable at the end of the panel",
         "internal Ingress Home Assistant count mismatch",
         "current ${scope} hold state",
         "presentationGeometryFailures",

@@ -78,7 +78,11 @@ the integration lifecycle or bridge-key routes. Direct clients are rejected by
 the Ingress listener itself.
 
 The panel displays the packaged, installed, rollback, and bridge-key identities
-without displaying the private bridge key. For a first installation:
+without displaying the private bridge key. Its controls use the same compact
+geometry as the other dashboard workspaces. When the complete lifecycle form is
+taller than the available Ingress viewport, only this pane scrolls; the final
+Core-restart and reauthentication guidance remains reachable at its end. For a
+first installation:
 
 1. verify the displayed packaged version and digest;
 2. choose **Use packaged** to place that exact digest in the confirmation field;

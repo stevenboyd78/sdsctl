@@ -18,6 +18,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   clear actions; bounded reconnect; and a graphical editor without accepting
   URLs, credentials, scanner addresses, or private Ingress identifiers.
 
+### Changed
+
+- Use one compact geometry for buttons inside every web-dashboard workspace
+  while preserving selected, action, and disabled state colors. The Ingress-only
+  Home Assistant lifecycle pane now owns bounded vertical scrolling, uses denser
+  inputs and status spacing, and keeps its Core-restart and reauthentication
+  guidance reachable across all built-in themes and supported viewports.
+
 ## [0.24.0] - 2026-08-29
 
 ### Added

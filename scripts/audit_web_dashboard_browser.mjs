@@ -1228,8 +1228,61 @@ function browserAuditLibrary() {
     return {failures};
   }
 
+  function subpanelButtonGeometry(expectedPane) {
+    const failures = [];
+    const reference = document.querySelector("#radio-view-auto");
+    const pane = document.querySelector(
+      `.workspace-pane[data-workspace-pane="${expectedPane}"]`,
+    );
+    if (!(reference instanceof HTMLButtonElement) || !(pane instanceof HTMLElement)) {
+      return ["compact sub-panel button reference or active pane is unavailable"];
+    }
+    const referenceStyle = getComputedStyle(reference);
+    const numericProperties = [
+      "minHeight",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "fontSize",
+      "lineHeight",
+    ];
+    const exactProperties = ["borderRadius", "fontWeight"];
+    const buttons = Array.from(pane.querySelectorAll("button")).filter(rendered);
+    for (const button of buttons) {
+      const style = getComputedStyle(button);
+      for (const property of numericProperties) {
+        if (
+          Math.abs(
+            Number.parseFloat(style[property]) -
+              Number.parseFloat(referenceStyle[property]),
+          ) > tolerance
+        ) {
+          failures.push(
+            `${label(button)} ${property} ${style[property]} does not match ` +
+              `the Scanner sub-panel control ${referenceStyle[property]}`,
+          );
+        }
+      }
+      for (const property of exactProperties) {
+        if (style[property] !== referenceStyle[property]) {
+          failures.push(
+            `${label(button)} ${property} ${style[property]} does not match ` +
+              `the Scanner sub-panel control ${referenceStyle[property]}`,
+          );
+        }
+      }
+    }
+    return failures;
+  }
+
   function normal(expectedPane, expectedTheme) {
     const failures = paneState(expectedPane);
+    failures.push(...subpanelButtonGeometry(expectedPane));
     const html = document.documentElement;
     const body = document.body;
     const activePane = document.querySelector(
@@ -1326,10 +1379,15 @@ function browserAuditLibrary() {
 
   function ingressHomeAssistantLayout() {
     const failures = paneState("home-assistant");
+    failures.push(...subpanelButtonGeometry("home-assistant"));
     const pane = document.querySelector("#pane-home-assistant");
     const panel = pane?.querySelector(":scope > .home-assistant-integration-panel");
+    const guidance = panel?.querySelector(".home-assistant-integration-guidance");
     if (!(pane instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
       return {failures: [...failures, "Home Assistant workspace is unavailable"]};
+    }
+    if (!(guidance instanceof HTMLElement)) {
+      return {failures: [...failures, "Home Assistant operator guidance is unavailable"]};
     }
     const paneRect = pane.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
@@ -1342,6 +1400,25 @@ function browserAuditLibrary() {
     if (document.querySelector("#pane-diagnostics .home-assistant-integration-panel")) {
       failures.push("Home Assistant integration panel remains inside Diagnostics");
     }
+    const panelStyle = getComputedStyle(panel);
+    const requiresScroll = panel.scrollHeight > panel.clientHeight + tolerance;
+    if (requiresScroll && !["auto", "scroll"].includes(panelStyle.overflowY)) {
+      failures.push(
+        `Home Assistant integration content overflows with overflow-y ${panelStyle.overflowY}`,
+      );
+    }
+    const originalScrollTop = panel.scrollTop;
+    panel.scrollTop = panel.scrollHeight;
+    const guidanceRect = guidance.getBoundingClientRect();
+    const visibleTop = panelRect.top + panel.clientTop;
+    const visibleBottom = visibleTop + panel.clientHeight;
+    if (
+      guidanceRect.top < visibleTop - tolerance ||
+      guidanceRect.bottom > visibleBottom + tolerance
+    ) {
+      failures.push("Home Assistant operator guidance is unreachable at the end of the panel");
+    }
+    panel.scrollTop = originalScrollTop;
     return {failures};
   }
 

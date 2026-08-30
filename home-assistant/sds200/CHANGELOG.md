@@ -6,7 +6,9 @@
   installations, where a host Docker CLI is intentionally unavailable. The
   dedicated tab keeps integration lifecycle, Core-restart guidance, and private
   live-audio bridge controls out of read-only Diagnostics and is omitted from
-  every non-Ingress dashboard.
+  every non-Ingress dashboard. Compact controls and bounded pane scrolling keep
+  the final restart and reauthentication guidance reachable without allowing the
+  surrounding dashboard to clip it.
   Exact-digest installation, update, rollback, removal, rollback discard, and
   bridge-key rotation retain their existing atomic and explicit boundaries;
   bridge-key reveal is concealed, `no-store`, and cleared after 60 seconds.

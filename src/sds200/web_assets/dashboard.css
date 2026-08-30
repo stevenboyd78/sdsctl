@@ -924,6 +924,17 @@ body {
   overflow: hidden;
 }
 
+.workspace-pane button {
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.28rem, 0.8vw, 0.65rem);
+  border-width: 1px;
+  border-radius: var(--radius-small);
+  font-size: clamp(0.62rem, 1.35vmin, 0.78rem);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
 .workspace-pane > .panel,
 .recordings-layout > .panel,
 .diagnostics-layout > .panel {
@@ -1534,22 +1545,37 @@ body {
   overflow: hidden;
 }
 
-.home-assistant-integration-panel {
+.workspace-pane > .home-assistant-integration-panel {
+  display: block;
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.home-assistant-integration-message {
+  min-height: 1.2em;
+  margin: clamp(0.25rem, 0.8vmin, 0.65rem) 0;
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
 }
 
 .home-assistant-integration-panel .status-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 var(--workspace-gap);
+  margin-top: clamp(0.2rem, 0.65vmin, 0.5rem);
+}
+
+.home-assistant-integration-panel .status-list > div {
+  padding-block: clamp(0.18rem, 0.55vmin, 0.42rem);
 }
 
 .home-assistant-integration-confirmation,
 .home-assistant-integration-secret {
   display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
+  gap: clamp(0.18rem, 0.55vmin, 0.42rem);
+  margin-top: clamp(0.3rem, 0.9vmin, 0.7rem);
 }
 
 .home-assistant-integration-confirmation label,
@@ -1562,7 +1588,8 @@ body {
 .home-assistant-integration-secret input {
   width: 100%;
   min-width: 0;
-  padding: var(--space-3);
+  min-height: 1.9rem;
+  padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.35rem, 0.9vw, 0.7rem);
   border: 1px solid var(--border);
   border-radius: var(--radius-small);
   color: var(--text);
@@ -1570,7 +1597,7 @@ body {
 }
 
 .home-assistant-integration-actions {
-  margin-top: var(--space-3);
+  margin-top: clamp(0.2rem, 0.65vmin, 0.5rem);
 }
 
 .home-assistant-integration-actions button,
@@ -1579,9 +1606,9 @@ body {
 }
 
 .home-assistant-integration-guidance {
-  margin: var(--space-4) 0 0;
+  margin: clamp(0.3rem, 0.9vmin, 0.7rem) 0 0;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
 }
 
 .scanner-panel {
@@ -1912,6 +1939,13 @@ body {
     border-top: 1px solid var(--border);
     border-left: 0;
   }
+
+  .workspace-pane button {
+    min-height: 1.55rem;
+    padding: 0.15rem 0.3rem;
+    font-size: 0.68rem;
+    line-height: 1.05;
+  }
 }
 
 @media (max-height: 38rem) and (min-height: 28rem) {
@@ -1970,6 +2004,13 @@ body {
   .radio-field-group h3,
   .radio-field-list dt,
   .radio-field-list dd {
+    line-height: 1;
+  }
+
+  .workspace-pane button {
+    min-height: 1.35rem;
+    padding: 0.08rem 0.2rem;
+    font-size: 0.6rem;
     line-height: 1;
   }
 }
@@ -2119,7 +2160,8 @@ body {
     overflow: visible;
   }
 
-  .home-assistant-integration-panel {
+  .workspace-pane > .home-assistant-integration-panel {
+    height: auto;
     overflow: visible;
   }
 

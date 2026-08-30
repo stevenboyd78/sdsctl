@@ -232,6 +232,17 @@
     overflow: hidden !important;
   }
 
+  .workspace-pane button {
+    min-width: 0 !important;
+    min-height: 1.9rem !important;
+    padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.28rem, 0.8vw, 0.65rem) !important;
+    border-width: 1px !important;
+    border-radius: var(--radius-small) !important;
+    font-size: clamp(0.62rem, 1.35vmin, 0.78rem) !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+  }
+
   .workspace-pane > .panel,
   .recordings-layout > .panel,
   .diagnostics-layout > .panel {
@@ -250,6 +261,14 @@
     min-height: 0 !important;
     padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
     overflow: hidden !important;
+  }
+
+  #pane-home-assistant > .home-assistant-integration-panel {
+    display: block !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable !important;
+    overscroll-behavior: contain !important;
   }
 
   .waterfall-panel {
@@ -839,6 +858,13 @@
     .scanner-panel > .panel-subsection {
       grid-row: 3 !important;
     }
+
+    .workspace-pane button {
+      min-height: 1.55rem !important;
+      padding: 0.15rem 0.3rem !important;
+      font-size: 0.68rem !important;
+      line-height: 1.05 !important;
+    }
   }
 
   @media (max-width: 26rem) and (min-height: 28rem) {
@@ -987,6 +1013,13 @@
 
     .radio-field-list dt,
     .radio-field-list dd {
+      line-height: 1 !important;
+    }
+
+    .workspace-pane button {
+      min-height: 1.35rem !important;
+      padding: 0.08rem 0.2rem !important;
+      font-size: 0.6rem !important;
       line-height: 1 !important;
     }
   }
@@ -1138,6 +1171,11 @@
     .recordings-layout > .panel {
       height: auto !important;
       min-height: 0 !important;
+      overflow: visible !important;
+    }
+
+    #pane-home-assistant > .home-assistant-integration-panel {
+      height: auto !important;
       overflow: visible !important;
     }
 
