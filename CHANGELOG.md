@@ -20,6 +20,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Keep the live daemon-event status in the balanced right-hand overview column
+  when a non-System web theme hides the System palette selector, preventing the
+  compact status from shifting inward or wrapping into a narrow orphaned track.
 - Add a System-only web palette selector centered in the dashboard overview.
   Follow-device remains the default; 21 explicit choices mirror Textual's full
   built-in TUI scheme list across System surfaces, scanner presentation,

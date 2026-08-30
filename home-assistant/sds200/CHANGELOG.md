@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep the live daemon-event status right-aligned and single-line when a
+  non-System theme hides the System palette selector instead of leaving the
+  message in the selector's narrow center track.
 - Add the System web theme's responsive, browser-local palette selector to the
   Ingress dashboard. Follow-device remains the default; the full 21-scheme
   Textual TUI list is available only while System is active and changes

@@ -756,6 +756,14 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)" in (
         stylesheet_source.text
     )
+    assert (
+        ':root[data-theme]:not([data-theme="system"]) .overview'
+        in stylesheet_source.text
+    )
+    assert (
+        ':root[data-theme]:not([data-theme="system"]) .dashboard-message'
+        in viewport_stylesheet.text
+    )
     assert "justify-self: end" in stylesheet_source.text
     assert "justify-self: center" in stylesheet_source.text
     assert "justify-items: end" in stylesheet_source.text

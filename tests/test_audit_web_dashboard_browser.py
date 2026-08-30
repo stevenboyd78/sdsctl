@@ -140,6 +140,7 @@ def test_browser_audit_source_preserves_browser_specific_acceptance_guards() -> 
         "Home Assistant operator guidance is unreachable at the end of the panel",
         "System palette controller, document, and selector disagree",
         "System palette selector is exposed for ${expectedTheme}",
+        "non-System live daemon status wraps onto multiple lines",
         "switchSystemPalette",
         "systemPaletteChoices.slice(1)",
         "responsive System-palette cases",

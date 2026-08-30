@@ -192,6 +192,15 @@
     max-width: 48% !important;
   }
 
+  :root[data-theme]:not([data-theme="system"]) .overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :root[data-theme]:not([data-theme="system"]) .dashboard-message {
+    grid-column: 2 !important;
+    max-width: 100% !important;
+  }
+
   .workspace-shell {
     display: grid !important;
     grid-template-rows: auto minmax(0, 1fr) !important;

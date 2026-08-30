@@ -1281,9 +1281,50 @@ function browserAuditLibrary() {
     return failures;
   }
 
+  function overviewStatusLayout(expectedTheme) {
+    if (expectedTheme === "system") return [];
+    const failures = [];
+    const overview = document.querySelector(".overview");
+    const message = document.querySelector("#dashboard-message");
+    if (!(overview instanceof HTMLElement) || !(message instanceof HTMLElement)) {
+      return ["overview or live daemon status message is unavailable"];
+    }
+    const overviewStyle = getComputedStyle(overview);
+    const messageStyle = getComputedStyle(message);
+    const tracks = overviewStyle.gridTemplateColumns.trim().split(/\s+/);
+    const overviewRect = overview.getBoundingClientRect();
+    const messageRect = message.getBoundingClientRect();
+    const lineHeight = Number.parseFloat(messageStyle.lineHeight);
+    if (overviewStyle.display !== "grid") {
+      failures.push(
+        `non-System overview display is ${overviewStyle.display}, expected grid`,
+      );
+    }
+    if (tracks.length !== 2) {
+      failures.push(
+        `non-System overview exposes ${tracks.length} columns instead of two: ` +
+          overviewStyle.gridTemplateColumns,
+      );
+    }
+    if (messageStyle.gridColumnStart !== "2") {
+      failures.push(
+        `non-System live daemon status starts in grid column ` +
+          `${messageStyle.gridColumnStart}, expected 2`,
+      );
+    }
+    if (Math.abs(messageRect.right - overviewRect.right) > tolerance) {
+      failures.push("non-System live daemon status is not right-aligned");
+    }
+    if (Number.isFinite(lineHeight) && messageRect.height > lineHeight * 1.5) {
+      failures.push("non-System live daemon status wraps onto multiple lines");
+    }
+    return failures;
+  }
+
   function normal(expectedPane, expectedTheme) {
     const failures = paneState(expectedPane);
     failures.push(...subpanelButtonGeometry(expectedPane));
+    failures.push(...overviewStatusLayout(expectedTheme));
     const html = document.documentElement;
     const body = document.body;
     const activePane = document.querySelector(
