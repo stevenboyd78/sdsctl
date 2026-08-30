@@ -119,6 +119,27 @@ def test_install_update_and_rollback_use_exact_digest_and_readback(tmp_path: Pat
     assert rolled_back.rollback_digest == packaged.digest
 
 
+def test_inspection_excludes_only_bounded_regular_python_cache_files(
+    tmp_path: Path,
+) -> None:
+    destination = _destination(tmp_path)
+    packaged = built_in_home_assistant_integration_image()
+    install_home_assistant_integration(
+        destination,
+        confirmation_digest=packaged.digest,
+    )
+
+    cache = destination / "__pycache__"
+    cache.mkdir()
+    (cache / "media_source.cpython-314.pyc").write_bytes(b"runtime bytecode")
+    inspected = inspect_home_assistant_integration(destination)
+    assert inspected.current_digest == packaged.digest
+
+    (cache / "unexpected.txt").write_text("not bytecode", encoding="utf-8")
+    with pytest.raises(SDS200Error, match="Python cache contains an unsafe file"):
+        inspect_home_assistant_integration(destination)
+
+
 def test_removal_is_recoverable_then_rollback_can_be_discarded(tmp_path: Path) -> None:
     destination = _destination(tmp_path)
     image = built_in_home_assistant_integration_image()

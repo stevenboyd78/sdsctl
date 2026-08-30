@@ -23,6 +23,7 @@ HOME_ASSISTANT_INTEGRATION_MAX_BYTES = 512 * 1024
 HOME_ASSISTANT_INTEGRATION_BRIDGE_KEY = Path("/data/live-audio-bridge.key")
 
 _RESOURCE_ROOT = "home_assistant_integration/custom_components/sdsctl"
+_PYTHON_CACHE_DIRECTORY = "__pycache__"
 _ARTIFACT_FILES = (
     "__init__.py",
     "client.py",
@@ -368,6 +369,13 @@ def _read_directory_image(root: Path) -> HomeAssistantIntegrationImage:
             child = directory_path / name
             if child.is_symlink():
                 raise SDS200Error("Home Assistant integration image contains a symlink.")
+            if name == _PYTHON_CACHE_DIRECTORY:
+                total += _validated_python_cache_bytes(child)
+                if total > HOME_ASSISTANT_INTEGRATION_MAX_BYTES:
+                    raise SDS200Error(
+                        "Home Assistant integration image exceeds its byte limit."
+                    )
+                directory_names.remove(name)
         for name in filenames:
             child = directory_path / name
             if child.is_symlink() or not child.is_file():
@@ -389,6 +397,26 @@ def _read_directory_image(root: Path) -> HomeAssistantIntegrationImage:
         digest=_image_digest(payloads),
         files=tuple(sorted(payloads)),
     )
+
+
+def _validated_python_cache_bytes(root: Path) -> int:
+    """Validate bounded Core-created bytecode without adding it to identity."""
+
+    total = 0
+    for directory, directory_names, filenames in os.walk(root, followlinks=False):
+        if directory_names:
+            raise SDS200Error(
+                "Home Assistant integration Python cache contains a directory."
+            )
+        directory_path = Path(directory)
+        for name in filenames:
+            child = directory_path / name
+            if child.is_symlink() or not child.is_file() or child.suffix != ".pyc":
+                raise SDS200Error(
+                    "Home Assistant integration Python cache contains an unsafe file."
+                )
+            total += len(child.read_bytes())
+    return total
 
 
 def _write_stage(parent: Path, image: HomeAssistantIntegrationImage) -> Path:

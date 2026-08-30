@@ -70,6 +70,12 @@ filesystem mutation below is an explicit authenticated Ingress action with an
 exact SHA-256 confirmation. The panel reports that Home Assistant Core was not
 restarted or reloaded.
 
+Home Assistant Core may create regular `__pycache__/*.pyc` files after loading
+the integration. The lifecycle validates and size-bounds that runtime cache but
+excludes it from the source-artifact digest, so a normal Core import does not
+make an exact installation appear modified. Symlinks, nested cache directories,
+and non-bytecode cache files remain invalid.
+
 On Home Assistant OS, open the one exact published or deliberately named Local
 sds200 App and choose **Web UI > Home Assistant > Live-audio integration**. Do not
 install a Docker client, disable Advanced SSH protection, or give another App
