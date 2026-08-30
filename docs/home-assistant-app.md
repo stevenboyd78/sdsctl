@@ -1027,3 +1027,61 @@ credentials, or private network details are retained in the repository. This
 source-built run validates the Milestone 27.4 branch boundary; the later
 published v0.23.0 image still requires the separate repository-managed release
 acceptance gate above.
+
+### Milestone 29.1 responsive waterfall-card development acceptance
+
+Milestone 29.1 physical development acceptance completed on August 29, 2026,
+using an isolated source-built Local App at version 0.24.0 from exact corrected
+commit `6f18adb3b168dfef16358200787f2c33013a7587`. This was a development
+build, not a newly published repository image. The amd64 host ran Home
+Assistant OS 18.2, Core 2026.8.3, Supervisor 2026.07.5, Frontend 20260729.7,
+and Docker 29.7.2 against an SDS200 running firmware 1.26.01. Only the selected
+acceptance App ran while the physical waterfall tests were active, preserving
+one daemon, scanner-control, PSI, waterfall-polling, and RTSP/RTP owner.
+
+The first live card run identified a real Ingress transport defect: requesting
+newline-delimited JSON caused Home Assistant's proxy to buffer many frames and
+then deliver them as a burst. The corrected card requests the already-supported
+same-origin `text/event-stream` representation, parses its bounded `id:` and
+`data:` framing, and retains newline-delimited decoding compatibility for the
+direct route. Its deployed module matched the corrected repository asset at
+SHA-256
+`1401fff2bd67bf4583b866d0eae296a3f0e873425fc138baac32675f7cd29fc2`.
+Direct unauthenticated App access returned HTTP 403.
+
+The corrected acceptance run confirmed:
+
+- two simultaneously visible cards consumed one shared daemon-side demand while
+  advancing independently at approximately three frames per second. Each frame
+  contained the expected 240 relative bins, current frequency context, bounded
+  age and cadence telemetry, and zero client or daemon queue loss;
+- a standard, theme-following card and a compact cyan card rendered side by
+  side. Removing one card expanded the remaining card into the available width,
+  exercising independent density, palette, history, and responsive-width
+  behavior on physical Home Assistant OS. The deterministic Chrome matrix
+  remains the coverage source for every desktop, wall-display, and phone size;
+- pausing one card froze only its presentation while its sequence and current
+  frame age continued advancing. Resume restored live painting, and Clear
+  History rebuilt only that card's bounded history without altering the second
+  card;
+- restarting the Local App moved both cards through an authenticated waiting
+  state and back to fresh ordered frames without a page reload or reconnect
+  storm. Removing the second card left the first healthy; navigating away from
+  the final card released its lease, after which no further scanner-side
+  waterfall polling appeared;
+- returning the scanner to normal scanning restored live System, Department,
+  Site, and Channel state as applicable, with scanner controls ready. The
+  existing Home Assistant connection entity and bundled display cards remained
+  online and updating through MQTT Discovery, with daemon and audio ownership
+  on and recording capture idle; and
+- the persistent ten-recording WAV and metadata inventory remained present.
+  The published v0.24.0 App then restarted as the sole scanner owner with its
+  authenticated dashboard, MQTT state, existing cards, media storage, and
+  normal scanner state healthy.
+
+Final cleanup stopped the Local App, disabled its Ingress panel, restored the
+stable `/local/sds200/sds200-waterfall-card.js` resource URL, removed the
+temporary validation view, and left the published App running as the sole
+owner. No scanner identifiers, programmed frequencies, raw waterfall frames,
+audio, credentials, ingress identifiers, or private network details are
+retained in the repository.

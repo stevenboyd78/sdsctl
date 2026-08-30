@@ -81,6 +81,17 @@ playback and downloads, MQTT Discovery, existing cards, and persistent data.
 Only one deliberately named Local validation App may exist during that run; the
 published repository App must be restored as the sole scanner owner afterward.
 
+Physical Home Assistant OS development acceptance completed on August 29,
+2026, against the SDS200 running firmware 1.26.01. It identified and corrected
+Ingress buffering by selecting the existing event-stream representation,
+validated single- and two-card demand sharing, responsive width and palette
+variants, pause/resume/clear isolation, App restart recovery, card-removal and
+final-lease cleanup, fail-closed direct access, and bounded live telemetry. The
+normal dashboard, scanner controls, MQTT-backed cards, audio ownership, and
+persistent recording inventory remained healthy after returning the published
+v0.24.0 App as the sole scanner owner. The detailed redacted evidence is in
+[the Home Assistant App guide](docs/home-assistant-app.md#milestone-291-responsive-waterfall-card-development-acceptance).
+
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
 writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
