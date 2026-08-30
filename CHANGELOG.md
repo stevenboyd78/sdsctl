@@ -20,6 +20,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Add a System-only web palette selector centered in the dashboard overview.
+  Follow-device remains the default; 21 explicit choices mirror Textual's full
+  built-in TUI scheme list across System surfaces, scanner presentation,
+  semantic status colors, controls, and Waterfall. The independently persisted
+  choice is hidden for non-System themes, stays responsive on phone and compact
+  displays, preserves WCAG AA through derived web label tokens, and does not
+  create new managed-theme packages or alter dashboard behavior.
 - Use one compact geometry for buttons inside every web-dashboard workspace
   while preserving selected, action, and disabled state colors. The Ingress-only
   Home Assistant lifecycle pane now owns bounded vertical scrolling, uses denser

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="system">
+<html lang="en" data-theme="system" data-system-palette="auto">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -59,6 +59,14 @@
       <div>
         <p class="eyebrow">Live local dashboard</p>
         <h2 id="overview-title">Local scanner overview</h2>
+      </div>
+
+      <div id="system-palette-picker" class="system-palette-picker" hidden>
+        <label for="system-palette-select">System palette</label>
+        <select id="system-palette-select">
+          <option value="auto">Follow device</option>
+          <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->
+        </select>
       </div>
 
       <p id="dashboard-message" class="dashboard-message" role="status">

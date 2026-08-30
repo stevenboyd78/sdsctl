@@ -211,21 +211,40 @@ function initializeWorkspace() {
 
 function initializeThemeControl() {
   const select = element("theme-select");
+  const systemPalettePicker = element("system-palette-picker");
+  const systemPaletteSelect = element("system-palette-select");
   const controller = window.sdsctlTheme;
 
   if (
     controller === undefined ||
     typeof controller.current !== "function" ||
-    typeof controller.select !== "function"
+    typeof controller.select !== "function" ||
+    typeof controller.currentSystemPalette !== "function" ||
+    typeof controller.selectSystemPalette !== "function"
   ) {
     select.disabled = true;
+    systemPaletteSelect.disabled = true;
+    systemPalettePicker.hidden = true;
     return;
   }
 
-  select.value = controller.current();
+  function synchronizePickers() {
+    select.value = controller.current();
+    systemPaletteSelect.value = controller.currentSystemPalette();
+    systemPalettePicker.hidden = controller.current() !== "system";
+  }
+
+  synchronizePickers();
   select.addEventListener("change", () => {
     controller.select(select.value);
-    select.value = controller.current();
+    synchronizePickers();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(renderWaterfallCanvases);
+    });
+  });
+  systemPaletteSelect.addEventListener("change", () => {
+    controller.selectSystemPalette(systemPaletteSelect.value);
+    synchronizePickers();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(renderWaterfallCanvases);
     });

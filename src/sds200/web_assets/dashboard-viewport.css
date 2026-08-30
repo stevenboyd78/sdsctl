@@ -178,9 +178,9 @@
   }
 
   .overview {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
     align-items: end !important;
-    justify-content: space-between !important;
     min-width: 0 !important;
     gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
     margin: 0 !important;
@@ -188,6 +188,7 @@
   }
 
   .dashboard-message {
+    justify-self: end !important;
     max-width: 48% !important;
   }
 
@@ -583,6 +584,41 @@
   }
 
   @media (max-width: 44rem) and (min-height: 28rem) {
+    .overview {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+
+    .overview > :first-child {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+    }
+
+    .system-palette-picker {
+      display: grid !important;
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+      grid-template-columns: auto minmax(7rem, 11rem) !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 0 !important;
+    }
+
+    .system-palette-picker[hidden] {
+      display: none !important;
+    }
+
+    .system-palette-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .dashboard-message {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+      max-width: 100% !important;
+    }
+
     .site-header {
       align-items: center !important;
     }
@@ -1131,6 +1167,28 @@
     .site-footer {
       align-items: stretch !important;
       flex-direction: column !important;
+    }
+
+    .overview {
+      display: flex !important;
+    }
+
+    .system-palette-picker {
+      display: grid !important;
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      align-items: center !important;
+      justify-content: stretch !important;
+      text-align: left !important;
+    }
+
+    .system-palette-picker[hidden] {
+      display: none !important;
+    }
+
+    .system-palette-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
     }
 
     .site-header {

@@ -28,6 +28,14 @@ Use `sdsctl themes --root /absolute/path ...` to operate on an explicit root.
 The lifecycle never scans elsewhere automatically. Built-in themes remain in
 the installed Python distribution and cannot be shadowed, replaced, or removed.
 
+The web dashboard's **System palette** selector is a separate presentation
+control, not another managed-theme interface. Its Follow-device option and the
+21 built-in Textual color schemes all remain inside the stable `system` web
+theme package and therefore do not appear as installable, replaceable, or
+removable directories. Selecting one does not change theme discovery, package
+identity, lifecycle validation, or the `sdsctl.web.theme` value; it only updates
+the browser-local `sdsctl.web.system-palette` choice while System is active.
+
 ## Validate and inspect
 
 Validate one unpacked local package without changing its source or managed

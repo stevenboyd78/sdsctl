@@ -139,9 +139,9 @@ select:focus-visible,
   padding-bottom: var(--space-6);
 }
 .overview {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: end;
-  justify-content: space-between;
   gap: var(--space-5);
   margin-bottom: var(--space-4);
 }
@@ -149,10 +149,35 @@ select:focus-visible,
   font-size: clamp(1.4rem, 3vw, 2rem);
 }
 .dashboard-message {
+  justify-self: end;
   max-width: 38rem;
   margin: 0;
   color: var(--muted);
   text-align: right;
+}
+.system-palette-picker {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  text-align: center;
+}
+.system-palette-picker label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.system-palette-picker select {
+  min-width: 8.5rem;
+  padding: 0.38rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 750;
 }
 .notice {
   padding: var(--space-4);
@@ -372,7 +397,7 @@ select:focus-visible,
   padding: var(--space-3) var(--space-4);
   border: 0.125rem solid var(--accent);
   border-radius: var(--radius-small);
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   background: var(--accent);
   font: inherit;
   font-weight: 800;
@@ -903,7 +928,7 @@ body {
 }
 
 .workspace-tabs [role="tab"][aria-selected="true"] {
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -1195,7 +1220,7 @@ body {
 }
 
 .radio-view-controls button[aria-pressed="true"] {
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -1676,7 +1701,31 @@ body {
   }
 
   .dashboard-message {
-    max-width: 42%;
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 100%;
+  }
+
+  .overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .overview > :first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .system-palette-picker {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: auto minmax(7rem, 11rem);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .system-palette-picker select {
+    width: 100%;
+    min-width: 0;
   }
 
   .home-assistant-integration-panel .status-list {

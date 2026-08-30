@@ -10,6 +10,7 @@ from typing import Self
 
 import pytest
 from fastapi.testclient import TestClient
+from textual.theme import BUILTIN_THEMES
 
 import sds200.web_dashboard as web_dashboard
 from sds200 import __version__
@@ -594,6 +595,13 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert 'href="assets/favicon.svg"' in response.text
     assert 'type="image/svg+xml"' in response.text
     assert 'id="theme-select"' in response.text
+    assert 'id="system-palette-select"' in response.text
+    assert '<option value="auto">Follow device</option>' in response.text
+    for palette_name in sorted(BUILTIN_THEMES):
+        assert (
+            f'<option value="{palette_name}">{palette_name}</option>'
+            in response.text
+        )
     assert response.text.index('class="brand"') < response.text.index(
         'id="status-badge"'
     ) < response.text.index('class="header-actions"')
@@ -608,6 +616,7 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     )
     assert 'src="assets/theme-bootstrap.js"' in response.text
     assert 'href="assets/dashboard.css"' in response.text
+    assert 'href="assets/system-palettes.css"' in response.text
     for theme in (
         "system",
         "lcars",
@@ -621,6 +630,9 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
         'href="assets/themes/system/theme.css"'
     )
     assert response.text.index('href="assets/themes/pip-boy-inspired/theme.css"') < (
+        response.text.index('href="assets/system-palettes.css"')
+    )
+    assert response.text.index('href="assets/system-palettes.css"') < (
         response.text.index('href="assets/dashboard-viewport.css"')
     )
     assert response.text.index('href="assets/dashboard-viewport.css"') < (
@@ -642,6 +654,7 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
         stylesheet = client.get("/assets/dashboard.css")
         stylesheet_source = client.get("/assets/dashboard.css?sdsctl_source=1")
         viewport_stylesheet = client.get("/assets/dashboard-viewport.css")
+        system_palette_stylesheet = client.get("/assets/system-palettes.css")
         theme_stylesheets = {
             theme: client.get(f"/assets/themes/{theme}/theme.css")
             for theme in (
@@ -664,6 +677,29 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert stylesheet.headers["cache-control"] == "no-store"
     assert stylesheet_source.status_code == 200
     assert viewport_stylesheet.status_code == 200
+    assert system_palette_stylesheet.status_code == 200
+    assert system_palette_stylesheet.headers["content-type"].startswith("text/css")
+    assert system_palette_stylesheet.headers["cache-control"] == "no-store"
+    for palette_name, palette in BUILTIN_THEMES.items():
+        selector = f'[data-system-palette="{palette_name}"]'
+        assert selector in system_palette_stylesheet.text
+        if not palette.ansi:
+            generated = palette.to_color_system().generate()
+            for color_name in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            ):
+                assert generated[color_name] in system_palette_stylesheet.text
     assert (
         '@import url("dashboard.css?sdsctl_source=1") layer(sdsctl-shared)'
         in stylesheet.text

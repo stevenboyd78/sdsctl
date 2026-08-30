@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass
 from functools import cache
 from html import escape
 from importlib.resources import files
@@ -79,6 +80,94 @@ _WEB_RESPONSE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _SystemPalette:
+    identifier: str
+    label: str
+    dark: bool
+    background: str
+    surface: str
+    panel: str
+    foreground: str
+    muted: str
+    border: str
+    primary: str
+    secondary: str
+    warning: str
+    error: str
+    success: str
+    accent: str
+
+
+def _required_system_palette_text(
+    entry: Mapping[str, object],
+    field: str,
+) -> str:
+    value = entry.get(field)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"System palette {field!r} must be non-empty text.")
+    return value
+
+
+def _palette_rgb(color: str) -> tuple[float, float, float]:
+    return (
+        int(color[1:3], 16) / 255,
+        int(color[3:5], 16) / 255,
+        int(color[5:7], 16) / 255,
+    )
+
+
+def _palette_luminance(color: str) -> float:
+    channels = tuple(
+        channel / 12.92
+        if channel <= 0.04045
+        else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in _palette_rgb(color)
+    )
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _palette_contrast(first: str, second: str) -> float:
+    lighter, darker = sorted(
+        (_palette_luminance(first), _palette_luminance(second)),
+        reverse=True,
+    )
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _palette_mix(color: str, target: str, amount: float) -> str:
+    source_channels = _palette_rgb(color)
+    target_channels = _palette_rgb(target)
+    channels = tuple(
+        round((source + (destination - source) * amount) * 255)
+        for source, destination in zip(source_channels, target_channels, strict=True)
+    )
+    return "#" + "".join(f"{channel:02X}" for channel in channels)
+
+
+def _accessible_palette_color(
+    color: str,
+    backgrounds: tuple[str, ...],
+    *,
+    minimum: float = 5.0,
+) -> str:
+    opaque = color[:7]
+
+    def minimum_contrast(candidate: str) -> float:
+        return min(_palette_contrast(candidate, background) for background in backgrounds)
+
+    if minimum_contrast(opaque) >= minimum:
+        return opaque
+    target = max(("#000000", "#FFFFFF"), key=minimum_contrast)
+    for step in range(1, 101):
+        candidate = _palette_mix(opaque, target, step / 100)
+        if minimum_contrast(candidate) >= minimum:
+            return candidate
+    return target
+
+
 _API_DOCS_RESPONSE_HEADERS = {
     **_WEB_RESPONSE_HEADERS,
     "Content-Security-Policy": (
@@ -460,6 +549,18 @@ def create_web_dashboard_app(
     )
     def viewport_stylesheet() -> Response:
         return _asset_response("dashboard-viewport.css", media_type="text/css")
+
+    @app.get(
+        "/assets/system-palettes.css",
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def system_palette_stylesheet() -> Response:
+        return Response(
+            content=_system_palette_stylesheet(),
+            media_type="text/css",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
 
     @app.get(
         "/assets/theme-bootstrap.js",
@@ -898,6 +999,161 @@ def _read_web_asset(name: str) -> str:
     )
 
 
+@cache
+def _system_palettes() -> tuple[_SystemPalette, ...]:
+    document = json.loads(_read_web_asset("system-palettes.json"))
+    if not isinstance(document, list) or not document:
+        raise ValueError("System palette registry must be a non-empty list.")
+
+    palettes: list[_SystemPalette] = []
+    for entry in document:
+        if not isinstance(entry, dict):
+            raise ValueError("System palette entries must be objects.")
+
+        identifier = _required_system_palette_text(entry, "id")
+        if (
+            not identifier.replace("-", "").isalnum()
+            or identifier.lower() != identifier
+        ):
+            raise ValueError(f"Invalid System palette identifier: {identifier!r}.")
+        dark = entry.get("dark")
+        if not isinstance(dark, bool):
+            raise ValueError(f"System palette {identifier!r} must declare dark mode.")
+
+        colors = {
+            field: _required_system_palette_text(entry, field)
+            for field in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            )
+        }
+        for field, color in colors.items():
+            if len(color) not in {7, 9} or not color.startswith("#"):
+                raise ValueError(
+                    f"System palette {identifier!r} has an invalid {field} color."
+                )
+            try:
+                int(color[1:], 16)
+            except ValueError as exc:
+                raise ValueError(
+                    f"System palette {identifier!r} has an invalid {field} color."
+                ) from exc
+
+        palettes.append(
+            _SystemPalette(
+                identifier=identifier,
+                label=_required_system_palette_text(entry, "label"),
+                dark=dark,
+                background=colors["background"],
+                surface=colors["surface"],
+                panel=colors["panel"],
+                foreground=colors["foreground"],
+                muted=colors["foreground-muted"],
+                border=colors["border"],
+                primary=colors["primary"],
+                secondary=colors["secondary"],
+                warning=colors["warning"],
+                error=colors["error"],
+                success=colors["success"],
+                accent=colors["accent"],
+            )
+        )
+
+    identifiers = tuple(palette.identifier for palette in palettes)
+    if identifiers != tuple(sorted(identifiers)) or len(set(identifiers)) != len(
+        identifiers
+    ):
+        raise ValueError("System palettes must use unique deterministic order.")
+    return tuple(palettes)
+
+
+@cache
+def _system_palette_stylesheet() -> str:
+    blocks: list[str] = []
+    for palette in _system_palettes():
+        color_scheme = "dark" if palette.dark else "light"
+        surfaces = (palette.background, palette.surface, palette.panel)
+        text = _accessible_palette_color(palette.foreground, surfaces)
+        muted = _accessible_palette_color(palette.muted, surfaces)
+        accent_text = _accessible_palette_color(palette.accent, surfaces)
+        success = _accessible_palette_color(palette.success, surfaces)
+        warning = _accessible_palette_color(palette.warning, surfaces)
+        danger = _accessible_palette_color(palette.error, surfaces)
+        focus = _accessible_palette_color(palette.secondary, surfaces)
+        on_accent = (
+            "#000000"
+            if _palette_contrast("#000000", palette.primary)
+            >= _palette_contrast("#FFFFFF", palette.primary)
+            else "#FFFFFF"
+        )
+        sheen = (
+            "rgb(255 255 255 / 0.025)"
+            if palette.dark
+            else "rgb(255 255 255 / 0.32)"
+        )
+        shadow = "rgb(0 0 0 / 0.3)" if palette.dark else "rgb(23 32 51 / 0.12)"
+        blocks.append(
+            "\n".join(
+                (
+                    f':root[data-theme="system"][data-system-palette="{palette.identifier}"] {{',
+                    f"  color-scheme: {color_scheme};",
+                    f"  --tui-background: {palette.background};",
+                    f"  --tui-surface: {palette.surface};",
+                    f"  --tui-panel: {palette.panel};",
+                    f"  --tui-foreground: {palette.foreground};",
+                    f"  --tui-foreground-muted: {palette.muted};",
+                    f"  --tui-border: {palette.border};",
+                    f"  --tui-primary: {palette.primary};",
+                    f"  --tui-secondary: {palette.secondary};",
+                    f"  --tui-warning: {palette.warning};",
+                    f"  --tui-error: {palette.error};",
+                    f"  --tui-success: {palette.success};",
+                    f"  --tui-accent: {palette.accent};",
+                    f"  --background: {palette.background};",
+                    f"  --surface: {palette.surface};",
+                    f"  --surface-emphasis: {palette.panel};",
+                    f"  --text: {text};",
+                    f"  --muted: {muted};",
+                    f"  --border: {palette.border};",
+                    f"  --accent: {palette.primary};",
+                    f"  --accent-strong: {accent_text};",
+                    f"  --on-accent: {on_accent};",
+                    f"  --success: {success};",
+                    f"  --warning: {warning};",
+                    f"  --danger: {danger};",
+                    f"  --focus: {focus};",
+                    f"  --shadow: 0 0.75rem 2rem {shadow};",
+                    f"  --system-surface-sheen: {sheen};",
+                    f"  --waterfall-background: {palette.background};",
+                    f"  --waterfall-grid: {palette.border};",
+                    f"  --waterfall-spectrum: {palette.primary};",
+                    f"  --waterfall-marker: {palette.warning};",
+                    f"  --waterfall-history: {palette.secondary};",
+                    f"  --scanner-bezel: {palette.background};",
+                    f"  --scanner-bezel-edge: {palette.border};",
+                    f"  --scanner-display: {palette.surface};",
+                    f"  --scanner-display-emphasis: {palette.panel};",
+                    f"  --scanner-display-ink: {text};",
+                    f"  --scanner-display-muted: {muted};",
+                    f"  --scanner-display-rule: {palette.border};",
+                    f"  --scanner-key: {palette.panel};",
+                    "}",
+                )
+            )
+        )
+    return "\n\n".join(blocks) + "\n"
+
+
 def _asset_response(name: str, *, media_type: str) -> Response:
     return Response(
         content=_read_web_asset(name),
@@ -1159,6 +1415,7 @@ def _dashboard_shell(
     )
     stylesheet_links = (
         f"{theme_stylesheet_links}\n"
+        '  <link rel="stylesheet" href="assets/system-palettes.css">\n'
         '  <link rel="stylesheet" href="assets/dashboard-viewport.css">'
     )
     options = "\n".join(
@@ -1167,6 +1424,13 @@ def _dashboard_shell(
             f"{escape(theme.label)}</option>"
         )
         for theme in runtime.registry.themes
+    )
+    system_palette_options = "\n".join(
+        (
+            f'          <option value="{palette.identifier}">'
+            f"{escape(palette.label)}</option>"
+        )
+        for palette in _system_palettes()
     )
     return (
         _read_web_asset("dashboard.html")
@@ -1181,6 +1445,10 @@ def _dashboard_shell(
         )
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
+        .replace(
+            "          <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->",
+            system_palette_options,
+        )
         .replace(
             "        <!-- SDSCTL_HOME_ASSISTANT_TAB -->",
             (
@@ -1202,6 +1470,10 @@ def _dashboard_shell(
 
 @cache
 def _theme_bootstrap_script(runtime: WebThemeRuntimeRegistry) -> str:
+    system_palettes = [
+        {"id": palette.identifier, "dark": palette.dark}
+        for palette in _system_palettes()
+    ]
     return (
         _read_web_asset("theme-bootstrap.js")
         .replace(
@@ -1212,6 +1484,14 @@ def _theme_bootstrap_script(runtime: WebThemeRuntimeRegistry) -> str:
             "__SDSCTL_MANAGED_WEB_THEME_IDS__",
             json.dumps(
                 runtime.managed_identifiers,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ),
+        )
+        .replace(
+            "__SDSCTL_SYSTEM_PALETTES__",
+            json.dumps(
+                system_palettes,
                 ensure_ascii=True,
                 separators=(",", ":"),
             ),

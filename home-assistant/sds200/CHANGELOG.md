@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add the System web theme's responsive, browser-local palette selector to the
+  Ingress dashboard. Follow-device remains the default; the full 21-scheme
+  Textual TUI list is available only while System is active and changes
+  presentation without exposing App configuration, credentials, or scanner
+  control state.
 - Add an authenticated Ingress-only Home Assistant workspace for protected HAOS
   installations, where a host Docker CLI is intentionally unavailable. The
   dedicated tab keeps integration lifecycle, Core-restart guidance, and private

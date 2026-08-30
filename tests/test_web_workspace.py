@@ -353,7 +353,10 @@ const document = {
 };
 
 const themeSelect = add("theme-select");
+const systemPalettePicker = add("system-palette-picker");
+const systemPaletteSelect = add("system-palette-select");
 let selectedTheme = "system";
+let selectedSystemPalette = "auto";
 const eventSources = [];
 let nextTimeoutId = 1;
 const timeouts = new Map();
@@ -392,8 +395,14 @@ const window = {
     current() {
       return selectedTheme;
     },
+    currentSystemPalette() {
+      return selectedSystemPalette;
+    },
     select(value) {
       selectedTheme = value;
+    },
+    selectSystemPalette(value) {
+      selectedSystemPalette = value;
     },
   },
 };
@@ -575,9 +584,14 @@ audioPlaybackActive = true;
 const preservedFocus = document.activeElement;
 const preservedFallback = fallbackSelect.value;
 initializeThemeControl();
+assert.equal(systemPalettePicker.hidden, false);
+systemPaletteSelect.value = "nord";
+systemPaletteSelect.dispatch("change");
+assert.equal(selectedSystemPalette, "nord");
 themeSelect.value = "pip-boy-inspired";
 themeSelect.dispatch("change");
 assert.equal(selectedTheme, "pip-boy-inspired");
+assert.equal(systemPalettePicker.hidden, true);
 assert.equal(activeWorkspacePane, "audio");
 assert.equal(radioInspectionView, "auto");
 assert.equal(fallbackSelect.value, preservedFallback);

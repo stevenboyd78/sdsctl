@@ -87,13 +87,14 @@ Usage: node scripts/audit_web_dashboard_browser.mjs [options]
 
 Run the deterministic dashboard and Home Assistant waterfall-card browser audit in one local
 Chrome/Chromium session. The audit writes no PNGs. It covers all 144 built-in
-theme × reference CSS viewport × workspace pane cases, plus media-preference,
-enlarged-text, pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA
-contrast, complete adaptive-presentation, DPR-transition, and prefixed-URL
-probes. It also covers the Home Assistant Ingress Diagnostics layout across all
-themes at desktop and phone widths, plus the authenticated waterfall card at
-desktop, 800x480, and phone widths; bounded Canvas sizing; shared authentication;
-two live cards; pause; hide/show; removal; and final-stream cleanup.
+theme × reference CSS viewport × workspace pane cases, all 189 explicit System
+palette responsive cases, plus media-preference, enlarged-text,
+pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
+adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
+the Home Assistant Ingress Diagnostics layout across all themes at desktop and
+phone widths, plus the authenticated waterfall card at desktop, 800x480, and
+phone widths; bounded Canvas sizing; shared authentication; two live cards;
+pause; hide/show; removal; and final-stream cleanup.
 
 Options:
   --chrome PATH       Chrome/Chromium executable (auto-detected by default)
@@ -1297,6 +1298,27 @@ function browserAuditLibrary() {
     if (document.querySelector("#theme-select")?.value !== expectedTheme) {
       failures.push(`theme selector does not report ${expectedTheme}`);
     }
+    const palettePicker = document.querySelector("#system-palette-picker");
+    const paletteSelect = document.querySelector("#system-palette-select");
+    const palette = html.dataset.systemPalette;
+    const paletteChoices = window.sdsctlTheme?.systemPaletteChoices ?? [];
+    if (!paletteChoices.includes(palette)) {
+      failures.push(`document System palette is invalid: ${palette}`);
+    }
+    if (
+      window.sdsctlTheme?.currentSystemPalette() !== palette ||
+      paletteSelect?.value !== palette
+    ) {
+      failures.push("System palette controller, document, and selector disagree");
+    }
+    if (palettePicker instanceof HTMLElement) {
+      if (expectedTheme === "system" && palettePicker.hidden) {
+        failures.push("System palette selector is hidden for the System theme");
+      }
+      if (expectedTheme !== "system" && !palettePicker.hidden) {
+        failures.push(`System palette selector is exposed for ${expectedTheme}`);
+      }
+    }
 
     if (html.scrollWidth > html.clientWidth + tolerance) {
       failures.push(`document scrolls horizontally (${html.scrollWidth} > ${html.clientWidth})`);
@@ -1451,6 +1473,37 @@ function browserAuditLibrary() {
     );
     if (!(themeLink instanceof HTMLLinkElement) || themeLink.sheet === null) {
       failures.push(`theme stylesheet for ${theme} is not loaded`);
+    }
+    return {failures};
+  }
+
+  function switchSystemPalette(palette) {
+    const failures = [];
+    const currentPane = document.documentElement.dataset.workspacePane;
+    const sentinel = document.querySelector(
+      `.workspace-pane[data-workspace-pane="${currentPane}"] button:not(:disabled)`,
+    );
+    sentinel?.focus({preventScroll: true});
+    const select = document.querySelector("#system-palette-select");
+    if (!(select instanceof HTMLSelectElement)) {
+      return {failures: ["System palette select is unavailable"]};
+    }
+    select.value = palette;
+    select.dispatchEvent(new Event("change", {bubbles: true}));
+    if (document.documentElement.dataset.systemPalette !== palette) {
+      failures.push(`System palette switch did not apply ${palette}`);
+    }
+    if (
+      window.sdsctlTheme?.currentSystemPalette() !== palette ||
+      select.value !== palette
+    ) {
+      failures.push(`System palette controller and selector disagree for ${palette}`);
+    }
+    if (document.documentElement.dataset.workspacePane !== currentPane) {
+      failures.push("System palette switch changed the active workspace pane");
+    }
+    if (sentinel instanceof HTMLElement && document.activeElement !== sentinel) {
+      failures.push("System palette switch displaced focus from the active pane");
     }
     return {failures};
   }
@@ -1797,6 +1850,7 @@ function browserAuditLibrary() {
     reducedMotion,
     resetPagination,
     sequentialFocusState,
+    switchSystemPalette,
     switchTheme,
   });
 }
@@ -2124,6 +2178,53 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
   await navigate(cdp, `${baseUrl}/`, timeoutMs);
 
   let caseCount = 0;
+  let systemPaletteCases = 0;
+  const systemPalettes = await evaluate(
+    cdp,
+    "window.sdsctlTheme.systemPaletteChoices.slice(1)",
+  );
+  collector.add(
+    "system/theme-switch",
+    await evaluate(cdp, 'window.__sdsctlBrowserAudit.switchTheme("system")'),
+  );
+  for (const palette of systemPalettes) {
+    collector.add(
+      `system-palette/${palette}/switch`,
+      await evaluate(
+        cdp,
+        `window.__sdsctlBrowserAudit.switchSystemPalette(${JSON.stringify(palette)})`,
+      ),
+    );
+    await frames(cdp);
+    for (const [viewportIndex, viewport] of VIEWPORTS.entries()) {
+      await setViewport(cdp, viewport);
+      const panes = viewportIndex === 0 ? PANES : ["scanner"];
+      for (const pane of panes) {
+        systemPaletteCases += 1;
+        await activatePane(cdp, pane);
+        const context =
+          `system-palette/${palette}/` +
+          `${viewport.width}x${viewport.height}@${viewport.dpr}/${pane}`;
+        collector.add(
+          context,
+          await evaluate(
+            cdp,
+            `window.__sdsctlBrowserAudit.normal(${JSON.stringify(pane)}, "system")`,
+          ),
+        );
+        await auditAccessibility(cdp, collector, context, pane);
+      }
+    }
+    console.log(`Audited System palette ${palette}`);
+  }
+  collector.add(
+    "system-palette/auto/restore",
+    await evaluate(
+      cdp,
+      'window.__sdsctlBrowserAudit.switchSystemPalette("auto")',
+    ),
+  );
+
   for (const theme of THEMES) {
     collector.add(
       `${theme}/theme-switch`,
@@ -2254,6 +2355,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     failures: collector.failures,
     ingressDiagnosticsCases,
     ingressHomeAssistantCases,
+    systemPaletteCases,
   };
 }
 
@@ -2990,7 +3092,8 @@ async function run(options) {
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
         "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 12 " +
-        "Ingress-only Home Assistant workspaces, all 12 read-only Ingress " +
+        `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
+        "responsive System-palette cases, all 12 read-only Ingress " +
         "Diagnostics layouts, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with shared authentication and complete lease cleanup.",
