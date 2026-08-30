@@ -831,8 +831,8 @@ The separately versioned `sdsctl` custom integration adds one browsable live
 scanner audio item at `media-source://sdsctl/live`; it does not create an output
 media-player entity. The App packages but never automatically installs or
 activates this Core integration. Exact-digest install, update, rollback, and
-removal remain explicit operator actions, and selected players receive only a
-bounded Home Assistant-owned `audio/mpeg` URL.
+removal remain explicit authenticated Ingress actions, and selected players
+receive only a bounded Home Assistant-owned `audio/mpeg` URL.
 
 See the [Home Assistant App guide](docs/home-assistant-app.md) for architecture,
 installation, configuration, networking, Ingress, local HAOS development,

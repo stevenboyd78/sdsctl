@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an authenticated Ingress-only integration lifecycle panel for protected
+  HAOS installations, where a host Docker CLI is intentionally unavailable.
+  Exact-digest installation, update, rollback, removal, rollback discard, and
+  bridge-key rotation retain their existing atomic and explicit boundaries;
+  bridge-key reveal is concealed, `no-store`, and cleared after 60 seconds.
 - Package the versioned first-party `sdsctl` Home Assistant custom integration
   and its explicit digest-confirmed install, update, rollback, recoverable
   removal, and permanent rollback-discard commands. Normal App startup never

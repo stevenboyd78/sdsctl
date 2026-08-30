@@ -27,6 +27,13 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .home_assistant_integration_ingress import (
+    HomeAssistantIntegrationAction,
+    execute_home_assistant_integration_ingress_action,
+    home_assistant_integration_ingress_status,
+    reveal_home_assistant_integration_bridge_key,
+    rotate_home_assistant_integration_ingress_bridge_key,
+)
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
 from .state import RadioStateSnapshot
@@ -415,7 +422,10 @@ def create_web_dashboard_app(
     )
     def index() -> HTMLResponse:
         return HTMLResponse(
-            content=_dashboard_shell(web_theme_runtime),
+            content=_dashboard_shell(
+                web_theme_runtime,
+                home_assistant_ingress,
+            ),
             headers=dict(_WEB_RESPONSE_HEADERS),
         )
 
@@ -637,29 +647,34 @@ def create_web_dashboard_app(
 
     @app.get("/api/v1")
     def api_index() -> dict[str, object]:
+        links = {
+            "audio": "/api/v1/audio",
+            "dashboard": "/",
+            "docs": "/api/v1/docs",
+            "events": "/api/v1/events",
+            "health": "/healthz",
+            "openapi": "/api/v1/openapi.json",
+            "recording": "/api/v1/recording",
+            "recordings": "/api/v1/recordings",
+            "recording_file": "/api/v1/recordings/file/{identifier}",
+            "redoc": "/api/v1/redoc",
+            "scanner_hold": "/api/v1/scanner/hold/{scope}",
+            "scanner_next": "/api/v1/scanner/next",
+            "scanner_next_scope": "/api/v1/scanner/next/{scope}",
+            "scanner_previous": "/api/v1/scanner/previous",
+            "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
+            "scanner_reconnect": "/api/v1/scanner/reconnect",
+            "snapshot": "/api/v1/snapshot",
+            "status": "/api/v1/status",
+            "waterfall": "/api/v1/waterfall",
+        }
+        if home_assistant_ingress:
+            links["home_assistant_integration"] = (
+                "/api/v1/home-assistant/integration"
+            )
         return {
             "service": _service_metadata(),
-            "links": {
-                "audio": "/api/v1/audio",
-                "dashboard": "/",
-                "docs": "/api/v1/docs",
-                "events": "/api/v1/events",
-                "health": "/healthz",
-                "openapi": "/api/v1/openapi.json",
-                "recording": "/api/v1/recording",
-                "recordings": "/api/v1/recordings",
-                "recording_file": "/api/v1/recordings/file/{identifier}",
-                "redoc": "/api/v1/redoc",
-                "scanner_hold": "/api/v1/scanner/hold/{scope}",
-                "scanner_next": "/api/v1/scanner/next",
-                "scanner_next_scope": "/api/v1/scanner/next/{scope}",
-                "scanner_previous": "/api/v1/scanner/previous",
-                "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
-                "scanner_reconnect": "/api/v1/scanner/reconnect",
-                "snapshot": "/api/v1/snapshot",
-                "status": "/api/v1/status",
-                "waterfall": "/api/v1/waterfall",
-            },
+            "links": links,
         }
 
     @app.get("/healthz")
@@ -668,6 +683,44 @@ def create_web_dashboard_app(
             "status": "ok",
             "service": _service_metadata(),
         }
+
+    if home_assistant_ingress:
+
+        @app.get("/api/v1/home-assistant/integration")
+        def home_assistant_integration_status() -> JSONResponse:
+            return _home_assistant_integration_response(
+                home_assistant_integration_ingress_status,
+            )
+
+        @app.post("/api/v1/home-assistant/integration/{action}")
+        def home_assistant_integration_action(
+            action: HomeAssistantIntegrationAction,
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: execute_home_assistant_integration_ingress_action(
+                    action,
+                    confirmation_digest=confirmation,
+                ),
+            )
+
+        @app.post("/api/v1/home-assistant/integration/bridge-key/reveal")
+        def home_assistant_integration_bridge_key_reveal() -> JSONResponse:
+            return _home_assistant_integration_response(
+                reveal_home_assistant_integration_bridge_key,
+            )
+
+        @app.post("/api/v1/home-assistant/integration/bridge-key/rotate")
+        def home_assistant_integration_bridge_key_rotate(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: rotate_home_assistant_integration_ingress_bridge_key(
+                    confirmation_digest=confirmation,
+                ),
+            )
 
     @app.get("/api/v1/status")
     def status() -> dict[str, object]:
@@ -853,8 +906,217 @@ def _asset_response(name: str, *, media_type: str) -> Response:
     )
 
 
+def _home_assistant_integration_confirmation(payload: object) -> str:
+    if not isinstance(payload, dict) or set(payload) != {"confirm"}:
+        raise HTTPException(
+            status_code=422,
+            detail="An exact confirmation digest is required.",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+    confirmation = payload.get("confirm")
+    if not isinstance(confirmation, str):
+        raise HTTPException(
+            status_code=422,
+            detail="An exact confirmation digest is required.",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+    return confirmation
+
+
+def _home_assistant_integration_response(
+    operation: Callable[[], dict[str, object]],
+) -> JSONResponse:
+    try:
+        payload = operation()
+    except (OSError, SDS200Error, ValueError) as error:
+        raise HTTPException(
+            status_code=409,
+            detail=str(error),
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        ) from error
+    return JSONResponse(
+        payload,
+        headers=dict(_WEB_RESPONSE_HEADERS),
+    )
+
+
 @cache
-def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
+def _home_assistant_integration_panel() -> str:
+    return """      <section
+        class="panel home-assistant-integration-panel"
+        aria-labelledby="home-assistant-integration-title"
+      >
+        <header class="panel-header">
+          <p class="panel-kicker">Home Assistant Core</p>
+          <h2 id="home-assistant-integration-title">Live-audio integration</h2>
+        </header>
+
+        <p
+          id="home-assistant-integration-message"
+          class="home-assistant-integration-message"
+          role="status"
+          aria-live="polite"
+        >Loading integration lifecycle status.</p>
+
+        <dl class="status-list status-list-compact">
+          <div>
+            <dt>Packaged version</dt>
+            <dd id="home-assistant-integration-artifact-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Packaged digest</dt>
+            <dd
+              id="home-assistant-integration-artifact-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Installed version</dt>
+            <dd id="home-assistant-integration-current-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Installed digest</dt>
+            <dd
+              id="home-assistant-integration-current-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Rollback version</dt>
+            <dd id="home-assistant-integration-rollback-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Rollback digest</dt>
+            <dd
+              id="home-assistant-integration-rollback-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Bridge-key digest</dt>
+            <dd
+              id="home-assistant-integration-bridge-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+        </dl>
+
+        <div class="home-assistant-integration-confirmation">
+          <label for="home-assistant-integration-confirm">
+            Exact SHA-256 confirmation
+          </label>
+          <input
+            id="home-assistant-integration-confirm"
+            class="technical-value"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <div class="home-assistant-integration-confirmation-choices">
+            <button
+              id="home-assistant-integration-use-artifact"
+              type="button"
+              disabled
+            >Use packaged</button>
+            <button
+              id="home-assistant-integration-use-current"
+              type="button"
+              disabled
+            >Use installed</button>
+            <button
+              id="home-assistant-integration-use-rollback"
+              type="button"
+              disabled
+            >Use rollback</button>
+            <button
+              id="home-assistant-integration-use-bridge"
+              type="button"
+              disabled
+            >Use bridge key</button>
+          </div>
+        </div>
+
+        <div
+          class="home-assistant-integration-actions"
+          role="group"
+          aria-label="Home Assistant integration lifecycle"
+        >
+          <button id="home-assistant-integration-refresh" type="button">
+            Refresh
+          </button>
+          <button
+            id="home-assistant-integration-install"
+            type="button"
+            data-home-assistant-integration-action="install"
+          >Install</button>
+          <button
+            id="home-assistant-integration-update"
+            type="button"
+            data-home-assistant-integration-action="update"
+          >Update</button>
+          <button
+            id="home-assistant-integration-rollback"
+            type="button"
+            data-home-assistant-integration-action="rollback"
+          >Rollback</button>
+          <button
+            id="home-assistant-integration-remove"
+            type="button"
+            data-home-assistant-integration-action="remove"
+          >Remove</button>
+          <button
+            id="home-assistant-integration-discard-rollback"
+            type="button"
+            data-home-assistant-integration-action="discard-rollback"
+          >Discard rollback</button>
+        </div>
+
+        <div class="home-assistant-integration-secret">
+          <label for="home-assistant-integration-bridge-key">Bridge key</label>
+          <input
+            id="home-assistant-integration-bridge-key"
+            class="technical-value"
+            type="password"
+            value=""
+            readonly
+            autocomplete="off"
+          >
+          <div class="home-assistant-integration-actions">
+            <button id="home-assistant-integration-reveal-key" type="button">
+              Reveal key
+            </button>
+            <button
+              id="home-assistant-integration-show-key"
+              type="button"
+              disabled
+            >Show</button>
+            <button
+              id="home-assistant-integration-copy-key"
+              type="button"
+              disabled
+            >Copy</button>
+            <button
+              id="home-assistant-integration-rotate-key"
+              type="button"
+            >Rotate key</button>
+          </div>
+        </div>
+
+        <p class="home-assistant-integration-guidance">
+          Core is never restarted automatically. Restart Core after an install,
+          update, rollback, or removal. Restart this App immediately after key
+          rotation, then complete integration reauthentication.
+        </p>
+      </section>"""
+
+
+@cache
+def _dashboard_shell(
+    runtime: WebThemeRuntimeRegistry,
+    home_assistant_ingress: bool,
+) -> str:
     theme_stylesheet_links = "\n".join(
         (
             f'  <link rel="stylesheet" href="{asset.manifest.stylesheet_url}">'
@@ -883,6 +1145,14 @@ def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
         _read_web_asset("dashboard.html")
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
+        .replace(
+            "        <!-- SDSCTL_HOME_ASSISTANT_INTEGRATION_PANEL -->",
+            (
+                _home_assistant_integration_panel()
+                if home_assistant_ingress
+                else ""
+            ),
+        )
     )
 
 

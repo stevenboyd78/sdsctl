@@ -336,7 +336,8 @@ select:focus-visible,
 .audio-playback-status,
 .scanner-control-status,
 .recording-status,
-.recordings-message {
+.recordings-message,
+.home-assistant-integration-message {
   min-height: 1.5em;
   margin: var(--space-5) 0 var(--space-3);
   color: var(--muted);
@@ -345,7 +346,9 @@ select:focus-visible,
 .audio-controls,
 .scanner-controls,
 .scanner-connection-actions,
-.recording-controls {
+.recording-controls,
+.home-assistant-integration-actions,
+.home-assistant-integration-confirmation-choices {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
@@ -362,6 +365,8 @@ select:focus-visible,
 .scanner-connection-actions button,
 .recording-controls button,
 .recording-library button,
+.home-assistant-integration-actions button,
+.home-assistant-integration-confirmation-choices button,
 .recording-action {
   min-width: 7rem;
   padding: var(--space-3) var(--space-4);
@@ -378,6 +383,8 @@ select:focus-visible,
 .scanner-connection-actions button:hover:not(:disabled),
 .recording-controls button:hover:not(:disabled),
 .recording-library button:hover:not(:disabled),
+.home-assistant-integration-actions button:hover:not(:disabled),
+.home-assistant-integration-confirmation-choices button:hover:not(:disabled),
 .recording-action:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
@@ -386,7 +393,9 @@ select:focus-visible,
 .scanner-controls button:disabled,
 .scanner-connection-actions button:disabled,
 .recording-controls button:disabled,
-.recording-library button:disabled {
+.recording-library button:disabled,
+.home-assistant-integration-actions button:disabled,
+.home-assistant-integration-confirmation-choices button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
@@ -1510,6 +1519,61 @@ body {
   min-height: 0;
 }
 
+.diagnostics-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: var(--workspace-gap);
+  overflow: hidden;
+}
+
+.home-assistant-integration-panel {
+  overflow: auto;
+}
+
+.home-assistant-integration-panel .status-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--workspace-gap);
+}
+
+.home-assistant-integration-confirmation,
+.home-assistant-integration-secret {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.home-assistant-integration-confirmation label,
+.home-assistant-integration-secret label {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.home-assistant-integration-confirmation input,
+.home-assistant-integration-secret input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--background);
+}
+
+.home-assistant-integration-actions {
+  margin-top: var(--space-3);
+}
+
+.home-assistant-integration-actions button,
+.home-assistant-integration-confirmation-choices button {
+  min-width: 0;
+}
+
+.home-assistant-integration-guidance {
+  margin: var(--space-4) 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
 .scanner-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1576,6 +1640,15 @@ body {
 
   .dashboard-message {
     max-width: 42%;
+  }
+
+  .diagnostics-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 0.55fr) minmax(0, 1.45fr);
+  }
+
+  .home-assistant-integration-panel .status-list {
+    grid-template-columns: 1fr;
   }
 
   .workspace-tabs {
@@ -2020,6 +2093,17 @@ body {
 
   .dashboard {
     display: block;
+  }
+
+  .diagnostics-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    height: auto;
+    overflow: visible;
+  }
+
+  .home-assistant-integration-panel {
+    overflow: visible;
   }
 
   .dashboard-message {

@@ -346,8 +346,8 @@ that exposes `media-source://sdsctl/live`. The App does not install, activate,
 reload, restart, update, or remove that integration during normal startup. See
 [the live-audio integration guide](home-assistant-live-audio.md) for its exact
 MP3 representation, private Core-to-App capability boundary, deliberate
-digest-confirmed install/update/rollback/removal commands, App DNS identity
-rules, automation syntax, target limitations, and test workflow.
+Ingress-only digest-confirmed install/update/rollback/removal actions, App DNS
+identity rules, automation syntax, target limitations, and test workflow.
 
 ## Bundled Lovelace cards
 

@@ -59,37 +59,23 @@ Browser audio also remains a separately started App Ingress client.
 
 The custom integration is packaged at version `0.1.0`. The App never installs,
 updates, activates, reloads, restarts, or removes it during normal startup. Every
-filesystem mutation below is an explicit terminal action with exact SHA-256
-confirmation. The command reports that Home Assistant Core was not restarted or
-reloaded.
+filesystem mutation below is an explicit authenticated Ingress action with an
+exact SHA-256 confirmation. The panel reports that Home Assistant Core was not
+restarted or reloaded.
 
-On Home Assistant OS, first open an Advanced SSH terminal and list the running
-containers so you can select the one exact published or deliberately named Local
-sds200 App:
+On Home Assistant OS, open the one exact published or deliberately named Local
+sds200 App and choose **Web UI > Diagnostics > Live-audio integration**. Do not
+install a Docker client, disable Advanced SSH protection, or give another App
+host-container access. The protected Advanced SSH App does not provide the
+host's general-purpose Docker CLI, and this workflow does not require it.
 
-```bash
-docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-```
+The panel displays the packaged, installed, rollback, and bridge-key identities
+without displaying the private bridge key. For a first installation:
 
-Set `APP_CONTAINER` to that exact container name. Do not use a broad match if
-more than one sds200 App exists.
-
-```bash
-APP_CONTAINER='REPLACE_WITH_EXACT_CONTAINER_NAME'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle artifact
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle status
-```
-
-Copy the displayed packaged `digest=` value exactly, then install:
-
-```bash
-INTEGRATION_DIGEST='REPLACE_WITH_EXACT_PACKAGED_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle install \
-  --confirm "$INTEGRATION_DIGEST"
-```
+1. verify the displayed packaged version and digest;
+2. choose **Use packaged** to place that exact digest in the confirmation field;
+3. choose **Install**; and
+4. verify that the same version and digest appear under **Installed**.
 
 The destination is
 `/homeassistant/custom_components/sdsctl`, the App's existing mapped Home
@@ -98,41 +84,40 @@ stage, complete readback, and atomic publication. It refuses symlinks, an
 unexpected destination shape, an existing integration, or an unconfirmed
 digest.
 
-Restart Home Assistant Core explicitly after installation. Then open
+Restart Home Assistant Core explicitly after installation. From an Advanced SSH
+terminal, the supported command is:
+
+```bash
+ha core restart
+```
+
+Then open
 **Settings > Devices & services > Add integration**, choose
 **sdsctl live scanner audio**, and enter:
 
 - the exact internal App DNS alias;
 - private port `8100`;
-- the bridge key printed by the explicit command below.
+- the bridge key returned by the panel's explicit **Reveal key** action.
 
-```bash
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle bridge-key
-```
-
-The bridge-key command prints the credential only to the invoking terminal. Do
-not paste it into logs, MQTT, dashboard YAML, entity state, filenames, issue
-reports, screenshots, or diagnostics.
+The key remains concealed by default. **Show** reveals it and **Copy** writes it
+to the browser clipboard. The dashboard clears the key from its document after
+60 seconds, when the page becomes hidden, or when it unloads. The response is
+`no-store`. Do not paste the key into logs, MQTT, dashboard YAML, entity state,
+filenames, issue reports, screenshots, or diagnostics.
 
 ### Bridge-key rotation
 
-The same command also prints a non-secret `digest=` of the current key. To rotate
-the credential, copy that digest exactly and run:
+To rotate the credential, verify the displayed non-secret **Bridge-key digest**,
+choose **Use bridge key**, and then choose **Rotate key**. Confirm the browser
+warning before continuing.
 
-```bash
-CURRENT_KEY_DIGEST='REPLACE_WITH_REPORTED_CURRENT_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle rotate-bridge-key \
-  --confirm "$CURRENT_KEY_DIGEST"
-```
-
-The rotation command atomically replaces the persistent mode-`0600` key and
-prints the new key once to the invoking terminal. It deliberately does not
-reload either running process. Restart the sdsctl App immediately so its private
-service loads the replacement, then complete the Home Assistant integration's
-reauthentication prompt with the new key. Existing outstanding App capabilities
-remain bounded to at most 30 seconds, and an App restart closes active streams.
+The action atomically replaces the persistent mode-`0600` key and returns the
+new key only in that authenticated, `no-store` response. It deliberately does
+not reload either running process. Copy the replacement and restart the sdsctl
+App immediately so its private service loads the replacement, then complete the
+Home Assistant integration's reauthentication prompt with the new key. Existing
+outstanding App capabilities remain bounded to at most 30 seconds, and an App
+restart closes active streams.
 
 Home Assistant App network aliases use `{REPO}_{SLUG}` with underscores changed
 to hyphens for DNS. For example, a Local App named `local_sds200` uses
@@ -143,61 +128,35 @@ flow contacts only the exact alias entered by the operator.
 
 ## Update, rollback, and removal
 
-Inspect before every lifecycle action:
-
-```bash
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle status
-```
+Refresh and inspect the Ingress lifecycle panel before every action.
 
 An update requires the new packaged digest and retains the previous complete
-integration as one private same-filesystem rollback image:
+integration as one private same-filesystem rollback image. Choose **Use
+packaged**, then **Update**, and verify both the new installed identity and the
+retained rollback identity.
 
-```bash
-NEW_DIGEST='REPLACE_WITH_NEW_PACKAGED_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle update \
-  --confirm "$NEW_DIGEST"
-```
-
-Restart Core explicitly. If validation fails, copy the exact
-`rollback_digest=` from `status` and swap the retained version back:
-
-```bash
-ROLLBACK_DIGEST='REPLACE_WITH_REPORTED_ROLLBACK_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle rollback \
-  --confirm "$ROLLBACK_DIGEST"
-```
-
-Restart Core again after rollback. The displaced current image becomes the new
-rollback image, so the swap is reversible.
+Restart Core explicitly. If validation fails, choose **Use rollback**, then
+**Rollback**, and restart Core again. The displaced current image becomes the
+new rollback image, so the swap is reversible.
 
 For removal, first delete the **sdsctl live scanner audio** config entry through
-Home Assistant. Then copy the exact `current_digest=` from `status` and perform
-the recoverable removal:
-
-```bash
-CURRENT_DIGEST='REPLACE_WITH_REPORTED_CURRENT_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle remove \
-  --confirm "$CURRENT_DIGEST"
-```
+Home Assistant. Then choose **Use installed**, choose **Remove**, and confirm the
+browser warning.
 
 Restart Core. `remove` moves the exact current directory into the rollback slot;
 it does not permanently delete it. Restore it with `rollback`, or permanently
-delete only that retained image with a separate exact confirmation:
-
-```bash
-ROLLBACK_DIGEST='REPLACE_WITH_REPORTED_ROLLBACK_SHA256'
-docker exec "$APP_CONTAINER" \
-  python -m sds200.home_assistant_integration_lifecycle discard-rollback \
-  --confirm "$ROLLBACK_DIGEST"
-```
+delete only that retained image by choosing **Use rollback**, **Discard
+rollback**, and confirming the separate browser warning.
 
 Only `discard-rollback` is permanent. It never targets the Home Assistant
 configuration root or any component other than the retained sdsctl rollback
 directory.
+
+The `python -m sds200.home_assistant_integration_lifecycle` command remains
+available for standalone development containers and direct diagnostic shells.
+It provides the same `artifact`, `status`, `install`, `update`, `rollback`,
+`remove`, `discard-rollback`, `bridge-key`, and `rotate-bridge-key` operations.
+It is not the HAOS Advanced SSH workflow.
 
 ## Playback and automations
 
