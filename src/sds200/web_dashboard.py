@@ -1143,6 +1143,15 @@ def _dashboard_shell(
     )
     return (
         _read_web_asset("dashboard.html")
+        .replace(
+            'class="diagnostics-layout"',
+            (
+                'class="diagnostics-layout diagnostics-layout-with-integration"'
+                if home_assistant_ingress
+                else 'class="diagnostics-layout"'
+            ),
+            1,
+        )
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
         .replace(

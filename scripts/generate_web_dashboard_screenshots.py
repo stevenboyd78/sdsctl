@@ -38,7 +38,10 @@ from sds200.daemon_waterfall_protocol import (
     DaemonWaterfallRecordKind,
 )
 from sds200.exceptions import DaemonDisconnectedError
-from sds200.web_dashboard import create_web_dashboard_app
+from sds200.web_dashboard import (
+    WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT,
+    create_web_dashboard_app,
+)
 
 _THEME_STORAGE_KEY = "sdsctl.web.theme"
 _DEMO_URL_PREFIX = "/__demo/prefix"
@@ -724,8 +727,9 @@ class _DemoUrlPrefixMiddleware:
 class _DemoHomeAssistantIngressMiddleware:
     """Route one fictional authenticated Ingress prefix to the demo App."""
 
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, ingress_app: ASGIApp) -> None:
         self._app = app
+        self._ingress_app = ingress_app
 
     async def __call__(
         self,
@@ -747,7 +751,11 @@ class _DemoHomeAssistantIngressMiddleware:
             rewritten_scope["root_path"] = (
                 f"{scope.get('root_path', '')}{_DEMO_HOME_ASSISTANT_INGRESS_PREFIX}"
             )
-            await self._app(rewritten_scope, receive, send)
+            rewritten_scope["client"] = (
+                WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT,
+                0,
+            )
+            await self._ingress_app(rewritten_scope, receive, send)
             return
         await self._app(scope, receive, send)
 
@@ -765,7 +773,13 @@ class _DemoClockMiddleware:
         send: Send,
     ) -> None:
         path = scope.get("path", "")
-        shell_paths = {"/", _DEMO_URL_PREFIX, f"{_DEMO_URL_PREFIX}/"}
+        shell_paths = {
+            "/",
+            _DEMO_URL_PREFIX,
+            f"{_DEMO_URL_PREFIX}/",
+            _DEMO_HOME_ASSISTANT_INGRESS_PREFIX,
+            f"{_DEMO_HOME_ASSISTANT_INGRESS_PREFIX}/",
+        }
         if scope["type"] != "http" or scope.get("method") != "GET" or path not in shell_paths:
             await self._app(scope, receive, send)
             return
@@ -851,6 +865,11 @@ def create_demo_app() -> FastAPI:
         DemoDaemonApiClient,
         waterfall_client_factory=DemoDaemonWaterfallClient,
     )
+    ingress_app = create_web_dashboard_app(
+        DemoDaemonApiClient,
+        waterfall_client_factory=DemoDaemonWaterfallClient,
+        home_assistant_ingress=True,
+    )
 
     @app.get(
         "/__demo/theme/{theme}",
@@ -909,7 +928,10 @@ def create_demo_app() -> FastAPI:
     # demo-only; the middleware changes only the request scope presented to the
     # unmodified production dashboard routes.
     app.add_middleware(_DemoUrlPrefixMiddleware)
-    app.add_middleware(_DemoHomeAssistantIngressMiddleware)
+    app.add_middleware(
+        _DemoHomeAssistantIngressMiddleware,
+        ingress_app=ingress_app,
+    )
     app.add_middleware(_DemoClockMiddleware)
 
     return app

@@ -280,12 +280,21 @@ def test_demo_app_mounts_an_ingress_style_url_prefix() -> None:
         shell = client.get("/__demo/prefix/")
         stylesheet = client.get("/__demo/prefix/assets/dashboard.css")
         status = client.get("/__demo/prefix/api/v1/status")
+        ingress_shell = client.get(
+            f"{screenshots._DEMO_HOME_ASSISTANT_INGRESS_PREFIX}/"
+        )
 
     assert shell.status_code == 200
     assert 'href="assets/dashboard.css"' in shell.text
     assert stylesheet.status_code == 200
     assert status.status_code == 200
     assert status.json()["daemon"]["snapshot"]["scanner_model"] == "SDS200"
+    assert ingress_shell.status_code == 200
+    assert 'id="home-assistant-integration-title"' in ingress_shell.text
+    assert 'class="diagnostics-layout diagnostics-layout-with-integration"' in (
+        ingress_shell.text
+    )
+    assert "__demo/fixed-clock.js" in ingress_shell.text
 
 
 def test_demo_app_exposes_sanitized_home_assistant_waterfall_fixture() -> None:

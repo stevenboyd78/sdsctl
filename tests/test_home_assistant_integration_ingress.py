@@ -132,6 +132,59 @@ def test_ingress_action_dispatches_exact_confirmation(
     }
 
 
+def test_ingress_action_dispatches_each_remaining_lifecycle_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[tuple[str, str]] = []
+
+    def operation(name: str):
+        def execute(*, confirmation_digest: str) -> HomeAssistantIntegrationStatus:
+            observed.append((name, confirmation_digest))
+            return _status()
+
+        return execute
+
+    monkeypatch.setattr(
+        integration_ingress,
+        "install_home_assistant_integration",
+        operation("install"),
+    )
+    monkeypatch.setattr(
+        integration_ingress,
+        "rollback_home_assistant_integration",
+        operation("rollback"),
+    )
+    monkeypatch.setattr(
+        integration_ingress,
+        "remove_home_assistant_integration",
+        operation("remove"),
+    )
+    monkeypatch.setattr(
+        integration_ingress,
+        "discard_home_assistant_integration_rollback",
+        operation("discard-rollback"),
+    )
+
+    for action in ("install", "rollback", "remove", "discard-rollback"):
+        payload = integration_ingress.execute_home_assistant_integration_ingress_action(
+            action,  # type: ignore[arg-type]
+            confirmation_digest=_ARTIFACT_DIGEST,
+        )
+        assert payload["action"] == action
+
+    assert observed == [
+        ("install", _ARTIFACT_DIGEST),
+        ("rollback", _ARTIFACT_DIGEST),
+        ("remove", _ARTIFACT_DIGEST),
+        ("discard-rollback", _ARTIFACT_DIGEST),
+    ]
+    with pytest.raises(ValueError, match="lifecycle action is invalid"):
+        integration_ingress.execute_home_assistant_integration_ingress_action(
+            "invalid",  # type: ignore[arg-type]
+            confirmation_digest=_ARTIFACT_DIGEST,
+        )
+
+
 def test_bridge_key_reveal_is_explicit_and_exact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -151,6 +204,41 @@ def test_bridge_key_reveal_is_explicit_and_exact(
         "version": 1,
         "bridge_key": "private-bridge-key",
         "bridge_key_digest": _BRIDGE_DIGEST,
+    }
+
+
+def test_bridge_key_rotation_returns_exact_restart_contract(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed: list[str] = []
+
+    def rotate(*, confirmation_digest: str) -> str:
+        observed.append(confirmation_digest)
+        return "replacement-bridge-key"
+
+    monkeypatch.setattr(
+        integration_ingress,
+        "rotate_home_assistant_integration_bridge_key",
+        rotate,
+    )
+    monkeypatch.setattr(
+        integration_ingress,
+        "home_assistant_integration_bridge_key_digest",
+        lambda: _BRIDGE_DIGEST,
+    )
+
+    payload = integration_ingress.rotate_home_assistant_integration_ingress_bridge_key(
+        confirmation_digest=_ARTIFACT_DIGEST,
+    )
+
+    assert observed == [_ARTIFACT_DIGEST]
+    assert payload == {
+        "protocol": "sdsctl.home-assistant-integration-lifecycle",
+        "version": 1,
+        "bridge_key": "replacement-bridge-key",
+        "bridge_key_digest": _BRIDGE_DIGEST,
+        "app_restart_required": True,
+        "integration_reauthentication_required": True,
     }
 
 
@@ -213,6 +301,9 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
 
     assert ingress_shell.status_code == 200
     assert 'id="home-assistant-integration-title"' in ingress_shell.text
+    assert 'class="diagnostics-layout diagnostics-layout-with-integration"' in (
+        ingress_shell.text
+    )
     assert "docker exec" not in ingress_shell.text
     assert ingress_status.status_code == 200
     assert ingress_status.json() == payload
@@ -278,3 +369,85 @@ def test_ingress_bridge_key_route_never_exists_outside_ingress() -> None:
         )
 
     assert response.status_code == 404
+
+
+def test_ingress_index_and_bridge_key_routes_are_exact(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_factory() -> object:
+        raise AssertionError("lifecycle request must not reach scanner daemon")
+
+    observed: list[str] = []
+    monkeypatch.setattr(
+        web_dashboard,
+        "reveal_home_assistant_integration_bridge_key",
+        lambda: {"bridge_key": "private-bridge-key"},
+    )
+
+    def rotate(*, confirmation_digest: str) -> dict[str, object]:
+        observed.append(confirmation_digest)
+        return {"bridge_key_digest": _BRIDGE_DIGEST}
+
+    monkeypatch.setattr(
+        web_dashboard,
+        "rotate_home_assistant_integration_ingress_bridge_key",
+        rotate,
+    )
+    app = web_dashboard.create_web_dashboard_app(
+        forbidden_factory,
+        home_assistant_ingress=True,
+    )
+
+    with _ingress_client(app) as client:
+        index = client.get("/api/v1")
+        revealed = client.post(
+            "/api/v1/home-assistant/integration/bridge-key/reveal",
+        )
+        invalid = client.post(
+            "/api/v1/home-assistant/integration/bridge-key/rotate",
+            json={"confirm": None},
+        )
+        rotated = client.post(
+            "/api/v1/home-assistant/integration/bridge-key/rotate",
+            json={"confirm": _ARTIFACT_DIGEST},
+        )
+
+    assert index.status_code == 200
+    assert index.json()["links"]["home_assistant_integration"] == (
+        "/api/v1/home-assistant/integration"
+    )
+    assert revealed.status_code == 200
+    assert revealed.json() == {"bridge_key": "private-bridge-key"}
+    assert invalid.status_code == 422
+    assert rotated.status_code == 200
+    assert rotated.json() == {"bridge_key_digest": _BRIDGE_DIGEST}
+    assert observed == [_ARTIFACT_DIGEST]
+
+
+def test_ingress_lifecycle_route_maps_safe_operation_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_factory() -> object:
+        raise AssertionError("lifecycle request must not reach scanner daemon")
+
+    def fail() -> dict[str, object]:
+        raise ValueError("lifecycle unavailable")
+
+    monkeypatch.setattr(
+        web_dashboard,
+        "reveal_home_assistant_integration_bridge_key",
+        fail,
+    )
+    app = web_dashboard.create_web_dashboard_app(
+        forbidden_factory,
+        home_assistant_ingress=True,
+    )
+
+    with _ingress_client(app) as client:
+        response = client.post(
+            "/api/v1/home-assistant/integration/bridge-key/reveal",
+        )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "lifecycle unavailable"}
+    assert response.headers["cache-control"] == "no-store"

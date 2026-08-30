@@ -24,11 +24,11 @@
   --radius-large: 1rem;
   --scanner-bezel: #303b48;
   --scanner-bezel-edge: #111923;
-  --scanner-display: #e7f0df;
-  --scanner-display-emphasis: #d9e9cf;
-  --scanner-display-ink: #142719;
-  --scanner-display-muted: #405d47;
-  --scanner-display-rule: #9db39e;
+  --scanner-display: #eef4fb;
+  --scanner-display-emphasis: #dfeaf7;
+  --scanner-display-ink: #172033;
+  --scanner-display-muted: #526a88;
+  --scanner-display-rule: #9fb2c9;
   --scanner-key: #e3e9f0;
 }
 
@@ -244,11 +244,11 @@
     --shadow: 0 0.75rem 2rem rgb(0 0 0 / 0.3);
     --scanner-bezel: #080d13;
     --scanner-bezel-edge: #000000;
-    --scanner-display: #07130d;
-    --scanner-display-emphasis: #0b1b12;
-    --scanner-display-ink: #d8ffe3;
-    --scanner-display-muted: #8ebc9a;
-    --scanner-display-rule: #285d38;
+    --scanner-display: #111b2b;
+    --scanner-display-emphasis: #1c2940;
+    --scanner-display-ink: #f1f5fb;
+    --scanner-display-muted: #9fb3cc;
+    --scanner-display-rule: #3b4b63;
     --scanner-key: #202c3a;
   }
 

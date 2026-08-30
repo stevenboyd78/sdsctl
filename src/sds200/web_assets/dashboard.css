@@ -929,6 +929,10 @@ body {
   min-height: 0;
 }
 
+.diagnostics-layout > .panel {
+  grid-area: auto;
+}
+
 .panel {
   min-width: 0;
   min-height: 0;
@@ -1521,9 +1525,13 @@ body {
 
 .diagnostics-layout {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--workspace-gap);
   overflow: hidden;
+}
+
+.diagnostics-layout-with-integration {
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
 }
 
 .home-assistant-integration-panel {
@@ -1642,7 +1650,7 @@ body {
     max-width: 42%;
   }
 
-  .diagnostics-layout {
+  .diagnostics-layout-with-integration {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(0, 0.55fr) minmax(0, 1.45fr);
   }

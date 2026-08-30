@@ -713,6 +713,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     )
     assert "white-space: nowrap !important" in viewport_stylesheet.text
     assert "grid-area: auto" in stylesheet_source.text
+    assert ".diagnostics-layout > .panel" in stylesheet_source.text
+    assert "grid-area: auto !important" in viewport_stylesheet.text
     assert "height: 100dvh" in stylesheet_source.text
     assert "overflow: hidden" in stylesheet_source.text
     assert "grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr)" in (
@@ -774,6 +776,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
 
     assert "--scanner-display:" in theme_text["system"]
     assert "--scanner-display-ink:" in theme_text["system"]
+    assert "--scanner-display: #eef4fb;" in theme_text["system"]
+    assert "--scanner-display: #111b2b;" in theme_text["system"]
     assert (
         ':root[data-theme="system"] '
         ".recordings-pagination button:hover:not(:disabled)"
