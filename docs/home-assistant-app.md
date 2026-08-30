@@ -387,11 +387,14 @@ install, execute, or replace managed modules.
 
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. The original **SDS200 Scanner**
-card remains unchanged. The additive **SDS200 Display** card provides five
+card remains read-only. The additive **SDS200 Display** card provides five
 explicit layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—plus
 an opt-in Auto layout, and Color, Black on White, and White on Black palettes.
 The **SDS200 Waterfall** card renders the App's authenticated relative,
-uncalibrated spectrum stream with bounded rolling history.
+uncalibrated spectrum stream with bounded rolling history. All three graphical
+editors additionally expose the same 21 System web palettes. The selection is
+stored per card, changes presentation only, and does not follow or alter the
+web dashboard's browser-local palette choice.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -428,6 +431,7 @@ YAML configuration remains available as a fallback:
 ```yaml
 type: custom:sds200-card
 title: SDS200 Scanner
+palette: theme  # Home Assistant theme or one System web palette
 entities:
   scanner_connected: binary_sensor.REPLACE_ME
   system: sensor.REPLACE_ME
@@ -462,7 +466,7 @@ type: custom:sds200-display-card
 title: SDS200 Display
 layout: auto  # auto, simple, detail, search, weather, or tone_out
 scan_layout: detail  # simple or detail when Auto is scanning or cannot classify
-palette: color  # color, black_on_white, or white_on_black
+palette: color  # scanner preset or one System web palette
 fit: viewport   # card or viewport
 entities:
   scanner_connected: binary_sensor.REPLACE_ME
@@ -514,7 +518,7 @@ editor exposes only bounded presentation choices. Equivalent YAML is:
 type: custom:sds200-waterfall-card
 title: SDS200 Waterfall
 density: standard  # compact, standard, or tall
-palette: theme  # theme, cyan, green, amber, or monochrome
+palette: theme  # theme, Waterfall preset, or one System web palette
 history: 120  # 60, 120, or 240 frames
 show_scale: true
 show_telemetry: true

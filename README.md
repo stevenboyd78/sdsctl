@@ -809,7 +809,8 @@ PCMU stream.
 The App installs the unchanged compact **SDS200 Scanner** Lovelace card, the
 additive **SDS200 Display** card, and an authenticated **SDS200 Waterfall** card.
 The display card offers five explicit
-scanner-style layouts plus an opt-in automatic layout, three palettes, and a 4:3
+scanner-style layouts plus an opt-in automatic layout, scanner presets and all
+21 System web palettes, and a 4:3
 viewport-fit option. Automatic mode uses the fixed Screen Kind entity to select
 Search/Close Call, Weather, or Tone-Out presentation and a configured Simple or
 Detail scanning fallback. Numeric zero configured for a Tone-Out tone is shown

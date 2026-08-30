@@ -36,6 +36,17 @@ removable directories. Selecting one does not change theme discovery, package
 identity, lifecycle validation, or the `sdsctl.web.theme` value; it only updates
 the browser-local `sdsctl.web.system-palette` choice while System is active.
 
+The three built-in Home Assistant cards reuse those same 21 color definitions
+as explicit per-card palette choices in their graphical editors. This is not a
+shared browser preference: each Lovelace card stores its selected palette in
+that card's ordinary dashboard configuration, so cards may use different
+schemes and do not follow the web dashboard's browser-local selection. The
+compact Scanner card may instead follow the active Home Assistant theme;
+Display also retains Color, Black on White, and White on Black; and Waterfall
+also retains its theme, cyan, green, amber, and monochrome choices. These
+packaged choices do not create discoverable or managed third-party theme
+packages.
+
 ## Validate and inspect
 
 Validate one unpacked local package without changing its source or managed

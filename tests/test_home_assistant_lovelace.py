@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,6 +50,28 @@ def card_text() -> str:
     )
 
 
+def run_card_javascript(body: str) -> object:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is required for compact-card runtime validation.")
+
+    harness = f"""
+global.HTMLElement = class {{}};
+global.CustomEvent = class {{}};
+global.customElements = {{get: () => null, define: () => undefined}};
+global.window = {{}};
+{card_text()}
+{body}
+"""
+    completed = subprocess.run(
+        [node, "-e", harness],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(completed.stdout)
+
+
 def test_lovelace_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL == "/local/sds200/sds200-card.js"
 
@@ -81,6 +106,53 @@ def test_lovelace_card_uses_builtin_graphical_configuration_form() -> None:
     assert "computeLabel:" in text
     assert "computeHelper:" in text
     assert "assertConfig:" in text
+
+
+def test_lovelace_card_reuses_every_system_web_palette() -> None:
+    expected = {
+        item["id"]: [
+            item[field]
+            for field in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            )
+        ]
+        for item in json.loads(
+            Path("src/sds200/web_assets/system-palettes.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    }
+    result = run_card_javascript(
+        """
+const properties = new Map();
+applyCardSystemPalette({style: {setProperty: (name, value) => {
+  properties.set(name, value);
+}}}, "nord");
+process.stdout.write(JSON.stringify({
+  palettes: SDS200_CARD_SYSTEM_PALETTES,
+  options: SDS200_CARD_PALETTES.map(({value}) => value),
+  config: requireCardConfig({palette: "nord", entities: {}}),
+  properties: Object.fromEntries(properties),
+}));
+"""
+    )
+
+    assert result["palettes"] == expected
+    assert result["options"] == ["theme", *expected]
+    assert result["config"]["palette"] == "nord"
+    assert result["properties"]["--sds200-card-background"] == "#2E3440"
+    assert result["properties"]["--sds200-card-success"] == "#A3BE8C"
 
 
 def test_lovelace_card_preserves_old_layout_when_new_details_are_unselected() -> None:

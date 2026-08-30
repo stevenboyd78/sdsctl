@@ -95,9 +95,9 @@ def test_built_in_modules_preserve_pre_extraction_bytes() -> None:
     }
 
     assert hashes == {
-        "compact": "0c6c09d7c127f358f58b192c6709e5983dffe0a02199f23f20ae46f13ce8d10d",
-        "sds200-display": "9b73390b49064dfd250384eb5e726a20e10514e46c5904e074a2c0890609bd80",
-        "waterfall": "1401fff2bd67bf4583b866d0eae296a3f0e873425fc138baac32675f7cd29fc2",
+        "compact": "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8",
+        "sds200-display": "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72",
+        "waterfall": "87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030",
     }
 
 

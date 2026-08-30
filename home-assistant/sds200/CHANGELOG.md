@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add the 21 System web palettes as per-card graphical-editor choices in the
+  compact Scanner, scanner-style Display, and Waterfall cards. Existing Home
+  Assistant theme-following and specialized Display/Waterfall presets remain
+  compatible, and card palette selection stays presentation-only.
 - Keep the live daemon-event status right-aligned and single-line when a
   non-System theme hides the System palette selector instead of leaving the
   message in the selector's narrow center track.

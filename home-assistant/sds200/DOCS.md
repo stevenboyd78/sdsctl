@@ -203,10 +203,12 @@ scan user-writable theme directories or discover third-party packages.
 
 Register each URL once in **Settings > Dashboards > Resources** as a
 **JavaScript Module**. HACS is not required. **SDS200 Scanner** remains the
-unchanged compact card. **SDS200 Display** adds Simple, Detail, Search/Close
+read-only compact card. **SDS200 Display** adds Simple, Detail, Search/Close
 Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
 Black palettes. **SDS200 Waterfall** adds a bounded responsive Canvas view of
-the authenticated App's relative, uncalibrated waterfall stream.
+the authenticated App's relative, uncalibrated waterfall stream. All three
+graphical editors also offer the same 21 System web palettes as independent,
+presentation-only per-card choices.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -242,6 +244,7 @@ YAML configuration remains available as a fallback:
 ```yaml
 type: custom:sds200-card
 title: SDS200 Scanner
+palette: theme  # Home Assistant theme or one System web palette
 entities:
   scanner_connected: binary_sensor.REPLACE_ME
   system: sensor.REPLACE_ME
@@ -299,8 +302,9 @@ entities:
 
 Use `auto`, `simple`, `detail`, `search`, `weather`, or `tone_out` for `layout`;
 and `simple` or `detail` for `scan_layout` when Auto is active;
-`color`, `black_on_white`, or `white_on_black` for `palette`; and `card` or
-`viewport` for `fit`. Viewport fit retains a centered 4:3 surface and grows only
+`color`, `black_on_white`, `white_on_black`, or one System web palette for
+`palette`; and `card` or `viewport` for `fit`. Viewport fit retains a centered
+4:3 surface and grows only
 to the smaller width- or height-constrained dimension, without internal
 scrolling. The original grid is inspired by the information hierarchy on pages
 38–39 of the
@@ -332,7 +336,8 @@ start_paused: false
 ```
 
 `density` is `compact`, `standard`, or `tall`; `palette` is `theme`, `cyan`,
-`green`, `amber`, or `monochrome`; and `history` is 60, 120, or 240 frames. The
+`green`, `amber`, `monochrome`, or one System web palette; and `history` is 60,
+120, or 240 frames. The
 card requires exactly one running SDS200 App discovered through Home Assistant.
 No running App is unavailable, and multiple running SDS200 Apps fail closed so
 the card cannot silently select the wrong scanner owner.

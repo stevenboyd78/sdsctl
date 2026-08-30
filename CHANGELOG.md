@@ -20,6 +20,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Reuse the System web theme's 21 Textual-derived color schemes as bounded
+  per-card palette choices in all three first-party Home Assistant cards. The
+  compact Scanner card gains a graphical-editor palette field; Display retains
+  its Color and two monochrome presets; Waterfall retains its four spectrum
+  presets; and every card keeps Home Assistant theme-following or its existing
+  default. Palette selection changes presentation only and adds no scanner,
+  App, network, credential, or browser-storage behavior.
 - Keep the live daemon-event status in the balanced right-hand overview column
   when a non-System web theme hides the System palette selector, preventing the
   compact status from shifting inward or wrapping into a narrow orphaned track.
