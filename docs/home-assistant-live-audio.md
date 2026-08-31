@@ -205,6 +205,12 @@ data:
   media_content_type: audio/mpeg
 ```
 
+The physical VLC-TELNET acceptance target played this canonical `audio/mpeg`
+action successfully. It also accepted `music` as a target-specific service media
+type while Home Assistant continued to resolve the item to the integration's
+exact `audio/mpeg` representation. Prefer the canonical example above unless a
+target's integration documents a narrower service media type.
+
 Stop with the target's normal `media_player.media_stop` action. Pause and resume
 are target-dependent; this integration does not advertise seeking, duration, or
 an unbounded pause buffer. When a target cannot pause a live MP3 stream safely,
@@ -214,7 +220,9 @@ The target must be able to reach the Home Assistant internal or external URL
 that Home Assistant selects for it. It does not need, and must not be given,
 network access to the private App port. If URL selection fails, configure Home
 Assistant's internal/external URL settings for the target network rather than
-exposing port 8100.
+exposing port 8100. When those settings are declared under `homeassistant:` in
+`configuration.yaml`, validate the configuration and restart Core before
+retesting; changing the file alone does not update already-issued playback URLs.
 
 Diagnostics contain only the configured App alias/port, negotiated application
 and protocol versions, exact MIME type, and low-rate playback counts. They omit
@@ -258,9 +266,35 @@ redeemed without rejection or expiry, but also exposed one remaining active
 Core proxy lease after VLC-TELNET had returned to `idle`. The `0.1.5` candidate
 therefore adds an explicit downstream-transport closing check between bounded
 MP3 chunks; that path closes the upstream App response and releases the Core
-lease exactly once in regression coverage. Physical revalidation must still
-prove that the target's transport actually enters that closing state and that
-post-stop diagnostics reach zero outstanding and active leases.
+lease exactly once in regression coverage.
+
+That physical revalidation completed on August 31, 2026 with integration
+candidate `0.1.5`, artifact SHA-256
+`3a9919a0701d5cf7e4e696b5a5de4b1eedd3b38a34b747908a8f105ced65fcec`, and
+Local App build `0.24.0-m29.2.49463f3`. A remote VLC-TELNET target on the HAOS
+LAN received the standard `media-source://sdsctl/live` action with both the
+canonical `audio/mpeg` media type and the compatible `music` alternate, and
+produced audible scanner audio through headphones. Its first silent attempt
+exposed an incorrect Home Assistant `internal_url` of `https://192.168.0.18`;
+the actual HAOS listener was `http://192.168.0.18:8123`. After that value was
+corrected and Core restarted, the target retrieved the Home Assistant-owned URL
+and played normally without access to the private App listener.
+
+After `media_player.media_stop`, the target stopped and the App remained
+`started`. Fresh redacted integration diagnostics recorded exactly one issued
+and one redeemed playback after the first run, then exactly two issued and two
+redeemed playbacks after the canonical `audio/mpeg` run, with zero active and
+outstanding leases, zero rejected or expired playbacks, and an open integration
+lifecycle. This closes the `0.1.5`
+downstream-transport cleanup gate. The retained `0.1.4` rollback was left intact
+until the remainder of Milestone 29.2 acceptance is complete.
+
+The same validation run exercised the Ingress-safe destructive confirmation
+before updating. The operator armed and confirmed **Discard rollback** against
+the exact retained `0.1.3` digest, and the action completed without a
+browser-native dialog. Updating to `0.1.5` then retained the exact `0.1.4` bytes
+as the new rollback image. Readback found no integration symlinks and no change
+outside the managed current and rollback directories.
 
 Milestone closure also still requires final shared-encoder cleanup, a
 concurrent-target run when another reachable target is available, and the

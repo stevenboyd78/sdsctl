@@ -125,11 +125,20 @@ validation or exposing private deployment data.
 
 Post-restart diagnostics proved a second playback resolution and redemption with
 no rejection or expiry, but retained one active Core proxy lease after the
-VLC-TELNET target returned to `idle`. Integration candidate `0.1.5` now checks
-the downstream Home Assistant transport between bounded MP3 chunks and releases
-its App response and Core lease when that transport is closing. Unit, static,
-documentation, and full-suite validation pass; physical HAOS revalidation remains
-required before this cleanup gate can close.
+VLC-TELNET target returned to `idle`. Integration candidate `0.1.5` added a
+downstream Home Assistant transport check between bounded MP3 chunks. Physical
+HAOS revalidation then streamed audible scanner audio to a remote VLC-TELNET
+target, stopped it normally, and reported exactly one issued and redeemed
+playback for each of the two accepted media-type values, with zero active,
+outstanding, rejected, or expired leases. That closes
+the downstream-transport cleanup gate without changing App or scanner ownership.
+
+The revalidation also identified an operator-networking defect rather than a
+media-source defect: Home Assistant had been configured with the unreachable
+local origin `https://192.168.0.18`. Correcting `internal_url` to the actual
+HAOS listener `http://192.168.0.18:8123` and restarting Core allowed the remote
+target to retrieve the Home Assistant-owned playback URL. No private App port,
+capability, Ingress identifier, or scanner address was exposed to the target.
 
 The same HAOS run exposed that Home Assistant's restricted Ingress frame
 suppresses browser-native confirmation dialogs, causing removal, rollback-image
@@ -137,8 +146,10 @@ discard, and bridge-key rotation to exit silently before reaching the lifecycle
 API. The candidate dashboard replaces those dialogs with a visible two-step
 in-page confirmation while retaining the exact SHA-256 requirement and clearing
 the armed action whenever that identity changes. Focused lifecycle, dashboard,
-JavaScript, and documentation validation pass; physical Ingress revalidation is
-still required before using the retained rollback slot for the `0.1.5` update.
+JavaScript, and documentation validation pass. Physical Ingress revalidation
+then used the two-step action to discard the retained `0.1.3` image before the
+deliberate `0.1.5` update. The update retained exact `0.1.4` bytes as the new
+rollback image, and no integration symlink or unrelated path was changed.
 
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
