@@ -296,9 +296,49 @@ browser-native dialog. Updating to `0.1.5` then retained the exact `0.1.4` bytes
 as the new rollback image. Readback found no integration symlinks and no change
 outside the managed current and rollback directories.
 
-Milestone closure also still requires final shared-encoder cleanup, a
-concurrent-target run when another reachable target is available, and the
-complete browser audio, recording/finalized-media, controls, waterfall, MQTT,
-card, and persistent-data regression pass. No bridge key, playback identifier,
-signed URL, scanner programming, audio payload, or private host identity is
-retained here.
+Final regression then exercised the surrounding system rather than inferring
+compatibility from media playback alone:
+
+- browser audio played audibly and returned to its stopped state;
+- daemon recording started, finalized, appeared in inventory, played audibly,
+  downloaded, and remained available after an App restart;
+- channel hold, next, previous, and release completed without losing the scanner
+  connection;
+- waterfall data advanced, paused, resumed, cleared, and repopulated. A few
+  isolated scanner-command timeouts reached at most two consecutive failures and
+  recovered; after the App restart the display reported 2.9 fps, zero queue
+  loss, zero overflows, and zero current poll failures;
+- Home Assistant retained the complete 24-component MQTT Discovery device: 17
+  state/diagnostic entities and seven controls. Optional fields remained
+  mode-dependent as documented;
+- all nine verification-card articles rendered after the restart with zero
+  configuration errors, seven online markers, and live daemon state; and
+- the Local App restarted without restarting Core, returned to `started`,
+  preserved its recording and bridge boundary, and served another audible
+  canonical `audio/mpeg` playback.
+
+The final redacted diagnostic reported three issued and three redeemed
+playbacks, zero active and outstanding leases, zero rejected or expired
+playbacks, and an open integration lifecycle. No authentication, live-audio,
+proxy, encoder, recording, or MQTT failure appeared in the bounded post-restart
+logs.
+
+Only one VLC-TELNET target was reachable during the final run; the second
+configured target was unavailable. The roadmap requires two simultaneous
+physical playback leases only when the available target set permits, so the
+test was not simulated against one target. Automated concurrent-consumer and
+shared-encoder coverage remains the evidence for that boundary, and this run
+does not claim physical two-target synchronization or concurrency.
+
+With that explicit environmental limit, the Milestone 29.2 implementation and
+physical acceptance gates are complete. Closure cleanup deleted the integration
+config entry; discarded the managed current and rollback integration copies;
+uninstalled the Local validation App; and removed the three exact validation
+share artifacts. The published `sds200` App version 0.24.0 started before the
+single required Core restart and resumed sole scanner ownership. Its Ingress
+dashboard returned connected, all nine verification-card articles rendered
+without configuration errors, and all 11 existing WAV recordings remained in
+the persistent media directory. Supervisor's remaining local source-catalog
+metadata reports no installed version and an unknown state, rather than an
+installed or running Local App. No bridge key, playback identifier, signed URL,
+scanner programming, audio payload, or private host identity is retained here.

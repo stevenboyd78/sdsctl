@@ -108,17 +108,17 @@ data. Only one deliberately named Local validation App and one explicitly
 installed Local integration may exist during the run; published components must
 be restored afterward.
 
-The first physical slice on Home Assistant OS 18.2 and Core 2026.8.3 now proves
+The first physical slice on Home Assistant OS 18.2 and Core 2026.8.3 proved
 root browsing, canonical artwork, standard `media_player.play_media` resolution,
 audible continuous MP3 playback on VLC-TELNET, normal target stop to idle, and
 unchanged single scanner/RTSP ownership. It also identified and corrected Core's
-valid null root-identifier form. The remaining diagnostics, final-encoder,
-restart, concurrency-when-available, and complete regression evidence above
-remain milestone gates rather than inferred closure.
+valid null root-identifier form. Later slices closed the diagnostics,
+final-encoder, App-restart, Ingress lifecycle, and complete regression gates
+described below.
 
 The same physical run also replaced the three Home Assistant card registrations
 with manifest-declared, SHA-256-qualified resource URLs. Direct HTTP and external
-HTTPS dashboard origins then rendered the complete seven-card verification view
+HTTPS dashboard origins then rendered the complete nine-card verification view
 without configuration errors, including the previously stale Auto Display card.
 This closes the browser-origin cache defect without weakening exact module-byte
 validation or exposing private deployment data.
@@ -150,6 +150,34 @@ JavaScript, and documentation validation pass. Physical Ingress revalidation
 then used the two-step action to discard the retained `0.1.3` image before the
 deliberate `0.1.5` update. The update retained exact `0.1.4` bytes as the new
 rollback image, and no integration symlink or unrelated path was changed.
+
+Final physical regression revalidated audible browser audio; daemon recording,
+finalization, saved playback, and download; channel hold, navigation, and
+release; live waterfall pause, resume, clear, and recovery; the complete
+24-component MQTT Discovery device; and all nine verification cards. Restarting
+only the Local App preserved the finalized recording, restored a live waterfall
+with zero queue loss, overflows, or poll failures, and allowed another canonical
+`audio/mpeg` playback to resolve, play, stop, and clean up normally. Final
+diagnostics reported three issued and three redeemed playbacks with zero active,
+outstanding, rejected, or expired leases.
+
+Only one VLC-TELNET target was reachable; the second configured target remained
+unavailable. The conditional two-target physical exercise therefore remained
+environment-limited rather than silently simulated. Automated concurrent-lease
+coverage remains authoritative, and this acceptance makes no claim of a
+physical two-target synchronization or concurrency run. With that explicit
+limit, the Milestone 29.2 implementation and physical acceptance gates are
+closed and ready for pull-request review.
+
+Closure cleanup then deleted the Home Assistant config entry, discarded both
+managed integration copies, uninstalled the Local validation App, and removed
+the three exact Milestone 29.2 share artifacts. The published `sds200` App
+version 0.24.0 resumed sole scanner ownership before the one required Core
+restart. Post-cleanup readback showed the published Ingress dashboard connected,
+all nine verification cards rendering without configuration errors, and all 11
+existing WAV recordings preserved. Supervisor retained only uninstalled local
+source metadata—version absent and state unknown—not a running or installed
+Local App instance.
 
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
