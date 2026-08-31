@@ -127,7 +127,7 @@ App keeps the generic daemon MQTT request-envelope command input disabled.
 
 The App installs three first-party Lovelace cards plus one aggregate resource.
 For a new installation, register
-`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`
 once under **Settings > Dashboards > Resources** as a JavaScript Module. It
 loads **SDS200 Scanner**, **SDS200 Display**, and **SDS200 Waterfall** through
 their exact digest-qualified modules. The three individual complete URLs remain

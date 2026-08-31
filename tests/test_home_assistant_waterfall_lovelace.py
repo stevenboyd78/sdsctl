@@ -70,7 +70,7 @@ global.window = {{
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-waterfall-card.js?v="
-        "87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030"
+        "812ef2a103b9517abe2583d0c8fbcd667445377a0032836307b05839a8bfb1b4"
     )
 
 
@@ -95,13 +95,19 @@ const accepted = requireWaterfallCardConfig({
   show_scale: false,
   show_telemetry: true,
   start_paused: true,
+  grid_options: {rows: "auto", columns: "full"},
 });
+const serializedHistories = ["60", "120", "240"].map(
+  (history) => requireWaterfallCardConfig({history}).history,
+);
 const rejected = [];
 for (const config of [
   {endpoint: "http://scanner.test"},
   {density: "fullscreen"},
   {palette: "custom"},
   {history: 1000000},
+  {history: "60.0"},
+  {history: " 60"},
   {show_scale: "yes"},
 ]) {
   try {
@@ -110,7 +116,7 @@ for (const config of [
     rejected.push(error.message);
   }
 }
-process.stdout.write(JSON.stringify({accepted, rejected}));
+process.stdout.write(JSON.stringify({accepted, serializedHistories, rejected}));
 """
     )
 
@@ -123,8 +129,11 @@ process.stdout.write(JSON.stringify({accepted, rejected}));
         "show_telemetry": True,
         "start_paused": True,
     }
-    assert len(result["rejected"]) == 5
+    assert result["serializedHistories"] == [60, 120, 240]
+    assert len(result["rejected"]) == 7
     assert "not supported" in result["rejected"][0]
+    assert 'history "60.0" is not supported' in result["rejected"][4]
+    assert 'history " 60" is not supported' in result["rejected"][5]
 
 
 def test_waterfall_card_reuses_every_system_web_palette() -> None:

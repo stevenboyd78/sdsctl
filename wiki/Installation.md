@@ -359,7 +359,7 @@ directory remains media-relative and the default still resolves to:
 The App installs the unchanged compact, responsive display, and authenticated
 waterfall card modules plus one aggregate entry point. For a new installation,
 register
-`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`
 once under **Settings > Dashboards > Resources** as a JavaScript Module. The
 three complete digest-qualified individual URLs remain supported for selective
 registration and existing installations. Add and verify the aggregate before

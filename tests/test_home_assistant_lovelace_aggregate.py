@@ -40,7 +40,7 @@ def aggregate_text() -> str:
 def test_aggregate_resource_url_uses_exact_module_digest() -> None:
     assert HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL == (
         "/local/sds200/sds200-cards.js?v="
-        "543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1"
+        "efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f"
     )
 
 

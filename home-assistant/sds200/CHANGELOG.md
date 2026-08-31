@@ -6,6 +6,10 @@
   three independently packaged first-party card modules. New installations can
   register one resource while existing individual URLs remain compatible; App
   startup does not add, update, or remove Home Assistant resource records.
+- Normalize the Waterfall card graphical editor's exact string-serialized 60,
+  120, and 240-frame history selections to the existing bounded numeric
+  capacities, and accept Home Assistant's host-owned `grid_options`
+  section-layout metadata, instead of rejecting valid dashboard selections.
 
 ## 0.25.0
 

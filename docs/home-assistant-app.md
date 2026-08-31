@@ -366,8 +366,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030
-/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1
+/local/sds200/sds200-waterfall-card.js?v=812ef2a103b9517abe2583d0c8fbcd667445377a0032836307b05839a8bfb1b4
+/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -410,7 +410,7 @@ digest-confirmed activation. The App does not automatically discover, approve,
 install, execute, or replace managed modules.
 
 For a new installation, register only the complete aggregate
-`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`
 URL in **Settings > Dashboards > Resources** as a **JavaScript Module**. It
 loads all three cards in deterministic manifest order. The three complete
 individual URLs above remain supported when only selected cards are wanted and
@@ -559,7 +559,14 @@ history: 120  # 60, 120, or 240 frames
 show_scale: true
 show_telemetry: true
 start_paused: false
+grid_options:  # Optional Home Assistant Sections layout metadata
+  rows: auto
+  columns: full
 ```
+
+Home Assistant owns `grid_options`; the card accepts this Sections-dashboard
+layout metadata without treating it as a Waterfall transport or presentation
+option. The Waterfall-specific choices remain bounded as shown above.
 
 The card discovers the SDS200 panel through Home Assistant's frontend context,
 asks Home Assistant for an authenticated App Ingress session, and requires

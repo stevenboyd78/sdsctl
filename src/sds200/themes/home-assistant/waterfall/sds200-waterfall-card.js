@@ -103,6 +103,7 @@ function requireWaterfallCardConfig(config) {
     "show_scale",
     "show_telemetry",
     "start_paused",
+    "grid_options",
   ]);
   for (const key of Object.keys(config)) {
     if (!supported.has(key)) {
@@ -124,7 +125,12 @@ function requireWaterfallCardConfig(config) {
       : "SDS200 Waterfall";
   const density = config.density ?? "standard";
   const palette = config.palette ?? "theme";
-  const history = config.history ?? 120;
+  const requestedHistory = config.history ?? 120;
+  const historyOption = SDS200_WATERFALL_HISTORY_OPTIONS.find(
+    (option) =>
+      option.value === requestedHistory ||
+      String(option.value) === requestedHistory,
+  );
 
   if (!waterfallOptionLabel(SDS200_WATERFALL_DENSITIES, density)) {
     throw new Error(
@@ -136,11 +142,12 @@ function requireWaterfallCardConfig(config) {
       `SDS200 waterfall card palette "${palette}" is not supported.`,
     );
   }
-  if (!waterfallOptionLabel(SDS200_WATERFALL_HISTORY_OPTIONS, history)) {
+  if (historyOption === undefined) {
     throw new Error(
-      `SDS200 waterfall card history "${history}" is not supported.`,
+      `SDS200 waterfall card history "${requestedHistory}" is not supported.`,
     );
   }
+  const history = historyOption.value;
 
   const booleans = {};
   for (const [key, fallback] of [

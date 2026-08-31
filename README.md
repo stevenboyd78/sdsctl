@@ -819,7 +819,7 @@ Home Assistant-authenticated App Ingress to render the existing daemon's
 relative, uncalibrated spectrum stream with bounded Canvas history; it adds no
 scanner transport or high-rate MQTT entities. New installations can register
 the one aggregate JavaScript Module at
-`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`.
+`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`.
 It imports all three cards through their exact digest-qualified module URLs.
 The three individual URLs remain supported for selective registration and
 existing installations. Their
