@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.25.0
+
+- Track the sdsctl v0.25.0 release while preserving the App name, slug, image
+  identity, MQTT identities, scanner ownership, persistent recordings, and
+  installed first-party custom elements.
 - Add the 21 System web palettes as per-card graphical-editor choices in the
   compact Scanner, scanner-style Display, and Waterfall cards. Existing Home
   Assistant theme-following and specialized Display/Waterfall presets remain

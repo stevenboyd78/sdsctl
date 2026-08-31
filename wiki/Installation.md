@@ -161,6 +161,47 @@ before changing network or MQTT settings.
 The Local App workflow under `/addons` remains available for development but is
 not required for normal release installation.
 
+## Upgrade to v0.25.0
+
+v0.25.0 freezes Milestones 29.1 through 29.3: the responsive first-party Home
+Assistant Waterfall card, the standard `media-source://sdsctl/live` workflow,
+the versioned optional Core integration, authenticated private App transports,
+bounded waterfall and playback leases, System palette choices for the web and
+all three cards, compact workspace controls, the Ingress-only integration
+lifecycle pane, SHA-qualified card resources, and visible two-step destructive
+confirmations. The daemon remains the only scanner, waterfall, and RTSP/RTP
+owner. Home Assistant media players receive a bounded Home Assistant-owned URL,
+not an Ingress identifier, App capability, scanner address, or public stream.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the Python package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.25.0"
+sdsctl --version
+```
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.25.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release, but
+the exact version tag is recommended for controlled deployments. Repository-root
+`compose.yaml` and `compose.usb.yaml` remain source-built and do not switch
+automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.25.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, and bundled cards. Upgrade the repository-
+managed App only after the matching release images have published. The optional
+Core integration remains independently versioned at 0.1.5 and requires explicit
+digest-confirmed install or update from the authenticated Ingress workspace,
+followed by the documented Core restart or reload and any required
+reauthentication. A target player must be able to reach Home Assistant's selected
+internal or external URL for live media playback.
+
 ## Upgrade to v0.24.0
 
 v0.24.0 freezes Milestones 28.1 through 28.4: one explicit credentialed
