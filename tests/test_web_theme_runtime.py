@@ -393,6 +393,73 @@ if (attributes.has("href")) throw new Error("retry href retained");
     assert completed.returncode == 0, completed.stderr
 
 
+def test_browser_bootstrap_persists_system_palette_independently(
+    tmp_path: Path,
+) -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is not available")
+    with TestClient(_app(tmp_path)) as client:
+        source = client.get("/assets/theme-bootstrap.js").text
+    harness = f"""
+"use strict";
+const values = new Map([
+  ["sdsctl.web.theme", "system"],
+  ["sdsctl.web.system-palette", "nord"],
+]);
+const colorScheme = {{content: ""}};
+const themeColor = {{content: ""}};
+const themePicker = {{value: "system"}};
+const palettePicker = {{value: "auto"}};
+const paletteWrapper = {{hidden: true}};
+global.document = {{
+  documentElement: {{dataset: {{}}}},
+  querySelectorAll: () => [],
+  querySelector: (selector) => {{
+    if (selector === 'meta[name="color-scheme"]') return colorScheme;
+    if (selector === 'meta[name="theme-color"]') return themeColor;
+    if (selector === "#theme-select") return themePicker;
+    if (selector === "#system-palette-select") return palettePicker;
+    if (selector === "#system-palette-picker") return paletteWrapper;
+    return null;
+  }},
+}};
+global.window = {{
+  localStorage: {{
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  }},
+  matchMedia: () => ({{matches: false, addEventListener: () => {{}}}}),
+}};
+eval({json.dumps(source)});
+if (window.sdsctlTheme.current() !== "system") throw new Error("theme");
+if (window.sdsctlTheme.currentSystemPalette() !== "nord") throw new Error("palette");
+if (document.documentElement.dataset.systemPalette !== "nord") throw new Error("dataset");
+if (palettePicker.value !== "nord" || paletteWrapper.hidden) throw new Error("picker");
+if (colorScheme.content !== "dark") throw new Error("dark metadata");
+if (window.sdsctlTheme.systemPaletteChoices.length !== 22) throw new Error("choices");
+window.sdsctlTheme.selectSystemPalette("rose-pine-dawn");
+if (values.get("sdsctl.web.system-palette") !== "rose-pine-dawn") throw new Error("stored");
+if (colorScheme.content !== "light") throw new Error("light metadata");
+window.sdsctlTheme.select("lcars");
+if (!paletteWrapper.hidden) throw new Error("non-System exposure");
+window.sdsctlTheme.select("system");
+if (paletteWrapper.hidden || palettePicker.value !== "rose-pine-dawn") throw new Error("return");
+window.sdsctlTheme.selectSystemPalette("missing");
+if (window.sdsctlTheme.currentSystemPalette() !== "auto") throw new Error("repair");
+"""
+
+    completed = subprocess.run(
+        [node, "-e", harness],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_browser_bootstrap_repairs_stored_managed_theme_with_missing_link(
     tmp_path: Path,
 ) -> None:
@@ -536,7 +603,7 @@ def test_dashboard_does_not_live_discover_new_package(tmp_path: Path) -> None:
         shell = client.get("/")
         stylesheet = client.get("/assets/themes/solarized/theme.css")
 
-    assert "solarized" not in shell.text
+    assert '<option value="solarized">' not in shell.text
     assert stylesheet.status_code == 404
     assert stylesheet.json() == {"detail": "Theme not found."}
 

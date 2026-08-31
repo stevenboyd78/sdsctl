@@ -107,3 +107,4 @@ python_version = "3.11"
 strict = true
 packages = ["sds200"]
 mypy_path = "src"
+exclude = ["^src/sds200/home_assistant_integration/"]

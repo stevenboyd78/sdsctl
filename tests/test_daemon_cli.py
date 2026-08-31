@@ -1089,10 +1089,11 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
     explicit = tmp_path / "explicit" / "daemon.sock"
     explicit_events = tmp_path / "explicit" / "events.sock"
     explicit_pcmu = tmp_path / "explicit" / "pcmu.sock"
+    explicit_live_audio = tmp_path / "explicit" / "live-audio.sock"
     explicit_recording_files = tmp_path / "explicit" / "recordings.sock"
     explicit_recordings = tmp_path / "recordings"
     explicit.parent.mkdir()
-    observed: list[tuple[object, object, object, object, object]] = []
+    observed: list[tuple[object, object, object, object, object, object]] = []
 
     monkeypatch.setattr(
         cli,
@@ -1117,6 +1118,7 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
             api_server: object,
             event_server: object,
             pcmu_server: object,
+            live_audio_server: object,
         ) -> None:
             del runtime, destination_coordinator, destination_reloader
             observed.append(
@@ -1126,6 +1128,7 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
                     api_server,
                     event_server,
                     pcmu_server,
+                    live_audio_server,
                 )
             )
 
@@ -1197,6 +1200,14 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
             "11",
             "--pcmu-shutdown-timeout",
             "6",
+            "--live-audio-socket-path",
+            str(explicit_live_audio),
+            "--live-audio-max-clients",
+            "3",
+            "--live-audio-send-timeout",
+            "12",
+            "--live-audio-shutdown-timeout",
+            "7",
         ],
         environ={
             "XDG_RUNTIME_DIR": str(tmp_path / "runtime"),
@@ -1211,6 +1222,7 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
         api_server,
         event_server,
         pcmu_server,
+        live_audio_server,
     ) = observed[0]
     assert isinstance(recording_manager, cli.DaemonRecordingManager)
     assert recording_manager.directory == explicit_recordings
@@ -1267,6 +1279,17 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
     assert pcmu_server.max_frame_bytes == 16384
     assert pcmu_server.send_timeout == 11.0
     assert pcmu_server.shutdown_timeout == 6.0
+
+    assert isinstance(live_audio_server, cli.DaemonLiveAudioServer)
+    assert live_audio_server.listener.location.source is (
+        DaemonSocketSource.EXPLICIT
+    )
+    assert live_audio_server.listener.location.path == explicit_live_audio
+    assert live_audio_server.max_clients == 3
+    assert live_audio_server.send_timeout == 12.0
+    assert live_audio_server.shutdown_timeout == 7.0
+    assert isinstance(live_audio_server.session, cli.LiveAudioSession)
+    assert live_audio_server.session.max_leases == 3
 
 
 def test_daemon_cli_reports_relative_socket_path(

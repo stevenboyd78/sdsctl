@@ -28,6 +28,25 @@ Use `sdsctl themes --root /absolute/path ...` to operate on an explicit root.
 The lifecycle never scans elsewhere automatically. Built-in themes remain in
 the installed Python distribution and cannot be shadowed, replaced, or removed.
 
+The web dashboard's **System palette** selector is a separate presentation
+control, not another managed-theme interface. Its Follow-device option and the
+21 built-in Textual color schemes all remain inside the stable `system` web
+theme package and therefore do not appear as installable, replaceable, or
+removable directories. Selecting one does not change theme discovery, package
+identity, lifecycle validation, or the `sdsctl.web.theme` value; it only updates
+the browser-local `sdsctl.web.system-palette` choice while System is active.
+
+The three built-in Home Assistant cards reuse those same 21 color definitions
+as explicit per-card palette choices in their graphical editors. This is not a
+shared browser preference: each Lovelace card stores its selected palette in
+that card's ordinary dashboard configuration, so cards may use different
+schemes and do not follow the web dashboard's browser-local selection. The
+compact Scanner card may instead follow the active Home Assistant theme;
+Display also retains Color, Black on White, and White on Black; and Waterfall
+also retains its theme, cyan, green, amber, and monochrome choices. These
+packaged choices do not create discoverable or managed third-party theme
+packages.
+
 ## Validate and inspect
 
 Validate one unpacked local package without changing its source or managed
@@ -317,8 +336,14 @@ Only the ledger-pinned filename with the exact approved module digest is
 removed. Modified, missing, symlinked, or substituted targets fail closed.
 Unrelated files and activation records are preserved.
 
-Register `/local/sds200/<declared-filename>.js` as a JavaScript module resource
-in Home Assistant manually. These commands do not edit YAML, `.storage`,
+Register the manifest-declared
+`/local/sds200/<declared-filename>.js?v=<module-sha256>` as a JavaScript module
+resource in Home Assistant manually. The digest-qualified form is recommended;
+schema-version-1 packages may retain the legacy unversioned form, while a
+declared digest must exactly match the packaged module bytes. Update the
+registered URL after approving changed module bytes so independent HTTP and
+HTTPS browser caches cannot retain an older custom element. These commands do
+not edit YAML, `.storage`,
 dashboards, Lovelace resources, App options, or Home Assistant Core state. The
 Home Assistant App installs only the three bundled first-party cards (compact,
 display, and waterfall);

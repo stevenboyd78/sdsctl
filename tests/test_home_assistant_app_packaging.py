@@ -285,6 +285,7 @@ def test_home_assistant_app_dockerfile_builds_local_source_with_required_extras(
     assert 'io.hass.type="app"' in dockerfile
     assert 'io.hass.version="${BUILD_VERSION}"' in dockerfile
     assert 'io.hass.arch="${BUILD_ARCH}"' in dockerfile
+    assert "apt-get install --yes --no-install-recommends lame" in dockerfile
     assert '"sds200[web,mqtt]"' in dockerfile
     assert (
         'CMD ["python", "-m", "sds200.home_assistant_app_supervisor"]'

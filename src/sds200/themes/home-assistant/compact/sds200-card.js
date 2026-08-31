@@ -1,6 +1,36 @@
 const SDS200_CARD_TYPE = "sds200-card";
 const SDS200_CARD_TAG = "sds200-card";
 
+const SDS200_CARD_SYSTEM_PALETTES = Object.freeze({
+  "ansi-dark": Object.freeze(["#0c0c0c", "#1a1a1a", "#242424", "#cccccc", "#858585", "#3b8eea", "#3b8eea", "#29b8db", "#e5e510", "#e74856", "#16c60c", "#16c60c"]),
+  "ansi-light": Object.freeze(["#f5f5f5", "#ffffff", "#e5e5e5", "#0c0c0c", "#767676", "#0037da", "#0037da", "#3a96dd", "#e74856", "#c50f1f", "#13a10e", "#881798"]),
+  "atom-one-dark": Object.freeze(["#282C34", "#3B414D", "#4F5666", "#ABB2BF", "#ABB2BF99", "#61AFEF", "#61AFEF", "#C678DD", "#DDB25B", "#EF6262", "#62F062", "#A378C2"]),
+  "atom-one-light": Object.freeze(["#FAFAFA", "#E0E0E0", "#CCCCCC", "#383A42", "#383A4299", "#4078F2", "#4078F2", "#A626A4", "#D7D938", "#F13F3F", "#6BF23F", "#BE9232"]),
+  "catppuccin-frappe": Object.freeze(["#303446", "#414559", "#51576D", "#C6D0F5", "#C6D0F599", "#BABBF1", "#CA9EE6", "#EE9F76", "#E4C890", "#E68284", "#A6D189", "#F4B8E4"]),
+  "catppuccin-latte": Object.freeze(["#EFF1F5", "#E6E9EF", "#CCD0DA", "#4C4F69", "#4C4F6999", "#8839EF", "#8839EF", "#DB8A78", "#DE8E1D", "#D10F39", "#40A02B", "#FD640B"]),
+  "catppuccin-macchiato": Object.freeze(["#24273A", "#363A4F", "#494D64", "#CAD3F5", "#CAD3F599", "#B7BDF8", "#C6A0F6", "#F4A97F", "#EED49F", "#ED8796", "#A6DA95", "#F5BDE6"]),
+  "catppuccin-mocha": Object.freeze(["#181825", "#313244", "#45475A", "#CDD6F4", "#CDD6F499", "#b4befe", "#F5C2E7", "#CBA6F7", "#FAE3B0", "#F28FAD", "#ABE9B3", "#F9B387"]),
+  dracula: Object.freeze(["#282A36", "#2B2E3B", "#313442", "#F8F8F2", "#F8F8F299", "#BD93F9", "#BD93F9", "#6272A4", "#FEB86C", "#FE5555", "#50FA7B", "#FF79C6"]),
+  flexoki: Object.freeze(["#100F0F", "#1C1B1A", "#282726", "#FFFCF0", "#FFFCF099", "#205EA6", "#205EA6", "#24837B", "#AC8301", "#AE3029", "#65800B", "#9B76C8"]),
+  gruvbox: Object.freeze(["#282828", "#3C3836", "#504945", "#FBF1C7", "#FBF1C799", "#85A598", "#85A598", "#A89A85", "#FD8019", "#FA4934", "#B7BB26", "#F9BD2F"]),
+  monokai: Object.freeze(["#272822", "#2E2E2E", "#3E3D32", "#D6D6D6", "#797979", "#AE81FF", "#AE81FF", "#F82672", "#FC971F", "#F82672", "#A5E22E", "#66D9EF"]),
+  nord: Object.freeze(["#2E3440", "#3B4252", "#434C5E", "#D8DEE9", "#D8DEE999", "#88C0D0", "#88C0D0", "#81A1C1", "#EACB8B", "#BE616A", "#A3BE8C", "#B48EAD"]),
+  "rose-pine": Object.freeze(["#191724", "#1F1D2E", "#26233A", "#E0DEF4", "#E0DEF499", "#524f67", "#C4A7E7", "#31748F", "#F5C177", "#EA6F92", "#9CCFD8", "#EBBCBA"]),
+  "rose-pine-dawn": Object.freeze(["#FAF4ED", "#FFFAF3", "#F2E9E1", "#575279", "#57527999", "#cecacd", "#907AA9", "#286983", "#E99D34", "#B4637A", "#56949F", "#D6827E"]),
+  "rose-pine-moon": Object.freeze(["#232136", "#2A273F", "#393552", "#E0DEF4", "#E0DEF499", "#56526e", "#C4A7E7", "#3E8FB0", "#F5C177", "#EA6F92", "#9CCFD8", "#EA9A97"]),
+  "solarized-dark": Object.freeze(["#002B36", "#073642", "#073642", "#839496", "#83949699", "#268BD2", "#268BD2", "#2AA198", "#CA4B16", "#DB322F", "#849900", "#6C71C4"]),
+  "solarized-light": Object.freeze(["#FDF6E3", "#EEE8D5", "#EEE8D5", "#586E75", "#586E7599", "#268BD2", "#268BD2", "#2AA198", "#CA4B16", "#DB322F", "#849900", "#6C71C4"]),
+  "textual-dark": Object.freeze(["#121212", "#1E1E1E", "#242F38", "#E0E0E0", "#E0E0E099", "#0178D4", "#0178D4", "#004578", "#FEA62B", "#B93C5B", "#4EBF71", "#FEA62B"]),
+  "textual-light": Object.freeze(["#E0E0E0", "#D8D8D8", "#D0D0D0", "#1F1F1F", "#1F1F1F99", "#004578", "#004578", "#0178D4", "#FEA62B", "#B93C5B", "#4EBF71", "#FEA62B"]),
+  "tokyo-night": Object.freeze(["#1A1B26", "#24283B", "#414868", "#A9B1D6", "#A9B1D699", "#BB9AF7", "#BB9AF7", "#7AA2F7", "#DFAF68", "#F6768E", "#9ECE6A", "#FE9E64"]),
+});
+const SDS200_CARD_PALETTES = Object.freeze([
+  Object.freeze({ value: "theme", label: "Home Assistant theme" }),
+  ...Object.keys(SDS200_CARD_SYSTEM_PALETTES).map((value) =>
+    Object.freeze({ value, label: value }),
+  ),
+]);
+
 const SDS200_ENTITY_FIELDS = Object.freeze([
   Object.freeze({
     key: "scanner_connected",
@@ -90,6 +120,24 @@ function fieldForName(name) {
   );
 }
 
+function cardOptionLabel(options, value) {
+  return options.find((option) => option.value === value)?.label;
+}
+
+function applyCardSystemPalette(element, palette) {
+  const colors = SDS200_CARD_SYSTEM_PALETTES[palette];
+  if (colors === undefined) {
+    return;
+  }
+  const names = [
+    "background", "surface", "panel", "foreground", "muted", "border",
+    "primary", "secondary", "warning", "error", "success", "accent",
+  ];
+  names.forEach((name, index) => {
+    element.style.setProperty(`--sds200-card-${name}`, colors[index]);
+  });
+}
+
 function toneOutDisplay(value) {
   const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(?:hz)?$/i.exec(
     value.trim(),
@@ -112,6 +160,12 @@ function requireCardConfig(config) {
     typeof config.title === "string" && config.title.trim()
       ? config.title.trim()
       : "SDS200 Scanner";
+  const palette = config.palette ?? "theme";
+  if (!cardOptionLabel(SDS200_CARD_PALETTES, palette)) {
+    throw new Error(
+      `SDS200 card palette "${palette}" is not supported.`,
+    );
+  }
 
   const source =
     config.entities === undefined ? {} : config.entities;
@@ -160,6 +214,7 @@ function requireCardConfig(config) {
 
   return Object.freeze({
     title,
+    palette,
     entities: Object.freeze(entities),
   });
 }
@@ -179,6 +234,7 @@ function textElement(
 class Sds200Card extends HTMLElement {
   static getStubConfig() {
     return {
+      palette: "theme",
       entities: {},
     };
   }
@@ -190,6 +246,13 @@ class Sds200Card extends HTMLElement {
           name: "title",
           selector: {
             text: {},
+          },
+        },
+        {
+          name: "palette",
+          required: true,
+          selector: {
+            select: { options: SDS200_CARD_PALETTES },
           },
         },
         {
@@ -216,11 +279,17 @@ class Sds200Card extends HTMLElement {
         if (schema.name === "title") {
           return "Title";
         }
+        if (schema.name === "palette") {
+          return "Palette";
+        }
 
         const field = fieldForName(schema.name);
         return field?.label;
       },
       computeHelper: (schema) => {
+        if (schema.name === "palette") {
+          return "Follow Home Assistant or choose a System web palette.";
+        }
         if (schema.name === "entities") {
           return (
             "Select the entities created by the SDS200 " +
@@ -430,20 +499,21 @@ class Sds200Card extends HTMLElement {
     style.textContent = `
       :host {
         display: block;
-        color: var(--primary-text-color, #1f2933);
+        color: var(--sds200-card-foreground, var(--primary-text-color, #1f2933));
       }
 
       .card {
         overflow: hidden;
-        border: 1px solid var(--divider-color, rgb(127 127 127 / 0.25));
+        border: 1px solid var(--sds200-card-border, var(--divider-color, rgb(127 127 127 / 0.25)));
         border-radius: var(--ha-card-border-radius, 12px);
-        background: var(--ha-card-background, var(--card-background-color, #fff));
+        background: var(--sds200-card-background, var(--ha-card-background, var(--card-background-color, #fff)));
         box-shadow: var(--ha-card-box-shadow, none);
       }
 
       .header {
         padding: 1rem 1rem 0.75rem;
-        border-bottom: 1px solid var(--divider-color, rgb(127 127 127 / 0.2));
+        border-bottom: 1px solid var(--sds200-card-border, var(--divider-color, rgb(127 127 127 / 0.2)));
+        background: var(--sds200-card-surface, transparent);
       }
 
       .title {
@@ -461,7 +531,7 @@ class Sds200Card extends HTMLElement {
 
       .hierarchy {
         margin: 0.25rem 0 0;
-        color: var(--secondary-text-color, #687078);
+        color: var(--sds200-card-muted, var(--secondary-text-color, #687078));
         font-size: 0.9rem;
         overflow-wrap: anywhere;
       }
@@ -471,7 +541,8 @@ class Sds200Card extends HTMLElement {
         flex-wrap: wrap;
         gap: 0.55rem 1rem;
         padding: 0.75rem 1rem;
-        border-bottom: 1px solid var(--divider-color, rgb(127 127 127 / 0.2));
+        border-bottom: 1px solid var(--sds200-card-border, var(--divider-color, rgb(127 127 127 / 0.2)));
+        background: var(--sds200-card-panel, transparent);
       }
 
       .status {
@@ -485,11 +556,11 @@ class Sds200Card extends HTMLElement {
         width: 0.55rem;
         height: 0.55rem;
         border-radius: 50%;
-        background: var(--disabled-text-color, #9aa0a6);
+        background: var(--sds200-card-muted, var(--disabled-text-color, #9aa0a6));
       }
 
       .status-indicator[data-active="true"] {
-        background: var(--success-color, #43a047);
+        background: var(--sds200-card-success, var(--success-color, #43a047));
       }
 
       .details {
@@ -498,6 +569,7 @@ class Sds200Card extends HTMLElement {
         margin: 0;
         padding: 0.75rem 1rem 1rem;
         gap: 0.6rem 1rem;
+        background: var(--sds200-card-surface, transparent);
       }
 
       .row {
@@ -506,7 +578,7 @@ class Sds200Card extends HTMLElement {
 
       .label {
         margin: 0;
-        color: var(--secondary-text-color, #687078);
+        color: var(--sds200-card-muted, var(--secondary-text-color, #687078));
         font-size: 0.72rem;
         font-weight: 600;
         text-transform: uppercase;
@@ -522,7 +594,7 @@ class Sds200Card extends HTMLElement {
       .configuration {
         margin: 0;
         padding: 0.8rem 1rem 1rem;
-        color: var(--secondary-text-color, #687078);
+        color: var(--sds200-card-muted, var(--secondary-text-color, #687078));
         font-size: 0.85rem;
       }
 
@@ -537,6 +609,8 @@ class Sds200Card extends HTMLElement {
       documentObject.createElement("article");
 
     article.className = "card";
+    article.dataset.palette = this._config.palette;
+    applyCardSystemPalette(article, this._config.palette);
 
     const header =
       documentObject.createElement("header");

@@ -21,12 +21,38 @@ const SDS200_WATERFALL_DENSITIES = Object.freeze([
   Object.freeze({value: "standard", label: "Standard"}),
   Object.freeze({value: "tall", label: "Tall"}),
 ]);
+const SDS200_WATERFALL_SYSTEM_PALETTES = Object.freeze({
+  "ansi-dark": Object.freeze(["#0c0c0c", "#1a1a1a", "#242424", "#cccccc", "#858585", "#3b8eea", "#3b8eea", "#29b8db", "#e5e510", "#e74856", "#16c60c", "#16c60c"]),
+  "ansi-light": Object.freeze(["#f5f5f5", "#ffffff", "#e5e5e5", "#0c0c0c", "#767676", "#0037da", "#0037da", "#3a96dd", "#e74856", "#c50f1f", "#13a10e", "#881798"]),
+  "atom-one-dark": Object.freeze(["#282C34", "#3B414D", "#4F5666", "#ABB2BF", "#ABB2BF99", "#61AFEF", "#61AFEF", "#C678DD", "#DDB25B", "#EF6262", "#62F062", "#A378C2"]),
+  "atom-one-light": Object.freeze(["#FAFAFA", "#E0E0E0", "#CCCCCC", "#383A42", "#383A4299", "#4078F2", "#4078F2", "#A626A4", "#D7D938", "#F13F3F", "#6BF23F", "#BE9232"]),
+  "catppuccin-frappe": Object.freeze(["#303446", "#414559", "#51576D", "#C6D0F5", "#C6D0F599", "#BABBF1", "#CA9EE6", "#EE9F76", "#E4C890", "#E68284", "#A6D189", "#F4B8E4"]),
+  "catppuccin-latte": Object.freeze(["#EFF1F5", "#E6E9EF", "#CCD0DA", "#4C4F69", "#4C4F6999", "#8839EF", "#8839EF", "#DB8A78", "#DE8E1D", "#D10F39", "#40A02B", "#FD640B"]),
+  "catppuccin-macchiato": Object.freeze(["#24273A", "#363A4F", "#494D64", "#CAD3F5", "#CAD3F599", "#B7BDF8", "#C6A0F6", "#F4A97F", "#EED49F", "#ED8796", "#A6DA95", "#F5BDE6"]),
+  "catppuccin-mocha": Object.freeze(["#181825", "#313244", "#45475A", "#CDD6F4", "#CDD6F499", "#b4befe", "#F5C2E7", "#CBA6F7", "#FAE3B0", "#F28FAD", "#ABE9B3", "#F9B387"]),
+  dracula: Object.freeze(["#282A36", "#2B2E3B", "#313442", "#F8F8F2", "#F8F8F299", "#BD93F9", "#BD93F9", "#6272A4", "#FEB86C", "#FE5555", "#50FA7B", "#FF79C6"]),
+  flexoki: Object.freeze(["#100F0F", "#1C1B1A", "#282726", "#FFFCF0", "#FFFCF099", "#205EA6", "#205EA6", "#24837B", "#AC8301", "#AE3029", "#65800B", "#9B76C8"]),
+  gruvbox: Object.freeze(["#282828", "#3C3836", "#504945", "#FBF1C7", "#FBF1C799", "#85A598", "#85A598", "#A89A85", "#FD8019", "#FA4934", "#B7BB26", "#F9BD2F"]),
+  monokai: Object.freeze(["#272822", "#2E2E2E", "#3E3D32", "#D6D6D6", "#797979", "#AE81FF", "#AE81FF", "#F82672", "#FC971F", "#F82672", "#A5E22E", "#66D9EF"]),
+  nord: Object.freeze(["#2E3440", "#3B4252", "#434C5E", "#D8DEE9", "#D8DEE999", "#88C0D0", "#88C0D0", "#81A1C1", "#EACB8B", "#BE616A", "#A3BE8C", "#B48EAD"]),
+  "rose-pine": Object.freeze(["#191724", "#1F1D2E", "#26233A", "#E0DEF4", "#E0DEF499", "#524f67", "#C4A7E7", "#31748F", "#F5C177", "#EA6F92", "#9CCFD8", "#EBBCBA"]),
+  "rose-pine-dawn": Object.freeze(["#FAF4ED", "#FFFAF3", "#F2E9E1", "#575279", "#57527999", "#cecacd", "#907AA9", "#286983", "#E99D34", "#B4637A", "#56949F", "#D6827E"]),
+  "rose-pine-moon": Object.freeze(["#232136", "#2A273F", "#393552", "#E0DEF4", "#E0DEF499", "#56526e", "#C4A7E7", "#3E8FB0", "#F5C177", "#EA6F92", "#9CCFD8", "#EA9A97"]),
+  "solarized-dark": Object.freeze(["#002B36", "#073642", "#073642", "#839496", "#83949699", "#268BD2", "#268BD2", "#2AA198", "#CA4B16", "#DB322F", "#849900", "#6C71C4"]),
+  "solarized-light": Object.freeze(["#FDF6E3", "#EEE8D5", "#EEE8D5", "#586E75", "#586E7599", "#268BD2", "#268BD2", "#2AA198", "#CA4B16", "#DB322F", "#849900", "#6C71C4"]),
+  "textual-dark": Object.freeze(["#121212", "#1E1E1E", "#242F38", "#E0E0E0", "#E0E0E099", "#0178D4", "#0178D4", "#004578", "#FEA62B", "#B93C5B", "#4EBF71", "#FEA62B"]),
+  "textual-light": Object.freeze(["#E0E0E0", "#D8D8D8", "#D0D0D0", "#1F1F1F", "#1F1F1F99", "#004578", "#004578", "#0178D4", "#FEA62B", "#B93C5B", "#4EBF71", "#FEA62B"]),
+  "tokyo-night": Object.freeze(["#1A1B26", "#24283B", "#414868", "#A9B1D6", "#A9B1D699", "#BB9AF7", "#BB9AF7", "#7AA2F7", "#DFAF68", "#F6768E", "#9ECE6A", "#FE9E64"]),
+});
 const SDS200_WATERFALL_PALETTES = Object.freeze([
   Object.freeze({value: "theme", label: "Home Assistant theme"}),
   Object.freeze({value: "cyan", label: "Cyan"}),
   Object.freeze({value: "green", label: "Green"}),
   Object.freeze({value: "amber", label: "Amber"}),
   Object.freeze({value: "monochrome", label: "Monochrome"}),
+  ...Object.keys(SDS200_WATERFALL_SYSTEM_PALETTES).map((value) =>
+    Object.freeze({value, label: value}),
+  ),
 ]);
 const SDS200_WATERFALL_HISTORY_OPTIONS = Object.freeze([
   Object.freeze({value: 60, label: "60 frames"}),
@@ -38,6 +64,23 @@ const SDS200_WATERFALL_INGRESS_PATH_PATTERN =
 
 function waterfallOptionLabel(options, value) {
   return options.find((option) => option.value === value)?.label;
+}
+
+function applyWaterfallSystemPalette(element, palette) {
+  const names = [
+    "background", "surface", "panel", "foreground", "muted", "border",
+    "primary", "secondary", "warning", "error", "success", "accent",
+  ];
+  names.forEach((name) => {
+    element.style.removeProperty(`--sds200-waterfall-${name}`);
+  });
+  const colors = SDS200_WATERFALL_SYSTEM_PALETTES[palette];
+  if (colors === undefined) {
+    return;
+  }
+  names.forEach((name, index) => {
+    element.style.setProperty(`--sds200-waterfall-${name}`, colors[index]);
+  });
 }
 
 function requireWaterfallCardConfig(config) {
@@ -486,6 +529,7 @@ class Sds200WaterfallCard extends HTMLElement {
         start_paused: "Start with display paused",
       })[schema.name],
       computeHelper: (schema) => ({
+        palette: "Follow Home Assistant, use a Waterfall preset, or choose a System web palette.",
         history: "Choose one bounded rolling-history capacity.",
         start_paused: "The authenticated stream still connects while paused.",
       })[schema.name],
@@ -647,8 +691,8 @@ class Sds200WaterfallCard extends HTMLElement {
         padding: 1rem;
         overflow: hidden;
         box-sizing: border-box;
-        background: var(--ha-card-background, var(--card-background-color));
-        color: var(--primary-text-color);
+        background: var(--sds200-waterfall-surface, var(--ha-card-background, var(--card-background-color)));
+        color: var(--sds200-waterfall-foreground, var(--primary-text-color));
       }
       ha-card[data-density="compact"] {
         --sds200-waterfall-card-height: min(22rem, calc(100dvh - 5rem));
@@ -690,22 +734,22 @@ class Sds200WaterfallCard extends HTMLElement {
       }
       .status {
         margin-top: 0.15rem;
-        color: var(--secondary-text-color);
+        color: var(--sds200-waterfall-muted, var(--secondary-text-color));
         font-size: 0.78rem;
         line-height: 1.25;
       }
       .status[data-state="live"] {
-        color: var(--success-color, #2e7d32);
+        color: var(--sds200-waterfall-success, var(--success-color, #2e7d32));
       }
       .status[data-state="error"] {
-        color: var(--error-color, #b71c1c);
+        color: var(--sds200-waterfall-error, var(--error-color, #b71c1c));
       }
       .actions {
         flex: 0 0 auto;
       }
       button {
         min-height: 2.25rem;
-        border: 1px solid var(--divider-color);
+        border: 1px solid var(--sds200-waterfall-border, var(--divider-color));
         border-radius: 0.45rem;
         padding: 0.35rem 0.7rem;
         background: transparent;
@@ -714,7 +758,7 @@ class Sds200WaterfallCard extends HTMLElement {
         cursor: pointer;
       }
       button:focus-visible {
-        outline: 2px solid var(--primary-color);
+        outline: 2px solid var(--sds200-waterfall-primary, var(--primary-color));
         outline-offset: 2px;
       }
       .surface {
@@ -722,7 +766,7 @@ class Sds200WaterfallCard extends HTMLElement {
         grid-template-rows: minmax(3rem, 1fr) minmax(5rem, 2.2fr);
         min-height: 0;
         overflow: hidden;
-        border: 1px solid var(--divider-color);
+        border: 1px solid var(--sds200-waterfall-border, var(--divider-color));
         border-radius: 0.45rem;
         background: #07111c;
       }
@@ -733,11 +777,11 @@ class Sds200WaterfallCard extends HTMLElement {
         min-height: 0;
       }
       .history {
-        border-top: 1px solid var(--divider-color);
+        border-top: 1px solid var(--sds200-waterfall-border, var(--divider-color));
       }
       .scale {
         justify-content: space-between;
-        color: var(--secondary-text-color);
+        color: var(--sds200-waterfall-muted, var(--secondary-text-color));
         font-size: 0.72rem;
       }
       .scale[hidden],
@@ -758,7 +802,7 @@ class Sds200WaterfallCard extends HTMLElement {
       .telemetry {
         display: grid;
         grid-template-columns: repeat(5, minmax(0, 1fr));
-        color: var(--secondary-text-color);
+        color: var(--sds200-waterfall-muted, var(--secondary-text-color));
         font-size: 0.7rem;
       }
       .telemetry div {
@@ -775,7 +819,7 @@ class Sds200WaterfallCard extends HTMLElement {
         text-transform: uppercase;
       }
       .telemetry dd {
-        color: var(--primary-text-color);
+        color: var(--sds200-waterfall-foreground, var(--primary-text-color));
       }
       @container (max-width: 32rem) {
         ha-card {
@@ -1256,6 +1300,7 @@ class Sds200WaterfallCard extends HTMLElement {
   _render() {
     this._card.dataset.density = this._config.density;
     this._card.dataset.palette = this._config.palette;
+    applyWaterfallSystemPalette(this._card, this._config.palette);
     this._title.textContent = this._config.title;
     this._scale.hidden = !this._config.show_scale;
     this._telemetry.hidden = !this._config.show_telemetry;
@@ -1350,6 +1395,16 @@ class Sds200WaterfallCard extends HTMLElement {
         history: "#d0d0d0",
       },
     };
+    const systemColors = SDS200_WATERFALL_SYSTEM_PALETTES[this._config.palette];
+    if (systemColors !== undefined) {
+      return {
+        background: systemColors[0],
+        grid: systemColors[5],
+        spectrum: systemColors[6],
+        marker: systemColors[11],
+        history: systemColors[7],
+      };
+    }
     if (this._config.palette !== "theme") {
       return presets[this._config.palette];
     }

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .daemon_ipc import (
     DAEMON_EVENT_SOCKET_FILENAME,
+    DAEMON_LIVE_AUDIO_SOCKET_FILENAME,
     DAEMON_PCMU_SOCKET_FILENAME,
     DAEMON_RECORDING_FILE_SOCKET_FILENAME,
     DAEMON_SOCKET_FILENAME,
@@ -14,6 +15,9 @@ from .daemon_ipc import (
 from .home_assistant_app import (
     HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY,
     HomeAssistantAppOptions,
+)
+from .home_assistant_live_audio_service_runtime import (
+    HOME_ASSISTANT_LIVE_AUDIO_SERVICE_PORT,
 )
 
 HOME_ASSISTANT_APP_RUNTIME_DIRECTORY = Path("/run/sdsctl")
@@ -27,6 +31,10 @@ HOME_ASSISTANT_APP_RECORDING_DIRECTORY = (
 HOME_ASSISTANT_APP_INGRESS_PORT = 8099
 HOME_ASSISTANT_APP_RTP_PORT = 50000
 HOME_ASSISTANT_APP_EXECUTABLE = "sdsctl"
+HOME_ASSISTANT_APP_MEDIA_EXECUTABLE = "python3"
+HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_KEY = Path(
+    "/data/live-audio-bridge.key"
+)
 
 
 def _require_absolute_path(value: object, *, label: str) -> Path:
@@ -64,6 +72,8 @@ class HomeAssistantAppRuntimePaths:
     recording_file_socket: Path
     recording_directory: Path
     waterfall_socket: Path | None = None
+    live_audio_socket: Path | None = None
+    live_audio_bridge_key: Path | None = None
 
     def __post_init__(self) -> None:
         runtime_directory = _require_absolute_path(
@@ -77,6 +87,18 @@ class HomeAssistantAppRuntimePaths:
                 "waterfall_socket",
                 runtime_directory / DAEMON_WATERFALL_SOCKET_FILENAME,
             )
+        if self.live_audio_socket is None:
+            object.__setattr__(
+                self,
+                "live_audio_socket",
+                runtime_directory / DAEMON_LIVE_AUDIO_SOCKET_FILENAME,
+            )
+        if self.live_audio_bridge_key is None:
+            object.__setattr__(
+                self,
+                "live_audio_bridge_key",
+                runtime_directory / "live-audio-bridge.key",
+            )
 
         for field_name, label in (
             ("mqtt_configuration", "Home Assistant App MQTT configuration"),
@@ -88,6 +110,10 @@ class HomeAssistantAppRuntimePaths:
                 "Home Assistant App recording-file socket",
             ),
             ("waterfall_socket", "Home Assistant App waterfall socket"),
+            (
+                "live_audio_socket",
+                "Home Assistant App live-audio socket",
+            ),
         ):
             path = _require_absolute_path(
                 getattr(self, field_name),
@@ -106,6 +132,14 @@ class HomeAssistantAppRuntimePaths:
             _require_absolute_path(
                 self.recording_directory,
                 label="Home Assistant App recording directory",
+            ),
+        )
+        object.__setattr__(
+            self,
+            "live_audio_bridge_key",
+            _require_absolute_path(
+                self.live_audio_bridge_key,
+                label="Home Assistant App live-audio bridge key",
             ),
         )
 
@@ -131,6 +165,8 @@ def default_home_assistant_app_runtime_paths(
             runtime / DAEMON_RECORDING_FILE_SOCKET_FILENAME
         ),
         waterfall_socket=runtime / DAEMON_WATERFALL_SOCKET_FILENAME,
+        live_audio_socket=runtime / DAEMON_LIVE_AUDIO_SOCKET_FILENAME,
+        live_audio_bridge_key=HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_KEY,
         recording_directory=(
             HOME_ASSISTANT_APP_MEDIA_DIRECTORY / recording_relative
         ),
@@ -156,6 +192,7 @@ def build_home_assistant_daemon_command(
 
     program = _require_executable(executable)
     assert paths.waterfall_socket is not None
+    assert paths.live_audio_socket is not None
     return (
         program,
         "--host",
@@ -177,6 +214,8 @@ def build_home_assistant_daemon_command(
         os.fspath(paths.recording_file_socket),
         "--waterfall-socket-path",
         os.fspath(paths.waterfall_socket),
+        "--live-audio-socket-path",
+        os.fspath(paths.live_audio_socket),
     )
 
 
@@ -222,8 +261,38 @@ def build_home_assistant_web_command(
     )
 
 
+def build_home_assistant_media_command(
+    paths: HomeAssistantAppRuntimePaths,
+    *,
+    executable: str = HOME_ASSISTANT_APP_MEDIA_EXECUTABLE,
+    listen_port: int = HOME_ASSISTANT_LIVE_AUDIO_SERVICE_PORT,
+) -> tuple[str, ...]:
+    """Build the private Core-facing media child command."""
+
+    if not isinstance(paths, HomeAssistantAppRuntimePaths):
+        raise TypeError("Home Assistant media command requires App runtime paths.")
+    if type(listen_port) is not int or not 1 <= listen_port <= 65535:
+        raise ValueError("Home Assistant media port must be between 1 and 65535.")
+    program = _require_executable(executable)
+    assert paths.live_audio_socket is not None
+    assert paths.live_audio_bridge_key is not None
+    return (
+        program,
+        "-m",
+        "sds200.home_assistant_live_audio_service_runtime",
+        "--daemon-live-audio-socket",
+        os.fspath(paths.live_audio_socket),
+        "--bridge-secret-file",
+        os.fspath(paths.live_audio_bridge_key),
+        "--listen-port",
+        str(listen_port),
+    )
+
+
 __all__ = [
     "HOME_ASSISTANT_APP_EXECUTABLE",
+    "HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_KEY",
+    "HOME_ASSISTANT_APP_MEDIA_EXECUTABLE",
     "HOME_ASSISTANT_APP_INGRESS_PORT",
     "HOME_ASSISTANT_APP_MQTT_CONFIG_FILENAME",
     "HOME_ASSISTANT_APP_MEDIA_DIRECTORY",
@@ -233,6 +302,7 @@ __all__ = [
     "HOME_ASSISTANT_APP_RUNTIME_DIRECTORY",
     "HomeAssistantAppRuntimePaths",
     "build_home_assistant_daemon_command",
+    "build_home_assistant_media_command",
     "build_home_assistant_web_command",
     "default_home_assistant_app_runtime_paths",
 ]

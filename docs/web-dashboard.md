@@ -304,6 +304,26 @@ scanner pane around the established scanner-display proportions, hierarchy,
 status treatment, and adaptive screen profiles. The five custom choices are
 more theatrical while preserving the same dashboard semantics:
 
+When **System** is active, a second browser-local selector appears in the center
+of the overview row. **Follow device** preserves the adaptive behavior above.
+The remaining choices mirror Textual's full built-in TUI color-scheme inventory:
+ANSI Dark/Light, Atom One Dark/Light, Catppuccin Frappé/Latte/Macchiato/Mocha,
+Dracula, Flexoki, Gruvbox, Monokai, Nord, Rosé Pine/Dawn/Moon, Solarized
+Dark/Light, Textual Dark/Light, and Tokyo Night. An explicit choice fixes the
+System presentation to that light or dark scheme until changed, independently
+of later operating-system preference changes. It recolors System surfaces,
+scanner display, semantic status colors, controls, and Waterfall without
+changing layout, data, or behavior. The choice is stored under
+`sdsctl.web.system-palette`, remains available when switching away and back, and
+is never shown for another web theme. Because browsers have no terminal ANSI
+color table, the two ANSI choices use stable web equivalents; the other 19
+schemes retain Textual 8.2's resolved built-in source values. Browser-facing
+label and semantic-status tokens are minimally shifted toward black or white
+only when the terminal value would fall below WCAG AA against its web surface;
+accent-filled controls receive the higher-contrast black or white label. On
+phone-sized viewports the selector moves below the overview title and connection
+message rather than compressing either one.
+
 - **LCARS-inspired** connects the six operational panels with asymmetric rails,
   segmented console bands, luminous command-deck surfaces, and layered display
   depth.
@@ -359,9 +379,10 @@ priority and conventional scrolling is deliberately restored.
 The base and packaged theme stylesheets are declared before the same-origin
 `/assets/theme-bootstrap.js` script in the document head. That parser-blocking
 script still runs before the body is parsed and before first paint. It validates
-the stored value against registry-generated metadata, applies the corresponding
-`data-theme` value to the document root, and updates `color-scheme` and
-`theme-color` metadata. Managed links remain inert until the bootstrap has
+the stored theme and System sub-palette against registry-generated metadata,
+applies the corresponding `data-theme` and `data-system-palette` values to the
+document root, and updates `color-scheme` and `theme-color` metadata. Managed
+links remain inert until the bootstrap has
 installed failure handling and selected their ID. A missing, removed, mutated,
 or unloadable stylesheet removes the failed link target and repairs the
 document theme, metadata, visible picker, and stored selection to **System**;

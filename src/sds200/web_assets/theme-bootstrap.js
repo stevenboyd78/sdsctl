@@ -2,6 +2,17 @@
 
 (() => {
   const STORAGE_KEY = "sdsctl.web.theme";
+  const SYSTEM_PALETTE_STORAGE_KEY = "sdsctl.web.system-palette";
+  const SYSTEM_PALETTE_DOCUMENTS = Object.freeze(
+    __SDSCTL_SYSTEM_PALETTES__,
+  );
+  const SYSTEM_PALETTES = Object.freeze([
+    "auto",
+    ...SYSTEM_PALETTE_DOCUMENTS.map((palette) => palette.id),
+  ]);
+  const SYSTEM_PALETTES_BY_ID = new Map(
+    SYSTEM_PALETTE_DOCUMENTS.map((palette) => [palette.id, palette]),
+  );
   const THEME_DOCUMENTS = Object.freeze(__SDSCTL_WEB_THEME_MANIFESTS__);
   const THEMES = Object.freeze(THEME_DOCUMENTS.map((theme) => theme.id));
   const MANAGED_THEMES = new Set(__SDSCTL_MANAGED_WEB_THEME_IDS__);
@@ -18,6 +29,7 @@
       ? window.matchMedia("(prefers-color-scheme: dark)")
       : null;
   let activeTheme = "system";
+  let activeSystemPalette = "auto";
 
   function normalizeTheme(value) {
     if (!THEMES.includes(value)) {
@@ -49,6 +61,25 @@
     }
   }
 
+  function normalizeSystemPalette(value) {
+    return SYSTEM_PALETTES.includes(value) ? value : "auto";
+  }
+
+  function readStoredSystemPalette() {
+    try {
+      const storedPalette = window.localStorage.getItem(
+        SYSTEM_PALETTE_STORAGE_KEY,
+      );
+      const palette = normalizeSystemPalette(storedPalette);
+      return Object.freeze({
+        palette,
+        repair: storedPalette !== null && storedPalette !== palette,
+      });
+    } catch {
+      return Object.freeze({palette: "auto", repair: false});
+    }
+  }
+
   function updateMetadata(theme) {
     const colorScheme = document.querySelector('meta[name="color-scheme"]');
     const themeColor = document.querySelector('meta[name="theme-color"]');
@@ -58,14 +89,25 @@
       return;
     }
 
+    const paletteDocument = SYSTEM_PALETTES_BY_ID.get(activeSystemPalette);
     if (colorScheme !== null) {
-      colorScheme.content = documentTheme.colorScheme;
+      colorScheme.content =
+        theme === "system" && paletteDocument !== undefined
+          ? paletteDocument.dark
+            ? "dark"
+            : "light"
+          : documentTheme.colorScheme;
     }
     if (themeColor !== null) {
-      themeColor.content =
-        systemColorQuery !== null && systemColorQuery.matches
-          ? documentTheme.themeColors.dark
-          : documentTheme.themeColors.light;
+      const deviceUsesDark =
+        systemColorQuery !== null && systemColorQuery.matches;
+      const useDark =
+        theme === "system"
+          ? paletteDocument?.dark ?? deviceUsesDark
+          : deviceUsesDark;
+      themeColor.content = useDark
+        ? documentTheme.themeColors.dark
+        : documentTheme.themeColors.light;
     }
   }
 
@@ -73,6 +115,17 @@
     const picker = document.querySelector("#theme-select");
     if (picker !== null && picker.value !== theme) {
       picker.value = theme;
+    }
+  }
+
+  function updateSystemPalettePicker() {
+    const wrapper = document.querySelector("#system-palette-picker");
+    const picker = document.querySelector("#system-palette-select");
+    if (wrapper !== null) {
+      wrapper.hidden = activeTheme !== "system";
+    }
+    if (picker !== null && picker.value !== activeSystemPalette) {
+      picker.value = activeSystemPalette;
     }
   }
 
@@ -99,6 +152,7 @@
     document.documentElement.dataset.theme = theme;
     updateMetadata(theme);
     updatePicker(theme);
+    updateSystemPalettePicker();
 
     if (persist) {
       try {
@@ -111,6 +165,24 @@
     return theme;
   }
 
+  function applySystemPalette(value, persist) {
+    const palette = normalizeSystemPalette(value);
+    activeSystemPalette = palette;
+    document.documentElement.dataset.systemPalette = palette;
+    updateMetadata(activeTheme);
+    updateSystemPalettePicker();
+
+    if (persist) {
+      try {
+        window.localStorage.setItem(SYSTEM_PALETTE_STORAGE_KEY, palette);
+      } catch {
+        // Browser-local persistence is optional; applying the palette still succeeds.
+      }
+    }
+
+    return palette;
+  }
+
   MANAGED_THEME_LINKS.forEach((link, identifier) => {
     link.addEventListener("error", () => {
       link.removeAttribute("href");
@@ -120,7 +192,12 @@
     });
   });
 
+  const storedSystemPalette = readStoredSystemPalette();
   const storedSelection = readStoredTheme();
+  activeSystemPalette = applySystemPalette(
+    storedSystemPalette.palette,
+    storedSystemPalette.repair,
+  );
   activeTheme = applyTheme(storedSelection.theme, storedSelection.repair);
 
   if (
@@ -137,6 +214,9 @@
   window.sdsctlTheme = Object.freeze({
     choices: THEMES,
     current: () => activeTheme,
+    currentSystemPalette: () => activeSystemPalette,
     select: (value) => applyTheme(value, true),
+    selectSystemPalette: (value) => applySystemPalette(value, true),
+    systemPaletteChoices: SYSTEM_PALETTES,
   });
 })();

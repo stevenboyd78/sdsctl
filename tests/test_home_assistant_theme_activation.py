@@ -376,6 +376,43 @@ def test_status_distinguishes_missing_target_and_invalid_ledger(tmp_path: Path) 
     assert inventory.statuses[0].state == "invalid-ledger"
 
 
+def test_status_accepts_digest_qualified_resource_url(tmp_path: Path) -> None:
+    root, target, digest = _installed(tmp_path)
+    record = _activate(root, target, digest)
+    ledger = root / HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME
+    document = json.loads(ledger.read_text(encoding="utf-8"))
+    document["activations"][0]["resource_url"] = (
+        f"/local/sds200/{record.installed_filename}?v={record.module_sha256}"
+    )
+    ledger.write_text(json.dumps(document) + "\n", encoding="utf-8")
+
+    inventory = home_assistant_activation_inventory(root)
+
+    assert inventory.valid is True
+    assert inventory.statuses[0].record is not None
+    assert inventory.statuses[0].record.resource_url.endswith(
+        f"?v={record.module_sha256}"
+    )
+
+
+def test_status_rejects_mismatched_digest_qualified_resource_url(
+    tmp_path: Path,
+) -> None:
+    root, target, digest = _installed(tmp_path)
+    record = _activate(root, target, digest)
+    ledger = root / HOME_ASSISTANT_ACTIVATION_LEDGER_FILENAME
+    document = json.loads(ledger.read_text(encoding="utf-8"))
+    document["activations"][0]["resource_url"] = (
+        f"/local/sds200/{record.installed_filename}?v={'0' * 64}"
+    )
+    ledger.write_text(json.dumps(document) + "\n", encoding="utf-8")
+
+    inventory = home_assistant_activation_inventory(root)
+
+    assert inventory.valid is False
+    assert inventory.statuses[0].state == "invalid-ledger"
+
+
 def test_status_rejects_public_or_symlinked_ledger(tmp_path: Path) -> None:
     root, target, digest = _installed(tmp_path)
     _activate(root, target, digest)

@@ -18,6 +18,31 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   clear actions; bounded reconnect; and a graphical editor without accepting
   URLs, credentials, scanner addresses, or private Ingress identifiers.
 
+### Changed
+
+- Reuse the System web theme's 21 Textual-derived color schemes as bounded
+  per-card palette choices in all three first-party Home Assistant cards. The
+  compact Scanner card gains a graphical-editor palette field; Display retains
+  its Color and two monochrome presets; Waterfall retains its four spectrum
+  presets; and every card keeps Home Assistant theme-following or its existing
+  default. Palette selection changes presentation only and adds no scanner,
+  App, network, credential, or browser-storage behavior.
+- Keep the live daemon-event status in the balanced right-hand overview column
+  when a non-System web theme hides the System palette selector, preventing the
+  compact status from shifting inward or wrapping into a narrow orphaned track.
+- Add a System-only web palette selector centered in the dashboard overview.
+  Follow-device remains the default; 21 explicit choices mirror Textual's full
+  built-in TUI scheme list across System surfaces, scanner presentation,
+  semantic status colors, controls, and Waterfall. The independently persisted
+  choice is hidden for non-System themes, stays responsive on phone and compact
+  displays, preserves WCAG AA through derived web label tokens, and does not
+  create new managed-theme packages or alter dashboard behavior.
+- Use one compact geometry for buttons inside every web-dashboard workspace
+  while preserving selected, action, and disabled state colors. The Ingress-only
+  Home Assistant lifecycle pane now owns bounded vertical scrolling, uses denser
+  inputs and status spacing, and keeps its Core-restart and reauthentication
+  guidance reachable across all built-in themes and supported viewports.
+
 ## [0.24.0] - 2026-08-29
 
 ### Added

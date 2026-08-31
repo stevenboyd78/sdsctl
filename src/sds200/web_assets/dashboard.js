@@ -32,6 +32,7 @@ const WORKSPACE_PANES = Object.freeze([
   "waterfall",
   "audio",
   "recordings",
+  "home-assistant",
   "diagnostics",
 ]);
 const RADIO_INSPECTION_VIEWS = Object.freeze([
@@ -71,6 +72,10 @@ let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
 let recordingInventorySignature = "";
 let recordingPaginationFocusId = null;
+let homeAssistantIntegrationBusy = false;
+let homeAssistantIntegrationStatus = {};
+let homeAssistantBridgeKeyClearTimer = null;
+let homeAssistantIntegrationArmedAction = null;
 
 let waterfallGeneration = 0;
 let waterfallAbortController = null;
@@ -138,7 +143,9 @@ function writeStoredValue(key, value) {
 }
 
 function normalizedWorkspacePane(value) {
-  return typeof value === "string" && WORKSPACE_PANES.includes(value)
+  return typeof value === "string" &&
+    WORKSPACE_PANES.includes(value) &&
+    document.getElementById(`pane-tab-${value}`) !== null
     ? value
     : "scanner";
 }
@@ -205,21 +212,40 @@ function initializeWorkspace() {
 
 function initializeThemeControl() {
   const select = element("theme-select");
+  const systemPalettePicker = element("system-palette-picker");
+  const systemPaletteSelect = element("system-palette-select");
   const controller = window.sdsctlTheme;
 
   if (
     controller === undefined ||
     typeof controller.current !== "function" ||
-    typeof controller.select !== "function"
+    typeof controller.select !== "function" ||
+    typeof controller.currentSystemPalette !== "function" ||
+    typeof controller.selectSystemPalette !== "function"
   ) {
     select.disabled = true;
+    systemPaletteSelect.disabled = true;
+    systemPalettePicker.hidden = true;
     return;
   }
 
-  select.value = controller.current();
+  function synchronizePickers() {
+    select.value = controller.current();
+    systemPaletteSelect.value = controller.currentSystemPalette();
+    systemPalettePicker.hidden = controller.current() !== "system";
+  }
+
+  synchronizePickers();
   select.addEventListener("change", () => {
     controller.select(select.value);
-    select.value = controller.current();
+    synchronizePickers();
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(renderWaterfallCanvases);
+    });
+  });
+  systemPaletteSelect.addEventListener("change", () => {
+    controller.selectSystemPalette(systemPaletteSelect.value);
+    synchronizePickers();
     window.requestAnimationFrame(() => {
       window.requestAnimationFrame(renderWaterfallCanvases);
     });
@@ -2533,8 +2559,428 @@ function initializeAudioPlayback() {
   setAudioControls("Stopped", false);
 }
 
+function homeAssistantIntegrationPanelAvailable() {
+  return document.getElementById(
+    "home-assistant-integration-message",
+  ) !== null;
+}
+
+function setHomeAssistantIntegrationMessage(message, state = "ready") {
+  const node = element("home-assistant-integration-message");
+  node.textContent = message;
+  node.dataset.state = state;
+}
+
+function clearHomeAssistantIntegrationActionConfirmation() {
+  const actions = {
+    remove: ["home-assistant-integration-remove", "Remove"],
+    "discard-rollback": [
+      "home-assistant-integration-discard-rollback",
+      "Discard rollback",
+    ],
+    "rotate-bridge-key": [
+      "home-assistant-integration-rotate-key",
+      "Rotate key",
+    ],
+  };
+  for (const [buttonId, label] of Object.values(actions)) {
+    const button = element(buttonId);
+    button.textContent = label;
+    delete button.dataset.confirming;
+  }
+  homeAssistantIntegrationArmedAction = null;
+}
+
+function confirmHomeAssistantIntegrationAction(action, guidance) {
+  const buttons = {
+    remove: "home-assistant-integration-remove",
+    "discard-rollback": "home-assistant-integration-discard-rollback",
+    "rotate-bridge-key": "home-assistant-integration-rotate-key",
+  };
+  if (homeAssistantIntegrationArmedAction === action) {
+    clearHomeAssistantIntegrationActionConfirmation();
+    return true;
+  }
+
+  clearHomeAssistantIntegrationActionConfirmation();
+  homeAssistantIntegrationArmedAction = action;
+  const button = element(buttons[action]);
+  button.textContent = `Confirm ${button.textContent.toLowerCase()}`;
+  button.dataset.confirming = "true";
+  setHomeAssistantIntegrationMessage(
+    `${guidance} Press “${button.textContent}” to continue.`,
+    "warning",
+  );
+  return false;
+}
+
+function clearHomeAssistantBridgeKey() {
+  if (!homeAssistantIntegrationPanelAvailable()) {
+    return;
+  }
+  if (homeAssistantBridgeKeyClearTimer !== null) {
+    window.clearTimeout(homeAssistantBridgeKeyClearTimer);
+    homeAssistantBridgeKeyClearTimer = null;
+  }
+  const field = element("home-assistant-integration-bridge-key");
+  field.value = "";
+  field.type = "password";
+  element("home-assistant-integration-show-key").disabled = true;
+  element("home-assistant-integration-show-key").textContent = "Show";
+  element("home-assistant-integration-copy-key").disabled = true;
+}
+
+function retainHomeAssistantBridgeKey(value) {
+  clearHomeAssistantBridgeKey();
+  const field = element("home-assistant-integration-bridge-key");
+  field.value = value;
+  element("home-assistant-integration-show-key").disabled = false;
+  element("home-assistant-integration-copy-key").disabled = false;
+  homeAssistantBridgeKeyClearTimer = window.setTimeout(
+    clearHomeAssistantBridgeKey,
+    60000,
+  );
+}
+
+function setHomeAssistantIntegrationBusy(busy) {
+  homeAssistantIntegrationBusy = busy;
+  const artifact = record(homeAssistantIntegrationStatus.artifact);
+  const publication = record(homeAssistantIntegrationStatus.publication);
+  const current = typeof publication.current_digest === "string";
+  const rollback = typeof publication.rollback_digest === "string";
+
+  element("home-assistant-integration-refresh").disabled = busy;
+  element("home-assistant-integration-install").disabled = busy || current;
+  element("home-assistant-integration-update").disabled =
+    busy || !current || rollback;
+  element("home-assistant-integration-rollback").disabled = busy || !rollback;
+  element("home-assistant-integration-remove").disabled =
+    busy || !current || rollback;
+  element("home-assistant-integration-discard-rollback").disabled =
+    busy || !rollback;
+  element("home-assistant-integration-reveal-key").disabled = busy;
+  element("home-assistant-integration-rotate-key").disabled = busy;
+  element("home-assistant-integration-use-artifact").disabled =
+    busy || typeof artifact.digest !== "string";
+  element("home-assistant-integration-use-current").disabled =
+    busy || !current;
+  element("home-assistant-integration-use-rollback").disabled =
+    busy || !rollback;
+  element("home-assistant-integration-use-bridge").disabled =
+    busy || typeof homeAssistantIntegrationStatus.bridge_key_digest !== "string";
+}
+
+function renderHomeAssistantIntegrationStatus(payload) {
+  homeAssistantIntegrationStatus = record(payload);
+  const artifact = record(homeAssistantIntegrationStatus.artifact);
+  const publication = record(homeAssistantIntegrationStatus.publication);
+  setText(
+    "home-assistant-integration-artifact-version",
+    artifact.version,
+  );
+  setText(
+    "home-assistant-integration-artifact-digest",
+    artifact.digest,
+  );
+  setText(
+    "home-assistant-integration-current-version",
+    publication.current_version,
+    "Absent",
+  );
+  setText(
+    "home-assistant-integration-current-digest",
+    publication.current_digest,
+    "Absent",
+  );
+  setText(
+    "home-assistant-integration-rollback-version",
+    publication.rollback_version,
+    "Absent",
+  );
+  setText(
+    "home-assistant-integration-rollback-digest",
+    publication.rollback_digest,
+    "Absent",
+  );
+  setText(
+    "home-assistant-integration-bridge-digest",
+    homeAssistantIntegrationStatus.bridge_key_digest,
+  );
+  setHomeAssistantIntegrationBusy(homeAssistantIntegrationBusy);
+}
+
+async function homeAssistantIntegrationRequest(path, options = {}) {
+  const response = await fetch(webUrl(path), {
+    cache: "no-store",
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  if (!response.ok) {
+    throw new Error(errorMessage(payload, response));
+  }
+  return payload;
+}
+
+async function refreshHomeAssistantIntegrationStatus() {
+  if (!homeAssistantIntegrationPanelAvailable() || homeAssistantIntegrationBusy) {
+    return;
+  }
+  clearHomeAssistantIntegrationActionConfirmation();
+  setHomeAssistantIntegrationBusy(true);
+  setHomeAssistantIntegrationMessage("Reading exact lifecycle status.", "working");
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/integration",
+      {method: "GET"},
+    );
+    renderHomeAssistantIntegrationStatus(payload);
+    setHomeAssistantIntegrationMessage(
+      "Lifecycle status is current. Core was not restarted or reloaded.",
+    );
+  } catch (error) {
+    setHomeAssistantIntegrationMessage(
+      error instanceof Error ? error.message : "Lifecycle status failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantIntegrationBusy(false);
+  }
+}
+
+async function performHomeAssistantIntegrationAction(action) {
+  if (homeAssistantIntegrationBusy) {
+    return;
+  }
+  const confirmation = element("home-assistant-integration-confirm").value;
+  if (confirmation.length !== 64) {
+    setHomeAssistantIntegrationMessage(
+      "Select or paste the exact 64-character SHA-256 confirmation first.",
+      "error",
+    );
+    return;
+  }
+  if (["remove", "discard-rollback"].includes(action)) {
+    const guidance =
+      action === "remove"
+        ? "Move the exact installed integration into the rollback slot?"
+        : "Permanently discard the exact retained rollback integration?";
+    if (!confirmHomeAssistantIntegrationAction(action, guidance)) {
+      return;
+    }
+  }
+
+  setHomeAssistantIntegrationBusy(true);
+  setHomeAssistantIntegrationMessage(`Executing ${action}.`, "working");
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      `api/v1/home-assistant/integration/${action}`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({confirm: confirmation}),
+      },
+    );
+    element("home-assistant-integration-confirm").value = "";
+    renderHomeAssistantIntegrationStatus({
+      ...homeAssistantIntegrationStatus,
+      publication: record(payload.publication),
+    });
+    setHomeAssistantIntegrationMessage(
+      `${displayValue(payload.action, action)} completed. ` +
+        "Restart Home Assistant Core explicitly before relying on the change.",
+    );
+  } catch (error) {
+    setHomeAssistantIntegrationMessage(
+      error instanceof Error ? error.message : `${action} failed.`,
+      "error",
+    );
+  } finally {
+    setHomeAssistantIntegrationBusy(false);
+  }
+}
+
+async function revealHomeAssistantIntegrationBridgeKey() {
+  if (homeAssistantIntegrationBusy) {
+    return;
+  }
+  setHomeAssistantIntegrationBusy(true);
+  clearHomeAssistantBridgeKey();
+  setHomeAssistantIntegrationMessage("Reading bridge key.", "working");
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/integration/bridge-key/reveal",
+      {method: "POST"},
+    );
+    if (typeof payload.bridge_key !== "string") {
+      throw new Error("Bridge-key response was invalid.");
+    }
+    retainHomeAssistantBridgeKey(payload.bridge_key);
+    setHomeAssistantIntegrationMessage(
+      "Bridge key is concealed below and will be cleared in 60 seconds.",
+    );
+  } catch (error) {
+    setHomeAssistantIntegrationMessage(
+      error instanceof Error ? error.message : "Bridge-key reveal failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantIntegrationBusy(false);
+  }
+}
+
+async function rotateHomeAssistantIntegrationBridgeKey() {
+  if (homeAssistantIntegrationBusy) {
+    return;
+  }
+  const confirmation = element("home-assistant-integration-confirm").value;
+  if (confirmation.length !== 64) {
+    setHomeAssistantIntegrationMessage(
+      "Select or paste the exact bridge-key SHA-256 confirmation first.",
+      "error",
+    );
+    return;
+  }
+  if (
+    !confirmHomeAssistantIntegrationAction(
+      "rotate-bridge-key",
+      "Rotate the private bridge key now?",
+    )
+  ) {
+    return;
+  }
+  setHomeAssistantIntegrationBusy(true);
+  clearHomeAssistantBridgeKey();
+  setHomeAssistantIntegrationMessage("Rotating bridge key.", "working");
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/integration/bridge-key/rotate",
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({confirm: confirmation}),
+      },
+    );
+    if (typeof payload.bridge_key !== "string") {
+      throw new Error("Bridge-key rotation response was invalid.");
+    }
+    retainHomeAssistantBridgeKey(payload.bridge_key);
+    element("home-assistant-integration-confirm").value = "";
+    homeAssistantIntegrationStatus.bridge_key_digest =
+      payload.bridge_key_digest;
+    setText(
+      "home-assistant-integration-bridge-digest",
+      payload.bridge_key_digest,
+    );
+    setHomeAssistantIntegrationMessage(
+      "Bridge key rotated. Copy it now, restart this App immediately, then " +
+        "complete integration reauthentication.",
+    );
+  } catch (error) {
+    setHomeAssistantIntegrationMessage(
+      error instanceof Error ? error.message : "Bridge-key rotation failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantIntegrationBusy(false);
+  }
+}
+
+function useHomeAssistantIntegrationConfirmation(source) {
+  clearHomeAssistantIntegrationActionConfirmation();
+  const artifact = record(homeAssistantIntegrationStatus.artifact);
+  const publication = record(homeAssistantIntegrationStatus.publication);
+  const values = {
+    artifact: artifact.digest,
+    current: publication.current_digest,
+    rollback: publication.rollback_digest,
+    bridge: homeAssistantIntegrationStatus.bridge_key_digest,
+  };
+  const value = values[source];
+  if (typeof value === "string") {
+    element("home-assistant-integration-confirm").value = value;
+    setHomeAssistantIntegrationMessage(
+      `Selected the exact ${source} SHA-256 identity.`,
+    );
+  }
+}
+
+function initializeHomeAssistantIntegrationLifecycle() {
+  if (!homeAssistantIntegrationPanelAvailable()) {
+    return;
+  }
+  element("home-assistant-integration-refresh").addEventListener("click", () => {
+    void refreshHomeAssistantIntegrationStatus();
+  });
+  element("home-assistant-integration-confirm").addEventListener(
+    "input",
+    clearHomeAssistantIntegrationActionConfirmation,
+  );
+  for (const button of document.querySelectorAll(
+    "[data-home-assistant-integration-action]",
+  )) {
+    button.addEventListener("click", () => {
+      void performHomeAssistantIntegrationAction(
+        button.dataset.homeAssistantIntegrationAction,
+      );
+    });
+  }
+  for (const source of ["artifact", "current", "rollback", "bridge"]) {
+    element(`home-assistant-integration-use-${source}`).addEventListener(
+      "click",
+      () => useHomeAssistantIntegrationConfirmation(source),
+    );
+  }
+  element("home-assistant-integration-reveal-key").addEventListener(
+    "click",
+    () => void revealHomeAssistantIntegrationBridgeKey(),
+  );
+  element("home-assistant-integration-rotate-key").addEventListener(
+    "click",
+    () => void rotateHomeAssistantIntegrationBridgeKey(),
+  );
+  element("home-assistant-integration-show-key").addEventListener("click", () => {
+    const field = element("home-assistant-integration-bridge-key");
+    const showing = field.type === "text";
+    field.type = showing ? "password" : "text";
+    element("home-assistant-integration-show-key").textContent =
+      showing ? "Show" : "Hide";
+  });
+  element("home-assistant-integration-copy-key").addEventListener(
+    "click",
+    async () => {
+      const value = element("home-assistant-integration-bridge-key").value;
+      if (value === "") {
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(value);
+        setHomeAssistantIntegrationMessage(
+          "Bridge key copied. It will still be cleared from this page shortly.",
+        );
+      } catch {
+        setHomeAssistantIntegrationMessage(
+          "Clipboard access failed. Select the revealed key manually.",
+          "error",
+        );
+      }
+    },
+  );
+  void refreshHomeAssistantIntegrationStatus();
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
+    clearHomeAssistantBridgeKey();
     stopEventStream();
     stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
     return;
@@ -2548,6 +2994,7 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  clearHomeAssistantBridgeKey();
   stopEventStream();
   stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
@@ -2632,6 +3079,7 @@ initializeWorkspace();
 initializeThemeControl();
 initializeRadioViewControls();
 initializeAudioPlayback();
+initializeHomeAssistantIntegrationLifecycle();
 renderRecording({}, false);
 setScannerControls();
 void refreshStatus();

@@ -281,9 +281,14 @@ def _parse_record(value: object) -> HomeAssistantActivationRecord:
         )
     filename = _require_text(value["installed_filename"], field="installed_filename")
     resource_url = _require_text(value["resource_url"], field="resource_url")
+    module_sha256 = _require_sha256(value["module_sha256"], field="module_sha256")
+    base_resource_url = f"/local/sds200/{filename}"
     if (
         _JAVASCRIPT_FILENAME_PATTERN.fullmatch(filename) is None
-        or resource_url != f"/local/sds200/{filename}"
+        or resource_url not in (
+            base_resource_url,
+            f"{base_resource_url}?v={module_sha256}",
+        )
     ):
         raise ThemeLifecycleError("activation ledger module identity is invalid")
     custom_element = _require_text(value["custom_element"], field="custom_element")
@@ -293,7 +298,7 @@ def _parse_record(value: object) -> HomeAssistantActivationRecord:
         interface="home-assistant",
         identifier=identifier,
         package_sha256=_require_sha256(value["package_sha256"], field="package_sha256"),
-        module_sha256=_require_sha256(value["module_sha256"], field="module_sha256"),
+        module_sha256=module_sha256,
         installed_filename=filename,
         custom_element=custom_element,
         resource_url=resource_url,

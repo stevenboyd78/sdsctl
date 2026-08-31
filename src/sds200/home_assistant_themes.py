@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -35,6 +36,7 @@ _IDENTIFIER_PATTERN: Final = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*\Z")
 _JAVASCRIPT_FILENAME_PATTERN: Final = re.compile(
     r"[a-z0-9]+(?:-[a-z0-9]+)*\.js\Z"
 )
+_SHA256_PATTERN: Final = re.compile(r"[0-9a-f]{64}\Z")
 
 
 class HomeAssistantThemeError(SDS200Error):
@@ -196,11 +198,26 @@ def _read_manifest(directory: Traversable) -> HomeAssistantThemeManifest:
         )
 
     resource_url = _required_text(document, "resource_url")
-    expected_resource_url = f"/local/sds200/{installed_filename}"
-    if resource_url != expected_resource_url:
+    base_resource_url = f"/local/sds200/{installed_filename}"
+    version_prefix = f"{base_resource_url}?v="
+    if resource_url == base_resource_url:
+        resource_version = None
+    elif resource_url.startswith(version_prefix):
+        resource_version = resource_url.removeprefix(version_prefix)
+        if _SHA256_PATTERN.fullmatch(resource_version) is None:
+            raise HomeAssistantThemeError(
+                "Home Assistant theme resource URL version must be lowercase SHA-256"
+            )
+    else:
         raise HomeAssistantThemeError(
             "Home Assistant theme resource URL must use its exact /local/sds200/ path"
         )
+    if resource_version is not None:
+        module_sha256 = hashlib.sha256(module_path.read_bytes()).hexdigest()
+        if resource_version != module_sha256:
+            raise HomeAssistantThemeError(
+                "Home Assistant theme resource URL version does not match its module"
+            )
 
     declared_files = {HOME_ASSISTANT_THEME_MANIFEST_FILENAME, module}
     actual_files = {child.name for child in directory.iterdir()}

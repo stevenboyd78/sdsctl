@@ -139,9 +139,9 @@ select:focus-visible,
   padding-bottom: var(--space-6);
 }
 .overview {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: end;
-  justify-content: space-between;
   gap: var(--space-5);
   margin-bottom: var(--space-4);
 }
@@ -149,10 +149,42 @@ select:focus-visible,
   font-size: clamp(1.4rem, 3vw, 2rem);
 }
 .dashboard-message {
+  justify-self: end;
   max-width: 38rem;
   margin: 0;
   color: var(--muted);
   text-align: right;
+}
+:root[data-theme]:not([data-theme="system"]) .overview {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+:root[data-theme]:not([data-theme="system"]) .dashboard-message {
+  grid-column: 2;
+  max-width: 100%;
+}
+.system-palette-picker {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  text-align: center;
+}
+.system-palette-picker label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.system-palette-picker select {
+  min-width: 8.5rem;
+  padding: 0.38rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-weight: 750;
 }
 .notice {
   padding: var(--space-4);
@@ -336,7 +368,8 @@ select:focus-visible,
 .audio-playback-status,
 .scanner-control-status,
 .recording-status,
-.recordings-message {
+.recordings-message,
+.home-assistant-integration-message {
   min-height: 1.5em;
   margin: var(--space-5) 0 var(--space-3);
   color: var(--muted);
@@ -345,7 +378,9 @@ select:focus-visible,
 .audio-controls,
 .scanner-controls,
 .scanner-connection-actions,
-.recording-controls {
+.recording-controls,
+.home-assistant-integration-actions,
+.home-assistant-integration-confirmation-choices {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-3);
@@ -362,12 +397,14 @@ select:focus-visible,
 .scanner-connection-actions button,
 .recording-controls button,
 .recording-library button,
+.home-assistant-integration-actions button,
+.home-assistant-integration-confirmation-choices button,
 .recording-action {
   min-width: 7rem;
   padding: var(--space-3) var(--space-4);
   border: 0.125rem solid var(--accent);
   border-radius: var(--radius-small);
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   background: var(--accent);
   font: inherit;
   font-weight: 800;
@@ -378,6 +415,8 @@ select:focus-visible,
 .scanner-connection-actions button:hover:not(:disabled),
 .recording-controls button:hover:not(:disabled),
 .recording-library button:hover:not(:disabled),
+.home-assistant-integration-actions button:hover:not(:disabled),
+.home-assistant-integration-confirmation-choices button:hover:not(:disabled),
 .recording-action:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
@@ -386,9 +425,16 @@ select:focus-visible,
 .scanner-controls button:disabled,
 .scanner-connection-actions button:disabled,
 .recording-controls button:disabled,
-.recording-library button:disabled {
+.recording-library button:disabled,
+.home-assistant-integration-actions button:disabled,
+.home-assistant-integration-confirmation-choices button:disabled {
   cursor: not-allowed;
   opacity: 0.55;
+}
+
+.home-assistant-integration-actions button[data-confirming="true"] {
+  outline: 0.1875rem solid var(--warning);
+  outline-offset: -0.1875rem;
 }
 .scanner-hold-group {
   grid-column: 1 / -1;
@@ -867,6 +913,10 @@ body {
   min-width: 0;
 }
 
+.workspace-tabs-with-home-assistant {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
 .workspace-tabs [role="tab"] {
   min-width: 0;
   min-height: 2.2rem;
@@ -890,7 +940,7 @@ body {
 }
 
 .workspace-tabs [role="tab"][aria-selected="true"] {
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -911,6 +961,17 @@ body {
   overflow: hidden;
 }
 
+.workspace-pane button {
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.28rem, 0.8vw, 0.65rem);
+  border-width: 1px;
+  border-radius: var(--radius-small);
+  font-size: clamp(0.62rem, 1.35vmin, 0.78rem);
+  font-weight: 800;
+  line-height: 1.15;
+}
+
 .workspace-pane > .panel,
 .recordings-layout > .panel,
 .diagnostics-layout > .panel {
@@ -918,6 +979,10 @@ body {
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+.diagnostics-layout > .panel {
+  grid-area: auto;
 }
 
 .panel {
@@ -1167,7 +1232,7 @@ body {
 }
 
 .radio-view-controls button[aria-pressed="true"] {
-  color: var(--surface);
+  color: var(--on-accent, var(--surface));
   border-color: var(--accent);
   background: var(--accent);
 }
@@ -1510,6 +1575,79 @@ body {
   min-height: 0;
 }
 
+.diagnostics-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--workspace-gap);
+  overflow: hidden;
+}
+
+.workspace-pane > .home-assistant-integration-panel {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
+}
+
+.home-assistant-integration-message {
+  min-height: 1.2em;
+  margin: clamp(0.25rem, 0.8vmin, 0.65rem) 0;
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+}
+
+.home-assistant-integration-panel .status-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--workspace-gap);
+  margin-top: clamp(0.2rem, 0.65vmin, 0.5rem);
+}
+
+.home-assistant-integration-panel .status-list > div {
+  padding-block: clamp(0.18rem, 0.55vmin, 0.42rem);
+}
+
+.home-assistant-integration-confirmation,
+.home-assistant-integration-secret {
+  display: grid;
+  gap: clamp(0.18rem, 0.55vmin, 0.42rem);
+  margin-top: clamp(0.3rem, 0.9vmin, 0.7rem);
+}
+
+.home-assistant-integration-confirmation label,
+.home-assistant-integration-secret label {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.home-assistant-integration-confirmation input,
+.home-assistant-integration-secret input {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.35rem, 0.9vw, 0.7rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--background);
+}
+
+.home-assistant-integration-actions {
+  margin-top: clamp(0.2rem, 0.65vmin, 0.5rem);
+}
+
+.home-assistant-integration-actions button,
+.home-assistant-integration-confirmation-choices button {
+  min-width: 0;
+}
+
+.home-assistant-integration-guidance {
+  margin: clamp(0.3rem, 0.9vmin, 0.7rem) 0 0;
+  color: var(--muted);
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+}
+
 .scanner-panel {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1575,7 +1713,35 @@ body {
   }
 
   .dashboard-message {
-    max-width: 42%;
+    grid-column: 2;
+    grid-row: 1;
+    max-width: 100%;
+  }
+
+  .overview {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .overview > :first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .system-palette-picker {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: auto minmax(7rem, 11rem);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .system-palette-picker select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .home-assistant-integration-panel .status-list {
+    grid-template-columns: 1fr;
   }
 
   .workspace-tabs {
@@ -1597,6 +1763,18 @@ body {
 
   .workspace-tabs [role="tab"]:nth-child(n + 4) {
     grid-column: span 3;
+  }
+
+  .workspace-tabs-with-home-assistant {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .workspace-tabs-with-home-assistant [role="tab"]:nth-child(-n + 4) {
+    grid-column: span 3;
+  }
+
+  .workspace-tabs-with-home-assistant [role="tab"]:nth-child(n + 5) {
+    grid-column: span 4;
   }
 
   .waterfall-header {
@@ -1822,6 +2000,13 @@ body {
     border-top: 1px solid var(--border);
     border-left: 0;
   }
+
+  .workspace-pane button {
+    min-height: 1.55rem;
+    padding: 0.15rem 0.3rem;
+    font-size: 0.68rem;
+    line-height: 1.05;
+  }
 }
 
 @media (max-height: 38rem) and (min-height: 28rem) {
@@ -1880,6 +2065,13 @@ body {
   .radio-field-group h3,
   .radio-field-list dt,
   .radio-field-list dd {
+    line-height: 1;
+  }
+
+  .workspace-pane button {
+    min-height: 1.35rem;
+    padding: 0.08rem 0.2rem;
+    font-size: 0.6rem;
     line-height: 1;
   }
 }
@@ -2020,6 +2212,18 @@ body {
 
   .dashboard {
     display: block;
+  }
+
+  .diagnostics-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    height: auto;
+    overflow: visible;
+  }
+
+  .workspace-pane > .home-assistant-integration-panel {
+    height: auto;
+    overflow: visible;
   }
 
   .dashboard-message {

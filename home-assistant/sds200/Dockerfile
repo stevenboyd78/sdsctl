@@ -35,7 +35,10 @@ ENV \
 
 COPY --from=build /wheels /wheels
 
-RUN python -m pip install \
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends lame \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install \
         --disable-pip-version-check \
         --no-cache-dir \
         --no-index \

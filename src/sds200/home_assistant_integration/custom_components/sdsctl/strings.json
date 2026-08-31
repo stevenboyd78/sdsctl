@@ -1,0 +1,38 @@
+{
+  "title": "sdsctl live scanner audio",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to the sdsctl App",
+        "description": "Enter the exact internal Home Assistant App DNS alias and the private bridge key shown by the explicit App operator command. No network discovery is performed.",
+        "data": {
+          "app_host": "App DNS alias",
+          "app_port": "Private service port",
+          "bridge_key": "Private bridge key"
+        },
+        "data_description": {
+          "app_host": "Use the installed App name with underscores replaced by hyphens, such as local-sds200. Published repository identifiers are not hard-coded.",
+          "app_port": "Keep 8100 unless the first-party App contract changes.",
+          "bridge_key": "Stored only in the Home Assistant config entry and sent only to the selected App's private service."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Update the private sdsctl bridge key",
+        "description": "The configured App rejected the stored key. Enter the replacement printed by the explicit App terminal command.",
+        "data": {
+          "bridge_key": "Private bridge key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "The exact configured App service is unavailable.",
+      "incompatible": "The App and integration live-audio protocol or format do not match.",
+      "invalid_auth": "The private bridge key was rejected.",
+      "invalid_input": "The App hostname, port, or bridge key has an invalid shape."
+    },
+    "abort": {
+      "already_configured": "sdsctl live scanner audio is already configured.",
+      "reauth_successful": "The private bridge key was updated."
+    }
+  }
+}

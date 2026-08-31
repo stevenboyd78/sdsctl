@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+- Add the 21 System web palettes as per-card graphical-editor choices in the
+  compact Scanner, scanner-style Display, and Waterfall cards. Existing Home
+  Assistant theme-following and specialized Display/Waterfall presets remain
+  compatible, and card palette selection stays presentation-only.
+- Keep the live daemon-event status right-aligned and single-line when a
+  non-System theme hides the System palette selector instead of leaving the
+  message in the selector's narrow center track.
+- Add the System web theme's responsive, browser-local palette selector to the
+  Ingress dashboard. Follow-device remains the default; the full 21-scheme
+  Textual TUI list is available only while System is active and changes
+  presentation without exposing App configuration, credentials, or scanner
+  control state.
+- Add an authenticated Ingress-only Home Assistant workspace for protected HAOS
+  installations, where a host Docker CLI is intentionally unavailable. The
+  dedicated tab keeps integration lifecycle, Core-restart guidance, and private
+  live-audio bridge controls out of read-only Diagnostics and is omitted from
+  every non-Ingress dashboard. Compact controls and bounded pane scrolling keep
+  the final restart and reauthentication guidance reachable without allowing the
+  surrounding dashboard to clip it.
+  Exact-digest installation, update, rollback, removal, rollback discard, and
+  bridge-key rotation retain their existing atomic and explicit boundaries;
+  bridge-key reveal is concealed, `no-store`, and cleared after 60 seconds.
+- Package the versioned first-party `sdsctl` Home Assistant custom integration
+  and its explicit digest-confirmed install, update, rollback, recoverable
+  removal, and permanent rollback-discard commands. Normal App startup never
+  writes or activates the integration and never restarts Home Assistant Core.
+- Add the private protocol-versioned Core-to-App live-audio service and the
+  browsable `media-source://sdsctl/live` item. Home Assistant resolves one
+  signed, bounded Core proxy URL with exact `audio/mpeg` type; one-time App
+  capabilities and one shared daemon-owned MP3 encoder remain hidden from the
+  target, MQTT, entities, diagnostics, and browser storage.
 - Install the first-party `/local/sds200/sds200-waterfall-card.js` resource. The
   read-only responsive card uses Home Assistant-authenticated App Ingress to
   render the existing daemon's relative, uncalibrated waterfall stream with

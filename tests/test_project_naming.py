@@ -82,20 +82,17 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
     assert _quoted_yaml_scalar(manifest, "image") == "ghcr.io/stevenboyd78/sds200-home-assistant"
     assert _quoted_yaml_scalar(workflow, "IMAGE_NAME") == "sds200-home-assistant"
     assert 'HOME_ASSISTANT_LOVELACE_CARD_FILENAME = "sds200-card.js"' in lovelace_installer
-    assert (
-        'HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = "/local/sds200/sds200-card.js"'
-        in lovelace_installer
-    )
+    assert 'HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL' in lovelace_installer
     assert (
         'HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"'
         in lovelace_installer
     )
-    assert '"/local/sds200/sds200-display-card.js"' in lovelace_installer
+    assert "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL" in lovelace_installer
     assert (
         'HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME = "sds200-waterfall-card.js"'
         in lovelace_installer
     )
-    assert '"/local/sds200/sds200-waterfall-card.js"' in lovelace_installer
+    assert "HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL" in lovelace_installer
 
 
 def test_generic_container_documentation_preserves_local_image_tag() -> None:
@@ -126,11 +123,19 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
     )[0]
+    normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.1 — Responsive Home Assistant waterfall card" in (
+    assert "### Milestone 29.2 — Home Assistant media-source live scanner audio" in (
         active_milestone
     )
+    for required in (
+        "media-source://sdsctl/live",
+        "does not model the scanner as an output `media_player` entity",
+        "daemon remains the only SDS200 RTSP/RTP owner",
+        "public or anonymous live-audio URLs",
+    ):
+        assert required in normalized_active_milestone
 
     for required in (
         "### Milestone 28 complete — v0.24.0 release candidate",

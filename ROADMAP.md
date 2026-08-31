@@ -11,94 +11,182 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.1 — Responsive Home Assistant waterfall card
+### Milestone 29.2 — Home Assistant media-source live scanner audio
 
-Milestone 28 is closed with the public v0.24.0 package, generic container image,
-Home Assistant App images, reviewed wiki, GitHub Release, and release metadata
-published and independently validated. Repository-managed Home Assistant OS
-acceptance confirmed the published 0.24.0 App as the sole scanner owner, with
-the authenticated dashboard, semantic controls, audio, recording, finalized
-playback and downloads, MQTT Discovery, both bundled card modules, and all six
-built-in themes healthy. Local validation Apps were then uninstalled and their
-source trees moved into a private recoverable archive outside `/addons`.
-
-Milestone 29.1 adds a first-party responsive Home Assistant waterfall card over
-the existing authenticated App and daemon waterfall service. It must not create
-another scanner transport, polling loop, waterfall owner, or audio owner. The
-daemon remains the sole scanner owner, and the existing browser waterfall must
-continue to use the same renderer-neutral relative and uncalibrated data model.
-High-rate waterfall samples must not be published as MQTT state, events, or
-Discovery entities.
-
-The card transport must preserve Home Assistant authentication and App Ingress
-isolation without placing credentials, ingress identifiers, private endpoints,
-or scanner addresses in card configuration, browser storage, logs, diagnostics,
-or error text. Direct unauthenticated access must fail closed. Authentication
-expiry, App restart, transport loss, malformed frames, and version mismatch must
-produce bounded user-visible states and deterministic cleanup rather than an
-implicit reconnect storm or a fallback scanner connection.
-
-Each connected and visible card instance owns an independent demand lease over
-one shared daemon-side waterfall demand. Adding a second card must not start a
-second scanner-side owner. Hiding, disconnecting, removing, or reconfiguring one
-card must release only its lease; releasing the final live lease must stop the
-shared demand. Cleanup must not depend solely on browser unload events: server-
-side expiry and client reconciliation must reap abandoned leases after a bounded
-interval. Dashboard navigation, edit-mode previews, tab visibility changes, Home
-Assistant reconnects, and App restarts must preserve this ownership contract.
-
-The card uses a bounded Canvas renderer that responds to section, masonry,
-panel, wall-display, and phone widths without horizontal scrolling. Retained
-history, frame cadence, device-pixel scaling, decode work, queued samples, and
-repaint work must have explicit limits. Slow or hidden clients may drop stale
-visual frames and expose relative loss or lifecycle telemetry, but may not grow
-memory without bound, block newer data behind obsolete frames, or affect other
-card and web clients.
-
-The graphical card editor must provide safe declarative presentation options
-with accessible defaults, including a title, supported height or density,
-theme-following or reviewed palette selection, and visibility of relative scale
-and lifecycle telemetry. It must not accept arbitrary URLs, credentials, raw
-scanner commands, undocumented waterfall parameters, or unbounded dimensions
-and history. Multiple differently configured cards on one dashboard must remain
-independent at the presentation layer while sharing transport demand correctly.
-
-Package the card through the existing Home Assistant App card-installation and
-resource-management boundary. Installation, upgrade, duplicate-resource,
-rollback, and unavailable-App behavior must remain deterministic and must not
-break either existing bundled card module. Add renderer-neutral, transport,
-JavaScript, real-Chrome, packaging, documentation, and release-contract coverage
-in proportion to the new boundary. Documentation and deterministic screenshots
-must cover desktop, Raspberry Pi or wall-panel, and phone presentations without
-including private scanner data or authenticated transport material.
-
-Physical Home Assistant OS acceptance must prove one and multiple live cards,
-responsive resizing, theme changes, pause and resume, hidden and removed-card
-cleanup, final-lease release, App restart recovery, and bounded loss behavior
-against the repository's supported scanner service. It must also revalidate the
-authenticated web waterfall, scanner controls, audio, recordings, finalized
-playback and downloads, MQTT Discovery, existing cards, and persistent data.
-Only one deliberately named Local validation App may exist during that run; the
-published repository App must be restored as the sole scanner owner afterward.
-
-Physical Home Assistant OS development acceptance completed on August 29,
-2026, against the SDS200 running firmware 1.26.01. It identified and corrected
-Ingress buffering by selecting the existing event-stream representation,
-validated single- and two-card demand sharing, responsive width and palette
-variants, pause/resume/clear isolation, App restart recovery, card-removal and
-final-lease cleanup, fail-closed direct access, and bounded live telemetry. The
-normal dashboard, scanner controls, MQTT-backed cards, audio ownership, and
-persistent recording inventory remained healthy after returning the published
-v0.24.0 App as the sole scanner owner. The detailed redacted evidence is in
+Milestone 29.1 is closed with the responsive Home Assistant waterfall card,
+authenticated event-stream transport, shared demand leases, deterministic
+desktop, wall-display, and phone references, physical Home Assistant OS
+acceptance, and post-merge CI on `main`. The live run identified and corrected
+Ingress buffering, then restored the published v0.24.0 App as the sole scanner,
+waterfall, and audio owner. The detailed redacted evidence remains in
 [the Home Assistant App guide](docs/home-assistant-app.md#milestone-291-responsive-waterfall-card-development-acceptance).
+
+Milestone 29.2 makes the daemon-owned live scanner audio available through Home
+Assistant's standard media-source and media-player workflow. It adds one
+browsable, playable `media-source://sdsctl/live` item; it does not model the
+scanner as an output `media_player` entity. Existing finalized WAV recordings
+remain available through Home Assistant local media, and existing browser audio
+remains a separate explicitly started client.
+
+Follow the current
+[Home Assistant media-source platform](https://developers.home-assistant.io/docs/core/platform/media_source/)
+contract: the Core-side integration resolves the live item to one playable URL
+and its exact MIME type. Home Assistant does not transcode media-source content,
+so the App must provide an evidence-selected streaming representation that the
+documented target class can consume. Do not label raw PCMU, headerless PCM, or an
+indefinite WAV response as a broadly compatible stream without deterministic
+container, codec, seek, duration, disconnect, and representative-player
+evidence. Unsupported players must fail clearly rather than receive a disguised
+or silently downgraded format.
+
+App Ingress remains the authenticated human-browser boundary and must not be
+used as a media-device credential. Add a first-party Core-side media-source
+bridge and a private App-side live-audio service. The media player receives only
+a Home Assistant-owned, bounded-lifetime playback URL; it must not receive an
+Ingress identifier, Supervisor token, App-internal hostname, scanner address,
+long-lived bearer token, or operator credential. Core-to-App access must use a
+least-privilege, rotatable capability with strict origin, path, method, lifetime,
+and concurrency checks. Authentication material must remain out of MQTT,
+browser storage, entity state, diagnostics, filenames, and error text.
+
+The Core-side integration must be a versioned, reviewable artifact with explicit
+install, update, rollback, and removal behavior. The App may stage or offer that
+artifact through a documented operator action, but it may not silently write,
+activate, or restart a Home Assistant custom integration. Published and Local
+App identities must be resolved without hard-coding one repository hash, and a
+missing, mismatched, stopped, or incompatible App must produce a bounded
+unavailable result rather than scanning the LAN or falling back to a public
+listener.
+
+The daemon remains the only SDS200 RTSP/RTP owner and the existing accepted-PCMU
+and decoded-PCM routers remain the source of truth. One shared, bounded encoder
+or container pipeline per selected representation fans out to independent Home
+Assistant playback leases. Starting a second media player must not start a
+second scanner audio session or duplicate decode work. Slow consumers may drop
+bounded data or disconnect, but may not block RTP reception, browser audio,
+recording, another media target, scanner control, PSI, or waterfall delivery.
+
+Each resolved playback owns one short-lived lease with explicit creation,
+first-byte, idle, maximum-duration, client-disconnect, target-stop, App-restart,
+Core-restart, and final-lease cleanup semantics. Abandoned URLs and half-open
+clients must expire server-side without relying solely on a frontend stop event.
+Revocation must close only the affected playback; releasing the final live-media
+lease must stop its shared encoder demand while leaving daemon audio ownership
+available to recordings and other explicit subscribers.
+
+Volume, mute, pause, resume, and stop behavior must respect Home Assistant's
+roles. Output volume and mute belong to the selected target media player.
+Scanner volume, squelch, and mute remain explicit scanner controls and may not be
+changed as a side effect of media playback. Pause may be supported only when the
+selected representation and target have bounded semantics; otherwise expose
+stop and restart honestly instead of buffering an unbounded live backlog. The
+live item is not seekable and must not advertise a finite duration.
+
+Expose low-rate, redacted lifecycle and failure evidence sufficient to diagnose
+resolving, waiting for scanner audio, streaming, target disconnect, expiry,
+encoder failure, App loss, and compatibility rejection. Do not publish audio
+payloads or packet-rate telemetry through MQTT, Home Assistant state, events, or
+logs. Existing RTP continuity, per-subscriber loss, and daemon health remain the
+authoritative operational evidence.
+
+Add daemon, App transport, Core-integration, authentication, format, concurrent-
+consumer, malformed-client, expiry, packaging, upgrade, rollback, and removal
+coverage. Use synthetic audio fixtures and redacted metadata in committed tests.
+Document the exact supported container, codec, MIME type, latency expectations,
+target limitations, network reachability, automation syntax, and the distinction
+between live scanner audio and finalized recordings. Keep Core and App version
+compatibility explicit and fail closed across mixed-version upgrades.
+
+Physical Home Assistant OS acceptance must browse and resolve the live item,
+start and stop it through the standard `media_player.play_media` workflow on at
+least one representative reachable target, exercise two concurrent playback
+leases when the available target set permits, and prove final-lease cleanup,
+App restart recovery, bounded latency, and unchanged single RTSP/RTP ownership.
+It must also revalidate browser audio, recording and finalized media, scanner
+controls, waterfall clients, MQTT Discovery, existing cards, and persistent
+data. Only one deliberately named Local validation App and one explicitly
+installed Local integration may exist during the run; published components must
+be restored afterward.
+
+The first physical slice on Home Assistant OS 18.2 and Core 2026.8.3 proved
+root browsing, canonical artwork, standard `media_player.play_media` resolution,
+audible continuous MP3 playback on VLC-TELNET, normal target stop to idle, and
+unchanged single scanner/RTSP ownership. It also identified and corrected Core's
+valid null root-identifier form. Later slices closed the diagnostics,
+final-encoder, App-restart, Ingress lifecycle, and complete regression gates
+described below.
+
+The same physical run also replaced the three Home Assistant card registrations
+with manifest-declared, SHA-256-qualified resource URLs. Direct HTTP and external
+HTTPS dashboard origins then rendered the complete nine-card verification view
+without configuration errors, including the previously stale Auto Display card.
+This closes the browser-origin cache defect without weakening exact module-byte
+validation or exposing private deployment data.
+
+Post-restart diagnostics proved a second playback resolution and redemption with
+no rejection or expiry, but retained one active Core proxy lease after the
+VLC-TELNET target returned to `idle`. Integration candidate `0.1.5` added a
+downstream Home Assistant transport check between bounded MP3 chunks. Physical
+HAOS revalidation then streamed audible scanner audio to a remote VLC-TELNET
+target, stopped it normally, and reported exactly one issued and redeemed
+playback for each of the two accepted media-type values, with zero active,
+outstanding, rejected, or expired leases. That closes
+the downstream-transport cleanup gate without changing App or scanner ownership.
+
+The revalidation also identified an operator-networking defect rather than a
+media-source defect: Home Assistant had been configured with the unreachable
+local origin `https://192.168.0.18`. Correcting `internal_url` to the actual
+HAOS listener `http://192.168.0.18:8123` and restarting Core allowed the remote
+target to retrieve the Home Assistant-owned playback URL. No private App port,
+capability, Ingress identifier, or scanner address was exposed to the target.
+
+The same HAOS run exposed that Home Assistant's restricted Ingress frame
+suppresses browser-native confirmation dialogs, causing removal, rollback-image
+discard, and bridge-key rotation to exit silently before reaching the lifecycle
+API. The candidate dashboard replaces those dialogs with a visible two-step
+in-page confirmation while retaining the exact SHA-256 requirement and clearing
+the armed action whenever that identity changes. Focused lifecycle, dashboard,
+JavaScript, and documentation validation pass. Physical Ingress revalidation
+then used the two-step action to discard the retained `0.1.3` image before the
+deliberate `0.1.5` update. The update retained exact `0.1.4` bytes as the new
+rollback image, and no integration symlink or unrelated path was changed.
+
+Final physical regression revalidated audible browser audio; daemon recording,
+finalization, saved playback, and download; channel hold, navigation, and
+release; live waterfall pause, resume, clear, and recovery; the complete
+24-component MQTT Discovery device; and all nine verification cards. Restarting
+only the Local App preserved the finalized recording, restored a live waterfall
+with zero queue loss, overflows, or poll failures, and allowed another canonical
+`audio/mpeg` playback to resolve, play, stop, and clean up normally. Final
+diagnostics reported three issued and three redeemed playbacks with zero active,
+outstanding, rejected, or expired leases.
+
+Only one VLC-TELNET target was reachable; the second configured target remained
+unavailable. The conditional two-target physical exercise therefore remained
+environment-limited rather than silently simulated. Automated concurrent-lease
+coverage remains authoritative, and this acceptance makes no claim of a
+physical two-target synchronization or concurrency run. With that explicit
+limit, the Milestone 29.2 implementation and physical acceptance gates are
+closed and ready for pull-request review.
+
+Closure cleanup then deleted the Home Assistant config entry, discarded both
+managed integration copies, uninstalled the Local validation App, and removed
+the three exact Milestone 29.2 share artifacts. The published `sds200` App
+version 0.24.0 resumed sole scanner ownership before the one required Core
+restart. Post-cleanup readback showed the published Ingress dashboard connected,
+all nine verification cards rendering without configuration errors, and all 11
+existing WAV recordings preserved. Supervisor retained only uninstalled local
+source metadata—version absent and state unknown—not a running or installed
+Local App instance.
 
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
 writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
-connection, dependency locking, TUI or GUI waterfall rendering, weather-alert
-recording, Home Assistant media-compatible scanner audio, and GUI implementation
-remain deferred. The external implementation-review message and dependency-
-update pull requests remain separate unless their reviewed state changes.
+connection, public or anonymous live-audio URLs, arbitrary transcoding profiles,
+whole-home synchronization claims, weather-alert recording, TUI waterfall
+rendering, and GUI implementation remain deferred. The external implementation-
+review message and dependency-update pull requests remain separate unless their
+reviewed state changes.
 
 
 ## Deferred hardware validation
@@ -782,9 +870,13 @@ state changes.
   visibility demand, final-card cleanup, bounded Canvas performance, Ingress
   authentication, card-editor configuration, multi-card behavior, and HAOS
   acceptance without high-rate MQTT entities or another scanner connection.
-- Weather-alert state and recording, Home Assistant media-compatible scanner
-  audio, TUI waterfall rendering, and the future GUI remain separately bounded
-  follow-up candidates.
+- Milestone 29.2: a first-party Home Assistant media source for live scanner
+  audio through one Core-side bridge and one private App-side service. Preserve
+  daemon RTSP/RTP ownership, use bounded short-lived playback leases, advertise
+  only evidence-backed formats, and complete explicit packaging, security,
+  compatibility, and HAOS acceptance.
+- Weather-alert state and recording, TUI waterfall rendering, and the future GUI
+  remain separately bounded follow-up candidates.
 
 ## Completed milestone groups
 

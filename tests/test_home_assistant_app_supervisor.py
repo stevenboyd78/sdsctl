@@ -23,6 +23,7 @@ from sds200.home_assistant_app_supervisor import (
     HomeAssistantAppSupervisor,
     migrate_home_assistant_app_recordings,
     prepare_home_assistant_app_launch_plan,
+    prepare_home_assistant_live_audio_bridge_secret,
     run_home_assistant_app,
 )
 from sds200.home_assistant_themes import HomeAssistantThemeError
@@ -805,3 +806,83 @@ def test_supervisor_uses_distinct_default_child_stop_budgets(
     assert supervisor.web_stop_timeout == 5.0
     assert supervisor.daemon_stop_timeout == 30.0
     assert supervisor.force_stop_timeout == 5.0
+
+
+def test_supervisor_brackets_media_child_between_web_and_daemon(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    daemon = FakeProcess("daemon", events)
+    media = FakeProcess("media", events)
+    web = FakeProcess("web", events)
+    processes = iter((daemon, media, web))
+    base = launch_plan(tmp_path)
+    plan = HomeAssistantAppLaunchPlan(
+        options=base.options,
+        mqtt_service=base.mqtt_service,
+        paths=base.paths,
+        daemon_command=base.daemon_command,
+        web_command=base.web_command,
+        daemon_environment=base.daemon_environment,
+        web_environment=base.web_environment,
+        media_command=("media-child",),
+        media_environment={"MEDIA": "1"},
+    )
+    created: list[tuple[tuple[str, ...], dict[str, str]]] = []
+
+    def factory(
+        command: Sequence[str],
+        environment: Mapping[str, str],
+    ) -> FakeProcess:
+        created.append((tuple(command), dict(environment)))
+        child = next(processes)
+        events.append(f"start:{child.name}")
+        return child
+
+    supervisor = HomeAssistantAppSupervisor(
+        plan,
+        process_factory=factory,
+        daemon_ready_probe=lambda path, timeout: True,
+        signals=FakeSignals(stop_after_waits=1),
+    )
+
+    assert supervisor.run() == 0
+    assert created == [
+        (("daemon-child",), {"DAEMON": "1"}),
+        (("media-child",), {"MEDIA": "1"}),
+        (("web-child",), {"WEB": "1"}),
+    ]
+    assert events[:3] == ["start:daemon", "start:media", "start:web"]
+    assert events[-6:] == [
+        "web:terminate",
+        "web:wait",
+        "media:terminate",
+        "media:wait",
+        "daemon:terminate",
+        "daemon:wait",
+    ]
+
+
+def test_live_audio_bridge_secret_is_created_once_mode_0600(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "data" / "live-audio-bridge.key"
+
+    prepare_home_assistant_live_audio_bridge_secret(path)
+    first = path.read_bytes()
+    prepare_home_assistant_live_audio_bridge_secret(path)
+
+    assert path.read_bytes() == first
+    assert len(first.strip()) == 43
+    assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_live_audio_bridge_secret_rejects_symlink(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.write_text("x" * 43, encoding="ascii")
+    target.chmod(0o600)
+    path = tmp_path / "live-audio-bridge.key"
+    path.symlink_to(target)
+
+    with pytest.raises(SDS200Error, match="mode-0600 regular file"):
+        prepare_home_assistant_live_audio_bridge_secret(path)

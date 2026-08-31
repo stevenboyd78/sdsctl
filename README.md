@@ -99,6 +99,9 @@ information in this image represents a real system.*
   uses Supervisor MQTT service discovery and authenticated Ingress, stores
   recordings in configurable Home Assistant media storage, and publishes a fixed
   UDP RTP port without enabling host networking or creating another scanner owner
+- A separately installed, versioned Home Assistant custom integration that
+  resolves `media-source://sdsctl/live` to a bounded Home Assistant-owned MP3
+  proxy URL while private one-time App capabilities remain hidden from targets
 - Versioned bounded local daemon PCMU stream over a third private Unix socket with
   accepted RTP payloads, continuity metadata, and independent client-loss counters
 - Optional live playback through the local default or selected audio output device
@@ -806,7 +809,8 @@ PCMU stream.
 The App installs the unchanged compact **SDS200 Scanner** Lovelace card, the
 additive **SDS200 Display** card, and an authenticated **SDS200 Waterfall** card.
 The display card offers five explicit
-scanner-style layouts plus an opt-in automatic layout, three palettes, and a 4:3
+scanner-style layouts plus an opt-in automatic layout, scanner presets and all
+21 System web palettes, and a 4:3
 viewport-fit option. Automatic mode uses the fixed Screen Kind entity to select
 Search/Close Call, Weather, or Tone-Out presentation and a configured Simple or
 Detail scanning fallback. Numeric zero configured for a Tone-Out tone is shown
@@ -824,9 +828,19 @@ byte-identical sources are independently packaged under
 validated immutable registry drive App installation without changing those
 public URLs or enabling third-party discovery.
 
+The separately versioned `sdsctl` custom integration adds one browsable live
+scanner audio item at `media-source://sdsctl/live`; it does not create an output
+media-player entity. The App packages but never automatically installs or
+activates this Core integration. Exact-digest install, update, rollback, and
+removal remain explicit authenticated Ingress actions, and selected players
+receive only a bounded Home Assistant-owned `audio/mpeg` URL.
+
 See the [Home Assistant App guide](docs/home-assistant-app.md) for architecture,
 installation, configuration, networking, Ingress, local HAOS development,
 persistent recordings, MQTT entities, security boundaries, and troubleshooting.
+See the [Home Assistant live-audio guide](docs/home-assistant-live-audio.md) for
+the exact format, capability boundary, artifact lifecycle, automation syntax,
+and target requirements.
 
 ### SDS200 network audio playback and recording
 
@@ -1177,6 +1191,7 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting and
 - [Foreground daemon and ownership runtime](docs/daemon-runtime.md)
 - [Daemon MQTT publication](docs/daemon-mqtt.md)
 - [Home Assistant App](docs/home-assistant-app.md)
+- [Home Assistant live scanner audio](docs/home-assistant-live-audio.md)
 - [Local daemon API](docs/daemon-api.md)
 - [Web dashboard](docs/web-dashboard.md)
 - [Local daemon event stream](docs/daemon-events.md)

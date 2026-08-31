@@ -69,7 +69,8 @@ global.window = {{
 
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
-        "/local/sds200/sds200-waterfall-card.js"
+        "/local/sds200/sds200-waterfall-card.js?v="
+        "87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030"
     )
 
 
@@ -124,6 +125,71 @@ process.stdout.write(JSON.stringify({accepted, rejected}));
     }
     assert len(result["rejected"]) == 5
     assert "not supported" in result["rejected"][0]
+
+
+def test_waterfall_card_reuses_every_system_web_palette() -> None:
+    expected = {
+        item["id"]: [
+            item[field]
+            for field in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            )
+        ]
+        for item in json.loads(
+            Path("src/sds200/web_assets/system-palettes.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    }
+    result = run_waterfall_card_javascript(
+        """
+const properties = new Map();
+const style = {
+  removeProperty: (name) => properties.delete(name),
+  setProperty: (name, value) => properties.set(name, value),
+};
+applyWaterfallSystemPalette({style}, "nord");
+const card = Object.create(Sds200WaterfallCard.prototype);
+card._config = requireWaterfallCardConfig({palette: "nord"});
+process.stdout.write(JSON.stringify({
+  palettes: SDS200_WATERFALL_SYSTEM_PALETTES,
+  options: SDS200_WATERFALL_PALETTES.map(({value}) => value),
+  config: card._config,
+  properties: Object.fromEntries(properties),
+  canvas: card._palette(),
+}));
+"""
+    )
+
+    assert result["palettes"] == expected
+    assert result["options"] == [
+        "theme",
+        "cyan",
+        "green",
+        "amber",
+        "monochrome",
+        *expected,
+    ]
+    assert result["config"]["palette"] == "nord"
+    assert result["properties"]["--sds200-waterfall-surface"] == "#3B4252"
+    assert result["canvas"] == {
+        "background": "#2E3440",
+        "grid": "#88C0D0",
+        "spectrum": "#88C0D0",
+        "marker": "#B48EAD",
+        "history": "#81A1C1",
+    }
 
 
 def test_waterfall_card_normalizes_exact_hexadecimal_frames() -> None:

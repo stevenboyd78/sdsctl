@@ -89,7 +89,8 @@ global.window = {{}};
 
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL == (
-        "/local/sds200/sds200-display-card.js"
+        "/local/sds200/sds200-display-card.js?v="
+        "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72"
     )
 
 
@@ -160,6 +161,58 @@ def test_display_card_has_all_layout_palette_and_fit_presets() -> None:
     assert 'value: "viewport"' in text
     assert "SDS200_DISPLAY_SCAN_LAYOUTS" in text
     assert 'name: "scan_layout"' in text
+
+
+def test_display_card_reuses_every_system_web_palette() -> None:
+    expected = {
+        item["id"]: [
+            item[field]
+            for field in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            )
+        ]
+        for item in json.loads(
+            Path("src/sds200/web_assets/system-palettes.json").read_text(
+                encoding="utf-8"
+            )
+        )
+    }
+    result = run_display_card_javascript(
+        """
+const properties = new Map();
+applyDisplaySystemPalette({style: {setProperty: (name, value) => {
+  properties.set(name, value);
+}}}, "nord");
+process.stdout.write(JSON.stringify({
+  palettes: SDS200_DISPLAY_SYSTEM_PALETTES,
+  options: SDS200_DISPLAY_PALETTES.map(({value}) => value),
+  config: requireDisplayCardConfig({palette: "nord", entities: {}}),
+  properties: Object.fromEntries(properties),
+}));
+"""
+    )
+
+    assert result["palettes"] == expected
+    assert result["options"] == [
+        "color",
+        "black_on_white",
+        "white_on_black",
+        *expected,
+    ]
+    assert result["config"]["palette"] == "nord"
+    assert result["properties"]["--frame-bg"] == "#2E3440"
+    assert result["properties"]["--active"] == "#A3BE8C"
 
 
 def test_display_card_auto_layout_maps_known_screens_and_safe_fallbacks() -> None:

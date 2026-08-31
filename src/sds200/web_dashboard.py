@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 from collections.abc import AsyncIterator, Callable, Mapping
+from dataclasses import dataclass
 from functools import cache
 from html import escape
 from importlib.resources import files
@@ -27,6 +28,13 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .home_assistant_integration_ingress import (
+    HomeAssistantIntegrationAction,
+    execute_home_assistant_integration_ingress_action,
+    home_assistant_integration_ingress_status,
+    reveal_home_assistant_integration_bridge_key,
+    rotate_home_assistant_integration_ingress_bridge_key,
+)
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
 from .state import RadioStateSnapshot
@@ -72,6 +80,94 @@ _WEB_RESPONSE_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
 }
+
+
+@dataclass(frozen=True, slots=True)
+class _SystemPalette:
+    identifier: str
+    label: str
+    dark: bool
+    background: str
+    surface: str
+    panel: str
+    foreground: str
+    muted: str
+    border: str
+    primary: str
+    secondary: str
+    warning: str
+    error: str
+    success: str
+    accent: str
+
+
+def _required_system_palette_text(
+    entry: Mapping[str, object],
+    field: str,
+) -> str:
+    value = entry.get(field)
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"System palette {field!r} must be non-empty text.")
+    return value
+
+
+def _palette_rgb(color: str) -> tuple[float, float, float]:
+    return (
+        int(color[1:3], 16) / 255,
+        int(color[3:5], 16) / 255,
+        int(color[5:7], 16) / 255,
+    )
+
+
+def _palette_luminance(color: str) -> float:
+    channels = tuple(
+        channel / 12.92
+        if channel <= 0.04045
+        else ((channel + 0.055) / 1.055) ** 2.4
+        for channel in _palette_rgb(color)
+    )
+    return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+
+def _palette_contrast(first: str, second: str) -> float:
+    lighter, darker = sorted(
+        (_palette_luminance(first), _palette_luminance(second)),
+        reverse=True,
+    )
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def _palette_mix(color: str, target: str, amount: float) -> str:
+    source_channels = _palette_rgb(color)
+    target_channels = _palette_rgb(target)
+    channels = tuple(
+        round((source + (destination - source) * amount) * 255)
+        for source, destination in zip(source_channels, target_channels, strict=True)
+    )
+    return "#" + "".join(f"{channel:02X}" for channel in channels)
+
+
+def _accessible_palette_color(
+    color: str,
+    backgrounds: tuple[str, ...],
+    *,
+    minimum: float = 5.0,
+) -> str:
+    opaque = color[:7]
+
+    def minimum_contrast(candidate: str) -> float:
+        return min(_palette_contrast(candidate, background) for background in backgrounds)
+
+    if minimum_contrast(opaque) >= minimum:
+        return opaque
+    target = max(("#000000", "#FFFFFF"), key=minimum_contrast)
+    for step in range(1, 101):
+        candidate = _palette_mix(opaque, target, step / 100)
+        if minimum_contrast(candidate) >= minimum:
+            return candidate
+    return target
+
+
 _API_DOCS_RESPONSE_HEADERS = {
     **_WEB_RESPONSE_HEADERS,
     "Content-Security-Policy": (
@@ -415,7 +511,10 @@ def create_web_dashboard_app(
     )
     def index() -> HTMLResponse:
         return HTMLResponse(
-            content=_dashboard_shell(web_theme_runtime),
+            content=_dashboard_shell(
+                web_theme_runtime,
+                home_assistant_ingress,
+            ),
             headers=dict(_WEB_RESPONSE_HEADERS),
         )
 
@@ -450,6 +549,18 @@ def create_web_dashboard_app(
     )
     def viewport_stylesheet() -> Response:
         return _asset_response("dashboard-viewport.css", media_type="text/css")
+
+    @app.get(
+        "/assets/system-palettes.css",
+        include_in_schema=False,
+        response_class=Response,
+    )
+    def system_palette_stylesheet() -> Response:
+        return Response(
+            content=_system_palette_stylesheet(),
+            media_type="text/css",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
 
     @app.get(
         "/assets/theme-bootstrap.js",
@@ -637,29 +748,34 @@ def create_web_dashboard_app(
 
     @app.get("/api/v1")
     def api_index() -> dict[str, object]:
+        links = {
+            "audio": "/api/v1/audio",
+            "dashboard": "/",
+            "docs": "/api/v1/docs",
+            "events": "/api/v1/events",
+            "health": "/healthz",
+            "openapi": "/api/v1/openapi.json",
+            "recording": "/api/v1/recording",
+            "recordings": "/api/v1/recordings",
+            "recording_file": "/api/v1/recordings/file/{identifier}",
+            "redoc": "/api/v1/redoc",
+            "scanner_hold": "/api/v1/scanner/hold/{scope}",
+            "scanner_next": "/api/v1/scanner/next",
+            "scanner_next_scope": "/api/v1/scanner/next/{scope}",
+            "scanner_previous": "/api/v1/scanner/previous",
+            "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
+            "scanner_reconnect": "/api/v1/scanner/reconnect",
+            "snapshot": "/api/v1/snapshot",
+            "status": "/api/v1/status",
+            "waterfall": "/api/v1/waterfall",
+        }
+        if home_assistant_ingress:
+            links["home_assistant_integration"] = (
+                "/api/v1/home-assistant/integration"
+            )
         return {
             "service": _service_metadata(),
-            "links": {
-                "audio": "/api/v1/audio",
-                "dashboard": "/",
-                "docs": "/api/v1/docs",
-                "events": "/api/v1/events",
-                "health": "/healthz",
-                "openapi": "/api/v1/openapi.json",
-                "recording": "/api/v1/recording",
-                "recordings": "/api/v1/recordings",
-                "recording_file": "/api/v1/recordings/file/{identifier}",
-                "redoc": "/api/v1/redoc",
-                "scanner_hold": "/api/v1/scanner/hold/{scope}",
-                "scanner_next": "/api/v1/scanner/next",
-                "scanner_next_scope": "/api/v1/scanner/next/{scope}",
-                "scanner_previous": "/api/v1/scanner/previous",
-                "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
-                "scanner_reconnect": "/api/v1/scanner/reconnect",
-                "snapshot": "/api/v1/snapshot",
-                "status": "/api/v1/status",
-                "waterfall": "/api/v1/waterfall",
-            },
+            "links": links,
         }
 
     @app.get("/healthz")
@@ -668,6 +784,44 @@ def create_web_dashboard_app(
             "status": "ok",
             "service": _service_metadata(),
         }
+
+    if home_assistant_ingress:
+
+        @app.get("/api/v1/home-assistant/integration")
+        def home_assistant_integration_status() -> JSONResponse:
+            return _home_assistant_integration_response(
+                home_assistant_integration_ingress_status,
+            )
+
+        @app.post("/api/v1/home-assistant/integration/{action}")
+        def home_assistant_integration_action(
+            action: HomeAssistantIntegrationAction,
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: execute_home_assistant_integration_ingress_action(
+                    action,
+                    confirmation_digest=confirmation,
+                ),
+            )
+
+        @app.post("/api/v1/home-assistant/integration/bridge-key/reveal")
+        def home_assistant_integration_bridge_key_reveal() -> JSONResponse:
+            return _home_assistant_integration_response(
+                reveal_home_assistant_integration_bridge_key,
+            )
+
+        @app.post("/api/v1/home-assistant/integration/bridge-key/rotate")
+        def home_assistant_integration_bridge_key_rotate(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: rotate_home_assistant_integration_ingress_bridge_key(
+                    confirmation_digest=confirmation,
+                ),
+            )
 
     @app.get("/api/v1/status")
     def status() -> dict[str, object]:
@@ -845,6 +999,161 @@ def _read_web_asset(name: str) -> str:
     )
 
 
+@cache
+def _system_palettes() -> tuple[_SystemPalette, ...]:
+    document = json.loads(_read_web_asset("system-palettes.json"))
+    if not isinstance(document, list) or not document:
+        raise ValueError("System palette registry must be a non-empty list.")
+
+    palettes: list[_SystemPalette] = []
+    for entry in document:
+        if not isinstance(entry, dict):
+            raise ValueError("System palette entries must be objects.")
+
+        identifier = _required_system_palette_text(entry, "id")
+        if (
+            not identifier.replace("-", "").isalnum()
+            or identifier.lower() != identifier
+        ):
+            raise ValueError(f"Invalid System palette identifier: {identifier!r}.")
+        dark = entry.get("dark")
+        if not isinstance(dark, bool):
+            raise ValueError(f"System palette {identifier!r} must declare dark mode.")
+
+        colors = {
+            field: _required_system_palette_text(entry, field)
+            for field in (
+                "background",
+                "surface",
+                "panel",
+                "foreground",
+                "foreground-muted",
+                "border",
+                "primary",
+                "secondary",
+                "warning",
+                "error",
+                "success",
+                "accent",
+            )
+        }
+        for field, color in colors.items():
+            if len(color) not in {7, 9} or not color.startswith("#"):
+                raise ValueError(
+                    f"System palette {identifier!r} has an invalid {field} color."
+                )
+            try:
+                int(color[1:], 16)
+            except ValueError as exc:
+                raise ValueError(
+                    f"System palette {identifier!r} has an invalid {field} color."
+                ) from exc
+
+        palettes.append(
+            _SystemPalette(
+                identifier=identifier,
+                label=_required_system_palette_text(entry, "label"),
+                dark=dark,
+                background=colors["background"],
+                surface=colors["surface"],
+                panel=colors["panel"],
+                foreground=colors["foreground"],
+                muted=colors["foreground-muted"],
+                border=colors["border"],
+                primary=colors["primary"],
+                secondary=colors["secondary"],
+                warning=colors["warning"],
+                error=colors["error"],
+                success=colors["success"],
+                accent=colors["accent"],
+            )
+        )
+
+    identifiers = tuple(palette.identifier for palette in palettes)
+    if identifiers != tuple(sorted(identifiers)) or len(set(identifiers)) != len(
+        identifiers
+    ):
+        raise ValueError("System palettes must use unique deterministic order.")
+    return tuple(palettes)
+
+
+@cache
+def _system_palette_stylesheet() -> str:
+    blocks: list[str] = []
+    for palette in _system_palettes():
+        color_scheme = "dark" if palette.dark else "light"
+        surfaces = (palette.background, palette.surface, palette.panel)
+        text = _accessible_palette_color(palette.foreground, surfaces)
+        muted = _accessible_palette_color(palette.muted, surfaces)
+        accent_text = _accessible_palette_color(palette.accent, surfaces)
+        success = _accessible_palette_color(palette.success, surfaces)
+        warning = _accessible_palette_color(palette.warning, surfaces)
+        danger = _accessible_palette_color(palette.error, surfaces)
+        focus = _accessible_palette_color(palette.secondary, surfaces)
+        on_accent = (
+            "#000000"
+            if _palette_contrast("#000000", palette.primary)
+            >= _palette_contrast("#FFFFFF", palette.primary)
+            else "#FFFFFF"
+        )
+        sheen = (
+            "rgb(255 255 255 / 0.025)"
+            if palette.dark
+            else "rgb(255 255 255 / 0.32)"
+        )
+        shadow = "rgb(0 0 0 / 0.3)" if palette.dark else "rgb(23 32 51 / 0.12)"
+        blocks.append(
+            "\n".join(
+                (
+                    f':root[data-theme="system"][data-system-palette="{palette.identifier}"] {{',
+                    f"  color-scheme: {color_scheme};",
+                    f"  --tui-background: {palette.background};",
+                    f"  --tui-surface: {palette.surface};",
+                    f"  --tui-panel: {palette.panel};",
+                    f"  --tui-foreground: {palette.foreground};",
+                    f"  --tui-foreground-muted: {palette.muted};",
+                    f"  --tui-border: {palette.border};",
+                    f"  --tui-primary: {palette.primary};",
+                    f"  --tui-secondary: {palette.secondary};",
+                    f"  --tui-warning: {palette.warning};",
+                    f"  --tui-error: {palette.error};",
+                    f"  --tui-success: {palette.success};",
+                    f"  --tui-accent: {palette.accent};",
+                    f"  --background: {palette.background};",
+                    f"  --surface: {palette.surface};",
+                    f"  --surface-emphasis: {palette.panel};",
+                    f"  --text: {text};",
+                    f"  --muted: {muted};",
+                    f"  --border: {palette.border};",
+                    f"  --accent: {palette.primary};",
+                    f"  --accent-strong: {accent_text};",
+                    f"  --on-accent: {on_accent};",
+                    f"  --success: {success};",
+                    f"  --warning: {warning};",
+                    f"  --danger: {danger};",
+                    f"  --focus: {focus};",
+                    f"  --shadow: 0 0.75rem 2rem {shadow};",
+                    f"  --system-surface-sheen: {sheen};",
+                    f"  --waterfall-background: {palette.background};",
+                    f"  --waterfall-grid: {palette.border};",
+                    f"  --waterfall-spectrum: {palette.primary};",
+                    f"  --waterfall-marker: {palette.warning};",
+                    f"  --waterfall-history: {palette.secondary};",
+                    f"  --scanner-bezel: {palette.background};",
+                    f"  --scanner-bezel-edge: {palette.border};",
+                    f"  --scanner-display: {palette.surface};",
+                    f"  --scanner-display-emphasis: {palette.panel};",
+                    f"  --scanner-display-ink: {text};",
+                    f"  --scanner-display-muted: {muted};",
+                    f"  --scanner-display-rule: {palette.border};",
+                    f"  --scanner-key: {palette.panel};",
+                    "}",
+                )
+            )
+        )
+    return "\n\n".join(blocks) + "\n"
+
+
 def _asset_response(name: str, *, media_type: str) -> Response:
     return Response(
         content=_read_web_asset(name),
@@ -853,8 +1162,244 @@ def _asset_response(name: str, *, media_type: str) -> Response:
     )
 
 
+def _home_assistant_integration_confirmation(payload: object) -> str:
+    if not isinstance(payload, dict) or set(payload) != {"confirm"}:
+        raise HTTPException(
+            status_code=422,
+            detail="An exact confirmation digest is required.",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+    confirmation = payload.get("confirm")
+    if not isinstance(confirmation, str):
+        raise HTTPException(
+            status_code=422,
+            detail="An exact confirmation digest is required.",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+    return confirmation
+
+
+def _home_assistant_integration_response(
+    operation: Callable[[], dict[str, object]],
+) -> JSONResponse:
+    try:
+        payload = operation()
+    except (OSError, SDS200Error, ValueError) as error:
+        raise HTTPException(
+            status_code=409,
+            detail=str(error),
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        ) from error
+    return JSONResponse(
+        payload,
+        headers=dict(_WEB_RESPONSE_HEADERS),
+    )
+
+
 @cache
-def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
+def _home_assistant_integration_tab() -> str:
+    return """        <button
+          id="pane-tab-home-assistant"
+          type="button"
+          role="tab"
+          aria-selected="false"
+          aria-controls="pane-home-assistant"
+          tabindex="-1"
+          data-workspace-tab="home-assistant"
+        >Home Assistant</button>"""
+
+
+@cache
+def _home_assistant_integration_panel() -> str:
+    return """      <section
+        class="panel home-assistant-integration-panel"
+        aria-labelledby="home-assistant-integration-title"
+      >
+        <header class="panel-header">
+          <p class="panel-kicker">Home Assistant Core</p>
+          <h2 id="home-assistant-integration-title">Live-audio integration</h2>
+        </header>
+
+        <p
+          id="home-assistant-integration-message"
+          class="home-assistant-integration-message"
+          role="status"
+          aria-live="polite"
+        >Loading integration lifecycle status.</p>
+
+        <dl class="status-list status-list-compact">
+          <div>
+            <dt>Packaged version</dt>
+            <dd id="home-assistant-integration-artifact-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Packaged digest</dt>
+            <dd
+              id="home-assistant-integration-artifact-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Installed version</dt>
+            <dd id="home-assistant-integration-current-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Installed digest</dt>
+            <dd
+              id="home-assistant-integration-current-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Rollback version</dt>
+            <dd id="home-assistant-integration-rollback-version">Checking</dd>
+          </div>
+          <div>
+            <dt>Rollback digest</dt>
+            <dd
+              id="home-assistant-integration-rollback-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Bridge-key digest</dt>
+            <dd
+              id="home-assistant-integration-bridge-digest"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+        </dl>
+
+        <div class="home-assistant-integration-confirmation">
+          <label for="home-assistant-integration-confirm">
+            Exact SHA-256 confirmation
+          </label>
+          <input
+            id="home-assistant-integration-confirm"
+            class="technical-value"
+            type="text"
+            inputmode="text"
+            autocomplete="off"
+            autocapitalize="none"
+            spellcheck="false"
+          >
+          <div class="home-assistant-integration-confirmation-choices">
+            <button
+              id="home-assistant-integration-use-artifact"
+              type="button"
+              disabled
+            >Use packaged</button>
+            <button
+              id="home-assistant-integration-use-current"
+              type="button"
+              disabled
+            >Use installed</button>
+            <button
+              id="home-assistant-integration-use-rollback"
+              type="button"
+              disabled
+            >Use rollback</button>
+            <button
+              id="home-assistant-integration-use-bridge"
+              type="button"
+              disabled
+            >Use bridge key</button>
+          </div>
+        </div>
+
+        <div
+          class="home-assistant-integration-actions"
+          role="group"
+          aria-label="Home Assistant integration lifecycle"
+        >
+          <button id="home-assistant-integration-refresh" type="button">
+            Refresh
+          </button>
+          <button
+            id="home-assistant-integration-install"
+            type="button"
+            data-home-assistant-integration-action="install"
+          >Install</button>
+          <button
+            id="home-assistant-integration-update"
+            type="button"
+            data-home-assistant-integration-action="update"
+          >Update</button>
+          <button
+            id="home-assistant-integration-rollback"
+            type="button"
+            data-home-assistant-integration-action="rollback"
+          >Rollback</button>
+          <button
+            id="home-assistant-integration-remove"
+            type="button"
+            data-home-assistant-integration-action="remove"
+          >Remove</button>
+          <button
+            id="home-assistant-integration-discard-rollback"
+            type="button"
+            data-home-assistant-integration-action="discard-rollback"
+          >Discard rollback</button>
+        </div>
+
+        <div class="home-assistant-integration-secret">
+          <label for="home-assistant-integration-bridge-key">Bridge key</label>
+          <input
+            id="home-assistant-integration-bridge-key"
+            class="technical-value"
+            type="password"
+            value=""
+            readonly
+            autocomplete="off"
+          >
+          <div class="home-assistant-integration-actions">
+            <button id="home-assistant-integration-reveal-key" type="button">
+              Reveal key
+            </button>
+            <button
+              id="home-assistant-integration-show-key"
+              type="button"
+              disabled
+            >Show</button>
+            <button
+              id="home-assistant-integration-copy-key"
+              type="button"
+              disabled
+            >Copy</button>
+            <button
+              id="home-assistant-integration-rotate-key"
+              type="button"
+            >Rotate key</button>
+          </div>
+        </div>
+
+        <p class="home-assistant-integration-guidance">
+          Core is never restarted automatically. Restart Core after an install,
+          update, rollback, or removal. Restart this App immediately after key
+          rotation, then complete integration reauthentication.
+        </p>
+      </section>"""
+
+
+@cache
+def _home_assistant_integration_pane() -> str:
+    return f"""        <section
+          id="pane-home-assistant"
+          class="workspace-pane"
+          role="tabpanel"
+          aria-labelledby="pane-tab-home-assistant"
+          data-workspace-pane="home-assistant"
+          hidden
+        >
+{_home_assistant_integration_panel()}
+        </section>"""
+
+
+@cache
+def _dashboard_shell(
+    runtime: WebThemeRuntimeRegistry,
+    home_assistant_ingress: bool,
+) -> str:
     theme_stylesheet_links = "\n".join(
         (
             f'  <link rel="stylesheet" href="{asset.manifest.stylesheet_url}">'
@@ -870,6 +1415,7 @@ def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
     )
     stylesheet_links = (
         f"{theme_stylesheet_links}\n"
+        '  <link rel="stylesheet" href="assets/system-palettes.css">\n'
         '  <link rel="stylesheet" href="assets/dashboard-viewport.css">'
     )
     options = "\n".join(
@@ -879,15 +1425,55 @@ def _dashboard_shell(runtime: WebThemeRuntimeRegistry) -> str:
         )
         for theme in runtime.registry.themes
     )
+    system_palette_options = "\n".join(
+        (
+            f'          <option value="{palette.identifier}">'
+            f"{escape(palette.label)}</option>"
+        )
+        for palette in _system_palettes()
+    )
     return (
         _read_web_asset("dashboard.html")
+        .replace(
+            'class="workspace-tabs"',
+            (
+                'class="workspace-tabs workspace-tabs-with-home-assistant"'
+                if home_assistant_ingress
+                else 'class="workspace-tabs"'
+            ),
+            1,
+        )
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
+        .replace(
+            "          <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->",
+            system_palette_options,
+        )
+        .replace(
+            "        <!-- SDSCTL_HOME_ASSISTANT_TAB -->",
+            (
+                _home_assistant_integration_tab()
+                if home_assistant_ingress
+                else ""
+            ),
+        )
+        .replace(
+            "        <!-- SDSCTL_HOME_ASSISTANT_PANE -->",
+            (
+                _home_assistant_integration_pane()
+                if home_assistant_ingress
+                else ""
+            ),
+        )
     )
 
 
 @cache
 def _theme_bootstrap_script(runtime: WebThemeRuntimeRegistry) -> str:
+    system_palettes = [
+        {"id": palette.identifier, "dark": palette.dark}
+        for palette in _system_palettes()
+    ]
     return (
         _read_web_asset("theme-bootstrap.js")
         .replace(
@@ -898,6 +1484,14 @@ def _theme_bootstrap_script(runtime: WebThemeRuntimeRegistry) -> str:
             "__SDSCTL_MANAGED_WEB_THEME_IDS__",
             json.dumps(
                 runtime.managed_identifiers,
+                ensure_ascii=True,
+                separators=(",", ":"),
+            ),
+        )
+        .replace(
+            "__SDSCTL_SYSTEM_PALETTES__",
+            json.dumps(
+                system_palettes,
                 ensure_ascii=True,
                 separators=(",", ":"),
             ),

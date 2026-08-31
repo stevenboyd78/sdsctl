@@ -178,9 +178,9 @@
   }
 
   .overview {
-    display: flex !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
     align-items: end !important;
-    justify-content: space-between !important;
     min-width: 0 !important;
     gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;
     margin: 0 !important;
@@ -188,7 +188,17 @@
   }
 
   .dashboard-message {
+    justify-self: end !important;
     max-width: 48% !important;
+  }
+
+  :root[data-theme]:not([data-theme="system"]) .overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :root[data-theme]:not([data-theme="system"]) .dashboard-message {
+    grid-column: 2 !important;
+    max-width: 100% !important;
   }
 
   .workspace-shell {
@@ -203,6 +213,10 @@
     display: grid !important;
     grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
     gap: clamp(0.2rem, 0.8vw, 0.55rem) !important;
+  }
+
+  .workspace-tabs-with-home-assistant {
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   }
 
   .workspace-tabs [role="tab"] {
@@ -228,6 +242,17 @@
     overflow: hidden !important;
   }
 
+  .workspace-pane button {
+    min-width: 0 !important;
+    min-height: 1.9rem !important;
+    padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.28rem, 0.8vw, 0.65rem) !important;
+    border-width: 1px !important;
+    border-radius: var(--radius-small) !important;
+    font-size: clamp(0.62rem, 1.35vmin, 0.78rem) !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+  }
+
   .workspace-pane > .panel,
   .recordings-layout > .panel,
   .diagnostics-layout > .panel {
@@ -237,11 +262,23 @@
     min-height: 0 !important;
   }
 
+  .diagnostics-layout > .panel {
+    grid-area: auto !important;
+  }
+
   .panel {
     min-width: 0 !important;
     min-height: 0 !important;
     padding: clamp(0.55rem, 1.35vmin, 1.15rem) !important;
     overflow: hidden !important;
+  }
+
+  #pane-home-assistant > .home-assistant-integration-panel {
+    display: block !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    scrollbar-gutter: stable !important;
+    overscroll-behavior: contain !important;
   }
 
   .waterfall-panel {
@@ -556,6 +593,41 @@
   }
 
   @media (max-width: 44rem) and (min-height: 28rem) {
+    .overview {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    }
+
+    .overview > :first-child {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+    }
+
+    .system-palette-picker {
+      display: grid !important;
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+      grid-template-columns: auto minmax(7rem, 11rem) !important;
+      align-items: center !important;
+      justify-content: center !important;
+      min-width: 0 !important;
+    }
+
+    .system-palette-picker[hidden] {
+      display: none !important;
+    }
+
+    .system-palette-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
+    .dashboard-message {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+      max-width: 100% !important;
+    }
+
     .site-header {
       align-items: center !important;
     }
@@ -578,6 +650,18 @@
 
     .workspace-tabs [role="tab"]:nth-child(n + 4) {
       grid-column: span 3 !important;
+    }
+
+    .workspace-tabs-with-home-assistant {
+      grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    }
+
+    .workspace-tabs-with-home-assistant [role="tab"]:nth-child(-n + 4) {
+      grid-column: span 3 !important;
+    }
+
+    .workspace-tabs-with-home-assistant [role="tab"]:nth-child(n + 5) {
+      grid-column: span 4 !important;
     }
 
     .waterfall-header {
@@ -819,6 +903,13 @@
     .scanner-panel > .panel-subsection {
       grid-row: 3 !important;
     }
+
+    .workspace-pane button {
+      min-height: 1.55rem !important;
+      padding: 0.15rem 0.3rem !important;
+      font-size: 0.68rem !important;
+      line-height: 1.05 !important;
+    }
   }
 
   @media (max-width: 26rem) and (min-height: 28rem) {
@@ -969,6 +1060,13 @@
     .radio-field-list dd {
       line-height: 1 !important;
     }
+
+    .workspace-pane button {
+      min-height: 1.35rem !important;
+      padding: 0.08rem 0.2rem !important;
+      font-size: 0.6rem !important;
+      line-height: 1 !important;
+    }
   }
 
   @media (min-width: 44.01rem) and (max-height: 38rem) and (min-height: 28rem) {
@@ -1080,6 +1178,28 @@
       flex-direction: column !important;
     }
 
+    .overview {
+      display: flex !important;
+    }
+
+    .system-palette-picker {
+      display: grid !important;
+      grid-template-columns: auto minmax(0, 1fr) !important;
+      align-items: center !important;
+      justify-content: stretch !important;
+      text-align: left !important;
+    }
+
+    .system-palette-picker[hidden] {
+      display: none !important;
+    }
+
+    .system-palette-picker select {
+      width: 100% !important;
+      min-width: 0 !important;
+      max-width: 100% !important;
+    }
+
     .site-header {
       display: flex !important;
     }
@@ -1118,6 +1238,11 @@
     .recordings-layout > .panel {
       height: auto !important;
       min-height: 0 !important;
+      overflow: visible !important;
+    }
+
+    #pane-home-assistant > .home-assistant-integration-panel {
+      height: auto !important;
       overflow: visible !important;
     }
 

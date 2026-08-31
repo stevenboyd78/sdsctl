@@ -268,6 +268,21 @@ class FakePcmuServer:
             raise self.stop_error
 
 
+class FakeLiveAudioServer:
+    def __init__(self, order: list[str]) -> None:
+        self.order = order
+        self.start_calls = 0
+        self.stop_calls = 0
+
+    def start(self) -> None:
+        self.order.append("live-audio.start")
+        self.start_calls += 1
+
+    def stop(self) -> None:
+        self.order.append("live-audio.stop")
+        self.stop_calls += 1
+
+
 class FakeWaterfallServer:
     def __init__(
         self,
@@ -1461,6 +1476,32 @@ def test_process_brackets_runtime_with_event_and_pcmu_servers() -> None:
     ]
     assert pcmu_server.start_calls == 1
     assert pcmu_server.stop_calls == 1
+
+
+def test_process_starts_live_audio_after_runtime_and_stops_it_before_runtime() -> None:
+    order: list[str] = []
+    runtime = FakeRuntime(order)
+    live_audio_server = FakeLiveAudioServer(order)
+    signals = FakeSignalController(order, (True,))
+
+    DaemonProcess(
+        runtime,
+        live_audio_server=live_audio_server,
+        signals=signals,
+        poll_interval=0.25,
+    ).run()
+
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "live-audio.start",
+        "signals.wait",
+        "live-audio.stop",
+        "runtime.stop",
+        "signals.exit",
+    ]
+    assert live_audio_server.start_calls == 1
+    assert live_audio_server.stop_calls == 1
 
 
 def test_process_starts_waterfall_after_runtime_and_stops_it_before_runtime() -> None:
