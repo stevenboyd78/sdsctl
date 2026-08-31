@@ -73,7 +73,7 @@ def test_client_accepts_only_one_app_alias_and_exact_protocol_shape() -> None:
     assert client.normalize_app_host("local-sds200-29-2") == "local-sds200-29-2"
     for rejected in (
         "http://local-sds200",
-        "192.168.0.18",
+        "192.0.2.18",
         "local_sds200",
         " Local-sds200",
         "local-sds200/path",

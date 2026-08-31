@@ -198,11 +198,12 @@ outstanding, rejected, or expired leases. That closes
 the downstream-transport cleanup gate without changing App or scanner ownership.
 
 The revalidation also identified an operator-networking defect rather than a
-media-source defect: Home Assistant had been configured with the unreachable
-local origin `https://192.168.0.18`. Correcting `internal_url` to the actual
-HAOS listener `http://192.168.0.18:8123` and restarting Core allowed the remote
-target to retrieve the Home Assistant-owned playback URL. No private App port,
-capability, Ingress identifier, or scanner address was exposed to the target.
+media-source defect. Sanitized evidence records the unreachable origin as
+`https://192.0.2.18` and the reachable HAOS listener as
+`http://192.0.2.18:8123`; correcting `internal_url` and restarting Core allowed
+the remote target to retrieve the Home Assistant-owned playback URL. No private
+App port, capability, Ingress identifier, or scanner address was exposed to the
+target.
 
 The same HAOS run exposed that Home Assistant's restricted Ingress frame
 suppresses browser-native confirmation dialogs, causing removal, rollback-image

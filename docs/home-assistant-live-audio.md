@@ -275,10 +275,11 @@ Local App build `0.24.0-m29.2.49463f3`. A remote VLC-TELNET target on the HAOS
 LAN received the standard `media-source://sdsctl/live` action with both the
 canonical `audio/mpeg` media type and the compatible `music` alternate, and
 produced audible scanner audio through headphones. Its first silent attempt
-exposed an incorrect Home Assistant `internal_url` of `https://192.168.0.18`;
-the actual HAOS listener was `http://192.168.0.18:8123`. After that value was
-corrected and Core restarted, the target retrieved the Home Assistant-owned URL
-and played normally without access to the private App listener.
+exposed an incorrect Home Assistant `internal_url`; sanitized evidence records
+the unreachable origin as `https://192.0.2.18` and the reachable HAOS listener
+as `http://192.0.2.18:8123`. After that value was corrected and Core restarted,
+the target retrieved the Home Assistant-owned URL and played normally without
+access to the private App listener.
 
 After `media_player.media_stop`, the target stopped and the App remained
 `started`. Fresh redacted integration diagnostics recorded exactly one issued
