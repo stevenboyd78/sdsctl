@@ -126,13 +126,20 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.2 — Home Assistant media-source live scanner audio" in (
+    assert "### Milestone 29.3 — v0.25.0 release and publication closure" in (
         active_milestone
     )
     for required in (
+        "Milestones 29.1 and 29.2 are closed",
+        "Python distribution, import version, and Home Assistant App at 0.25.0",
+        "Home Assistant Core integration at 0.1.5",
         "media-source://sdsctl/live",
         "does not model the scanner as an output `media_player` entity",
         "daemon remains the only SDS200 RTSP/RTP owner",
+        "Only one genuine matching `v0.25.0` tag",
+        "Workflow success alone is not release acceptance",
+        "pull request 205",
+        "No new runtime capability enters Milestone 29.3",
         "public or anonymous live-audio URLs",
     ):
         assert required in normalized_active_milestone
