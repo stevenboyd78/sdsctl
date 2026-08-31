@@ -75,6 +75,7 @@ let recordingPaginationFocusId = null;
 let homeAssistantIntegrationBusy = false;
 let homeAssistantIntegrationStatus = {};
 let homeAssistantBridgeKeyClearTimer = null;
+let homeAssistantIntegrationArmedAction = null;
 
 let waterfallGeneration = 0;
 let waterfallAbortController = null;
@@ -2570,6 +2571,49 @@ function setHomeAssistantIntegrationMessage(message, state = "ready") {
   node.dataset.state = state;
 }
 
+function clearHomeAssistantIntegrationActionConfirmation() {
+  const actions = {
+    remove: ["home-assistant-integration-remove", "Remove"],
+    "discard-rollback": [
+      "home-assistant-integration-discard-rollback",
+      "Discard rollback",
+    ],
+    "rotate-bridge-key": [
+      "home-assistant-integration-rotate-key",
+      "Rotate key",
+    ],
+  };
+  for (const [buttonId, label] of Object.values(actions)) {
+    const button = element(buttonId);
+    button.textContent = label;
+    delete button.dataset.confirming;
+  }
+  homeAssistantIntegrationArmedAction = null;
+}
+
+function confirmHomeAssistantIntegrationAction(action, guidance) {
+  const buttons = {
+    remove: "home-assistant-integration-remove",
+    "discard-rollback": "home-assistant-integration-discard-rollback",
+    "rotate-bridge-key": "home-assistant-integration-rotate-key",
+  };
+  if (homeAssistantIntegrationArmedAction === action) {
+    clearHomeAssistantIntegrationActionConfirmation();
+    return true;
+  }
+
+  clearHomeAssistantIntegrationActionConfirmation();
+  homeAssistantIntegrationArmedAction = action;
+  const button = element(buttons[action]);
+  button.textContent = `Confirm ${button.textContent.toLowerCase()}`;
+  button.dataset.confirming = "true";
+  setHomeAssistantIntegrationMessage(
+    `${guidance} Press “${button.textContent}” to continue.`,
+    "warning",
+  );
+  return false;
+}
+
 function clearHomeAssistantBridgeKey() {
   if (!homeAssistantIntegrationPanelAvailable()) {
     return;
@@ -2691,6 +2735,7 @@ async function refreshHomeAssistantIntegrationStatus() {
   if (!homeAssistantIntegrationPanelAvailable() || homeAssistantIntegrationBusy) {
     return;
   }
+  clearHomeAssistantIntegrationActionConfirmation();
   setHomeAssistantIntegrationBusy(true);
   setHomeAssistantIntegrationMessage("Reading exact lifecycle status.", "working");
   try {
@@ -2724,15 +2769,14 @@ async function performHomeAssistantIntegrationAction(action) {
     );
     return;
   }
-  if (
-    ["remove", "discard-rollback"].includes(action) &&
-    !window.confirm(
+  if (["remove", "discard-rollback"].includes(action)) {
+    const guidance =
       action === "remove"
         ? "Move the exact installed integration into the rollback slot?"
-        : "Permanently discard the exact retained rollback integration?",
-    )
-  ) {
-    return;
+        : "Permanently discard the exact retained rollback integration?";
+    if (!confirmHomeAssistantIntegrationAction(action, guidance)) {
+      return;
+    }
   }
 
   setHomeAssistantIntegrationBusy(true);
@@ -2806,7 +2850,12 @@ async function rotateHomeAssistantIntegrationBridgeKey() {
     );
     return;
   }
-  if (!window.confirm("Rotate the private bridge key now?")) {
+  if (
+    !confirmHomeAssistantIntegrationAction(
+      "rotate-bridge-key",
+      "Rotate the private bridge key now?",
+    )
+  ) {
     return;
   }
   setHomeAssistantIntegrationBusy(true);
@@ -2847,6 +2896,7 @@ async function rotateHomeAssistantIntegrationBridgeKey() {
 }
 
 function useHomeAssistantIntegrationConfirmation(source) {
+  clearHomeAssistantIntegrationActionConfirmation();
   const artifact = record(homeAssistantIntegrationStatus.artifact);
   const publication = record(homeAssistantIntegrationStatus.publication);
   const values = {
@@ -2871,6 +2921,10 @@ function initializeHomeAssistantIntegrationLifecycle() {
   element("home-assistant-integration-refresh").addEventListener("click", () => {
     void refreshHomeAssistantIntegrationStatus();
   });
+  element("home-assistant-integration-confirm").addEventListener(
+    "input",
+    clearHomeAssistantIntegrationActionConfirmation,
+  );
   for (const button of document.querySelectorAll(
     "[data-home-assistant-integration-action]",
   )) {

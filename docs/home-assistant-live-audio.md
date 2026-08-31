@@ -137,7 +137,9 @@ filenames, issue reports, screenshots, or diagnostics.
 
 To rotate the credential, verify the displayed non-secret **Bridge-key digest**,
 choose **Use bridge key**, and then choose **Rotate key**. Confirm the browser
-warning before continuing.
+warning by choosing the relabeled **Confirm rotate key** action before
+continuing. This confirmation is rendered inside the App so it remains visible
+when Home Assistant embeds the dashboard in its restricted Ingress frame.
 
 The action atomically replaces the persistent mode-`0600` key and returns the
 new key only in that authenticated, `no-store` response. It deliberately does
@@ -169,16 +171,19 @@ new rollback image, so the swap is reversible.
 
 For removal, first delete the **sdsctl live scanner audio** config entry through
 Home Assistant. Then choose **Use installed**, choose **Remove**, and confirm the
-browser warning.
+in-page warning by choosing the relabeled **Confirm remove** action.
 
 Restart Core. `remove` moves the exact current directory into the rollback slot;
 it does not permanently delete it. Restore it with `rollback`, or permanently
 delete only that retained image by choosing **Use rollback**, **Discard
-rollback**, and confirming the separate browser warning.
+rollback**, and then the separately relabeled **Confirm discard rollback**
+action.
 
 Only `discard-rollback` is permanent. It never targets the Home Assistant
 configuration root or any component other than the retained sdsctl rollback
-directory.
+directory. Editing the exact SHA-256 confirmation clears any armed destructive
+action, so the operator must review the identity before beginning the two-step
+confirmation again.
 
 The `python -m sds200.home_assistant_integration_lifecycle` command remains
 available for standalone development containers and direct diagnostic shells.

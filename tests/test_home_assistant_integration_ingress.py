@@ -334,6 +334,23 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
     assert ingress_status.headers["x-content-type-options"] == "nosniff"
 
 
+def test_ingress_destructive_actions_use_in_page_confirmation() -> None:
+    script = (
+        Path(__file__).parents[1]
+        / "src"
+        / "sds200"
+        / "web_assets"
+        / "dashboard.js"
+    ).read_text(encoding="utf-8")
+
+    assert "window.confirm(" not in script
+    assert "confirmHomeAssistantIntegrationAction" in script
+    assert 'button.dataset.confirming = "true"' in script
+    assert "Press “${button.textContent}” to continue." in script
+    assert '"discard-rollback"' in script
+    assert '"rotate-bridge-key"' in script
+
+
 def test_ingress_mutation_route_requires_one_confirm_field(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

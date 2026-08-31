@@ -131,6 +131,15 @@ its App response and Core lease when that transport is closing. Unit, static,
 documentation, and full-suite validation pass; physical HAOS revalidation remains
 required before this cleanup gate can close.
 
+The same HAOS run exposed that Home Assistant's restricted Ingress frame
+suppresses browser-native confirmation dialogs, causing removal, rollback-image
+discard, and bridge-key rotation to exit silently before reaching the lifecycle
+API. The candidate dashboard replaces those dialogs with a visible two-step
+in-page confirmation while retaining the exact SHA-256 requirement and clearing
+the armed action whenever that identity changes. Focused lifecycle, dashboard,
+JavaScript, and documentation validation pass; physical Ingress revalidation is
+still required before using the retained rollback slot for the `0.1.5` update.
+
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
 writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
