@@ -215,3 +215,43 @@ Diagnostics contain only the configured App alias/port, negotiated application
 and protocol versions, exact MIME type, and low-rate playback counts. They omit
 the bridge key, App capability tokens, Home Assistant playback identifiers,
 signed URLs, audio payloads, and packet-rate telemetry.
+
+## Milestone 29.2 development acceptance
+
+The first physical Home Assistant OS acceptance slice completed on August 30,
+2026. The amd64 host ran Home Assistant OS 18.2, Core 2026.8.3, Supervisor
+2026.07.5, Frontend 20260729.7, and Docker 29.7.2 with a physical SDS200 running
+firmware 1.26.01. The deliberately named Local validation App ran build
+`0.24.0-m29.2.2a1dbcd`; the installed custom integration was version `0.1.4`
+with artifact SHA-256
+`231ce7c58addb2c838512a2df1eddfbab870f580d0275520b3f33c69a2f863c6`.
+The retained `0.1.3` integration remained available as the rollback image.
+
+Home Assistant Core 2026.8 supplies `None` as the root media-source identifier.
+The initial `0.1.3` integration rejected that valid root with `Unknown sdsctl
+media item.` Version `0.1.4` accepts both the documented null root and the empty
+root while continuing to reject null resolution and arbitrary child identities.
+After the deliberate update and Core restart, the physical run confirmed:
+
+- **Media > sdsctl** rendered the canonical repository artwork and browsed to
+  **Live scanner audio** without the prior error;
+- `media_player.play_media` resolved `media-source://sdsctl/live` as
+  `audio/mpeg`, drove the existing VLC-TELNET target to `playing`, and produced
+  audible scanner audio through the configured local output;
+- the stream remained live while scanner state continued updating. App evidence
+  contained only occasional isolated one-packet RTP gaps of 320 samples and no
+  live-audio service, proxy, encoder, or authentication failure;
+- the normal `media_player.media_stop` action returned the target to `idle` and
+  reset its media position to zero, while the App remained `started` on the
+  exact validation build with no update pending; and
+- neither the Home Assistant playback action nor stop changed scanner volume,
+  squelch, mute, hold, tuning, daemon ownership, or the single RTSP/RTP source.
+
+This slice validates one representative target and clean target-side teardown.
+Milestone closure still requires the remaining acceptance matrix: a redacted
+post-stop diagnostics snapshot proving zero outstanding and active Core proxy
+leases, final shared-encoder cleanup, App-restart recovery, a concurrent-target
+run when another reachable target is available, and the complete browser audio,
+recording/finalized-media, controls, waterfall, MQTT, card, and persistent-data
+regression pass. No bridge key, playback identifier, signed URL, scanner
+programming, audio payload, or private host identity is retained here.

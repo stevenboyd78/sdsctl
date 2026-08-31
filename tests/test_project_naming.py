@@ -82,20 +82,17 @@ def test_home_assistant_compatibility_identity_remains_sds200() -> None:
     assert _quoted_yaml_scalar(manifest, "image") == "ghcr.io/stevenboyd78/sds200-home-assistant"
     assert _quoted_yaml_scalar(workflow, "IMAGE_NAME") == "sds200-home-assistant"
     assert 'HOME_ASSISTANT_LOVELACE_CARD_FILENAME = "sds200-card.js"' in lovelace_installer
-    assert (
-        'HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL = "/local/sds200/sds200-card.js"'
-        in lovelace_installer
-    )
+    assert 'HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL' in lovelace_installer
     assert (
         'HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME = "sds200-display-card.js"'
         in lovelace_installer
     )
-    assert '"/local/sds200/sds200-display-card.js"' in lovelace_installer
+    assert "HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL" in lovelace_installer
     assert (
         'HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME = "sds200-waterfall-card.js"'
         in lovelace_installer
     )
-    assert '"/local/sds200/sds200-waterfall-card.js"' in lovelace_installer
+    assert "HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL" in lovelace_installer
 
 
 def test_generic_container_documentation_preserves_local_image_tag() -> None:

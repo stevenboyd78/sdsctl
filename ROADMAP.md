@@ -108,6 +108,21 @@ data. Only one deliberately named Local validation App and one explicitly
 installed Local integration may exist during the run; published components must
 be restored afterward.
 
+The first physical slice on Home Assistant OS 18.2 and Core 2026.8.3 now proves
+root browsing, canonical artwork, standard `media_player.play_media` resolution,
+audible continuous MP3 playback on VLC-TELNET, normal target stop to idle, and
+unchanged single scanner/RTSP ownership. It also identified and corrected Core's
+valid null root-identifier form. The remaining diagnostics, final-encoder,
+restart, concurrency-when-available, and complete regression evidence above
+remain milestone gates rather than inferred closure.
+
+The same physical run also replaced the three Home Assistant card registrations
+with manifest-declared, SHA-256-qualified resource URLs. Direct HTTP and external
+HTTPS dashboard origins then rendered the complete seven-card verification view
+without configuration errors, including the previously stale Auto Display card.
+This closes the browser-origin cache defect without weakening exact module-byte
+validation or exposing private deployment data.
+
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
 writable FTP, daemon/web/Home Assistant Favorites execution, another scanner

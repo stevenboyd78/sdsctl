@@ -296,10 +296,9 @@ distribution path on Home Assistant OS.
 6. Confirm the Configuration page renders the translated scanner host, MQTT topic
    prefix, and recording-directory names/descriptions; verify the default
    recording directory resolves below `/media`.
-7. Confirm `/local/sds200/sds200-card.js`,
-   `/local/sds200/sds200-display-card.js`, and
-   `/local/sds200/sds200-waterfall-card.js` are available, register each as a
-   JavaScript Module when needed, and verify **SDS200 Scanner**, **SDS200
+7. Confirm the three manifest-declared, digest-qualified `/local/sds200/`
+   resource URLs are available, register or update each complete URL as a
+   JavaScript Module, and verify **SDS200 Scanner**, **SDS200
    Display**, and **SDS200 Waterfall** appear in the card picker with working
    graphical editors and read-only rendering. Exercise all five explicit display
    layouts, Auto

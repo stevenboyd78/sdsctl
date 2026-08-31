@@ -73,7 +73,10 @@ global.window = {{}};
 
 
 def test_lovelace_card_resource_url_uses_home_assistant_local_path() -> None:
-    assert HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL == "/local/sds200/sds200-card.js"
+    assert HOME_ASSISTANT_LOVELACE_CARD_RESOURCE_URL == (
+        "/local/sds200/sds200-card.js?v="
+        "beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8"
+    )
 
 
 def test_lovelace_card_packaged_asset_is_importable() -> None:

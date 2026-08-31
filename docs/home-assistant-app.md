@@ -362,10 +362,27 @@ The Home Assistant App installs three first-party SDS200 cards:
 Home Assistant serves them to the frontend as:
 
 ```text
-/local/sds200/sds200-card.js
-/local/sds200/sds200-display-card.js
-/local/sds200/sds200-waterfall-card.js
+/local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
+/local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
+/local/sds200/sds200-waterfall-card.js?v=87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030
 ```
+
+The `v` value is the exact SHA-256 of the installed JavaScript module. Home
+Assistant serves `/local` resources with a long public cache lifetime, and HTTP
+and HTTPS browser origins maintain independent caches. The content-addressed
+query prevents one origin from continuing to execute an older card after an
+App update. Register the complete manifest-declared URL, including `?v=...`,
+and replace that resource URL whenever the packaged digest changes. The
+underlying filename remains stable; the query contains no credential or private
+host information.
+
+Milestone 29.2 physical acceptance replaced all three legacy resource
+registrations with their exact manifest-declared URLs. The same dashboard then
+rendered seven SDS200 display cards over both the direct HTTP origin and the
+external HTTPS origin with no configuration errors. In particular, the
+previously stale HTTPS Auto Display card rendered `Auto / Detail` with its
+configured `dracula` palette, proving that the digest-qualified URL separates a
+new module revision from each origin's older cached bytes.
 
 The byte-identical source modules are independently packaged inside the Python
 distribution as:
@@ -1094,7 +1111,7 @@ The corrected acceptance run confirmed:
   normal scanner state healthy.
 
 Final cleanup stopped the Local App, disabled its Ingress panel, restored the
-stable `/local/sds200/sds200-waterfall-card.js` resource URL, removed the
+packaged waterfall resource URL, removed the
 temporary validation view, and left the published App running as the sole
 owner. No scanner identifiers, programmed frequencies, raw waterfall frames,
 audio, credentials, ingress identifiers, or private network details are

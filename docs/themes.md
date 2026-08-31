@@ -336,8 +336,14 @@ Only the ledger-pinned filename with the exact approved module digest is
 removed. Modified, missing, symlinked, or substituted targets fail closed.
 Unrelated files and activation records are preserved.
 
-Register `/local/sds200/<declared-filename>.js` as a JavaScript module resource
-in Home Assistant manually. These commands do not edit YAML, `.storage`,
+Register the manifest-declared
+`/local/sds200/<declared-filename>.js?v=<module-sha256>` as a JavaScript module
+resource in Home Assistant manually. The digest-qualified form is recommended;
+schema-version-1 packages may retain the legacy unversioned form, while a
+declared digest must exactly match the packaged module bytes. Update the
+registered URL after approving changed module bytes so independent HTTP and
+HTTPS browser caches cannot retain an older custom element. These commands do
+not edit YAML, `.storage`,
 dashboards, Lovelace resources, App options, or Home Assistant Core state. The
 Home Assistant App installs only the three bundled first-party cards (compact,
 display, and waterfall);

@@ -69,7 +69,8 @@ global.window = {{
 
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
-        "/local/sds200/sds200-waterfall-card.js"
+        "/local/sds200/sds200-waterfall-card.js?v="
+        "87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030"
     )
 
 

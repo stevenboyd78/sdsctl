@@ -89,7 +89,8 @@ global.window = {{}};
 
 def test_display_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL == (
-        "/local/sds200/sds200-display-card.js"
+        "/local/sds200/sds200-display-card.js?v="
+        "b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72"
     )
 
 
