@@ -66,7 +66,7 @@ class SdsctlMediaSource(MediaSource):
         """Return the root or the exact playable live item."""
 
         self._runtime()
-        if item.identifier not in ("", LIVE_IDENTIFIER):
+        if item.identifier not in (None, "", LIVE_IDENTIFIER):
             raise BrowseError("Unknown sdsctl media item.")
         artwork_url = async_sign_path(
             self._hass,

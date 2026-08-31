@@ -225,16 +225,27 @@ def test_media_source_resolves_only_live_to_a_core_relative_url() -> None:
     assert "local-sds200" not in resolved.url
     assert "8100" not in resolved.url
 
-    root = asyncio.run(source.async_browse_media(SimpleNamespace(identifier="")))
-    assert root.can_play is False
-    assert root.thumbnail == (
-        "/api/sdsctl/media-source-artwork?authSig=test-signature"
-    )
-    assert root.children[0].media_content_id == "media-source://sdsctl/live"
-    assert root.children[0].can_play is True
-    assert root.children[0].thumbnail == (
-        "/api/sdsctl/media-source-artwork?authSig=test-signature"
-    )
+    with pytest.raises(media_source.Unresolvable, match="Unknown sdsctl media item"):
+        asyncio.run(source.async_resolve_media(SimpleNamespace(identifier=None)))
+
+    for root_identifier in (None, ""):
+        root = asyncio.run(
+            source.async_browse_media(
+                SimpleNamespace(identifier=root_identifier)
+            )
+        )
+        assert root.can_play is False
+        assert root.thumbnail == (
+            "/api/sdsctl/media-source-artwork?authSig=test-signature"
+        )
+        assert root.children[0].media_content_id == "media-source://sdsctl/live"
+        assert root.children[0].can_play is True
+        assert root.children[0].thumbnail == (
+            "/api/sdsctl/media-source-artwork?authSig=test-signature"
+        )
+
+    with pytest.raises(media_source.BrowseError, match="Unknown sdsctl media item"):
+        asyncio.run(source.async_browse_media(SimpleNamespace(identifier="other")))
 
 
 def _install_http_stubs() -> tuple[type[Exception], type[Exception]]:

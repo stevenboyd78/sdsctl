@@ -67,7 +67,7 @@ Browser audio also remains a separately started App Ingress client.
 
 ## Artifact identity and deliberate installation
 
-The custom integration is packaged at version `0.1.3`. The App never installs,
+The custom integration is packaged at version `0.1.4`. The App never installs,
 updates, activates, reloads, restarts, or removes it during normal startup. Every
 filesystem mutation below is an explicit authenticated Ingress action with an
 exact SHA-256 confirmation. The panel reports that Home Assistant Core was not

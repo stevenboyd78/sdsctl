@@ -32,7 +32,7 @@ def _destination(tmp_path: Path) -> Path:
 def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
     image = built_in_home_assistant_integration_image()
 
-    assert image.version == "0.1.3"
+    assert image.version == "0.1.4"
     assert len(image.digest) == 64
     assert image.total_bytes < 512 * 1024
     names = {name for name, _payload in image.files}
