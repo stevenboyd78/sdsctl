@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import struct
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -31,12 +32,14 @@ def _destination(tmp_path: Path) -> Path:
 def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
     image = built_in_home_assistant_integration_image()
 
-    assert image.version == "0.1.2"
+    assert image.version == "0.1.3"
     assert len(image.digest) == 64
     assert image.total_bytes < 512 * 1024
     names = {name for name, _payload in image.files}
     assert {
         "__init__.py",
+        "brand/icon.png",
+        "brand/logo.png",
         "client.py",
         "config_flow.py",
         "diagnostics.py",
@@ -50,6 +53,12 @@ def test_packaged_integration_is_versioned_bounded_and_complete() -> None:
     assert dict(image.files)["sdsctl-logo.svg"] == (
         Path(__file__).parents[1] / "docs" / "assets" / "sdsctl-logo.svg"
     ).read_bytes()
+    icon = dict(image.files)["brand/icon.png"]
+    logo = dict(image.files)["brand/logo.png"]
+    assert icon.startswith(b"\x89PNG\r\n\x1a\n")
+    assert logo.startswith(b"\x89PNG\r\n\x1a\n")
+    assert struct.unpack(">II", icon[16:24]) == (256, 256)
+    assert struct.unpack(">II", logo[16:24]) == (1200, 300)
     manifest = json.loads(dict(image.files)["manifest.json"])
     assert manifest["domain"] == "sdsctl"
     assert manifest["version"] == image.version

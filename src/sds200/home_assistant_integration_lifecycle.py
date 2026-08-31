@@ -26,6 +26,8 @@ _RESOURCE_ROOT = "home_assistant_integration/custom_components/sdsctl"
 _PYTHON_CACHE_DIRECTORY = "__pycache__"
 _ARTIFACT_FILES = (
     "__init__.py",
+    "brand/icon.png",
+    "brand/logo.png",
     "client.py",
     "config_flow.py",
     "const.py",
