@@ -83,6 +83,9 @@ class SdsctlLiveAudioView(HomeAssistantView):
             upstream = await runtime.client.async_open_stream()
             await response.prepare(request)
             async for chunk in upstream.content.iter_chunked(16_384):
+                transport = request.transport
+                if transport is not None and transport.is_closing():
+                    break
                 if chunk:
                     await response.write(chunk)
         except (SdsctlClientError, ClientError, ConnectionError, TimeoutError) as error:

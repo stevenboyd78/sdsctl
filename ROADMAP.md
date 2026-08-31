@@ -123,6 +123,14 @@ without configuration errors, including the previously stale Auto Display card.
 This closes the browser-origin cache defect without weakening exact module-byte
 validation or exposing private deployment data.
 
+Post-restart diagnostics proved a second playback resolution and redemption with
+no rejection or expiry, but retained one active Core proxy lease after the
+VLC-TELNET target returned to `idle`. Integration candidate `0.1.5` now checks
+the downstream Home Assistant transport between bounded MP3 chunks and releases
+its App response and Core lease when that transport is closing. Unit, static,
+documentation, and full-suite validation pass; physical HAOS revalidation remains
+required before this cleanup gate can close.
+
 Automatic or background RadioReference synchronization, silent conflict
 resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
 writable FTP, daemon/web/Home Assistant Favorites execution, another scanner

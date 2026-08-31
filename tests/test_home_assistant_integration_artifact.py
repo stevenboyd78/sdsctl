@@ -378,7 +378,7 @@ def test_http_view_redeems_once_streams_and_releases_only_its_lease() -> None:
     hass = SimpleNamespace(
         data={"sdsctl": {"runtime": SimpleNamespace(playbacks=registry, client=client)}}
     )
-    request = SimpleNamespace(app={"hass": hass})
+    request = SimpleNamespace(app={"hass": hass}, transport=None)
 
     response = asyncio.run(http.SdsctlLiveAudioView().get(request, token))
     assert response.content_type == "audio/mpeg"
@@ -390,3 +390,52 @@ def test_http_view_redeems_once_streams_and_releases_only_its_lease() -> None:
     with pytest.raises(http_gone):
         asyncio.run(http.SdsctlLiveAudioView().get(request, token))
     assert client.opens == 1
+
+
+def test_http_view_stops_upstream_when_downstream_transport_is_closing() -> None:
+    _reset_package()
+    _install_http_stubs()
+    _load("const")
+    playback = _load("playback")
+
+    client_module = ModuleType(f"{PACKAGE}.client")
+
+    class SdsctlClientError(RuntimeError):
+        pass
+
+    client_module.SdsctlClientError = SdsctlClientError  # type: ignore[attr-defined]
+    sys.modules[f"{PACKAGE}.client"] = client_module
+    http = _load("http")
+
+    class Content:
+        async def iter_chunked(self, size: int):
+            assert size == 16_384
+            yield b"mp3-a"
+
+    upstream = SimpleNamespace(content=Content())
+
+    class Client:
+        def __init__(self) -> None:
+            self.releases = 0
+
+        async def async_open_stream(self):
+            return upstream
+
+        def release_stream(self, response: object) -> None:
+            assert response is upstream
+            self.releases += 1
+
+    client = Client()
+    registry = playback.PlaybackRegistry(token_factory=lambda: "r" * 43)
+    token = registry.issue()
+    hass = SimpleNamespace(
+        data={"sdsctl": {"runtime": SimpleNamespace(playbacks=registry, client=client)}}
+    )
+    transport = SimpleNamespace(is_closing=lambda: True)
+    request = SimpleNamespace(app={"hass": hass}, transport=transport)
+
+    response = asyncio.run(http.SdsctlLiveAudioView().get(request, token))
+
+    assert response.chunks == []
+    assert client.releases == 1
+    assert registry.snapshot().active == 0

@@ -67,7 +67,7 @@ Browser audio also remains a separately started App Ingress client.
 
 ## Artifact identity and deliberate installation
 
-The custom integration is packaged at version `0.1.4`. The App never installs,
+The custom integration is packaged at version `0.1.5`. The App never installs,
 updates, activates, reloads, restarts, or removes it during normal startup. Every
 filesystem mutation below is an explicit authenticated Ingress action with an
 exact SHA-256 confirmation. The panel reports that Home Assistant Core was not
@@ -248,10 +248,18 @@ After the deliberate update and Core restart, the physical run confirmed:
   squelch, mute, hold, tuning, daemon ownership, or the single RTSP/RTP source.
 
 This slice validates one representative target and clean target-side teardown.
-Milestone closure still requires the remaining acceptance matrix: a redacted
-post-stop diagnostics snapshot proving zero outstanding and active Core proxy
-leases, final shared-encoder cleanup, App-restart recovery, a concurrent-target
-run when another reachable target is available, and the complete browser audio,
-recording/finalized-media, controls, waterfall, MQTT, card, and persistent-data
-regression pass. No bridge key, playback identifier, signed URL, scanner
-programming, audio payload, or private host identity is retained here.
+Post-restart diagnostics then proved that a second playback URL was issued and
+redeemed without rejection or expiry, but also exposed one remaining active
+Core proxy lease after VLC-TELNET had returned to `idle`. The `0.1.5` candidate
+therefore adds an explicit downstream-transport closing check between bounded
+MP3 chunks; that path closes the upstream App response and releases the Core
+lease exactly once in regression coverage. Physical revalidation must still
+prove that the target's transport actually enters that closing state and that
+post-stop diagnostics reach zero outstanding and active leases.
+
+Milestone closure also still requires final shared-encoder cleanup, a
+concurrent-target run when another reachable target is available, and the
+complete browser audio, recording/finalized-media, controls, waterfall, MQTT,
+card, and persistent-data regression pass. No bridge key, playback identifier,
+signed URL, scanner programming, audio payload, or private host identity is
+retained here.
