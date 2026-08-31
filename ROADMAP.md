@@ -11,7 +11,71 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.2 — Home Assistant media-source live scanner audio
+### Milestone 29.3 — v0.25.0 release and publication closure
+
+Milestones 29.1 and 29.2 are closed after completing the responsive Home
+Assistant waterfall card, standard Home Assistant media-source live scanner
+audio, authenticated App transports, shared daemon-owned demand and playback
+leases, web and card palette expansion, lifecycle-interface hardening, physical
+Home Assistant OS acceptance, cleanup, reviewed pull-request merges, and exact
+post-merge validation on `main`. The companion Docker Buildx and build-push
+action updates are also closed through reviewed immutable pins and synchronized
+release-integrity tests in pull request 205; the incomplete Dependabot pull
+requests 188 and 189 are closed as superseded.
+
+Milestone 29.3 is release closure rather than another runtime feature slice.
+Synchronize the Python distribution, import version, and Home Assistant App at
+0.25.0. Retain the independently versioned Home Assistant Core integration at
+0.1.5 unless a reviewed integration change requires a new artifact version.
+Freeze the complete repository and Home Assistant App changelogs with explicit
+Milestone 29.1 and 29.2 release notes, exact comparison links, and one coherent
+public account of the waterfall, media-source, palette, lifecycle, and
+dependency-maintenance boundaries.
+
+Audit the README, release guide, container and Home Assistant documentation,
+live-audio guide, web-dashboard and theme guides, project vision, reviewed wiki
+source, generated reference screenshots, package metadata, example commands,
+and pinned public image references for 0.25.0. Documentation must distinguish
+the standard `media-source://sdsctl/live` workflow from browser audio and
+finalized recordings, preserve the single SDS200 RTSP/RTP owner, explain Home
+Assistant target reachability and `internal_url`, and state the accepted
+Home Assistant OS, Core, Supervisor, frontend, Docker, scanner model, and
+firmware evidence without publishing private addresses, credentials, capability
+material, recordings, Favorites content, provider data, or local identifiers.
+
+Run the complete Ruff, MyPy, multi-version pytest and coverage, documentation,
+real-Chrome, screenshot-gallery and repeatability, source and wheel distribution,
+Twine, release-integrity, generic Docker/Compose/Podman, Home Assistant App
+amd64/aarch64, custom-integration packaging, CodeQL, dependency-graph, and
+tag-contract validation. The shared coverage floor remains 86 percent. Release
+artifacts must be rebuilt from the reviewed source and must not rely on retained
+Milestone 29.1 or 29.2 Local App, integration, share, or browser-cache state.
+
+Pull requests, `main` pushes, and manual workflow dispatches may build and
+validate the generic Docker and Home Assistant App images, but may not publish
+release tags. Only one genuine matching `v0.25.0` tag on the exact reviewed
+release commit may publish the versioned and moving image tags. The Python
+distribution and GitHub Release must use the same commit, version, changelog,
+and artifact set. Workflow success alone is not release acceptance.
+
+After tag-gated publication, verify the GitHub Release, source archive, wheel,
+generic multi-platform Docker image, Home Assistant amd64/aarch64 images,
+repository metadata, checksums, and public documentation. Complete a clean
+installation or upgrade through the published Home Assistant repository, prove
+the App owns the scanner exactly once, and revalidate Ingress, MQTT Discovery,
+all first-party cards, browser audio, finalized recordings, controls, waterfall,
+and the optional 0.1.5 Core integration lifecycle. Restore the published App as
+the sole owner and remove any deliberately named release-validation components.
+
+Automatic or background RadioReference synchronization, silent conflict
+resolution, MyRR scraping, undocumented interfaces, new Favorites mappings,
+writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
+connection, public or anonymous live-audio URLs, arbitrary transcoding profiles,
+whole-home synchronization claims, weather-alert recording, TUI waterfall
+rendering, GUI implementation, and the external implementation-review message
+remain outside this release. No new runtime capability enters Milestone 29.3.
+
+#### Closed Milestone 29.2 acceptance record
 
 Milestone 29.1 is closed with the responsive Home Assistant waterfall card,
 authenticated event-stream transport, shared demand leases, deterministic
@@ -185,8 +249,9 @@ writable FTP, daemon/web/Home Assistant Favorites execution, another scanner
 connection, public or anonymous live-audio URLs, arbitrary transcoding profiles,
 whole-home synchronization claims, weather-alert recording, TUI waterfall
 rendering, and GUI implementation remain deferred. The external implementation-
-review message and dependency-update pull requests remain separate unless their
-reviewed state changes.
+review message remains separate. Dependency-update pull requests 188 and 189
+were later resolved together by the reviewed, fully validated replacement in
+pull request 205.
 
 
 ## Deferred hardware validation
@@ -875,6 +940,12 @@ state changes.
   daemon RTSP/RTP ownership, use bounded short-lived playback leases, advertise
   only evidence-backed formats, and complete explicit packaging, security,
   compatibility, and HAOS acceptance.
+- Milestone 29.3: v0.25.0 release and publication closure for the responsive
+  Home Assistant waterfall, media-source live scanner audio, palette and
+  lifecycle improvements, and reviewed Docker action maintenance. Freeze the
+  feature boundary, synchronize release surfaces, validate every distribution
+  and image contract, publish only from one genuine matching tag, verify the
+  public artifacts, and complete repository-managed Home Assistant acceptance.
 - Weather-alert state and recording, TUI waterfall rendering, and the future GUI
   remain separately bounded follow-up candidates.
 

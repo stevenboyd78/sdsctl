@@ -126,13 +126,20 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.2 — Home Assistant media-source live scanner audio" in (
+    assert "### Milestone 29.3 — v0.25.0 release and publication closure" in (
         active_milestone
     )
     for required in (
+        "Milestones 29.1 and 29.2 are closed",
+        "Python distribution, import version, and Home Assistant App at 0.25.0",
+        "Home Assistant Core integration at 0.1.5",
         "media-source://sdsctl/live",
         "does not model the scanner as an output `media_player` entity",
         "daemon remains the only SDS200 RTSP/RTP owner",
+        "Only one genuine matching `v0.25.0` tag",
+        "Workflow success alone is not release acceptance",
+        "pull request 205",
+        "No new runtime capability enters Milestone 29.3",
         "public or anonymous live-audio URLs",
     ):
         assert required in normalized_active_milestone
@@ -291,24 +298,50 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v024_release_documentation_names_current_generic_image() -> None:
+def test_v025_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
     for document in (readme, deployment):
-        assert "v0.24.0" in document
-        assert "theboyd78/sdsctl:0.24.0" in document
+        assert "v0.25.0" in document
+        assert "theboyd78/sdsctl:0.25.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.24.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.24.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.24.0" in installation
+    assert "## Upgrade to v0.25.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.25.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.25.0" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
     assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation
+    assert "Core integration remains independently versioned at 0.1.5" in installation
+
+
+def test_v025_home_assistant_release_gate_is_explicit() -> None:
+    guide = _read("docs/home-assistant-app.md")
+    start = guide.index("### v0.25.0 release acceptance gate")
+    end = guide.index("\n### v0.24.0 release acceptance gate", start)
+    release_gate = guide[start:end]
+    normalized = " ".join(release_gate.split())
+
+    for required in (
+        "genuine v0.25.0 tag",
+        "without a Local App, Local integration, retained share",
+        "all twenty-four fixed MQTT Discovery components",
+        "all three first-party card modules",
+        "manifest-declared SHA-qualified resource URLs",
+        "media-source://sdsctl/live",
+        "audio/mpeg",
+        "version 0.1.5",
+        "zero active or outstanding playback leases",
+        "internal or external URL",
+        "visible two-step destructive confirmation",
+        "only runtime owner",
+        "removed afterward",
+    ):
+        assert required in release_gate or required in normalized
 
 
 def test_milestone_28_4_records_sanitized_physical_acceptance() -> None:

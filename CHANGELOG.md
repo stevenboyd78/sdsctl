@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-31
+
 ### Added
 
 - Add the first-party responsive **SDS200 Waterfall** Home Assistant card over
@@ -17,6 +19,19 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   frames of history; relative scale and lifecycle telemetry controls; pause and
   clear actions; bounded reconnect; and a graphical editor without accepting
   URLs, credentials, scanner addresses, or private Ingress identifiers.
+- Add a versioned first-party Home Assistant Core integration with one standard
+  browsable `media-source://sdsctl/live` item. Home Assistant resolves the item
+  to a bounded Core-owned proxy URL and exact `audio/mpeg` type; a private,
+  rotatable Core-to-App bridge capability and one shared daemon-owned MP3
+  encoder remain hidden from target players, MQTT, entities, diagnostics,
+  browser storage, and public network listeners. Explicit digest-confirmed
+  install, update, rollback, removal, rollback discard, and key rotation never
+  run silently or restart Core automatically.
+- Add an authenticated Home Assistant Ingress-only lifecycle workspace for the
+  custom integration and private bridge. It is omitted from direct and generic
+  web-dashboard sessions, retains exact SHA-256 confirmation and two-step
+  destructive-action arming, and keeps restart and reauthentication guidance
+  reachable across all built-in themes and supported viewports.
 
 ### Changed
 
@@ -45,6 +60,25 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   Home Assistant lifecycle pane now owns bounded vertical scrolling, uses denser
   inputs and status spacing, and keeps its Core-restart and reauthentication
   guidance reachable across all built-in themes and supported viewports.
+
+### Fixed
+
+- Register all three first-party Home Assistant cards through manifest-declared,
+  SHA-256-qualified resource URLs so direct HTTP and external HTTPS dashboard
+  origins load the same reviewed module bytes without retaining a stale Auto
+  Display definition in browser caches.
+- Replace Home Assistant Ingress-incompatible browser confirmation dialogs with
+  visible two-step in-page confirmation for integration removal, rollback-image
+  discard, and bridge-key rotation. Retain exact-digest checks and clear armed
+  actions whenever their identity changes.
+- Close Home Assistant live-audio downstream transport leases after the target
+  disconnects or returns to idle. Physical Home Assistant OS 18.2 acceptance on
+  Core 2026.8.3 and SDS200 firmware 1.26.01 proved canonical MP3 playback on a
+  reachable VLC-TELNET target, normal stop and final-lease cleanup, App restart
+  recovery, unchanged single RTSP/RTP ownership, and regression coverage for
+  browser audio, recording, controls, waterfall, MQTT Discovery, and all nine
+  verification cards. The run also documents that Home Assistant `internal_url`
+  must be reachable by the selected media target.
 
 ## [0.24.0] - 2026-08-29
 
@@ -1525,7 +1559,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.21.0...v0.22.0

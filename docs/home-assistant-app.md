@@ -709,6 +709,44 @@ stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
 dashboard reported `Connected`; the repository App was therefore restored as
 the sole scanner owner.
 
+### v0.25.0 release acceptance gate
+
+After the genuine v0.25.0 tag publishes the amd64, aarch64, and generic
+multi-architecture images, upgrade or install the repository-managed App and
+record the exact platform, App image, integration artifact, and scanner versions
+used. The release gate must confirm:
+
+- the App reports 0.25.0 and uses the matching published image without a Local
+  App, Local integration, retained share, or development-source ambiguity;
+- all twenty-four fixed MQTT Discovery components and all three first-party card
+  modules load from their manifest-declared SHA-qualified resource URLs through
+  both applicable dashboard origins;
+- the responsive Waterfall card creates authenticated demand only while visible,
+  renders explicitly relative and uncalibrated data, and releases final demand
+  after removal, navigation, or disconnect;
+- the optional Core integration reports version 0.1.5, browses
+  `media-source://sdsctl/live`, resolves exact `audio/mpeg`, plays on a reachable
+  representative media target, stops cleanly, and leaves zero active or
+  outstanding playback leases;
+- the selected target can reach Home Assistant's configured internal or external
+  URL, while no App capability, Ingress identifier, scanner address, Supervisor
+  token, or public audio listener is exposed;
+- the Ingress-only Home Assistant workspace retains explicit digest confirmation,
+  update/rollback/removal behavior, visible two-step destructive confirmation,
+  bridge-key protection, Core-restart guidance, and reauthentication guidance;
+- System palettes, all six managed web themes, controls, browser audio,
+  recording and finalization, saved playback and download, waterfall, ordered-
+  event recovery, persistent recordings, and App restart recovery remain healthy;
+  and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, waterfall polling, and RTSP/RTP audio.
+
+The release-validation integration and any deliberately named Local App must be
+removed afterward. Restore the published App as sole owner, perform only the
+documented Core restart or reload, verify preserved recordings, and retain no
+private capability, recording, address, scanner-programming, or credential data
+in public release evidence.
+
 ### v0.24.0 release acceptance gate
 
 After the genuine v0.24.0 tag publishes the amd64, aarch64, and generic

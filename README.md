@@ -548,7 +548,7 @@ See the
 
 The generic release workflow publishes amd64 and arm64 images for genuine
 matching release tags. v0.21.0 established that publication path; the current
-v0.24.0 version-selected release image is `theboyd78/sdsctl:0.24.0`, and
+v0.25.0 version-selected release image is `theboyd78/sdsctl:0.25.0`, and
 `theboyd78/sdsctl:latest` tracks the newest successfully published release.
 Prefer an exact version tag for controlled upgrades. Registry tags remain mutable;
 use a separately verified manifest digest when cryptographic immutability is
@@ -1223,22 +1223,28 @@ documented separately in pull requests and release notes.
 
 ## Project status
 
-Version `0.24.0` completes the explicit assisted RadioReference workflow inside
-the local Favorites Workspace editor: one credentialed refresh, exact read-only
-preview, reviewed field and record decisions, deterministic write planning, and
-full-token-confirmed copied-tree or freshly qualified USB execution with verified
-readback, conditional provenance publication, and cross-store recovery. It also
-adds complete current-target context plus Previous, Hold/Release, and Next actions
-for all four web control scopes. The release retains v0.23.0's responsive six-pane
-workspace, adaptive scanner screens, authenticated relative Waterfall, six themes,
-browser audio, and recording, together with the direct-TLS LAN boundary and remote
-daemon-backed CLI/TUI support. Synchronization remains explicit and local—not
-scheduled, background, silent, or exposed through web, Home Assistant, or MQTT.
-Loopback access remains the default, waterfall values remain explicitly
-uncalibrated, and the daemon remains the sole owner of scanner control, PSI,
-waterfall polling, and RTSP/RTP audio. SDS100 and SDS200 control support is
-hardware-validated; v0.24.0 additionally completed reversible physical SDS100 USB
-Favorites acceptance. SDS150 support is implemented and fixture-tested, with
+Version `0.25.0` adds the responsive first-party Home Assistant Waterfall card
+and a standard `media-source://sdsctl/live` workflow through the independently
+versioned first-party Core integration. Authenticated App transports, bounded
+waterfall demand, short-lived playback capabilities, one shared MP3 encoder,
+target-disconnect cleanup, and explicit integration install/update/rollback/
+removal keep the daemon as the sole owner of scanner control, PSI, waterfall
+polling, and RTSP/RTP audio. The web dashboard and all three cards gain bounded
+System palette choices; Ingress gains a dedicated lifecycle workspace, compact
+uniform controls, reachable guidance, cache-qualified card resources, and
+two-step destructive confirmations. Physical Home Assistant OS acceptance
+validated live audio, recordings, scanner controls, waterfall, MQTT Discovery,
+all cards, restart recovery, and cleanup against an SDS200.
+
+The release retains v0.24.0's explicit assisted RadioReference workflow inside
+the local Favorites Workspace editor, including reviewed decisions, exact write
+planning, full-token-confirmed copied-tree or qualified USB execution, verified
+readback, conditional provenance publication, and cross-store recovery.
+Synchronization remains explicit and local—not scheduled, background, silent,
+or exposed through web, Home Assistant, or MQTT. Loopback web access remains the
+default and waterfall values remain explicitly uncalibrated. SDS100 and SDS200
+control support is hardware-validated; SDS100 USB Favorites programming is also
+physically accepted. SDS150 support is implemented and fixture-tested, with
 physical validation deferred until representative hardware is available. API
 compatibility is not guaranteed until version 1.0.
 
