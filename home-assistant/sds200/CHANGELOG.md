@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Install one digest-qualified `sds200-cards.js` aggregate entry point after the
+  three independently packaged first-party card modules. New installations can
+  register one resource while existing individual URLs remain compatible; App
+  startup does not add, update, or remove Home Assistant resource records.
+
 ## 0.25.0
 
 - Track the sdsctl v0.25.0 release while preserving the App name, slug, image

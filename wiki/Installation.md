@@ -356,11 +356,15 @@ directory remains media-relative and the default still resolves to:
 /media/sdsctl/recordings
 ```
 
-The App installs the unchanged compact card at
-`/local/sds200/sds200-card.js` and the additive responsive display card at
-`/local/sds200/sds200-display-card.js`, plus the authenticated waterfall card at
-`/local/sds200/sds200-waterfall-card.js`. Register each desired path once under
-**Settings > Dashboards > Resources** as a JavaScript Module. If the App had to
+The App installs the unchanged compact, responsive display, and authenticated
+waterfall card modules plus one aggregate entry point. For a new installation,
+register
+`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+once under **Settings > Dashboards > Resources** as a JavaScript Module. The
+three complete digest-qualified individual URLs remain supported for selective
+registration and existing installations. Add and verify the aggregate before
+explicitly removing old individual resource records; the App never edits those
+records. If the App had to
 create Home Assistant's `www` directory for the first time, restart Home
 Assistant Core once before registering the `/local` resources. Add **SDS200
 Scanner**, **SDS200 Display**, or **SDS200 Waterfall** from the picker and use

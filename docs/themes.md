@@ -346,7 +346,7 @@ HTTPS browser caches cannot retain an older custom element. These commands do
 not edit YAML, `.storage`,
 dashboards, Lovelace resources, App options, or Home Assistant Core state. The
 Home Assistant App installs only the three bundled first-party cards (compact,
-display, and waterfall);
+display, and waterfall) plus their declarative aggregate loader;
 it does not scan or activate the user-writable managed theme directory.
 
 The lifecycle does not download themes, extract archives, execute scripts, or

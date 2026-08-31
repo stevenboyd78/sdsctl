@@ -296,10 +296,13 @@ subject to the daemon's transport capability check.
 ### SDS200 Lovelace card is missing
 
 Confirm the App log did not report a card-installation warning and verify
-`/local/sds200/sds200-card.js` is registered for **SDS200 Scanner**, or
-`/local/sds200/sds200-display-card.js` is registered for **SDS200 Display**, or
-`/local/sds200/sds200-waterfall-card.js` is registered for **SDS200 Waterfall**, under
-**Settings > Dashboards > Resources** as a JavaScript Module. If the App created
+the complete digest-qualified `/local/sds200/sds200-cards.js?v=...` aggregate
+URL is registered under **Settings > Dashboards > Resources** as a JavaScript
+Module. Selective installations may instead register the complete
+digest-qualified `sds200-card.js`, `sds200-display-card.js`, or
+`sds200-waterfall-card.js` URL. An unqualified or stale `v` query can leave one
+browser origin on older cached bytes; use the exact URL documented by the
+installed App. If the App created
 Home Assistant's `www` directory for the first time, restart Home Assistant Core
 once before registering the resource.
 

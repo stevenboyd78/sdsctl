@@ -125,12 +125,14 @@ scanner controls: System, Department, Site, and Channel Hold
 switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
 App keeps the generic daemon MQTT request-envelope command input disabled.
 
-The App installs three first-party Lovelace resources:
-`/local/sds200/sds200-card.js` for the unchanged compact **SDS200 Scanner** card
-and `/local/sds200/sds200-display-card.js` for **SDS200 Display**, plus
-`/local/sds200/sds200-waterfall-card.js` for **SDS200 Waterfall**. Register each
-desired resource once under **Settings > Dashboards > Resources** as a JavaScript
-Module. The display card provides five explicit scanner-style layouts plus an
+The App installs three first-party Lovelace cards plus one aggregate resource.
+For a new installation, register
+`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+once under **Settings > Dashboards > Resources** as a JavaScript Module. It
+loads **SDS200 Scanner**, **SDS200 Display**, and **SDS200 Waterfall** through
+their exact digest-qualified modules. The three individual complete URLs remain
+supported for selective registration and existing installations. The display
+card provides five explicit scanner-style layouts plus an
 opt-in Auto layout, three palettes, and a viewport-bounded 4:3 fit. Auto uses
 Screen Kind with a configurable Simple or Detail scanning fallback.
 The waterfall card uses authenticated App Ingress for the daemon's relative,

@@ -296,9 +296,10 @@ distribution path on Home Assistant OS.
 6. Confirm the Configuration page renders the translated scanner host, MQTT topic
    prefix, and recording-directory names/descriptions; verify the default
    recording directory resolves below `/media`.
-7. Confirm the three manifest-declared, digest-qualified `/local/sds200/`
-   resource URLs are available, register or update each complete URL as a
-   JavaScript Module, and verify **SDS200 Scanner**, **SDS200
+7. Confirm the three manifest-declared, digest-qualified card URLs and the
+   digest-qualified `/local/sds200/sds200-cards.js` aggregate URL are available.
+   Register or update the complete aggregate URL as one JavaScript Module and
+   verify **SDS200 Scanner**, **SDS200
    Display**, and **SDS200 Waterfall** appear in the card picker with working
    graphical editors and read-only rendering. Exercise all five explicit display
    layouts, Auto
@@ -307,7 +308,10 @@ distribution path on Home Assistant OS.
    phone, 800x480, and 1920x1080 reference sizes. Exercise one and multiple live
    waterfall cards at all three sizes, each bounded density and palette, pause,
    resume, clear, hidden and removed-card cleanup, final-lease release, and App
-   restart recovery. Confirm exactly one running App is required and no private
+   restart recovery. Also verify the three individual resource URLs remain
+   supported selective-registration paths, that duplicate aggregate/individual
+   loading is harmless, and that the App never edits Home Assistant resource
+   records. Confirm exactly one running App is required and no private
    Ingress value, URL, credential, or scanner address enters card configuration.
 8. Confirm the discovered SDS200 device exposes twenty-four components: seventeen
    state/diagnostic components plus four Hold switches and Previous Channel,

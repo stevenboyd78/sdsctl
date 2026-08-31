@@ -351,12 +351,14 @@ identity rules, automation syntax, target limitations, and test workflow.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs three first-party SDS200 cards:
+The Home Assistant App installs three first-party SDS200 cards and one
+declarative aggregate entry point:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
 /homeassistant/www/sds200/sds200-waterfall-card.js
+/homeassistant/www/sds200/sds200-cards.js
 ```
 
 Home Assistant serves them to the frontend as:
@@ -365,6 +367,7 @@ Home Assistant serves them to the frontend as:
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
 /local/sds200/sds200-waterfall-card.js?v=87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030
+/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -374,7 +377,8 @@ query prevents one origin from continuing to execute an older card after an
 App update. Register the complete manifest-declared URL, including `?v=...`,
 and replace that resource URL whenever the packaged digest changes. The
 underlying filename remains stable; the query contains no credential or private
-host information.
+host information. The value is a content digest, not an operator-selected or
+custom version string.
 
 Milestone 29.2 physical acceptance replaced all three legacy resource
 registrations with their exact manifest-declared URLs. The same dashboard then
@@ -391,10 +395,13 @@ distribution as:
 sds200/themes/home-assistant/compact/
 sds200/themes/home-assistant/sds200-display/
 sds200/themes/home-assistant/waterfall/
+sds200/themes/home-assistant/sds200-cards.js
 ```
 
-Each package contains a versioned manifest and its one declared JavaScript
-module. A validated immutable built-in registry supplies the installer order,
+Each card package contains a versioned manifest and its one declared JavaScript
+module. The top-level aggregate module contains only ordered imports of those
+three manifest-declared digest-qualified URLs. A validated immutable built-in
+registry supplies the installer order,
 module source, custom-element identity, installed filename, and public resource
 URL. Invalid or undeclared package content is rejected before installation.
 This is a built-in packaging boundary. Managed third-party Home Assistant
@@ -402,9 +409,15 @@ packages require an explicit executable-code trust acknowledgement and separate
 digest-confirmed activation. The App does not automatically discover, approve,
 install, execute, or replace managed modules.
 
-Register each URL once in **Settings > Dashboards > Resources** as a
-**JavaScript Module**. HACS is not required. The original **SDS200 Scanner**
-card remains read-only. The additive **SDS200 Display** card provides five
+For a new installation, register only the complete aggregate
+`/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1`
+URL in **Settings > Dashboards > Resources** as a **JavaScript Module**. It
+loads all three cards in deterministic manifest order. The three complete
+individual URLs above remain supported when only selected cards are wanted and
+for existing installations. Registering the aggregate beside an individual
+module is safe but redundant; the guarded card and picker registrations remain
+idempotent. HACS is not required. The original **SDS200 Scanner** card remains
+read-only. The additive **SDS200 Display** card provides five
 explicit layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—plus
 an opt-in Auto layout, and Color, Black on White, and White on Black palettes.
 The **SDS200 Waterfall** card renders the App's authenticated relative,
@@ -417,12 +430,18 @@ If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
 available.
 
+To migrate an existing installation, add the aggregate URL first, reload the
+Home Assistant frontend, and verify all three cards. The operator may then
+remove the three individual resource records. Removing those records does not
+remove dashboard cards or their configuration. The App never adds, updates, or
+deletes resource records automatically.
+
 The automatic `/local` delivery requires the App to map Home Assistant's
 configuration directory read/write. That filesystem permission is broader than
-the three card files: the container can technically write elsewhere in the Home
+the four installed JavaScript files: the container can technically write elsewhere in the Home
 Assistant configuration tree while it is running. The SDS200 installer
 deliberately limits its own behavior to creating `www/sds200` when necessary and
-creating or replacing only the three card files listed above. It does not edit
+creating or replacing only the four files listed above. It does not edit
 Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
 Failure to install or update the optional cards is isolated from the scanner

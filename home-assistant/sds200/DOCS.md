@@ -177,32 +177,41 @@ namespace should be limited to trusted Home Assistant publishers.
 
 ## Bundled Lovelace cards
 
-The Home Assistant App installs three first-party SDS200 cards:
+The Home Assistant App installs three first-party SDS200 cards and one
+declarative aggregate entry point:
 
 ```text
 /homeassistant/www/sds200/sds200-card.js
 /homeassistant/www/sds200/sds200-display-card.js
 /homeassistant/www/sds200/sds200-waterfall-card.js
+/homeassistant/www/sds200/sds200-cards.js
 ```
 
 Home Assistant serves them to the frontend as:
 
 ```text
-/local/sds200/sds200-card.js
-/local/sds200/sds200-display-card.js
-/local/sds200/sds200-waterfall-card.js
+/local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
+/local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
+/local/sds200/sds200-waterfall-card.js?v=87bc2be613a2c44a185c32780ea7fd0c65b0d3e6c642d8d3c8a547bfcc250030
+/local/sds200/sds200-cards.js?v=543b8d2fa1d257c64ee343f5880f330a18bc4e254ad8d11523450e296b5322a1
 ```
 
 The three byte-identical modules are independently packaged under
 `sds200/themes/home-assistant/compact/` and
 `sds200/themes/home-assistant/sds200-display/`, and
-`sds200/themes/home-assistant/waterfall/`. Versioned manifests and one
+`sds200/themes/home-assistant/waterfall/`. The aggregate module is packaged at
+`sds200/themes/home-assistant/sds200-cards.js`. Versioned manifests and one
 validated immutable built-in registry drive their ordered installation while
 preserving the same flat installed filenames and public URLs. The App does not
 scan user-writable theme directories or discover third-party packages.
 
-Register each URL once in **Settings > Dashboards > Resources** as a
-**JavaScript Module**. HACS is not required. **SDS200 Scanner** remains the
+For a new installation, register only the complete aggregate URL in
+**Settings > Dashboards > Resources** as a **JavaScript Module**. It imports all
+three exact card modules. The three complete individual URLs remain supported
+for selective registration and existing installations. The `v` query is the
+exact module SHA-256, not a custom version string. To migrate, add and verify
+the aggregate resource before explicitly removing the individual resource
+records; the App never edits those records. HACS is not required. **SDS200 Scanner** remains the
 read-only compact card. **SDS200 Display** adds Simple, Detail, Search/Close
 Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
 Black palettes. **SDS200 Waterfall** adds a bounded responsive Canvas view of
@@ -216,10 +225,10 @@ available.
 
 The automatic `/local` delivery requires the App to map Home Assistant's
 configuration directory read/write. That filesystem permission is broader than
-the three card files: the container can technically write elsewhere in the Home
+the four installed JavaScript files: the container can technically write elsewhere in the Home
 Assistant configuration tree while it is running. The SDS200 installer
 deliberately limits its own behavior to creating `www/sds200` when necessary and
-creating or replacing only the three card files listed above. It does not edit
+creating or replacing only the four files listed above. It does not edit
 Home Assistant YAML, `.storage`, dashboards, or resource registration.
 
 Failure to install or update the optional cards is isolated from the scanner

@@ -118,7 +118,7 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
-def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
+def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
         "## Deferred hardware validation", 1
@@ -126,10 +126,15 @@ def test_roadmap_records_completed_milestone_28_release_boundary() -> None:
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.3 — v0.25.0 release and publication closure" in (
+    assert "### Milestone 29.4 — Unified Home Assistant card resource registration" in (
         active_milestone
     )
     for required in (
+        "Milestone 29.3 is closed with the exact v0.25.0 Python distribution",
+        "/local/sds200/sds200-cards.js",
+        "SHA-256-qualified resource URLs",
+        "supported selective-registration and migration alternatives",
+        "must not edit Home Assistant `.storage`",
         "Milestones 29.1 and 29.2 are closed",
         "Python distribution, import version, and Home Assistant App at 0.25.0",
         "Home Assistant Core integration at 0.1.5",

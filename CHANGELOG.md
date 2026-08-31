@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add one digest-qualified `sds200-cards.js` Home Assistant resource that
+  imports the compact Scanner, responsive Display, and authenticated Waterfall
+  cards through their exact manifest-declared URLs. Existing individual
+  resources remain supported selective-registration paths, duplicate loading is
+  idempotent, and the App still never edits Home Assistant resource records.
+
 ## [0.25.0] - 2026-08-31
 
 ### Added
