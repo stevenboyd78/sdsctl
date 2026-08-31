@@ -20,6 +20,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Update the generic Docker Hub workflow's reviewed, immutable action pins to
+  `docker/setup-buildx-action` 4.3.0 and `docker/build-push-action` 7.3.0 while
+  retaining the existing validation and tag-gated publication boundary.
 - Reuse the System web theme's 21 Textual-derived color schemes as bounded
   per-card palette choices in all three first-party Home Assistant cards. The
   compact Scanner card gains a graphical-editor palette field; Display retains

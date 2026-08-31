@@ -51,16 +51,16 @@ APPROVED_ACTIONS = {
         "docker/setup-qemu-action v4.2.0",
     ),
     "docker/setup-buildx-action": (
-        "bb05f3f5519dd87d3ba754cc423b652a5edd6d2c",
-        "docker/setup-buildx-action v4.2.0",
+        "37fe631027851001ddb9b187196cc803df7f5f0e",
+        "docker/setup-buildx-action v4.3.0",
     ),
     "docker/login-action": (
         "dbcb813823bdd20940b903addbd779551569679f",
         "docker/login-action v4.6.0",
     ),
     "docker/build-push-action": (
-        "f9f3042f7e2789586610d6e8b85c8f03e5195baf",
-        "docker/build-push-action v7.2.0",
+        "53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
+        "docker/build-push-action v7.3.0",
     ),
 }
 
