@@ -549,7 +549,7 @@ See the
 
 The generic release workflow publishes amd64 and arm64 images for genuine
 matching release tags. v0.21.0 established that publication path; the current
-v0.25.0 version-selected release image is `theboyd78/sdsctl:0.25.0`, and
+v0.26.0 version-selected release image is `theboyd78/sdsctl:0.26.0`, and
 `theboyd78/sdsctl:latest` tracks the newest successfully published release.
 Prefer an exact version tag for controlled upgrades. Registry tags remain mutable;
 use a separately verified manifest digest when cryptographic immutability is
@@ -1229,18 +1229,26 @@ documented separately in pull requests and release notes.
 
 ## Project status
 
-Version `0.25.0` adds the responsive first-party Home Assistant Waterfall card
-and a standard `media-source://sdsctl/live` workflow through the independently
-versioned first-party Core integration. Authenticated App transports, bounded
-waterfall demand, short-lived playback capabilities, one shared MP3 encoder,
-target-disconnect cleanup, and explicit integration install/update/rollback/
-removal keep the daemon as the sole owner of scanner control, PSI, waterfall
-polling, and RTSP/RTP audio. The web dashboard and all three cards gain bounded
-System palette choices; Ingress gains a dedicated lifecycle workspace, compact
-uniform controls, reachable guidance, cache-qualified card resources, and
-two-step destructive confirmations. Physical Home Assistant OS acceptance
-validated live audio, recordings, scanner controls, waterfall, MQTT Discovery,
-all cards, restart recovery, and cleanup against an SDS200.
+Version `0.26.0` adds one digest-qualified aggregate Home Assistant card
+resource while retaining the three individual compatibility URLs. It anchors
+the 250 ms text-GWF schedule to prior deadlines, exposes bounded round-trip and
+scheduler telemetry, refreshes typed GST range data independently, and keeps
+the web and Home Assistant Waterfall renderers aligned with live scanner span
+changes. The card editor accepts Home Assistant section-layout metadata and
+normalizes string-serialized 60, 120, and 240-frame choices without weakening
+its bounded configuration contract. Exact-byte GW2 research preserves the
+qualified text `PWF`/`GWF` data plane after the reviewed SDS200 firmware 1.26.01
+LAN candidate returned `ERR\r` and established no binary framing or renderer
+benefit.
+
+The release retains v0.25.0's responsive first-party Home Assistant Waterfall
+card and standard `media-source://sdsctl/live` workflow through the independently
+versioned 0.1.5 Core integration. Authenticated App transports, bounded
+waterfall and playback leases, one shared MP3 encoder, target-disconnect cleanup,
+and explicit integration lifecycle actions keep the daemon as the sole owner of
+scanner control, PSI, Waterfall polling, and RTSP/RTP audio. System palettes,
+the Ingress lifecycle workspace, compact uniform controls, cache-qualified card
+resources, and visible two-step destructive confirmations remain available.
 
 The release retains v0.24.0's explicit assisted RadioReference workflow inside
 the local Favorites Workspace editor, including reviewed decisions, exact write

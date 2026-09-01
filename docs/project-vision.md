@@ -242,10 +242,13 @@ artwork, screenshots, sounds, proprietary fonts, copied hardware geometry,
 remote resources, or theme-owned JavaScript. System and every built-in or valid
 managed web theme use the same pane shell rather than substituting theme-owned
 application behavior. Theme staging remains decorative, pointer-inert,
-reduced-motion aware, and independent of daemon or scanner state. Remaining
-dashboard work includes the waterfall renderer, operational logs, additional
-shared branding assets, and deliberate trusted-reverse-proxy or public/Internet
-access design beyond the existing authenticated private-LAN mode.
+reduced-motion aware, and independent of daemon or scanner state. The web
+Waterfall renderer follows bounded daemon demand and live scanner-reported span
+metadata while remaining explicitly relative and uncalibrated. Remaining
+dashboard work includes richer operational logs, duration-based Waterfall
+history and an optional frequency pointer, additional shared branding assets,
+and deliberate trusted-reverse-proxy or public/Internet access design beyond
+the existing authenticated private-LAN mode.
 
 ### Home Assistant
 

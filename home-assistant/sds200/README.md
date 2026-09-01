@@ -25,7 +25,9 @@ It provides:
   card; a responsive 4:3 SDS200 Display card with five explicit layouts, opt-in
   automatic layout selection, and scanner palettes; and an authenticated
   responsive SDS200 Waterfall card with bounded relative spectrum history. All
-  three also offer the 21 System web palettes as per-card presentation choices.
+  three also offer the 21 System web palettes as per-card presentation choices;
+  one aggregate resource can register all three while the individual resources
+  remain supported for selective and existing installations.
 
 The App requires a LAN-connected SDS200 and publishes UDP port `50000` for the
 scanner's inbound RTP audio. It does not enable host networking or expose the

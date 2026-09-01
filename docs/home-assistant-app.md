@@ -744,6 +744,50 @@ stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
 dashboard reported `Connected`; the repository App was therefore restored as
 the sole scanner owner.
 
+### v0.26.0 release acceptance gate
+
+After the genuine v0.26.0 tag publishes the amd64, aarch64, and generic
+multi-architecture images, upgrade the repository-managed v0.25.0 App and
+record the exact platform, App image, integration artifact, and scanner versions
+used. The release gate must confirm:
+
+- the App reports 0.26.0 and uses the matching published image without a Local
+  App, Local integration, retained share, private capture, or development-source
+  ambiguity;
+- all twenty-four fixed MQTT Discovery components remain available, and the
+  aggregate `sds200-cards.js` resource registers the compact Scanner, responsive
+  Display, and authenticated Waterfall cards from its manifest-declared SHA-
+  qualified imports while all three individual compatibility resources remain
+  valid;
+- duplicate aggregate and individual loading is idempotent, the App does not
+  edit Home Assistant resource records, the Waterfall editor normalizes its 60,
+  120, and 240-frame choices, and Home Assistant-owned `grid_options` metadata
+  does not invalidate an otherwise supported card;
+- three simultaneous visible Waterfall cards share one scanner-side session,
+  sustain the phase-stable text-GWF schedule without catch-up bursts, expose
+  bounded timing telemetry, follow a physical scanner span change through the
+  independent GST refresh, and release final demand after removal, navigation,
+  or disconnect;
+- Waterfall presentation remains explicitly relative and uncalibrated, the
+  qualified text `PWF`/`GWF` path remains authoritative, and no binary GW2
+  negotiation or undocumented FFT semantics enter the published runtime;
+- the optional Core integration remains version 0.1.5, browses
+  `media-source://sdsctl/live`, resolves exact `audio/mpeg`, plays on a reachable
+  representative media target, stops cleanly, and leaves zero active or
+  outstanding playback leases;
+- Ingress, System palettes, all six managed web themes, controls, browser audio,
+  recording and finalization, saved playback and download, ordered-event
+  recovery, persistent recordings, visible lifecycle confirmations, and App
+  restart recovery remain healthy; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, Waterfall polling, and RTSP/RTP audio.
+
+Remove the release-validation integration and any deliberately named Local App
+afterward. Restore the published App as sole owner, perform only the documented
+Core restart or reload, verify preserved recordings, and retain no private
+capability, recording, address, scanner-programming, provider, or credential
+data in public release evidence.
+
 ### v0.25.0 release acceptance gate
 
 After the genuine v0.25.0 tag publishes the amd64, aarch64, and generic

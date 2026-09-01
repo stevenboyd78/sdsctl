@@ -11,84 +11,71 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.6 — Binary GW2 waterfall framing and value research
+### Milestone 29.7 — v0.26.0 release and publication closure
 
-Milestones 29.4 and 29.5 are closed through reviewed pull requests 208 and 209.
-The aggregate Home Assistant card loader, phase-stable 250 ms text-GWF schedule,
-bounded timing telemetry, low-rate typed GST refresh, and live renderer span
-tracking are merged on `main` at
-`889f554cb342e8c4b55b16928b5060313b297b10`. Physical Home Assistant OS
-acceptance sustained 4.0–4.1 text frames per second across three simultaneous
-cards and matched the exact scanner-reported 1.44 MHz frequency range. Cleanup
-restored the published v0.25.0 App as sole scanner owner and removed both Local
-validation Apps, sources, and catalog records.
+Milestones 29.4 through 29.6 are closed through reviewed pull requests 208,
+209, and 210. The aggregate Home Assistant card loader, phase-stable 250 ms
+text-GWF schedule, bounded timing telemetry, low-rate typed GST refresh, live
+renderer span tracking, and bounded binary-GW2 research conclusion are merged
+on `main` at `a8854ce91175670ebf0969417832e08d0f6f0462`. Physical Home
+Assistant OS acceptance sustained 4.0–4.1 text frames per second across three
+simultaneous cards, followed the exact scanner-reported 1.44 MHz frequency
+range, restored the published v0.25.0 App as sole scanner owner, and removed
+the deliberately named Local validation Apps and sources.
 
-Milestone 29.6 is a protocol-research slice, not production waterfall
-integration. Determine whether the SDS Series V2.00 `GW2` addition supplies a
-measurably better framing, bandwidth, or cadence option than the qualified text
-`PWF`/`GWF` path without weakening the one-owner transport boundary or assigning
-unsupported FFT semantics.
+Milestone 29.7 is release closure rather than another runtime feature slice.
+Synchronize the Python distribution, import version, and Home Assistant App at
+0.26.0; freeze the accumulated changelogs; and run the complete static, test,
+documentation, distribution, container, browser, screenshot, and release-
+contract validation before any release tag exists. The independently packaged
+Home Assistant Core integration remains at 0.1.5 because Milestones 29.4
+through 29.6 do not change its artifact.
 
-The official specification establishes only that V2.00 added `GW2`, calls it
-Waterfall FFT information without separators, labels its payload as 240 binary
-displayed-FFT values, and lists `GW2` in the command table. Its detailed row is
-internally inconsistent: both controller and radio forms are printed as `GWF`,
-the response still shows a terminating carriage return, and no header, element
-width, byte order, signedness, escape rule, payload-length field, cadence, start
-and stop behavior, magnitude scale, or transport applicability is defined. Do
-not resolve those contradictions by assumption.
+Audit the README, release guide, container and Home Assistant documentation,
+custom-integration guide, daemon-waterfall and web-dashboard guides, advanced-
+protocol research, capability audit, project vision, reviewed wiki source,
+generated reference screenshots, package metadata, example commands, and
+pinned public image references. The public account must explain the aggregate
+card resource and retained individual compatibility URLs, phase-stable text
+cadence and timing telemetry, scanner-reported span refresh, graphical-editor
+and Home Assistant section-layout compatibility, relative and uncalibrated FFT
+presentation, and the exact tested GW2 rejection without implying unsupported
+binary framing or universal model and firmware behavior.
 
-Begin with an exact-byte, renderer-neutral research substrate. Synthetic
-fixtures and parsers must preserve the complete source bytes plus datagram or
-stream-boundary metadata. They must enforce explicit maximum record size,
-record count, elapsed time, and inactivity limits; distinguish complete,
-truncated, concatenated, and unexpected text data; and expose structural
-observations without treating any payload byte as power, dB, RSSI, color, or a
-calibrated FFT value. The existing serial and UDP line decoders must remain
-unchanged until framing evidence proves a safe mixed binary/text contract.
+Run Ruff, strict MyPy, the complete multi-version pytest and coverage matrix,
+documentation checks, source and wheel builds, Twine checks, release-integrity
+and tag-contract tests, real-browser and screenshot-gallery checks, generic
+Docker/Compose/Podman validation, Home Assistant App amd64/aarch64 validation,
+custom-integration packaging, CodeQL, and dependency-graph review. The shared
+coverage floor remains 86 percent. Release artifacts must be rebuilt from the
+reviewed source and must not depend on retained Local App, integration, share,
+browser-cache, private capture, or scanner state.
 
-Physical qualification must use one deliberately bounded research probe while
-the published Home Assistant App is stopped and verified stopped. The probe may
-open only one scanner control transport, send only one reviewed candidate form
-at a time, retain raw captures only in private local validation storage, issue
-the matching reviewed cleanup form where applicable, close deterministically,
-and restore the published App under an automatic rollback guard. No live probe
-may run concurrently with the daemon or use a repeated, unbounded, fuzzed, or
-disruptive command sequence.
+Pull requests, `main` pushes, and manual workflow dispatches may build and
+validate the generic Docker and Home Assistant App images, but may not publish
+release tags. Only one genuine matching `v0.26.0` tag on the exact reviewed
+release commit may publish the versioned and moving image tags. The Python
+distribution and GitHub Release must use the same commit, version, changelog,
+and artifact set. Workflow success alone is not release acceptance.
 
-Record the SDS200 firmware and LAN-control applicability of every physical
-observation. Compare exact payload size, response latency, sustainable cadence,
-loss, framing stability, and renderer-visible value against the accepted text
-baseline. A production proposal requires repeatable framing and a material
-measured benefit; otherwise the qualified phase-stable text path remains the
-product implementation.
+After tag-gated publication, verify the GitHub Release, source archive, wheel,
+generic multi-platform Docker image, Home Assistant amd64/aarch64 images,
+repository metadata, checksums, and public documentation. Complete a clean
+published Home Assistant upgrade from v0.25.0 to v0.26.0 and prove Ingress,
+MQTT Discovery, the aggregate and retained individual card resources, all
+first-party cards, browser audio, finalized recordings, controls, Waterfall
+cadence and live span changes, and the optional 0.1.5 Core integration. Restore
+the published App as the sole scanner owner and remove any deliberately named
+release-validation components.
 
-Physical qualification on August 31, 2026 used the SDS200 running firmware
-1.26.01 over LAN UDP control. With the published App verified stopped, the
-separately reviewed command-table candidate `GW2,1,ON` produced one complete
-four-byte `ERR\r` datagram after approximately 32 ms and no binary frame. The
-paired `GW2,1,OFF` cleanup completed, the published App returned to sole
-ownership, and authenticated Home Assistant readback showed three live text
-waterfall cards running with fresh frames. The contradictory detailed-row
-`GWF,1,ON` spelling is already the physically qualified text-GWF request, so it
-does not identify a separate binary path. This evidence rejects the reviewed
-GW2 candidate on the tested model, firmware, and transport without claiming
-that every undocumented syntax or future firmware is unsupported.
+No new runtime capability enters Milestone 29.7. Duration-based Waterfall
+history, an interactive frequency pointer, TUI Waterfall rendering, GUI work,
+a ProScan wire comparison, alternative GW2 syntax, binary negotiation, FFT
+calibration, scanner tuning, public or anonymous audio, automatic
+RadioReference synchronization, weather-alert recording, and broader scanner-
+family validation remain separately bounded future work.
 
-There is therefore no repeatable binary framing or measured renderer benefit
-to justify production negotiation. Do not guess another wire form or refactor
-the production transports. The phase-stable text-GWF implementation remains the
-qualified product data plane; GW2 may be reconsidered only if stronger vendor
-documentation or independently reproducible wire evidence resolves the command
-and framing contradictions.
-
-Production daemon ownership, automatic text/binary negotiation, web or Home
-Assistant delivery, public APIs, MQTT FFT publication, recording, serial-port
-support, SDS100/SDS150 applicability, calibrated magnitude, tuning, mode
-navigation, TUI rendering, GUI implementation, and release publication remain
-outside Milestone 29.6.
-
-#### Closed Milestones 29.4 and 29.5 — Home Assistant card loader and waterfall cadence
+#### Closed Milestones 29.4 through 29.6 — Card loading, cadence, and GW2 research
 
 Milestone 29.4 added one digest-qualified first-party aggregate Home Assistant
 card resource while retaining the three individual compatibility URLs and the
@@ -98,6 +85,14 @@ round-trip and scheduler telemetry, and carried independently refreshed typed
 GST range data to the web dashboard and first-party Home Assistant Waterfall
 card. Both milestones completed full static, test, package, container, browser,
 and physical Home Assistant OS validation before merge.
+
+Milestone 29.6 added a bounded, exact-byte, renderer-neutral GW2 research
+substrate and one guarded physical probe on the SDS200 running firmware 1.26.01
+over LAN UDP control. Exact `GW2,1,ON` returned `ERR\r` and no binary frame;
+paired cleanup and Home Assistant recovery passed. The qualified phase-stable
+text `PWF`/`GWF` path remains authoritative unless stronger vendor
+documentation or independently reproducible evidence establishes a safe,
+materially beneficial binary contract.
 
 #### Closed Milestone 29.3 — v0.25.0 release and publication closure
 
@@ -1043,6 +1038,16 @@ state changes.
   scanner's current Waterfall span. Qualify the resulting physical SDS200 frame
   rate before separately researching binary GW2 framing, transport, cadence,
   and renderer value.
+- Milestone 29.6: bounded exact-byte binary-GW2 research and one guarded SDS200
+  firmware 1.26.01 LAN probe. Preserve the qualified text `PWF`/`GWF` data plane
+  after exact `GW2,1,ON` returns `ERR\r` and establishes no binary framing or
+  material renderer benefit.
+- Milestone 29.7: v0.26.0 release and publication closure for the aggregate Home
+  Assistant card loader, phase-stable Waterfall cadence, live scanner-span
+  tracking, compatibility fixes, and bounded GW2 research conclusion. Freeze
+  the runtime boundary, synchronize release surfaces, validate every artifact,
+  publish only from one genuine matching tag, and complete a clean published
+  Home Assistant upgrade acceptance.
 - Weather-alert state and recording, TUI waterfall rendering, and the future GUI
   remain separately bounded follow-up candidates.
 
