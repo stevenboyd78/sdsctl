@@ -572,7 +572,12 @@ The card discovers the SDS200 panel through Home Assistant's frontend context,
 asks Home Assistant for an authenticated App Ingress session, and requires
 exactly one running SDS200 App. No App produces an unavailable state; multiple
 running SDS200 Apps fail closed so the card cannot silently select the wrong
-scanner owner. Stop or uninstall obsolete Local Apps before using it.
+scanner owner. The intended running App must also have **Show in sidebar**
+enabled so Home Assistant advertises it in the Ingress panel registry. Opening
+`/app/<slug>` directly does not register a hidden App for card discovery. This
+is especially important during Local App validation when an installed but
+stopped published App may retain the visible panel. Stop obsolete Local Apps,
+enable the intended owner's panel, and leave only one SDS200 App running.
 
 Each connected and visible card owns its own demand lease over the daemon's one
 shared waterfall session. Hidden, removed, or disconnected cards abort their

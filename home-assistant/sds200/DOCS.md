@@ -356,7 +356,10 @@ option. The Waterfall-specific choices remain bounded as shown above.
 120, or 240 frames. The
 card requires exactly one running SDS200 App discovered through Home Assistant.
 No running App is unavailable, and multiple running SDS200 Apps fail closed so
-the card cannot silently select the wrong scanner owner.
+the card cannot silently select the wrong scanner owner. Enable **Show in
+sidebar** for the intended running App so Home Assistant includes it in the
+Ingress panel registry used for discovery. Opening `/app/<slug>` directly is
+not a substitute for that panel setting.
 
 Visible card instances hold independent demand leases over the daemon's single
 shared scanner-side waterfall session. Hiding, removing, or disconnecting a card

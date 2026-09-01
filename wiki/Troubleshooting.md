@@ -317,11 +317,15 @@ values use the configured Simple or Detail scan fallback. Explicit layouts
 intentionally ignore Screen Kind.
 
 If **SDS200 Waterfall** reports that no App is available, start the installed
-SDS200 App and confirm its Ingress panel loads. If it reports multiple running
-Apps, stop or uninstall obsolete Local development Apps so one scanner owner
-remains. The card deliberately has no manual endpoint or credential fallback.
-Authentication or App-restart failures use bounded reconnect delays; removing
-or hiding the card releases its stream lease.
+SDS200 App, enable **Show in sidebar**, and confirm its Ingress panel loads.
+The card discovers candidates from Home Assistant's panel registry; opening
+`/app/<slug>` directly does not make an App with a hidden panel discoverable.
+During Local App validation, confirm the Local App—not only an installed but
+stopped published App—owns the visible panel. If the card reports multiple
+running Apps, stop or uninstall obsolete Local development Apps so one scanner
+owner remains. The card deliberately has no manual endpoint or credential
+fallback. Authentication or App-restart failures use bounded reconnect delays;
+removing or hiding the card releases its stream lease.
 
 ## Capture detailed diagnostics
 
