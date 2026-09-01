@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 0.26.1
+
+- Track the sdsctl v0.26.1 installation and documentation release while
+  preserving the App name, slug, image identity, MQTT identities, scanner
+  ownership, persistent recordings, custom-integration 0.1.5 artifact, and
+  installed first-party custom elements.
+- Retain the complete v0.26.0 scanner, daemon, web, audio, recording, MQTT,
+  Waterfall, and Home Assistant runtime boundary. This patch publishes the
+  concise beginner documentation and aggregate Python runtime extra without
+  changing App configuration or behavior beyond the synchronized version.
+
 ## 0.26.0
 
 - Track the sdsctl v0.26.0 release while preserving the App name, slug, image

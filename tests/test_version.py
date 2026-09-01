@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.26.0...v0.26.1"
+        in changelog
+    )
+    assert (
         "[0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.25.0...v0.26.0"
         in changelog
@@ -206,5 +211,26 @@ def test_current_release_changelog_covers_v026_feature_groups() -> None:
         "60, 120, and 240-frame history selections",
         "Home Assistant's host-owned `grid_options`",
         "Show in sidebar",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_release_changelog_covers_v0261_installation_release() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.26.1] - ")
+    end = changelog.index("\n## [0.26.0]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "`all` optional Python runtime extra",
+        "exact union",
+        "`tui`, `web`, `mqtt`, and `playback`",
+        "beginner-oriented wiki guides",
+        "1,278-line package README",
+        "211-line project landing page",
+        "PyPI now renders that same concise account",
+        "350-line README ceiling",
+        "validate documented Python extras against package metadata",
     ):
         assert required in release or required in normalized

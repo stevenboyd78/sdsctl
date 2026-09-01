@@ -340,24 +340,25 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v026_release_documentation_names_current_generic_image() -> None:
+def test_v0261_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
-    assert "Version `0.26.0`" in readme
-    assert "theboyd78/sdsctl:0.26.0" in readme
+    assert "Version `0.26.1`" in readme
+    assert "theboyd78/sdsctl:0.26.1" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment,):
-        assert "v0.26.0" in document
-        assert "theboyd78/sdsctl:0.26.0" in document
+        assert "v0.26.1" in document
+        assert "theboyd78/sdsctl:0.26.1" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.26.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.26.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.26.0" in installation
+    assert "## Upgrade to v0.26.1" in installation
+    assert 'python -m pip install --upgrade "sds200==0.26.1"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.26.1"' in installation
+    assert "docker pull theboyd78/sdsctl:0.26.1" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
@@ -365,30 +366,23 @@ def test_v026_release_documentation_names_current_generic_image() -> None:
     assert "Core integration remains independently versioned at 0.1.5" in installation
 
 
-def test_v026_home_assistant_release_gate_is_explicit() -> None:
+def test_v0261_home_assistant_release_gate_is_explicit() -> None:
     guide = _read("docs/home-assistant-app.md")
-    start = guide.index("### v0.26.0 release acceptance gate")
-    end = guide.index("\n### v0.25.0 release acceptance gate", start)
+    start = guide.index("### v0.26.1 release acceptance gate")
+    end = guide.index("\n### v0.26.0 release acceptance gate", start)
     release_gate = guide[start:end]
     normalized = " ".join(release_gate.split())
 
     for required in (
-        "genuine v0.26.0 tag",
+        "genuine v0.26.1 tag",
         "without a Local App, Local integration, retained share, private capture",
         "all twenty-four fixed MQTT Discovery components",
-        "aggregate `sds200-cards.js` resource",
-        "all three individual compatibility resources",
-        "Home Assistant-owned `grid_options` metadata",
-        "three simultaneous visible Waterfall cards",
-        "phase-stable text-GWF schedule without catch-up bursts",
-        "physical scanner span change",
-        "no binary GW2 negotiation",
-        "media-source://sdsctl/live",
-        "audio/mpeg",
-        "version 0.1.5",
-        "zero active or outstanding playback leases",
+        "aggregate plus retained individual first-party card resources",
+        "persistent recordings survive the upgrade",
+        "independently versioned at 0.1.5",
+        "does not require installation, replacement, key rotation",
         "only runtime owner of scanner control",
-        "Remove the release-validation integration",
+        "Remove any deliberately named release-validation component",
     ):
         assert required in release_gate or required in normalized
 
