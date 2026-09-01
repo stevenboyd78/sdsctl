@@ -2,25 +2,33 @@
 
 - [Home](Home)
 - [Installation](Installation)
+- [Release upgrade notes](Installation#upgrade-to-v0260)
+- [First connection](First-Connection)
 - [Troubleshooting](Troubleshooting)
 
-### Canonical guides
+### Use sdsctl
 
-- [Repository README](https://github.com/stevenboyd78/sdsctl/blob/main/README.md)
+- [Interfaces and everyday tasks](Using-sdsctl)
+- [Audio and recordings](Audio-and-Recordings)
+- [Home Assistant](Home-Assistant)
+- [Favorites and RadioReference](Favorites-and-RadioReference)
+- [Operations and diagnostics](Operations-and-Diagnostics)
+- [Python API](Python-API)
+- [Containers](Containers)
+- [Web dashboard gallery](Web-Dashboard)
+
+### Advanced reference
+
 - [Supported models](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
-- [Textual TUI](https://github.com/stevenboyd78/sdsctl/blob/main/docs/tui.md)
-- [Network audio](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
-- [Web dashboard](Web-Dashboard)
-- [Home Assistant App](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
-- [Operational logging](https://github.com/stevenboyd78/sdsctl/blob/main/docs/logging.md)
+- [Configuration](https://github.com/stevenboyd78/sdsctl/blob/main/docs/configuration.md)
 - [Daemon deployment](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-deployment.md)
-- [Layered configuration](https://github.com/stevenboyd78/sdsctl/blob/main/docs/configuration.md)
-- [Capture and replay](https://github.com/stevenboyd78/sdsctl/blob/main/docs/replay-and-capture.md)
+- [Control transports](https://github.com/stevenboyd78/sdsctl/blob/main/docs/transports.md)
+- [Project vision](https://github.com/stevenboyd78/sdsctl/blob/main/docs/project-vision.md)
 
 ### Project
 
-- [Roadmap](https://github.com/stevenboyd78/sdsctl/blob/main/ROADMAP.md)
-- [Project vision](https://github.com/stevenboyd78/sdsctl/blob/main/docs/project-vision.md)
 - [Changelog](https://github.com/stevenboyd78/sdsctl/blob/main/CHANGELOG.md)
+- [Roadmap](https://github.com/stevenboyd78/sdsctl/blob/main/ROADMAP.md)
 - [Support](https://github.com/stevenboyd78/sdsctl/blob/main/SUPPORT.md)
+- [Publishing this wiki](Publishing)
 - [Issues](https://github.com/stevenboyd78/sdsctl/issues)

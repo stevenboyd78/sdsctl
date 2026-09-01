@@ -118,6 +118,20 @@ def test_generic_docker_hub_identity_is_isolated_from_python_and_home_assistant(
     assert '"sds200[mqtt,web]"' in _read("Dockerfile")
 
 
+def test_all_optional_dependency_extra_is_exact_runtime_union() -> None:
+    project = tomllib.loads(_read("pyproject.toml"))["project"]
+    optional = project["optional-dependencies"]
+    runtime_extras = ("tui", "web", "mqtt", "playback")
+    runtime_union = {
+        dependency
+        for extra in runtime_extras
+        for dependency in optional[extra]
+    }
+
+    assert set(optional["all"]) == runtime_union
+    assert len(optional["all"]) == len(runtime_union)
+
+
 def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> None:
     roadmap = ROADMAP.read_text(encoding="utf-8")
     active_milestone = roadmap.split("## Active milestone", 1)[1].split(
@@ -126,29 +140,36 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.7 — v0.26.0 release and publication closure" in (
+    assert "### Milestone 30.1 — Installation experience and beginner documentation" in (
         active_milestone
     )
     for required in (
-        "Milestones 29.4 through 29.6 are closed through reviewed pull requests 208, 209, and 210",
-        "a8854ce91175670ebf0969417832e08d0f6f0462",
-        "4.0–4.1 text frames per second across three simultaneous cards",
-        "exact scanner-reported 1.44 MHz frequency range",
-        "Milestone 29.7 is release closure rather than another runtime feature slice",
-        "Python distribution, import version, and Home Assistant App at 0.26.0",
-        "Home Assistant Core integration remains at 0.1.5",
-        "aggregate card resource and retained individual compatibility URLs",
-        "scanner-reported span refresh",
-        "relative and uncalibrated FFT presentation",
-        "shared coverage floor remains 86 percent",
-        "Only one genuine matching `v0.26.0` tag",
-        "Complete a clean published Home Assistant upgrade from v0.25.0 to v0.26.0",
-        "No new runtime capability enters Milestone 29.7",
+        "Milestone 29.7 is closed through reviewed pull request 211",
+        "public v0.26.0 release",
+        "7ea9ff2ae8a0234a4b54fbb64757bfbe105df36b",
+        "published App as sole scanner owner",
+        "without changing scanner, daemon, web, audio, Favorites, Waterfall, "
+        "or Home Assistant runtime behavior",
+        "README becomes a concise project landing page",
+        "README must remain no longer than 350 lines",
+        "`sds200[all]` optional dependency extra",
+        "exact union of the `tui`, `web`, `mqtt`, and `playback` runtime extras",
+        "does not include development tooling, operating-system packages",
+        "Reorganize the reviewed wiki source around deployment targets and user goals",
+        "Home Assistant OS, Linux or Raspberry Pi workstations, Linux servers, "
+        "Docker or Podman deployments",
+        "Do not remove detailed README material until it has an audited destination",
+        "complete pytest and coverage suite",
+        "clean-environment package installation and import smoke tests",
+        "No physical scanner, Home Assistant mutation, container publication, "
+        "package publication, release tag, or version change",
         "Duration-based Waterfall history",
         "a ProScan wire comparison",
+        "#### Closed Milestone 29.7 — v0.26.0 release and publication closure",
+        "Home Assistant Core integration at 0.1.5",
         "Exact `GW2,1,ON` returned `ERR\\r` and no binary frame",
         "qualified phase-stable text `PWF`/`GWF` path remains authoritative",
-        "aggregate Home Assistant card loader",
+        "aggregate Home Assistant card resource",
         "removed completion-relative text-GWF drift",
         "Milestones 29.1 and 29.2 are closed",
         "Python distribution, import version, and Home Assistant App at 0.25.0",
@@ -323,7 +344,11 @@ def test_v026_release_documentation_names_current_generic_image() -> None:
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
-    for document in (readme, deployment):
+    assert "Version `0.26.0`" in readme
+    assert "theboyd78/sdsctl:0.26.0" in readme
+    assert "theboyd78/sdsctl:latest" in readme
+
+    for document in (deployment,):
         assert "v0.26.0" in document
         assert "theboyd78/sdsctl:0.26.0" in document
         assert "theboyd78/sdsctl:latest" in document

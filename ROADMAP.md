@@ -11,69 +11,84 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.7 — v0.26.0 release and publication closure
+### Milestone 30.1 — Installation experience and beginner documentation
 
-Milestones 29.4 through 29.6 are closed through reviewed pull requests 208,
-209, and 210. The aggregate Home Assistant card loader, phase-stable 250 ms
-text-GWF schedule, bounded timing telemetry, low-rate typed GST refresh, live
-renderer span tracking, and bounded binary-GW2 research conclusion are merged
-on `main` at `a8854ce91175670ebf0969417832e08d0f6f0462`. Physical Home
-Assistant OS acceptance sustained 4.0–4.1 text frames per second across three
-simultaneous cards, followed the exact scanner-reported 1.44 MHz frequency
-range, restored the published v0.25.0 App as sole scanner owner, and removed
-the deliberately named Local validation Apps and sources.
+Milestone 29.7 is closed through reviewed pull request 211 and the public
+v0.26.0 release. The Python distribution, generic Docker image, Home Assistant
+App images, reviewed wiki, GitHub Release, source archives, checksums, and
+release metadata are published and verified from commit
+`7ea9ff2ae8a0234a4b54fbb64757bfbe105df36b`. Physical Home Assistant OS
+acceptance covered the published App upgrade, scanner controls, browser and
+Home Assistant media-source audio, finalized recordings, Waterfall cadence and
+span tracking, restart recovery, optional Core integration lifecycle, and exact
+cleanup back to the published App as sole scanner owner.
 
-Milestone 29.7 is release closure rather than another runtime feature slice.
-Synchronize the Python distribution, import version, and Home Assistant App at
-0.26.0; freeze the accumulated changelogs; and run the complete static, test,
-documentation, distribution, container, browser, screenshot, and release-
-contract validation before any release tag exists. The independently packaged
-Home Assistant Core integration remains at 0.1.5 because Milestones 29.4
-through 29.6 do not change its artifact.
+Milestone 30.1 makes the supported installation and first-use paths easier to
+understand without changing scanner, daemon, web, audio, Favorites, Waterfall,
+or Home Assistant runtime behavior. The repository README becomes a concise
+project landing page rather than a second operations manual. It must explain
+what `sdsctl` is, identify supported scanners, help a beginner choose an
+installation target, provide the shortest verified first connection, preserve
+the alpha, security, hardware-validation, and safety boundaries, and route the
+reader to maintained task-oriented documentation. Detailed setup, operation,
+configuration, troubleshooting, architecture, protocol, and release material
+belongs in the reviewed wiki source or an explicitly linked advanced reference.
+The reviewed README must remain no longer than 350 lines.
 
-Audit the README, release guide, container and Home Assistant documentation,
-custom-integration guide, daemon-waterfall and web-dashboard guides, advanced-
-protocol research, capability audit, project vision, reviewed wiki source,
-generated reference screenshots, package metadata, example commands, and
-pinned public image references. The public account must explain the aggregate
-card resource and retained individual compatibility URLs, phase-stable text
-cadence and timing telemetry, scanner-reported span refresh, graphical-editor
-and Home Assistant section-layout compatibility, relative and uncalibrated FFT
-presentation, and the exact tested GW2 rejection without implying unsupported
-binary framing or universal model and firmware behavior.
+Add a published `sds200[all]` optional dependency extra whose members are the
+exact union of the `tui`, `web`, `mqtt`, and `playback` runtime extras. The name
+`all` means all optional Python runtime interfaces; it does not include
+development tooling, operating-system packages, Home Assistant installation,
+container deployment, audio-server configuration, or external encoders.
+Preserve the individually installable extras and add an integrity test that
+fails if their union and `all` drift apart. Documentation examples must be
+validated against the extras declared by package metadata and must continue to
+call out PortAudio and other operating-system prerequisites where applicable.
 
-Run Ruff, strict MyPy, the complete multi-version pytest and coverage matrix,
-documentation checks, source and wheel builds, Twine checks, release-integrity
-and tag-contract tests, real-browser and screenshot-gallery checks, generic
-Docker/Compose/Podman validation, Home Assistant App amd64/aarch64 validation,
-custom-integration packaging, CodeQL, and dependency-graph review. The shared
-coverage floor remains 86 percent. Release artifacts must be rebuilt from the
-reviewed source and must not depend on retained Local App, integration, share,
-browser-cache, private capture, or scanner state.
+Reorganize the reviewed wiki source around deployment targets and user goals.
+The first decision separates Home Assistant OS, Linux or Raspberry Pi
+workstations, Linux servers, Docker or Podman deployments, base CLI or Python
+library use, full Python runtime installations, and development environments.
+Task navigation then covers discovery and first connection, CLI use, the TUI,
+the web dashboard, live audio and recordings, MQTT, Home Assistant, Favorites
+and assisted RadioReference workflows, Waterfall, and themes. Management and
+advanced sections cover configuration, security, upgrades, rollback, logging,
+diagnostics, troubleshooting, daemon APIs, profiles, capture and replay,
+protocol research, and architecture.
 
-Pull requests, `main` pushes, and manual workflow dispatches may build and
-validate the generic Docker and Home Assistant App images, but may not publish
-release tags. Only one genuine matching `v0.26.0` tag on the exact reviewed
-release commit may publish the versioned and moving image tags. The Python
-distribution and GitHub Release must use the same commit, version, changelog,
-and artifact set. Workflow success alone is not release acceptance.
+Beginner-facing guides must state what a feature does, who should use it,
+prerequisites, the shortest working procedure, the expected success evidence,
+how to stop or undo the workflow, common failures, and the route to advanced
+reference material. Do not remove detailed README material until it has an
+audited destination. Avoid maintaining divergent copies of the same procedure:
+the README and wiki should link to canonical repository references where the
+technical detail must remain versioned with the code.
 
-After tag-gated publication, verify the GitHub Release, source archive, wheel,
-generic multi-platform Docker image, Home Assistant amd64/aarch64 images,
-repository metadata, checksums, and public documentation. Complete a clean
-published Home Assistant upgrade from v0.25.0 to v0.26.0 and prove Ingress,
-MQTT Discovery, the aggregate and retained individual card resources, all
-first-party cards, browser audio, finalized recordings, controls, Waterfall
-cadence and live span changes, and the optional 0.1.5 Core integration. Restore
-the published App as the sole scanner owner and remove any deliberately named
-release-validation components.
+Run Ruff, strict MyPy, the complete pytest and coverage suite, documentation
+checks, source and wheel builds, Twine checks, release-integrity tests, and
+clean-environment package installation and import smoke tests for the base,
+individual optional, combined runtime, and development installation targets.
+Verify wiki navigation, README and wiki links, declared extras, command names,
+supported Python versions, scanner-model claims, and security language. No
+physical scanner, Home Assistant mutation, container publication, package
+publication, release tag, or version change is required for this documentation
+and packaging slice.
 
-No new runtime capability enters Milestone 29.7. Duration-based Waterfall
-history, an interactive frequency pointer, TUI Waterfall rendering, GUI work,
-a ProScan wire comparison, alternative GW2 syntax, binary negotiation, FFT
-calibration, scanner tuning, public or anonymous audio, automatic
-RadioReference synchronization, weather-alert recording, and broader scanner-
-family validation remain separately bounded future work.
+Duration-based Waterfall history, an interactive frequency pointer, TUI
+Waterfall rendering, GUI work, a ProScan wire comparison, alternative GW2
+syntax, binary negotiation, FFT calibration, scanner tuning, public or
+anonymous audio, automatic RadioReference synchronization, weather-alert
+recording, and broader scanner-family validation remain separately bounded
+future work.
+
+#### Closed Milestone 29.7 — v0.26.0 release and publication closure
+
+Milestone 29.7 synchronized and published version 0.26.0 after complete static,
+test, documentation, distribution, container, browser, screenshot, Home
+Assistant, and release-contract validation. The release retained the separately
+versioned Home Assistant Core integration at 0.1.5, verified all public
+artifacts from the reviewed release commit, and completed exact post-acceptance
+cleanup without retaining private validation state.
 
 #### Closed Milestones 29.4 through 29.6 — Card loading, cadence, and GW2 research
 

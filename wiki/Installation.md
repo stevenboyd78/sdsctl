@@ -1,18 +1,33 @@
 # Installation
 
 > [!IMPORTANT]
-> This page is a task-oriented guide. The
-> [repository README](https://github.com/stevenboyd78/sdsctl/blob/main/README.md)
-> is the canonical installation reference.
+> Choose the target that matches how you want to run `sdsctl`. Home Assistant
+> and container users do not need to install the Python package on the host.
 
-## Requirements
+## Choose an installation
+
+| Goal | Recommended path |
+| --- | --- |
+| Run inside Home Assistant OS | Install the [Home Assistant App](Home-Assistant) |
+| Use a terminal UI on Linux or Raspberry Pi OS | Install `sds200[tui,playback]` |
+| Run a web dashboard or MQTT service on a Linux server | Install `sds200[web,mqtt]` |
+| Install every optional Python runtime interface | Install `sds200[all]` |
+| Use only the CLI or Python library | Install the base `sds200` package |
+| Run a managed container | Follow the [container deployment guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/container-deployment.md) |
+| Develop or contribute to `sdsctl` | Install the source checkout with `.[dev,all]` |
+
+Continue with [First connection](First-Connection) after a Python or container
+installation. Home Assistant users should finish the App setup first.
+
+## Python requirements
 
 - Python 3.11 or newer
 - A Uniden SDS100, SDS150, or SDS200 scanner
 - A USB serial connection for any supported model, or a trusted local network
   for native SDS200 Ethernet features
-- FFmpeg with `libmp3lame` for the Broadcastify adapter
-- A working PortAudio environment for optional local playback
+- A working PortAudio runtime for optional local playback
+
+FFmpeg with `libmp3lame` is needed only for the optional Broadcastify adapter.
 
 ## Install from PyPI
 
@@ -40,11 +55,22 @@ Install the optional loopback web dashboard:
 python -m pip install "sds200[web]"
 ```
 
-Install the TUI, playback, and web feature groups together:
+Install optional daemon MQTT support:
 
 ```bash
-python -m pip install "sds200[tui,playback,web]"
+python -m pip install "sds200[mqtt]"
 ```
+
+Install every optional Python runtime interface:
+
+```bash
+python -m pip install "sds200[all]"
+```
+
+The `all` extra is exactly the union of `tui`, `web`, `mqtt`, and `playback`.
+It does not install development tools, operating-system packages, Home
+Assistant, Docker or Podman, an audio server, or FFmpeg. Individual extras can
+still be combined, such as `sds200[tui,playback]` or `sds200[web,mqtt]`.
 
 Verify the installation:
 
@@ -61,7 +87,7 @@ A virtual environment keeps the package and optional dependencies isolated:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install "sds200[tui,playback]"
+python -m pip install "sds200[all]"
 ```
 
 Activate the environment again before using its `sdsctl` command:
@@ -79,7 +105,7 @@ cd sdsctl
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e ".[dev,all]"
 ```
 
 Run the project checks before contributing:
@@ -109,6 +135,24 @@ Inspect stable device paths with:
 ls -l /dev/serial/by-id/
 ```
 
+## Linux playback requirement
+
+The `playback` extra installs the Python binding, but Linux must also provide
+the PortAudio runtime. On Debian or Raspberry Pi OS:
+
+```bash
+sudo apt update
+sudo apt install libportaudio2
+```
+
+List the audio devices visible to `sdsctl`:
+
+```bash
+sdsctl audio-devices
+```
+
+If playback still fails, use [Troubleshooting](Troubleshooting#local-playback-fails).
+
 ## Optional FFmpeg support
 
 Check that FFmpeg exposes the MP3 encoder required by the Broadcastify adapter:
@@ -122,44 +166,14 @@ The encoder listing should contain `libmp3lame`.
 
 ## First connection
 
-Try automatic USB discovery:
-
-```bash
-sdsctl discover
-sdsctl info
-```
-
-For an SDS200 on Ethernet:
-
-```bash
-sdsctl discover --network 192.168.0.0/24 --network-only
-sdsctl --host SCANNER_IP info
-```
-
-Only scan networks you own or are authorized to probe.
+Continue with [First connection](First-Connection) for USB, SDS200 Ethernet,
+multiple-scanner selection, expected success output, and safe discovery limits.
 
 ## Install the Home Assistant App
 
-Home Assistant OS users can install the published App without copying a Local
-App into `/addons`.
-
-1. Open **Settings > Apps > App store**.
-2. Open the top-right three-dot menu and choose **Repositories**.
-3. Add `https://github.com/stevenboyd78/sdsctl`.
-4. Open the repository's **sds200** App.
-5. Install it.
-6. Set `scanner_host` to the SDS200 LAN hostname or IP address.
-7. Leave `recording_directory` at `sdsctl/recordings` unless another Home
-   Assistant media subdirectory is preferred.
-8. Start the App and open **Web UI**.
-
-The App requires the Home Assistant MQTT service and uses UDP `50000` for
-scanner RTP audio. See the canonical
-[Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
-before changing network or MQTT settings.
-
-The Local App workflow under `/addons` remains available for development but is
-not required for normal release installation.
+Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
+published App does not require `pip`, a source checkout, or a Local App under
+`/addons`.
 
 ## Upgrade to v0.26.0
 
@@ -494,12 +508,10 @@ and does not open scanner hardware directly.
 
 ## Next steps
 
-- Launch the terminal monitor with `sdsctl monitor`.
-- Launch the optional TUI with `sdsctl tui`.
-- Read the canonical
-  [TUI guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/tui.md).
-- Read the canonical
-  [network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md).
-- Read the canonical
-  [web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md).
+- Complete [First connection](First-Connection).
+- Choose a CLI, TUI, web, daemon, MQTT, control, or theme workflow in
+  [Using sdsctl](Using-sdsctl).
+- Configure [audio and recordings](Audio-and-Recordings).
+- Review [operations and diagnostics](Operations-and-Diagnostics) before
+  installing a persistent service.
 - Open [Troubleshooting](Troubleshooting) when discovery or startup fails.
