@@ -11,70 +11,74 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.4 — Unified Home Assistant card resource registration
+### Milestone 29.6 — Binary GW2 waterfall framing and value research
 
-Milestone 29.3 is closed with the exact v0.25.0 Python distribution, generic
-Docker image, Home Assistant App images, reviewed wiki, GitHub Release, and
-repository-managed physical Home Assistant OS acceptance published and
-verified. The release tag and every public artifact resolve to reviewed commit
-`2aa91778660faa89a2f2f7f1b62de68f98fc632a`. The published App resumed sole
-scanner ownership after validation cleanup, and no pull request remains open.
+Milestones 29.4 and 29.5 are closed through reviewed pull requests 208 and 209.
+The aggregate Home Assistant card loader, phase-stable 250 ms text-GWF schedule,
+bounded timing telemetry, low-rate typed GST refresh, and live renderer span
+tracking are merged on `main` at
+`889f554cb342e8c4b55b16928b5060313b297b10`. Physical Home Assistant OS
+acceptance sustained 4.0–4.1 text frames per second across three simultaneous
+cards and matched the exact scanner-reported 1.44 MHz frequency range. Cleanup
+restored the published v0.25.0 App as sole scanner owner and removed both Local
+validation Apps, sources, and catalog records.
 
-Milestone 29.4 simplifies installation of the three first-party Home Assistant
-cards without merging their implementation or weakening their independently
-validated package identities. Add one first-party ES module entry point at
-`/local/sds200/sds200-cards.js` whose exact packaged bytes import the compact,
-display, and waterfall modules in manifest order through their complete
-SHA-256-qualified resource URLs. Registering that one digest-qualified entry
-point must expose all three existing custom elements and card-picker entries.
+Milestone 29.6 is a protocol-research slice, not production waterfall
+integration. Determine whether the SDS Series V2.00 `GW2` addition supplies a
+measurably better framing, bandwidth, or cadence option than the qualified text
+`PWF`/`GWF` path without weakening the one-owner transport boundary or assigning
+unsupported FFT semantics.
 
-The existing compact, display, and waterfall resource URLs remain supported and
-byte-identical compatibility paths. Existing dashboards and individual resource
-registrations must continue to work without migration. Loading the aggregate
-entry point beside one or more individual modules must remain idempotent through
-the cards' existing guarded custom-element and picker registration. The App may
-install or update the four exact files under `www/sds200`, but it must not edit
-Home Assistant `.storage`, dashboard configuration, YAML, or resource records.
+The official specification establishes only that V2.00 added `GW2`, calls it
+Waterfall FFT information without separators, labels its payload as 240 binary
+displayed-FFT values, and lists `GW2` in the command table. Its detailed row is
+internally inconsistent: both controller and radio forms are printed as `GWF`,
+the response still shows a terminating carriage return, and no header, element
+width, byte order, signedness, escape rule, payload-length field, cadence, start
+and stop behavior, magnitude scale, or transport applicability is defined. Do
+not resolve those contradictions by assumption.
 
-Treat the aggregate entry point as a declarative compatibility asset rather
-than a fourth theme or card. Its child import list must be derived from the
-validated immutable built-in Home Assistant registry, contain no remote URL,
-runtime discovery, user-writable source, executable configuration, credential,
-or scanner endpoint, and fail validation when its ordered imports or embedded
-digests diverge from the three packaged modules. Its own recommended resource
-URL must carry the SHA-256 of the complete loader bytes so any child digest
-change necessarily produces a new browser-cache identity.
+Begin with an exact-byte, renderer-neutral research substrate. Synthetic
+fixtures and parsers must preserve the complete source bytes plus datagram or
+stream-boundary metadata. They must enforce explicit maximum record size,
+record count, elapsed time, and inactivity limits; distinguish complete,
+truncated, concatenated, and unexpected text data; and expose structural
+observations without treating any payload byte as power, dB, RSSI, color, or a
+calibrated FFT value. The existing serial and UDP line decoders must remain
+unchanged until framing evidence proves a safe mixed binary/text contract.
 
-Extend the existing symlink-refusing, atomic, byte-verifying App installer and
-packaging contracts to the aggregate asset. Add source-tree, wheel, Home
-Assistant App, idempotence, stale-file replacement, path-safety, exact-digest,
-ordered-import, duplicate-load, and Node-backed custom-element registration
-coverage. Preserve optional-card installation failure isolation so scanner,
-daemon, MQTT, audio, recording, control, and waterfall ownership can still
-start when Home Assistant's optional `www` delivery is unavailable.
+Physical qualification must use one deliberately bounded research probe while
+the published Home Assistant App is stopped and verified stopped. The probe may
+open only one scanner control transport, send only one reviewed candidate form
+at a time, retain raw captures only in private local validation storage, issue
+the matching reviewed cleanup form where applicable, close deterministically,
+and restore the published App under an automatic rollback guard. No live probe
+may run concurrently with the daemon or use a repeated, unbounded, fuzzed, or
+disruptive command sequence.
 
-Make the aggregate digest-qualified URL the recommended registration for new
-installations while documenting the three digest-qualified individual URLs as
-supported selective-registration and migration alternatives. Correct every App,
-repository, release, and reviewed-wiki instruction that still shows an
-unqualified resource URL. Documentation must explain that changing only a URL
-query is an intentional cache-version update, not a custom version string, and
-that removing old individual resource records is an explicit operator action
-performed only after the aggregate module has loaded successfully.
+Record the SDS200 firmware and LAN-control applicability of every physical
+observation. Compare exact payload size, response latency, sustainable cadence,
+loss, framing stability, and renderer-visible value against the accepted text
+baseline. A production proposal requires repeatable framing and a material
+measured benefit; otherwise the qualified phase-stable text path remains the
+product implementation.
 
-Physical Home Assistant OS acceptance must upgrade one deliberately named Local
-App, verify exact installed bytes and one aggregate resource registration, load
-all three cards through direct HTTP and external HTTPS frontend origins, prove
-card-picker and existing-dashboard compatibility, and confirm scanner, audio,
-recording, controls, and waterfall behavior remain unchanged. Restore the
-published App as sole owner and remove all deliberately named validation state
-after acceptance.
+Production daemon ownership, automatic text/binary negotiation, web or Home
+Assistant delivery, public APIs, MQTT FFT publication, recording, serial-port
+support, SDS100/SDS150 applicability, calibrated magnitude, tuning, mode
+navigation, TUI rendering, GUI implementation, and release publication remain
+outside Milestone 29.6.
 
-Automatic Home Assistant resource registration or deletion, HACS publication,
-runtime bundling or code generation in the browser, third-party Home Assistant
-JavaScript discovery, card rendering changes, scanner behavior changes, another
-scanner connection, TUI waterfall rendering, weather-alert recording, and GUI
-implementation remain outside Milestone 29.4.
+#### Closed Milestones 29.4 and 29.5 — Home Assistant card loader and waterfall cadence
+
+Milestone 29.4 added one digest-qualified first-party aggregate Home Assistant
+card resource while retaining the three individual compatibility URLs and the
+existing symlink-refusing, atomic, byte-verifying installation boundary.
+Milestone 29.5 removed completion-relative text-GWF drift, added bounded
+round-trip and scheduler telemetry, and carried independently refreshed typed
+GST range data to the web dashboard and first-party Home Assistant Waterfall
+card. Both milestones completed full static, test, package, container, browser,
+and physical Home Assistant OS validation before merge.
 
 #### Closed Milestone 29.3 — v0.25.0 release and publication closure
 
