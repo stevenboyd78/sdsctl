@@ -50,11 +50,28 @@ attempts both stop wires in this order:
 The SDS200 firmware tested in this milestone does not continue sending GWF after
 that initial request. While the shared session is running, the daemon runtime
 therefore serializes a new `GWF,1,ON` request at a conservative 250 ms interval.
+The recurring deadline advances from its previous phase rather than from the
+daemon loop's actual wake-up time. A late wake skips expired slots and never
+issues a catch-up burst, so the 100 ms daemon loop does not steadily turn the
+nominal 250 ms interval into approximately 300 ms. Successful GWF round-trip
+time, scheduler lag, and cumulative skipped deadlines are retained as bounded
+session telemetry.
+
+After a successful due GWF request, the same command owner refreshes typed GST
+status on a separate one-second phase-stable schedule. This lets lower, center,
+upper, marker, span, and related Waterfall metadata follow changes made on the
+physical scanner without asking a renderer to infer a frequency range. GST
+failures are counted and redacted but do not fail the GWF session: consumers
+retain the last complete typed status until a later refresh succeeds. A
+semantic revision changes only when the Waterfall-oriented status fields change;
+the refresh timestamp still advances after an unchanged successful response.
+
 One missed response records redacted poll-failure telemetry without destroying
 the session; three consecutive misses transition it to failed. A successful
 response resets only the consecutive-failure count. Request attempts, last-
-request time, total and consecutive failures, last failure time, and redacted
-last error are part of the immutable checkpoint.
+request time, total and consecutive failures, last failure time, redacted last
+error, scheduler timing, GST refresh state, and the latest typed status are part
+of the immutable checkpoint.
 
 Later clients receive independent bounded queues without sending another PWF
 start or creating another recurring poll owner. Closing a client affects only
@@ -107,15 +124,19 @@ newline and carries:
 Every connection begins with `session.checkpoint`. Its payload contains the
 authoritative shared-session snapshot, latest typed GST metadata, publisher
 counts, consumer count, lifecycle timestamps, last failure, GWF poll interval,
-request attempts, transient and consecutive failure counts, and redacted last
-poll failure. Later records are `waterfall.pwf`, `waterfall.gwf`, or
-`session.transition`.
+request attempts, round-trip and scheduler timing, transient and consecutive
+failure counts, GST refresh state, semantic status revision, and redacted last
+poll and refresh failures. Later records are `waterfall.pwf`, `waterfall.gwf`,
+or `session.transition`.
 
 PWF and GWF payloads include the radio-owned `source_sequence`, raw `values`,
-source receive timestamp, and cumulative lease loss counters. The validating
-client rejects an absent initial checkpoint, repeated checkpoint, unsupported
-protocol/version/kind, oversized record, malformed JSON or UTF-8, naive
-timestamp, and any per-client sequence gap.
+source receive timestamp, cumulative lease loss counters, and an additive
+current `session` snapshot. The live snapshot lets existing renderers retain
+the initial checkpoint while updated renderers follow later GST frequency-range
+changes; consumers that do not recognize it may ignore it under protocol
+version 1. The validating client rejects an absent initial checkpoint, repeated
+checkpoint, unsupported protocol/version/kind, oversized record, malformed JSON
+or UTF-8, naive timestamp, and any per-client sequence gap.
 
 The default encoded-record limit is 64 KiB and the default server limit is eight
 concurrent local clients. These are framing and resource bounds, not claims
@@ -140,8 +161,10 @@ limit for negative tests.
 ## Current validation status
 
 Host-independent tests cover exact commands, strict GST/PWF/GWF parsing including
-the terminal separator, first-record confirmation, recurring polls, transient-
-miss tolerance and failure threshold, lock ordering, partial-start rollback,
+the terminal separator, first-record confirmation, phase-stable recurring polls,
+skipped-deadline behavior, successful round-trip aggregation, isolated low-rate
+GST refresh and dynamic frequency-range delivery, transient-miss tolerance and
+failure threshold, lock ordering, partial-start rollback,
 both-stop cleanup after a failure, shared demand, retry, interruption and
 recovery, per-client overflow isolation, canonical JSON, client ordering, socket
 mode, multi-client fanout, final-client stop, and socket removal.

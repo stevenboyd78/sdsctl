@@ -1270,6 +1270,9 @@ class Sds200WaterfallCard extends HTMLElement {
     }
 
     const payload = waterfallRecordObject(record.payload);
+    if (payload.session !== undefined) {
+      this._applySnapshot(waterfallRecordObject(payload.session));
+    }
     const frame = normalizeWaterfallFrame(payload.values);
     this._queueLoss = waterfallNonnegativeInteger(
       payload.responses_dropped,

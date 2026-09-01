@@ -409,9 +409,10 @@ sockets:
 - `$XDG_RUNTIME_DIR/sdsctl/waterfall.sock`, or the user-state fallback, provides
   a demand-driven, size-bounded JSON Lines stream of qualified GST/PWF/GWF
   records. On the physically tested SDS200 firmware 1.26.01, the daemon requests
-  one GWF frame every 250 ms while shared demand exists; the raw 240 values remain
-  uncalibrated and uninterpreted. Select an explicit absolute path with
-  `--waterfall-socket-path`.
+  one GWF frame on a phase-stable 250 ms schedule while shared demand exists and
+  refreshes typed GST metadata separately so consumers can follow scanner span
+  changes. The raw 240 values remain uncalibrated and uninterpreted. Select an
+  explicit absolute path with `--waterfall-socket-path`.
 
 Use the explicit daemon client when another process owns the scanner:
 
@@ -704,8 +705,11 @@ private daemon waterfall service. The browser validates checkpoint-first,
 contiguous, size-bounded NDJSON and renders each exact 240-string GWF frame as a
 relative spectrum plus at most 240 rolling Canvas rows. It labels the data as
 uncalibrated, never claims dB or RF power, and shows GST frequency metadata only
-when its complete axis is structurally valid. Pause freezes only the display;
-hiding or leaving the pane aborts the stream and releases daemon demand.
+when its complete axis is structurally valid. The typed GST range refreshes at a
+separate bounded cadence so the scale follows physical scanner span changes;
+failed refreshes retain the last complete scale without stopping frames. Pause
+freezes only the display; hiding or leaving the pane aborts the stream and
+releases daemon demand.
 
 At normal browser zoom, the document and active pane fit without horizontal or
 vertical scrolling at the 390x844, 800x480, 1366x768, and 1920x1080 reference
@@ -819,7 +823,7 @@ Home Assistant-authenticated App Ingress to render the existing daemon's
 relative, uncalibrated spectrum stream with bounded Canvas history; it adds no
 scanner transport or high-rate MQTT entities. New installations can register
 the one aggregate JavaScript Module at
-`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`.
+`/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`.
 It imports all three cards through their exact digest-qualified module URLs.
 The three individual URLs remain supported for selective registration and
 existing installations. Their

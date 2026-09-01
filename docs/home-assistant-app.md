@@ -366,8 +366,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=812ef2a103b9517abe2583d0c8fbcd667445377a0032836307b05839a8bfb1b4
-/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f
+/local/sds200/sds200-waterfall-card.js?v=a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc
+/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -410,7 +410,7 @@ digest-confirmed activation. The App does not automatically discover, approve,
 install, execute, or replace managed modules.
 
 For a new installation, register only the complete aggregate
-`/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f`
+`/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`
 URL in **Settings > Dashboards > Resources** as a **JavaScript Module**. It
 loads all three cards in deterministic manifest order. The three complete
 individual URLs above remain supported when only selected cards are wanted and
@@ -586,7 +586,11 @@ freezes visual history while retaining the live lease; **Clear** removes only
 that card's retained history. History, input lines, reconnect delay, Canvas
 dimensions, device-pixel scaling, queued repaint work, and frame count are
 bounded. The stream is relative and uncalibrated; it is not a calibrated signal
-level or measurement instrument.
+level or measurement instrument. The daemon refreshes typed Waterfall status at
+a separate bounded cadence, and every live frame can carry its current session
+snapshot. If the physical scanner's span changes, the card replaces its lower,
+center, upper, and marker labels with that scanner-reported range. A failed
+refresh preserves the last valid scale and does not interrupt frame delivery.
 
 Ingress authentication is shared between card instances, but stream leases and
 presentation settings remain independent. Authentication expiry, an App restart,

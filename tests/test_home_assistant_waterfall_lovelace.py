@@ -70,7 +70,7 @@ global.window = {{
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-waterfall-card.js?v="
-        "812ef2a103b9517abe2583d0c8fbcd667445377a0032836307b05839a8bfb1b4"
+        "a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc"
     )
 
 
@@ -294,6 +294,68 @@ process.stdout.write(JSON.stringify({
     )
 
     assert result == {"retainedSamples": 0, "rate": "0.0 fps"}
+
+
+def test_waterfall_card_applies_live_session_frequency_range() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const card = Object.create(Sds200WaterfallCard.prototype);
+card._lastSequence = 1;
+card._checkpoint = {};
+card._history = [];
+card._latestFrame = null;
+card._paused = true;
+card._config = {history: 120};
+card._queueLoss = 0;
+card._overflows = 0;
+card._frameTimes = [];
+card._lastFrameAt = null;
+card._transitions = 0;
+card._renderTelemetry = () => undefined;
+card._scaleLower = {textContent: ""};
+card._scaleCenter = {textContent: ""};
+card._scaleUpper = {textContent: ""};
+const status = {
+  lower_frequency: "9450000",
+  center_frequency: "9490000",
+  upper_frequency: "9520000",
+  marker_frequency: "9490000",
+  marker_position: "120",
+};
+card._applyRecord({
+  protocol: SDS200_WATERFALL_PROTOCOL,
+  version: SDS200_WATERFALL_VERSION,
+  sequence: 2,
+  observed_at: new Date().toISOString(),
+  kind: "waterfall.gwf",
+  payload: {
+    values: Array.from({length: 240}, (_, index) => index.toString(16)),
+    responses_dropped: 0,
+    overflows: 0,
+    source_received_at: new Date().toISOString(),
+    session: {
+      state: "running",
+      gwf_poll_failures: 0,
+      waterfall_status_revision: 2,
+      waterfall_status: status,
+    },
+  },
+});
+process.stdout.write(JSON.stringify({
+  revision: card._checkpoint.waterfall_status_revision,
+  lower: card._scaleLower.textContent,
+  center: card._scaleCenter.textContent,
+  upper: card._scaleUpper.textContent,
+}));
+"""
+    )
+
+    assert result == {
+        "revision": 2,
+        "lower": "9450000",
+        "center": "9490000",
+        "upper": "9520000",
+    }
 
 
 def test_waterfall_card_discovers_only_sds200_app_panels() -> None:

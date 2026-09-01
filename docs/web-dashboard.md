@@ -25,7 +25,9 @@ without changing daemon ownership, authentication, or Ingress behavior.
 Milestone 27.4 adds a sixth Waterfall pane over the private validated daemon
 waterfall stream. Its bounded Canvas renderer remains explicitly relative and
 uncalibrated and creates scanner demand only while the visible pane has an
-authenticated browser consumer.
+authenticated browser consumer. Milestone 29.5 keeps the nominal text-GWF
+schedule phase-stable and carries bounded timing plus refreshed typed GST status
+to the same renderer without changing scanner ownership.
 
 ## Architecture
 
@@ -446,11 +448,18 @@ source strings remain preserved in the adjacent raw output, and the UI does not
 label the values as power, dB, RSSI, or calibrated FFT magnitude. Lower, center,
 upper, and marker values appear only when all four GST frequency strings and the
 marker position form a structurally valid axis; otherwise those fields remain
-unavailable and the plots retain bin position only.
+unavailable and the plots retain bin position only. While demand remains live,
+the daemon refreshes typed GST status at a separate bounded cadence and embeds
+the current session snapshot in delivery records. Changing the scanner's span
+therefore replaces the displayed lower, center, upper, and marker metadata with
+the scanner-reported range. A missed refresh leaves the last valid range visible
+and does not interrupt GWF frames.
 
 Adjacent semantic HTML reports session state, frequency metadata, frame rate,
-frame age, stream sequence, cumulative queue loss, overflow, poll failures, and
-session-transition count. **Pause display** freezes Canvas history while the
+frame age, stream sequence, cumulative queue loss, overflow, poll failures,
+successful GWF command round-trip time, scheduler lag and skipped deadlines,
+GST refresh revision and failures, and session-transition count. **Pause
+display** freezes Canvas history while the
 browser continues consuming data; it does not pause the scanner protocol.
 **Clear history** clears only browser memory. **Full screen** uses the browser
 Full Screen API when available. Canvas backing dimensions follow the rendered

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+from collections.abc import Callable
 
 import pytest
 
@@ -25,12 +26,19 @@ class FakeWaterfallRadio:
         self.status_calls: list[float] = []
         self.stop_calls: list[float] = []
         self.poll_calls: list[float] = []
+        self.after_poll: Callable[[], None] | None = None
+        self.status_frequency_offset = 0
+        self.status_errors_remaining = 0
         self.start_error: BaseException | None = None
         self.stop_error: BaseException | None = None
         self.poll_errors_remaining = 0
 
     def get_waterfall_status(self, *, timeout: float = 2.0) -> GstResponse:
         self.status_calls.append(timeout)
+        if self.status_errors_remaining > 0:
+            self.status_errors_remaining -= 1
+            raise RuntimeError("synthetic GST timeout")
+        offset = self.status_frequency_offset
         packet = Packet(command="GST", fields=(), raw="GST")
         return GstResponse(
             display_form="00000",
@@ -39,12 +47,12 @@ class FakeWaterfallRadio:
             alert_led="0",
             charge_led="0",
             waterfall_mode="1",
-            marker_frequency="1555500",
+            marker_frequency=str(1555500 + offset),
             modulation="NFM",
             marker_position="120",
-            center_frequency="1550000",
-            lower_frequency="1540000",
-            upper_frequency="1560000",
+            center_frequency=str(1550000 + offset),
+            lower_frequency=str(1540000 + offset),
+            upper_frequency=str(1560000 + offset),
             color_mode="0",
             fft_area_size="1",
             packet=packet,
@@ -74,6 +82,8 @@ class FakeWaterfallRadio:
         if self.poll_errors_remaining > 0:
             self.poll_errors_remaining -= 1
             raise RuntimeError("synthetic GWF timeout")
+        if self.after_poll is not None:
+            self.after_poll()
         response = self._gwf(len(self.poll_calls))
         self.publisher.publish(response)
         return response
@@ -104,6 +114,21 @@ class FakeWaterfallRadio:
         )
         assert isinstance(response, GwfResponse)
         return response
+
+
+@pytest.mark.parametrize(
+    ("keyword", "message"),
+    (
+        ({"status_poll_interval": 0.0}, "GST poll interval"),
+        ({"status_poll_timeout": 0.0}, "GST poll timeout"),
+    ),
+)
+def test_status_poll_configuration_requires_positive_values(
+    keyword: dict[str, float],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        WaterfallSession(FakeWaterfallRadio(), **keyword)
 
 
 def test_first_lease_starts_one_session_and_last_lease_stops_it() -> None:
@@ -231,9 +256,184 @@ def test_due_poll_requests_one_shared_gwf_frame() -> None:
     assert snapshot.gwf_poll_interval_seconds == 0.25
     assert snapshot.gwf_max_consecutive_failures == 3
     assert snapshot.gwf_requests == 2
+    assert snapshot.gwf_skipped_poll_deadlines == 0
+    assert snapshot.last_gwf_scheduler_lag_seconds == 0.0
+    assert snapshot.maximum_gwf_scheduler_lag_seconds == 0.0
+    assert snapshot.gwf_round_trip_samples == 1
+    assert snapshot.last_gwf_round_trip_seconds == 0.0
+    assert snapshot.average_gwf_round_trip_seconds == 0.0
+    assert snapshot.maximum_gwf_round_trip_seconds == 0.0
     assert snapshot.gwf_poll_failures == 0
     assert snapshot.consecutive_gwf_failures == 0
     assert snapshot.last_gwf_request_at is not None
+    lease.close()
+
+
+def test_late_poll_retains_phase_instead_of_drifting_from_execution_time() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+
+    clock[0] = 100.30
+    assert session.poll() is True
+    first = session.snapshot()
+    assert first.gwf_skipped_poll_deadlines == 0
+    assert first.last_gwf_scheduler_lag_seconds == pytest.approx(0.05)
+
+    clock[0] = 100.49
+    assert session.poll() is False
+    clock[0] = 100.50
+    assert session.poll() is True
+    second = session.snapshot()
+    assert second.gwf_requests == 3
+    assert second.gwf_skipped_poll_deadlines == 0
+    assert second.last_gwf_scheduler_lag_seconds == pytest.approx(0.0)
+    assert second.maximum_gwf_scheduler_lag_seconds == pytest.approx(0.05)
+    lease.close()
+
+
+def test_poll_skips_expired_deadlines_without_bursting() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+
+    clock[0] = 101.0
+    assert session.poll() is True
+    delayed = session.snapshot()
+    assert delayed.gwf_skipped_poll_deadlines == 3
+    assert delayed.last_gwf_scheduler_lag_seconds == pytest.approx(0.75)
+
+    assert session.poll() is False
+    clock[0] = 101.24
+    assert session.poll() is False
+    clock[0] = 101.25
+    assert session.poll() is True
+    lease.close()
+
+
+def test_successful_poll_records_bounded_round_trip_telemetry() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_interval=0.25,
+        poll_clock=lambda: clock[0],
+    )
+    lease = session.subscribe()
+
+    radio.after_poll = lambda: clock.__setitem__(0, clock[0] + 0.04)
+    clock[0] = 100.25
+    assert session.poll() is True
+
+    radio.after_poll = lambda: clock.__setitem__(0, clock[0] + 0.06)
+    clock[0] = 100.50
+    assert session.poll() is True
+
+    snapshot = session.snapshot()
+    assert snapshot.gwf_round_trip_samples == 2
+    assert snapshot.last_gwf_round_trip_seconds == pytest.approx(0.06)
+    assert snapshot.average_gwf_round_trip_seconds == pytest.approx(0.05)
+    assert snapshot.maximum_gwf_round_trip_seconds == pytest.approx(0.06)
+    lease.close()
+
+
+def test_low_rate_gst_refresh_updates_changed_frequency_range() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_clock=lambda: clock[0],
+        status_poll_interval=1.0,
+        status_poll_timeout=0.4,
+    )
+    lease = session.subscribe()
+    initial = session.snapshot()
+    assert initial.gst_requests == 1
+    assert initial.waterfall_status_revision == 1
+    assert initial.waterfall_status is not None
+    assert initial.waterfall_status.lower_frequency == "1540000"
+
+    radio.status_frequency_offset = 250
+    clock[0] = 101.0
+    assert session.poll() is True
+
+    refreshed = session.snapshot()
+    assert radio.status_calls == [3.0, 0.4]
+    assert refreshed.gst_requests == 2
+    assert refreshed.gst_skipped_poll_deadlines == 0
+    assert refreshed.gst_poll_failures == 0
+    assert refreshed.waterfall_status_revision == 2
+    assert refreshed.waterfall_status_refreshed_at is not None
+    assert refreshed.waterfall_status_changed_at is not None
+    assert refreshed.waterfall_status is not None
+    assert refreshed.waterfall_status.lower_frequency == "1540250"
+    assert refreshed.waterfall_status.center_frequency == "1550250"
+    assert refreshed.waterfall_status.upper_frequency == "1560250"
+    lease.close()
+
+
+def test_late_unchanged_gst_refresh_skips_expired_slots_without_revision() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_clock=lambda: clock[0],
+        status_poll_interval=1.0,
+    )
+    lease = session.subscribe()
+
+    clock[0] = 103.1
+    assert session.poll() is True
+    refreshed = session.snapshot()
+    assert refreshed.gst_requests == 2
+    assert refreshed.gst_skipped_poll_deadlines == 2
+    assert refreshed.waterfall_status_revision == 1
+
+    assert session.poll() is False
+    assert radio.status_calls == [3.0, 1.0]
+    lease.close()
+
+
+def test_gst_refresh_failure_preserves_frames_and_last_valid_range() -> None:
+    radio = FakeWaterfallRadio()
+    clock = [100.0]
+    session = WaterfallSession(
+        radio,
+        poll_clock=lambda: clock[0],
+        status_poll_interval=1.0,
+    )
+    lease = session.subscribe()
+
+    radio.status_errors_remaining = 1
+    radio.status_frequency_offset = 500
+    clock[0] = 101.0
+    assert session.poll() is True
+    failed = session.snapshot()
+    assert failed.state is WaterfallSessionState.RUNNING
+    assert failed.gst_poll_failures == 1
+    assert failed.last_gst_error == "RuntimeError: synthetic GST timeout"
+    assert failed.waterfall_status_revision == 1
+    assert failed.waterfall_status is not None
+    assert failed.waterfall_status.lower_frequency == "1540000"
+
+    clock[0] = 102.0
+    assert session.poll() is True
+    recovered = session.snapshot()
+    assert recovered.gst_poll_failures == 1
+    assert recovered.last_gst_error is None
+    assert recovered.waterfall_status_revision == 2
+    assert recovered.waterfall_status is not None
+    assert recovered.waterfall_status.lower_frequency == "1540500"
     lease.close()
 
 

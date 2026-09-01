@@ -1012,6 +1012,14 @@ state changes.
   feature boundary, synchronize release surfaces, validate every distribution
   and image contract, publish only from one genuine matching tag, verify the
   public artifacts, and complete repository-managed Home Assistant acceptance.
+- Milestone 29.4: one digest-qualified aggregate Home Assistant card resource
+  that imports the independently packaged compact, display, and waterfall
+  modules while preserving their individual compatibility URLs.
+- Milestone 29.5: phase-stable text-GWF scheduling, bounded command and scheduler
+  telemetry, and low-rate typed GST refresh so every renderer follows the
+  scanner's current Waterfall span. Qualify the resulting physical SDS200 frame
+  rate before separately researching binary GW2 framing, transport, cadence,
+  and renderer value.
 - Weather-alert state and recording, TUI waterfall rendering, and the future GUI
   remain separately bounded follow-up candidates.
 

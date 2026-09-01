@@ -155,6 +155,9 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
             "waterfall-history",
             "waterfall-pause",
             "waterfall-fullscreen",
+            "waterfall-gwf-timing",
+            "waterfall-scheduler",
+            "waterfall-status-refresh",
         ),
         "pane-recordings": (
             "recording-start",
@@ -564,6 +567,44 @@ assert.equal(validFrequencyMetadata({
   marker_frequency: "1555500",
   marker_position: "120",
 }), null);
+
+for (const identifier of [
+  "waterfall-session-state",
+  "waterfall-poll-failures",
+  "waterfall-gwf-timing",
+  "waterfall-scheduler",
+  "waterfall-status-refresh",
+  "waterfall-frequency-lower",
+  "waterfall-frequency-center",
+  "waterfall-frequency-upper",
+  "waterfall-frequency-marker",
+]) {
+  add(identifier);
+}
+applyWaterfallSnapshot({
+  state: "running",
+  gwf_poll_failures: 1,
+  average_gwf_round_trip_seconds: 0.042,
+  maximum_gwf_round_trip_seconds: 0.075,
+  last_gwf_scheduler_lag_seconds: 0.012,
+  gwf_skipped_poll_deadlines: 2,
+  waterfall_status_revision: 3,
+  gst_poll_failures: 1,
+  waterfall_status: {
+    lower_frequency: "9450000",
+    center_frequency: "9490000",
+    upper_frequency: "9520000",
+    marker_frequency: "9490000",
+    marker_position: "120",
+  },
+});
+assert.equal(nodes.get("waterfall-gwf-timing").textContent, "42 / 75 ms avg/max");
+assert.equal(nodes.get("waterfall-scheduler").textContent, "12 ms lag · 2 skipped");
+assert.equal(nodes.get("waterfall-status-refresh").textContent, "revision 3 · 1 failures");
+assert.equal(nodes.get("waterfall-frequency-lower").textContent, "9450000");
+assert.equal(nodes.get("waterfall-frequency-center").textContent, "9490000");
+assert.equal(nodes.get("waterfall-frequency-upper").textContent, "9520000");
+assert.equal(nodes.get("waterfall-frequency-marker").textContent, "9490000");
 
 for (const target of Object.values(RADIO_STATE_FIELD_TARGETS)) {
   if (!nodes.has(target)) {

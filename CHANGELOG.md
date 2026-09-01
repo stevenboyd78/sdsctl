@@ -8,6 +8,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add bounded Waterfall timing and status telemetry: successful GWF round-trip
+  time, scheduler lag, skipped poll deadlines, low-rate GST refresh attempts and
+  failures, and a semantic Waterfall-status revision now travel with live
+  daemon records and appear in the authenticated web diagnostics.
 - Add one digest-qualified `sds200-cards.js` Home Assistant resource that
   imports the compact Scanner, responsive Display, and authenticated Waterfall
   cards through their exact manifest-declared URLs. Existing individual
@@ -16,6 +20,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Keep the daemon's 250 ms text-GWF schedule anchored to its prior deadline
+  instead of adding the interval after each daemon-loop wake-up. Late wakes skip
+  expired slots without issuing catch-up bursts, avoiding the approximately
+  300 ms drift created by the 100 ms runtime loop. Refresh typed GST metadata at
+  a separate bounded cadence so changes to scanner span update the live lower,
+  center, upper, and marker frequencies in the web dashboard and Home Assistant
+  Waterfall card. A failed GST refresh preserves the last valid scale and does
+  not interrupt GWF delivery.
 - Normalize the Waterfall card graphical editor's exact string-serialized 60,
   120, and 240-frame history selections back to bounded numeric capacities, and
   accept Home Assistant's host-owned `grid_options` section-layout metadata,
