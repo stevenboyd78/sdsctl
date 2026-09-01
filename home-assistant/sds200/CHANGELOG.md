@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.26.0
+
+- Track the sdsctl v0.26.0 release while preserving the App name, slug, image
+  identity, MQTT identities, scanner ownership, persistent recordings, custom-
+  integration 0.1.5 artifact, and installed first-party custom elements.
+- Keep recurring text-GWF requests on the daemon's phase-stable 250 ms schedule,
+  expose bounded round-trip and scheduler telemetry, and refresh typed GST span
+  metadata independently without interrupting frames after a failed refresh.
 - Follow live scanner span changes in the Waterfall card by applying the
   daemon's current typed GST status carried with bounded GWF records. A missed
   status refresh retains the last valid frequency scale without interrupting
@@ -14,6 +22,10 @@
   120, and 240-frame history selections to the existing bounded numeric
   capacities, and accept Home Assistant's host-owned `grid_options`
   section-layout metadata, instead of rejecting valid dashboard selections.
+- Retain the qualified text `PWF`/`GWF` Waterfall path after a bounded physical
+  SDS200 firmware 1.26.01 LAN research candidate returned `ERR\r` for
+  `GW2,1,ON` and established no binary framing or production negotiation
+  contract.
 
 ## 0.25.0
 

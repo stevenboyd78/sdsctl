@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-08-31
+
 ### Added
 
 - Add bounded Waterfall timing and status telemetry: successful GWF round-trip
@@ -17,6 +19,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   cards through their exact manifest-declared URLs. Existing individual
   resources remain supported selective-registration paths, duplicate loading is
   idempotent, and the App still never edits Home Assistant resource records.
+- Add a bounded exact-byte GW2 research substrate that preserves complete raw
+  datagrams and stream boundaries, classifies structural observations without
+  inventing FFT semantics, and enforces explicit record-size, count, elapsed-
+  time, and inactivity limits. A guarded physical SDS200 firmware 1.26.01 LAN
+  probe sent one reviewed `GW2,1,ON` candidate, received exact `ERR\r`, issued
+  paired cleanup, and restored the published Home Assistant App with fresh
+  text-Waterfall frames.
+
+### Changed
+
+- Retain the physically qualified phase-stable text `PWF`/`GWF` path as the
+  authoritative Waterfall data plane. The tested GW2 candidate established no
+  binary framing or renderer benefit, so production transports do not guess an
+  alternate syntax, negotiate undocumented binary records, or assign
+  unsupported magnitude, calibration, byte-order, or element-width semantics.
 
 ### Fixed
 
@@ -1590,7 +1607,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...v0.24.0
 [0.23.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.22.0...v0.23.0

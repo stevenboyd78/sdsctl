@@ -1989,4 +1989,4 @@ __all__ = [
     "home_assistant_live_audio_encoder_config",
 ]
 
-__version__ = "0.25.0"
+__version__ = "0.26.0"

@@ -215,8 +215,11 @@ records; the App never edits those records. HACS is not required. **SDS200 Scann
 read-only compact card. **SDS200 Display** adds Simple, Detail, Search/Close
 Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
 Black palettes. **SDS200 Waterfall** adds a bounded responsive Canvas view of
-the authenticated App's relative, uncalibrated waterfall stream. All three
-graphical editors also offer the same 21 System web palettes as independent,
+the authenticated App's relative, uncalibrated waterfall stream. Its live scale
+follows valid scanner-reported span changes; the graphical editor normalizes
+60, 120, and 240-frame history choices and accepts Home Assistant-owned section
+layout metadata without treating it as card configuration. All three graphical
+editors also offer the same 21 System web palettes as independent,
 presentation-only per-card choices.
 
 If the App creates Home Assistant's `www` directory for the first time, restart

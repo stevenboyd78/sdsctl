@@ -126,30 +126,28 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.6 — Binary GW2 waterfall framing and value research" in (
+    assert "### Milestone 29.7 — v0.26.0 release and publication closure" in (
         active_milestone
     )
     for required in (
-        "Milestones 29.4 and 29.5 are closed through reviewed pull requests 208 and 209",
+        "Milestones 29.4 through 29.6 are closed through reviewed pull requests 208, 209, and 210",
+        "a8854ce91175670ebf0969417832e08d0f6f0462",
         "4.0–4.1 text frames per second across three simultaneous cards",
         "exact scanner-reported 1.44 MHz frequency range",
-        "`GW2` addition supplies a measurably better framing",
-        "Do not resolve those contradictions by assumption",
-        "exact-byte, renderer-neutral research substrate",
-        "maximum record size, record count, elapsed time, and inactivity limits",
-        "published Home Assistant App is stopped and verified stopped",
-        "send only one reviewed candidate form at a time",
-        "raw captures only in private local validation storage",
-        "repeatable framing and a material measured benefit",
-        "existing serial and UDP line decoders must remain unchanged",
-        "`GW2,1,ON` produced one complete four-byte `ERR\\r` datagram",
-        "three live text waterfall cards running with fresh frames",
-        "Do not guess another wire form",
-        (
-            "phase-stable text-GWF implementation remains the qualified "
-            "product data plane"
-        ),
-        "Production daemon ownership, automatic text/binary negotiation",
+        "Milestone 29.7 is release closure rather than another runtime feature slice",
+        "Python distribution, import version, and Home Assistant App at 0.26.0",
+        "Home Assistant Core integration remains at 0.1.5",
+        "aggregate card resource and retained individual compatibility URLs",
+        "scanner-reported span refresh",
+        "relative and uncalibrated FFT presentation",
+        "shared coverage floor remains 86 percent",
+        "Only one genuine matching `v0.26.0` tag",
+        "Complete a clean published Home Assistant upgrade from v0.25.0 to v0.26.0",
+        "No new runtime capability enters Milestone 29.7",
+        "Duration-based Waterfall history",
+        "a ProScan wire comparison",
+        "Exact `GW2,1,ON` returned `ERR\\r` and no binary frame",
+        "qualified phase-stable text `PWF`/`GWF` path remains authoritative",
         "aggregate Home Assistant card loader",
         "removed completion-relative text-GWF drift",
         "Milestones 29.1 and 29.2 are closed",
@@ -320,20 +318,20 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v025_release_documentation_names_current_generic_image() -> None:
+def test_v026_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
     for document in (readme, deployment):
-        assert "v0.25.0" in document
-        assert "theboyd78/sdsctl:0.25.0" in document
+        assert "v0.26.0" in document
+        assert "theboyd78/sdsctl:0.26.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.25.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.25.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.25.0" in installation
+    assert "## Upgrade to v0.26.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.26.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.26.0" in installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
@@ -341,27 +339,30 @@ def test_v025_release_documentation_names_current_generic_image() -> None:
     assert "Core integration remains independently versioned at 0.1.5" in installation
 
 
-def test_v025_home_assistant_release_gate_is_explicit() -> None:
+def test_v026_home_assistant_release_gate_is_explicit() -> None:
     guide = _read("docs/home-assistant-app.md")
-    start = guide.index("### v0.25.0 release acceptance gate")
-    end = guide.index("\n### v0.24.0 release acceptance gate", start)
+    start = guide.index("### v0.26.0 release acceptance gate")
+    end = guide.index("\n### v0.25.0 release acceptance gate", start)
     release_gate = guide[start:end]
     normalized = " ".join(release_gate.split())
 
     for required in (
-        "genuine v0.25.0 tag",
-        "without a Local App, Local integration, retained share",
+        "genuine v0.26.0 tag",
+        "without a Local App, Local integration, retained share, private capture",
         "all twenty-four fixed MQTT Discovery components",
-        "all three first-party card modules",
-        "manifest-declared SHA-qualified resource URLs",
+        "aggregate `sds200-cards.js` resource",
+        "all three individual compatibility resources",
+        "Home Assistant-owned `grid_options` metadata",
+        "three simultaneous visible Waterfall cards",
+        "phase-stable text-GWF schedule without catch-up bursts",
+        "physical scanner span change",
+        "no binary GW2 negotiation",
         "media-source://sdsctl/live",
         "audio/mpeg",
         "version 0.1.5",
         "zero active or outstanding playback leases",
-        "internal or external URL",
-        "visible two-step destructive confirmation",
-        "only runtime owner",
-        "removed afterward",
+        "only runtime owner of scanner control",
+        "Remove the release-validation integration",
     ):
         assert required in release_gate or required in normalized
 

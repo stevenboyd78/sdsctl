@@ -161,6 +161,46 @@ before changing network or MQTT settings.
 The Local App workflow under `/addons` remains available for development but is
 not required for normal release installation.
 
+## Upgrade to v0.26.0
+
+v0.26.0 freezes Milestones 29.4 through 29.7: one aggregate first-party Home
+Assistant card resource with retained individual compatibility URLs, a phase-
+stable 250 ms text-GWF schedule, bounded timing telemetry, independently
+refreshed typed GST span data, Home Assistant editor and section-layout
+compatibility, and the bounded GW2 research conclusion. The qualified text
+`PWF`/`GWF` path remains authoritative; the tested SDS200 firmware 1.26.01 LAN
+GW2 candidate returned `ERR\r` and established no binary framing or production
+negotiation contract.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the Python package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.26.0"
+sdsctl --version
+```
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.26.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release, but
+the exact version tag is recommended for controlled deployments. Repository-root
+`compose.yaml` and `compose.usb.yaml` remain source-built and do not switch
+automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.26.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, and independently versioned card modules.
+Upgrade the repository-managed App only after the matching release images have
+published. The optional Core integration remains independently versioned at
+0.1.5; this release does not require replacing its artifact. Existing
+digest-confirmed integration lifecycle, Core restart or reload,
+reauthentication, and media-target URL reachability requirements remain
+unchanged.
+
 ## Upgrade to v0.25.0
 
 v0.25.0 freezes Milestones 29.1 through 29.3: the responsive first-party Home

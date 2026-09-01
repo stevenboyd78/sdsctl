@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.25.0...v0.26.0"
+        in changelog
+    )
+    assert (
         "[0.25.0]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.24.0...v0.25.0"
         in changelog
@@ -178,5 +183,28 @@ def test_current_release_changelog_covers_v025_feature_groups() -> None:
         "internal_url",
         "docker/setup-buildx-action` 4.3.0",
         "docker/build-push-action` 7.3.0",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_release_changelog_covers_v026_feature_groups() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.26.0] - ")
+    end = changelog.index("\n## [0.25.0]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "bounded Waterfall timing and status telemetry",
+        "digest-qualified `sds200-cards.js`",
+        "bounded exact-byte GW2 research substrate",
+        "SDS200 firmware 1.26.01 LAN",
+        "exact `ERR\\r`",
+        "phase-stable text `PWF`/`GWF` path",
+        "250 ms text-GWF schedule",
+        "Refresh typed GST metadata",
+        "60, 120, and 240-frame history selections",
+        "Home Assistant's host-owned `grid_options`",
+        "Show in sidebar",
     ):
         assert required in release or required in normalized
