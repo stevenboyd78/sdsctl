@@ -142,6 +142,13 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
         "raw captures only in private local validation storage",
         "repeatable framing and a material measured benefit",
         "existing serial and UDP line decoders must remain unchanged",
+        "`GW2,1,ON` produced one complete four-byte `ERR\\r` datagram",
+        "three live text waterfall cards running with fresh frames",
+        "Do not guess another wire form",
+        (
+            "phase-stable text-GWF implementation remains the qualified "
+            "product data plane"
+        ),
         "Production daemon ownership, automatic text/binary negotiation",
         "aggregate Home Assistant card loader",
         "removed completion-relative text-GWF drift",

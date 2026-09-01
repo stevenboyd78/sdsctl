@@ -29,6 +29,9 @@ FIXTURE = (
     / "advanced_protocol"
     / "synthetic-gw2-datagrams.json"
 )
+PROTOCOL_RESEARCH = (
+    Path(__file__).parents[1] / "docs" / "advanced-protocol-research.md"
+)
 
 
 class _Clock:
@@ -333,3 +336,25 @@ def test_private_capture_is_mode_0600_and_never_replaced(tmp_path: Path) -> None
     assert document["safe_completion"] is True
     with pytest.raises(FileExistsError):
         write_private_gw2_capture(plan.output_path, result)
+
+
+def test_protocol_research_records_sanitized_physical_gw2_conclusion() -> None:
+    document = PROTOCOL_RESEARCH.read_text(encoding="utf-8")
+    section = document.split(
+        "### Milestone 29.6 physical observation and conclusion",
+        1,
+    )[1].split("## Milestone 24.1 boundary", 1)[0]
+    normalized = " ".join(section.split())
+
+    for required in (
+        "physical SDS200 running firmware 1.26.01 through LAN UDP control",
+        "exact `GW2,1,ON\\r`",
+        "complete four-byte `ERR\\r` UDP datagram after 31.844 ms",
+        "exact paired cleanup `GW2,1,OFF\\r`",
+        "No other syntax was guessed or sent",
+        "all three Waterfall cards `running` at 3.1 fps",
+        "phase-stable text-GWF path remains authoritative",
+    ):
+        assert required in normalized
+    assert "192.168." not in section
+    assert "sdsctl-local-validation" not in section

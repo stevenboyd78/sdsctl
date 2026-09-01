@@ -578,8 +578,10 @@ Exploratory areas include:
 - `QSH` Quick Search control;
 - `URC` scanner recording control;
 - `AST` and `APR` analysis controls;
-- binary `GW2` waterfall framing, transport, and evidence-backed benefit over
-  the qualified text `PWF`/`GWF` data plane;
+- binary `GW2` waterfall framing only if stronger vendor documentation or
+  independently reproducible wire evidence supersedes the tested SDS200
+  firmware 1.26.01 LAN candidate rejection and establishes a benefit over the
+  qualified text `PWF`/`GWF` data plane;
 - `MNU`, `MSI`, `MSV`, and `MSB` menu operations;
 - NAC, RAN, color code, area, activity, and quality details;
 - conventional and trunking discovery modes;

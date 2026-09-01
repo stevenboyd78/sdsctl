@@ -63,6 +63,25 @@ baseline. A production proposal requires repeatable framing and a material
 measured benefit; otherwise the qualified phase-stable text path remains the
 product implementation.
 
+Physical qualification on August 31, 2026 used the SDS200 running firmware
+1.26.01 over LAN UDP control. With the published App verified stopped, the
+separately reviewed command-table candidate `GW2,1,ON` produced one complete
+four-byte `ERR\r` datagram after approximately 32 ms and no binary frame. The
+paired `GW2,1,OFF` cleanup completed, the published App returned to sole
+ownership, and authenticated Home Assistant readback showed three live text
+waterfall cards running with fresh frames. The contradictory detailed-row
+`GWF,1,ON` spelling is already the physically qualified text-GWF request, so it
+does not identify a separate binary path. This evidence rejects the reviewed
+GW2 candidate on the tested model, firmware, and transport without claiming
+that every undocumented syntax or future firmware is unsupported.
+
+There is therefore no repeatable binary framing or measured renderer benefit
+to justify production negotiation. Do not guess another wire form or refactor
+the production transports. The phase-stable text-GWF implementation remains the
+qualified product data plane; GW2 may be reconsidered only if stronger vendor
+documentation or independently reproducible wire evidence resolves the command
+and framing contradictions.
+
 Production daemon ownership, automatic text/binary negotiation, web or Home
 Assistant delivery, public APIs, MQTT FFT publication, recording, serial-port
 support, SDS100/SDS150 applicability, calibrated magnitude, tuning, mode
