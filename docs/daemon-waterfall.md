@@ -190,3 +190,31 @@ was returned to normal scanning, the temporary host daemon was stopped, and the
 repository Home Assistant App was restored with connected Ingress state and live
 entities. Raw captures contain programming data and remain uncommitted; these
 sanitized structural observations are the committed evidence.
+
+Physical Milestone 29.5 qualification on August 31, 2026, used the same SDS200
+and firmware through the Home Assistant OS App. Three simultaneous first-party
+Waterfall cards shared one scanner session and sustained 4.0, 4.0, and 4.1
+frames per second with a displayed frame age of 0.0 seconds. With the scanner
+centered at 94.9000 MHz and its span set to 1.44 MHz, all three cards received
+the exact typed GST lower, center, and upper values corresponding to 94.1800,
+94.9000, and 95.6200 MHz. The scanner display truncates its edge labels to one
+decimal place; this accounts for its visible 94.1 through 95.6 range without
+altering the more precise protocol values used by clients.
+
+The physical scanner exposed the following span and display-label pairs around
+that center frequency:
+
+| Span | Scanner display labels |
+| --- | --- |
+| 360 kHz | 94.7–95.0 MHz |
+| 720 kHz | 94.5–95.2 MHz |
+| 1.44 MHz | 94.1–95.6 MHz |
+| 2.88 MHz | 93.4–96.3 MHz |
+| 5.76 MHz | 92.0–97.7 MHz |
+| 8.64 MHz | 90.5–99.2 MHz |
+| 17.28 MHz | 86.2–103.5 MHz |
+
+These observations validate direct use of the scanner-reported GST range and
+do not require a renderer-maintained span table. The separate one-second GST
+refresh and the session snapshot carried by live GWF records let a later span
+change replace renderer scale data without restarting the session.
