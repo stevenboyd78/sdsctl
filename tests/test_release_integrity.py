@@ -8,7 +8,7 @@ from sds200 import __version__
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW_DIRECTORY = ROOT / ".github" / "workflows"
-PYTHON_BASE_DIGEST = "83ff1d245a3d57d04152252d3ef9cb361494d0b3395abd65a5ebe91c401c8e83"
+PYTHON_BASE_DIGEST = "656d12e70054d5fda18a045e2494c96701e9792dd1445f95b3d038df954f57e9"
 APPROVED_ACTIONS = {
     "actions/checkout": (
         "3d3c42e5aac5ba805825da76410c181273ba90b1",
