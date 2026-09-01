@@ -3,6 +3,83 @@
 This document establishes the evidence and fixture foundation for advanced
 scanner protocol work. It does not define public scanner behavior.
 
+## Milestone 29.6 binary GW2 research boundary
+
+The Uniden SDS Series Remote Command Specification V2.00 adds `GW2` to its
+command table and describes 240 displayed-FFT values without separators as
+binary data. The detailed block is internally inconsistent: its controller and
+radio forms are both printed as `GWF`, its response retains a carriage-return
+terminator, and it defines no binary header, element width, byte order,
+signedness, escape rule, length field, scale, cadence, lifecycle, or transport
+applicability. Milestone 29.6 preserves that uncertainty instead of promoting a
+guessed binary protocol into the production transports.
+
+`sds200.gw2_research` therefore provides only an isolated research substrate.
+It names the command-table `GW2,1,ON`/`OFF` and contradictory detailed-row
+`GWF,1,ON`/`OFF` spellings as separate candidates; it never selects between
+them automatically. The type-1 shape is inherited from the already qualified
+text-GWF control and is itself part of the candidate, not a claim that GW2 uses
+that argument. Every execution requires a separately generated SHA-256 token
+bound to the exact candidate, IPv4 target, port, private output path, and byte,
+datagram, elapsed-time, and inactivity limits. The exact physical model and
+firmware string are also token-bound capture provenance, and the observation
+scope is explicitly limited to physical SDS200 LAN UDP control.
+
+The probe retains each UDP datagram as exact base64 bytes with its SHA-256,
+transport-boundary, truncation flag, elapsed time, and structural byte counts.
+Printable text and possible concatenated printable records are identified only
+so contradictory or error replies remain visible. Opaque bytes remain opaque:
+no byte is labeled power, dB, RSSI, color, or an FFT magnitude. Evidence files
+are new mode-0600 files and are never overwritten.
+
+This tool does not stop or restore a daemon itself. Its execution mode requires
+an explicit assertion that the sole scanner owner was independently verified
+stopped; the guarded physical-validation workflow must restore that owner even
+when the probe fails. The tool sends one exact start candidate, captures within
+all four independent limits, attempts the paired cleanup form in every path
+after a successful start write, and closes the socket. A cleanup failure is a
+failed safe completion, not a successful capture.
+
+`synthetic-gw2-datagrams.json` is deliberately not a replay capture. It includes
+an opaque 240-byte datagram, one speculative wrapper shaped like the
+specification's contradictory printed response, unexpected and concatenated
+text, and a transport-truncated prefix. Those records validate preservation and
+classification only. They provide no physical wire, payload, cadence, or value
+evidence, and the production UDP and serial text decoders remain unchanged.
+
+### Milestone 29.6 physical observation and conclusion
+
+The first and only live GW2 candidate probe ran on August 31, 2026 against a
+physical SDS200 running firmware 1.26.01 through LAN UDP control. The published
+Home Assistant App was verified stopped before the research socket opened. The
+token-bound command-table candidate sent exact `GW2,1,ON\r`, retained one
+complete four-byte `ERR\r` UDP datagram after 31.844 ms, reached its inactivity
+limit with no additional datagram, sent exact paired cleanup `GW2,1,OFF\r`, and
+closed without capture or cleanup error. The private mode-0600 capture envelope
+has SHA-256
+`40ec2e50712d88906dbb5084c95d7142b2daa44bf415e75f6970ac49b31fb945`.
+
+This observation rejects that exact candidate on the tested model, firmware,
+and transport. It does not establish whether the error reflects syntax,
+firmware, scanner state, or another undocumented precondition, and it is not a
+claim that all possible future GW2 implementations are unsupported. No other
+syntax was guessed or sent.
+
+The contradictory detailed-row `GWF,1,ON` form is already physically qualified
+by the production text waterfall path: it returns one comma-separated
+240-value GWF record rather than a distinct binary record on this same scanner.
+After the probe, the published App returned to `started`; authenticated Home
+Assistant readback showed all three Waterfall cards `running` at 3.1 fps with
+0.0-second frame age, the scanner display link `ONLINE`, and the daemon
+`running`. Thus neither V2.00 spelling provides repeatable binary framing or a
+measurable renderer benefit on the qualified path.
+
+Milestone 29.6 consequently makes no production transport, command, parser,
+daemon, API, web, or Home Assistant change. The phase-stable text-GWF path
+remains authoritative. GW2 research may reopen only if stronger vendor
+documentation or independently reproducible exact-byte evidence resolves the
+wire and framing contradictions.
+
 ## Milestone 24.1 boundary
 
 Milestone 24.1 inventories the existing protocol architecture, records evidence
@@ -255,11 +332,12 @@ The reviewed control notation `PWF,[FFT_TYPE],[ON/OFF]` and
 `GWF,[TYPE],[ON/OFF]` is not promoted to a command API in this slice. No
 running/stopped state, start/stop behavior, reconnect restoration, cadence,
 numeric FFT scale, transport applicability, model/firmware support, or renderer
-integration is inferred. `GW2` remains deferred: V2.00 describes it as a
-binary/no-separator form, while the current serial and UDP control receive paths
-decode bytes to text before radio dispatch. Preserving GW2 therefore requires a
-separate evidence-backed binary transport/framing contract rather than forcing
-binary data through the line parser.
+integration is inferred. `GW2` remained deferred in this historical slice:
+V2.00 describes it as a binary/no-separator form, while the current serial and
+UDP control receive paths decode bytes to text before radio dispatch. Milestone
+29.6 later tested one separately reviewed exact-byte command-table candidate;
+the scanner returned `ERR\r`, so no production binary transport/framing contract
+was justified.
 
 ## Milestone 27.2 physical waterfall qualification
 
@@ -530,16 +608,21 @@ abstraction” is a planning inference, not established protocol behavior.
 - **Shape:** the specification describes `PWF,[FFT_TYPE],[ON/OFF]\r` and
   `GWF,[TYPE],[ON/OFF]\r`. The tested SDS200 returned `PWF,OK` and one 240-value
   GWF line with a trailing separator for each `GWF,1,ON` request. `GW2`, added
-  in V2.00, remains a binary/no-separator waterfall form.
+  in V2.00, is described as a binary/no-separator waterfall form, but the
+  command-table spelling and detailed row contradict each other. Milestone 29.6
+  sent exact `GW2,1,ON` under a bounded physical guard and received exact
+  `ERR\r`; the detailed-row `GWF,1,ON` spelling remains the established text
+  request on this scanner.
 - **Lifecycle and safety:** one daemon-owned demand session serializes PWF/GWF
   lifecycle and recurring 250 ms GWF gets, isolates bounded consumers, restores
   after reconnect, and sends both stop wires on final release or shutdown. The
   interval and three-consecutive-miss policy are application choices, not
   scanner protocol semantics.
 - **Repository fit:** the qualified text path is implemented through typed raw
-  records and a private JSON Lines fanout. `GW2` still requires a transport
-  contract capable of preserving binary records. Numeric FFT magnitude, color,
-  calibration, and applicability beyond the tested model/firmware remain
+  records and a private JSON Lines fanout. No repeatable GW2 binary record or
+  material renderer benefit was observed, so production transport negotiation
+  was not added. Numeric FFT magnitude, color, calibration, future-firmware GW2
+  behavior, and applicability beyond the tested model/firmware remain
   unresolved.
 
 ### MNU, MSI, MSV, and MSB

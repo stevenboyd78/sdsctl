@@ -33,9 +33,12 @@ variable future PWF shapes. GWF becomes typed only for exactly 240
 comma-separated values. It accepts either 240 packet fields or those same 240
 values followed by the specification-defined terminal empty field produced by
 the trailing comma on the physical scanner; the lossless source `Packet` retains
-that separator. Binary `GW2` is excluded because the current line-oriented
-transports cannot preserve its framing safely and the V2.00 text contains
-unresolved command details.
+that separator. Binary `GW2` is excluded because V2.00 contains contradictory
+command details and the Milestone 29.6 bounded physical candidate `GW2,1,ON`
+returned exact `ERR\r` on the SDS200 firmware 1.26.01 LAN-control path. The
+contradictory `GWF,1,ON` spelling is already the qualified comma-separated text
+request. No repeatable binary frame or material renderer benefit exists to
+justify changing the current line-oriented transports.
 
 ## Shared session lifecycle
 
