@@ -140,31 +140,32 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 30.1 — Installation experience and beginner documentation" in (
+    assert "### Milestone 30.2 — v0.26.1 installation release and publication closure" in (
         active_milestone
     )
     for required in (
-        "Milestone 29.7 is closed through reviewed pull request 211",
-        "public v0.26.0 release",
-        "7ea9ff2ae8a0234a4b54fbb64757bfbe105df36b",
-        "published App as sole scanner owner",
-        "without changing scanner, daemon, web, audio, Favorites, Waterfall, "
-        "or Home Assistant runtime behavior",
-        "README becomes a concise project landing page",
-        "README must remain no longer than 350 lines",
-        "`sds200[all]` optional dependency extra",
-        "exact union of the `tui`, `web`, `mqtt`, and `playback` runtime extras",
-        "does not include development tooling, operating-system packages",
-        "Reorganize the reviewed wiki source around deployment targets and user goals",
-        "Home Assistant OS, Linux or Raspberry Pi workstations, Linux servers, "
-        "Docker or Podman deployments",
-        "Do not remove detailed README material until it has an audited destination",
-        "complete pytest and coverage suite",
-        "clean-environment package installation and import smoke tests",
-        "No physical scanner, Home Assistant mutation, container publication, "
-        "package publication, release tag, or version change",
+        "Milestone 30.1 is closed through reviewed pull request 212",
+        "e438af0c06e955a6ca5688376c2023f8f35481c1",
+        "concise 211-line README",
+        "exact union of `tui`, `web`, `mqtt`, and `playback`",
+        "Public PyPI still serves immutable version 0.26.0 metadata",
+        "does not declare the `all` extra",
+        "release closure for the already-reviewed installation and documentation work",
+        "Python distribution, import version, and Home Assistant App at 0.26.1",
+        "Home Assistant Core integration remains at 0.1.5",
+        "complete Python 3.11–3.14 pytest and coverage matrix",
+        "verify the base, each individual optional extra, `all`, and `dev,all`",
+        "packaged PyPI long description contains the reviewed beginner installation command",
+        "Only one genuine matching `v0.26.1` tag",
+        "Workflow success alone is not release acceptance",
+        "public PyPI reports version 0.26.1",
+        "Complete a proportionate Home Assistant OS upgrade",
+        "No scanner, daemon, web, audio, Favorites, Waterfall, MQTT, container, "
+        "or Home Assistant runtime capability enters Milestone 30.2",
         "Duration-based Waterfall history",
         "a ProScan wire comparison",
+        "#### Closed Milestone 30.1 — Installation experience and beginner documentation",
+        "performed no package, container, App, tag, release, or wiki publication",
         "#### Closed Milestone 29.7 — v0.26.0 release and publication closure",
         "Home Assistant Core integration at 0.1.5",
         "Exact `GW2,1,ON` returned `ERR\\r` and no binary frame",
