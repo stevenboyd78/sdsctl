@@ -60,6 +60,14 @@ for the exact evidence and limits.
 - [Deploy with Docker or Podman](Containers)
 - [View the web theme and Waterfall gallery](Web-Dashboard)
 
+### Reference screenshots
+
+Deterministic fictional-data Home Assistant Waterfall captures are available
+for [1920×1080 desktop](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-1920x1080.png),
+[800×480 wall display](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-800x480.png),
+and [390×844 phone at DPR 2](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-390x844-dpr2.png).
+The captures contain no private Home Assistant or scanner data.
+
 ## Security boundaries
 
 The SDS200 network-control protocol is unauthenticated and unencrypted. Keep it
