@@ -1,37 +1,37 @@
 # sdsctl Wiki
 
-> [!IMPORTANT]
-> This wiki is a task-oriented guide. The version-controlled documentation in
-> the [main repository](https://github.com/stevenboyd78/sdsctl) is
-> authoritative when a wiki page and repository document differ.
+`sdsctl` is an alpha Python library and toolkit for controlling and monitoring
+Uniden SDS100, SDS150, and SDS200 scanners. It provides a command-line tool,
+terminal interface, responsive web dashboard, Home Assistant App, typed Python
+API, Favorites Workspace, and daemon-based automation services.
 
-`sdsctl` is an alpha Python library and command-line toolkit for the
-Uniden SDS100, SDS150, and SDS200 scanners. It provides the model-neutral
-`sdsctl` command, a typed Python API, USB serial control for all supported
-models, and native Ethernet control and RTSP/RTP audio for the SDS200.
-
-The project is not affiliated with or endorsed by Uniden.
+The project is not affiliated with or endorsed by Uniden. It is not a
+safety-critical or emergency-dispatch system.
 
 ## Start here
 
-- [Installation](Installation) — install the package and optional features.
-- [Troubleshooting](Troubleshooting) — diagnose USB, network, TUI, and audio
-  problems.
-- [Repository README](https://github.com/stevenboyd78/sdsctl/blob/main/README.md)
-  — canonical overview, examples, and project status.
-- [Supported scanner models](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
-  — capability and hardware-validation matrix.
-- [Textual TUI guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/tui.md)
-  — full-screen monitoring, controls, recording, and playback.
-- [Network audio guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
-  — SDS200 playback, recording, Broadcastify, and Asterisk integration.
-- [Web dashboard](Web-Dashboard) — visual guide to the responsive six-pane
-  workspace, six themes, live monitoring, controls, audio, and recordings.
-- [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
-  — repository installation, Ingress, scanner controls, audio, persistent
-  recordings, MQTT Discovery, and security boundaries.
-- [Daemon deployment and upgrade guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-deployment.md)
-  — systemd, destination manifests, local clients, migration, and upgrades.
+1. [Choose an installation](Installation).
+2. Complete [First connection](First-Connection).
+3. [Choose an interface or task](Using-sdsctl).
+4. Open [Troubleshooting](Troubleshooting) if expected success evidence does
+   not appear.
+
+## Choose your target
+
+| I want to… | Start with… |
+| --- | --- |
+| Run inside Home Assistant OS | [Home Assistant](Home-Assistant) |
+| Use a terminal UI on Linux or Raspberry Pi OS | [Python installation](Installation#install-from-pypi), then [Using sdsctl](Using-sdsctl#terminal-interface) |
+| Run a browser dashboard or MQTT service | [Server-oriented Python installation](Installation#choose-an-installation) |
+| Run all optional Python interfaces | `python -m pip install "sds200[all]"` |
+| Deploy with Docker or Podman | [Containers](Containers) |
+| Use only the CLI or Python library | [Base Python installation](Installation#install-from-pypi) |
+| Edit Favorites or import selected RadioReference data | [Favorites and RadioReference](Favorites-and-RadioReference) |
+| Develop an integration | [Python API](Python-API) |
+
+The `all` extra includes the TUI, web, MQTT, and local-playback Python
+dependencies. It does not install operating-system packages, Home Assistant,
+containers, audio services, or FFmpeg.
 
 ## Supported scanners
 
@@ -42,134 +42,69 @@ The project is not affiliated with or endorsed by Uniden.
 | SDS200 | Yes | Yes | Yes |
 
 SDS200 USB, Ethernet control, and network audio have been validated on physical
-hardware. SDS100 core USB behavior has also been hardware-validated. SDS150
-support is specification-backed and awaits physical-hardware validation. See
-the canonical
-[supported-models guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
-for exact validation scope and tested firmware.
+firmware 1.26.01. SDS100 core USB behavior has also been hardware-validated on
+firmware 1.26.01. SDS150 support follows the shared SDS-series command
+specification and still awaits physical validation. Read the
+[supported-models matrix](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
+for the exact evidence and limits.
 
 ## Common tasks
 
-### Find scanners
+- [Discover and connect to a scanner](First-Connection)
+- [Use the CLI, TUI, web dashboard, daemon, MQTT, controls, or themes](Using-sdsctl)
+- [Play live SDS200 audio and make recordings](Audio-and-Recordings)
+- [Install and operate the Home Assistant App](Home-Assistant)
+- [Edit Favorites and review assisted RadioReference changes](Favorites-and-RadioReference)
+- [Configure profiles, logging, health, capture, replay, and recovery](Operations-and-Diagnostics)
+- [Use the Python API](Python-API)
+- [Deploy with Docker or Podman](Containers)
+- [View the web theme and Waterfall gallery](Web-Dashboard)
 
-```bash
-sdsctl discover
-sdsctl discover --network 192.168.0.0/24 --network-only
-```
+## Security boundaries
 
-Only probe networks you own or are authorized to scan.
+The SDS200 network-control protocol is unauthenticated and unencrypted. Keep it
+on a trusted LAN or use a secured VPN. Do not forward scanner UDP port `50536`
+to the Internet.
 
-### Show scanner information
+The default native web dashboard is loopback-only. Its supported remote-LAN
+mode requires an explicit private-interface bind, password authentication,
+native TLS, and a browser-trusted certificate. Home Assistant uses its separate
+authenticated Ingress boundary. Reverse-proxy and public anonymous exposure are
+not implied by either mode.
 
-```bash
-sdsctl info
-sdsctl --host SCANNER_IP info
-```
+Favorites data, RadioReference credentials and payloads, scanner addresses,
+recordings, capture files, Home Assistant bridge keys, and local diagnostics can
+be private. Sanitize complete artifacts before sharing them.
 
-### Start monitoring
+## Advanced reference
 
-```bash
-sdsctl monitor
-sdsctl --host SCANNER_IP monitor
-sdsctl --host SCANNER_IP tui
-```
+- [Supported models](https://github.com/stevenboyd78/sdsctl/blob/main/docs/supported-models.md)
+- [Control transports](https://github.com/stevenboyd78/sdsctl/blob/main/docs/transports.md)
+- [Layered configuration](https://github.com/stevenboyd78/sdsctl/blob/main/docs/configuration.md)
+- [Daemon deployment](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-deployment.md)
+- [Daemon API](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-api.md)
+- [Network audio](https://github.com/stevenboyd78/sdsctl/blob/main/docs/audio.md)
+- [Web dashboard](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md)
+- [Home Assistant App](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
+- [Favorites Workspace](https://github.com/stevenboyd78/sdsctl/blob/main/docs/favorites-workspace-editor.md)
+- [Capability and field-parity audit](https://github.com/stevenboyd78/sdsctl/blob/main/docs/capability-field-parity-audit.md)
+- [Advanced protocol research](https://github.com/stevenboyd78/sdsctl/blob/main/docs/advanced-protocol-research.md)
 
-### Play or record SDS200 network audio
+## Project information
 
-```bash
-sdsctl --host SCANNER_IP audio --play
-
-sdsctl --host SCANNER_IP audio \
-  --output scanner-audio.wav \
-  --duration 30
-```
-
-### Run the daemon-backed web dashboard
-
-Install the web extra, start the daemon, then start the loopback web service in
-another terminal:
-
-```bash
-python -m pip install "sds200[web]"
-sdsctl --log-level INFO --host SCANNER_IP daemon
-sdsctl web
-```
-
-Open `http://127.0.0.1:8000/` on the same host. The dashboard consumes daemon
-state and services; it does not open a second scanner control or RTSP/RTP audio
-connection. Current browser workflows include ordered live updates, explicit
-audio playback, daemon-owned recording, and safe playback/download of finalized
-recordings.
-
-See the visual [Web dashboard](Web-Dashboard) page for the workspace and theme
-gallery, and the canonical
-[web dashboard guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/web-dashboard.md)
-for security boundaries and exact behavior.
-
-### Install the Home Assistant App
-
-On Home Assistant OS, add
-`https://github.com/stevenboyd78/sdsctl` under
-**Settings > Apps > App store > Repositories**, then install **sds200**.
-
-The published App uses Home Assistant Ingress for its dashboard, obtains the
-configured MQTT service from Supervisor, stores recordings in writable Home
-Assistant media storage, and publishes UDP `50000` for SDS200 RTP audio. The
-default recording library is `/media/sdsctl/recordings`; the media-relative
-`recording_directory` option can select another location below `/media`.
-
-Home Assistant MQTT Discovery exposes seventeen state/diagnostic components,
-including fixed Screen Kind and optional Site, Frequency, Modulation, Service
-Type, and configured Tone-Out Tone A and Tone B sensors, plus seven bounded
-scanner controls: System, Department, Site, and Channel Hold
-switches and Previous Channel, Next Channel, and Reconnect Scanner buttons. The
-App keeps the generic daemon MQTT request-envelope command input disabled.
-
-The App installs three first-party Lovelace cards plus one aggregate resource.
-For a new installation, register
-`/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`
-once under **Settings > Dashboards > Resources** as a JavaScript Module. It
-loads **SDS200 Scanner**, **SDS200 Display**, and **SDS200 Waterfall** through
-their exact digest-qualified modules. The three individual complete URLs remain
-supported for selective registration and existing installations. The display
-card provides five explicit scanner-style layouts plus an
-opt-in Auto layout, three palettes, and a viewport-bounded 4:3 fit. Auto uses
-Screen Kind with a configurable Simple or Detail scanning fallback.
-The waterfall card uses authenticated App Ingress for the daemon's relative,
-uncalibrated spectrum stream, with bounded responsive Canvas history and no
-entity, URL, credential, or scanner-address configuration. Scanner controls
-remain standard Home Assistant entities rather than a transport inside a card.
-
-Deterministic fictional-data reference captures are available for
-[desktop](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-1920x1080.png),
-[800×480 wall panel](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-800x480.png),
-and [390×844 phone](https://raw.githubusercontent.com/stevenboyd78/sdsctl/main/docs/assets/home-assistant/home-assistant-waterfall-390x844-dpr2.png)
-presentations. The captures contain no private Home Assistant or scanner data.
-
-See the canonical
-[Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
-for configuration and security details.
-
-## Project documentation
-
+- [Latest release](https://github.com/stevenboyd78/sdsctl/releases/latest)
+- [Changelog](https://github.com/stevenboyd78/sdsctl/blob/main/CHANGELOG.md)
 - [Roadmap](https://github.com/stevenboyd78/sdsctl/blob/main/ROADMAP.md)
 - [Project vision](https://github.com/stevenboyd78/sdsctl/blob/main/docs/project-vision.md)
-- [Changelog](https://github.com/stevenboyd78/sdsctl/blob/main/CHANGELOG.md)
-- [Operational logging](https://github.com/stevenboyd78/sdsctl/blob/main/docs/logging.md)
-- [Daemon deployment and upgrades](https://github.com/stevenboyd78/sdsctl/blob/main/docs/daemon-deployment.md)
-- [Layered application configuration](https://github.com/stevenboyd78/sdsctl/blob/main/docs/configuration.md)
-- [Capture and replay](https://github.com/stevenboyd78/sdsctl/blob/main/docs/replay-and-capture.md)
-- [Linux udev rule](https://github.com/stevenboyd78/sdsctl/blob/main/docs/udev.md)
+- [Contributing](https://github.com/stevenboyd78/sdsctl/blob/main/CONTRIBUTING.md)
+- [Support policy](https://github.com/stevenboyd78/sdsctl/blob/main/SUPPORT.md)
+- [Security policy](https://github.com/stevenboyd78/sdsctl/blob/main/SECURITY.md)
 
 ## Getting help
 
-Review [Troubleshooting](Troubleshooting) first. Reproducible bugs and
-feature requests belong in
-[GitHub Issues](https://github.com/stevenboyd78/sdsctl/issues). Include
-the package version or commit, Python and operating-system versions, scanner
-model and firmware, transport, exact command, and complete sanitized error.
-
-The project support scope is defined in
-[SUPPORT.md](https://github.com/stevenboyd78/sdsctl/blob/main/SUPPORT.md).
-Report security vulnerabilities through
-[SECURITY.md](https://github.com/stevenboyd78/sdsctl/blob/main/SECURITY.md).
+Review [Troubleshooting](Troubleshooting) first. Reproducible bugs and feature
+requests belong in [GitHub Issues](https://github.com/stevenboyd78/sdsctl/issues).
+Include the `sdsctl`, Python, and operating-system versions, scanner model and
+firmware, connection type, exact command, expected result, and complete
+sanitized error. Use the private reporting path in the security policy for a
+suspected vulnerability.

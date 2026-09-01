@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from pathlib import Path
 from urllib.parse import unquote
 
@@ -23,6 +24,14 @@ REQUIRED_FILES = (
     Path("docs/supported-models.md"),
     Path("wiki/Home.md"),
     Path("wiki/_Sidebar.md"),
+    Path("wiki/Audio-and-Recordings.md"),
+    Path("wiki/Containers.md"),
+    Path("wiki/Favorites-and-RadioReference.md"),
+    Path("wiki/First-Connection.md"),
+    Path("wiki/Home-Assistant.md"),
+    Path("wiki/Operations-and-Diagnostics.md"),
+    Path("wiki/Python-API.md"),
+    Path("wiki/Using-sdsctl.md"),
     Path("wiki/Web-Dashboard.md"),
     Path("wiki/Installation.md"),
     Path("wiki/Troubleshooting.md"),
@@ -33,6 +42,8 @@ REQUIRED_FILES = (
 )
 
 MARKDOWN_LINK = re.compile(r"!?\[[^\]]*]\(([^)]+)\)")
+PYTHON_EXTRA_REFERENCE = re.compile(r"(?:sds200|\.)\[([a-z0-9_, -]+)]")
+README_LINE_LIMIT = 350
 
 
 def markdown_files() -> tuple[Path, ...]:
@@ -99,6 +110,12 @@ def main() -> int:
             errors.append(f"Missing required project file: {required}")
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    readme_lines = len(readme.splitlines())
+    if readme_lines > README_LINE_LIMIT:
+        errors.append(
+            f"README has {readme_lines} lines; the beginner landing page limit is "
+            f"{README_LINE_LIMIT}. Move detailed instructions to the wiki."
+        )
     if "Milestone 1 provides:" in readme:
         errors.append("README still leads with obsolete Milestone 1 documentation.")
     if "docs/transports.md" not in readme:
@@ -110,8 +127,23 @@ def main() -> int:
     if "docs/configuration.md" not in readme:
         errors.append("README does not link to layered configuration documentation.")
 
+    with (ROOT / "pyproject.toml").open("rb") as stream:
+        optional_extras = set(
+            tomllib.load(stream)["project"]["optional-dependencies"]
+        )
+
     for markdown in markdown_files():
         text = markdown.read_text(encoding="utf-8")
+        for reference in PYTHON_EXTRA_REFERENCE.findall(text):
+            referenced_extras = {
+                extra.strip() for extra in reference.split(",") if extra.strip()
+            }
+            unknown_extras = referenced_extras - optional_extras
+            if unknown_extras:
+                errors.append(
+                    f"{markdown.relative_to(ROOT)} references unknown Python extras: "
+                    f"{', '.join(sorted(unknown_extras))}"
+                )
         for raw_target in MARKDOWN_LINK.findall(text):
             if uses_raw_wiki_markdown_route(markdown, raw_target):
                 errors.append(

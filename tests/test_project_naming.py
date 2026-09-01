@@ -344,7 +344,11 @@ def test_v026_release_documentation_names_current_generic_image() -> None:
     deployment = _read("docs/container-deployment.md")
     installation = _read("wiki/Installation.md")
 
-    for document in (readme, deployment):
+    assert "Version `0.26.0`" in readme
+    assert "theboyd78/sdsctl:0.26.0" in readme
+    assert "theboyd78/sdsctl:latest" in readme
+
+    for document in (deployment,):
         assert "v0.26.0" in document
         assert "theboyd78/sdsctl:0.26.0" in document
         assert "theboyd78/sdsctl:latest" in document

@@ -1,0 +1,69 @@
+# Containers
+
+Use the published generic image when a Linux Docker or Podman host should run
+the daemon and optional web client without installing the Python package on the
+host. Home Assistant OS users should install the [Home Assistant App](Home-Assistant)
+instead.
+
+## Pull the image
+
+Use an exact release tag for controlled deployments:
+
+```bash
+docker pull theboyd78/sdsctl:0.26.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release.
+Registry tags are mutable; verify the reviewed manifest digest when
+cryptographic immutability is required.
+
+## Repository Compose deployment
+
+The repository-root Compose files build the checked-out source rather than
+selecting the published image:
+
+```bash
+git clone https://github.com/stevenboyd78/sdsctl.git
+cd sdsctl
+cp .env.example .env
+docker compose up --detach --build daemon
+docker compose run --rm daemon-client status --json
+```
+
+Start the optional loopback web sidecar explicitly:
+
+```bash
+docker compose --profile web up --detach --build web-dashboard
+```
+
+Open `http://127.0.0.1:8000/` on the Docker host. The default host publication
+is loopback-only. Do not change it into an unauthenticated LAN or public
+listener.
+
+Stop the services without deleting named data volumes:
+
+```bash
+docker compose down
+```
+
+Do not add `--volumes` unless permanent deletion of the deployment's named
+volumes is intended.
+
+## Linux USB commands
+
+The opt-in `compose.usb.yaml` path supports explicitly mapped scanner serial
+devices on native Linux without privileged mode or networking. It requires a
+stable device path and numeric device group. Validate the exact command in the
+[container deployment guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/container-deployment.md)
+before attaching hardware.
+
+Remote Podman clients, Docker Desktop USB/IP, and physical Windows or macOS
+scanner attachment are not claimed as supported equivalents.
+
+## Detailed reference
+
+The [generic container deployment guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/container-deployment.md)
+is authoritative for Docker Compose, rootless Podman, USB mapping, readiness,
+networking, persistence, upgrades, recovery, and the validated portability
+matrix.
+

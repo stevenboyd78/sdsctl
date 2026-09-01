@@ -537,8 +537,11 @@ def test_generic_container_documentation_preserves_compose_security_boundary() -
         "[generic container deployment guide](docs/container-deployment.md)"
         in readme
     )
-    assert "docker compose run --rm daemon-client status --json" in readme
-    assert "docker compose -f compose.usb.yaml run --rm usb-scanner info" in readme
+    beginner_guide = (
+        _REPOSITORY_ROOT / "wiki" / "Containers.md"
+    ).read_text(encoding="utf-8")
+    assert "docker compose run --rm daemon-client status --json" in beginner_guide
+    assert "`compose.usb.yaml`" in beginner_guide
     assert "snapshot --json" not in document
     assert "physical scanner validation of the generic Compose deployment" not in document
 
