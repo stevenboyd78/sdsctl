@@ -93,8 +93,9 @@ pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
-phone widths; bounded Canvas sizing; shared authentication; two live cards;
-pause; hide/show; removal; and final-stream cleanup.
+phone widths; bounded frame-count and elapsed-time history; pointer, touch, and
+keyboard frequency inspection; Canvas sizing; shared authentication;
+two live cards; pause; hide/show; removal; and final-stream cleanup.
 
 Options:
   --chrome PATH       Chrome/Chromium executable (auto-detected by default)
@@ -535,6 +536,116 @@ async function waitForWaterfallCanvasStability(cdp, timeoutMs) {
     `waterfall canvases did not become pixel-stable after ${attempts} attempts: ` +
       JSON.stringify(state),
   );
+}
+
+async function auditWebWaterfallHistoryAndPointer(
+  cdp,
+  baseUrl,
+  timeoutMs,
+  pageFailures,
+) {
+  const exceptionBaseline = pageFailures.length;
+  await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+  await navigate(cdp, `${baseUrl}/__demo/theme/system?pane=waterfall`, timeoutMs);
+  await waitForWaterfallCanvasStability(cdp, timeoutMs);
+  let state = await evaluate(
+    cdp,
+    `(() => {
+      const history = document.querySelector("#waterfall-history-policy");
+      const button = document.querySelector("#waterfall-pointer");
+      const canvas = document.querySelector("#waterfall-spectrum");
+      history.value = "duration:15";
+      history.dispatchEvent(new Event("change", {bubbles: true}));
+      button.click();
+      const bounds = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true,
+        clientX: bounds.left + bounds.width * 0.5,
+        pointerType: "touch",
+      }));
+      return {
+        history: history.value,
+        pointerPressed: button.getAttribute("aria-pressed"),
+        pointerText: document.querySelector("#waterfall-pointer-frequency")
+          .textContent.trim(),
+        canvases: Array.from(document.querySelectorAll(".waterfall-plot canvas"))
+          .map((item) => ({
+            pointerEnabled: item.dataset.pointerEnabled,
+            tabIndex: item.tabIndex,
+            touchAction: getComputedStyle(item).touchAction,
+          })),
+      };
+    })()`,
+  );
+  if (
+    state.history !== "duration:15" ||
+    state.pointerPressed !== "true" ||
+    !state.pointerText.includes("MHz") ||
+    state.canvases.length !== 2 ||
+    state.canvases.some((canvas) =>
+      canvas.pointerEnabled !== "true" ||
+      canvas.tabIndex !== 0 ||
+      canvas.touchAction !== "none"
+    )
+  ) {
+    throw new Error(
+      `web Waterfall duration/pointer activation failed: ${JSON.stringify(state)}`,
+    );
+  }
+
+  state = await evaluate(
+    cdp,
+    `(() => {
+      const canvas = document.querySelector("#waterfall-spectrum");
+      canvas.focus();
+      canvas.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "End",
+      }));
+      const endText = document.querySelector("#waterfall-pointer-frequency")
+        .textContent.trim();
+      canvas.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Escape",
+      }));
+      const clearedText = document.querySelector("#waterfall-pointer-frequency")
+        .textContent.trim();
+      document.querySelector("#waterfall-pointer").click();
+      return {
+        clearedText,
+        endText,
+        hidden: document.querySelector("#waterfall-pointer-frequency").hidden,
+        pointerPressed: document.querySelector("#waterfall-pointer")
+          .getAttribute("aria-pressed"),
+        canvases: Array.from(document.querySelectorAll(".waterfall-plot canvas"))
+          .map((item) => ({
+            pointerEnabled: item.dataset.pointerEnabled,
+            tabIndex: item.tabIndex,
+            touchAction: getComputedStyle(item).touchAction,
+          })),
+      };
+    })()`,
+  );
+  if (
+    !state.endText.includes("MHz") ||
+    state.clearedText !== "Frequency pointer unavailable." ||
+    state.hidden !== true ||
+    state.pointerPressed !== "false" ||
+    state.canvases.some((canvas) =>
+      canvas.pointerEnabled !== "false" ||
+      canvas.tabIndex !== -1 ||
+      canvas.touchAction !== "pan-y"
+    )
+  ) {
+    throw new Error(
+      `web Waterfall keyboard/pointer cleanup failed: ${JSON.stringify(state)}`,
+    );
+  }
+  if (pageFailures.length !== exceptionBaseline) {
+    throw new Error("web Waterfall duration/pointer audit raised a browser exception");
+  }
 }
 
 async function captureStableScreenshot(cdp) {
@@ -2415,11 +2526,16 @@ async function homeAssistantWaterfallState(cdp) {
           const rect = card.getBoundingClientRect();
           return {
             connected: card.isConnected,
+            historyMode: card._historyPolicy?.mode ?? null,
+            historySeconds: card._historyPolicy?.seconds ?? null,
             display: getComputedStyle(card).display,
             height: rect.height,
             history: card._history?.length ?? null,
             overflow: card.scrollWidth > card.clientWidth + 1,
             paused: root?.querySelector("button.pause")?.getAttribute("aria-pressed") ?? null,
+            pointerEnabled: card._config?.show_pointer ?? null,
+            pointerHidden: root?.querySelector(".pointer-readout")?.hidden ?? null,
+            pointerText: root?.querySelector(".pointer-readout")?.textContent?.trim() ?? null,
             sequence: root?.querySelector(".telemetry-item:last-child dd")?.textContent?.trim() ?? null,
             status: root?.querySelector(".status")?.dataset.state ?? null,
             statusText: root?.querySelector(".status")?.textContent?.trim() ?? null,
@@ -2429,6 +2545,9 @@ async function homeAssistantWaterfallState(cdp) {
               clientHeight: canvas.clientHeight,
               clientWidth: canvas.clientWidth,
               height: canvas.height,
+              pointerEnabled: canvas.dataset.pointerEnabled ?? null,
+              tabIndex: canvas.tabIndex,
+              touchAction: getComputedStyle(canvas).touchAction,
               width: canvas.width,
             })),
           };
@@ -2558,7 +2677,15 @@ async function auditHomeAssistantWaterfallCard(
     state.fixture.sessionCreates !== 1 ||
     state.fixture.infoCalls !== 1 ||
     state.cards[0].history <= 0 ||
-    state.cards[0].sequence === "Unavailable"
+    state.cards[0].sequence === "Unavailable" ||
+    state.cards[0].historyMode !== "frames" ||
+    state.cards[0].pointerEnabled !== false ||
+    state.cards[0].pointerHidden !== true ||
+    state.cards[0].canvases.some((canvas) =>
+      canvas.pointerEnabled !== "false" ||
+      canvas.tabIndex !== -1 ||
+      canvas.touchAction !== "pan-y"
+    )
   ) {
     throw new Error(`initial waterfall lifecycle is invalid: ${JSON.stringify(state)}`);
   }
@@ -2606,8 +2733,11 @@ async function auditHomeAssistantWaterfallCard(
       density: "compact",
       palette: "amber",
       history: 60,
+      history_mode: "duration",
+      history_seconds: 15,
       show_scale: false,
       show_telemetry: true,
+      show_pointer: true,
       start_paused: false,
     }); true`,
   );
@@ -2618,6 +2748,61 @@ async function auditHomeAssistantWaterfallCard(
   });
   if (state.fixture.sessionCreates !== 1 || state.fixture.streamsStarted !== 2) {
     throw new Error(`multiple cards did not share authentication: ${JSON.stringify(state)}`);
+  }
+  if (
+    state.cards[1].historyMode !== "duration" ||
+    state.cards[1].historySeconds !== 15 ||
+    state.cards[1].pointerEnabled !== true ||
+    state.cards[1].pointerHidden !== false ||
+    state.cards[1].canvases.some((canvas) =>
+      canvas.pointerEnabled !== "true" ||
+      canvas.tabIndex !== 0 ||
+      canvas.touchAction !== "none"
+    )
+  ) {
+    throw new Error(`elapsed-history card geometry is invalid: ${JSON.stringify(state)}`);
+  }
+
+  await evaluate(
+    cdp,
+    `(() => {
+      const card = document.querySelectorAll("sds200-waterfall-card")[1];
+      const canvas = card.shadowRoot.querySelector("canvas.spectrum");
+      const bounds = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new PointerEvent("pointermove", {
+        bubbles: true,
+        clientX: bounds.left + bounds.width * 0.5,
+        pointerType: "touch",
+      }));
+      return true;
+    })()`,
+  );
+  state = await homeAssistantWaterfallState(cdp);
+  if (!state.cards[1].pointerText.includes("MHz")) {
+    throw new Error(`Home Assistant pointer input failed: ${JSON.stringify(state)}`);
+  }
+  await evaluate(
+    cdp,
+    `(() => {
+      const canvas = document.querySelectorAll("sds200-waterfall-card")[1]
+        .shadowRoot.querySelector("canvas.spectrum");
+      canvas.focus();
+      canvas.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "End",
+      }));
+      canvas.dispatchEvent(new KeyboardEvent("keydown", {
+        bubbles: true,
+        cancelable: true,
+        key: "Escape",
+      }));
+      return true;
+    })()`,
+  );
+  state = await homeAssistantWaterfallState(cdp);
+  if (state.cards[1].pointerText !== "Frequency pointer unavailable.") {
+    throw new Error(`Home Assistant pointer cleanup failed: ${JSON.stringify(state)}`);
   }
 
   await evaluate(
@@ -3118,6 +3303,12 @@ async function run(options) {
       process.exitCode = 1;
       return;
     }
+    await auditWebWaterfallHistoryAndPointer(
+      cdp,
+      baseUrl,
+      options.timeoutMs,
+      pageFailures,
+    );
     const waterfallCard = await auditHomeAssistantWaterfallCard(
       cdp,
       baseUrl,
@@ -3135,9 +3326,10 @@ async function run(options) {
         "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 12 " +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
         "responsive System-palette cases, all 12 read-only Ingress " +
-        "Diagnostics layouts, and " +
+        "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
-        "viewports with shared authentication and complete lease cleanup.",
+        "viewports with elapsed history, display-only pointer input, shared " +
+        "authentication, and complete lease cleanup.",
     );
   } finally {
     cdp?.close();

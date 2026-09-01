@@ -306,9 +306,11 @@ distribution path on Home Assistant OS.
    with every supported Screen Kind and both scan fallbacks, all three palettes,
    and both fit modes; confirm viewport fit has no internal overflow at 390-pixel
    phone, 800x480, and 1920x1080 reference sizes. Exercise one and multiple live
-   waterfall cards at all three sizes, each bounded density and palette, pause,
-   resume, clear, hidden and removed-card cleanup, final-lease release, and App
-   restart recovery. Also verify the three individual resource URLs remain
+   waterfall cards at all three sizes, each bounded density and palette,
+   compatible frame-count and explicit elapsed-time history, opt-in pointer,
+   touch and keyboard inspection, pause, resume, clear, hidden and removed-card
+   cleanup, final-lease release, and App restart recovery. Also verify the three
+   individual resource URLs remain
    supported selective-registration paths, that duplicate aggregate/individual
    loading is harmless, and that the App never edits Home Assistant resource
    records. Confirm exactly one running App is required and no private

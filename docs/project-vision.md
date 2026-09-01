@@ -244,11 +244,12 @@ managed web theme use the same pane shell rather than substituting theme-owned
 application behavior. Theme staging remains decorative, pointer-inert,
 reduced-motion aware, and independent of daemon or scanner state. The web
 Waterfall renderer follows bounded daemon demand and live scanner-reported span
-metadata while remaining explicitly relative and uncalibrated. Remaining
-dashboard work includes richer operational logs, duration-based Waterfall
-history and an optional frequency pointer, additional shared branding assets,
-and deliberate trusted-reverse-proxy or public/Internet access design beyond
-the existing authenticated private-LAN mode.
+metadata while remaining explicitly relative and uncalibrated. It supports
+bounded frame-count or duration-based history and an optional display-only
+frequency pointer without scanner-side tuning. Remaining dashboard work includes
+richer operational logs, additional shared branding assets, and deliberate
+trusted-reverse-proxy or public/Internet access design beyond the existing
+authenticated private-LAN mode.
 
 ### Home Assistant
 

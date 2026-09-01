@@ -25,6 +25,7 @@ const WATERFALL_SSE_MEDIA_TYPE = "text/event-stream";
 const WATERFALL_BIN_COUNT = 240;
 const WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
 const WATERFALL_HISTORY_CAPACITY = 240;
+const WATERFALL_HISTORY_DURATIONS_SECONDS = Object.freeze([15, 30, 60]);
 const WATERFALL_RECONNECT_DELAY_MS = 2000;
 const WORKSPACE_PANES = Object.freeze([
   "scanner",
@@ -87,11 +88,18 @@ let waterfallLastSequence = null;
 let waterfallLastFrameAt = null;
 let waterfallFrameTimes = [];
 let waterfallHistory = [];
+let waterfallHistoryPolicyState = Object.freeze({
+  mode: "frames",
+  frames: WATERFALL_HISTORY_CAPACITY,
+  seconds: null,
+});
 let waterfallLatestFrame = null;
 let waterfallCheckpoint = {};
 let waterfallQueueLoss = 0;
 let waterfallOverflows = 0;
 let waterfallTransitions = 0;
+let waterfallPointerEnabled = false;
+let waterfallPointerRatio = null;
 
 let audioPlaybackGeneration = 0;
 let audioPlaybackActive = false;
@@ -279,6 +287,7 @@ function resetWaterfallLiveState({clearHistory = true} = {}) {
   waterfallQueueLoss = 0;
   waterfallOverflows = 0;
   waterfallTransitions = 0;
+  waterfallPointerRatio = null;
   if (clearHistory) {
     waterfallHistory = [];
   }
@@ -297,6 +306,7 @@ function resetWaterfallLiveState({clearHistory = true} = {}) {
   element("waterfall-status-refresh").textContent = "Unavailable";
   element("waterfall-transitions").textContent = "0";
   element("waterfall-raw-values").textContent = "Unavailable";
+  renderWaterfallPointerReadout();
   renderWaterfallCanvases();
 }
 
@@ -397,7 +407,167 @@ function validFrequencyMetadata(status) {
   ) {
     return null;
   }
-  return {fields, markerPosition};
+  return {fields, numbers, markerPosition};
+}
+
+function waterfallHistoryPolicy(mode, value) {
+  if (mode === "frames") {
+    const frames = Number(value);
+    if (![60, 120, WATERFALL_HISTORY_CAPACITY].includes(frames)) {
+      throw new Error("Waterfall frame history is invalid.");
+    }
+    return Object.freeze({mode, frames, seconds: null});
+  }
+  if (mode === "duration") {
+    const seconds = Number(value);
+    if (!WATERFALL_HISTORY_DURATIONS_SECONDS.includes(seconds)) {
+      throw new Error("Waterfall duration history is invalid.");
+    }
+    return Object.freeze({
+      mode,
+      frames: WATERFALL_HISTORY_CAPACITY,
+      seconds,
+    });
+  }
+  throw new Error("Waterfall history mode is invalid.");
+}
+
+function pruneWaterfallHistory(history, policy, now) {
+  if (!Array.isArray(history) || !Number.isFinite(now)) {
+    throw new Error("Waterfall history state is invalid.");
+  }
+  let retained = history.slice(-policy.frames);
+  if (policy.mode === "duration") {
+    const cutoff = now - policy.seconds * 1000;
+    retained = retained.filter(
+      (entry) => Number.isFinite(entry.receivedAt) && entry.receivedAt >= cutoff,
+    );
+  }
+  return retained;
+}
+
+function waterfallHistoryRows(history, policy, height, now) {
+  if (!Number.isFinite(height) || height <= 0) {
+    return [];
+  }
+  const retained = pruneWaterfallHistory(history, policy, now);
+  if (policy.mode === "frames") {
+    const rowHeight = height / policy.frames;
+    const startRow = policy.frames - retained.length;
+    return retained.map((entry, index) => ({
+      entry,
+      y: (startRow + index) * rowHeight,
+      height: Math.max(1, rowHeight),
+    }));
+  }
+  const duration = policy.seconds * 1000;
+  const cutoff = now - duration;
+  return retained.map((entry, index) => {
+    const nextAt = retained[index + 1]?.receivedAt ?? now;
+    const start = Math.max(0, Math.min(1, (entry.receivedAt - cutoff) / duration));
+    const end = Math.max(start, Math.min(1, (nextAt - cutoff) / duration));
+    const y = Math.min(height - 1, start * height);
+    return {
+      entry,
+      y,
+      height: Math.max(1, Math.min(height - y, (end - start) * height)),
+    };
+  });
+}
+
+function waterfallPointerFrequency(status, ratio) {
+  const frequencies = validFrequencyMetadata(record(status));
+  if (frequencies === null || !Number.isFinite(ratio)) {
+    return null;
+  }
+  const boundedRatio = Math.max(0, Math.min(1, ratio));
+  const raw = frequencies.numbers[0] +
+    (frequencies.numbers[2] - frequencies.numbers[0]) * boundedRatio;
+  return Object.freeze({
+    ratio: boundedRatio,
+    raw,
+    label: `${(raw / 10000).toFixed(4)} MHz`,
+  });
+}
+
+function renderWaterfallPointerReadout() {
+  const output = document.getElementById("waterfall-pointer-frequency");
+  if (output === null) {
+    return;
+  }
+  output.hidden = !waterfallPointerEnabled;
+  if (!waterfallPointerEnabled) {
+    output.textContent = "Frequency pointer off.";
+    return;
+  }
+  const pointer = waterfallPointerFrequency(
+    record(waterfallCheckpoint.waterfall_status),
+    waterfallPointerRatio,
+  );
+  output.textContent = pointer === null
+    ? "Frequency pointer unavailable."
+    : `Frequency pointer: ${pointer.label}`;
+}
+
+function setWaterfallPointerRatio(value) {
+  waterfallPointerRatio = Number.isFinite(value)
+    ? Math.max(0, Math.min(1, value))
+    : null;
+  renderWaterfallPointerReadout();
+  renderWaterfallCanvases();
+}
+
+function waterfallPointerRatioFromEvent(canvas, event) {
+  const bounds = canvas.getBoundingClientRect();
+  if (!Number.isFinite(bounds.width) || bounds.width <= 0) {
+    return null;
+  }
+  return (Number(event.clientX) - bounds.left) / bounds.width;
+}
+
+function initializeWaterfallPointerCanvas(canvas) {
+  canvas.tabIndex = waterfallPointerEnabled ? 0 : -1;
+  canvas.dataset.pointerEnabled = String(waterfallPointerEnabled);
+  canvas.setAttribute("role", "img");
+  const updateFromPointer = (event) => {
+    if (!waterfallPointerEnabled) {
+      return;
+    }
+    setWaterfallPointerRatio(waterfallPointerRatioFromEvent(canvas, event));
+  };
+  canvas.addEventListener("pointerdown", updateFromPointer);
+  canvas.addEventListener("pointermove", updateFromPointer);
+  canvas.addEventListener("pointerleave", () => {
+    if (document.activeElement !== canvas) {
+      setWaterfallPointerRatio(null);
+    }
+  });
+  canvas.addEventListener("blur", () => {
+    setWaterfallPointerRatio(null);
+  });
+  canvas.addEventListener("keydown", (event) => {
+    if (!waterfallPointerEnabled) {
+      return;
+    }
+    const step = 1 / (WATERFALL_BIN_COUNT - 1);
+    const current = waterfallPointerRatio ?? 0.5;
+    let next = current;
+    if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+      next = current - step;
+    } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+      next = current + step;
+    } else if (event.key === "Home") {
+      next = 0;
+    } else if (event.key === "End") {
+      next = 1;
+    } else if (event.key === "Escape") {
+      next = null;
+    } else {
+      return;
+    }
+    event.preventDefault();
+    setWaterfallPointerRatio(next);
+  });
 }
 
 function applyWaterfallSnapshot(snapshot) {
@@ -456,6 +626,7 @@ function applyWaterfallSnapshot(snapshot) {
   for (const [index, name] of ["lower", "center", "upper", "marker"].entries()) {
     element(`waterfall-frequency-${name}`).textContent = frequencyValues[index];
   }
+  renderWaterfallPointerReadout();
 }
 
 function normalizeWaterfallValues(values) {
@@ -529,10 +700,12 @@ function applyWaterfallRecord(value) {
 
   if (!waterfallPaused) {
     waterfallLatestFrame = frame.normalized;
-    waterfallHistory.push(frame.normalized);
-    if (waterfallHistory.length > WATERFALL_HISTORY_CAPACITY) {
-      waterfallHistory.shift();
-    }
+    waterfallHistory.push({values: frame.normalized, receivedAt: now});
+    waterfallHistory = pruneWaterfallHistory(
+      waterfallHistory,
+      waterfallHistoryPolicyState,
+      now,
+    );
     renderWaterfallCanvases();
   }
 }
@@ -670,6 +843,7 @@ function waterfallPalette() {
     spectrum: styles.getPropertyValue("--waterfall-spectrum").trim() || "#42d7ff",
     marker: styles.getPropertyValue("--waterfall-marker").trim() || "#ffcf4a",
     history: styles.getPropertyValue("--waterfall-history").trim() || "#42d7ff",
+    pointer: styles.getPropertyValue("--waterfall-pointer").trim() || "#ffffff",
   };
 }
 
@@ -725,18 +899,33 @@ function renderWaterfallCanvases() {
   historyContext.fillStyle = palette.background;
   historyContext.fillRect(0, 0, historySize.width, historySize.height);
   if (waterfallHistory.length !== 0) {
-    const rowHeight = historySize.height / WATERFALL_HISTORY_CAPACITY;
-    const startRow = WATERFALL_HISTORY_CAPACITY - waterfallHistory.length;
+    const historyNow = waterfallPaused
+      ? (waterfallHistory.at(-1)?.receivedAt ?? performance.now())
+      : performance.now();
+    waterfallHistory = pruneWaterfallHistory(
+      waterfallHistory,
+      waterfallHistoryPolicyState,
+      historyNow,
+    );
     historyContext.fillStyle = palette.history;
-    waterfallHistory.forEach((frame, rowIndex) => {
-      const y = (startRow + rowIndex) * rowHeight;
-      frame.forEach((value, binIndex) => {
+    for (const row of waterfallHistoryRows(
+      waterfallHistory,
+      waterfallHistoryPolicyState,
+      historySize.height,
+      historyNow,
+    )) {
+      row.entry.values.forEach((value, binIndex) => {
         historyContext.globalAlpha = 0.08 + value * 0.92;
         const x1 = binIndex * historySize.width / WATERFALL_BIN_COUNT;
         const x2 = (binIndex + 1) * historySize.width / WATERFALL_BIN_COUNT;
-        historyContext.fillRect(x1, y, Math.max(1, x2 - x1), Math.max(1, rowHeight));
+        historyContext.fillRect(
+          x1,
+          row.y,
+          Math.max(1, x2 - x1),
+          row.height,
+        );
       });
-    });
+    }
     historyContext.globalAlpha = 1;
   }
   const frequencies = validFrequencyMetadata(record(waterfallCheckpoint.waterfall_status));
@@ -752,6 +941,27 @@ function renderWaterfallCanvases() {
       context.stroke();
     }
   }
+  const pointer = waterfallPointerEnabled
+    ? waterfallPointerFrequency(
+      record(waterfallCheckpoint.waterfall_status),
+      waterfallPointerRatio,
+    )
+    : null;
+  if (pointer !== null) {
+    for (const [canvas, size] of [[spectrum, spectrumSize], [history, historySize]]) {
+      const context = canvas.getContext("2d");
+      const x = pointer.ratio * size.width;
+      context.save();
+      context.strokeStyle = palette.pointer;
+      context.lineWidth = 2 * size.ratio;
+      context.setLineDash([4 * size.ratio, 3 * size.ratio]);
+      context.beginPath();
+      context.moveTo(x, 0);
+      context.lineTo(x, size.height);
+      context.stroke();
+      context.restore();
+    }
+  }
 }
 
 function updateWaterfallFrameAge() {
@@ -761,6 +971,17 @@ function updateWaterfallFrameAge() {
     return;
   }
   target.textContent = `${Math.max(0, (Date.now() - waterfallLastFrameAt) / 1000).toFixed(1)} s`;
+  if (!waterfallPaused && waterfallHistoryPolicyState.mode === "duration") {
+    const before = waterfallHistory.length;
+    waterfallHistory = pruneWaterfallHistory(
+      waterfallHistory,
+      waterfallHistoryPolicyState,
+      performance.now(),
+    );
+    if (waterfallHistory.length !== before || waterfallHistory.length !== 0) {
+      renderWaterfallCanvases();
+    }
+  }
 }
 
 function initializeWaterfallWorkspace() {
@@ -775,12 +996,52 @@ function initializeWaterfallWorkspace() {
         ? "Display paused; scanner data continues to be consumed."
         : (waterfallConnected ? "Live relative waterfall data." : "Waterfall display resumed."),
     );
+    if (!waterfallPaused) {
+      waterfallHistory = pruneWaterfallHistory(
+        waterfallHistory,
+        waterfallHistoryPolicyState,
+        performance.now(),
+      );
+      renderWaterfallCanvases();
+    }
   });
   element("waterfall-clear").addEventListener("click", () => {
     waterfallHistory = [];
     waterfallLatestFrame = null;
     renderWaterfallCanvases();
   });
+  element("waterfall-history-policy").addEventListener("change", (event) => {
+    const [mode, value] = String(event.currentTarget.value).split(":", 2);
+    waterfallHistoryPolicyState = waterfallHistoryPolicy(mode, value);
+    waterfallHistory = pruneWaterfallHistory(
+      waterfallHistory,
+      waterfallHistoryPolicyState,
+      performance.now(),
+    );
+    renderWaterfallCanvases();
+  });
+  element("waterfall-pointer").addEventListener("click", () => {
+    waterfallPointerEnabled = !waterfallPointerEnabled;
+    const button = element("waterfall-pointer");
+    button.setAttribute("aria-pressed", String(waterfallPointerEnabled));
+    button.textContent = waterfallPointerEnabled
+      ? "Hide frequency pointer"
+      : "Frequency pointer";
+    if (!waterfallPointerEnabled) {
+      waterfallPointerRatio = null;
+    }
+    for (const canvas of [
+      element("waterfall-spectrum"),
+      element("waterfall-history"),
+    ]) {
+      canvas.tabIndex = waterfallPointerEnabled ? 0 : -1;
+      canvas.dataset.pointerEnabled = String(waterfallPointerEnabled);
+    }
+    renderWaterfallPointerReadout();
+    renderWaterfallCanvases();
+  });
+  initializeWaterfallPointerCanvas(element("waterfall-spectrum"));
+  initializeWaterfallPointerCanvas(element("waterfall-history"));
   const fullscreenButton = element("waterfall-fullscreen");
   if (
     typeof element("waterfall-panel").requestFullscreen !== "function" ||

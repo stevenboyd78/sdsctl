@@ -111,5 +111,6 @@ The command first runs the full existing dashboard Chrome audit, waits for the
 bounded card Canvas to reach a stable deterministic sequence at each target
 viewport, requires two identical consecutive compositor frames, writes the
 three PNGs, and then completes the shared-authentication, multi-card, pause,
+frame-count and elapsed-time history, display-only pointer, touch and keyboard,
 visibility, removal, and final-lease cleanup probes. Do not edit these PNGs
 manually; update the card or fictional fixture and regenerate all three together.

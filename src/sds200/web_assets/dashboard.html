@@ -398,8 +398,20 @@
                 <h2 id="waterfall-title">Spectrum and rolling waterfall</h2>
               </div>
               <div class="waterfall-controls" role="group" aria-label="Waterfall display controls">
+                <label class="waterfall-history-control" for="waterfall-history-policy">
+                  <span>History</span>
+                  <select id="waterfall-history-policy">
+                    <option value="frames:60">60 frames</option>
+                    <option value="frames:120">120 frames</option>
+                    <option value="frames:240" selected>240 frames</option>
+                    <option value="duration:15">15 seconds</option>
+                    <option value="duration:30">30 seconds</option>
+                    <option value="duration:60">60 seconds</option>
+                  </select>
+                </label>
                 <button id="waterfall-pause" type="button" aria-pressed="false">Pause display</button>
                 <button id="waterfall-clear" type="button">Clear history</button>
+                <button id="waterfall-pointer" type="button" aria-pressed="false">Frequency pointer</button>
                 <button id="waterfall-fullscreen" type="button">Full screen</button>
               </div>
             </header>
@@ -414,13 +426,19 @@
             <div class="waterfall-visuals" aria-label="Relative spectrum and rolling waterfall plots">
               <figure class="waterfall-plot spectrum-plot">
                 <figcaption>Relative spectrum · 240 bins</figcaption>
-                <canvas id="waterfall-spectrum" aria-label="Current relative 240-bin spectrum"></canvas>
+                <canvas id="waterfall-spectrum" role="img" tabindex="-1" aria-label="Current relative 240-bin spectrum. Enable the frequency pointer to inspect with pointer or arrow keys."></canvas>
               </figure>
               <figure class="waterfall-plot history-plot">
                 <figcaption>Rolling relative history · newest at bottom</figcaption>
-                <canvas id="waterfall-history" aria-label="Rolling relative waterfall history"></canvas>
+                <canvas id="waterfall-history" role="img" tabindex="-1" aria-label="Rolling relative waterfall history. Enable the frequency pointer to inspect with pointer or arrow keys."></canvas>
               </figure>
             </div>
+
+            <output
+              id="waterfall-pointer-frequency"
+              class="waterfall-pointer-frequency"
+              hidden
+            >Frequency pointer off.</output>
 
             <dl class="waterfall-telemetry">
               <div><dt>Session</dt><dd id="waterfall-session-state">Idle</dd></div>

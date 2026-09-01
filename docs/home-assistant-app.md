@@ -366,8 +366,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc
-/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f
+/local/sds200/sds200-waterfall-card.js?v=d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8
+/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -410,7 +410,7 @@ digest-confirmed activation. The App does not automatically discover, approve,
 install, execute, or replace managed modules.
 
 For a new installation, register only the complete aggregate
-`/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`
+`/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad`
 URL in **Settings > Dashboards > Resources** as a **JavaScript Module**. It
 loads all three cards in deterministic manifest order. The three complete
 individual URLs above remain supported when only selected cards are wanted and
@@ -421,10 +421,11 @@ read-only. The additive **SDS200 Display** card provides five
 explicit layouts—Simple, Detail, Search/Close Call, Weather, and Tone-Out—plus
 an opt-in Auto layout, and Color, Black on White, and White on Black palettes.
 The **SDS200 Waterfall** card renders the App's authenticated relative,
-uncalibrated spectrum stream with bounded rolling history. All three graphical
-editors additionally expose the same 21 System web palettes. The selection is
-stored per card, changes presentation only, and does not follow or alter the
-web dashboard's browser-local palette choice.
+uncalibrated spectrum stream with bounded frame-count or elapsed-time history
+and an optional display-only frequency pointer. All three graphical editors
+additionally expose the same 21 System web palettes. The selection is stored per
+card, changes presentation only, and does not follow or alter the web
+dashboard's browser-local palette choice.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -555,9 +556,12 @@ type: custom:sds200-waterfall-card
 title: SDS200 Waterfall
 density: standard  # compact, standard, or tall
 palette: theme  # theme, Waterfall preset, or one System web palette
-history: 120  # 60, 120, or 240 frames
+history_mode: duration  # duration or frames
+history_seconds: 30  # 15, 30, or 60; used by duration mode
+# history: 120  # 60, 120, or 240; used by frame mode
 show_scale: true
 show_telemetry: true
+show_pointer: false
 start_paused: false
 grid_options:  # Optional Home Assistant Sections layout metadata
   rows: auto
@@ -567,6 +571,13 @@ grid_options:  # Optional Home Assistant Sections layout metadata
 Home Assistant owns `grid_options`; the card accepts this Sections-dashboard
 layout metadata without treating it as a Waterfall transport or presentation
 option. The Waterfall-specific choices remain bounded as shown above.
+
+Existing card configurations that omit `history_mode` remain in compatible
+frame mode, including exact string-serialized `60`, `120`, and `240` editor
+values. Cards newly added through the picker select 30-second duration history.
+Duration placement uses accepted monotonic browser receipt time, leaves visible
+gaps when delivery pauses or slows, and remains capped at 240 frames as a second
+independent memory bound.
 
 The card discovers the SDS200 panel through Home Assistant's frontend context,
 asks Home Assistant for an authenticated App Ingress session, and requires
@@ -582,15 +593,24 @@ enable the intended owner's panel, and leave only one SDS200 App running.
 Each connected and visible card owns its own demand lease over the daemon's one
 shared waterfall session. Hidden, removed, or disconnected cards abort their
 streams. The last released lease stops scanner-side waterfall demand. **Pause**
-freezes visual history while retaining the live lease; **Clear** removes only
-that card's retained history. History, input lines, reconnect delay, Canvas
-dimensions, device-pixel scaling, queued repaint work, and frame count are
-bounded. The stream is relative and uncalibrated; it is not a calibrated signal
-level or measurement instrument. The daemon refreshes typed Waterfall status at
-a separate bounded cadence, and every live frame can carry its current session
-snapshot. If the physical scanner's span changes, the card replaces its lower,
-center, upper, and marker labels with that scanner-reported range. A failed
-refresh preserves the last valid scale and does not interrupt frame delivery.
+freezes visual history while retaining the live lease and does not accumulate a
+hidden frame backlog; **Clear** removes only that card's retained history.
+Stream-generation changes and teardown also clear retained history. History,
+input lines, reconnect delay, Canvas dimensions, device-pixel scaling, queued
+repaint work, and frame count are bounded. The stream is relative and
+uncalibrated; it is not a calibrated signal level or measurement instrument.
+The daemon refreshes typed Waterfall status at a separate bounded cadence, and
+every live frame can carry its current session snapshot. If the physical
+scanner's span changes, the card replaces its lower, center, upper, and marker
+labels with that scanner-reported range. A failed refresh preserves the last
+valid scale and does not interrupt frame delivery.
+
+When `show_pointer` is enabled, pointer or touch movement over either Canvas and
+the arrow, Home, and End keys move one shared vertical guide; Escape clears it.
+The adjacent output interpolates the validated scanner-reported lower and upper
+bounds and formats the result in MHz. Invalid or incomplete bounds make the
+output unavailable. This is a display aid only: it does not tune, hold, search,
+change scanner span, or establish a calibrated frequency measurement.
 
 Ingress authentication is shared between card instances, but stream leases and
 presentation settings remain independent. Authentication expiry, an App restart,

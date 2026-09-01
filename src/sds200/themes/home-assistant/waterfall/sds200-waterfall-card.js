@@ -5,6 +5,7 @@ const SDS200_WATERFALL_CARD_TAG = "sds200-waterfall-card";
 const SDS200_WATERFALL_PROTOCOL = "sdsctl.waterfall";
 const SDS200_WATERFALL_VERSION = 1;
 const SDS200_WATERFALL_BIN_COUNT = 240;
+const SDS200_WATERFALL_HISTORY_CAPACITY = 240;
 const SDS200_WATERFALL_MAX_LINE_CHARACTERS = 64 * 1024;
 const SDS200_WATERFALL_NDJSON_MEDIA_TYPE = "application/x-ndjson";
 const SDS200_WATERFALL_SSE_MEDIA_TYPE = "text/event-stream";
@@ -59,6 +60,15 @@ const SDS200_WATERFALL_HISTORY_OPTIONS = Object.freeze([
   Object.freeze({value: 120, label: "120 frames"}),
   Object.freeze({value: 240, label: "240 frames"}),
 ]);
+const SDS200_WATERFALL_HISTORY_MODES = Object.freeze([
+  Object.freeze({value: "frames", label: "Frame count"}),
+  Object.freeze({value: "duration", label: "Elapsed time"}),
+]);
+const SDS200_WATERFALL_HISTORY_DURATION_OPTIONS = Object.freeze([
+  Object.freeze({value: 15, label: "15 seconds"}),
+  Object.freeze({value: 30, label: "30 seconds"}),
+  Object.freeze({value: 60, label: "60 seconds"}),
+]);
 const SDS200_WATERFALL_INGRESS_PATH_PATTERN =
   /^\/api\/hassio_ingress\/[A-Za-z0-9_-]+\/$/;
 
@@ -100,8 +110,11 @@ function requireWaterfallCardConfig(config) {
     "density",
     "palette",
     "history",
+    "history_mode",
+    "history_seconds",
     "show_scale",
     "show_telemetry",
+    "show_pointer",
     "start_paused",
     "grid_options",
   ]);
@@ -125,6 +138,7 @@ function requireWaterfallCardConfig(config) {
       : "SDS200 Waterfall";
   const density = config.density ?? "standard";
   const palette = config.palette ?? "theme";
+  const historyMode = config.history_mode ?? "frames";
   const requestedHistory = config.history ?? 120;
   const historyOption = SDS200_WATERFALL_HISTORY_OPTIONS.find(
     (option) =>
@@ -148,11 +162,28 @@ function requireWaterfallCardConfig(config) {
     );
   }
   const history = historyOption.value;
+  if (!waterfallOptionLabel(SDS200_WATERFALL_HISTORY_MODES, historyMode)) {
+    throw new Error(
+      `SDS200 waterfall card history mode "${historyMode}" is not supported.`,
+    );
+  }
+  const requestedHistorySeconds = config.history_seconds ?? 30;
+  const historyDurationOption = SDS200_WATERFALL_HISTORY_DURATION_OPTIONS.find(
+    (option) => option.value === requestedHistorySeconds ||
+      String(option.value) === requestedHistorySeconds,
+  );
+  if (historyDurationOption === undefined) {
+    throw new Error(
+      `SDS200 waterfall card history duration "${requestedHistorySeconds}" is not supported.`,
+    );
+  }
+  const historySeconds = historyDurationOption.value;
 
   const booleans = {};
   for (const [key, fallback] of [
     ["show_scale", true],
     ["show_telemetry", true],
+    ["show_pointer", false],
     ["start_paused", false],
   ]) {
     const value = config[key] ?? fallback;
@@ -169,8 +200,11 @@ function requireWaterfallCardConfig(config) {
     density,
     palette,
     history,
+    history_mode: historyMode,
+    history_seconds: historySeconds,
     show_scale: booleans.show_scale,
     show_telemetry: booleans.show_telemetry,
+    show_pointer: booleans.show_pointer,
     start_paused: booleans.start_paused,
   });
 }
@@ -246,7 +280,91 @@ function validWaterfallFrequencies(status) {
   ) {
     return null;
   }
-  return Object.freeze({fields: Object.freeze(fields), markerPosition});
+  return Object.freeze({
+    fields: Object.freeze(fields),
+    numbers: Object.freeze(numbers),
+    markerPosition,
+  });
+}
+
+function waterfallHistoryPolicy(mode, value) {
+  if (mode === "frames") {
+    const frames = Number(value);
+    if (![60, 120, SDS200_WATERFALL_HISTORY_CAPACITY].includes(frames)) {
+      throw new Error("Waterfall frame history is invalid.");
+    }
+    return Object.freeze({mode, frames, seconds: null});
+  }
+  if (mode === "duration") {
+    const seconds = Number(value);
+    if (![15, 30, 60].includes(seconds)) {
+      throw new Error("Waterfall duration history is invalid.");
+    }
+    return Object.freeze({
+      mode,
+      frames: SDS200_WATERFALL_HISTORY_CAPACITY,
+      seconds,
+    });
+  }
+  throw new Error("Waterfall history mode is invalid.");
+}
+
+function pruneWaterfallHistory(history, policy, now) {
+  if (!Array.isArray(history) || !Number.isFinite(now)) {
+    throw new Error("Waterfall history state is invalid.");
+  }
+  let retained = history.slice(-policy.frames);
+  if (policy.mode === "duration") {
+    const cutoff = now - policy.seconds * 1000;
+    retained = retained.filter(
+      (entry) => Number.isFinite(entry.receivedAt) && entry.receivedAt >= cutoff,
+    );
+  }
+  return retained;
+}
+
+function waterfallHistoryRows(history, policy, height, now) {
+  if (!Number.isFinite(height) || height <= 0) {
+    return [];
+  }
+  const retained = pruneWaterfallHistory(history, policy, now);
+  if (policy.mode === "frames") {
+    const rowHeight = height / policy.frames;
+    const startRow = policy.frames - retained.length;
+    return retained.map((entry, index) => ({
+      entry,
+      y: (startRow + index) * rowHeight,
+      height: Math.max(1, rowHeight),
+    }));
+  }
+  const duration = policy.seconds * 1000;
+  const cutoff = now - duration;
+  return retained.map((entry, index) => {
+    const nextAt = retained[index + 1]?.receivedAt ?? now;
+    const start = Math.max(0, Math.min(1, (entry.receivedAt - cutoff) / duration));
+    const end = Math.max(start, Math.min(1, (nextAt - cutoff) / duration));
+    const y = Math.min(height - 1, start * height);
+    return {
+      entry,
+      y,
+      height: Math.max(1, Math.min(height - y, (end - start) * height)),
+    };
+  });
+}
+
+function waterfallPointerFrequency(status, ratio) {
+  const frequencies = validWaterfallFrequencies(status);
+  if (frequencies === null || !Number.isFinite(ratio)) {
+    return null;
+  }
+  const boundedRatio = Math.max(0, Math.min(1, ratio));
+  const raw = frequencies.numbers[0] +
+    (frequencies.numbers[2] - frequencies.numbers[0]) * boundedRatio;
+  return Object.freeze({
+    ratio: boundedRatio,
+    raw,
+    label: `${(raw / 10000).toFixed(4)} MHz`,
+  });
 }
 
 function requestHomeAssistantContext(
@@ -497,8 +615,11 @@ class Sds200WaterfallCard extends HTMLElement {
       density: "standard",
       palette: "theme",
       history: 120,
+      history_mode: "duration",
+      history_seconds: 30,
       show_scale: true,
       show_telemetry: true,
+      show_pointer: false,
       start_paused: false,
     };
   }
@@ -522,8 +643,21 @@ class Sds200WaterfallCard extends HTMLElement {
           required: true,
           selector: {select: {options: SDS200_WATERFALL_HISTORY_OPTIONS}},
         },
+        {
+          name: "history_mode",
+          required: true,
+          selector: {select: {options: SDS200_WATERFALL_HISTORY_MODES}},
+        },
+        {
+          name: "history_seconds",
+          required: true,
+          selector: {
+            select: {options: SDS200_WATERFALL_HISTORY_DURATION_OPTIONS},
+          },
+        },
         {name: "show_scale", selector: {boolean: {}}},
         {name: "show_telemetry", selector: {boolean: {}}},
+        {name: "show_pointer", selector: {boolean: {}}},
         {name: "start_paused", selector: {boolean: {}}},
       ],
       computeLabel: (schema) => ({
@@ -531,13 +665,19 @@ class Sds200WaterfallCard extends HTMLElement {
         density: "Card height",
         palette: "Palette",
         history: "History depth",
+        history_mode: "History mode",
+        history_seconds: "Elapsed history",
         show_scale: "Show relative frequency scale",
         show_telemetry: "Show lifecycle telemetry",
+        show_pointer: "Enable display-only frequency pointer",
         start_paused: "Start with display paused",
       })[schema.name],
       computeHelper: (schema) => ({
         palette: "Follow Home Assistant, use a Waterfall preset, or choose a System web palette.",
-        history: "Choose one bounded rolling-history capacity.",
+        history: "Frame-count mode keeps this bounded number of frames.",
+        history_mode: "Existing cards default to frame count; elapsed time is an explicit alternative.",
+        history_seconds: "Elapsed-time mode is also capped at 240 frames.",
+        show_pointer: "Inspect frequency without tuning or changing the scanner.",
         start_paused: "The authenticated stream still connects while paused.",
       })[schema.name],
       assertConfig: (config) => {
@@ -549,6 +689,10 @@ class Sds200WaterfallCard extends HTMLElement {
   constructor() {
     super();
     this._config = requireWaterfallCardConfig({});
+    this._historyPolicy = waterfallHistoryPolicy(
+      this._config.history_mode,
+      this._config.history,
+    );
     this._connected = false;
     this._intersecting = false;
     this._api = null;
@@ -566,6 +710,7 @@ class Sds200WaterfallCard extends HTMLElement {
     this._paused = false;
     this._history = [];
     this._latestFrame = null;
+    this._pointerRatio = null;
     this._lastSequence = null;
     this._lastFrameAt = null;
     this._frameTimes = [];
@@ -659,9 +804,20 @@ class Sds200WaterfallCard extends HTMLElement {
 
   setConfig(config) {
     this._config = requireWaterfallCardConfig(config);
+    this._historyPolicy = waterfallHistoryPolicy(
+      this._config.history_mode,
+      this._config.history_mode === "duration"
+        ? this._config.history_seconds
+        : this._config.history,
+    );
     this._paused = this._config.start_paused;
-    while (this._history.length > this._config.history) {
-      this._history.shift();
+    this._history = pruneWaterfallHistory(
+      this._history,
+      this._historyPolicy,
+      performance.now(),
+    );
+    if (!this._config.show_pointer) {
+      this._pointerRatio = null;
     }
     this._render();
     this._schedulePaint();
@@ -691,7 +847,7 @@ class Sds200WaterfallCard extends HTMLElement {
       }
       ha-card {
         display: grid;
-        grid-template-rows: auto minmax(0, 1fr) auto auto;
+        grid-template-rows: auto minmax(0, 1fr) auto auto auto;
         gap: 0.75rem;
         height: var(--sds200-waterfall-card-height);
         min-height: 0;
@@ -782,6 +938,14 @@ class Sds200WaterfallCard extends HTMLElement {
         width: 100%;
         height: 100%;
         min-height: 0;
+        touch-action: pan-y;
+      }
+      canvas[data-pointer-enabled="true"] {
+        touch-action: none;
+      }
+      canvas:focus-visible {
+        outline: 2px solid var(--sds200-waterfall-accent, var(--accent-color));
+        outline-offset: -2px;
       }
       .history {
         border-top: 1px solid var(--sds200-waterfall-border, var(--divider-color));
@@ -805,6 +969,19 @@ class Sds200WaterfallCard extends HTMLElement {
       }
       .scale .upper {
         text-align: right;
+      }
+      .pointer-readout {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--sds200-waterfall-foreground, var(--primary-text-color));
+        font-size: 0.72rem;
+        line-height: 1.2;
+        text-align: center;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pointer-readout[hidden] {
+        display: none;
       }
       .telemetry {
         display: grid;
@@ -870,6 +1047,14 @@ class Sds200WaterfallCard extends HTMLElement {
     this._pauseButton.type = "button";
     this._pauseButton.addEventListener("click", () => {
       this._paused = !this._paused;
+      if (!this._paused) {
+        this._history = pruneWaterfallHistory(
+          this._history,
+          this._historyPolicy,
+          performance.now(),
+        );
+        this._schedulePaint();
+      }
       this._render();
     });
     this._clearButton = waterfallNode(document, "button", "clear", "Clear");
@@ -886,14 +1071,24 @@ class Sds200WaterfallCard extends HTMLElement {
     this._spectrum = waterfallNode(document, "canvas", "spectrum");
     this._spectrum.setAttribute(
       "aria-label",
-      "Current relative 240-bin spectrum",
+      "Current relative 240-bin spectrum. Enable the frequency pointer to inspect with pointer or arrow keys.",
     );
     this._historyCanvas = waterfallNode(document, "canvas", "history");
     this._historyCanvas.setAttribute(
       "aria-label",
-      "Rolling relative waterfall history",
+      "Rolling relative waterfall history. Enable the frequency pointer to inspect with pointer or arrow keys.",
     );
+    this._initializePointerCanvas(this._spectrum);
+    this._initializePointerCanvas(this._historyCanvas);
     this._surface.append(this._spectrum, this._historyCanvas);
+
+    this._pointerReadout = waterfallNode(
+      document,
+      "output",
+      "pointer-readout",
+      "Frequency pointer unavailable.",
+    );
+    this._pointerReadout.hidden = true;
 
     this._scale = waterfallNode(document, "div", "scale");
     this._scaleLower = waterfallNode(document, "span", "lower", "Unavailable");
@@ -925,10 +1120,87 @@ class Sds200WaterfallCard extends HTMLElement {
     this._card.append(
       this._header,
       this._surface,
+      this._pointerReadout,
       this._scale,
       this._telemetry,
     );
     root.append(style, this._card);
+  }
+
+  _initializePointerCanvas(canvas) {
+    canvas.setAttribute("role", "img");
+    const updateFromPointer = (event) => {
+      if (!this._config.show_pointer) {
+        return;
+      }
+      const bounds = canvas.getBoundingClientRect();
+      if (!Number.isFinite(bounds.width) || bounds.width <= 0) {
+        this._setPointerRatio(null);
+        return;
+      }
+      this._setPointerRatio(
+        (Number(event.clientX) - bounds.left) / bounds.width,
+      );
+    };
+    canvas.addEventListener("pointerdown", updateFromPointer);
+    canvas.addEventListener("pointermove", updateFromPointer);
+    canvas.addEventListener("pointerleave", () => {
+      if (this.shadowRoot.activeElement !== canvas) {
+        this._setPointerRatio(null);
+      }
+    });
+    canvas.addEventListener("blur", () => {
+      this._setPointerRatio(null);
+    });
+    canvas.addEventListener("keydown", (event) => {
+      if (!this._config.show_pointer) {
+        return;
+      }
+      const step = 1 / (SDS200_WATERFALL_BIN_COUNT - 1);
+      const current = this._pointerRatio ?? 0.5;
+      let next = current;
+      if (event.key === "ArrowLeft" || event.key === "ArrowDown") {
+        next = current - step;
+      } else if (event.key === "ArrowRight" || event.key === "ArrowUp") {
+        next = current + step;
+      } else if (event.key === "Home") {
+        next = 0;
+      } else if (event.key === "End") {
+        next = 1;
+      } else if (event.key === "Escape") {
+        next = null;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      this._setPointerRatio(next);
+    });
+  }
+
+  _setPointerRatio(value) {
+    this._pointerRatio = Number.isFinite(value)
+      ? Math.max(0, Math.min(1, value))
+      : null;
+    this._renderPointer();
+    this._schedulePaint();
+  }
+
+  _renderPointer() {
+    if (this._pointerReadout === undefined) {
+      return;
+    }
+    this._pointerReadout.hidden = !this._config.show_pointer;
+    if (!this._config.show_pointer) {
+      this._pointerReadout.textContent = "Frequency pointer disabled.";
+      return;
+    }
+    const pointer = waterfallPointerFrequency(
+      waterfallRecordObject(this._checkpoint).waterfall_status,
+      this._pointerRatio,
+    );
+    this._pointerReadout.textContent = pointer === null
+      ? "Frequency pointer unavailable."
+      : `Frequency pointer: ${pointer.label}`;
   }
 
   _onVisibilityChange() {
@@ -962,7 +1234,7 @@ class Sds200WaterfallCard extends HTMLElement {
       this._retryTimer !== null
     ) {
       this._stopStream({
-        clearHistory: false,
+        clearHistory: true,
         status: "Waterfall waits until this card is visible.",
       });
     } else if (this._connected) {
@@ -990,9 +1262,11 @@ class Sds200WaterfallCard extends HTMLElement {
     this._queueLoss = 0;
     this._overflows = 0;
     this._transitions = 0;
+    this._pointerRatio = null;
     if (clearHistory) {
       this._history = [];
     }
+    this._renderPointer();
     this._renderTelemetry();
     this._schedulePaint();
   }
@@ -1046,7 +1320,7 @@ class Sds200WaterfallCard extends HTMLElement {
       return;
     }
     this._stopStream({
-      clearHistory: false,
+      clearHistory: true,
       status: "Authenticating the waterfall stream…",
     });
     const generation = this._generation;
@@ -1104,7 +1378,7 @@ class Sds200WaterfallCard extends HTMLElement {
       if (generation !== this._generation || controller.signal.aborted) {
         return;
       }
-      this._resetLiveState({clearHistory: false});
+      this._resetLiveState({clearHistory: true});
       const message = error instanceof WaterfallCardError
         ? error.message
         : "Waterfall data was rejected.";
@@ -1247,6 +1521,7 @@ class Sds200WaterfallCard extends HTMLElement {
     this._checkpoint = snapshot;
     this._renderTelemetry();
     this._renderScale();
+    this._renderPointer();
   }
 
   _applyRecord(value) {
@@ -1293,10 +1568,12 @@ class Sds200WaterfallCard extends HTMLElement {
     );
     if (!this._paused) {
       this._latestFrame = frame;
-      this._history.push(frame);
-      while (this._history.length > this._config.history) {
-        this._history.shift();
-      }
+      this._history.push({values: frame, receivedAt: now});
+      this._history = pruneWaterfallHistory(
+        this._history,
+        this._historyPolicy,
+        now,
+      );
       this._schedulePaint();
     }
     this._renderTelemetry();
@@ -1314,6 +1591,12 @@ class Sds200WaterfallCard extends HTMLElement {
     this._title.textContent = this._config.title;
     this._scale.hidden = !this._config.show_scale;
     this._telemetry.hidden = !this._config.show_telemetry;
+    this._spectrum.tabIndex = this._config.show_pointer ? 0 : -1;
+    this._historyCanvas.tabIndex = this._config.show_pointer ? 0 : -1;
+    this._spectrum.dataset.pointerEnabled = String(this._config.show_pointer);
+    this._historyCanvas.dataset.pointerEnabled = String(
+      this._config.show_pointer,
+    );
     this._pauseButton.textContent = this._paused ? "Resume" : "Pause";
     this._pauseButton.setAttribute("aria-pressed", String(this._paused));
     if (this._streaming) {
@@ -1324,6 +1607,7 @@ class Sds200WaterfallCard extends HTMLElement {
           : "Live relative waterfall data.",
       );
     }
+    this._renderPointer();
     this._renderScale();
     this._renderTelemetry();
   }
@@ -1345,6 +1629,17 @@ class Sds200WaterfallCard extends HTMLElement {
     this._telemetryValues.session.textContent =
       typeof snapshot.state === "string" ? snapshot.state : "Idle";
     const now = performance.now();
+    if (this._paused === false && this._historyPolicy?.mode === "duration") {
+      const before = this._history.length;
+      this._history = pruneWaterfallHistory(
+        this._history,
+        this._historyPolicy,
+        now,
+      );
+      if (this._history.length !== before || this._history.length !== 0) {
+        this._schedulePaint();
+      }
+    }
     this._frameTimes = this._frameTimes.filter(
       (time) => now - time <= 5000,
     );
@@ -1382,6 +1677,7 @@ class Sds200WaterfallCard extends HTMLElement {
         spectrum: "#42d7ff",
         marker: "#ffcf4a",
         history: "#42d7ff",
+        pointer: "#ffffff",
       },
       green: {
         background: "#031108",
@@ -1389,6 +1685,7 @@ class Sds200WaterfallCard extends HTMLElement {
         spectrum: "#66ff8a",
         marker: "#f6ff73",
         history: "#37e56d",
+        pointer: "#ffffff",
       },
       amber: {
         background: "#160e02",
@@ -1396,6 +1693,7 @@ class Sds200WaterfallCard extends HTMLElement {
         spectrum: "#ffbf47",
         marker: "#fff176",
         history: "#ff9f1a",
+        pointer: "#ffffff",
       },
       monochrome: {
         background: "#080808",
@@ -1403,6 +1701,7 @@ class Sds200WaterfallCard extends HTMLElement {
         spectrum: "#f2f2f2",
         marker: "#ffffff",
         history: "#d0d0d0",
+        pointer: "#ffffff",
       },
     };
     const systemColors = SDS200_WATERFALL_SYSTEM_PALETTES[this._config.palette];
@@ -1413,6 +1712,7 @@ class Sds200WaterfallCard extends HTMLElement {
         spectrum: systemColors[6],
         marker: systemColors[11],
         history: systemColors[7],
+        pointer: systemColors[3],
       };
     }
     if (this._config.palette !== "theme") {
@@ -1430,6 +1730,8 @@ class Sds200WaterfallCard extends HTMLElement {
         styles.getPropertyValue("--accent-color").trim() || "#ffcf4a",
       history:
         styles.getPropertyValue("--primary-color").trim() || "#42d7ff",
+      pointer:
+        styles.getPropertyValue("--primary-text-color").trim() || "#ffffff",
     };
   }
 
@@ -1497,12 +1799,22 @@ class Sds200WaterfallCard extends HTMLElement {
     historyContext.fillStyle = palette.background;
     historyContext.fillRect(0, 0, historySize.width, historySize.height);
     if (this._history.length !== 0) {
-      const rowHeight = historySize.height / this._config.history;
-      const startRow = this._config.history - this._history.length;
+      const historyNow = this._paused
+        ? (this._history.at(-1)?.receivedAt ?? performance.now())
+        : performance.now();
+      this._history = pruneWaterfallHistory(
+        this._history,
+        this._historyPolicy,
+        historyNow,
+      );
       historyContext.fillStyle = palette.history;
-      this._history.forEach((frame, rowIndex) => {
-        const y = (startRow + rowIndex) * rowHeight;
-        frame.forEach((value, binIndex) => {
+      for (const row of waterfallHistoryRows(
+        this._history,
+        this._historyPolicy,
+        historySize.height,
+        historyNow,
+      )) {
+        row.entry.values.forEach((value, binIndex) => {
           historyContext.globalAlpha = 0.08 + value * 0.92;
           const x1 = binIndex * historySize.width /
             SDS200_WATERFALL_BIN_COUNT;
@@ -1510,12 +1822,12 @@ class Sds200WaterfallCard extends HTMLElement {
             SDS200_WATERFALL_BIN_COUNT;
           historyContext.fillRect(
             x1,
-            y,
+            row.y,
             Math.max(1, x2 - x1),
-            Math.max(1, rowHeight),
+            row.height,
           );
         });
-      });
+      }
       historyContext.globalAlpha = 1;
     }
 
@@ -1536,6 +1848,30 @@ class Sds200WaterfallCard extends HTMLElement {
         context.moveTo(x, 0);
         context.lineTo(x, size.height);
         context.stroke();
+      }
+    }
+    const pointer = this._config.show_pointer
+      ? waterfallPointerFrequency(
+        waterfallRecordObject(this._checkpoint).waterfall_status,
+        this._pointerRatio,
+      )
+      : null;
+    if (pointer !== null) {
+      for (const [canvas, size] of [
+        [this._spectrum, spectrumSize],
+        [this._historyCanvas, historySize],
+      ]) {
+        const context = canvas.getContext("2d");
+        const x = pointer.ratio * size.width;
+        context.save();
+        context.strokeStyle = palette.pointer;
+        context.lineWidth = 2 * size.ratio;
+        context.setLineDash([4 * size.ratio, 3 * size.ratio]);
+        context.beginPath();
+        context.moveTo(x, 0);
+        context.lineTo(x, size.height);
+        context.stroke();
+        context.restore();
       }
     }
   }
