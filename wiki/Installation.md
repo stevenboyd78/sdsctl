@@ -175,6 +175,52 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.26.1
+
+v0.26.1 publishes Milestones 30.1 and 30.2: the concise package README,
+deployment- and task-oriented beginner documentation, and the `sds200[all]`
+optional dependency extra. The `all` extra is the exact union of `tui`, `web`,
+`mqtt`, and `playback`; it does not install development tools, operating-system
+packages, Home Assistant, containers, audio servers, or external encoders.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the base package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.26.1"
+sdsctl --version
+```
+
+Install or upgrade every optional Python runtime interface with:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.26.1"
+python -m pip check
+sdsctl --version
+```
+
+Linux local playback still needs a working PortAudio runtime. See
+[Audio and recordings](Audio-and-Recordings) for the required operating-system
+package and verification procedure.
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.26.1
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release,
+but the exact version tag is recommended for controlled deployments.
+Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built and do
+not switch automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.26.1 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, and independently versioned card modules.
+Upgrade the repository-managed App only after the matching release images have
+published. The optional Core integration remains independently versioned at
+0.1.5 and does not need replacement for this patch release.
+
 ## Upgrade to v0.26.0
 
 v0.26.0 freezes Milestones 29.4 through 29.7: one aggregate first-party Home

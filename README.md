@@ -64,7 +64,7 @@ PortAudio runtime; Debian and Raspberry Pi OS users normally install
 Published container users can pull the current exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.26.0
+docker pull theboyd78/sdsctl:0.26.1
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -196,7 +196,9 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.26.0` is the current published release. See the
+Version `0.26.1` is the current published release. It adds the public
+`sds200[all]` runtime-extra union and the reorganized beginner documentation
+without changing scanner or application runtime behavior. See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and
 [project vision](docs/project-vision.md) for released changes, ordered work,

@@ -744,6 +744,33 @@ stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
 dashboard reported `Connected`; the repository App was therefore restored as
 the sole scanner owner.
 
+### v0.26.1 release acceptance gate
+
+After the genuine v0.26.1 tag publishes the amd64, aarch64, and generic
+multi-architecture images, upgrade the repository-managed v0.26.0 App and
+record the exact platform, App image, and scanner versions used. This patch does
+not change runtime behavior, so the proportionate release gate must confirm:
+
+- the App reports 0.26.1 and uses the matching published image without a Local
+  App, Local integration, retained share, private capture, or development-source
+  ambiguity;
+- the scanner connects through the existing single-owner boundary, Ingress
+  opens, all twenty-four fixed MQTT Discovery components remain available, and
+  the aggregate plus retained individual first-party card resources still load;
+- existing configuration and persistent recordings survive the upgrade, and a
+  finalized recording remains available without adding a new scanner or audio
+  owner;
+- the optional Core integration remains independently versioned at 0.1.5 and
+  does not require installation, replacement, key rotation, reauthentication,
+  Core restart, or Core reload for this patch; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, Waterfall polling, and RTSP/RTP audio.
+
+Remove any deliberately named release-validation component afterward and
+restore the published App as sole scanner owner. Retain no private capability,
+recording, address, scanner-programming, provider, credential, or browser-cache
+data in public release evidence.
+
 ### v0.26.0 release acceptance gate
 
 After the genuine v0.26.0 tag publishes the amd64, aarch64, and generic

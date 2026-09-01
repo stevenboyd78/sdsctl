@@ -11,75 +11,84 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 30.1 — Installation experience and beginner documentation
+### Milestone 30.2 — v0.26.1 installation release and publication closure
 
-Milestone 29.7 is closed through reviewed pull request 211 and the public
-v0.26.0 release. The Python distribution, generic Docker image, Home Assistant
-App images, reviewed wiki, GitHub Release, source archives, checksums, and
-release metadata are published and verified from commit
-`7ea9ff2ae8a0234a4b54fbb64757bfbe105df36b`. Physical Home Assistant OS
-acceptance covered the published App upgrade, scanner controls, browser and
-Home Assistant media-source audio, finalized recordings, Waterfall cadence and
-span tracking, restart recovery, optional Core integration lifecycle, and exact
-cleanup back to the published App as sole scanner owner.
+Milestone 30.1 is closed through reviewed pull request 212 and merge commit
+`e438af0c06e955a6ca5688376c2023f8f35481c1`. The repository now has a concise
+211-line README, deployment- and task-oriented beginner wiki source, a checked
+350-line README ceiling, and an `sds200[all]` package extra whose members are
+the exact union of `tui`, `web`, `mqtt`, and `playback`. Local validation passed
+4,601 tests plus static, documentation, browser, screenshot, distribution, and
+clean-install checks; pull-request and post-merge CI, CodeQL, generic-container,
+Home Assistant App, and dependency-graph workflows also passed.
 
-Milestone 30.1 makes the supported installation and first-use paths easier to
-understand without changing scanner, daemon, web, audio, Favorites, Waterfall,
-or Home Assistant runtime behavior. The repository README becomes a concise
-project landing page rather than a second operations manual. It must explain
-what `sdsctl` is, identify supported scanners, help a beginner choose an
-installation target, provide the shortest verified first connection, preserve
-the alpha, security, hardware-validation, and safety boundaries, and route the
-reader to maintained task-oriented documentation. Detailed setup, operation,
-configuration, troubleshooting, architecture, protocol, and release material
-belongs in the reviewed wiki source or an explicitly linked advanced reference.
-The reviewed README must remain no longer than 350 lines.
+Public PyPI still serves immutable version 0.26.0 metadata and its prior long
+description. That artifact does not declare the `all` extra, so a public
+`python -m pip install "sds200[all]"` may warn and install only the base package.
+Milestone 30.2 closes that release-boundary mismatch; it is release closure for
+the already-reviewed installation and documentation work, not another runtime
+feature slice.
 
-Add a published `sds200[all]` optional dependency extra whose members are the
-exact union of the `tui`, `web`, `mqtt`, and `playback` runtime extras. The name
-`all` means all optional Python runtime interfaces; it does not include
-development tooling, operating-system packages, Home Assistant installation,
-container deployment, audio-server configuration, or external encoders.
-Preserve the individually installable extras and add an integrity test that
-fails if their union and `all` drift apart. Documentation examples must be
-validated against the extras declared by package metadata and must continue to
-call out PortAudio and other operating-system prerequisites where applicable.
+Synchronize the Python distribution, import version, and Home Assistant App at
+0.26.1. Freeze the project and App changelogs, release-facing README and wiki
+guidance, container references, and version assertions. The independently
+packaged Home Assistant Core integration remains at 0.1.5 because Milestone
+30.1 does not change that artifact. The public account must distinguish the base
+package, individual extras, the all-runtime extra, development dependencies,
+operating-system prerequisites, Home Assistant installation, and container
+deployment without implying that `all` installs non-Python components.
 
-Reorganize the reviewed wiki source around deployment targets and user goals.
-The first decision separates Home Assistant OS, Linux or Raspberry Pi
-workstations, Linux servers, Docker or Podman deployments, base CLI or Python
-library use, full Python runtime installations, and development environments.
-Task navigation then covers discovery and first connection, CLI use, the TUI,
-the web dashboard, live audio and recordings, MQTT, Home Assistant, Favorites
-and assisted RadioReference workflows, Waterfall, and themes. Management and
-advanced sections cover configuration, security, upgrades, rollback, logging,
-diagnostics, troubleshooting, daemon APIs, profiles, capture and replay,
-protocol research, and architecture.
+Run Ruff, strict MyPy, the complete Python 3.11–3.14 pytest and coverage matrix,
+documentation checks, real-browser and screenshot checks, source and wheel
+builds, Twine checks, release-integrity and tag-contract tests, generic
+Docker/Compose/Podman validation, Home Assistant App amd64/aarch64 validation,
+CodeQL, and dependency-graph review. In clean environments, verify the base,
+each individual optional extra, `all`, and `dev,all`; inspect wheel metadata to
+prove that `all` is the exact dependency union and that the packaged PyPI long
+description contains the reviewed beginner installation command.
 
-Beginner-facing guides must state what a feature does, who should use it,
-prerequisites, the shortest working procedure, the expected success evidence,
-how to stop or undo the workflow, common failures, and the route to advanced
-reference material. Do not remove detailed README material until it has an
-audited destination. Avoid maintaining divergent copies of the same procedure:
-the README and wiki should link to canonical repository references where the
-technical detail must remain versioned with the code.
+Pull requests, `main` pushes, and manual workflow dispatches may build and
+validate release artifacts but may not publish them. Only one genuine matching
+`v0.26.1` tag on the exact reviewed release commit may publish the Python
+distribution, generic Docker image, and Home Assistant App amd64/aarch64 and
+multi-architecture images. The GitHub Release must use that same commit,
+version, changelog, release notes, source archives, checksums, and artifact set.
+Workflow success alone is not release acceptance, and no tag may be moved or
+reused after publication.
 
-Run Ruff, strict MyPy, the complete pytest and coverage suite, documentation
-checks, source and wheel builds, Twine checks, release-integrity tests, and
-clean-environment package installation and import smoke tests for the base,
-individual optional, combined runtime, and development installation targets.
-Verify wiki navigation, README and wiki links, declared extras, command names,
-supported Python versions, scanner-model claims, and security language. No
-physical scanner, Home Assistant mutation, container publication, package
-publication, release tag, or version change is required for this documentation
-and packaging slice.
+Publish the reviewed wiki source without private validation data or source/wiki
+drift. After tag-gated publication, verify that public PyPI reports version
+0.26.1, exposes `all` with the exact four-extra dependency union, renders the
+concise README, and supports clean pinned base and `all` installations. Verify
+the GitHub Release, source archives, checksums, generic multi-platform image,
+Home Assistant images, moving tags, repository metadata, and public links.
 
-Duration-based Waterfall history, an interactive frequency pointer, TUI
-Waterfall rendering, GUI work, a ProScan wire comparison, alternative GW2
-syntax, binary negotiation, FFT calibration, scanner tuning, public or
-anonymous audio, automatic RadioReference synchronization, weather-alert
-recording, and broader scanner-family validation remain separately bounded
-future work.
+Complete a proportionate Home Assistant OS upgrade from published App 0.26.0
+to 0.26.1. Confirm the App reports the exact published version and image,
+connects to the scanner as sole control and RTSP/RTP owner, opens Ingress,
+retains MQTT Discovery and first-party card resources, and preserves recordings
+and configuration. Remove any deliberately named validation components and
+restore the published App as the sole scanner owner. No Local App, custom
+integration copy, private bridge key, recording, scanner programming, provider
+payload, credential, address, or browser-cache state may enter public evidence.
+
+No scanner, daemon, web, audio, Favorites, Waterfall, MQTT, container, or Home
+Assistant runtime capability enters Milestone 30.2. Duration-based Waterfall
+history, an interactive frequency pointer, TUI Waterfall rendering, GUI work, a
+ProScan wire comparison, alternative GW2 syntax, binary negotiation, FFT
+calibration, scanner tuning, public or anonymous audio, automatic
+RadioReference synchronization, weather-alert recording, and broader scanner-
+family validation remain separately bounded future work.
+
+#### Closed Milestone 30.1 — Installation experience and beginner documentation
+
+Milestone 30.1 replaced the oversized README with a concise project landing
+page, reorganized reviewed wiki source around beginner deployment targets and
+user goals, added the exact checked `sds200[all]` runtime-extra union, and added
+documentation contracts that validate README length, declared extras, and wiki
+destinations. It changed no scanner, daemon, web, audio, Favorites, Waterfall,
+MQTT, container, or Home Assistant runtime behavior and performed no package,
+container, App, tag, release, or wiki publication.
 
 #### Closed Milestone 29.7 — v0.26.0 release and publication closure
 
@@ -1063,6 +1072,14 @@ state changes.
   the runtime boundary, synchronize release surfaces, validate every artifact,
   publish only from one genuine matching tag, and complete a clean published
   Home Assistant upgrade acceptance.
+- Milestone 30.1: concise project landing page, deployment- and task-oriented
+  beginner wiki source, an exact checked `sds200[all]` runtime-extra union, and
+  documentation contracts for README length, declared extras, and audited
+  destinations without changing runtime behavior.
+- Milestone 30.2: v0.26.1 release and publication closure that makes the
+  reviewed installation experience and `all` extra genuinely available from
+  public PyPI, synchronizes release artifacts, validates clean installs, and
+  completes proportionate published Home Assistant acceptance.
 - Weather-alert state and recording, TUI waterfall rendering, and the future GUI
   remain separately bounded follow-up candidates.
 

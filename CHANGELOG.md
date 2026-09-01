@@ -6,6 +6,30 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-09-01
+
+### Added
+
+- Add an `all` optional Python runtime extra whose members are the exact union
+  of the independently installable `tui`, `web`, `mqtt`, and `playback` extras.
+  It intentionally excludes development tools, operating-system packages, Home
+  Assistant installation, containers, audio servers, FFmpeg, and other external
+  programs.
+- Add beginner-oriented wiki guides for first connection, ordinary `sdsctl`
+  use, Home Assistant, containers, audio and recordings, Favorites and
+  RadioReference, operations and diagnostics, and the Python API.
+
+### Changed
+
+- Replace the 1,278-line package README with a 211-line project landing page
+  that helps a beginner select an installation target, install the base or all-
+  runtime Python package, make the first scanner connection, and reach the
+  appropriate detailed guide. PyPI now renders that same concise account.
+- Reorganize reviewed wiki navigation around deployment targets and user goals,
+  while retaining detailed version-controlled technical references. Enforce a
+  350-line README ceiling and validate documented Python extras against package
+  metadata so instructions cannot silently drift from installable targets.
+
 ## [0.26.0] - 2026-08-31
 
 ### Added
@@ -1607,7 +1631,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...HEAD
+[0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.23.0...v0.24.0
