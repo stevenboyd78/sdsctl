@@ -11,7 +11,72 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 29.3 — v0.25.0 release and publication closure
+### Milestone 29.4 — Unified Home Assistant card resource registration
+
+Milestone 29.3 is closed with the exact v0.25.0 Python distribution, generic
+Docker image, Home Assistant App images, reviewed wiki, GitHub Release, and
+repository-managed physical Home Assistant OS acceptance published and
+verified. The release tag and every public artifact resolve to reviewed commit
+`2aa91778660faa89a2f2f7f1b62de68f98fc632a`. The published App resumed sole
+scanner ownership after validation cleanup, and no pull request remains open.
+
+Milestone 29.4 simplifies installation of the three first-party Home Assistant
+cards without merging their implementation or weakening their independently
+validated package identities. Add one first-party ES module entry point at
+`/local/sds200/sds200-cards.js` whose exact packaged bytes import the compact,
+display, and waterfall modules in manifest order through their complete
+SHA-256-qualified resource URLs. Registering that one digest-qualified entry
+point must expose all three existing custom elements and card-picker entries.
+
+The existing compact, display, and waterfall resource URLs remain supported and
+byte-identical compatibility paths. Existing dashboards and individual resource
+registrations must continue to work without migration. Loading the aggregate
+entry point beside one or more individual modules must remain idempotent through
+the cards' existing guarded custom-element and picker registration. The App may
+install or update the four exact files under `www/sds200`, but it must not edit
+Home Assistant `.storage`, dashboard configuration, YAML, or resource records.
+
+Treat the aggregate entry point as a declarative compatibility asset rather
+than a fourth theme or card. Its child import list must be derived from the
+validated immutable built-in Home Assistant registry, contain no remote URL,
+runtime discovery, user-writable source, executable configuration, credential,
+or scanner endpoint, and fail validation when its ordered imports or embedded
+digests diverge from the three packaged modules. Its own recommended resource
+URL must carry the SHA-256 of the complete loader bytes so any child digest
+change necessarily produces a new browser-cache identity.
+
+Extend the existing symlink-refusing, atomic, byte-verifying App installer and
+packaging contracts to the aggregate asset. Add source-tree, wheel, Home
+Assistant App, idempotence, stale-file replacement, path-safety, exact-digest,
+ordered-import, duplicate-load, and Node-backed custom-element registration
+coverage. Preserve optional-card installation failure isolation so scanner,
+daemon, MQTT, audio, recording, control, and waterfall ownership can still
+start when Home Assistant's optional `www` delivery is unavailable.
+
+Make the aggregate digest-qualified URL the recommended registration for new
+installations while documenting the three digest-qualified individual URLs as
+supported selective-registration and migration alternatives. Correct every App,
+repository, release, and reviewed-wiki instruction that still shows an
+unqualified resource URL. Documentation must explain that changing only a URL
+query is an intentional cache-version update, not a custom version string, and
+that removing old individual resource records is an explicit operator action
+performed only after the aggregate module has loaded successfully.
+
+Physical Home Assistant OS acceptance must upgrade one deliberately named Local
+App, verify exact installed bytes and one aggregate resource registration, load
+all three cards through direct HTTP and external HTTPS frontend origins, prove
+card-picker and existing-dashboard compatibility, and confirm scanner, audio,
+recording, controls, and waterfall behavior remain unchanged. Restore the
+published App as sole owner and remove all deliberately named validation state
+after acceptance.
+
+Automatic Home Assistant resource registration or deletion, HACS publication,
+runtime bundling or code generation in the browser, third-party Home Assistant
+JavaScript discovery, card rendering changes, scanner behavior changes, another
+scanner connection, TUI waterfall rendering, weather-alert recording, and GUI
+implementation remain outside Milestone 29.4.
+
+#### Closed Milestone 29.3 — v0.25.0 release and publication closure
 
 Milestones 29.1 and 29.2 are closed after completing the responsive Home
 Assistant waterfall card, standard Home Assistant media-source live scanner
@@ -75,7 +140,7 @@ whole-home synchronization claims, weather-alert recording, TUI waterfall
 rendering, GUI implementation, and the external implementation-review message
 remain outside this release. No new runtime capability enters Milestone 29.3.
 
-#### Closed Milestone 29.2 acceptance record
+##### Closed Milestone 29.2 acceptance record
 
 Milestone 29.1 is closed with the responsive Home Assistant waterfall card,
 authenticated event-stream transport, shared demand leases, deterministic

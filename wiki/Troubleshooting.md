@@ -296,10 +296,13 @@ subject to the daemon's transport capability check.
 ### SDS200 Lovelace card is missing
 
 Confirm the App log did not report a card-installation warning and verify
-`/local/sds200/sds200-card.js` is registered for **SDS200 Scanner**, or
-`/local/sds200/sds200-display-card.js` is registered for **SDS200 Display**, or
-`/local/sds200/sds200-waterfall-card.js` is registered for **SDS200 Waterfall**, under
-**Settings > Dashboards > Resources** as a JavaScript Module. If the App created
+the complete digest-qualified `/local/sds200/sds200-cards.js?v=...` aggregate
+URL is registered under **Settings > Dashboards > Resources** as a JavaScript
+Module. Selective installations may instead register the complete
+digest-qualified `sds200-card.js`, `sds200-display-card.js`, or
+`sds200-waterfall-card.js` URL. An unqualified or stale `v` query can leave one
+browser origin on older cached bytes; use the exact URL documented by the
+installed App. If the App created
 Home Assistant's `www` directory for the first time, restart Home Assistant Core
 once before registering the resource.
 
@@ -314,11 +317,15 @@ values use the configured Simple or Detail scan fallback. Explicit layouts
 intentionally ignore Screen Kind.
 
 If **SDS200 Waterfall** reports that no App is available, start the installed
-SDS200 App and confirm its Ingress panel loads. If it reports multiple running
-Apps, stop or uninstall obsolete Local development Apps so one scanner owner
-remains. The card deliberately has no manual endpoint or credential fallback.
-Authentication or App-restart failures use bounded reconnect delays; removing
-or hiding the card releases its stream lease.
+SDS200 App, enable **Show in sidebar**, and confirm its Ingress panel loads.
+The card discovers candidates from Home Assistant's panel registry; opening
+`/app/<slug>` directly does not make an App with a hidden panel discoverable.
+During Local App validation, confirm the Local App—not only an installed but
+stopped published App—owns the visible panel. If the card reports multiple
+running Apps, stop or uninstall obsolete Local development Apps so one scanner
+owner remains. The card deliberately has no manual endpoint or credential
+fallback. Authentication or App-restart failures use bounded reconnect delays;
+removing or hiding the card releases its stream lease.
 
 ## Capture detailed diagnostics
 

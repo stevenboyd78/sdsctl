@@ -13,6 +13,7 @@ from .exceptions import SDS200Error
 HOME_ASSISTANT_THEME_MANIFEST_SCHEMA_VERSION: Final = 1
 HOME_ASSISTANT_THEME_INTERFACE: Final = "home-assistant"
 HOME_ASSISTANT_THEME_MANIFEST_FILENAME: Final = "manifest.json"
+HOME_ASSISTANT_CARD_AGGREGATE_MODULE_FILENAME: Final = "sds200-cards.js"
 BUILT_IN_HOME_ASSISTANT_THEME_IDS: Final = (
     "compact",
     "sds200-display",
@@ -296,8 +297,39 @@ def read_built_in_home_assistant_theme_module(
     )
 
 
+def read_built_in_home_assistant_card_aggregate_module() -> bytes:
+    """Read and verify the aggregate loader for every built-in Lovelace card."""
+
+    registry = built_in_home_assistant_theme_registry()
+    if any("?v=" not in theme.resource_url for theme in registry.themes):
+        raise HomeAssistantThemeError(
+            "built-in Home Assistant aggregate card imports must be "
+            "digest-qualified"
+        )
+    expected = "".join(
+        f'import "{theme.resource_url}";\n' for theme in registry.themes
+    ).encode("utf-8")
+    path = (
+        files("sds200.themes")
+        .joinpath(HOME_ASSISTANT_THEME_INTERFACE)
+        .joinpath(HOME_ASSISTANT_CARD_AGGREGATE_MODULE_FILENAME)
+    )
+    if not path.is_file():
+        raise HomeAssistantThemeError(
+            "built-in Home Assistant aggregate card module is missing"
+        )
+    payload = path.read_bytes()
+    if payload != expected:
+        raise HomeAssistantThemeError(
+            "built-in Home Assistant aggregate card imports do not match "
+            "the validated registry"
+        )
+    return payload
+
+
 __all__ = [
     "BUILT_IN_HOME_ASSISTANT_THEME_IDS",
+    "HOME_ASSISTANT_CARD_AGGREGATE_MODULE_FILENAME",
     "HOME_ASSISTANT_THEME_INTERFACE",
     "HOME_ASSISTANT_THEME_MANIFEST_FILENAME",
     "HOME_ASSISTANT_THEME_MANIFEST_SCHEMA_VERSION",
@@ -308,4 +340,5 @@ __all__ = [
     "load_home_assistant_theme_package",
     "load_home_assistant_theme_registry",
     "read_built_in_home_assistant_theme_module",
+    "read_built_in_home_assistant_card_aggregate_module",
 ]

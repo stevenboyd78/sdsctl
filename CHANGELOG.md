@@ -6,6 +6,25 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add one digest-qualified `sds200-cards.js` Home Assistant resource that
+  imports the compact Scanner, responsive Display, and authenticated Waterfall
+  cards through their exact manifest-declared URLs. Existing individual
+  resources remain supported selective-registration paths, duplicate loading is
+  idempotent, and the App still never edits Home Assistant resource records.
+
+### Fixed
+
+- Normalize the Waterfall card graphical editor's exact string-serialized 60,
+  120, and 240-frame history selections back to bounded numeric capacities, and
+  accept Home Assistant's host-owned `grid_options` section-layout metadata,
+  while continuing to reject malformed or unsupported Waterfall options.
+- Clarify that authenticated Waterfall card discovery follows Home Assistant's
+  Ingress panel registry: the intended running App must have **Show in sidebar**
+  enabled, and directly opening a hidden Local App does not make it a discovery
+  candidate. This preserves the existing exactly-one-running-App boundary.
+
 ## [0.25.0] - 2026-08-31
 
 ### Added

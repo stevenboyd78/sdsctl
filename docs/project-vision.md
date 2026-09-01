@@ -327,6 +327,12 @@ fallback. Both card assets remain read-only, transport-free consumers of Home
 Assistant state; scanner display writes and copied manufacturer assets remain
 outside the product boundary.
 
+Milestone 29.4 adds one digest-qualified aggregate ES module for registering all
+three first-party Home Assistant cards through one resource record. It preserves
+the three independently packaged card modules and their individual URLs, derives
+only ordered exact-digest imports from the immutable built-in registry, and does
+not give the App authority to edit Home Assistant resource or dashboard state.
+
 HACS may still be evaluated later as an optional distribution channel, but it is
 not a dependency of the primary Home Assistant App repository distribution path.
 

@@ -10,6 +10,7 @@ import pytest
 
 from sds200.exceptions import SDS200Error
 from sds200.home_assistant_lovelace import (
+    HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME,
     HOME_ASSISTANT_LOVELACE_CARD_FILENAME,
     HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME,
     HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_RESOURCE_URL,
@@ -106,17 +107,23 @@ def test_install_cards_installs_all_packaged_assets(
     compact = tmp_path / HOME_ASSISTANT_LOVELACE_CARD_FILENAME
     display = tmp_path / HOME_ASSISTANT_LOVELACE_DISPLAY_CARD_FILENAME
     waterfall = tmp_path / HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_FILENAME
+    aggregate = tmp_path / HOME_ASSISTANT_LOVELACE_AGGREGATE_FILENAME
 
     assert install_home_assistant_lovelace_cards() == (
         compact,
         display,
         waterfall,
+        aggregate,
     )
     assert compact.read_text(encoding="utf-8") == compact_card_text()
     assert display.read_text(encoding="utf-8") == display_card_text()
     assert waterfall.read_text(encoding="utf-8").startswith(
         '"use strict";\n'
     )
+    assert aggregate.read_text(encoding="utf-8").splitlines() == [
+        f'import "{theme.resource_url}";'
+        for theme in built_in_home_assistant_theme_registry().themes
+    ]
 
 
 def test_display_card_packaged_asset_is_importable() -> None:
