@@ -3,6 +3,50 @@
 This document establishes the evidence and fixture foundation for advanced
 scanner protocol work. It does not define public scanner behavior.
 
+## Milestone 29.6 binary GW2 research boundary
+
+The Uniden SDS Series Remote Command Specification V2.00 adds `GW2` to its
+command table and describes 240 displayed-FFT values without separators as
+binary data. The detailed block is internally inconsistent: its controller and
+radio forms are both printed as `GWF`, its response retains a carriage-return
+terminator, and it defines no binary header, element width, byte order,
+signedness, escape rule, length field, scale, cadence, lifecycle, or transport
+applicability. Milestone 29.6 preserves that uncertainty instead of promoting a
+guessed binary protocol into the production transports.
+
+`sds200.gw2_research` therefore provides only an isolated research substrate.
+It names the command-table `GW2,1,ON`/`OFF` and contradictory detailed-row
+`GWF,1,ON`/`OFF` spellings as separate candidates; it never selects between
+them automatically. The type-1 shape is inherited from the already qualified
+text-GWF control and is itself part of the candidate, not a claim that GW2 uses
+that argument. Every execution requires a separately generated SHA-256 token
+bound to the exact candidate, IPv4 target, port, private output path, and byte,
+datagram, elapsed-time, and inactivity limits. The exact physical model and
+firmware string are also token-bound capture provenance, and the observation
+scope is explicitly limited to physical SDS200 LAN UDP control.
+
+The probe retains each UDP datagram as exact base64 bytes with its SHA-256,
+transport-boundary, truncation flag, elapsed time, and structural byte counts.
+Printable text and possible concatenated printable records are identified only
+so contradictory or error replies remain visible. Opaque bytes remain opaque:
+no byte is labeled power, dB, RSSI, color, or an FFT magnitude. Evidence files
+are new mode-0600 files and are never overwritten.
+
+This tool does not stop or restore a daemon itself. Its execution mode requires
+an explicit assertion that the sole scanner owner was independently verified
+stopped; the guarded physical-validation workflow must restore that owner even
+when the probe fails. The tool sends one exact start candidate, captures within
+all four independent limits, attempts the paired cleanup form in every path
+after a successful start write, and closes the socket. A cleanup failure is a
+failed safe completion, not a successful capture.
+
+`synthetic-gw2-datagrams.json` is deliberately not a replay capture. It includes
+an opaque 240-byte datagram, one speculative wrapper shaped like the
+specification's contradictory printed response, unexpected and concatenated
+text, and a transport-truncated prefix. Those records validate preservation and
+classification only. They provide no physical wire, payload, cadence, or value
+evidence, and the production UDP and serial text decoders remain unchanged.
+
 ## Milestone 24.1 boundary
 
 Milestone 24.1 inventories the existing protocol architecture, records evidence

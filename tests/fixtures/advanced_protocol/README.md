@@ -63,6 +63,14 @@ unverified unless separately documented.
   240 uninterpreted FFT fields. It contains no start/stop transmission and does
   not establish ON/OFF token semantics, GW2 binary framing, transport behavior,
   model/firmware applicability, cadence, termination, or physical validation.
+- `synthetic-gw2-datagrams.json` is renderer-neutral, exact-byte synthetic
+  evidence for the Milestone 29.6 research substrate. Its opaque 240-byte
+  record, deliberately speculative specification-printed wrapper, unexpected
+  text, concatenated text, and transport-truncated records exercise raw byte
+  and UDP-boundary preservation only. The fixture does not establish a GW2
+  request or response wire, prefix, suffix, payload length, byte meaning,
+  transport applicability, cadence, magnitude scale, or physical behavior.
+  The sequence `0` through `239` is test data, not scanner output.
 - `synthetic-msi.jsonl` is receive-only synthetic bounded-XML evidence for the
   first Milestone 24.8 slice. It proves only the reviewed `<MSI ...>` root and
   lossless structural preservation using deliberately synthetic unknown

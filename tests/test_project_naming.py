@@ -126,15 +126,25 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 29.4 — Unified Home Assistant card resource registration" in (
+    assert "### Milestone 29.6 — Binary GW2 waterfall framing and value research" in (
         active_milestone
     )
     for required in (
-        "Milestone 29.3 is closed with the exact v0.25.0 Python distribution",
-        "/local/sds200/sds200-cards.js",
-        "SHA-256-qualified resource URLs",
-        "supported selective-registration and migration alternatives",
-        "must not edit Home Assistant `.storage`",
+        "Milestones 29.4 and 29.5 are closed through reviewed pull requests 208 and 209",
+        "4.0–4.1 text frames per second across three simultaneous cards",
+        "exact scanner-reported 1.44 MHz frequency range",
+        "`GW2` addition supplies a measurably better framing",
+        "Do not resolve those contradictions by assumption",
+        "exact-byte, renderer-neutral research substrate",
+        "maximum record size, record count, elapsed time, and inactivity limits",
+        "published Home Assistant App is stopped and verified stopped",
+        "send only one reviewed candidate form at a time",
+        "raw captures only in private local validation storage",
+        "repeatable framing and a material measured benefit",
+        "existing serial and UDP line decoders must remain unchanged",
+        "Production daemon ownership, automatic text/binary negotiation",
+        "aggregate Home Assistant card loader",
+        "removed completion-relative text-GWF drift",
         "Milestones 29.1 and 29.2 are closed",
         "Python distribution, import version, and Home Assistant App at 0.25.0",
         "Home Assistant Core integration at 0.1.5",
