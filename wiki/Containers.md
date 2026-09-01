@@ -66,4 +66,3 @@ The [generic container deployment guide](https://github.com/stevenboyd78/sdsctl/
 is authoritative for Docker Compose, rootless Podman, USB mapping, readiness,
 networking, persistence, upgrades, recovery, and the validated portability
 matrix.
-

@@ -94,4 +94,3 @@ RTSP reachability and [local playback failures](Troubleshooting#local-playback-f
 for PortAudio or device problems. Local audio that works while a remote Home
 Assistant player stays silent usually indicates a target-reachability or Home
 Assistant URL configuration problem rather than an SDS200 audio failure.
-

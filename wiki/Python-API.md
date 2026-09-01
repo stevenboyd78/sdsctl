@@ -76,4 +76,3 @@ bounded push contexts deterministically, as shown by the context managers.
 Consult the repository source, type annotations, and
 [transport guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/transports.md)
 for advanced integration work.
-

@@ -59,4 +59,3 @@ rules, warnings, provenance, and recovery. The
 [RadioReference research](https://github.com/stevenboyd78/sdsctl/blob/main/docs/radioreference-interface-research.md)
 and [external-data research](https://github.com/stevenboyd78/sdsctl/blob/main/docs/favorites-external-data-research.md)
 record the provider and mapping boundaries.
-

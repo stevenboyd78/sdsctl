@@ -79,4 +79,3 @@ for architecture, configuration, networking, Ingress, MQTT entities, cards,
 local development, upgrades, persistent recordings, acceptance evidence, and
 security boundaries. Use [Troubleshooting](Troubleshooting#home-assistant-app-problems)
 when the repository, App, audio, MQTT entities, cards, or recordings fail.
-

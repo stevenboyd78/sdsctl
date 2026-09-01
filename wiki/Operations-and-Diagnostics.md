@@ -97,4 +97,3 @@ before changing their defaults.
 - Do not delete runtime, profile, recording, or Favorites directories as a
   generic repair step.
 - Use [Troubleshooting](Troubleshooting) before collecting a detailed report.
-

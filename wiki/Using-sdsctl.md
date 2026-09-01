@@ -128,4 +128,3 @@ eval "$(sdsctl completion zsh)"
 - [Favorites and RadioReference](Favorites-and-RadioReference)
 - [Operations and diagnostics](Operations-and-Diagnostics)
 - [Python API](Python-API)
-

@@ -106,4 +106,3 @@ unreviewed capture files.
 - [Play or record SDS200 audio](Audio-and-Recordings)
 - [Run in Home Assistant](Home-Assistant)
 - [Configure and diagnose a service](Operations-and-Diagnostics)
-
