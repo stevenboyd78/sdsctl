@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
+from math import floor
 from time import monotonic
 from typing import Protocol
 
@@ -66,10 +67,27 @@ class WaterfallSessionSnapshot:
     gwf_max_consecutive_failures: int
     gwf_requests: int
     last_gwf_request_at: datetime | None
+    gwf_skipped_poll_deadlines: int
+    last_gwf_scheduler_lag_seconds: float | None
+    maximum_gwf_scheduler_lag_seconds: float | None
+    gwf_round_trip_samples: int
+    last_gwf_round_trip_seconds: float | None
+    average_gwf_round_trip_seconds: float | None
+    maximum_gwf_round_trip_seconds: float | None
     gwf_poll_failures: int
     consecutive_gwf_failures: int
     last_gwf_failure_at: datetime | None
     last_gwf_error: str | None
+    gst_poll_interval_seconds: float
+    gst_requests: int
+    last_gst_request_at: datetime | None
+    gst_skipped_poll_deadlines: int
+    gst_poll_failures: int
+    last_gst_failure_at: datetime | None
+    last_gst_error: str | None
+    waterfall_status_revision: int
+    waterfall_status_refreshed_at: datetime | None
+    waterfall_status_changed_at: datetime | None
     waterfall_status: GstResponse | None
     publisher: WaterfallPublisherSnapshot
 
@@ -105,12 +123,45 @@ class WaterfallSessionSnapshot:
             "last_gwf_request_at": _optional_datetime(
                 self.last_gwf_request_at
             ),
+            "gwf_skipped_poll_deadlines": self.gwf_skipped_poll_deadlines,
+            "last_gwf_scheduler_lag_seconds": (
+                self.last_gwf_scheduler_lag_seconds
+            ),
+            "maximum_gwf_scheduler_lag_seconds": (
+                self.maximum_gwf_scheduler_lag_seconds
+            ),
+            "gwf_round_trip_samples": self.gwf_round_trip_samples,
+            "last_gwf_round_trip_seconds": self.last_gwf_round_trip_seconds,
+            "average_gwf_round_trip_seconds": (
+                self.average_gwf_round_trip_seconds
+            ),
+            "maximum_gwf_round_trip_seconds": (
+                self.maximum_gwf_round_trip_seconds
+            ),
             "gwf_poll_failures": self.gwf_poll_failures,
             "consecutive_gwf_failures": self.consecutive_gwf_failures,
             "last_gwf_failure_at": _optional_datetime(
                 self.last_gwf_failure_at
             ),
             "last_gwf_error": self.last_gwf_error,
+            "gst_poll_interval_seconds": self.gst_poll_interval_seconds,
+            "gst_requests": self.gst_requests,
+            "last_gst_request_at": _optional_datetime(
+                self.last_gst_request_at
+            ),
+            "gst_skipped_poll_deadlines": self.gst_skipped_poll_deadlines,
+            "gst_poll_failures": self.gst_poll_failures,
+            "last_gst_failure_at": _optional_datetime(
+                self.last_gst_failure_at
+            ),
+            "last_gst_error": self.last_gst_error,
+            "waterfall_status_revision": self.waterfall_status_revision,
+            "waterfall_status_refreshed_at": _optional_datetime(
+                self.waterfall_status_refreshed_at
+            ),
+            "waterfall_status_changed_at": _optional_datetime(
+                self.waterfall_status_changed_at
+            ),
             "waterfall_status": (
                 None
                 if self.waterfall_status is None
@@ -146,6 +197,34 @@ def _utc_now() -> datetime:
 
 def _optional_datetime(value: datetime | None) -> str | None:
     return None if value is None else value.isoformat()
+
+
+def _advance_periodic_deadline(
+    deadline: float,
+    interval: float,
+    now: float,
+) -> tuple[float, int, float]:
+    lag = max(0.0, now - deadline)
+    elapsed_intervals = floor(lag / interval)
+    next_deadline = deadline + (elapsed_intervals + 1) * interval
+    if next_deadline <= now:
+        elapsed_intervals += 1
+        next_deadline += interval
+    return next_deadline, elapsed_intervals, lag
+
+
+def _waterfall_status_key(status: GstResponse) -> tuple[object, ...]:
+    return (
+        status.waterfall_mode,
+        status.marker_frequency,
+        status.modulation,
+        status.marker_position,
+        status.center_frequency,
+        status.lower_frequency,
+        status.upper_frequency,
+        status.color_mode,
+        status.fft_area_size,
+    )
 
 
 class WaterfallSessionLease:
@@ -210,6 +289,8 @@ class WaterfallSession:
         stop_timeout: float = 2.0,
         poll_interval: float = 0.25,
         poll_timeout: float = 2.0,
+        status_poll_interval: float = 1.0,
+        status_poll_timeout: float = 1.0,
         max_consecutive_poll_failures: int = 3,
         poll_clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
@@ -222,6 +303,10 @@ class WaterfallSession:
             raise ValueError("Waterfall GWF poll interval must be greater than zero.")
         if poll_timeout <= 0:
             raise ValueError("Waterfall GWF poll timeout must be greater than zero.")
+        if status_poll_interval <= 0:
+            raise ValueError("Waterfall GST poll interval must be greater than zero.")
+        if status_poll_timeout <= 0:
+            raise ValueError("Waterfall GST poll timeout must be greater than zero.")
         if (
             isinstance(max_consecutive_poll_failures, bool)
             or not isinstance(max_consecutive_poll_failures, int)
@@ -236,6 +321,8 @@ class WaterfallSession:
         self.stop_timeout = float(stop_timeout)
         self.poll_interval = float(poll_interval)
         self.poll_timeout = float(poll_timeout)
+        self.status_poll_interval = float(status_poll_interval)
+        self.status_poll_timeout = float(status_poll_timeout)
         self.max_consecutive_poll_failures = max_consecutive_poll_failures
         self._poll_clock = poll_clock
         self._now = now
@@ -252,11 +339,28 @@ class WaterfallSession:
         self._last_error: str | None = None
         self._gwf_requests = 0
         self._last_gwf_request_at: datetime | None = None
+        self._gwf_skipped_poll_deadlines = 0
+        self._last_gwf_scheduler_lag_seconds: float | None = None
+        self._maximum_gwf_scheduler_lag_seconds: float | None = None
+        self._gwf_round_trip_samples = 0
+        self._gwf_round_trip_total_seconds = 0.0
+        self._last_gwf_round_trip_seconds: float | None = None
+        self._maximum_gwf_round_trip_seconds: float | None = None
         self._gwf_poll_failures = 0
         self._consecutive_gwf_failures = 0
         self._last_gwf_failure_at: datetime | None = None
         self._last_gwf_error: str | None = None
         self._next_poll_at: float | None = None
+        self._gst_requests = 0
+        self._last_gst_request_at: datetime | None = None
+        self._gst_skipped_poll_deadlines = 0
+        self._gst_poll_failures = 0
+        self._last_gst_failure_at: datetime | None = None
+        self._last_gst_error: str | None = None
+        self._next_gst_poll_at: float | None = None
+        self._waterfall_status_revision = 0
+        self._waterfall_status_refreshed_at: datetime | None = None
+        self._waterfall_status_changed_at: datetime | None = None
         self._waterfall_status: GstResponse | None = None
         self._callbacks: set[Callable[[WaterfallSessionTransition], None]] = set()
 
@@ -305,6 +409,7 @@ class WaterfallSession:
 
             self._transition_locked(WaterfallSessionState.STARTING)
             try:
+                self._record_gst_request_locked()
                 status = self.radio.get_waterfall_status(timeout=self.start_timeout)
                 self.radio.start_waterfall_publication(timeout=self.start_timeout)
             except BaseException as error:
@@ -317,7 +422,7 @@ class WaterfallSession:
             self._stopped_at = None
             self._last_error = None
             self._record_gwf_request_locked()
-            self._waterfall_status = status
+            self._record_gst_success_locked(status)
             self._transition_locked(WaterfallSessionState.RUNNING)
             return lease
 
@@ -336,10 +441,11 @@ class WaterfallSession:
                     or now < self._next_poll_at
                 ):
                     return False
-                self._next_poll_at = now + self.poll_interval
+                self._advance_poll_deadline_locked(now)
                 self._gwf_requests += 1
                 self._last_gwf_request_at = self._now()
 
+            request_started_at = self._poll_clock()
             try:
                 self.radio.get_waterfall_frame(timeout=self.poll_timeout)
             except Exception as error:
@@ -368,12 +474,17 @@ class WaterfallSession:
                         )
                 return False
 
+            request_completed_at = self._poll_clock()
             with self._lock:
                 if (
                     self._state is WaterfallSessionState.RUNNING
                     and self._leases
                 ):
                     self._consecutive_gwf_failures = 0
+                    self._record_gwf_round_trip_locked(
+                        max(0.0, request_completed_at - request_started_at)
+                    )
+            self._poll_waterfall_status_if_due()
             return True
         finally:
             self._poll_lock.release()
@@ -405,6 +516,7 @@ class WaterfallSession:
                 )
             self._transition_locked(WaterfallSessionState.STARTING)
             try:
+                self._record_gst_request_locked()
                 status = self.radio.get_waterfall_status(timeout=start_timeout)
                 self.radio.start_waterfall_publication(timeout=start_timeout)
             except BaseException as error:
@@ -414,7 +526,7 @@ class WaterfallSession:
             self._stopped_at = None
             self._last_error = None
             self._record_gwf_request_locked()
-            self._waterfall_status = status
+            self._record_gst_success_locked(status)
             self._transition_locked(WaterfallSessionState.RUNNING)
 
     def close(self) -> None:
@@ -439,6 +551,7 @@ class WaterfallSession:
 
             self._stopped_at = self._now()
             self._next_poll_at = None
+            self._next_gst_poll_at = None
             self._transition_locked(WaterfallSessionState.CLOSED)
             self._callbacks.clear()
             if stop_error is not None:
@@ -462,6 +575,7 @@ class WaterfallSession:
                 raise
             self._stopped_at = self._now()
             self._next_poll_at = None
+            self._next_gst_poll_at = None
             self._transition_locked(WaterfallSessionState.IDLE)
 
     def _record_gwf_request_locked(self) -> None:
@@ -469,6 +583,106 @@ class WaterfallSession:
         self._last_gwf_request_at = self._now()
         self._consecutive_gwf_failures = 0
         self._next_poll_at = self._poll_clock() + self.poll_interval
+
+    def _advance_poll_deadline_locked(self, now: float) -> None:
+        deadline = self._next_poll_at
+        if deadline is None:
+            raise RuntimeError("Waterfall GWF poll deadline is unavailable.")
+
+        next_deadline, elapsed_intervals, lag = _advance_periodic_deadline(
+            deadline,
+            self.poll_interval,
+            now,
+        )
+
+        self._next_poll_at = next_deadline
+        self._gwf_skipped_poll_deadlines += elapsed_intervals
+        self._last_gwf_scheduler_lag_seconds = lag
+        maximum_lag = self._maximum_gwf_scheduler_lag_seconds
+        if maximum_lag is None or lag > maximum_lag:
+            self._maximum_gwf_scheduler_lag_seconds = lag
+
+    def _record_gwf_round_trip_locked(self, duration: float) -> None:
+        self._gwf_round_trip_samples += 1
+        self._gwf_round_trip_total_seconds += duration
+        self._last_gwf_round_trip_seconds = duration
+        maximum_duration = self._maximum_gwf_round_trip_seconds
+        if maximum_duration is None or duration > maximum_duration:
+            self._maximum_gwf_round_trip_seconds = duration
+
+    def _poll_waterfall_status_if_due(self) -> None:
+        with self._lock:
+            now = self._poll_clock()
+            deadline = self._next_gst_poll_at
+            if (
+                self._state is not WaterfallSessionState.RUNNING
+                or not self._leases
+                or deadline is None
+                or now < deadline
+            ):
+                return
+            next_deadline, skipped, _ = _advance_periodic_deadline(
+                deadline,
+                self.status_poll_interval,
+                now,
+            )
+            self._next_gst_poll_at = next_deadline
+            self._gst_skipped_poll_deadlines += skipped
+            self._record_gst_request_locked()
+
+        try:
+            status = self.radio.get_waterfall_status(
+                timeout=self.status_poll_timeout
+            )
+        except Exception as error:
+            with self._lock:
+                if (
+                    self._state is WaterfallSessionState.RUNNING
+                    and self._leases
+                ):
+                    self._gst_poll_failures += 1
+                    self._last_gst_failure_at = self._now()
+                    self._last_gst_error = (
+                        f"{error.__class__.__name__}: {error}"
+                    )
+                    logger.warning(
+                        "Waterfall GST refresh missed error=%s",
+                        error.__class__.__name__,
+                    )
+            return
+
+        with self._lock:
+            if (
+                self._state is WaterfallSessionState.RUNNING
+                and self._leases
+            ):
+                self._record_gst_success_locked(status, schedule_next=False)
+
+    def _record_gst_request_locked(self) -> None:
+        self._gst_requests += 1
+        self._last_gst_request_at = self._now()
+
+    def _record_gst_success_locked(
+        self,
+        status: GstResponse,
+        *,
+        schedule_next: bool = True,
+    ) -> None:
+        observed_at = self._now()
+        previous = self._waterfall_status
+        if (
+            previous is None
+            or _waterfall_status_key(previous) != _waterfall_status_key(status)
+        ):
+            self._waterfall_status_revision += 1
+            self._waterfall_status_changed_at = observed_at
+        self._waterfall_status = status
+        self._waterfall_status_refreshed_at = observed_at
+        self._last_gst_error = None
+        if schedule_next:
+            self._next_gst_poll_at = (
+                self._poll_clock() + self.status_poll_interval
+            )
 
     def _record_failure_locked(self, error: BaseException) -> None:
         self._last_failure_at = self._now()
@@ -510,10 +724,40 @@ class WaterfallSession:
             ),
             gwf_requests=self._gwf_requests,
             last_gwf_request_at=self._last_gwf_request_at,
+            gwf_skipped_poll_deadlines=self._gwf_skipped_poll_deadlines,
+            last_gwf_scheduler_lag_seconds=(
+                self._last_gwf_scheduler_lag_seconds
+            ),
+            maximum_gwf_scheduler_lag_seconds=(
+                self._maximum_gwf_scheduler_lag_seconds
+            ),
+            gwf_round_trip_samples=self._gwf_round_trip_samples,
+            last_gwf_round_trip_seconds=self._last_gwf_round_trip_seconds,
+            average_gwf_round_trip_seconds=(
+                None
+                if self._gwf_round_trip_samples == 0
+                else self._gwf_round_trip_total_seconds
+                / self._gwf_round_trip_samples
+            ),
+            maximum_gwf_round_trip_seconds=(
+                self._maximum_gwf_round_trip_seconds
+            ),
             gwf_poll_failures=self._gwf_poll_failures,
             consecutive_gwf_failures=self._consecutive_gwf_failures,
             last_gwf_failure_at=self._last_gwf_failure_at,
             last_gwf_error=self._last_gwf_error,
+            gst_poll_interval_seconds=self.status_poll_interval,
+            gst_requests=self._gst_requests,
+            last_gst_request_at=self._last_gst_request_at,
+            gst_skipped_poll_deadlines=self._gst_skipped_poll_deadlines,
+            gst_poll_failures=self._gst_poll_failures,
+            last_gst_failure_at=self._last_gst_failure_at,
+            last_gst_error=self._last_gst_error,
+            waterfall_status_revision=self._waterfall_status_revision,
+            waterfall_status_refreshed_at=(
+                self._waterfall_status_refreshed_at
+            ),
+            waterfall_status_changed_at=self._waterfall_status_changed_at,
             waterfall_status=self._waterfall_status,
             publisher=self.radio.waterfall_snapshot(),
         )

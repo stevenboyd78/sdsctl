@@ -310,7 +310,13 @@ class DaemonWaterfallServer:
                 except WaterfallSubscriptionClosed:
                     return
                 sequence += 1
-                send(waterfall_delivery_record(sequence, delivery))
+                send(
+                    waterfall_delivery_record(
+                        sequence,
+                        delivery,
+                        self.session.snapshot(),
+                    )
+                )
         except (OSError, WaterfallSubscriptionClosed):
             return
         except Exception as error:

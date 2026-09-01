@@ -578,7 +578,8 @@ Exploratory areas include:
 - `QSH` Quick Search control;
 - `URC` scanner recording control;
 - `AST` and `APR` analysis controls;
-- `PWF` and `GWF` waterfall data;
+- binary `GW2` waterfall framing, transport, and evidence-backed benefit over
+  the qualified text `PWF`/`GWF` data plane;
 - `MNU`, `MSI`, `MSV`, and `MSB` menu operations;
 - NAC, RAN, color code, area, activity, and quality details;
 - conventional and trunking discovery modes;

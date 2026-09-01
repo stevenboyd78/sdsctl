@@ -292,6 +292,9 @@ function resetWaterfallLiveState({clearHistory = true} = {}) {
   element("waterfall-queue-loss").textContent = "0 records";
   element("waterfall-overflows").textContent = "0";
   element("waterfall-poll-failures").textContent = "0";
+  element("waterfall-gwf-timing").textContent = "Unavailable";
+  element("waterfall-scheduler").textContent = "Unavailable";
+  element("waterfall-status-refresh").textContent = "Unavailable";
   element("waterfall-transitions").textContent = "0";
   element("waterfall-raw-values").textContent = "Unavailable";
   renderWaterfallCanvases();
@@ -329,6 +332,16 @@ function scheduleWaterfallReconnect(generation) {
 
 function nonnegativeInteger(value, name) {
   if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Waterfall ${name} is invalid.`);
+  }
+  return value;
+}
+
+function optionalNonnegativeNumber(value, name) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (!Number.isFinite(value) || value < 0) {
     throw new Error(`Waterfall ${name} is invalid.`);
   }
   return value;
@@ -396,6 +409,45 @@ function applyWaterfallSnapshot(snapshot) {
   element("waterfall-session-state").textContent = state;
   const failures = nonnegativeInteger(snapshot.gwf_poll_failures, "poll failures");
   element("waterfall-poll-failures").textContent = String(failures);
+  const averageRoundTrip = optionalNonnegativeNumber(
+    snapshot.average_gwf_round_trip_seconds,
+    "average GWF round-trip time",
+  );
+  const maximumRoundTrip = optionalNonnegativeNumber(
+    snapshot.maximum_gwf_round_trip_seconds,
+    "maximum GWF round-trip time",
+  );
+  element("waterfall-gwf-timing").textContent =
+    averageRoundTrip === null || maximumRoundTrip === null
+      ? "Unavailable"
+      : `${(averageRoundTrip * 1000).toFixed(0)} / ${(maximumRoundTrip * 1000).toFixed(0)} ms avg/max`;
+  const schedulerLag = optionalNonnegativeNumber(
+    snapshot.last_gwf_scheduler_lag_seconds,
+    "scheduler lag",
+  );
+  const skippedDeadlines = snapshot.gwf_skipped_poll_deadlines === undefined
+    ? null
+    : nonnegativeInteger(
+      snapshot.gwf_skipped_poll_deadlines,
+      "skipped poll deadlines",
+    );
+  element("waterfall-scheduler").textContent =
+    schedulerLag === null || skippedDeadlines === null
+      ? "Unavailable"
+      : `${(schedulerLag * 1000).toFixed(0)} ms lag · ${skippedDeadlines} skipped`;
+  const statusRevision = snapshot.waterfall_status_revision === undefined
+    ? null
+    : nonnegativeInteger(
+      snapshot.waterfall_status_revision,
+      "status revision",
+    );
+  const statusFailures = snapshot.gst_poll_failures === undefined
+    ? null
+    : nonnegativeInteger(snapshot.gst_poll_failures, "GST poll failures");
+  element("waterfall-status-refresh").textContent =
+    statusRevision === null || statusFailures === null
+      ? "Unavailable"
+      : `revision ${statusRevision} · ${statusFailures} failures`;
   const status = record(snapshot.waterfall_status);
   const frequencies = validFrequencyMetadata(status);
   const frequencyValues = frequencies === null
@@ -452,6 +504,9 @@ function applyWaterfallRecord(value) {
     throw new Error("Waterfall record kind is unsupported.");
   }
 
+  if (envelope.payload.session !== undefined) {
+    applyWaterfallSnapshot(record(envelope.payload.session));
+  }
   const frame = normalizeWaterfallValues(envelope.payload.values);
   waterfallQueueLoss = nonnegativeInteger(envelope.payload.responses_dropped, "queue loss");
   waterfallOverflows = nonnegativeInteger(envelope.payload.overflows, "overflow count");

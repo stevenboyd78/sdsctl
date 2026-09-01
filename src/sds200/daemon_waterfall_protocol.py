@@ -112,6 +112,7 @@ def waterfall_transition_record(
 def waterfall_delivery_record(
     sequence: int,
     delivery: WaterfallDelivery,
+    snapshot: WaterfallSessionSnapshot,
 ) -> DaemonWaterfallRecord:
     response = delivery.response
     if isinstance(response, PwfResponse):
@@ -130,5 +131,6 @@ def waterfall_delivery_record(
             "responses_dropped": delivery.responses_dropped,
             "overflows": delivery.overflows,
             "source_received_at": response.packet.received_at.isoformat(),
+            "session": snapshot.as_dict(),
         },
     )

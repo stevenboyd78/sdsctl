@@ -197,6 +197,11 @@ def test_waterfall_unix_stream_starts_on_first_client_and_stops_on_departure(
     assert gwf.sequence == 3
     assert gwf.kind is DaemonWaterfallRecordKind.GWF
     assert len(gwf.payload["values"]) == 240  # type: ignore[arg-type]
+    live_session = gwf.payload["session"]
+    assert isinstance(live_session, dict)
+    assert live_session["state"] == "running"
+    assert live_session["waterfall_status_revision"] == 1
+    assert live_session["waterfall_status"]["lower_frequency"] == "1540000"
     assert radio.status_calls == 1
     assert radio.start_calls == 1
 

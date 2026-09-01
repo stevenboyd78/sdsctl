@@ -192,8 +192,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=812ef2a103b9517abe2583d0c8fbcd667445377a0032836307b05839a8bfb1b4
-/local/sds200/sds200-cards.js?v=efcd8279b998d9b881c9feeb2c0293cf3bfc7f3ae67024f9d6627792db58335f
+/local/sds200/sds200-waterfall-card.js?v=a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc
+/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f
 ```
 
 The three byte-identical modules are independently packaged under
@@ -366,7 +366,10 @@ shared scanner-side waterfall session. Hiding, removing, or disconnecting a card
 aborts its stream; releasing the final live card stops waterfall demand. Pause
 freezes only visual history and remains connected. Authentication and transport
 loss use bounded reconnect delays, and the card stores no authentication or
-Ingress material in configuration or browser storage.
+Ingress material in configuration or browser storage. The daemon refreshes
+typed Waterfall status independently of GWF delivery, so the frequency scale
+follows scanner span changes. A missed refresh retains the last complete scale
+without interrupting live frames.
 
 ## Troubleshooting
 

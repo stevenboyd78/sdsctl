@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Follow live scanner span changes in the Waterfall card by applying the
+  daemon's current typed GST status carried with bounded GWF records. A missed
+  status refresh retains the last valid frequency scale without interrupting
+  waterfall delivery.
 - Install one digest-qualified `sds200-cards.js` aggregate entry point after the
   three independently packaged first-party card modules. New installations can
   register one resource while existing individual URLs remain compatible; App
