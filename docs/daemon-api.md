@@ -60,7 +60,7 @@ secret contents or opening a socket. The daemon command does not consume that
 configuration yet, so no TCP/TLS listener, client credential, CLI option,
 container port, or Home Assistant App mapping is available.
 
-The authentication foundation now also defines an inert, versioned
+The authentication foundation also defines an inert, versioned
 challenge/proof contract for that future transport. A fresh server nonce and
 client nonce are bound with the client ID into a canonical HMAC-SHA256
 transcript. Single-use sessions reject replay, the active registry performs
@@ -68,9 +68,16 @@ constant-time comparisons across every active credential, and successful proof
 returns only the configured `observe`/`control` scopes. The private credential
 loader requires an exact 32-byte base64url secret in a non-symlink regular file
 with POSIX mode `0600`, using descriptor and path identity checks to detect
-replacement or mutation. The primitives perform no network I/O and are not yet
-wired into daemon startup; direct validated TLS and authorization before request
-dispatch remain mandatory before a remote listener can exist.
+replacement or mutation.
+
+The inert direct-TLS admission layer can now consume one already accepted
+socket, require TLS 1.3 with the configured server identity, and run that exact
+single-use exchange before returning a transport-ready stream. Its opaque peer
+result carries the authenticated identity and authoritative scopes without a
+private address or secret. Plaintext and failed peers are closed. This layer
+does not bind a TCP socket and is not wired into daemon startup. A bounded
+concurrent listener and authorization before request dispatch remain mandatory
+before a remote listener can exist.
 
 ## Starting the API
 

@@ -287,6 +287,126 @@ class DaemonRemoteAuthenticatedIdentity:
         return scope in self.scopes
 
 
+@dataclass(frozen=True, slots=True)
+class DaemonRemoteAuthenticationResult:
+    """One strict server result concluding the authentication exchange."""
+
+    ok: bool
+    scopes: tuple[DaemonRemoteAuthorizationScope, ...] = ()
+    error: DaemonRemoteAuthenticationErrorReason | None = None
+    protocol: str = DAEMON_REMOTE_AUTH_PROTOCOL
+    version: int = DAEMON_REMOTE_AUTH_VERSION
+
+    def __post_init__(self) -> None:
+        if type(self.ok) is not bool:
+            raise TypeError("Remote daemon authentication result status must be a boolean.")
+        if self.protocol != DAEMON_REMOTE_AUTH_PROTOCOL:
+            raise ValueError("Remote daemon authentication protocol is unsupported.")
+        if self.version != DAEMON_REMOTE_AUTH_VERSION:
+            raise ValueError("Remote daemon authentication version is unsupported.")
+        if type(self.scopes) is not tuple:
+            raise TypeError("Remote daemon authentication result scopes must be a tuple.")
+        if any(not isinstance(scope, DaemonRemoteAuthorizationScope) for scope in self.scopes):
+            raise TypeError("Remote daemon authentication result scopes are invalid.")
+        if len(set(self.scopes)) != len(self.scopes):
+            raise ValueError("Remote daemon authentication result scopes must be unique.")
+        if self.ok:
+            if not self.scopes or DaemonRemoteAuthorizationScope.OBSERVE not in self.scopes:
+                raise ValueError(
+                    "Successful remote daemon authentication must include observe scope."
+                )
+            if self.error is not None:
+                raise ValueError("Successful remote daemon authentication must not contain error.")
+        elif self.scopes:
+            raise ValueError("Failed remote daemon authentication must not contain scopes.")
+        elif not isinstance(self.error, DaemonRemoteAuthenticationErrorReason):
+            raise TypeError(
+                "Failed remote daemon authentication requires an authentication error reason."
+            )
+        object.__setattr__(
+            self,
+            "scopes",
+            tuple(sorted(self.scopes, key=lambda scope: scope.value)),
+        )
+
+    @classmethod
+    def success(
+        cls,
+        identity: DaemonRemoteAuthenticatedIdentity,
+    ) -> DaemonRemoteAuthenticationResult:
+        if not isinstance(identity, DaemonRemoteAuthenticatedIdentity):
+            raise TypeError(
+                "Remote daemon authentication success requires authenticated identity."
+            )
+        return cls(ok=True, scopes=identity.scopes)
+
+    @classmethod
+    def failure(
+        cls,
+        reason: DaemonRemoteAuthenticationErrorReason,
+    ) -> DaemonRemoteAuthenticationResult:
+        if not isinstance(reason, DaemonRemoteAuthenticationErrorReason):
+            raise TypeError(
+                "Remote daemon authentication failure requires an authentication error reason."
+            )
+        return cls(ok=False, error=reason)
+
+    def to_json_line(self) -> bytes:
+        payload: dict[str, object] = {
+            "ok": self.ok,
+            "protocol": self.protocol,
+            "version": self.version,
+        }
+        if self.ok:
+            payload["scopes"] = [scope.value for scope in self.scopes]
+        else:
+            assert self.error is not None
+            payload["error"] = {
+                "code": self.error.value,
+                "message": _AUTHENTICATION_ERROR_MESSAGES[self.error],
+            }
+        return _encode_frame(payload)
+
+    @classmethod
+    def from_json_line(cls, data: bytes | str) -> DaemonRemoteAuthenticationResult:
+        payload = _decode_frame(data)
+        protocol = payload.get("protocol")
+        if protocol != DAEMON_REMOTE_AUTH_PROTOCOL:
+            raise DaemonRemoteAuthenticationError(
+                DaemonRemoteAuthenticationErrorReason.UNSUPPORTED_PROTOCOL
+            )
+        version = payload.get("version")
+        if version != DAEMON_REMOTE_AUTH_VERSION:
+            raise DaemonRemoteAuthenticationError(
+                DaemonRemoteAuthenticationErrorReason.UNSUPPORTED_VERSION
+            )
+        ok = payload.get("ok")
+        if type(ok) is not bool:
+            raise _invalid_frame()
+        try:
+            if ok:
+                _require_exact_fields(payload, {"ok", "protocol", "scopes", "version"})
+                raw_scopes = payload["scopes"]
+                if not isinstance(raw_scopes, list):
+                    raise _invalid_frame()
+                scopes = tuple(DaemonRemoteAuthorizationScope(scope) for scope in raw_scopes)
+                return cls(ok=True, scopes=scopes, protocol=protocol, version=version)
+
+            _require_exact_fields(payload, {"error", "ok", "protocol", "version"})
+            raw_error = payload["error"]
+            if not isinstance(raw_error, Mapping):
+                raise _invalid_frame()
+            _require_exact_fields(raw_error, {"code", "message"})
+            reason = DaemonRemoteAuthenticationErrorReason(raw_error["code"])
+            if raw_error["message"] != _AUTHENTICATION_ERROR_MESSAGES[reason]:
+                raise _invalid_frame()
+            return cls(ok=False, error=reason, protocol=protocol, version=version)
+        except DaemonRemoteAuthenticationError:
+            raise
+        except (TypeError, ValueError) as error:
+            raise _invalid_frame() from error
+
+
 @dataclass(frozen=True, slots=True, repr=False)
 class _CredentialBinding:
     identity: DaemonRemoteClientIdentity
@@ -669,6 +789,7 @@ __all__ = [
     "DaemonRemoteAuthenticationError",
     "DaemonRemoteAuthenticationErrorReason",
     "DaemonRemoteAuthenticationRequest",
+    "DaemonRemoteAuthenticationResult",
     "DaemonRemoteAuthenticationSession",
     "DaemonRemoteChallenge",
     "DaemonRemoteCredential",

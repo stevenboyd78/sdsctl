@@ -3,13 +3,13 @@
 Milestone 32.1 is building an authenticated network transport for thin CLI and
 TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
 remain the default. This page describes the current configuration, security
-preflight, and inert authentication primitives; it does **not** announce an
-available remote listener.
+preflight, authentication protocol, and inert direct-TLS admission layer; it
+does **not** announce an available remote listener.
 
 The packaged `sdsctl daemon` command does not yet read this file, open a TCP
-socket, construct TLS, run the authentication handshake, publish a container
-port, or add a Home Assistant App port. The current model and pure handshake
-objects exist so those later runtime steps cannot define a weaker configuration
+socket, run the authentication handshake, publish a container port, or add a
+Home Assistant App port. The current model, handshake objects, and TLS admission
+object exist so those later runtime steps cannot define a weaker configuration
 boundary by accident.
 
 ## Default behavior
@@ -154,10 +154,10 @@ errors do not echo secret contents, private endpoint values, or secret paths.
 
 ## Authentication contract
 
-The `sds200.daemon_remote_auth` module now defines the version 1 authentication
-frames and verification behavior for a future direct-TLS transport. It is a
-pure foundation: constructing or using these objects performs no network I/O,
-and no packaged command invokes them yet.
+The `sds200.daemon_remote_auth` module defines the version 1 authentication
+frames and verification behavior for a future direct-TLS transport. Constructing
+or using those protocol objects performs no network I/O, and no packaged command
+invokes them yet.
 
 After a client has authenticated the server through validated direct TLS, the
 future listener can create one fresh 32-byte server nonce. The client answers
@@ -174,6 +174,10 @@ The active credential registry evaluates every configured active identity with
 constant-time identifier and proof comparisons before returning a result.
 Unknown, incorrect, and revoked identities share one redacted authentication
 failure; scopes and identity metadata are returned only after proof succeeds.
+The concluding server result is also strict and versioned. A success returns
+only the authoritative scopes; a failure returns one canonical error code and
+message without peer, endpoint, path, or credential data. A client must wait for
+that result before sending any daemon API request.
 
 An active credential file contains exactly one unpadded base64url value encoding
 32 random bytes, optionally followed by one newline. On POSIX its exact mode is
@@ -185,18 +189,29 @@ remote authentication attempt cannot probe credential-file existence or parse
 behavior. Exceptions and object representations never include credential bytes
 or private paths.
 
-These primitives do not make shared-secret authentication safe on a plaintext
-connection. The future runtime must complete validated direct TLS before sending
-a challenge or accepting a proof, must use a fresh session per connection, and
-must enforce the returned scopes at the daemon-operation boundary.
+The `sds200.daemon_remote_tls` admission object loads the preflighted server
+certificate, mode-`0600` private key, and active credential registry. It requires
+TLS 1.3, rechecks the certificate and private-key filesystem snapshots around
+context loading, applies a bounded handshake timeout, and begins the one-use
+challenge only after the TLS handshake succeeds. Plaintext, silent, malformed,
+oversized, unauthenticated, and abruptly disconnected peers are closed with
+redacted failure behavior. Successful admission returns the TLS stream plus an
+opaque peer carrying the authenticated ID and authoritative scopes.
+
+This object consumes only an already accepted stream. It does not create or bind
+a socket, advertise an endpoint, enter daemon startup, or dispatch an API
+operation. The future listener must bound concurrent admission work so a slow
+TLS peer cannot block another client. The API server must then enforce the
+returned scopes at the daemon-operation boundary before the stream becomes
+usable.
 
 ## What remains before remote use
 
 This foundation is not sufficient for a remote connection. Milestone 32.1 must
 still add and validate, in bounded slices:
 
-1. direct TLS server identity loading and wiring the existing client proof into
-   connection admission;
+1. a bounded exact-address TCP listener that isolates concurrent TLS admission
+   work and passes only authenticated streams to the existing server seam;
 2. transport-level scope enforcement before daemon operation dispatch;
 3. operational credential rotation and revocation without secret disclosure;
 4. bounded remote event, Waterfall, and audio leases with slow-peer isolation;

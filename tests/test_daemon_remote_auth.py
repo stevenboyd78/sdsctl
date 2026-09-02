@@ -25,6 +25,7 @@ from sds200 import (
     DaemonRemoteAuthenticationError,
     DaemonRemoteAuthenticationErrorReason,
     DaemonRemoteAuthenticationRequest,
+    DaemonRemoteAuthenticationResult,
     DaemonRemoteAuthenticationSession,
     DaemonRemoteAuthorizationScope,
     DaemonRemoteChallenge,
@@ -159,6 +160,124 @@ def test_proof_matches_an_independent_canonical_hmac_vector() -> None:
 
     assert request.proof == expected
     assert len(base64.urlsafe_b64decode(expected + "=")) == (DAEMON_REMOTE_AUTH_PROOF_BYTES)
+
+
+def test_authentication_result_has_strict_canonical_success_and_failure_frames() -> None:
+    identity = DaemonRemoteAuthenticatedIdentity(
+        CLIENT_ID,
+        (
+            DaemonRemoteAuthorizationScope.OBSERVE,
+            DaemonRemoteAuthorizationScope.CONTROL,
+        ),
+    )
+    success = DaemonRemoteAuthenticationResult.success(identity)
+    failure = DaemonRemoteAuthenticationResult.failure(
+        DaemonRemoteAuthenticationErrorReason.AUTHENTICATION_FAILED
+    )
+
+    assert success.to_json_line() == (
+        b'{"ok":true,"protocol":"sdsctl.daemon.auth",'
+        b'"scopes":["control","observe"],"version":1}\n'
+    )
+    assert failure.to_json_line() == (
+        b'{"error":{"code":"authentication_failed","message":'
+        b'"Remote daemon authentication failed."},"ok":false,'
+        b'"protocol":"sdsctl.daemon.auth","version":1}\n'
+    )
+    assert DaemonRemoteAuthenticationResult.from_json_line(success.to_json_line()) == success
+    assert DaemonRemoteAuthenticationResult.from_json_line(failure.to_json_line()) == failure
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda payload: payload.update(protocol="future"),
+        lambda payload: payload.update(version=2),
+        lambda payload: payload.update(ok="yes"),
+        lambda payload: payload.update(scopes="observe"),
+        lambda payload: payload.update(scopes=[]),
+        lambda payload: payload.update(scopes=["future"]),
+        lambda payload: payload.update(scopes=["observe", "observe"]),
+        lambda payload: payload.update(future=True),
+        lambda payload: payload.pop("scopes"),
+    ],
+)
+def test_authentication_success_result_parser_fails_closed(
+    mutation: Callable[[dict[str, object]], object],
+) -> None:
+    payload: dict[str, object] = json.loads(
+        DaemonRemoteAuthenticationResult.success(
+            DaemonRemoteAuthenticatedIdentity(
+                CLIENT_ID,
+                (DaemonRemoteAuthorizationScope.OBSERVE,),
+            )
+        ).to_json_line()
+    )
+    mutation(payload)
+
+    with pytest.raises(DaemonRemoteAuthenticationError):
+        DaemonRemoteAuthenticationResult.from_json_line(json.dumps(payload))
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda payload: payload.update(error="failed"),
+        lambda payload: payload.update(error={"code": "future", "message": "failed"}),
+        lambda payload: payload.update(
+            error={"code": "authentication_failed", "message": "private detail"}
+        ),
+        lambda payload: payload.update(scopes=["observe"]),
+        lambda payload: payload["error"].update(future=True),
+        lambda payload: payload.pop("error"),
+    ],
+)
+def test_authentication_failure_result_parser_fails_closed(
+    mutation: Callable[[dict[str, object]], object],
+) -> None:
+    payload: dict[str, object] = json.loads(
+        DaemonRemoteAuthenticationResult.failure(
+            DaemonRemoteAuthenticationErrorReason.AUTHENTICATION_FAILED
+        ).to_json_line()
+    )
+    mutation(payload)
+
+    with pytest.raises(DaemonRemoteAuthenticationError) as exc_info:
+        DaemonRemoteAuthenticationResult.from_json_line(json.dumps(payload))
+    assert "private detail" not in str(exc_info.value)
+
+
+def test_authentication_result_construction_invariants() -> None:
+    observe = (DaemonRemoteAuthorizationScope.OBSERVE,)
+    reason = DaemonRemoteAuthenticationErrorReason.AUTHENTICATION_FAILED
+
+    with pytest.raises(TypeError, match="status"):
+        DaemonRemoteAuthenticationResult(ok=1, scopes=observe)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="protocol"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=observe, protocol="future")
+    with pytest.raises(ValueError, match="version"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=observe, version=2)
+    with pytest.raises(TypeError, match="scopes must be a tuple"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=[])  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="scopes are invalid"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=("observe",))  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="scopes must be unique"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=observe + observe)
+    with pytest.raises(ValueError, match="include observe"):
+        DaemonRemoteAuthenticationResult(
+            ok=True,
+            scopes=(DaemonRemoteAuthorizationScope.CONTROL,),
+        )
+    with pytest.raises(ValueError, match="must not contain error"):
+        DaemonRemoteAuthenticationResult(ok=True, scopes=observe, error=reason)
+    with pytest.raises(ValueError, match="must not contain scopes"):
+        DaemonRemoteAuthenticationResult(ok=False, scopes=observe, error=reason)
+    with pytest.raises(TypeError, match="requires an authentication error reason"):
+        DaemonRemoteAuthenticationResult(ok=False)
+    with pytest.raises(TypeError, match="success requires"):
+        DaemonRemoteAuthenticationResult.success(object())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="failure requires"):
+        DaemonRemoteAuthenticationResult.failure("authentication_failed")  # type: ignore[arg-type]
 
 
 def test_valid_proof_returns_non_secret_scopes(tmp_path: Path) -> None:
