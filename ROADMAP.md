@@ -64,6 +64,37 @@ appropriate to the changed surfaces, followed by physical SDS200 and Home
 Assistant OS acceptance of duration pruning, pause, clear, live span changes,
 pointer accuracy, final-card cleanup, and scanner-session recovery.
 
+Physical acceptance completed on September 1, 2026, from pull-request head
+`91ec4f1c6ae6568ead5868b9f5814ada8596592f` through one deliberately named
+Local App on an amd64 Home Assistant OS 18.2 host running Core 2026.8.3,
+Supervisor 2026.08.0, and Docker 29.6.2 against an SDS200 running firmware
+1.26.01. The authenticated web renderer sustained 4.0 frames per second while
+15-second duration pruning, pause without hidden backlog, clear and progressive
+rebuild, pointer and keyboard interaction, and live 720 kHz, 1.44 MHz, and
+2.88 MHz span changes all passed without reconnecting or changing scanner
+state.
+
+The exact aggregate Home Assistant card module then loaded three unchanged
+60-, 120-, and 240-frame cards beside one graphical-editor-created 15-second
+duration card. All four shared the existing scanner-side session at 4.0 frames
+per second; per-card pause and clear remained independent, final hidden-card
+demand released cleanly, and visibility plus guarded App restart recovery
+reconnected automatically with empty histories and the restored live scale.
+The direct non-Ingress probe remained forbidden. Intermittent single GWF misses
+recovered at `consecutive_failures=1` without a catch-up burst or renderer
+failure. The implementation and physical gate are therefore complete pending
+pull-request review and merge.
+
+Closure removed the temporary duration card, restored the published v0.26.1
+App as the sole scanner owner, and registered its exact released aggregate
+module digest
+`dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`.
+The three retained frame-count cards rendered normally. The stopped Local App
+was then uninstalled, its exact `/addons/sds200_31_1` source and local staging
+directory were deleted, and the App catalog was reloaded. Post-cleanup audit
+found no installed Milestone 31.1 App or retained temporary directory while the
+published v0.26.1 App remained started.
+
 TUI Waterfall rendering, GUI work, scanner tuning, click-to-hold or click-to-
 search behavior, alternative GW2 syntax, binary negotiation, ProScan wire
 comparison, FFT calibration, public or anonymous access, weather-alert

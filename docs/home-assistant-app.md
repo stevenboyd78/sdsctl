@@ -764,6 +764,47 @@ stopped, the repository-managed 0.23.0 App was restarted, and its authenticated
 dashboard reported `Connected`; the repository App was therefore restored as
 the sole scanner owner.
 
+### Milestone 31.1 development acceptance
+
+On September 1, 2026, the duration-history and display-only frequency-pointer
+slice completed physical acceptance through a deliberately named Local App
+built from pull-request head
+`91ec4f1c6ae6568ead5868b9f5814ada8596592f`. The amd64 host ran Home Assistant
+OS 18.2, Core 2026.8.3, Supervisor 2026.08.0, and Docker 29.6.2 against an
+SDS200 running firmware 1.26.01. The published App remained stopped so the
+Local App was the sole scanner and audio owner.
+
+The authenticated web Waterfall sustained 4.0 frames per second while a
+15-second duration window pruned by receipt time, pause preserved only the
+visible bounded history, resume produced no backlog burst, and Clear rebuilt
+progressively. The pointer resolved the 1.44 MHz span to exact 94.1800 and
+95.6200 MHz bounds around 94.9000 MHz, supported Home, End, arrow, mouse, and
+both-canvas interaction, and changed no scanner state. Live 720 kHz and 2.88 MHz
+span changes updated the scale without reconnecting before 1.44 MHz was
+restored.
+
+Lovelace registered the exact aggregate module digest
+`dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad`.
+Existing 60-, 120-, and 240-frame cards remained compatible beside a new
+graphical-editor-created 15-second duration card; all four rendered at 4.0
+frames per second. The editor used a 30-second duration default and normalized
+Home Assistant's exact string serialization for the 15-second selection.
+Per-card pause and Clear remained independent. Final hidden-card cleanup,
+visibility reacquisition, and a guarded App restart all produced fresh histories
+and automatic card recovery without a manual reload. The direct non-Ingress
+request remained forbidden, and no credentials, capability URLs, scanner
+addresses, programming data, or private recordings entered this evidence.
+
+Closure removed the temporary duration card and restored the published v0.26.1
+App as the sole scanner owner. Lovelace then registered the released aggregate
+module at exact SHA-256
+`dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`,
+and the three retained frame-count cards rendered normally. The stopped Local
+App was uninstalled, its exact `/addons/sds200_31_1` source and local staging
+directory were deleted, and the App catalog was reloaded. Post-cleanup audit
+found no installed Milestone 31.1 App or temporary source while the published
+v0.26.1 App remained started.
+
 ### v0.26.1 release acceptance gate
 
 After the genuine v0.26.1 tag publishes the amd64, aarch64, and generic
