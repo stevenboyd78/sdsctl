@@ -321,11 +321,11 @@ richer scanner events, and GUI implementation remain separate future
 considerations. Milestone 32.1 established the first authenticated remote
 daemon-client transport and shared-service construction boundary. Milestone 32.2
 packages ordinary-host daemon startup and explicit CLI/TUI client profiles.
-Milestone 32.3 owns isolated native-Linux Docker Engine publication and one
-ordinary Raspberry Pi TUI deployment; Milestone 32.4 retains advanced Home
-Assistant App port exposure and the one-daemon/multiple-display physical
-acceptance topology. This work does not make GUI support or public access
-available.
+Milestone 32.3 completed isolated native-Linux Docker Engine publication and one
+ordinary Raspberry Pi TUI deployment. Milestone 32.4 adds opt-in advanced Home
+Assistant App ports for the authenticated daemon-client protocol and native
+HTTPS dashboard, with the one-daemon/multiple-display physical acceptance
+topology. This work does not make GUI support or public access available.
 
 Milestone 26.7 adds a separate responsive SDS200 Display Lovelace presentation
 without changing the original compact card. Five explicit scanner-style layout
@@ -392,9 +392,16 @@ and bounded per-client queues. Milestone 32.3 packages one native-Linux Docker
 Engine deployment in which the listener uses a fixed private address on an
 isolated bridge behind one exact private-host TCP mapping while host networking
 remains disabled. Its separate UDP 50000 mapping remains scanner RTP input, not
-a client service. Milestone 32.4 may add advanced Home Assistant App options for
-dedicated native-dashboard and daemon-client ports, but never republishes the
-trusted Ingress listener or turns UDP 50000 into a client-facing service.
+a client service. Milestone 32.4 adds disabled-by-default advanced Home
+Assistant App mappings for the dedicated native HTTPS dashboard and
+authenticated daemon-client protocol. The App binds each enabled service to its
+Supervisor-assigned private container address, validates the effective
+Supervisor mapping, and never republishes the trusted Ingress listener or turns
+UDP 50000 into a client-facing service. Because Supervisor publishes an App
+port host-wide instead of accepting a specific host-interface binding, this
+advanced mode is restricted to a trusted private LAN with client-limited
+firewall policy; exact-interface publication continues to require the
+Milestone 32.3 native-Docker topology.
 
 Trusted reverse-proxy deployment, wildcard binding, and public/Internet
 exposure remain unsupported future boundaries.

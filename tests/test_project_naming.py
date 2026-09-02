@@ -141,10 +141,33 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     assert (
-        "### Milestone 32.3 — Isolated container remote-daemon and thin-client deployment"
+        "### Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment"
         in active_milestone
     )
     for required in (
+        "Milestone 32.3 is closed through reviewed pull request 222",
+        "bbe9054407344ccf4ac11f79119e24728eeb86ae",
+        "authenticated remote-daemon and native-dashboard boundaries",
+        "installation or upgrade must continue to expose no daemon-client or "
+        "native-dashboard TCP port",
+        "authenticated daemon-client listener on container port 50443",
+        "native HTTPS dashboard on container port 8443",
+        "query `/addons/self/info` at startup",
+        "Supervisor-assigned private container address",
+        "creates host-wide Docker port bindings",
+        "trusted private LAN with host firewall rules restricted to intended client "
+        "addresses",
+        "Store the persistent server certificate, mode-`0600` private key",
+        "without the Home Assistant Ingress context",
+        "Home Assistant management tab, bridge-key workflow, and Core-integration "
+        "routes are absent",
+        "Ingress-only advanced-access workspace",
+        "multiple named remote-client identities",
+        "App must never restart Home Assistant Core automatically",
+        "at least two independent private-LAN consumers",
+        "separate Raspberry Pi display host",
+        "#### Closed Milestone 32.3 — Isolated container remote-daemon and "
+        "thin-client deployment",
         "Milestone 32.2 is closed through reviewed pull request 221",
         "ebc987926b846dc62c83478341a0c6b2ef250603",
         "one explicit native-Linux Docker Engine deployment",
