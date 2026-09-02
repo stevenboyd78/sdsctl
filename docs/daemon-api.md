@@ -52,6 +52,14 @@ future authenticated listener can return transport-ready streams without
 changing daemon request dispatch. It does not make a network listener
 constructible or configurable.
 
+The next foundation slice adds a strict, disabled-by-default
+[`daemon-remote.toml` configuration and filesystem preflight](daemon-remote.md).
+It models exact non-public binds, TLS file references, independently revocable
+client identities, and `observe`/`control` authorization scopes without reading
+secret contents or opening a socket. The daemon command does not consume that
+configuration yet, so no TCP/TLS listener, client credential, CLI option,
+container port, or Home Assistant App mapping is available.
+
 ## Starting the API
 
 The local API starts automatically with the foreground daemon:
