@@ -583,8 +583,12 @@ def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:
     assert response.text.count('role="tabpanel"') == 6
     assert 'id="waterfall-spectrum"' in response.text
     assert 'id="waterfall-history"' in response.text
+    assert response.text.count('role="img" tabindex="-1"') == 2
     assert 'id="waterfall-pause"' in response.text
     assert 'id="waterfall-clear"' in response.text
+    assert 'id="waterfall-history-policy"' in response.text
+    assert 'id="waterfall-pointer"' in response.text
+    assert 'id="waterfall-pointer-frequency"' in response.text
     assert 'id="waterfall-fullscreen"' in response.text
     assert "Relative, uncalibrated scanner values" in response.text
     assert 'class="scanner-display-hierarchy"' in response.text

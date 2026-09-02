@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add an explicit elapsed-time alternative to the Waterfall card's compatible
+  60-, 120-, and 240-frame history settings. The 15-, 30-, and 60-second modes
+  remain capped at 240 frames and retain delivery gaps rather than stretching
+  old data into a continuous trace.
+- Add an opt-in display-only frequency pointer to the Waterfall spectrum and
+  history. Pointer, touch, and keyboard input interpolate only validated live
+  span metadata and never send scanner commands or claim calibrated frequency.
+
 ## 0.26.1
 
 - Track the sdsctl v0.26.1 installation and documentation release while

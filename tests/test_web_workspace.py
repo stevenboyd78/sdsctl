@@ -153,6 +153,9 @@ def test_workspace_groups_existing_controls_without_changing_live_ids() -> None:
         "pane-waterfall": (
             "waterfall-spectrum",
             "waterfall-history",
+            "waterfall-history-policy",
+            "waterfall-pointer",
+            "waterfall-pointer-frequency",
             "waterfall-pause",
             "waterfall-fullscreen",
             "waterfall-gwf-timing",
@@ -567,6 +570,40 @@ assert.equal(validFrequencyMetadata({
   marker_frequency: "1555500",
   marker_position: "120",
 }), null);
+const frameHistoryPolicy = waterfallHistoryPolicy("frames", "120");
+const durationHistoryPolicy = waterfallHistoryPolicy("duration", "30");
+assert.deepEqual(frameHistoryPolicy, {mode: "frames", frames: 120, seconds: null});
+assert.deepEqual(durationHistoryPolicy, {mode: "duration", frames: 240, seconds: 30});
+const timedHistory = [
+  {values: [0.1], receivedAt: 1000},
+  {values: [0.2], receivedAt: 15000},
+  {values: [0.3], receivedAt: 31000},
+];
+assert.deepEqual(
+  pruneWaterfallHistory(timedHistory, durationHistoryPolicy, 40000),
+  timedHistory.slice(1),
+);
+const durationRows = waterfallHistoryRows(
+  timedHistory,
+  durationHistoryPolicy,
+  300,
+  40000,
+);
+assert.equal(durationRows.length, 2);
+assert.ok(durationRows[0].y < durationRows[1].y);
+assert.ok(durationRows.every((row) => row.height >= 1));
+assert.equal(waterfallPointerFrequency({
+  lower_frequency: "945000",
+  center_frequency: "949000",
+  upper_frequency: "952000",
+  marker_frequency: "949000",
+  marker_position: "120",
+}, 0.5).label, "94.8500 MHz");
+assert.equal(waterfallPointerFrequency({}, 0.5), null);
+assert.throws(
+  () => waterfallHistoryPolicy("duration", 3600),
+  /duration history is invalid/,
+);
 
 for (const identifier of [
   "waterfall-session-state",

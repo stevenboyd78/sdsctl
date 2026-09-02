@@ -442,7 +442,11 @@ The upper Canvas shows the newest 240-bin relative spectrum. The renderer parses
 each validated source token as a base-16 code, then normalizes that frame's code
 range for presentation only; this does not claim dB, RSSI, power, or another
 calibrated magnitude. The lower Canvas retains at most 240 normalized frames and
-draws the newest row at the bottom.
+draws the newest row at the bottom. **History** keeps the compatible 60-, 120-,
+or 240-frame policy, or explicitly selects a 15-, 30-, or 60-second elapsed-time
+window. Duration placement uses accepted monotonic browser receipt time,
+preserves delivery gaps, and retains the same 240-frame cap as an independent
+memory bound.
 Normalization is per frame and is only a presentation transform: the latest 240
 source strings remain preserved in the adjacent raw output, and the UI does not
 label the values as power, dB, RSSI, or calibrated FFT magnitude. Lower, center,
@@ -459,14 +463,23 @@ Adjacent semantic HTML reports session state, frequency metadata, frame rate,
 frame age, stream sequence, cumulative queue loss, overflow, poll failures,
 successful GWF command round-trip time, scheduler lag and skipped deadlines,
 GST refresh revision and failures, and session-transition count. **Pause
-display** freezes Canvas history while the
-browser continues consuming data; it does not pause the scanner protocol.
-**Clear history** clears only browser memory. **Full screen** uses the browser
-Full Screen API when available. Canvas backing dimensions follow the rendered
-CSS size and device pixel ratio, and resize or theme changes redraw the bounded
+display** freezes Canvas history while the browser continues consuming data; it
+does not pause the scanner protocol or accumulate a hidden frame backlog.
+**Clear history** clears only browser memory. A stream-generation change or
+teardown also clears retained history. **Full screen** uses the browser Full
+Screen API when available. Canvas backing dimensions follow the rendered CSS
+size and device pixel ratio, and resize or theme changes redraw the bounded
 history from memory. Base visualization tokens keep every built-in and managed
 theme legible; System and Pip-Boy-inspired define deliberate spectrum, grid,
-marker, history, and unavailable-state palettes.
+marker, pointer, history, and unavailable-state palettes.
+
+**Frequency pointer** enables one shared vertical guide over the spectrum and
+history. Pointer or touch movement and the arrow, Home, and End keys move the
+guide; Escape clears it. The adjacent output interpolates the structurally valid
+scanner-reported lower and upper bounds and formats the result in MHz. Invalid
+or incomplete bounds make it unavailable. The pointer is display-only: it does
+not tune, hold, search, change span, or establish a calibrated frequency
+measurement.
 
 Milestone 26.10 extraction acceptance completed on August 24, 2026, with the
 real packaged demo application and Google Chrome. All five themes rendered at

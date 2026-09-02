@@ -221,3 +221,62 @@ These observations validate direct use of the scanner-reported GST range and
 do not require a renderer-maintained span table. The separate one-second GST
 refresh and the session snapshot carried by live GWF records let a later span
 change replace renderer scale data without restarting the session.
+
+## Milestone 31.1 physical acceptance
+
+Physical Milestone 31.1 acceptance completed on September 1, 2026, from
+pull-request head `91ec4f1c6ae6568ead5868b9f5814ada8596592f` through one
+deliberately named Local App. The amd64 host ran Home Assistant OS 18.2, Core
+2026.8.3, Supervisor 2026.08.0, and Docker 29.6.2; the physical SDS200 ran
+firmware 1.26.01. The repository-managed App remained stopped during the test,
+so scanner control, PSI, Waterfall polling, and RTSP/RTP audio retained one
+application owner.
+
+The authenticated web renderer sustained 4.0 frames per second with a
+15-second elapsed-time window. History filled progressively, pruned by receipt
+time, froze without a hidden backlog while paused, resumed without catch-up,
+and rebuilt progressively after Clear. Its display-only pointer worked on both
+canvases with mouse and keyboard input. At the restored 1.44 MHz span, Home and
+End resolved the typed bounds as 94.1800 and 95.6200 MHz around the 94.9000 MHz
+center; one-bin arrow movement changed the value by approximately 0.0060 MHz.
+Pointer interaction did not change scanner frequency, span, mode, or hold
+state.
+
+Live scanner changes to 720 kHz and 2.88 MHz replaced the renderer scale without
+restarting the stream. Their exact typed bounds resolved to 94.5400 through
+95.2600 MHz and 93.4600 through 96.3400 MHz respectively. Returning to 1.44 MHz
+restored 94.1800 through 95.6200 MHz, and frame delivery remained 4.0 frames per
+second throughout.
+
+Home Assistant loaded the aggregate card module at exact SHA-256
+`dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad`.
+Three unchanged 60-, 120-, and 240-frame cards and one graphical-editor-created
+15-second duration card rendered together at 4.0 frames per second. The editor
+defaulted new cards to 30 elapsed seconds and accepted Home Assistant's exact
+string-serialized `history_seconds: '15'` selection. Per-card pause and Clear
+remained independent; the other three cards continued live without losing
+history, and the duration card accumulated no paused backlog.
+
+Hiding the final visible card group for longer than the duration window released
+demand while the scanner remained connected. Returning to the view
+reauthenticated automatically, began with empty histories, and restored 4.0
+frames per second without stale rows. A guarded Local App restart then forced a
+new scanner and stream generation; all four cards reconnected without manual
+reload, rebuilt fresh histories, and restored the live 94.1800, 94.9000, and
+95.6200 MHz scale. A direct request from outside the Home Assistant Ingress
+boundary returned HTTP 403 as required.
+
+Intermittent GWF command timeouts remained isolated at
+`consecutive_failures=1`; the qualified 4.0-frame-per-second cadence recovered
+without bursts, client errors, or a scanner reconnect. This evidence does not
+turn relative hexadecimal values into calibrated FFT power and does not expand
+the accepted text `PWF`/`GWF` transport boundary.
+
+Closure removed the temporary duration card and restored the published v0.26.1
+App as the sole scanner owner. The three retained frame-count cards continued
+to render through the exact released aggregate module with SHA-256
+`dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`.
+The stopped Local App was uninstalled, its exact Home Assistant source and
+local staging directories were deleted, and the App catalog was reloaded.
+Post-cleanup audit found no installed Milestone 31.1 App or temporary source
+while the published App remained started.

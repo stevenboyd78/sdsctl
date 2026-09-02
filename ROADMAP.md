@@ -11,74 +11,105 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 30.2 — v0.26.1 installation release and publication closure
+### Milestone 31.1 — Duration-based Waterfall history and frequency pointer
 
-Milestone 30.1 is closed through reviewed pull request 212 and merge commit
-`e438af0c06e955a6ca5688376c2023f8f35481c1`. The repository now has a concise
-211-line README, deployment- and task-oriented beginner wiki source, a checked
-350-line README ceiling, and an `sds200[all]` package extra whose members are
-the exact union of `tui`, `web`, `mqtt`, and `playback`. Local validation passed
-4,601 tests plus static, documentation, browser, screenshot, distribution, and
-clean-install checks; pull-request and post-merge CI, CodeQL, generic-container,
-Home Assistant App, and dependency-graph workflows also passed.
+Milestone 30.2 is closed through reviewed pull request 213, merge commit
+`9e693474e9bbd7c551a302b3c66df450a86011f9`, and the immutable `v0.26.1` tag.
+Public PyPI now exposes the reviewed `sds200[all]` dependency union and concise
+beginner README; the generic Docker and Home Assistant App multi-platform
+images, reviewed wiki, GitHub Release, and proportionate Home Assistant OS
+upgrade acceptance are published and verified.
 
-Public PyPI still serves immutable version 0.26.0 metadata and its prior long
-description. That artifact does not declare the `all` extra, so a public
-`python -m pip install "sds200[all]"` may warn and install only the base package.
-Milestone 30.2 closes that release-boundary mismatch; it is release closure for
-the already-reviewed installation and documentation work, not another runtime
-feature slice.
+Milestone 31.1 improves inspection of the already-qualified relative Waterfall
+without adding another scanner session or changing its authoritative text
+`PWF`/`GWF` data plane. Add bounded duration-based history to the web dashboard
+and first-party Home Assistant Waterfall card so operators can select a useful
+time window even when actual frame cadence varies. Existing 60-, 120-, and
+240-frame card configurations remain valid and retain their current meaning;
+duration mode is an explicit alternative rather than a silent migration.
 
-Synchronize the Python distribution, import version, and Home Assistant App at
-0.26.1. Freeze the project and App changelogs, release-facing README and wiki
-guidance, container references, and version assertions. The independently
-packaged Home Assistant Core integration remains at 0.1.5 because Milestone
-30.1 does not change that artifact. The public account must distinguish the base
-package, individual extras, the all-runtime extra, development dependencies,
-operating-system prerequisites, Home Assistant installation, and container
-deployment without implying that `all` installs non-Python components.
+History retention must use each accepted frame's ordered capture or receipt
+time, prune data outside the selected window, cap both elapsed duration and
+frame count, and clear all retained samples on the existing Clear action,
+stream-generation changes, invalid sequence transitions, and teardown. Paused
+rendering may preserve the bounded visible history but must not create an
+unbounded hidden backlog. Reconnect, visibility, and final-consumer cleanup
+retain the existing independent demand-lease and one shared scanner-side
+Waterfall session contract.
 
-Run Ruff, strict MyPy, the complete Python 3.11–3.14 pytest and coverage matrix,
-documentation checks, real-browser and screenshot checks, source and wheel
-builds, Twine checks, release-integrity and tag-contract tests, generic
-Docker/Compose/Podman validation, Home Assistant App amd64/aarch64 validation,
-CodeQL, and dependency-graph review. In clean environments, verify the base,
-each individual optional extra, `all`, and `dev,all`; inspect wheel metadata to
-prove that `all` is the exact dependency union and that the packaged PyPI long
-description contains the reviewed beginner installation command.
+Add an optional display-only frequency pointer over the spectrum and Waterfall
+surfaces. Derive its value only by linear interpolation across the current typed
+lower and upper span reported by the scanner, using the same geometry as the
+rendered bins. The pointer must follow span changes immediately, make its
+precision and MHz unit explicit, work with mouse, keyboard, and touch input,
+and remain readable without obscuring primary status or controls. When current
+span metadata is missing or invalid, hide the frequency value rather than reuse
+stale bounds or invent a scale.
 
-Pull requests, `main` pushes, and manual workflow dispatches may build and
-validate release artifacts but may not publish them. Only one genuine matching
-`v0.26.1` tag on the exact reviewed release commit may publish the Python
-distribution, generic Docker image, and Home Assistant App amd64/aarch64 and
-multi-architecture images. The GitHub Release must use that same commit,
-version, changelog, release notes, source archives, checksums, and artifact set.
-Workflow success alone is not release acceptance, and no tag may be moved or
-reused after publication.
+Pointer interaction is inspection only. It must not tune, hold, search, change
+center frequency or span, send raw scanner keys, retain a browser-visible
+frequency history, or claim calibrated power, FFT bins, signal bandwidth, or
+emission identity. Waterfall samples remain relative and uncalibrated. No new
+high-rate MQTT entities, public endpoints, credentials, scanner addresses, or
+Home Assistant resource-registration mutations enter this milestone.
 
-Publish the reviewed wiki source without private validation data or source/wiki
-drift. After tag-gated publication, verify that public PyPI reports version
-0.26.1, exposes `all` with the exact four-extra dependency union, renders the
-concise README, and supports clean pinned base and `all` installations. Verify
-the GitHub Release, source archives, checksums, generic multi-platform image,
-Home Assistant images, moving tags, repository metadata, and public links.
+Define one renderer-neutral duration and pointer model shared by the web and
+Home Assistant implementations, with bounded configuration parsing and safe
+fallbacks for older saved card configurations. Add deterministic unit, browser,
+graphical-editor, multi-card, resize, visibility, accessibility, reduced-motion,
+and screenshot coverage at the established phone, Raspberry Pi, desktop, and
+full-screen reference sizes. Run the complete static, test, documentation,
+package, generic-container, Home Assistant App, and real-browser validation
+appropriate to the changed surfaces, followed by physical SDS200 and Home
+Assistant OS acceptance of duration pruning, pause, clear, live span changes,
+pointer accuracy, final-card cleanup, and scanner-session recovery.
 
-Complete a proportionate Home Assistant OS upgrade from published App 0.26.0
-to 0.26.1. Confirm the App reports the exact published version and image,
-connects to the scanner as sole control and RTSP/RTP owner, opens Ingress,
-retains MQTT Discovery and first-party card resources, and preserves recordings
-and configuration. Remove any deliberately named validation components and
-restore the published App as the sole scanner owner. No Local App, custom
-integration copy, private bridge key, recording, scanner programming, provider
-payload, credential, address, or browser-cache state may enter public evidence.
+Physical acceptance completed on September 1, 2026, from pull-request head
+`91ec4f1c6ae6568ead5868b9f5814ada8596592f` through one deliberately named
+Local App on an amd64 Home Assistant OS 18.2 host running Core 2026.8.3,
+Supervisor 2026.08.0, and Docker 29.6.2 against an SDS200 running firmware
+1.26.01. The authenticated web renderer sustained 4.0 frames per second while
+15-second duration pruning, pause without hidden backlog, clear and progressive
+rebuild, pointer and keyboard interaction, and live 720 kHz, 1.44 MHz, and
+2.88 MHz span changes all passed without reconnecting or changing scanner
+state.
 
-No scanner, daemon, web, audio, Favorites, Waterfall, MQTT, container, or Home
-Assistant runtime capability enters Milestone 30.2. Duration-based Waterfall
-history, an interactive frequency pointer, TUI Waterfall rendering, GUI work, a
-ProScan wire comparison, alternative GW2 syntax, binary negotiation, FFT
-calibration, scanner tuning, public or anonymous audio, automatic
-RadioReference synchronization, weather-alert recording, and broader scanner-
-family validation remain separately bounded future work.
+The exact aggregate Home Assistant card module then loaded three unchanged
+60-, 120-, and 240-frame cards beside one graphical-editor-created 15-second
+duration card. All four shared the existing scanner-side session at 4.0 frames
+per second; per-card pause and clear remained independent, final hidden-card
+demand released cleanly, and visibility plus guarded App restart recovery
+reconnected automatically with empty histories and the restored live scale.
+The direct non-Ingress probe remained forbidden. Intermittent single GWF misses
+recovered at `consecutive_failures=1` without a catch-up burst or renderer
+failure. The implementation and physical gate are therefore complete pending
+pull-request review and merge.
+
+Closure removed the temporary duration card, restored the published v0.26.1
+App as the sole scanner owner, and registered its exact released aggregate
+module digest
+`dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f`.
+The three retained frame-count cards rendered normally. The stopped Local App
+was then uninstalled, its exact `/addons/sds200_31_1` source and local staging
+directory were deleted, and the App catalog was reloaded. Post-cleanup audit
+found no installed Milestone 31.1 App or retained temporary directory while the
+published v0.26.1 App remained started.
+
+TUI Waterfall rendering, GUI work, scanner tuning, click-to-hold or click-to-
+search behavior, alternative GW2 syntax, binary negotiation, ProScan wire
+comparison, FFT calibration, public or anonymous access, weather-alert
+recording, automatic RadioReference synchronization, and broader scanner-family
+validation remain outside Milestone 31.1.
+
+#### Closed Milestone 30.2 — v0.26.1 installation release and publication closure
+
+Milestone 30.2 synchronized and published version 0.26.1 after complete static,
+test, documentation, distribution, clean-install, container, browser, Home
+Assistant, and release-contract validation. The release made the reviewed
+`sds200[all]` extra and beginner installation experience public, retained the
+separately versioned Home Assistant Core integration at 0.1.5, verified every
+public artifact from the reviewed release commit, and completed exact Home
+Assistant acceptance and cleanup without retaining private validation state.
 
 #### Closed Milestone 30.1 — Installation experience and beginner documentation
 
@@ -1080,6 +1111,14 @@ state changes.
   reviewed installation experience and `all` extra genuinely available from
   public PyPI, synchronizes release artifacts, validates clean installs, and
   completes proportionate published Home Assistant acceptance.
+
+### Milestone 31 — Waterfall time and frequency inspection
+
+- Milestone 31.1: bounded duration-based history and an optional display-only
+  frequency pointer for the web dashboard and first-party Home Assistant
+  Waterfall card. Preserve legacy frame-depth configurations, the relative and
+  uncalibrated data contract, one shared scanner-side session, and explicit
+  separation from scanner tuning or unsupported RF interpretation.
 - Weather-alert state and recording, TUI waterfall rendering, and the future GUI
   remain separately bounded follow-up candidates.
 

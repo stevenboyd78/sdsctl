@@ -283,7 +283,7 @@
 
   .waterfall-panel {
     display: grid !important;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto !important;
     gap: clamp(0.25rem, 0.8vmin, 0.65rem) !important;
   }
 
@@ -672,6 +672,10 @@
     .waterfall-controls {
       display: grid !important;
       grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    .waterfall-history-control {
+      grid-column: 1 / -1 !important;
     }
 
     .waterfall-telemetry {
@@ -1117,11 +1121,12 @@
 
     .waterfall-panel {
       grid-template-columns: minmax(0, 1fr) minmax(19rem, 0.42fr) !important;
-      grid-template-rows: auto auto minmax(0, 1fr) auto !important;
+      grid-template-rows: auto auto minmax(0, 1fr) auto auto auto !important;
     }
 
     .waterfall-header,
     .waterfall-status,
+    .waterfall-pointer-frequency,
     .waterfall-disclaimer,
     .waterfall-raw {
       grid-column: 1 / -1 !important;
@@ -1136,6 +1141,10 @@
       grid-column: 2 !important;
       grid-row: 3 !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .waterfall-pointer-frequency {
+      grid-row: 4 !important;
     }
 
     .waterfall-telemetry > div {
@@ -1343,6 +1352,7 @@
       --waterfall-spectrum: LinkText !important;
       --waterfall-marker: Highlight !important;
       --waterfall-history: LinkText !important;
+      --waterfall-pointer: Highlight !important;
     }
 
     body,

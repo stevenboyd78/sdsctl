@@ -140,30 +140,34 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert "### Milestone 30.2 — v0.26.1 installation release and publication closure" in (
-        active_milestone
+    assert (
+        "### Milestone 31.1 — Duration-based Waterfall history and frequency pointer"
+        in active_milestone
     )
     for required in (
-        "Milestone 30.1 is closed through reviewed pull request 212",
-        "e438af0c06e955a6ca5688376c2023f8f35481c1",
-        "concise 211-line README",
-        "exact union of `tui`, `web`, `mqtt`, and `playback`",
-        "Public PyPI still serves immutable version 0.26.0 metadata",
-        "does not declare the `all` extra",
-        "release closure for the already-reviewed installation and documentation work",
-        "Python distribution, import version, and Home Assistant App at 0.26.1",
-        "Home Assistant Core integration remains at 0.1.5",
-        "complete Python 3.11–3.14 pytest and coverage matrix",
-        "verify the base, each individual optional extra, `all`, and `dev,all`",
-        "packaged PyPI long description contains the reviewed beginner installation command",
-        "Only one genuine matching `v0.26.1` tag",
-        "Workflow success alone is not release acceptance",
-        "public PyPI reports version 0.26.1",
-        "Complete a proportionate Home Assistant OS upgrade",
-        "No scanner, daemon, web, audio, Favorites, Waterfall, MQTT, container, "
-        "or Home Assistant runtime capability enters Milestone 30.2",
-        "Duration-based Waterfall history",
-        "a ProScan wire comparison",
+        "Milestone 30.2 is closed through reviewed pull request 213",
+        "9e693474e9bbd7c551a302b3c66df450a86011f9",
+        "immutable `v0.26.1` tag",
+        "Public PyPI now exposes the reviewed `sds200[all]` dependency union",
+        "Add bounded duration-based history to the web dashboard",
+        "Existing 60-, 120-, and 240-frame card configurations remain valid",
+        "duration mode is an explicit alternative rather than a silent migration",
+        "ordered capture or receipt time",
+        "cap both elapsed duration and frame count",
+        "Paused rendering may preserve the bounded visible history",
+        "one shared scanner-side Waterfall session contract",
+        "optional display-only frequency pointer",
+        "linear interpolation across the current typed lower and upper span",
+        "work with mouse, keyboard, and touch input",
+        "hide the frequency value rather than reuse stale bounds",
+        "must not tune, hold, search, change center frequency or span",
+        "Waterfall samples remain relative and uncalibrated",
+        "one renderer-neutral duration and pointer model",
+        "physical SDS200 and Home Assistant OS acceptance",
+        "TUI Waterfall rendering, GUI work, scanner tuning",
+        "alternative GW2 syntax",
+        "#### Closed Milestone 30.2 — v0.26.1 installation release and publication closure",
+        "retained the separately versioned Home Assistant Core integration at 0.1.5",
         "#### Closed Milestone 30.1 — Installation experience and beginner documentation",
         "performed no package, container, App, tag, release, or wiki publication",
         "#### Closed Milestone 29.7 — v0.26.0 release and publication closure",

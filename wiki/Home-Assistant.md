@@ -40,6 +40,11 @@ The individual compatibility resources remain available for selective or
 existing installations. Register either the aggregate resource or the needed
 individual resources; duplicate registration is unnecessary.
 
+The Waterfall card offers compatible 60-, 120-, and 240-frame history plus an
+explicit 15-, 30-, or 60-second mode, with 240 frames as the memory cap in every
+case. Its optional frequency pointer works with pointer, touch, or keyboard input
+and is a display aid only; it does not tune, hold, search, or change scanner span.
+
 ## Browser audio and recordings
 
 Browser audio starts only after an operator action. Recordings are finalized by

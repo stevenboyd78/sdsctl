@@ -785,6 +785,7 @@ select:focus-visible,
   --waterfall-spectrum: #42d7ff;
   --waterfall-marker: #ffcf4a;
   --waterfall-history: #42d7ff;
+  --waterfall-pointer: #ffffff;
 }
 
 html {
@@ -994,7 +995,7 @@ body {
 
 .waterfall-panel {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
   gap: clamp(0.25rem, 0.8vmin, 0.65rem);
   color: var(--text);
   background: var(--surface);
@@ -1030,6 +1031,21 @@ body {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: clamp(0.2rem, 0.6vmin, 0.45rem);
+}
+
+.waterfall-history-control {
+  display: grid;
+  grid-template-columns: auto minmax(6.5rem, 1fr);
+  align-items: center;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: clamp(0.58rem, 1.2vmin, 0.75rem);
+}
+
+.waterfall-history-control select {
+  min-height: 2rem;
+  padding: 0.2rem 0.35rem;
+  font-size: clamp(0.64rem, 1.35vmin, 0.82rem);
 }
 
 .waterfall-controls button {
@@ -1093,6 +1109,29 @@ body {
   min-height: 0;
   border: 1px solid var(--waterfall-grid);
   background: var(--waterfall-background);
+  touch-action: pan-y;
+}
+
+.waterfall-plot canvas[data-pointer-enabled="true"] {
+  touch-action: none;
+}
+
+.waterfall-plot canvas:focus-visible {
+  outline: 2px solid var(--waterfall-pointer);
+  outline-offset: 2px;
+}
+
+.waterfall-pointer-frequency {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: clamp(0.62rem, 1.3vmin, 0.8rem);
+  line-height: 1.2;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .waterfall-telemetry {

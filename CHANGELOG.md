@@ -6,6 +6,25 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add explicit 15-, 30-, and 60-second Waterfall history modes to the web
+  dashboard and first-party Home Assistant card. Elapsed history uses accepted
+  monotonic receipt time, preserves delivery gaps, and remains capped at 240
+  frames.
+- Add an optional display-only Waterfall frequency pointer across both spectrum
+  and history Canvases. Pointer, touch, and keyboard interaction interpolate the
+  validated scanner-reported lower and upper bounds without tuning, holding,
+  searching, changing span, or claiming calibrated frequency measurements.
+
+### Changed
+
+- Preserve the Home Assistant card's existing 60-, 120-, and 240-frame
+  configurations as the backward-compatible default while new picker-created
+  cards start with 30-second history. Pause freezes visible history without
+  accumulating a hidden backlog; Clear, stream-generation changes, and teardown
+  remove retained history deterministically.
+
 ## [0.26.1] - 2026-09-01
 
 ### Added

@@ -70,7 +70,7 @@ global.window = {{
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-waterfall-card.js?v="
-        "a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc"
+        "d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8"
     )
 
 
@@ -92,11 +92,16 @@ const accepted = requireWaterfallCardConfig({
   density: "tall",
   palette: "green",
   history: 240,
+  history_mode: "duration",
+  history_seconds: 60,
   show_scale: false,
   show_telemetry: true,
+  show_pointer: true,
   start_paused: true,
   grid_options: {rows: "auto", columns: "full"},
 });
+const defaults = requireWaterfallCardConfig({});
+const stub = Sds200WaterfallCard.getStubConfig();
 const serializedHistories = ["60", "120", "240"].map(
   (history) => requireWaterfallCardConfig({history}).history,
 );
@@ -108,6 +113,9 @@ for (const config of [
   {history: 1000000},
   {history: "60.0"},
   {history: " 60"},
+  {history_mode: "minutes"},
+  {history_seconds: 3600},
+  {show_pointer: "yes"},
   {show_scale: "yes"},
 ]) {
   try {
@@ -116,7 +124,13 @@ for (const config of [
     rejected.push(error.message);
   }
 }
-process.stdout.write(JSON.stringify({accepted, serializedHistories, rejected}));
+process.stdout.write(JSON.stringify({
+  accepted,
+  defaults,
+  stub,
+  serializedHistories,
+  rejected,
+}));
 """
     )
 
@@ -125,15 +139,86 @@ process.stdout.write(JSON.stringify({accepted, serializedHistories, rejected}));
         "density": "tall",
         "palette": "green",
         "history": 240,
+        "history_mode": "duration",
+        "history_seconds": 60,
         "show_scale": False,
         "show_telemetry": True,
+        "show_pointer": True,
         "start_paused": True,
     }
     assert result["serializedHistories"] == [60, 120, 240]
-    assert len(result["rejected"]) == 7
+    assert result["defaults"]["history_mode"] == "frames"
+    assert result["defaults"]["history"] == 120
+    assert result["defaults"]["history_seconds"] == 30
+    assert result["defaults"]["show_pointer"] is False
+    assert result["stub"]["history_mode"] == "duration"
+    assert result["stub"]["history_seconds"] == 30
+    assert result["stub"]["show_pointer"] is False
+    assert len(result["rejected"]) == 10
     assert "not supported" in result["rejected"][0]
     assert 'history "60.0" is not supported' in result["rejected"][4]
     assert 'history " 60" is not supported' in result["rejected"][5]
+
+
+def test_waterfall_history_and_pointer_models_are_bounded() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const framePolicy = waterfallHistoryPolicy("frames", "120");
+const durationPolicy = waterfallHistoryPolicy("duration", "30");
+const history = [
+  {values: [0.1], receivedAt: 1000},
+  {values: [0.2], receivedAt: 15000},
+  {values: [0.3], receivedAt: 31000},
+];
+const retained = pruneWaterfallHistory(history, durationPolicy, 40000);
+const rows = waterfallHistoryRows(history, durationPolicy, 300, 40000);
+const pointer = waterfallPointerFrequency({
+  lower_frequency: "945000",
+  center_frequency: "949000",
+  upper_frequency: "952000",
+  marker_frequency: "949000",
+  marker_position: "120",
+}, 0.5);
+const rejected = [];
+for (const [mode, value] of [["duration", 3600], ["frames", 1], ["other", 30]]) {
+  try {
+    waterfallHistoryPolicy(mode, value);
+  } catch (error) {
+    rejected.push(error.message);
+  }
+}
+process.stdout.write(JSON.stringify({
+  framePolicy,
+  durationPolicy,
+  retained: retained.map((entry) => entry.receivedAt),
+  rows: rows.map((row) => ({y: row.y, height: row.height})),
+  pointer,
+  missingPointer: waterfallPointerFrequency({}, 0.5),
+  rejected,
+}));
+"""
+    )
+
+    assert result["framePolicy"] == {
+        "mode": "frames",
+        "frames": 120,
+        "seconds": None,
+    }
+    assert result["durationPolicy"] == {
+        "mode": "duration",
+        "frames": 240,
+        "seconds": 30,
+    }
+    assert result["retained"] == [15000, 31000]
+    assert result["rows"][0]["y"] < result["rows"][1]["y"]
+    assert all(row["height"] >= 1 for row in result["rows"])
+    assert result["pointer"]["label"] == "94.8500 MHz"
+    assert result["missingPointer"] is None
+    assert result["rejected"] == [
+        "Waterfall duration history is invalid.",
+        "Waterfall frame history is invalid.",
+        "Waterfall history mode is invalid.",
+    ]
 
 
 def test_waterfall_card_reuses_every_system_web_palette() -> None:
@@ -198,6 +283,7 @@ process.stdout.write(JSON.stringify({
         "spectrum": "#88C0D0",
         "marker": "#B48EAD",
         "history": "#81A1C1",
+        "pointer": "#D8DEE9",
     }
 
 
@@ -550,14 +636,20 @@ def test_waterfall_card_has_bounded_canvas_and_reconnect_work() -> None:
     text = waterfall_card_text()
 
     assert "SDS200_WATERFALL_BIN_COUNT = 240" in text
+    assert "SDS200_WATERFALL_HISTORY_CAPACITY = 240" in text
     assert "Object.freeze({value: 240, label: \"240 frames\"})" in text
+    assert "Object.freeze({value: 60, label: \"60 seconds\"})" in text
     assert "Math.min(\n      2," in text
     assert "Math.min(\n      2048," in text
     assert "Math.min(\n      1024," in text
     assert "SDS200_WATERFALL_RECONNECT_DELAYS_MS" in text
     assert "30000," in text
     assert "window.requestAnimationFrame" in text
-    assert "while (this._history.length > this._config.history)" in text
+    assert "pruneWaterfallHistory(" in text
+    assert "waterfallPointerFrequency(" in text
+    assert 'canvas[data-pointer-enabled="true"]' in text
+    assert "touch-action: pan-y;" in text
+    assert "touch-action: none;" in text
     assert "overflow: auto" not in text
     assert "overflow: scroll" not in text
 

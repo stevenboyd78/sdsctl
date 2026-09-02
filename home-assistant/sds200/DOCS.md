@@ -192,8 +192,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=a9913f9d29528a489dcbd0370ca2d2ba656481b68fc0f48712719879a1214dcc
-/local/sds200/sds200-cards.js?v=dbbb246abbf82fff9040c2d3a4ccb7f94ef634bf56795c0c356737bb5faac37f
+/local/sds200/sds200-waterfall-card.js?v=d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8
+/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad
 ```
 
 The three byte-identical modules are independently packaged under
@@ -217,10 +217,12 @@ Call, Weather, and Tone-Out layouts with Color, Black on White, and White on
 Black palettes. **SDS200 Waterfall** adds a bounded responsive Canvas view of
 the authenticated App's relative, uncalibrated waterfall stream. Its live scale
 follows valid scanner-reported span changes; the graphical editor normalizes
-60, 120, and 240-frame history choices and accepts Home Assistant-owned section
-layout metadata without treating it as card configuration. All three graphical
-editors also offer the same 21 System web palettes as independent,
-presentation-only per-card choices.
+60, 120, and 240-frame history choices, offers an explicit 15-, 30-, or
+60-second alternative, and accepts Home Assistant-owned section layout metadata
+without treating it as card configuration. An optional display-only frequency
+pointer interpolates the valid live span without sending scanner commands. All
+three graphical editors also offer the same 21 System web palettes as
+independent, presentation-only per-card choices.
 
 If the App creates Home Assistant's `www` directory for the first time, restart
 Home Assistant Core once before registering the resource so `/local` becomes
@@ -341,9 +343,12 @@ type: custom:sds200-waterfall-card
 title: SDS200 Waterfall
 density: standard
 palette: theme
-history: 120
+history_mode: duration
+history_seconds: 30
+# history: 120  # Used only with history_mode: frames
 show_scale: true
 show_telemetry: true
+show_pointer: false
 start_paused: false
 grid_options:  # Optional Home Assistant Sections layout metadata
   rows: auto
@@ -355,9 +360,13 @@ layout metadata without treating it as a Waterfall transport or presentation
 option. The Waterfall-specific choices remain bounded as shown above.
 
 `density` is `compact`, `standard`, or `tall`; `palette` is `theme`, `cyan`,
-`green`, `amber`, `monochrome`, or one System web palette; and `history` is 60,
-120, or 240 frames. The
-card requires exactly one running SDS200 App discovered through Home Assistant.
+`green`, `amber`, `monochrome`, or one System web palette. `history_mode` is
+`frames` or `duration`. Frame mode uses `history` of 60, 120, or 240 frames;
+duration mode uses `history_seconds` of 15, 30, or 60 seconds and is still
+capped at 240 frames. Existing configurations without `history_mode` continue
+to use frame mode; cards newly added through the picker begin with 30 seconds.
+The card requires exactly one running SDS200 App discovered through Home
+Assistant.
 No running App is unavailable, and multiple running SDS200 Apps fail closed so
 the card cannot silently select the wrong scanner owner. Enable **Show in
 sidebar** for the intended running App so Home Assistant includes it in the
@@ -367,12 +376,17 @@ not a substitute for that panel setting.
 Visible card instances hold independent demand leases over the daemon's single
 shared scanner-side waterfall session. Hiding, removing, or disconnecting a card
 aborts its stream; releasing the final live card stops waterfall demand. Pause
-freezes only visual history and remains connected. Authentication and transport
-loss use bounded reconnect delays, and the card stores no authentication or
-Ingress material in configuration or browser storage. The daemon refreshes
-typed Waterfall status independently of GWF delivery, so the frequency scale
-follows scanner span changes. A missed refresh retains the last complete scale
-without interrupting live frames.
+freezes only visual history, remains connected, and accumulates no hidden frame
+backlog. Clear, stream-generation changes, and teardown remove retained history.
+The optional pointer can be moved with pointer, touch, arrow keys, Home, and End;
+Escape clears it. It reports interpolated MHz only while the scanner supplies a
+valid lower and upper bound, never sends tuning or hold commands, and is not a
+calibration claim. Authentication and transport loss use bounded reconnect
+delays, and the card stores no authentication or Ingress material in
+configuration or browser storage. The daemon refreshes typed Waterfall status
+independently of GWF delivery, so the frequency scale follows scanner span
+changes. A missed refresh retains the last complete scale without interrupting
+live frames.
 
 ## Troubleshooting
 
