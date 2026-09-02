@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import errno
-import os
 import socket as socket_module
 import struct
 import threading
@@ -11,6 +9,7 @@ from math import isfinite
 
 from .audio_recording import PCMU_SAMPLE_RATE
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_transport import DaemonClientTransport, UnixDaemonClientTransport
 from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
@@ -61,15 +60,29 @@ class DaemonPcmuClient:
 
     def __init__(
         self,
-        location: DaemonSocketLocation,
+        location: DaemonSocketLocation | DaemonClientTransport,
         *,
         timeout: float = DAEMON_PCMU_CLIENT_DEFAULT_TIMEOUT,
         max_endpoint_bytes: int = PCMU_STREAM_DEFAULT_MAX_ENDPOINT_BYTES,
         max_frame_bytes: int = PCMU_STREAM_DEFAULT_MAX_FRAME_BYTES,
     ) -> None:
-        if not isinstance(location, DaemonSocketLocation):
+        if isinstance(location, DaemonSocketLocation):
+            resolved_location: DaemonSocketLocation | None = location
+            transport: DaemonClientTransport = UnixDaemonClientTransport(
+                location,
+                service_label="Daemon PCMU",
+            )
+        elif isinstance(location, DaemonClientTransport):
+            resolved_location = (
+                location.location
+                if isinstance(location, UnixDaemonClientTransport)
+                else None
+            )
+            transport = location
+        else:
             raise TypeError(
-                "Daemon PCMU client location must be a DaemonSocketLocation."
+                "Daemon PCMU client endpoint must be a DaemonSocketLocation "
+                "or DaemonClientTransport."
             )
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise TypeError("Daemon PCMU connect timeout must be a number.")
@@ -96,7 +109,8 @@ class DaemonPcmuClient:
                 f"{PCMU_STREAM_HEADER_BYTES} bytes."
             )
 
-        self.location = location
+        self.location = resolved_location
+        self.transport = transport
         self.timeout = normalized_timeout
         self.max_endpoint_bytes = max_endpoint_bytes
         self.max_frame_bytes = max_frame_bytes
@@ -151,18 +165,20 @@ class DaemonPcmuClient:
             if self._socket is not None:
                 return self._socket
 
-            client = socket_module.socket(
-                socket_module.AF_UNIX,
-                socket_module.SOCK_STREAM,
-            )
-            client.settimeout(self.timeout)
+            client: socket_module.socket | None = None
             try:
-                client.connect(os.fspath(self.location.path))
+                client = self.transport.connect(timeout=self.timeout)
                 client.settimeout(None)
+            except DaemonUnavailableError:
+                raise
             except OSError as error:
-                _close_socket(client)
-                self._raise_connect_error(error)
+                if client is not None:
+                    _close_socket(client)
+                raise DaemonUnavailableError(
+                    "Could not establish daemon PCMU client transport."
+                ) from error
 
+            assert client is not None
             self._socket = client
             self._reset_statistics_locked()
             return client
@@ -363,33 +379,6 @@ class DaemonPcmuClient:
             if self._socket is expected:
                 self._socket = None
         _close_socket(expected)
-
-    def _raise_connect_error(self, error: OSError) -> None:
-        path = self.location.path
-        if error.errno == errno.ENOENT:
-            raise DaemonUnavailableError(
-                f"Daemon PCMU socket was not found: {path}"
-            ) from error
-        if error.errno == errno.ECONNREFUSED:
-            raise DaemonUnavailableError(
-                "Daemon PCMU socket is present but not accepting "
-                f"connections: {path}"
-            ) from error
-        if error.errno in {errno.EACCES, errno.EPERM}:
-            raise DaemonUnavailableError(
-                "Permission denied while connecting to daemon PCMU "
-                f"socket: {path}"
-            ) from error
-        if isinstance(error, TimeoutError):
-            raise DaemonUnavailableError(
-                f"Timed out connecting to daemon PCMU socket: {path}"
-            ) from error
-
-        detail = error.strerror or error.__class__.__name__
-        raise DaemonUnavailableError(
-            f"Could not connect to daemon PCMU socket {path}: {detail}"
-        ) from error
-
 
 def _close_socket(client: socket_module.socket) -> None:
     with suppress(OSError):

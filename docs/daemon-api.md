@@ -34,16 +34,21 @@ The Python implementation retains the historical public class name
 `DaemonReadOnlyApi` for compatibility even though version 1 now advertises both
 read-only and control operations.
 
-Milestone 32.1 adds transport separation without exposing a packaged network
-service by default.
+Milestone 32.1 adds transport separation and an explicit-construction remote
+transport without exposing a packaged network service by default.
 `DaemonApiClient` now consumes the public `DaemonClientTransport` connection
 contract. Passing the existing `DaemonSocketLocation` constructs a
 `UnixDaemonClientTransport` automatically, preserving every local path,
-permission, timeout, error, framing, and protocol behavior. A custom transport
-may be supplied to deterministic application code, but the packaged CLI and TUI
-still resolve only private Unix-domain sockets. No CLI option, remote profile,
-container port, Home Assistant App mapping, or automatically started TCP service
-is available in this foundation slice.
+permission, timeout, error, framing, and protocol behavior. A custom transport,
+including `DaemonRemoteClientTransport`, may be supplied to deterministic
+application code, but the packaged CLI and TUI still resolve only private
+Unix-domain sockets. The remote client validates TLS 1.3 server identity,
+completes the versioned challenge/proof exchange, and selects the `api` service
+before the existing API framing begins. A sanitized remote runtime snapshot
+must recursively omit scanner and audio endpoint fields; their presence fails
+closed. No CLI option, remote profile, container port, Home Assistant App
+mapping, or automatically started TCP service is available in this foundation
+slice.
 
 The server side now consumes the public `DaemonServerListener` and
 `DaemonServerAcceptor` contracts. The existing `DaemonSocketListener` satisfies
@@ -613,7 +618,7 @@ The `daemon.sock` protocol intentionally excludes:
 - generic public `KEY` passthrough and unverified key modes or gestures;
 - streaming event responses on an API connection;
 - binary PCM, PCMU, or finalized-WAV delivery on the API connection;
-- TCP or remote-network exposure;
+- packaged TCP or remote-network exposure;
 - daemon discovery or automatic client selection;
 - decoded-PCM CLI client workflows; and
 - destination activation or configuration reload.

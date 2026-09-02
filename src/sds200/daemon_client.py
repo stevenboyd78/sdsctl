@@ -24,6 +24,7 @@ from .daemon_server import DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
 from .daemon_transport import (
     DaemonClientTransport,
     UnixDaemonClientTransport,
+    daemon_transport_sanitizes_private_state,
 )
 from .exceptions import (
     DaemonDisconnectedError,
@@ -82,6 +83,9 @@ class DaemonApiClient:
 
         self.location = resolved_location
         self.transport = transport
+        self.sanitizes_private_state = daemon_transport_sanitizes_private_state(
+            transport
+        )
         self.timeout = normalized_timeout
         self.max_response_bytes = max_response_bytes
         self._lifecycle_lock = threading.RLock()
@@ -164,7 +168,10 @@ class DaemonApiClient:
 
         result = self.request(DaemonApiOperation.RUNTIME_SNAPSHOT)
         try:
-            _validate_runtime_snapshot(result)
+            _validate_runtime_snapshot(
+                result,
+                sanitized=self.sanitizes_private_state,
+            )
         except DaemonProtocolError:
             self.close()
             raise
@@ -375,7 +382,11 @@ class DaemonApiClient:
     ) -> dict[str, object]:
         result = self.request(operation, params)
         try:
-            _validate_control_result(result, expected_operation=operation)
+            _validate_control_result(
+                result,
+                expected_operation=operation,
+                sanitized=self.sanitizes_private_state,
+            )
         except DaemonProtocolError:
             self.close()
             raise
@@ -471,10 +482,13 @@ class DaemonApiClient:
 
             frame = self._read_response(client)
             try:
-                return _decode_response(
+                result = _decode_response(
                     frame,
                     expected_request_id=selected_request_id,
                 )
+                if self.sanitizes_private_state:
+                    _validate_remote_result_privacy(result)
+                return result
             except DaemonProtocolError:
                 self._invalidate(client)
                 raise
@@ -737,6 +751,7 @@ def _validate_control_result(
     result: Mapping[str, object],
     *,
     expected_operation: DaemonApiOperation,
+    sanitized: bool = False,
 ) -> None:
     required = {
         "sequence",
@@ -778,7 +793,7 @@ def _validate_control_result(
         raise DaemonProtocolError(
             "The daemon control result snapshot must be a JSON object."
         )
-    _validate_runtime_snapshot(snapshot)
+    _validate_runtime_snapshot(snapshot, sanitized=sanitized)
 
 
 def _aware_datetime(value: object, name: str) -> datetime:
@@ -918,7 +933,11 @@ def _validate_hello_result(result: Mapping[str, object]) -> None:
         )
 
 
-def _validate_runtime_snapshot(result: Mapping[str, object]) -> None:
+def _validate_runtime_snapshot(
+    result: Mapping[str, object],
+    *,
+    sanitized: bool = False,
+) -> None:
     required = {
         "state",
         "scanner_endpoint",
@@ -935,6 +954,12 @@ def _validate_runtime_snapshot(result: Mapping[str, object]) -> None:
         "last_failure_at",
         "last_error",
     }
+    if sanitized:
+        if "scanner_endpoint" in result:
+            raise DaemonProtocolError(
+                "The remote daemon runtime snapshot exposed scanner_endpoint."
+            )
+        required.remove("scanner_endpoint")
     missing = sorted(required - set(result))
     if missing:
         raise DaemonProtocolError(
@@ -943,7 +968,8 @@ def _validate_runtime_snapshot(result: Mapping[str, object]) -> None:
         )
 
     _non_empty_string(result["state"], "state")
-    _non_empty_string(result["scanner_endpoint"], "scanner_endpoint")
+    if not sanitized:
+        _non_empty_string(result["scanner_endpoint"], "scanner_endpoint")
     for name in ("scanner_model", "scanner_firmware"):
         if name in result:
             _optional_string(result[name], name)
@@ -959,6 +985,43 @@ def _validate_runtime_snapshot(result: Mapping[str, object]) -> None:
     _non_negative_integer(result["transition_sequence"], "transition_sequence")
     _optional_string(result["last_failure_at"], "last_failure_at")
     _optional_string(result["last_error"], "last_error")
+
+
+def _validate_remote_result_privacy(value: object) -> None:
+    leaked = _remote_private_result_fields(value)
+    if leaked:
+        raise DaemonProtocolError(
+            "The remote daemon API exposed private fields: "
+            f"{sorted(leaked)!r}."
+        )
+
+
+def _remote_private_result_fields(value: object) -> set[str]:
+    if isinstance(value, Mapping):
+        leaked: set[str] = set()
+        for key, child in value.items():
+            if not isinstance(key, str):
+                continue
+            normalized = key.casefold()
+            if (
+                normalized in {"endpoint", "scanner_endpoint"}
+                or normalized.endswith("_endpoint")
+                or normalized.endswith("_path")
+                or normalized.endswith("_file")
+                or normalized.endswith("_directory")
+                or normalized.endswith("_token")
+                or normalized.endswith("_credential")
+                or normalized.endswith("_secret")
+            ):
+                leaked.add(key)
+            leaked.update(_remote_private_result_fields(child))
+        return leaked
+    if isinstance(value, (list, tuple)):
+        leaked = set()
+        for child in value:
+            leaked.update(_remote_private_result_fields(child))
+        return leaked
+    return set()
 
 
 def _integer_list(

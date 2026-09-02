@@ -20,6 +20,14 @@ class DaemonClientTransport(Protocol):
         """Return one connected stream or raise ``DaemonUnavailableError``."""
 
 
+def daemon_transport_sanitizes_private_state(
+    transport: DaemonClientTransport,
+) -> bool:
+    """Return whether a transport requires the documented remote omissions."""
+
+    return getattr(transport, "sanitizes_private_state", None) is True
+
+
 @runtime_checkable
 class DaemonServerAcceptor(Protocol):
     """Accept bounded client streams for one daemon service."""

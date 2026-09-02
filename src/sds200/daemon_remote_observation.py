@@ -29,7 +29,11 @@ from .pcmu_subscriptions import (
     PcmuSubscription,
     PcmuSubscriptionClosed,
 )
-from .waterfall_session import WaterfallSessionLease
+from .waterfall_session import (
+    WaterfallSessionLease,
+    WaterfallSessionSnapshot,
+    WaterfallSessionTransition,
+)
 from .waterfall_subscriptions import (
     WaterfallDelivery,
     WaterfallSubscriptionClosed,
@@ -121,6 +125,13 @@ class _EventSource(Protocol):
 
 class _WaterfallSource(Protocol):
     def subscribe(self) -> WaterfallSessionLease: ...
+
+    def snapshot(self) -> WaterfallSessionSnapshot: ...
+
+    def on_transition(
+        self,
+        callback: Callable[[WaterfallSessionTransition], None],
+    ) -> Callable[[], None]: ...
 
 
 class _AudioSource(Protocol):
@@ -336,6 +347,7 @@ class DaemonRemoteWaterfallLease(_DaemonRemoteObservationLease):
         self,
         broker: DaemonRemoteObservationBroker,
         peer: DaemonRemoteAuthenticatedPeer,
+        source: _WaterfallSource,
         lease: WaterfallSessionLease,
     ) -> None:
         super().__init__(
@@ -344,6 +356,7 @@ class DaemonRemoteWaterfallLease(_DaemonRemoteObservationLease):
             DaemonRemoteObservationKind.WATERFALL,
             lease.close,
         )
+        self._source = source
         self._lease = lease
 
     def get(self, timeout: float | None = None) -> WaterfallDelivery:
@@ -352,6 +365,25 @@ class DaemonRemoteWaterfallLease(_DaemonRemoteObservationLease):
             WaterfallSubscriptionClosed,
             timeout,
         )
+
+    def snapshot(self) -> WaterfallSessionSnapshot:
+        self._require_current()
+        snapshot = self._source.snapshot()
+        self._require_current()
+        return snapshot
+
+    def on_transition(
+        self,
+        callback: Callable[[WaterfallSessionTransition], None],
+    ) -> Callable[[], None]:
+        self._require_current()
+        unsubscribe = self._source.on_transition(callback)
+        try:
+            self._require_current()
+        except BaseException:
+            unsubscribe()
+            raise
+        return unsubscribe
 
 
 class DaemonRemoteAudioLease(_DaemonRemoteObservationLease):
@@ -620,6 +652,7 @@ class DaemonRemoteObservationBroker:
             return DaemonRemoteWaterfallLease(
                 self,
                 peer,
+                waterfall_source,
                 waterfall_source.subscribe(),
             )
         audio_source = self.pcmu_stream

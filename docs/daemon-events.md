@@ -267,7 +267,7 @@ The event service and Milestone 19.9 client still do not add:
 - event replay or server-side filtering;
 - binary PCM delivery or PCMU delivery on the event socket;
 - scanner-control operations on the event socket;
-- TCP or remote authentication;
+- packaged TCP startup or a remote client option;
 - daemon discovery or automatic client selection;
 - decoded-PCM CLI client workflows; or
 - destination activation and configuration reload.
@@ -314,8 +314,12 @@ as playable.
 
 Milestone 32.1 adds an explicit-construction
 [authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
-over this same publisher. It preserves snapshot and sequence ordering but
-omits `recording.state` and recursively removes recording, scanner endpoint,
-filesystem, credential, token, secret, and last-error fields. The packaged
-daemon does not yet expose that lease on TCP; the private local event socket and
-its unchanged full-fidelity contract remain the default.
+and [service router](daemon-remote.md#service-selection-and-shared-client-transport)
+over this same publisher. The existing event client can consume either the
+private Unix socket or an explicitly constructed remote transport. Remote
+delivery preserves snapshot and sequence ordering but omits `recording.state`
+and recursively removes recording, scanner endpoint, filesystem, credential,
+token, secret, and last-error fields; the client fails closed if required
+private fields reappear. Packaged daemon and client startup do not yet construct
+the remote path. The private local event socket and its unchanged full-fidelity
+contract remain the default.

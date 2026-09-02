@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 class _DaemonPcmuReceiver(Protocol):
     """Minimal daemon PCMU client contract required by the audio adapter."""
 
-    location: DaemonSocketLocation
+    location: DaemonSocketLocation | None
 
     @property
     def connected(self) -> bool: ...
@@ -115,7 +115,10 @@ class DaemonPcmuAudioTransport:
             endpoint = self._endpoint
         if endpoint is not None:
             return endpoint
-        return f"pcmu+unix://{self.client.location.path}"
+        location = self.client.location
+        if location is None:
+            return "sdsctl-remote-daemon"
+        return f"pcmu+unix://{location.path}"
 
     @property
     def running(self) -> bool:
@@ -200,8 +203,8 @@ class DaemonPcmuAudioTransport:
                     with self._statistics_lock:
                         self._statistics.receive_errors += 1
                     logger.exception(
-                        "Daemon PCMU audio receive failed socket=%s",
-                        self.client.location.path,
+                        "Daemon PCMU audio receive failed endpoint=%s",
+                        self.endpoint,
                     )
                     break
 

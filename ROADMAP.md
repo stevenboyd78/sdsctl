@@ -104,9 +104,17 @@ prior-generation sessions on successful rotation or revocation. Authenticated
 observation leases now attach to the existing ordered-event, shared Waterfall,
 and accepted-PCMU publishers with aggregate and per-identity limits,
 source-specific redaction, independent release, slow-consumer isolation, and
-generation-linked invalidation. These objects remain explicit construction
-boundaries and are not yet wired into a shared remote client transport,
-packaged daemon startup, or deployment port metadata.
+generation-linked invalidation. A strict post-authentication service-selection
+protocol now routes one TLS connection to the existing API, event, Waterfall,
+or accepted-PCMU service, and the shared daemon clients accept either their
+unchanged private Unix socket or the new TLS client transport. Server identity,
+credential proof, authoritative scopes, and exact service selection must all
+complete within one bounded connection deadline before existing service bytes
+are accepted. Remote API, event, Waterfall, audio, and TUI state reject leaked
+scanner endpoints and retain only the documented redacted endpoint label.
+These objects remain explicit construction boundaries and are not yet wired
+into packaged daemon or client startup, automatic selection, or deployment port
+metadata.
 
 Trusted reverse-proxy identity, Internet/public exposure, wildcard binding,
 third-party identity providers, browser-stored bearer credentials, automatic

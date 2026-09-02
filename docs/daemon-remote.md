@@ -5,14 +5,15 @@ TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
 remain the default. This page describes the current configuration, security
 preflight, authentication protocol, direct-TLS admission, exact-address TCP
 listener, credential lifecycle, operation authorization, and bounded
-observation-lease boundaries; it does **not** announce a packaged remote
-service.
+observation-lease and service-routing boundaries; it does **not** announce a
+packaged remote service.
 
-The packaged `sdsctl daemon` command does not yet read this file, construct the
-listener or observation broker, publish a container port, or add a Home
-Assistant App port. The current objects are explicit Python construction
-boundaries so later startup and deployment steps cannot define weaker bind,
-admission, authorization, or stream-lifecycle behavior by accident.
+The packaged `sdsctl daemon` and `sdsctl daemon-client` commands do not yet read
+these settings, construct the remote listener, router, broker, or client
+transport, publish a container port, or add a Home Assistant App port. The
+current objects are explicit Python construction boundaries so later startup
+and deployment steps cannot define weaker bind, admission, authorization,
+service-selection, or stream-lifecycle behavior by accident.
 
 ## Default behavior
 
@@ -255,9 +256,15 @@ generation, configured/active/revoked/control client counts, live-session and
 invalidation counts, reload totals, and stable failure classes. They contain no
 client ID, endpoint, path, or credential material.
 
-Only authenticated streams are delivered to the daemon API server, together
-with a transport-owned peer context. That context invokes a distinct
-authorization entry point before dispatch. An `observe` identity receives
+The explicit `DaemonRemoteServiceRouter` receives authenticated TLS streams and
+requires one strict, bounded service selection. Only an authorized `api`
+selection is delivered to the daemon API server, together with a
+transport-owned peer context; the existing event, Waterfall, and PCMU protocols
+use their dedicated observation leases. The router preserves the peer context
+and aggregate client cap through API handoff, so API shutdown or credential
+invalidation releases the exact remote client without affecting another
+service. That context invokes a distinct authorization entry point before
+dispatch. An `observe` identity receives
 negotiation, ping, sanitized runtime/scanner state, and audio health. The
 private scanner endpoint is removed from state responses. A `control` identity
 adds the existing typed scanner controls. Recording status, start, stop, and
@@ -266,18 +273,17 @@ are outside this milestone's authority. Negotiated capabilities are filtered to
 the peer's exact operation set, and a denied operation returns
 `authorization_denied` without reaching runtime dispatch.
 
-These objects still do not enter daemon startup, create a client transport,
-publish a deployment port, or activate Home Assistant configuration.
+These objects still do not enter packaged daemon startup, publish a deployment
+port, or activate Home Assistant configuration.
 
 ## Authenticated observation leases
 
-The `sds200.daemon_remote_observation` module adds a transport-neutral broker
+The `sds200.daemon_remote_observation` module provides a transport-neutral broker
 over the daemon's existing event, shared Waterfall, and accepted-PCMU
 publishers. The broker does not bind a socket and does not own or create a
 scanner command transport, PSI stream, Waterfall poller, RTSP session, RTP
-receiver, or audio decoder. A later remote service router can therefore attach
-an authenticated connection to these leases without becoming a second scanner
-owner.
+receiver, or audio decoder. The remote service router attaches authenticated
+connections to these leases without becoming a second scanner owner.
 
 Every lease requires a `DaemonRemoteAuthenticatedPeer` with `observe` scope.
 Acquisition is linearized with that peer's credential generation. One
@@ -312,20 +318,77 @@ other daemon services. Its snapshot reports only capacities and aggregate
 lease, rejection, expiration, and filtered-event counts; it contains no client
 identity or private endpoint.
 
-This boundary is not yet the on-wire service-selection protocol. It neither
-adds remote client configuration nor changes the existing local Unix socket
-formats. The next slice can build one shared local/remote client transport on
-top of these source-preserving leases.
+## Service selection and shared client transport
+
+After TLS 1.3 server-identity validation and successful challenge/proof
+authentication, a client sends exactly one bounded, versioned JSON Lines
+service request. Protocol `sdsctl.daemon.service`, version 1, accepts exactly
+one of `api`, `events`, `waterfall`, or `audio`. The server returns one strict
+success or canonical redacted failure before emitting any selected-service
+bytes. Unknown fields, extra newlines, malformed or oversized frames,
+unsupported versions or services, missing authority, unavailable sources, and
+capacity excess fail closed.
+
+One connection carries one selected service. There is no in-band switching or
+multiplexing. After a successful selection, framing is deliberately unchanged:
+
+| Service | Bytes after selection |
+| --- | --- |
+| `api` | Existing versioned daemon API JSON Lines request/response frames, with peer authorization and remote response sanitization |
+| `events` | Existing event JSON Lines envelopes, beginning with the authoritative remote-filtered snapshot |
+| `waterfall` | Existing checkpoint, transition, and delivery JSON Lines records from the shared `WaterfallSession` |
+| `audio` | Existing binary PCMU header and delivery frames from the daemon-owned accepted-packet publisher |
+
+`DaemonRemoteServiceRouter` consumes an already authenticated listener, applies
+an aggregate client cap and a selection deadline, and hands an authorized API
+connection to the existing `DaemonApiServer`. Event, Waterfall, and audio
+workers hold exactly one observation lease with bounded source queues and send
+deadlines. A malformed, stalled, expired, or disconnected client releases only
+its own stream and lease. API handoff retains the authenticated peer context;
+credential reload invalidates both API and observation connections from the old
+generation. Router diagnostics contain only aggregate counts, capacities, and
+stable failure classes.
+
+`DaemonRemoteClientConfiguration` models one literal private or link-local
+server address, one port, an expected TLS server hostname, an absolute CA
+certificate path, and an independently provisioned client ID and mode-`0600`
+credential path. It rejects wildcard, loopback, public, hostname-as-address,
+URL, and relative-path inputs. Its representation and failures do not disclose
+the address, hostname, client ID, or filesystem paths.
+
+`DaemonRemoteClientTransport` uses one absolute deadline to load and recheck
+trust material, connect, validate TLS 1.3 and the expected server identity,
+complete challenge/proof authentication, receive authoritative scopes, and
+select its exact service. It has no plaintext or certificate-verification
+fallback. `for_service()` creates another immutable service transport using the
+same client configuration, allowing API, event, Waterfall, and audio clients to
+connect independently and reconnect without sharing a mutable stream.
+
+The existing `DaemonApiClient`, `DaemonEventClient`, `DaemonWaterfallClient`,
+and `DaemonPcmuClient` now accept either their original Unix socket location or
+a `DaemonClientTransport`. Local construction preserves the exact private
+socket formats and diagnostics. A remote transport declares that private state
+has already been sanitized: API and event validation then requires the scanner
+endpoint to be absent, and event validation also requires the private
+`last_error` field to be absent. API results recursively remove scanner and
+audio endpoint fields, including nested control snapshots. Audio reports only
+the constant `sdsctl-remote-daemon`; the TUI uses that same label and never
+caches or renders the scanner address. A purported sanitized transport that
+leaks a private endpoint fails closed.
+
+These are programmatic construction seams, not packaged configuration. The CLI
+and TUI still choose only local Unix sockets because no released argument,
+profile parser, discovery mechanism, or startup wiring constructs the remote
+client transport. The local protocols and same-host defaults are unchanged.
 
 ## What remains before remote use
 
 This foundation is not sufficient for a supported packaged remote deployment.
 Milestone 32.1 must still add and validate, in bounded slices:
 
-1. one shared remote client transport for CLI and TUI consumers;
-2. explicit opt-in daemon startup and diagnostics;
-3. explicit Docker/Compose and Home Assistant App port metadata; and
-4. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
+1. explicit opt-in daemon and client startup, profile loading, and diagnostics;
+2. explicit Docker/Compose and Home Assistant App port metadata; and
+3. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
    and remote-TUI acceptance.
 
 Until those steps are complete and released, use the private local daemon

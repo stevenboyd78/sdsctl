@@ -283,9 +283,13 @@ while the published App remained started.
 
 Milestone 32.1 adds an explicit-construction
 [authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
-over this same shared `WaterfallSession`. Remote and local consumers therefore
-increment the same demand count: the first combined consumer starts the single
-scanner publication, an individual disconnect releases only its own lease, and
-the final combined release stops publication. The packaged daemon does not yet
-route remote TCP clients to this lease, and the relative, uncalibrated,
-inspection-only data contract is unchanged.
+and [service router](daemon-remote.md#service-selection-and-shared-client-transport)
+over this same shared `WaterfallSession`. The existing Waterfall client can
+consume either the private Unix socket or an explicitly constructed remote
+transport without changing checkpoint, transition, or delivery framing. Remote
+and local consumers therefore increment the same demand count: the first
+combined consumer starts the single scanner publication, an individual
+disconnect releases only its own lease, and the final combined release stops
+publication. Packaged daemon and client startup do not yet construct the remote
+path, and the relative, uncalibrated, inspection-only data contract is
+unchanged.

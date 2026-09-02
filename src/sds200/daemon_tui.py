@@ -9,6 +9,7 @@ from typing import Any, Protocol, Self
 
 from .commands import NavigationTarget
 from .daemon_events import DaemonEvent, DaemonEventKind
+from .daemon_remote_client import DAEMON_REMOTE_CLIENT_ENDPOINT
 from .events import EventBus
 from .exceptions import DaemonProtocolError
 from .state import RadioStateSnapshot, ScannerScreenKind
@@ -119,8 +120,21 @@ class DaemonTuiRadio:
                 "greater than zero."
             )
 
+        api_sanitizes_private_state = (
+            getattr(api_client, "sanitizes_private_state", None) is True
+        )
+        event_sanitizes_private_state = (
+            getattr(event_client, "sanitizes_private_state", None) is True
+        )
+        if api_sanitizes_private_state != event_sanitizes_private_state:
+            raise ValueError(
+                "Daemon TUI API and event clients must use the same privacy "
+                "boundary."
+            )
+
         self.api_client = api_client
         self.event_client = event_client
+        self.sanitizes_private_state = api_sanitizes_private_state
         self.event_thread_join_timeout = normalized_timeout
         self._events = EventBus()
         self._lock = RLock()
@@ -147,7 +161,10 @@ class DaemonTuiRadio:
     ) -> DaemonTuiBootstrap:
         """Apply one authoritative API snapshot before launching the TUI."""
 
-        initial = daemon_tui_bootstrap(snapshot)
+        initial = daemon_tui_bootstrap(
+            snapshot,
+            sanitized=self.sanitizes_private_state,
+        )
         self._set_connected(initial.connected)
         return initial
 
@@ -527,11 +544,19 @@ def _daemon_identity_value(
 
 def daemon_tui_bootstrap(
     payload: Mapping[str, object],
+    *,
+    sanitized: bool = False,
 ) -> DaemonTuiBootstrap:
     """Decode one authoritative daemon snapshot for TUI construction."""
 
     endpoint = payload.get("scanner_endpoint")
-    if (
+    if sanitized:
+        if endpoint is not None:
+            raise DaemonProtocolError(
+                "Remote daemon runtime snapshot exposed scanner_endpoint."
+            )
+        endpoint = DAEMON_REMOTE_CLIENT_ENDPOINT
+    elif (
         not isinstance(endpoint, str)
         or not endpoint
         or endpoint.strip() != endpoint

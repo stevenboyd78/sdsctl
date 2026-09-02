@@ -56,7 +56,10 @@ class FakeSnapshot:
             "psi_interval_ms": 500,
             "psi_active": True,
             "radio_state": {"channel": "Dispatch"},
-            "audio": {"running": True},
+            "audio": {
+                "endpoint": "rtsp://192.168.20.25/audio",
+                "running": True,
+            },
             "router": {"subscribers": 1},
         }
 
@@ -66,7 +69,13 @@ class FakeResult:
         self.operation = operation
 
     def as_dict(self) -> dict[str, object]:
-        return {"operation": self.operation}
+        return {
+            "operation": self.operation,
+            "snapshot": {
+                "scanner_endpoint": "udp://192.168.20.25:50536",
+                "audio": {"endpoint": "rtsp://192.168.20.25/audio"},
+            },
+        }
 
 
 class FakeRuntime:
@@ -416,8 +425,12 @@ def test_remote_state_removes_private_scanner_endpoint(
 
     assert response["ok"] is True
     assert "scanner_endpoint" not in response["result"]
+    assert "endpoint" not in response["result"].get("audio", {})
     assert "192.168.20.25" not in json.dumps(response)
-    assert DAEMON_REMOTE_REDACTED_RESULT_FIELDS == ("scanner_endpoint",)
+    assert DAEMON_REMOTE_REDACTED_RESULT_FIELDS == (
+        "endpoint",
+        "scanner_endpoint",
+    )
 
 
 def test_observe_peer_denies_control_before_runtime_dispatch() -> None:
@@ -462,6 +475,8 @@ def test_control_peer_dispatches_scanner_control_but_not_recording_operation() -
     )
 
     assert allowed["ok"] is True
+    assert "scanner_endpoint" not in json.dumps(allowed)
+    assert "192.168.20.25" not in json.dumps(allowed)
     assert runtime.controls == [("volume", (8, 2.0))]
     assert denied["error"]["code"] == "authorization_denied"
     assert peer.allowed_operations == (
