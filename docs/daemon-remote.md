@@ -2,13 +2,15 @@
 
 Milestone 32.1 is building an authenticated network transport for thin CLI and
 TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
-remain the default. This page describes the current configuration and security
-preflight foundation; it does **not** announce an available remote listener.
+remain the default. This page describes the current configuration, security
+preflight, and inert authentication primitives; it does **not** announce an
+available remote listener.
 
 The packaged `sdsctl daemon` command does not yet read this file, open a TCP
-socket, construct TLS, accept a remote credential, publish a container port, or
-add a Home Assistant App port. The current model exists so those later runtime
-steps cannot define a weaker configuration boundary by accident.
+socket, construct TLS, run the authentication handshake, publish a container
+port, or add a Home Assistant App port. The current model and pure handshake
+objects exist so those later runtime steps cannot define a weaker configuration
+boundary by accident.
 
 ## Default behavior
 
@@ -121,9 +123,9 @@ The two modeled authorization scopes are:
 Every identity must include `observe`; `control` alone is invalid. Neither scope
 grants raw scanner keys, generic MQTT commands, filesystem access, recording
 contents, Favorites bytes, provider credentials, Home Assistant tokens, or
-Ingress identifiers. Runtime enforcement and authenticated protocol negotiation
-are later Milestone 32.1 slices and are not provided by the configuration model
-alone.
+Ingress identifiers. Authentication returns scopes only after successful proof,
+but transport-level enforcement before operation dispatch remains a later
+Milestone 32.1 slice.
 
 ## Filesystem preflight
 
@@ -150,15 +152,53 @@ diagnostics report enabled state, address family, port, and client counts; they
 do not include the private bind address or any filesystem path. Validation
 errors do not echo secret contents, private endpoint values, or secret paths.
 
+## Authentication contract
+
+The `sds200.daemon_remote_auth` module now defines the version 1 authentication
+frames and verification behavior for a future direct-TLS transport. It is a
+pure foundation: constructing or using these objects performs no network I/O,
+and no packaged command invokes them yet.
+
+After a client has authenticated the server through validated direct TLS, the
+future listener can create one fresh 32-byte server nonce. The client answers
+with its configured ID, a fresh 32-byte client nonce, and an HMAC-SHA256 proof
+over a canonical transcript containing the exact protocol, version, algorithm,
+client ID, and both nonces. Frames are strict, versioned UTF-8 JSON Lines no
+larger than 4 KiB. Unknown fields, malformed values, unsupported protocol or
+version values, and newline injection fail closed.
+
+Each challenge session accepts exactly one authentication attempt. A malformed
+or unsuccessful attempt consumes the challenge just as a successful attempt
+does, and a proof for one challenge cannot authenticate a different challenge.
+The active credential registry evaluates every configured active identity with
+constant-time identifier and proof comparisons before returning a result.
+Unknown, incorrect, and revoked identities share one redacted authentication
+failure; scopes and identity metadata are returned only after proof succeeds.
+
+An active credential file contains exactly one unpadded base64url value encoding
+32 random bytes, optionally followed by one newline. On POSIX its exact mode is
+`0600`. The credential loader rejects relative paths, symlinks, non-regular
+files, malformed or oversized contents, and files whose identity or metadata
+changes between path inspection, descriptor opening, reading, and final
+inspection. Active credentials are loaded once into an immutable registry so a
+remote authentication attempt cannot probe credential-file existence or parse
+behavior. Exceptions and object representations never include credential bytes
+or private paths.
+
+These primitives do not make shared-secret authentication safe on a plaintext
+connection. The future runtime must complete validated direct TLS before sending
+a challenge or accepting a proof, must use a fresh session per connection, and
+must enforce the returned scopes at the daemon-operation boundary.
+
 ## What remains before remote use
 
 This foundation is not sufficient for a remote connection. Milestone 32.1 must
 still add and validate, in bounded slices:
 
-1. direct TLS server identity loading and authenticated client proof;
+1. direct TLS server identity loading and wiring the existing client proof into
+   connection admission;
 2. transport-level scope enforcement before daemon operation dispatch;
-3. protocol negotiation, rotation, revocation, replay handling, and redacted
-   failure behavior;
+3. operational credential rotation and revocation without secret disclosure;
 4. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
 5. one shared remote client transport for CLI and TUI consumers;
 6. explicit Docker/Compose and Home Assistant App port metadata; and
