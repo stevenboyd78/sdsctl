@@ -7,6 +7,8 @@ from pathlib import Path
 from sds200 import __version__
 from sds200.home_assistant_app_runtime import (
     HOME_ASSISTANT_APP_INGRESS_PORT,
+    HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT,
+    HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT,
     HOME_ASSISTANT_APP_RTP_PORT,
 )
 from sds200.home_assistant_app_supervisor import (
@@ -103,6 +105,8 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
         f"{HOME_ASSISTANT_APP_RTP_PORT}\n"
         in manifest
     )
+    assert f"  {HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT}/tcp: null\n" in manifest
+    assert f"  {HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT}/tcp: null\n" in manifest
     assert (
         "ports_description:\n"
         f'  {HOME_ASSISTANT_APP_RTP_PORT}/udp: "SDS200 RTP audio"\n'
@@ -130,6 +134,16 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert 'scanner_host: "str(1,)"\n' in manifest
     assert 'mqtt_topic_prefix: "str(1,)"\n' in manifest
     assert 'recording_directory: "str(1,)"\n' in manifest
+    assert "  remote_daemon_enabled: false\n" in manifest
+    assert "  native_dashboard_enabled: false\n" in manifest
+    assert '  advanced_access_server_name: ""\n' in manifest
+    assert '  advanced_access_host_address: ""\n' in manifest
+    assert "  remote_daemon_enabled: bool\n" in manifest
+    assert "  native_dashboard_enabled: bool\n" in manifest
+    assert '  advanced_access_server_name: "str?"\n' in manifest
+    assert '  advanced_access_host_address: "str?"\n' in manifest
+    assert "hassio_api: true\n" not in manifest
+    assert "host_network: true\n" not in manifest
 
 
 def test_home_assistant_app_configuration_translations_cover_schema() -> None:
@@ -172,6 +186,12 @@ def test_home_assistant_app_configuration_translations_cover_schema() -> None:
     assert "Home Assistant /media root" in translations
     assert "sdsctl/recordings" in translations
     assert "/media/sdsctl/recordings" in translations
+    assert "name: Advanced remote daemon clients\n" in translations
+    assert "matching Network port" in translations
+    assert "listener remains withheld" in translations
+    assert "name: Advanced native HTTPS dashboard\n" in translations
+    assert "name: Advanced access server name\n" in translations
+    assert "name: Advanced access host address\n" in translations
 
 
 def test_home_assistant_app_image_includes_packaged_lovelace_card() -> None:
@@ -285,7 +305,10 @@ def test_home_assistant_app_dockerfile_builds_local_source_with_required_extras(
     assert 'io.hass.type="app"' in dockerfile
     assert 'io.hass.version="${BUILD_VERSION}"' in dockerfile
     assert 'io.hass.arch="${BUILD_ARCH}"' in dockerfile
-    assert "apt-get install --yes --no-install-recommends lame" in dockerfile
+    assert (
+        "apt-get install --yes --no-install-recommends lame openssl"
+        in dockerfile
+    )
     assert '"sds200[web,mqtt]"' in dockerfile
     assert (
         'CMD ["python", "-m", "sds200.home_assistant_app_supervisor"]'

@@ -36,7 +36,7 @@ ENV \
 COPY --from=build /wheels /wheels
 
 RUN apt-get update \
-    && apt-get install --yes --no-install-recommends lame \
+    && apt-get install --yes --no-install-recommends lame openssl \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip install \
         --disable-pip-version-check \

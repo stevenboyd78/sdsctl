@@ -13,9 +13,21 @@ import pytest
 from sds200.exceptions import SDS200Error
 from sds200.home_assistant_app import (
     HOME_ASSISTANT_APP_MQTT_PASSWORD_VARIABLE,
+    HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY,
+    HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY,
     HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE,
+    HomeAssistantAppAdvancedExposure,
     HomeAssistantAppOptions,
+    HomeAssistantAppSupervisorInfo,
     HomeAssistantMqttService,
+)
+from sds200.home_assistant_app_advanced import (
+    HomeAssistantAppAdvancedAccessPaths,
+    default_home_assistant_app_advanced_access_paths,
+    issue_home_assistant_app_remote_client,
+    load_home_assistant_app_advanced_access_context,
+    rotate_home_assistant_app_dashboard_password,
+    rotate_home_assistant_app_server_identity,
 )
 from sds200.home_assistant_app_runtime import HomeAssistantAppRuntimePaths
 from sds200.home_assistant_app_supervisor import (
@@ -30,13 +42,20 @@ from sds200.home_assistant_themes import HomeAssistantThemeError
 
 
 class FakeSignals:
-    def __init__(self, *, stop_after_waits: int | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        stop_after_waits: int | None = None,
+        reload_after_waits: int | None = None,
+    ) -> None:
         self.stop_after_waits = stop_after_waits
+        self.reload_after_waits = reload_after_waits
         self.wait_calls = 0
         self.enter_calls = 0
         self.exit_calls = 0
         self._stop_requested = False
         self._last_signal: int | None = None
+        self._reload_requested = False
 
     @property
     def stop_requested(self) -> bool:
@@ -54,12 +73,28 @@ class FakeSignals:
         del timeout
         self.wait_calls += 1
         if (
+            self.reload_after_waits is not None
+            and self.wait_calls == self.reload_after_waits
+        ):
+            self.request_reload()
+            return True
+        if (
             self.stop_after_waits is not None
             and self.wait_calls >= self.stop_after_waits
         ):
             self.request_stop()
             return True
         return False
+
+    def request_reload(self) -> None:
+        self._last_signal = int(signal.SIGHUP)
+        self._reload_requested = True
+
+    def consume_reload_request(self) -> bool:
+        if not self._reload_requested:
+            return False
+        self._reload_requested = False
+        return True
 
     def __enter__(self) -> Self:
         self.enter_calls += 1
@@ -91,6 +126,7 @@ class FakeProcess:
         self.terminate_calls = 0
         self.kill_calls = 0
         self.wait_calls: list[float | None] = []
+        self.sent_signals: list[int] = []
 
     def poll(self) -> int | None:
         return self.returncode
@@ -113,6 +149,10 @@ class FakeProcess:
             self.returncode = 0
         return self.returncode
 
+    def send_signal(self, signal_number: int) -> None:
+        self.sent_signals.append(signal_number)
+        self.events.append(f"{self.name}:signal:{signal_number}")
+
 
 def runtime_paths(tmp_path: Path) -> HomeAssistantAppRuntimePaths:
     runtime = tmp_path / "run" / "sdsctl"
@@ -124,6 +164,13 @@ def runtime_paths(tmp_path: Path) -> HomeAssistantAppRuntimePaths:
         pcmu_socket=runtime / "pcmu.sock",
         recording_file_socket=runtime / "recordings.sock",
         recording_directory=tmp_path / "data" / "recordings",
+    )
+
+
+def advanced_paths(tmp_path: Path) -> HomeAssistantAppAdvancedAccessPaths:
+    return default_home_assistant_app_advanced_access_paths(
+        root=tmp_path / "data" / "advanced-access",
+        runtime_directory=tmp_path / "run" / "sdsctl",
     )
 
 
@@ -368,6 +415,13 @@ def test_prepare_launch_plan_generates_config_and_separates_child_secrets(
     plan = prepare_home_assistant_app_launch_plan(
         options_path=options_path,
         paths=paths,
+        supervisor_info=HomeAssistantAppSupervisorInfo(
+            container_address="172.30.33.7",
+            network={
+                HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: None,
+                HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: None,
+            },
+        ),
         environ={
             HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE: "supervisor-token",
             HOME_ASSISTANT_APP_MQTT_PASSWORD_VARIABLE: "stale-password",
@@ -401,6 +455,227 @@ def test_prepare_launch_plan_generates_config_and_separates_child_secrets(
     assert plan.web_environment == {"PATH": "/usr/bin"}
     assert HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE not in plan.web_environment
     assert HOME_ASSISTANT_APP_MQTT_PASSWORD_VARIABLE not in plan.web_environment
+
+
+def test_prepare_launch_plan_rejects_advanced_files_outside_runtime_directory(
+    tmp_path: Path,
+) -> None:
+    options_path = tmp_path / "options.json"
+    options_path.write_text(
+        '{"scanner_host":"scanner.local"}\n',
+        encoding="utf-8",
+    )
+    misplaced = default_home_assistant_app_advanced_access_paths(
+        root=tmp_path / "data" / "advanced-access",
+        runtime_directory=tmp_path / "other-run",
+    )
+
+    with pytest.raises(ValueError, match="directly inside the App runtime"):
+        prepare_home_assistant_app_launch_plan(
+            options_path=options_path,
+            paths=runtime_paths(tmp_path),
+            advanced_paths=misplaced,
+            supervisor_info=HomeAssistantAppSupervisorInfo(
+                container_address="172.30.33.7",
+                network={
+                    HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: None,
+                    HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: None,
+                },
+            ),
+        )
+
+
+def test_prepare_launch_plan_enables_reconciled_advanced_children(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options_path = tmp_path / "options.json"
+    options_path.write_text(
+        json.dumps(
+            {
+                "scanner_host": "192.0.2.25",
+                "remote_daemon_enabled": True,
+                "native_dashboard_enabled": True,
+                "advanced_access_server_name": "sdsctl.local",
+                "advanced_access_host_address": "192.168.20.15",
+            }
+        ),
+        encoding="utf-8",
+    )
+    app_paths = runtime_paths(tmp_path)
+    lifecycle_paths = advanced_paths(tmp_path)
+    rotate_home_assistant_app_server_identity(
+        lifecycle_paths,
+        "sdsctl.local",
+        generator=lambda server_name: (
+            b"-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n",
+            b"-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
+        ),
+    )
+    dashboard_password = rotate_home_assistant_app_dashboard_password(
+        lifecycle_paths
+    ).password
+    enrollment = issue_home_assistant_app_remote_client(
+        lifecycle_paths,
+        client_id="pi-display",
+        control=False,
+        host_address="192.168.20.15",
+        server_name="sdsctl.local",
+        host_port=15044,
+    )
+    service = HomeAssistantMqttService(
+        host="mqtt",
+        port=1883,
+        ssl=False,
+        username="user",
+        password="secret",
+        protocol="3.1.1",
+    )
+    monkeypatch.setattr(
+        "sds200.home_assistant_app_supervisor.fetch_home_assistant_mqtt_service",
+        lambda **kwargs: service,
+    )
+
+    plan = prepare_home_assistant_app_launch_plan(
+        options_path=options_path,
+        paths=app_paths,
+        advanced_paths=lifecycle_paths,
+        supervisor_info=HomeAssistantAppSupervisorInfo(
+            container_address="172.30.33.7",
+            network={
+                HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: 15044,
+                HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: 15443,
+            },
+            options={
+                "remote_daemon_enabled": True,
+                "native_dashboard_enabled": True,
+                "advanced_access_server_name": "sdsctl.local",
+                "advanced_access_host_address": "192.168.20.15",
+            },
+        ),
+        environ={
+            HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE: "supervisor-token",
+            "PATH": "/usr/bin",
+        },
+    )
+
+    assert plan.advanced_paths is lifecycle_paths
+    assert plan.advanced_exposure is not None
+    assert plan.advanced_exposure.remote_daemon_host_port == 15044
+    assert plan.advanced_exposure.native_dashboard_host_port == 15443
+    assert plan.daemon_command[-2:] == (
+        "--remote-config",
+        str(lifecycle_paths.runtime_remote_configuration),
+    )
+    assert lifecycle_paths.runtime_remote_configuration.is_file()
+    assert plan.native_web_command
+    assert "--home-assistant-ingress" not in plan.native_web_command
+    assert plan.native_web_environment == {"PATH": "/usr/bin"}
+    assert dashboard_password not in repr(plan)
+    assert enrollment.credential not in repr(plan)
+    context = load_home_assistant_app_advanced_access_context(lifecycle_paths)
+    assert context.container_address == "172.30.33.7"
+    assert context.network[HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY] == 15044
+    assert HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE not in (
+        lifecycle_paths.runtime_remote_configuration.parent
+        / "home-assistant-advanced-context.json"
+    ).read_text(encoding="ascii")
+
+
+def test_prepare_launch_plan_removes_stale_disabled_remote_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options_path = tmp_path / "options.json"
+    options_path.write_text('{"scanner_host":"192.0.2.25"}\n', encoding="utf-8")
+    lifecycle_paths = advanced_paths(tmp_path)
+    lifecycle_paths.runtime_remote_configuration.parent.mkdir(parents=True)
+    lifecycle_paths.runtime_remote_configuration.write_text(
+        "stale\n",
+        encoding="utf-8",
+    )
+    service = HomeAssistantMqttService(
+        host="mqtt",
+        port=1883,
+        ssl=False,
+        username="user",
+        password="secret",
+        protocol="3.1.1",
+    )
+    monkeypatch.setattr(
+        "sds200.home_assistant_app_supervisor.fetch_home_assistant_mqtt_service",
+        lambda **kwargs: service,
+    )
+
+    plan = prepare_home_assistant_app_launch_plan(
+        options_path=options_path,
+        paths=runtime_paths(tmp_path),
+        advanced_paths=lifecycle_paths,
+        supervisor_info=HomeAssistantAppSupervisorInfo(
+            container_address="172.30.33.7",
+            network={
+                HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: None,
+                HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: None,
+            },
+        ),
+        environ={HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE: "supervisor-token"},
+    )
+
+    assert "--remote-config" not in plan.daemon_command
+    assert plan.native_web_command == ()
+    assert not lifecycle_paths.runtime_remote_configuration.exists()
+
+
+def test_prepare_launch_plan_withholds_incomplete_advanced_listeners(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    options_path = tmp_path / "options.json"
+    options_path.write_text(
+        json.dumps(
+            {
+                "scanner_host": "192.0.2.25",
+                "remote_daemon_enabled": True,
+                "native_dashboard_enabled": True,
+                "advanced_access_server_name": "sdsctl.local",
+                "advanced_access_host_address": "192.168.20.15",
+            }
+        ),
+        encoding="utf-8",
+    )
+    service = HomeAssistantMqttService(
+        host="mqtt",
+        port=1883,
+        ssl=False,
+        username="user",
+        password="secret",
+        protocol="3.1.1",
+    )
+    monkeypatch.setattr(
+        "sds200.home_assistant_app_supervisor.fetch_home_assistant_mqtt_service",
+        lambda **kwargs: service,
+    )
+    caplog.set_level(logging.WARNING)
+
+    plan = prepare_home_assistant_app_launch_plan(
+        options_path=options_path,
+        paths=runtime_paths(tmp_path),
+        advanced_paths=advanced_paths(tmp_path),
+        supervisor_info=HomeAssistantAppSupervisorInfo(
+            container_address="172.30.33.7",
+            network={
+                HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY: 15044,
+                HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT_KEY: 15443,
+            },
+        ),
+        environ={HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE: "supervisor-token"},
+    )
+
+    assert "--remote-config" not in plan.daemon_command
+    assert plan.native_web_command == ()
+    assert "remote daemon is enabled" in caplog.text
+    assert "native dashboard is enabled" in caplog.text
 
 
 def test_run_home_assistant_app_installs_lovelace_card_before_supervisor(
@@ -625,6 +900,40 @@ def test_supervisor_starts_web_only_after_daemon_readiness(
         "daemon:ready",
         "start:web",
     ]
+
+
+def test_supervisor_forwards_reload_signal_only_to_daemon(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    daemon = FakeProcess("daemon", events)
+    web = FakeProcess("web", events)
+    processes = iter((daemon, web))
+
+    base = launch_plan(tmp_path)
+    plan = HomeAssistantAppLaunchPlan(
+        options=base.options,
+        mqtt_service=base.mqtt_service,
+        paths=base.paths,
+        daemon_command=base.daemon_command,
+        web_command=base.web_command,
+        daemon_environment=base.daemon_environment,
+        web_environment=base.web_environment,
+        advanced_exposure=HomeAssistantAppAdvancedExposure(
+            container_address="172.30.33.7",
+            remote_daemon_host_port=50443,
+        ),
+    )
+    supervisor = HomeAssistantAppSupervisor(
+        plan,
+        process_factory=lambda command, environment: next(processes),
+        daemon_ready_probe=lambda path, timeout: True,
+        signals=FakeSignals(reload_after_waits=1, stop_after_waits=2),
+    )
+
+    assert supervisor.run() == 0
+    assert daemon.sent_signals == [int(signal.SIGHUP)]
+    assert web.sent_signals == []
     assert events[-4:] == [
         "web:terminate",
         "web:wait",
@@ -854,6 +1163,52 @@ def test_supervisor_brackets_media_child_between_web_and_daemon(
     ]
     assert events[:3] == ["start:daemon", "start:media", "start:web"]
     assert events[-6:] == [
+        "web:terminate",
+        "web:wait",
+        "media:terminate",
+        "media:wait",
+        "daemon:terminate",
+        "daemon:wait",
+    ]
+
+
+def test_supervisor_starts_and_stops_optional_native_web_child(
+    tmp_path: Path,
+) -> None:
+    events: list[str] = []
+    daemon = FakeProcess("daemon", events)
+    media = FakeProcess("media", events)
+    web = FakeProcess("web", events)
+    native_web = FakeProcess("native-web", events)
+    processes = iter((daemon, media, web, native_web))
+    base = launch_plan(tmp_path)
+    plan = HomeAssistantAppLaunchPlan(
+        options=base.options,
+        mqtt_service=base.mqtt_service,
+        paths=base.paths,
+        daemon_command=base.daemon_command,
+        web_command=base.web_command,
+        daemon_environment=base.daemon_environment,
+        web_environment=base.web_environment,
+        media_command=("media-child",),
+        media_environment={"MEDIA": "1"},
+        native_web_command=("native-web-child",),
+        native_web_environment={"NATIVE_WEB": "1"},
+    )
+
+    assert (
+        HomeAssistantAppSupervisor(
+            plan,
+            process_factory=lambda command, environment: next(processes),
+            daemon_ready_probe=lambda path, timeout: True,
+            signals=FakeSignals(stop_after_waits=1),
+        ).run()
+        == 0
+    )
+
+    assert events[-8:] == [
+        "native-web:terminate",
+        "native-web:wait",
         "web:terminate",
         "web:wait",
         "media:terminate",

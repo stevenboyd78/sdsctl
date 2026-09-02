@@ -4,15 +4,25 @@ from pathlib import Path
 
 import pytest
 
-from sds200.home_assistant_app import HomeAssistantAppOptions
+from sds200.home_assistant_app import (
+    HomeAssistantAppAdvancedExposure,
+    HomeAssistantAppOptions,
+)
+from sds200.home_assistant_app_advanced import (
+    default_home_assistant_app_advanced_access_paths,
+    rotate_home_assistant_app_dashboard_password,
+    rotate_home_assistant_app_server_identity,
+)
 from sds200.home_assistant_app_runtime import (
     HOME_ASSISTANT_APP_INGRESS_PORT,
+    HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT,
     HOME_ASSISTANT_APP_RECORDING_DIRECTORY,
     HOME_ASSISTANT_APP_RTP_PORT,
     HOME_ASSISTANT_APP_RUNTIME_DIRECTORY,
     HomeAssistantAppRuntimePaths,
     build_home_assistant_daemon_command,
     build_home_assistant_media_command,
+    build_home_assistant_native_web_command,
     build_home_assistant_web_command,
     default_home_assistant_app_runtime_paths,
 )
@@ -122,6 +132,29 @@ def test_home_assistant_daemon_command_never_contains_mqtt_password() -> None:
     assert all("password" not in argument.casefold() for argument in command)
 
 
+def test_home_assistant_daemon_command_selects_explicit_remote_configuration(
+    tmp_path: Path,
+) -> None:
+    remote_configuration = tmp_path / "run" / "daemon-remote.toml"
+
+    command = build_home_assistant_daemon_command(
+        HomeAssistantAppOptions(scanner_host="scanner.local"),
+        default_home_assistant_app_runtime_paths(),
+        remote_configuration=remote_configuration,
+    )
+
+    assert command[-2:] == ("--remote-config", str(remote_configuration))
+
+
+def test_home_assistant_daemon_command_rejects_relative_remote_configuration() -> None:
+    with pytest.raises(ValueError, match="must be absolute"):
+        build_home_assistant_daemon_command(
+            HomeAssistantAppOptions(scanner_host="scanner.local"),
+            default_home_assistant_app_runtime_paths(),
+            remote_configuration=Path("daemon-remote.toml"),
+        )
+
+
 def test_home_assistant_media_command_uses_only_private_bridge_paths() -> None:
     assert build_home_assistant_media_command(
         default_home_assistant_app_runtime_paths()
@@ -169,6 +202,86 @@ def test_home_assistant_web_command_enables_ingress_and_private_clients() -> Non
         "--listen-port",
         str(HOME_ASSISTANT_APP_INGRESS_PORT),
     )
+
+
+def test_home_assistant_native_web_command_is_separate_and_secret_free(
+    tmp_path: Path,
+) -> None:
+    advanced_paths = default_home_assistant_app_advanced_access_paths(
+        root=tmp_path / "data" / "advanced-access",
+        runtime_directory=tmp_path / "run" / "sdsctl",
+    )
+    rotate_home_assistant_app_server_identity(
+        advanced_paths,
+        "sdsctl.local",
+        generator=lambda server_name: (
+            b"-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n",
+            b"-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
+        ),
+    )
+    password = rotate_home_assistant_app_dashboard_password(advanced_paths).password
+    options = HomeAssistantAppOptions(
+        scanner_host="scanner.local",
+        native_dashboard_enabled=True,
+        advanced_access_server_name="sdsctl.local",
+    )
+    exposure = HomeAssistantAppAdvancedExposure(
+        container_address="172.30.33.7",
+        native_dashboard_host_port=10443,
+    )
+
+    command = build_home_assistant_native_web_command(
+        options,
+        exposure,
+        default_home_assistant_app_runtime_paths(),
+        advanced_paths,
+    )
+
+    assert command[:4] == (
+        "sdsctl",
+        "web",
+        "--authenticated-lan",
+        "--lan-listen-address",
+    )
+    assert command[4] == "172.30.33.7"
+    assert "--home-assistant-ingress" not in command
+    assert command[command.index("--listen-port") + 1] == str(
+        HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT
+    )
+    assert command[command.index("--lan-public-port") + 1] == "10443"
+    assert command[command.index("--lan-origin") + 1] == (
+        "https://sdsctl.local:10443"
+    )
+    assert password not in command
+    assert command[command.index("--lan-password-file") + 1] == str(
+        advanced_paths.dashboard_password
+    )
+
+
+def test_home_assistant_native_web_command_requires_initialized_lifecycle(
+    tmp_path: Path,
+) -> None:
+    advanced_paths = default_home_assistant_app_advanced_access_paths(
+        root=tmp_path / "advanced-access",
+        runtime_directory=tmp_path / "run",
+    )
+    options = HomeAssistantAppOptions(
+        scanner_host="scanner.local",
+        native_dashboard_enabled=True,
+        advanced_access_server_name="sdsctl.local",
+    )
+    exposure = HomeAssistantAppAdvancedExposure(
+        container_address="172.30.33.7",
+        native_dashboard_host_port=8443,
+    )
+
+    with pytest.raises(ValueError, match="identity is unavailable"):
+        build_home_assistant_native_web_command(
+            options,
+            exposure,
+            default_home_assistant_app_runtime_paths(),
+            advanced_paths,
+        )
 
 
 @pytest.mark.parametrize("port", [0, 65536])

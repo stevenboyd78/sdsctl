@@ -256,6 +256,7 @@ from .web_server import (
     normalize_authenticated_lan_host,
     normalize_authenticated_lan_tls_files,
     normalize_web_dashboard_host,
+    read_authenticated_lan_password_file,
     run_web_dashboard_server,
 )
 
@@ -1650,10 +1651,26 @@ def build_parser(
         help="Canonical HTTPS browser origin, including the nondefault port",
     )
     web.add_argument(
+        "--lan-public-port",
+        type=_positive_integer,
+        metavar="PORT",
+        help=(
+            "Externally mapped HTTPS port when it differs from --listen-port; "
+            "authenticated LAN mode only"
+        ),
+    )
+    lan_password = web.add_mutually_exclusive_group()
+    lan_password.add_argument(
         "--lan-password-env",
         type=_environment_variable_name,
         metavar="NAME",
         help="Environment-variable name containing the dashboard password",
+    )
+    lan_password.add_argument(
+        "--lan-password-file",
+        type=Path,
+        metavar="PATH",
+        help="Absolute mode-0600 file containing the dashboard password",
     )
     web.add_argument(
         "--lan-tls-certfile",
@@ -4796,7 +4813,9 @@ def _run_web(
     lan_values = (
         args.lan_listen_address,
         args.lan_origin,
+        args.lan_public_port,
         args.lan_password_env,
+        args.lan_password_file,
         args.lan_tls_certfile,
         args.lan_tls_keyfile,
     )
@@ -4817,7 +4836,6 @@ def _run_web(
         required_lan_options = {
             "--lan-listen-address": args.lan_listen_address,
             "--lan-origin": args.lan_origin,
-            "--lan-password-env": args.lan_password_env,
             "--lan-tls-certfile": args.lan_tls_certfile,
             "--lan-tls-keyfile": args.lan_tls_keyfile,
         }
@@ -4827,6 +4845,11 @@ def _run_web(
         if missing_lan_options:
             raise ValueError(
                 "--authenticated-lan requires: " + ", ".join(missing_lan_options) + "."
+            )
+        if args.lan_password_env is None and args.lan_password_file is None:
+            raise ValueError(
+                "--authenticated-lan requires one of --lan-password-env or "
+                "--lan-password-file."
             )
 
     if (
@@ -4864,13 +4887,20 @@ def _run_web(
 
     if args.authenticated_lan:
         environment = os.environ if environ is None else environ
-        assert args.lan_password_env is not None
-        password = environment.get(args.lan_password_env)
-        if not password:
-            raise ValueError(
-                "Authenticated LAN password environment variable "
-                f"{args.lan_password_env!r} is not set."
+        password: str
+        if args.lan_password_file is not None:
+            password = read_authenticated_lan_password_file(
+                args.lan_password_file
             )
+        else:
+            assert args.lan_password_env is not None
+            environment_password = environment.get(args.lan_password_env)
+            if not environment_password:
+                raise ValueError(
+                    "Authenticated LAN password environment variable "
+                    f"{args.lan_password_env!r} is not set."
+                )
+            password = environment_password
         assert args.lan_origin is not None
         lan_authentication = WebDashboardAuthentication(
             password,
@@ -4879,8 +4909,12 @@ def _run_web(
         del password
         parsed_origin = urlsplit(lan_authentication.origin)
         origin_port = parsed_origin.port or 443
-        if origin_port != args.listen_port:
-            raise ValueError("Authenticated LAN origin port must match --listen-port.")
+        expected_origin_port = args.lan_public_port or args.listen_port
+        if origin_port != expected_origin_port:
+            raise ValueError(
+                "Authenticated LAN origin port must match --listen-port or "
+                "the explicit --lan-public-port."
+            )
         certificate_path, private_key_path = normalize_authenticated_lan_tls_files(
             args.lan_tls_certfile,
             args.lan_tls_keyfile,

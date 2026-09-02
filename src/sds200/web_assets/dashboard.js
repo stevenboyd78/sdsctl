@@ -77,6 +77,11 @@ let homeAssistantIntegrationBusy = false;
 let homeAssistantIntegrationStatus = {};
 let homeAssistantBridgeKeyClearTimer = null;
 let homeAssistantIntegrationArmedAction = null;
+let homeAssistantAdvancedBusy = false;
+let homeAssistantAdvancedStatus = {};
+let homeAssistantAdvancedSecretTimer = null;
+let homeAssistantAdvancedEnrollment = null;
+let homeAssistantAdvancedArmedAction = null;
 
 let waterfallGeneration = 0;
 let waterfallAbortController = null;
@@ -3294,9 +3299,565 @@ function initializeHomeAssistantIntegrationLifecycle() {
   void refreshHomeAssistantIntegrationStatus();
 }
 
+function homeAssistantAdvancedPanelAvailable() {
+  return document.getElementById("home-assistant-advanced-message") !== null;
+}
+
+function setHomeAssistantAdvancedMessage(message, state = "ready") {
+  const node = element("home-assistant-advanced-message");
+  node.textContent = message;
+  node.dataset.state = state;
+}
+
+function clearHomeAssistantAdvancedConfirmation() {
+  homeAssistantAdvancedArmedAction = null;
+  for (const [buttonId, label] of [
+    ["home-assistant-advanced-rotate-identity", "Rotate identity"],
+    ["home-assistant-advanced-rotate-password", "Create or rotate"],
+    ["home-assistant-advanced-rotate-client", "Rotate selected client"],
+  ]) {
+    const button = element(buttonId);
+    if (buttonId === "home-assistant-advanced-rotate-identity") {
+      const lifecycle = record(homeAssistantAdvancedStatus.lifecycle);
+      button.textContent = lifecycle.identity_present === true
+        ? label
+        : "Initialize identity";
+    } else {
+      button.textContent = label;
+    }
+    delete button.dataset.confirming;
+  }
+}
+
+function confirmHomeAssistantAdvancedAction(action, buttonId, guidance) {
+  if (homeAssistantAdvancedArmedAction === action) {
+    clearHomeAssistantAdvancedConfirmation();
+    return true;
+  }
+  clearHomeAssistantAdvancedConfirmation();
+  homeAssistantAdvancedArmedAction = action;
+  const button = element(buttonId);
+  button.textContent = `Confirm ${button.textContent.toLowerCase()}`;
+  button.dataset.confirming = "true";
+  setHomeAssistantAdvancedMessage(
+    `${guidance} Press “${button.textContent}” to continue.`,
+    "warning",
+  );
+  return false;
+}
+
+function clearHomeAssistantAdvancedSecrets() {
+  if (!homeAssistantAdvancedPanelAvailable()) {
+    return;
+  }
+  if (homeAssistantAdvancedSecretTimer !== null) {
+    window.clearTimeout(homeAssistantAdvancedSecretTimer);
+    homeAssistantAdvancedSecretTimer = null;
+  }
+  homeAssistantAdvancedEnrollment = null;
+  for (const id of [
+    "home-assistant-advanced-password",
+    "home-assistant-advanced-client-credential",
+  ]) {
+    const field = element(id);
+    field.value = "";
+    field.type = "password";
+  }
+  element("home-assistant-advanced-client-profile").value = "";
+  element("home-assistant-advanced-show-password").disabled = true;
+  element("home-assistant-advanced-show-password").textContent = "Show";
+  for (const id of [
+    "home-assistant-advanced-copy-password",
+    "home-assistant-advanced-copy-credential",
+    "home-assistant-advanced-copy-profile",
+    "home-assistant-advanced-download-client",
+    "home-assistant-advanced-clear-client",
+  ]) {
+    element(id).disabled = true;
+  }
+}
+
+function retainHomeAssistantAdvancedSecretTimer() {
+  if (homeAssistantAdvancedSecretTimer !== null) {
+    window.clearTimeout(homeAssistantAdvancedSecretTimer);
+  }
+  homeAssistantAdvancedSecretTimer = window.setTimeout(
+    clearHomeAssistantAdvancedSecrets,
+    60000,
+  );
+}
+
+function retainHomeAssistantAdvancedPassword(password) {
+  clearHomeAssistantAdvancedSecrets();
+  element("home-assistant-advanced-password").value = password;
+  element("home-assistant-advanced-show-password").disabled = false;
+  element("home-assistant-advanced-copy-password").disabled = false;
+  retainHomeAssistantAdvancedSecretTimer();
+}
+
+function retainHomeAssistantAdvancedEnrollment(payload) {
+  clearHomeAssistantAdvancedSecrets();
+  homeAssistantAdvancedEnrollment = Object.freeze({
+    clientId: payload.client_id,
+    credential: payload.credential,
+    certificate: payload.certificate,
+    profile: payload.profile,
+  });
+  element("home-assistant-advanced-client-credential").value =
+    payload.credential;
+  element("home-assistant-advanced-client-profile").value = payload.profile;
+  for (const id of [
+    "home-assistant-advanced-copy-credential",
+    "home-assistant-advanced-copy-profile",
+    "home-assistant-advanced-download-client",
+    "home-assistant-advanced-clear-client",
+  ]) {
+    element(id).disabled = false;
+  }
+  retainHomeAssistantAdvancedSecretTimer();
+}
+
+function setHomeAssistantAdvancedBusy(busy) {
+  homeAssistantAdvancedBusy = busy;
+  const lifecycle = record(homeAssistantAdvancedStatus.lifecycle);
+  element("home-assistant-advanced-use-identity").disabled =
+    busy || lifecycle.identity_present !== true;
+  for (const id of [
+    "home-assistant-advanced-rotate-identity",
+    "home-assistant-advanced-rotate-password",
+    "home-assistant-advanced-issue-client",
+    "home-assistant-advanced-rotate-client",
+  ]) {
+    element(id).disabled = busy;
+  }
+  for (const button of document.querySelectorAll(
+    "[data-home-assistant-advanced-client-action]",
+  )) {
+    button.disabled = busy;
+  }
+}
+
+function renderHomeAssistantAdvancedClients(clients) {
+  const container = element("home-assistant-advanced-clients");
+  container.replaceChildren();
+  if (clients.length === 0) {
+    container.textContent = "No clients configured.";
+    return;
+  }
+  for (const client of clients) {
+    const item = record(client);
+    const clientId = typeof item.client_id === "string" ? item.client_id : "";
+    if (clientId === "") {
+      continue;
+    }
+    const row = document.createElement("div");
+    row.className = "advanced-access-client-row";
+    const description = document.createElement("span");
+    const scopes = Array.isArray(item.scopes) ? item.scopes.join(", ") : "observe";
+    description.textContent = `${clientId} · ${scopes} · ` +
+      (item.revoked === true ? "revoked" : "active");
+    const select = document.createElement("button");
+    select.type = "button";
+    select.textContent = "Select";
+    select.dataset.homeAssistantAdvancedClientAction = "select";
+    select.addEventListener("click", () => {
+      element("home-assistant-advanced-client-id").value = clientId;
+      element("home-assistant-advanced-client-scope").value =
+        Array.isArray(item.scopes) && item.scopes.includes("control")
+          ? "control"
+          : "observe";
+      clearHomeAssistantAdvancedConfirmation();
+      setHomeAssistantAdvancedMessage(`Selected ${clientId}.`);
+    });
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.textContent = item.revoked === true ? "Restore" : "Revoke";
+    toggle.dataset.homeAssistantAdvancedClientAction = "revoke";
+    toggle.addEventListener("click", () => {
+      void setHomeAssistantAdvancedClientRevoked(
+        clientId,
+        item.revoked !== true,
+      );
+    });
+    row.append(description, select, toggle);
+    container.append(row);
+  }
+}
+
+function renderHomeAssistantAdvancedStatus(payload) {
+  homeAssistantAdvancedStatus = record(payload);
+  const configuration = record(homeAssistantAdvancedStatus.configuration);
+  const publication = record(homeAssistantAdvancedStatus.publication);
+  const lifecycle = record(homeAssistantAdvancedStatus.lifecycle);
+  const clients = Array.isArray(lifecycle.clients) ? lifecycle.clients : [];
+  const activeClients = clients.filter(
+    (client) => record(client).revoked !== true,
+  ).length;
+  setText(
+    "home-assistant-advanced-remote",
+    configuration.remote_daemon_enabled === true ? "Enabled" : "Disabled",
+  );
+  setText(
+    "home-assistant-advanced-remote-port",
+    publication.remote_daemon_host_port,
+    "Disabled",
+  );
+  setText(
+    "home-assistant-advanced-dashboard",
+    configuration.native_dashboard_enabled === true ? "Enabled" : "Disabled",
+  );
+  setText(
+    "home-assistant-advanced-dashboard-port",
+    publication.native_dashboard_host_port,
+    "Disabled",
+  );
+  setText(
+    "home-assistant-advanced-identity",
+    lifecycle.certificate_sha256,
+    "Not initialized",
+  );
+  setText("home-assistant-advanced-client-count", activeClients);
+  setText(
+    "home-assistant-advanced-password-state",
+    lifecycle.dashboard_password_present === true ? "Configured" : "Not configured",
+  );
+  element("home-assistant-advanced-use-identity").disabled =
+    homeAssistantAdvancedBusy || lifecycle.identity_present !== true;
+  element("home-assistant-advanced-download-certificate").hidden =
+    lifecycle.identity_present !== true;
+  renderHomeAssistantAdvancedClients(clients);
+  clearHomeAssistantAdvancedConfirmation();
+  setHomeAssistantAdvancedBusy(homeAssistantAdvancedBusy);
+}
+
+async function refreshHomeAssistantAdvancedStatus() {
+  if (!homeAssistantAdvancedPanelAvailable() || homeAssistantAdvancedBusy) {
+    return;
+  }
+  setHomeAssistantAdvancedBusy(true);
+  setHomeAssistantAdvancedMessage("Reading redacted advanced-access status.", "working");
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/advanced-access",
+      {method: "GET"},
+    );
+    renderHomeAssistantAdvancedStatus(payload);
+    setHomeAssistantAdvancedMessage("Advanced-access status is current.");
+  } catch (error) {
+    setHomeAssistantAdvancedMessage(
+      error instanceof Error ? error.message : "Advanced-access status failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantAdvancedBusy(false);
+  }
+}
+
+async function rotateHomeAssistantAdvancedIdentity() {
+  if (homeAssistantAdvancedBusy) {
+    return;
+  }
+  const confirmation = element("home-assistant-advanced-confirm").value;
+  if (confirmation !== "INITIALIZE" && confirmation.length !== 64) {
+    setHomeAssistantAdvancedMessage(
+      "Select INITIALIZE or the exact current certificate SHA-256 first.",
+      "error",
+    );
+    return;
+  }
+  const configuration = record(homeAssistantAdvancedStatus.configuration);
+  const identityRestartRequired =
+    configuration.remote_daemon_enabled === true ||
+    configuration.native_dashboard_enabled === true;
+  if (!confirmHomeAssistantAdvancedAction(
+    "identity",
+    "home-assistant-advanced-rotate-identity",
+    "Create and select a new private TLS server identity?" +
+      (identityRestartRequired
+        ? " Download the new certificate for every client, then restart this App."
+        : ""),
+  )) {
+    return;
+  }
+  setHomeAssistantAdvancedBusy(true);
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/advanced-access/identity/rotate",
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({confirm: confirmation}),
+      },
+    );
+    element("home-assistant-advanced-confirm").value = "";
+    renderHomeAssistantAdvancedStatus(record(payload.status));
+    setHomeAssistantAdvancedMessage(
+      payload.restart_required === true
+        ? "Server identity rotated. Restart this App before relying on it."
+        : "Server identity initialized. Continue with password and client setup.",
+    );
+  } catch (error) {
+    setHomeAssistantAdvancedMessage(
+      error instanceof Error ? error.message : "Identity rotation failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantAdvancedBusy(false);
+  }
+}
+
+async function rotateHomeAssistantAdvancedPassword() {
+  const configuration = record(homeAssistantAdvancedStatus.configuration);
+  if (homeAssistantAdvancedBusy || !confirmHomeAssistantAdvancedAction(
+    "password",
+    "home-assistant-advanced-rotate-password",
+    "Replace the native-dashboard password?" +
+      (configuration.native_dashboard_enabled === true
+        ? " Save its one-time value, then restart this App."
+        : ""),
+  )) {
+    return;
+  }
+  setHomeAssistantAdvancedBusy(true);
+  clearHomeAssistantAdvancedSecrets();
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/advanced-access/password/rotate",
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({confirm: "ROTATE"}),
+      },
+    );
+    if (typeof payload.password !== "string") {
+      throw new Error("Dashboard password response was invalid.");
+    }
+    retainHomeAssistantAdvancedPassword(payload.password);
+    renderHomeAssistantAdvancedStatus(record(payload.status));
+    setHomeAssistantAdvancedMessage(
+      "Password is concealed below and clears in 60 seconds. Restart this App " +
+        "if the native dashboard is enabled.",
+    );
+  } catch (error) {
+    setHomeAssistantAdvancedMessage(
+      error instanceof Error ? error.message : "Password rotation failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantAdvancedBusy(false);
+  }
+}
+
+async function issueHomeAssistantAdvancedClient(replace) {
+  if (homeAssistantAdvancedBusy) {
+    return;
+  }
+  const clientId = element("home-assistant-advanced-client-id").value;
+  if (clientId === "") {
+    setHomeAssistantAdvancedMessage("Enter an exact client ID first.", "error");
+    return;
+  }
+  if (replace && !confirmHomeAssistantAdvancedAction(
+    "client",
+    "home-assistant-advanced-rotate-client",
+    `Replace the credential for ${clientId}?`,
+  )) {
+    return;
+  }
+  setHomeAssistantAdvancedBusy(true);
+  clearHomeAssistantAdvancedSecrets();
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      "api/v1/home-assistant/advanced-access/clients",
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          client_id: clientId,
+          control: element("home-assistant-advanced-client-scope").value === "control",
+          replace,
+          confirm: clientId,
+        }),
+      },
+    );
+    if (
+      typeof payload.client_id !== "string" ||
+      typeof payload.credential !== "string" ||
+      typeof payload.certificate !== "string" ||
+      typeof payload.profile !== "string"
+    ) {
+      throw new Error("Client enrollment response was invalid.");
+    }
+    retainHomeAssistantAdvancedEnrollment(payload);
+    renderHomeAssistantAdvancedStatus(record(payload.status));
+    setHomeAssistantAdvancedMessage(
+      "Client material is available once below and clears in 60 seconds. " +
+        "Copy or download it now." +
+        (payload.restart_required === true
+          ? " Restart this App to activate the credential change."
+          : ""),
+    );
+  } catch (error) {
+    setHomeAssistantAdvancedMessage(
+      error instanceof Error ? error.message : "Client enrollment failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantAdvancedBusy(false);
+  }
+}
+
+async function setHomeAssistantAdvancedClientRevoked(clientId, revoked) {
+  if (homeAssistantAdvancedBusy) {
+    return;
+  }
+  setHomeAssistantAdvancedBusy(true);
+  try {
+    const payload = await homeAssistantIntegrationRequest(
+      `api/v1/home-assistant/advanced-access/clients/${encodeURIComponent(clientId)}/revoked`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({revoked, confirm: clientId}),
+      },
+    );
+    renderHomeAssistantAdvancedStatus(record(payload.status));
+    setHomeAssistantAdvancedMessage(
+      `${clientId} ${revoked ? "revoked" : "restored"}. ` +
+        (payload.reload_requested === true
+          ? "The remote listener reload was requested."
+          : payload.restart_required === true
+            ? "Restart this App to activate the remote listener."
+            : "The change will apply when remote access is enabled."),
+    );
+  } catch (error) {
+    setHomeAssistantAdvancedMessage(
+      error instanceof Error ? error.message : "Client update failed.",
+      "error",
+    );
+  } finally {
+    setHomeAssistantAdvancedBusy(false);
+  }
+}
+
+async function copyHomeAssistantAdvancedValue(id, label) {
+  const value = element(id).value;
+  if (value === "") {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    setHomeAssistantAdvancedMessage(`${label} copied. It clears shortly.`);
+  } catch {
+    setHomeAssistantAdvancedMessage(
+      `Clipboard access failed. Select the ${label.toLowerCase()} manually.`,
+      "error",
+    );
+  }
+}
+
+function downloadHomeAssistantAdvancedText(filename, value) {
+  const url = URL.createObjectURL(new Blob([value], {type: "text/plain"}));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function downloadHomeAssistantAdvancedClient() {
+  const enrollment = homeAssistantAdvancedEnrollment;
+  if (enrollment === null) {
+    return;
+  }
+  downloadHomeAssistantAdvancedText("remote-client.toml", enrollment.profile);
+  downloadHomeAssistantAdvancedText("server.crt", enrollment.certificate);
+  downloadHomeAssistantAdvancedText("client.secret", `${enrollment.credential}\n`);
+  setHomeAssistantAdvancedMessage(
+    "Requested three client-file downloads. Store client.secret privately as mode 0600.",
+  );
+}
+
+function initializeHomeAssistantAdvancedAccess() {
+  if (!homeAssistantAdvancedPanelAvailable()) {
+    return;
+  }
+  element("home-assistant-advanced-use-identity").addEventListener("click", () => {
+    const lifecycle = record(homeAssistantAdvancedStatus.lifecycle);
+    const digest = lifecycle.certificate_sha256;
+    if (typeof digest === "string") {
+      element("home-assistant-advanced-confirm").value = digest;
+      setHomeAssistantAdvancedMessage("Selected the current certificate SHA-256.");
+    }
+  });
+  element("home-assistant-advanced-confirm").addEventListener(
+    "input",
+    clearHomeAssistantAdvancedConfirmation,
+  );
+  element("home-assistant-advanced-rotate-identity").addEventListener(
+    "click",
+    () => void rotateHomeAssistantAdvancedIdentity(),
+  );
+  element("home-assistant-advanced-rotate-password").addEventListener(
+    "click",
+    () => void rotateHomeAssistantAdvancedPassword(),
+  );
+  element("home-assistant-advanced-issue-client").addEventListener(
+    "click",
+    () => void issueHomeAssistantAdvancedClient(false),
+  );
+  element("home-assistant-advanced-rotate-client").addEventListener(
+    "click",
+    () => void issueHomeAssistantAdvancedClient(true),
+  );
+  element("home-assistant-advanced-show-password").addEventListener(
+    "click",
+    () => {
+      const field = element("home-assistant-advanced-password");
+      const showing = field.type === "text";
+      field.type = showing ? "password" : "text";
+      element("home-assistant-advanced-show-password").textContent =
+        showing ? "Show" : "Hide";
+    },
+  );
+  element("home-assistant-advanced-copy-password").addEventListener(
+    "click",
+    () => void copyHomeAssistantAdvancedValue(
+      "home-assistant-advanced-password",
+      "Dashboard password",
+    ),
+  );
+  element("home-assistant-advanced-copy-credential").addEventListener(
+    "click",
+    () => void copyHomeAssistantAdvancedValue(
+      "home-assistant-advanced-client-credential",
+      "Client credential",
+    ),
+  );
+  element("home-assistant-advanced-copy-profile").addEventListener(
+    "click",
+    () => void copyHomeAssistantAdvancedValue(
+      "home-assistant-advanced-client-profile",
+      "Client profile",
+    ),
+  );
+  element("home-assistant-advanced-download-client").addEventListener(
+    "click",
+    downloadHomeAssistantAdvancedClient,
+  );
+  element("home-assistant-advanced-clear-client").addEventListener(
+    "click",
+    clearHomeAssistantAdvancedSecrets,
+  );
+  element("home-assistant-advanced-confirm").value = "INITIALIZE";
+  clearHomeAssistantAdvancedSecrets();
+  void refreshHomeAssistantAdvancedStatus();
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     clearHomeAssistantBridgeKey();
+    clearHomeAssistantAdvancedSecrets();
     stopEventStream();
     stopWaterfallStream({status: "Open this pane to start the waterfall stream."});
     return;
@@ -3311,6 +3872,7 @@ document.addEventListener("visibilitychange", () => {
 
 window.addEventListener("pagehide", () => {
   clearHomeAssistantBridgeKey();
+  clearHomeAssistantAdvancedSecrets();
   stopEventStream();
   stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
@@ -3396,6 +3958,7 @@ initializeThemeControl();
 initializeRadioViewControls();
 initializeAudioPlayback();
 initializeHomeAssistantIntegrationLifecycle();
+initializeHomeAssistantAdvancedAccess();
 renderRecording({}, false);
 setScannerControls();
 void refreshStatus();

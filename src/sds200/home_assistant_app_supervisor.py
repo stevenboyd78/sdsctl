@@ -26,18 +26,30 @@ from .home_assistant_app import (
     HOME_ASSISTANT_APP_MQTT_PASSWORD_VARIABLE,
     HOME_ASSISTANT_APP_OPTIONS_PATH,
     HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE,
+    HomeAssistantAppAdvancedExposure,
     HomeAssistantAppOptions,
+    HomeAssistantAppSupervisorInfo,
     HomeAssistantMqttService,
+    fetch_home_assistant_app_supervisor_info,
     fetch_home_assistant_mqtt_service,
     home_assistant_mqtt_password_environment,
     load_home_assistant_app_options,
+    reconcile_home_assistant_app_advanced_exposure,
     write_home_assistant_daemon_mqtt_configuration,
+)
+from .home_assistant_app_advanced import (
+    HomeAssistantAppAdvancedAccessPaths,
+    default_home_assistant_app_advanced_access_paths,
+    inspect_home_assistant_app_advanced_access,
+    write_home_assistant_app_advanced_access_context,
+    write_home_assistant_app_remote_daemon_configuration,
 )
 from .home_assistant_app_runtime import (
     HOME_ASSISTANT_APP_LEGACY_RECORDING_DIRECTORY,
     HomeAssistantAppRuntimePaths,
     build_home_assistant_daemon_command,
     build_home_assistant_media_command,
+    build_home_assistant_native_web_command,
     build_home_assistant_web_command,
     default_home_assistant_app_runtime_paths,
 )
@@ -68,6 +80,8 @@ class HomeAssistantAppChildProcess(Protocol):
 
     def wait(self, timeout: float | None = None) -> int: ...
 
+    def send_signal(self, signal_number: int) -> None: ...
+
 
 class HomeAssistantAppSignalControllerLike(Protocol):
     @property
@@ -77,6 +91,8 @@ class HomeAssistantAppSignalControllerLike(Protocol):
     def last_signal(self) -> int | None: ...
 
     def wait(self, timeout: float | None = None) -> bool: ...
+
+    def consume_reload_request(self) -> bool: ...
 
     def __enter__(self) -> Self: ...
 
@@ -111,6 +127,16 @@ class HomeAssistantAppLaunchPlan:
         default_factory=dict,
         repr=False,
     )
+    advanced_exposure: HomeAssistantAppAdvancedExposure | None = None
+    advanced_paths: HomeAssistantAppAdvancedAccessPaths | None = field(
+        default=None,
+        repr=False,
+    )
+    native_web_command: tuple[str, ...] = ()
+    native_web_environment: Mapping[str, str] = field(
+        default_factory=dict,
+        repr=False,
+    )
 
 
 class HomeAssistantAppSignalController:
@@ -122,6 +148,7 @@ class HomeAssistantAppSignalController:
         self._active = False
         self._last_signal: int | None = None
         self._stop_requested = False
+        self._reload_requested = False
 
     @property
     def stop_requested(self) -> bool:
@@ -137,6 +164,12 @@ class HomeAssistantAppSignalController:
             self._event.clear()
         return triggered
 
+    def consume_reload_request(self) -> bool:
+        if not self._reload_requested:
+            return False
+        self._reload_requested = False
+        return True
+
     def __enter__(self) -> HomeAssistantAppSignalController:
         if self._active:
             raise RuntimeError(
@@ -146,9 +179,10 @@ class HomeAssistantAppSignalController:
         self._event.clear()
         self._last_signal = None
         self._stop_requested = False
+        self._reload_requested = False
         installed: list[int] = []
         try:
-            for signum in _home_assistant_app_stop_signals():
+            for signum in _home_assistant_app_signals():
                 self._previous[signum] = signal.getsignal(signum)
                 signal.signal(signum, self._handle)
                 installed.append(signum)
@@ -209,7 +243,10 @@ class HomeAssistantAppSignalController:
     def _handle(self, signum: int, frame: FrameType | None) -> None:
         del frame
         self._last_signal = signum
-        self._stop_requested = True
+        if signum == _home_assistant_app_reload_signal():
+            self._reload_requested = True
+        else:
+            self._stop_requested = True
         self._event.set()
 
 
@@ -220,6 +257,19 @@ def _home_assistant_app_stop_signals() -> tuple[int, ...]:
         if isinstance(value, int) and value not in signals:
             signals.append(int(value))
     return tuple(signals)
+
+
+def _home_assistant_app_reload_signal() -> int | None:
+    value = getattr(signal, "SIGHUP", None)
+    return int(value) if isinstance(value, int) else None
+
+
+def _home_assistant_app_signals() -> tuple[int, ...]:
+    selected = list(_home_assistant_app_stop_signals())
+    reload_signal = _home_assistant_app_reload_signal()
+    if reload_signal is not None and reload_signal not in selected:
+        selected.append(reload_signal)
+    return tuple(selected)
 
 
 def _default_process_factory(
@@ -462,6 +512,8 @@ def prepare_home_assistant_app_launch_plan(
     *,
     options_path: str | Path = HOME_ASSISTANT_APP_OPTIONS_PATH,
     paths: HomeAssistantAppRuntimePaths | None = None,
+    advanced_paths: HomeAssistantAppAdvancedAccessPaths | None = None,
+    supervisor_info: HomeAssistantAppSupervisorInfo | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> HomeAssistantAppLaunchPlan:
     """Load App state and prepare child commands without starting processes."""
@@ -482,6 +534,37 @@ def prepare_home_assistant_app_launch_plan(
         raise TypeError(
             "Home Assistant App launch plan requires App runtime paths."
         )
+
+    selected_info = (
+        fetch_home_assistant_app_supervisor_info(environ=source_environment)
+        if supervisor_info is None
+        else supervisor_info
+    )
+    exposure = reconcile_home_assistant_app_advanced_exposure(
+        options,
+        selected_info,
+    )
+    selected_advanced_paths = (
+        default_home_assistant_app_advanced_access_paths(
+            runtime_directory=selected_paths.runtime_directory,
+        )
+        if advanced_paths is None
+        else advanced_paths
+    )
+    if not isinstance(selected_advanced_paths, HomeAssistantAppAdvancedAccessPaths):
+        raise TypeError("Home Assistant App launch plan requires advanced paths.")
+    if (
+        selected_advanced_paths.runtime_remote_configuration.parent
+        != selected_paths.runtime_directory
+    ):
+        raise ValueError(
+            "Home Assistant App advanced runtime files must be directly inside "
+            "the App runtime directory."
+        )
+    write_home_assistant_app_advanced_access_context(
+        selected_advanced_paths,
+        selected_info,
+    )
 
     service = fetch_home_assistant_mqtt_service(
         environ=source_environment,
@@ -504,6 +587,49 @@ def prepare_home_assistant_app_launch_plan(
         service,
         source_environment,
     )
+    remote_configuration: Path | None = None
+    advanced_snapshot = inspect_home_assistant_app_advanced_access(
+        selected_advanced_paths
+    )
+    active_advanced_clients = sum(
+        not client.revoked for client in advanced_snapshot.clients
+    )
+    if options.remote_daemon_enabled:
+        if advanced_snapshot.identity_present and active_advanced_clients > 0:
+            remote_configuration = (
+                write_home_assistant_app_remote_daemon_configuration(
+                    selected_advanced_paths,
+                    exposure,
+                )
+            )
+        else:
+            with suppress(FileNotFoundError):
+                selected_advanced_paths.runtime_remote_configuration.unlink()
+            logger.warning(
+                "Home Assistant App remote daemon is enabled but its identity "
+                "or active client is not configured; the listener is withheld."
+            )
+    else:
+        with suppress(FileNotFoundError):
+            selected_advanced_paths.runtime_remote_configuration.unlink()
+
+    native_web_command: tuple[str, ...] = ()
+    if options.native_dashboard_enabled:
+        if (
+            advanced_snapshot.identity_present
+            and advanced_snapshot.dashboard_password_present
+        ):
+            native_web_command = build_home_assistant_native_web_command(
+                options,
+                exposure,
+                selected_paths,
+                selected_advanced_paths,
+            )
+        else:
+            logger.warning(
+                "Home Assistant App native dashboard is enabled but its identity "
+                "or password is not configured; the listener is withheld."
+            )
 
     return HomeAssistantAppLaunchPlan(
         options=options,
@@ -512,12 +638,17 @@ def prepare_home_assistant_app_launch_plan(
         daemon_command=build_home_assistant_daemon_command(
             options,
             selected_paths,
+            remote_configuration=remote_configuration,
         ),
         web_command=build_home_assistant_web_command(selected_paths),
         daemon_environment=daemon_environment,
         web_environment=web_environment,
         media_command=build_home_assistant_media_command(selected_paths),
         media_environment=web_environment,
+        advanced_exposure=exposure,
+        advanced_paths=selected_advanced_paths,
+        native_web_command=native_web_command,
+        native_web_environment=web_environment,
     )
 
 
@@ -588,6 +719,7 @@ class HomeAssistantAppSupervisor:
         daemon: HomeAssistantAppChildProcess | None = None
         media: HomeAssistantAppChildProcess | None = None
         web: HomeAssistantAppChildProcess | None = None
+        native_web: HomeAssistantAppChildProcess | None = None
         process_error: BaseException | None = None
 
         with self.signals:
@@ -610,12 +742,23 @@ class HomeAssistantAppSupervisor:
                     self.launch_plan.web_command,
                     self.launch_plan.web_environment,
                 )
-                self._wait_for_stop_or_child_exit(daemon, web, media)
+                if self.launch_plan.native_web_command:
+                    native_web = self.process_factory(
+                        self.launch_plan.native_web_command,
+                        self.launch_plan.native_web_environment,
+                    )
+                self._wait_for_stop_or_child_exit(
+                    daemon,
+                    web,
+                    media,
+                    native_web,
+                )
             except BaseException as error:
                 process_error = error
             finally:
                 cleanup_errors: list[BaseException] = []
                 for label, child, graceful_timeout in (
+                    ("native web", native_web, self.web_stop_timeout),
                     ("web", web, self.web_stop_timeout),
                     ("media", media, self.web_stop_timeout),
                     ("daemon", daemon, self.daemon_stop_timeout),
@@ -686,6 +829,7 @@ class HomeAssistantAppSupervisor:
         daemon: HomeAssistantAppChildProcess,
         web: HomeAssistantAppChildProcess,
         media: HomeAssistantAppChildProcess | None = None,
+        native_web: HomeAssistantAppChildProcess | None = None,
     ) -> None:
         while True:
             if self.signals.stop_requested:
@@ -713,7 +857,24 @@ class HomeAssistantAppSupervisor:
                         f"with status {media_returncode}."
                     )
 
+            if native_web is not None:
+                native_web_returncode = native_web.poll()
+                if native_web_returncode is not None:
+                    raise SDS200Error(
+                        "Home Assistant App native web process exited unexpectedly "
+                        f"with status {native_web_returncode}."
+                    )
+
             self.signals.wait(self.supervisor_poll_interval)
+            if self.signals.consume_reload_request():
+                exposure = self.launch_plan.advanced_exposure
+                if (
+                    exposure is not None
+                    and exposure.remote_daemon_host_port is not None
+                ):
+                    reload_signal = _home_assistant_app_reload_signal()
+                    if reload_signal is not None:
+                        daemon.send_signal(reload_signal)
 
     def _stop_child(
         self,

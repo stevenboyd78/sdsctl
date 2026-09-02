@@ -306,6 +306,9 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
 
     assert ingress_shell.status_code == 200
     assert 'id="home-assistant-integration-title"' in ingress_shell.text
+    assert 'id="home-assistant-advanced-title"' in ingress_shell.text
+    assert 'id="home-assistant-advanced-clients"' in ingress_shell.text
+    assert 'class="home-assistant-workspace"' in ingress_shell.text
     assert 'id="pane-tab-home-assistant"' in ingress_shell.text
     assert 'data-workspace-tab="home-assistant"' in ingress_shell.text
     assert 'id="pane-home-assistant"' in ingress_shell.text
@@ -328,6 +331,7 @@ def test_lifecycle_routes_and_panel_exist_only_in_ingress(
         'id="pane-scanner"', 1
     )[0]
     assert "docker exec" not in ingress_shell.text
+    assert "reverse proxies are unsupported." in ingress_shell.text
     assert ingress_status.status_code == 200
     assert ingress_status.json() == payload
     assert ingress_status.headers["cache-control"] == "no-store"
@@ -349,6 +353,28 @@ def test_ingress_destructive_actions_use_in_page_confirmation() -> None:
     assert "Press “${button.textContent}” to continue." in script
     assert '"discard-rollback"' in script
     assert '"rotate-bridge-key"' in script
+
+
+def test_advanced_access_one_time_material_stays_out_of_browser_storage() -> None:
+    script = (
+        Path(__file__).parents[1]
+        / "src"
+        / "sds200"
+        / "web_assets"
+        / "dashboard.js"
+    ).read_text(encoding="utf-8")
+    advanced = script[
+        script.index("function homeAssistantAdvancedPanelAvailable") :
+        script.index('element("audio-play").addEventListener')
+    ]
+
+    assert "localStorage" not in advanced
+    assert "sessionStorage" not in advanced
+    assert "60000" in advanced
+    assert 'downloadHomeAssistantAdvancedText("remote-client.toml"' in advanced
+    assert 'downloadHomeAssistantAdvancedText("server.crt"' in advanced
+    assert 'downloadHomeAssistantAdvancedText("client.secret"' in advanced
+    assert advanced.count("clearHomeAssistantAdvancedSecrets();") >= 4
 
 
 def test_ingress_mutation_route_requires_one_confirm_field(

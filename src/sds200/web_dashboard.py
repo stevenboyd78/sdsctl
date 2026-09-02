@@ -28,6 +28,14 @@ from .daemon_recording_file_client import (
 from .daemon_recording_file_protocol import RecordingFileResponseStatus
 from .daemon_waterfall_protocol import DaemonWaterfallRecord
 from .exceptions import DaemonRequestError, SDS200Error
+from .home_assistant_app_advanced_ingress import (
+    home_assistant_app_advanced_ingress_status,
+    issue_home_assistant_app_advanced_ingress_client,
+    read_home_assistant_app_advanced_ingress_certificate,
+    rotate_home_assistant_app_advanced_ingress_dashboard_password,
+    rotate_home_assistant_app_advanced_ingress_identity,
+    set_home_assistant_app_advanced_ingress_client_revoked,
+)
 from .home_assistant_integration_ingress import (
     HomeAssistantIntegrationAction,
     execute_home_assistant_integration_ingress_action,
@@ -773,6 +781,9 @@ def create_web_dashboard_app(
             links["home_assistant_integration"] = (
                 "/api/v1/home-assistant/integration"
             )
+            links["home_assistant_advanced_access"] = (
+                "/api/v1/home-assistant/advanced-access"
+            )
         return {
             "service": _service_metadata(),
             "links": links,
@@ -821,6 +832,98 @@ def create_web_dashboard_app(
                 lambda: rotate_home_assistant_integration_ingress_bridge_key(
                     confirmation_digest=confirmation,
                 ),
+            )
+
+        @app.get("/api/v1/home-assistant/advanced-access")
+        def home_assistant_advanced_access_status() -> JSONResponse:
+            return _home_assistant_integration_response(
+                home_assistant_app_advanced_ingress_status,
+            )
+
+        @app.post("/api/v1/home-assistant/advanced-access/identity/rotate")
+        def home_assistant_advanced_access_identity_rotate(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: rotate_home_assistant_app_advanced_ingress_identity(
+                    confirmation,
+                ),
+            )
+
+        @app.post("/api/v1/home-assistant/advanced-access/password/rotate")
+        def home_assistant_advanced_access_password_rotate(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: (
+                    rotate_home_assistant_app_advanced_ingress_dashboard_password(
+                        confirmation,
+                    )
+                ),
+            )
+
+        @app.post("/api/v1/home-assistant/advanced-access/clients")
+        def home_assistant_advanced_access_client_issue(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            document = _home_assistant_advanced_access_payload(
+                payload,
+                schema={
+                    "client_id": str,
+                    "control": bool,
+                    "replace": bool,
+                    "confirm": str,
+                },
+            )
+            return _home_assistant_integration_response(
+                lambda: issue_home_assistant_app_advanced_ingress_client(
+                    client_id=document.get("client_id"),
+                    control=document.get("control"),
+                    replace=document.get("replace"),
+                    confirmation=document.get("confirm"),
+                ),
+            )
+
+        @app.post(
+            "/api/v1/home-assistant/advanced-access/clients/{client_id}/revoked"
+        )
+        def home_assistant_advanced_access_client_revoked(
+            client_id: str,
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            document = _home_assistant_advanced_access_payload(
+                payload,
+                schema={"revoked": bool, "confirm": str},
+            )
+            return _home_assistant_integration_response(
+                lambda: set_home_assistant_app_advanced_ingress_client_revoked(
+                    client_id=client_id,
+                    revoked=document.get("revoked"),
+                    confirmation=document.get("confirm"),
+                ),
+            )
+
+        @app.get("/api/v1/home-assistant/advanced-access/certificate")
+        def home_assistant_advanced_access_certificate() -> Response:
+            try:
+                certificate = read_home_assistant_app_advanced_ingress_certificate()
+            except (OSError, SDS200Error, ValueError) as error:
+                raise HTTPException(
+                    status_code=409,
+                    detail=str(error),
+                    headers=dict(_WEB_RESPONSE_HEADERS),
+                ) from error
+            return Response(
+                certificate,
+                media_type="application/x-pem-file",
+                headers={
+                    **_WEB_RESPONSE_HEADERS,
+                    "Content-Disposition": (
+                        'attachment; filename="sdsctl-remote-server.crt"'
+                    ),
+                },
             )
 
     @app.get("/api/v1/status")
@@ -1179,6 +1282,27 @@ def _home_assistant_integration_confirmation(payload: object) -> str:
     return confirmation
 
 
+def _home_assistant_advanced_access_payload(
+    payload: object,
+    *,
+    schema: Mapping[str, type[object]],
+) -> Mapping[str, object]:
+    if (
+        not isinstance(payload, Mapping)
+        or set(payload) != set(schema)
+        or any(
+            type(payload.get(field)) is not expected
+            for field, expected in schema.items()
+        )
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail="An advanced-access request object is required.",
+            headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+    return payload
+
+
 def _home_assistant_integration_response(
     operation: Callable[[], dict[str, object]],
 ) -> JSONResponse:
@@ -1382,6 +1506,199 @@ def _home_assistant_integration_panel() -> str:
 
 
 @cache
+def _home_assistant_advanced_access_panel() -> str:
+    return """      <section
+        class="panel home-assistant-integration-panel advanced-access-panel"
+        aria-labelledby="home-assistant-advanced-title"
+      >
+        <header class="panel-header">
+          <p class="panel-kicker">Optional private LAN</p>
+          <h2 id="home-assistant-advanced-title">Advanced remote access</h2>
+        </header>
+
+        <p
+          id="home-assistant-advanced-message"
+          class="home-assistant-integration-message"
+          role="status"
+          aria-live="polite"
+        >Loading advanced-access status.</p>
+
+        <dl class="status-list status-list-compact">
+          <div>
+            <dt>Remote daemon</dt>
+            <dd id="home-assistant-advanced-remote">Checking</dd>
+          </div>
+          <div>
+            <dt>Remote port</dt>
+            <dd id="home-assistant-advanced-remote-port">Disabled</dd>
+          </div>
+          <div>
+            <dt>Native dashboard</dt>
+            <dd id="home-assistant-advanced-dashboard">Checking</dd>
+          </div>
+          <div>
+            <dt>Dashboard port</dt>
+            <dd id="home-assistant-advanced-dashboard-port">Disabled</dd>
+          </div>
+          <div>
+            <dt>Server identity</dt>
+            <dd
+              id="home-assistant-advanced-identity"
+              class="technical-value"
+            >Checking</dd>
+          </div>
+          <div>
+            <dt>Active clients</dt>
+            <dd id="home-assistant-advanced-client-count">0</dd>
+          </div>
+          <div>
+            <dt>Dashboard password</dt>
+            <dd id="home-assistant-advanced-password-state">Checking</dd>
+          </div>
+        </dl>
+
+        <div class="advanced-access-grid">
+          <section class="advanced-access-group">
+            <h3>1. Server identity</h3>
+            <label for="home-assistant-advanced-confirm">
+              Exact confirmation
+            </label>
+            <input
+              id="home-assistant-advanced-confirm"
+              class="technical-value"
+              type="text"
+              autocomplete="off"
+              autocapitalize="none"
+              spellcheck="false"
+            >
+            <div class="home-assistant-integration-actions">
+              <button id="home-assistant-advanced-use-identity" type="button">
+                Use current identity
+              </button>
+              <button id="home-assistant-advanced-rotate-identity" type="button">
+                Initialize identity
+              </button>
+              <a
+                id="home-assistant-advanced-download-certificate"
+                class="recording-action"
+                href="api/v1/home-assistant/advanced-access/certificate"
+                download="sdsctl-remote-server.crt"
+              >Download certificate</a>
+            </div>
+          </section>
+
+          <section class="advanced-access-group">
+            <h3>2. Native dashboard password</h3>
+            <input
+              id="home-assistant-advanced-password"
+              class="technical-value"
+              type="password"
+              value=""
+              readonly
+              autocomplete="off"
+            >
+            <div class="home-assistant-integration-actions">
+              <button id="home-assistant-advanced-rotate-password" type="button">
+                Create or rotate
+              </button>
+              <button id="home-assistant-advanced-show-password" type="button" disabled>
+                Show
+              </button>
+              <button id="home-assistant-advanced-copy-password" type="button" disabled>
+                Copy
+              </button>
+            </div>
+          </section>
+
+          <section class="advanced-access-group advanced-access-client-group">
+            <h3>3. Remote client</h3>
+            <div class="advanced-access-client-fields">
+              <label for="home-assistant-advanced-client-id">Client ID</label>
+              <input
+                id="home-assistant-advanced-client-id"
+                class="technical-value"
+                type="text"
+                maxlength="64"
+                autocomplete="off"
+                autocapitalize="none"
+                spellcheck="false"
+                placeholder="pi-display"
+              >
+              <label for="home-assistant-advanced-client-scope">Access</label>
+              <select id="home-assistant-advanced-client-scope">
+                <option value="observe">Display only</option>
+                <option value="control">Display and controls</option>
+              </select>
+            </div>
+            <div class="home-assistant-integration-actions">
+              <button id="home-assistant-advanced-issue-client" type="button">
+                Add client
+              </button>
+              <button id="home-assistant-advanced-rotate-client" type="button">
+                Rotate selected client
+              </button>
+            </div>
+          </section>
+
+          <section class="advanced-access-group advanced-access-one-time">
+            <h3>One-time client files</h3>
+            <label for="home-assistant-advanced-client-credential">
+              Credential
+            </label>
+            <input
+              id="home-assistant-advanced-client-credential"
+              class="technical-value"
+              type="password"
+              value=""
+              readonly
+              autocomplete="off"
+            >
+            <label for="home-assistant-advanced-client-profile">Profile</label>
+            <textarea
+              id="home-assistant-advanced-client-profile"
+              class="technical-value"
+              rows="5"
+              readonly
+              autocomplete="off"
+            ></textarea>
+            <div class="home-assistant-integration-actions">
+              <button id="home-assistant-advanced-copy-credential" type="button" disabled>
+                Copy credential
+              </button>
+              <button id="home-assistant-advanced-copy-profile" type="button" disabled>
+                Copy profile
+              </button>
+              <button id="home-assistant-advanced-download-client" type="button" disabled>
+                Download client files
+              </button>
+              <button id="home-assistant-advanced-clear-client" type="button" disabled>
+                Clear
+              </button>
+            </div>
+          </section>
+        </div>
+
+        <section class="advanced-access-group">
+          <h3>Configured clients</h3>
+          <div id="home-assistant-advanced-clients" class="advanced-access-clients">
+            No clients configured.
+          </div>
+        </section>
+
+        <p class="home-assistant-integration-guidance">
+          In App Configuration, set the private server name, enable only the
+          service you need, and assign its private-LAN Network host port. Save
+          and restart this App; an unprepared listener remains safely withheld.
+          Return here to create its identity, password, or client, save every
+          one-time value, and restart once more to activate it. Home Assistant
+          publishes enabled ports on all host interfaces; restrict them to
+          trusted private clients with your firewall. Internet exposure, router
+          forwarding, and reverse proxies are unsupported.
+        </p>
+      </section>"""
+
+
+@cache
 def _home_assistant_integration_pane() -> str:
     return f"""        <section
           id="pane-home-assistant"
@@ -1391,7 +1708,10 @@ def _home_assistant_integration_pane() -> str:
           data-workspace-pane="home-assistant"
           hidden
         >
+          <div class="home-assistant-workspace">
 {_home_assistant_integration_panel()}
+{_home_assistant_advanced_access_panel()}
+          </div>
         </section>"""
 
 

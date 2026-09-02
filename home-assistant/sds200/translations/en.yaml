@@ -13,3 +13,26 @@ configuration:
       Path relative to the Home Assistant /media root where recordings are
       stored. For example, sdsctl/recordings stores recordings in
       /media/sdsctl/recordings.
+  remote_daemon_enabled:
+    name: Advanced remote daemon clients
+    description: >-
+      Begin two-stage setup by enabling the authenticated sdsctl daemon-client
+      protocol with its matching Network port. The listener remains withheld
+      until its private identity and at least one client are prepared.
+  native_dashboard_enabled:
+    name: Advanced native HTTPS dashboard
+    description: >-
+      Begin two-stage setup by enabling a password-authenticated HTTPS dashboard
+      outside Home Assistant Ingress with its matching Network port. The
+      listener remains withheld until its identity and password are prepared.
+  advanced_access_server_name:
+    name: Advanced access server name
+    description: >-
+      Private IP address, single-label name, .local name, or .home.arpa name
+      used by advanced clients and the native HTTPS certificate. Leave empty
+      while both advanced listeners are disabled.
+  advanced_access_host_address:
+    name: Advanced access host address
+    description: >-
+      Literal private Home Assistant host address used by remote daemon-client
+      profiles. Required only when advanced remote daemon clients are enabled.

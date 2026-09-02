@@ -1621,14 +1621,21 @@ body {
   overflow: hidden;
 }
 
-.workspace-pane > .home-assistant-integration-panel {
-  display: block;
+.workspace-pane > .home-assistant-workspace {
+  display: grid;
+  grid-auto-rows: max-content;
+  align-content: start;
+  gap: var(--workspace-gap);
   width: 100%;
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
   overscroll-behavior: contain;
+}
+
+.home-assistant-workspace > .home-assistant-integration-panel {
+  display: block;
 }
 
 .home-assistant-integration-message {
@@ -1661,7 +1668,10 @@ body {
 }
 
 .home-assistant-integration-confirmation input,
-.home-assistant-integration-secret input {
+.home-assistant-integration-secret input,
+.advanced-access-group input,
+.advanced-access-group select,
+.advanced-access-group textarea {
   width: 100%;
   min-width: 0;
   min-height: 1.9rem;
@@ -1670,6 +1680,68 @@ body {
   border-radius: var(--radius-small);
   color: var(--text);
   background: var(--background);
+}
+
+.advanced-access-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--workspace-gap);
+  margin-top: clamp(0.35rem, 1vmin, 0.8rem);
+}
+
+.advanced-access-group {
+  min-width: 0;
+  padding: clamp(0.45rem, 1.2vmin, 0.85rem);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--surface-emphasis) 45%, transparent);
+}
+
+.advanced-access-group h3 {
+  margin: 0 0 clamp(0.3rem, 0.8vmin, 0.65rem);
+  font-size: clamp(0.78rem, 1.65vmin, 1rem);
+}
+
+.advanced-access-group label {
+  display: block;
+  margin: clamp(0.18rem, 0.5vmin, 0.35rem) 0;
+  color: var(--muted);
+  font-size: clamp(0.68rem, 1.45vmin, 0.86rem);
+  font-weight: 750;
+}
+
+.advanced-access-group textarea {
+  resize: vertical;
+}
+
+.advanced-access-client-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(0.25rem, 0.7vmin, 0.55rem);
+}
+
+.advanced-access-client-group,
+.advanced-access-one-time {
+  grid-column: 1 / -1;
+}
+
+.advanced-access-clients {
+  display: grid;
+  gap: clamp(0.25rem, 0.7vmin, 0.55rem);
+  color: var(--muted);
+}
+
+.advanced-access-client-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: clamp(0.25rem, 0.7vmin, 0.55rem);
+}
+
+.advanced-access-client-row button {
+  min-width: 0;
+  padding: clamp(0.28rem, 0.7vmin, 0.48rem) clamp(0.45rem, 1vw, 0.8rem);
 }
 
 .home-assistant-integration-actions {
@@ -2260,9 +2332,18 @@ body {
     overflow: visible;
   }
 
-  .workspace-pane > .home-assistant-integration-panel {
+  .workspace-pane > .home-assistant-workspace {
     height: auto;
     overflow: visible;
+  }
+
+  .advanced-access-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-access-client-group,
+  .advanced-access-one-time {
+    grid-column: auto;
   }
 
   .dashboard-message {

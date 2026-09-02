@@ -14,7 +14,13 @@ from .daemon_ipc import (
 )
 from .home_assistant_app import (
     HOME_ASSISTANT_APP_DEFAULT_RECORDING_DIRECTORY,
+    HomeAssistantAppAdvancedExposure,
     HomeAssistantAppOptions,
+)
+from .home_assistant_app_advanced import (
+    HomeAssistantAppAdvancedAccessPaths,
+    inspect_home_assistant_app_advanced_access,
+    load_home_assistant_app_advanced_access_state,
 )
 from .home_assistant_live_audio_service_runtime import (
     HOME_ASSISTANT_LIVE_AUDIO_SERVICE_PORT,
@@ -30,6 +36,8 @@ HOME_ASSISTANT_APP_RECORDING_DIRECTORY = (
 )
 HOME_ASSISTANT_APP_INGRESS_PORT = 8099
 HOME_ASSISTANT_APP_RTP_PORT = 50000
+HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT = 50443
+HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT = 8443
 HOME_ASSISTANT_APP_EXECUTABLE = "sdsctl"
 HOME_ASSISTANT_APP_MEDIA_EXECUTABLE = "python3"
 HOME_ASSISTANT_APP_LIVE_AUDIO_BRIDGE_KEY = Path(
@@ -177,6 +185,7 @@ def build_home_assistant_daemon_command(
     options: HomeAssistantAppOptions,
     paths: HomeAssistantAppRuntimePaths,
     *,
+    remote_configuration: Path | None = None,
     executable: str = HOME_ASSISTANT_APP_EXECUTABLE,
 ) -> tuple[str, ...]:
     """Build the single-owner daemon child command without embedding secrets."""
@@ -193,7 +202,7 @@ def build_home_assistant_daemon_command(
     program = _require_executable(executable)
     assert paths.waterfall_socket is not None
     assert paths.live_audio_socket is not None
-    return (
+    command = (
         program,
         "--host",
         options.scanner_host,
@@ -216,6 +225,16 @@ def build_home_assistant_daemon_command(
         os.fspath(paths.waterfall_socket),
         "--live-audio-socket-path",
         os.fspath(paths.live_audio_socket),
+    )
+    if remote_configuration is None:
+        return command
+    normalized_remote_configuration = _require_absolute_path(
+        remote_configuration,
+        label="Home Assistant App remote-daemon configuration",
+    )
+    return command + (
+        "--remote-config",
+        os.fspath(normalized_remote_configuration),
     )
 
 
@@ -261,6 +280,79 @@ def build_home_assistant_web_command(
     )
 
 
+def build_home_assistant_native_web_command(
+    options: HomeAssistantAppOptions,
+    exposure: HomeAssistantAppAdvancedExposure,
+    paths: HomeAssistantAppRuntimePaths,
+    advanced_paths: HomeAssistantAppAdvancedAccessPaths,
+    *,
+    executable: str = HOME_ASSISTANT_APP_EXECUTABLE,
+    listen_port: int = HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT,
+) -> tuple[str, ...]:
+    """Build the separately authenticated, non-Ingress native dashboard."""
+
+    if not isinstance(options, HomeAssistantAppOptions):
+        raise TypeError("Home Assistant native web command requires App options.")
+    if not isinstance(exposure, HomeAssistantAppAdvancedExposure):
+        raise TypeError("Home Assistant native web command requires App exposure.")
+    if not isinstance(paths, HomeAssistantAppRuntimePaths):
+        raise TypeError("Home Assistant native web command requires App runtime paths.")
+    if not isinstance(advanced_paths, HomeAssistantAppAdvancedAccessPaths):
+        raise TypeError(
+            "Home Assistant native web command requires advanced-access paths."
+        )
+    if type(listen_port) is not int or not 1 <= listen_port <= 65535:
+        raise ValueError(
+            "Home Assistant App native dashboard port must be between 1 and 65535."
+        )
+    if not options.native_dashboard_enabled:
+        raise ValueError("Home Assistant App native dashboard is not enabled.")
+    if exposure.native_dashboard_host_port is None:
+        raise ValueError("Home Assistant App native dashboard is not published.")
+
+    snapshot = inspect_home_assistant_app_advanced_access(advanced_paths)
+    state = load_home_assistant_app_advanced_access_state(advanced_paths)
+    if not snapshot.identity_present or state.identity_generation is None:
+        raise ValueError("Home Assistant App native dashboard identity is unavailable.")
+    if not snapshot.dashboard_password_present:
+        raise ValueError("Home Assistant App native dashboard password is unavailable.")
+
+    program = _require_executable(executable)
+    assert paths.waterfall_socket is not None
+    origin_host = options.advanced_access_server_name
+    if ":" in origin_host:
+        origin_host = f"[{origin_host}]"
+    return (
+        program,
+        "web",
+        "--authenticated-lan",
+        "--lan-listen-address",
+        exposure.container_address,
+        "--lan-origin",
+        f"https://{origin_host}:{exposure.native_dashboard_host_port}",
+        "--lan-public-port",
+        str(exposure.native_dashboard_host_port),
+        "--lan-password-file",
+        os.fspath(advanced_paths.dashboard_password),
+        "--lan-tls-certfile",
+        os.fspath(advanced_paths.certificate(state.identity_generation)),
+        "--lan-tls-keyfile",
+        os.fspath(advanced_paths.private_key(state.identity_generation)),
+        "--daemon-socket-path",
+        os.fspath(paths.daemon_socket),
+        "--daemon-event-socket-path",
+        os.fspath(paths.event_socket),
+        "--daemon-pcmu-socket-path",
+        os.fspath(paths.pcmu_socket),
+        "--daemon-recording-file-socket-path",
+        os.fspath(paths.recording_file_socket),
+        "--daemon-waterfall-socket-path",
+        os.fspath(paths.waterfall_socket),
+        "--listen-port",
+        str(listen_port),
+    )
+
+
 def build_home_assistant_media_command(
     paths: HomeAssistantAppRuntimePaths,
     *,
@@ -296,13 +388,16 @@ __all__ = [
     "HOME_ASSISTANT_APP_INGRESS_PORT",
     "HOME_ASSISTANT_APP_MQTT_CONFIG_FILENAME",
     "HOME_ASSISTANT_APP_MEDIA_DIRECTORY",
+    "HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT",
     "HOME_ASSISTANT_APP_LEGACY_RECORDING_DIRECTORY",
     "HOME_ASSISTANT_APP_RECORDING_DIRECTORY",
+    "HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT",
     "HOME_ASSISTANT_APP_RTP_PORT",
     "HOME_ASSISTANT_APP_RUNTIME_DIRECTORY",
     "HomeAssistantAppRuntimePaths",
     "build_home_assistant_daemon_command",
     "build_home_assistant_media_command",
+    "build_home_assistant_native_web_command",
     "build_home_assistant_web_command",
     "default_home_assistant_app_runtime_paths",
 ]
