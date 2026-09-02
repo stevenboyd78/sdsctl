@@ -304,6 +304,10 @@ from .daemon_server import (
     DaemonApiServer,
     DaemonApiServerSnapshot,
 )
+from .daemon_transport import (
+    DaemonClientTransport,
+    UnixDaemonClientTransport,
+)
 from .daemon_tui import (
     DaemonTuiBootstrap,
     DaemonTuiRadio,
@@ -1260,6 +1264,7 @@ __all__ = [
     "DaemonApiResponse",
     "DaemonApiServer",
     "DaemonApiServerSnapshot",
+    "DaemonClientTransport",
     "DaemonClientError",
     "DaemonControlBusyError",
     "DaemonControlOperation",
@@ -1330,6 +1335,7 @@ __all__ = [
     "DaemonSocketLocation",
     "DaemonSocketSource",
     "DaemonUnavailableError",
+    "UnixDaemonClientTransport",
     "DaemonWaterfallClient",
     "DaemonWaterfallRecord",
     "DaemonWaterfallRecordKind",

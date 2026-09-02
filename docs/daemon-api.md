@@ -34,6 +34,16 @@ The Python implementation retains the historical public class name
 `DaemonReadOnlyApi` for compatibility even though version 1 now advertises both
 read-only and control operations.
 
+Milestone 32.1 begins transport separation without exposing a network service.
+`DaemonApiClient` now consumes the public `DaemonClientTransport` connection
+contract. Passing the existing `DaemonSocketLocation` constructs a
+`UnixDaemonClientTransport` automatically, preserving every local path,
+permission, timeout, error, framing, and protocol behavior. A custom transport
+may be supplied to deterministic application code, but the packaged CLI and TUI
+still resolve only private Unix-domain sockets. No TCP listener, TLS endpoint,
+credential, port, remote profile, or Home Assistant port mapping is available in
+this foundation slice.
+
 ## Starting the API
 
 The local API starts automatically with the foreground daemon:
@@ -74,8 +84,10 @@ device and inode check. The daemon never replaces an active endpoint.
 
 ## Transport, framing, and limits
 
-The transport is an `AF_UNIX`, `SOCK_STREAM` socket. Requests and responses are
-UTF-8 JSON Lines: each JSON value is terminated by one newline.
+The currently supported runtime transport is an `AF_UNIX`, `SOCK_STREAM`
+socket. Requests and responses are UTF-8 JSON Lines: each JSON value is
+terminated by one newline. The connection abstraction does not change or wrap
+this framing.
 
 One connection may submit multiple requests. Responses remain ordered for that
 connection. Separate admitted clients are handled independently. Scanner

@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import errno
 import json
-import os
 import socket as socket_module
 import threading
 from collections.abc import Mapping
@@ -23,6 +21,10 @@ from .daemon_api import (
 )
 from .daemon_ipc import DaemonSocketLocation
 from .daemon_server import DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
+from .daemon_transport import (
+    DaemonClientTransport,
+    UnixDaemonClientTransport,
+)
 from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
@@ -35,18 +37,29 @@ _DAEMON_API_CLIENT_RECV_BYTES = 4096
 
 
 class DaemonApiClient:
-    """Persistent negotiated client for the private local daemon API."""
+    """Persistent negotiated client for one daemon API transport."""
 
     def __init__(
         self,
-        location: DaemonSocketLocation,
+        location: DaemonSocketLocation | DaemonClientTransport,
         *,
         timeout: float = DAEMON_API_CLIENT_DEFAULT_TIMEOUT,
         max_response_bytes: int = DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES,
     ) -> None:
-        if not isinstance(location, DaemonSocketLocation):
+        if isinstance(location, DaemonSocketLocation):
+            resolved_location: DaemonSocketLocation | None = location
+            transport: DaemonClientTransport = UnixDaemonClientTransport(location)
+        elif isinstance(location, DaemonClientTransport):
+            resolved_location = (
+                location.location
+                if isinstance(location, UnixDaemonClientTransport)
+                else None
+            )
+            transport = location
+        else:
             raise TypeError(
-                "Daemon API client location must be a DaemonSocketLocation."
+                "Daemon API client endpoint must be a DaemonSocketLocation "
+                "or DaemonClientTransport."
             )
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise TypeError("Daemon API client timeout must be a number.")
@@ -67,7 +80,8 @@ class DaemonApiClient:
                 "Maximum daemon API client response size must be greater than zero."
             )
 
-        self.location = location
+        self.location = resolved_location
+        self.transport = transport
         self.timeout = normalized_timeout
         self.max_response_bytes = max_response_bytes
         self._lifecycle_lock = threading.RLock()
@@ -86,17 +100,20 @@ class DaemonApiClient:
             if self._socket is not None:
                 return self._socket
 
-            client = socket_module.socket(
-                socket_module.AF_UNIX,
-                socket_module.SOCK_STREAM,
-            )
-            client.settimeout(self.timeout)
+            client: socket_module.socket | None = None
             try:
-                client.connect(os.fspath(self.location.path))
+                client = self.transport.connect(timeout=self.timeout)
+                client.settimeout(self.timeout)
+            except DaemonUnavailableError:
+                raise
             except OSError as error:
-                client.close()
-                self._raise_connect_error(error)
+                if client is not None:
+                    _close_socket(client)
+                raise DaemonUnavailableError(
+                    "Could not establish daemon client transport."
+                ) from error
 
+            assert client is not None
             self._socket = client
             return client
 
@@ -522,31 +539,6 @@ class DaemonApiClient:
                 self._socket = None
                 self._hello_result = None
         _close_socket(expected)
-
-    def _raise_connect_error(self, error: OSError) -> None:
-        path = self.location.path
-        if error.errno == errno.ENOENT:
-            raise DaemonUnavailableError(
-                f"Daemon socket was not found: {path}"
-            ) from error
-        if error.errno == errno.ECONNREFUSED:
-            raise DaemonUnavailableError(
-                f"Daemon socket is present but not accepting connections: {path}"
-            ) from error
-        if error.errno in {errno.EACCES, errno.EPERM}:
-            raise DaemonUnavailableError(
-                f"Permission denied while connecting to daemon socket: {path}"
-            ) from error
-        if isinstance(error, TimeoutError):
-            raise DaemonUnavailableError(
-                f"Timed out connecting to daemon socket: {path}"
-            ) from error
-
-        detail = error.strerror or error.__class__.__name__
-        raise DaemonUnavailableError(
-            f"Could not connect to daemon socket {path}: {detail}"
-        ) from error
-
 
 def _hold_state_scope(value: object) -> str:
     if not isinstance(value, str) or not value.strip():
