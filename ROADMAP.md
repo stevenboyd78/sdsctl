@@ -11,85 +11,133 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 31.2 — v0.27.0 release and publication closure
+### Milestone 32.1 — Authenticated remote daemon client/server foundation
 
-Milestone 31.1 is closed through reviewed pull request 216, merge commit
-`ebcad4161376ba4c51af06665fd2c5cdb7080506`, complete post-merge validation on
-`main`, physical SDS200 and Home Assistant OS acceptance, published-runtime
-restoration, and exact cleanup of its deliberately named validation App,
-source, card, and staging artifacts. The merged implementation adds bounded
-elapsed-time Waterfall history and an optional display-only frequency pointer
-to the authenticated web dashboard and first-party Home Assistant card while
-preserving legacy frame-depth configurations, one scanner-side session, and
-the relative and uncalibrated data contract.
+Milestone 31.2 is closed through reviewed pull request 218, merge commit
+`8ae60aa4a8ed02a4e3f2a6657c4f8216634e52be`, the immutable annotated
+`v0.27.0` tag, complete public-artifact verification, repository-managed Home
+Assistant OS acceptance, reviewed wiki publication, a normal Latest GitHub
+Release, and exact cleanup of its release branch and temporary validation
+artifacts. Version 0.27.0 publishes bounded elapsed-time Waterfall history and
+an optional display-only frequency pointer while retaining legacy frame-depth
+configurations and the relative, uncalibrated, single-owner data contract.
 
-Milestone 31.2 is release closure rather than another runtime feature slice.
-Synchronize the Python package metadata, import version, and Home Assistant App
-at 0.27.0. Keep the independently packaged Home Assistant Core integration at
-0.1.5 unless a reviewed integration change requires a new artifact version.
-Freeze both changelogs with one coherent account of duration retention,
-pause/clear and reconnect behavior, pointer accessibility and inspection-only
-semantics, live scanner-span tracking, legacy-card compatibility, physical
-acceptance, and the unchanged scanner, audio, MQTT, recording, Favorites, and
-security boundaries.
+Milestone 32.1 establishes the first supported authenticated network transport
+for remote daemon-backed clients. The primary topology is one scanner-owning
+daemon, running on an ordinary host, in a generic container, or in the Home
+Assistant App, with multiple independently reconnecting thin clients. A
+Raspberry Pi or other display may open the existing authenticated HTTPS web
+dashboard in a kiosk browser or run a TUI backed by the new remote daemon-client
+transport; no display client opens its own scanner control, PSI, Waterfall, or
+RTSP/RTP audio session.
 
-Audit the concise README, reviewed wiki source, release guide, Waterfall
-protocol and renderer documentation, web-dashboard guide, Home Assistant App
-guide, project vision, screenshots, package metadata, and repository links.
-Public instructions must distinguish elapsed-time modes from retained
-frame-count modes, state that pointer values interpolate scanner-reported span
-bounds without tuning, and retain the relative and uncalibrated signal warning.
-Documentation must contain no private host, scanner, capability, credential,
-recording, Favorites, provider, or browser-cache data.
+Existing private Unix-domain sockets remain the default and continue to serve
+same-host clients without network configuration. Every host-facing TCP listener
+is disabled unless explicitly enabled, binds one operator-selected private,
+unique-local, or link-local address rather than a wildcard, uses authenticated
+encryption, and publishes one documented, configurable port. A process inside
+an isolated container may bind its container interface only behind one explicit
+orchestrator host-port mapping while host networking remains disabled. Reject
+anonymous access, plaintext fallback, wildcard host publication, public or
+multicast discovery, credentials in URLs, and implicit exposure caused only by
+enabling container host networking. Preserve bounded framing, request IDs,
+protocol-version negotiation, timeouts, backpressure, redacted failures, and
+fail-closed behavior before dispatching any existing daemon operation.
 
-Before any release tag exists, run the complete Ruff, MyPy, Python 3.11 through
-3.14 test, documentation, distribution, release-integrity, clean-install,
-declared-extra, browser, screenshot, generic-container, and Home Assistant App
-validation appropriate to the accumulated v0.27.0 surface. Validate wheel and
-source-distribution contents and metadata from clean environments. Pull-request,
-`main`, and manual workflow runs may build and inspect images but must not
-publish release artifacts.
+Define least-privilege client authorization at the transport boundary. A
+display-only client may observe bounded state, ordered events, diagnostics, and
+demand-driven relative Waterfall data without control authority. Explicit
+operator capability may additionally use the existing typed semantic controls;
+it must not expose unrestricted raw scanner keys, the generic MQTT command
+envelope, filesystem paths, Home Assistant tokens, Ingress identifiers, scanner
+addresses, recording contents, Favorites bytes, or provider credentials. Client
+identities must be independently revocable and safe to provision in mode-0600
+configuration or an equivalent platform secret store without logging secret
+material.
 
-Publish the reviewed wiki source before tagging, and verify its commit and
-content against the repository-managed source. Only after the release pull
-request is reviewed, green, and merged may one genuine annotated `v0.27.0` tag
-be created from the exact reviewed `main` commit. The tag must be absent both
-locally and remotely beforehand and must exactly match all three synchronized
-0.27.0 version surfaces. Never move, replace, recreate, or use a synthetic tag
-after publication begins.
+Create one transport-neutral daemon-client abstraction shared by local and
+remote CLI/TUI consumers rather than duplicating scanner or application
+semantics. Remote startup must validate the server identity and negotiated
+protocol before presenting cached state. Disconnect, stale-event detection,
+ordered resynchronization, stream-generation changes, credential rotation, and
+server restart must recover without a client restart where safe. Isolate slow,
+malformed, unauthenticated, and abruptly disconnected peers with bounded
+per-client queues and leases so one client cannot block the daemon or another
+display.
 
-The genuine matching tag may publish the Python distributions to PyPI through
-the configured trusted publisher, amd64 and aarch64 Home Assistant App images
-plus their multi-architecture manifest to GHCR, and the generic
-multi-architecture image to Docker Hub. Verify public package metadata,
-checksums, imports, command versions, optional extras, image architectures,
-labels, App metadata, immutable digests, and tag-to-commit identity without
-mutating published artifacts or credentials.
+Add an advanced Home Assistant App configuration without weakening Ingress.
+Authenticated Ingress remains the default dashboard path and its trusted
+Supervisor listener is never published as a general LAN port. When an operator
+opts in, App metadata and documentation may expose only the dedicated remote
+daemon-client port and the existing native authenticated HTTPS dashboard port.
+The Home Assistant-only lifecycle workspace remains available solely through
+Ingress, even when the native dashboard is reachable directly. Retain the
+existing UDP 50000 scanner-to-daemon RTP mapping as an input rather than
+misrepresenting it as a client/server port.
 
-Before creating the GitHub Release, complete a clean repository-managed Home
-Assistant OS upgrade from published v0.26.1 to v0.27.0. Preserve operator
-configuration, MQTT identities, persistent recordings, aggregate and
-individual first-party card compatibility, and the optional 0.1.5 Core
-integration boundary. Revalidate Ingress, scanner controls, browser audio,
-recording finalization and saved playback, legacy and duration Waterfall cards,
-frequency-pointer interaction, live span changes, restart recovery, and the
-single-owner scanner, Waterfall, and RTSP/RTP audio contract. Restore the
-published App as sole owner and retain no Local App, integration copy, resource
-mutation, validation dashboard artifact, private capture, source directory, or
-staging worktree.
+Document beginner and advanced deployment recipes for an ordinary Python host,
+Docker or Compose, and Home Assistant OS. Include firewall direction, TLS trust
+and credential provisioning, port mapping, revocation, service restart,
+diagnostics, and a concrete one-daemon/multiple-display example. The documented
+Raspberry Pi acceptance topology must cover at least two simultaneous display
+clients at the 800 by 480 reference size, including one remote TUI and one kiosk
+browser, plus an independent administrative client. Make clear that direct
+browser access uses the daemon host's native HTTPS dashboard while the TUI uses
+the remote daemon-client transport.
 
-Create the GitHub Release from the genuine tag and mark it Latest only after
-all public artifacts and Home Assistant acceptance pass. Release notes must
-link the exact comparison, summarize user-visible additions and compatibility,
-identify the inspection-only and uncalibrated limits, and make no unsupported
-RF, scanner-family, public-access, or synchronization claim.
+Add deterministic unit, integration, hostile-peer, real-browser, container,
+and Home Assistant App coverage for disabled-by-default listeners, exact bind
+policy, authentication and revocation, authorization scopes, protocol mismatch,
+malformed and oversized frames, replay or duplicate requests, connection and
+queue limits, slow consumers, fanout ordering, reconnect, shutdown, and log and
+diagnostic redaction. Physical acceptance must prove all concurrent clients
+share exactly one scanner owner, one PSI stream, one demand-driven Waterfall
+session, and one daemon-owned RTSP/RTP audio input while independent client
+disconnects release only their own leases.
 
-Weather-alert state or recording, TUI Waterfall rendering, GUI implementation,
-scanner tuning from the pointer, click-to-hold or click-to-search behavior,
-alternative GW2 syntax, binary negotiation, ProScan wire comparison, FFT or
-power calibration, anonymous endpoints, automatic RadioReference execution,
-and broader scanner-family validation remain outside Milestone 31.2. No new
-runtime capability enters this release-closure milestone.
+Trusted reverse-proxy identity, Internet/public exposure, wildcard binding,
+third-party identity providers, browser-stored bearer credentials, automatic
+LAN discovery, multi-user administration, scanner sharing between multiple
+daemons, GUI implementation, and broader scanner-family validation remain
+outside Milestone 32.1. The milestone adds no scanner protocol, Favorites write,
+RadioReference execution, RF calibration, tuning-from-Waterfall, or Home
+Assistant resource-registration authority.
+
+#### Closed Milestone 31.2 — v0.27.0 release and publication closure
+
+Milestone 31.2 synchronized the Python package, import version, and Home
+Assistant App at 0.27.0 while retaining the independently packaged Home
+Assistant Core integration at 0.1.5. Pull request 218 merged as
+`8ae60aa4a8ed02a4e3f2a6657c4f8216634e52be` after complete static, test,
+documentation, distribution, clean-install, browser, screenshot, generic
+container, and Home Assistant App validation. Reviewed wiki source was published
+as commit `4e09aa030bd4e993f80a095c17e0e241206f5839` before tagging.
+
+The genuine annotated `v0.27.0` tag object
+`d24897dcd4ea8a43d762a46fb48fe44bbea1ad8e` points to that exact merge commit.
+Tag-gated workflows published and verified the Python wheel and source
+distribution, the amd64 and arm64 generic Docker image, and the amd64 and
+aarch64 Home Assistant App images plus both multi-architecture manifests. The
+normal GitHub Release was created from the genuine tag and marked Latest with
+the reviewed comparison, alpha-API warning, compatibility notes, and relative,
+uncalibrated, inspection-only limits.
+
+Repository-managed Home Assistant acceptance upgraded the published App from
+0.26.1 to 0.27.0 on amd64 Home Assistant OS 18.2, Core 2026.8.3, Supervisor
+2026.08.0, and Docker 29.6.2 against an SDS200 running firmware 1.26.01.
+Operator options and the exact persistent-recording tree were preserved. Ingress
+reconnected after Core restart; the 24-component integration contract, three
+legacy frame-count cards, duration and pointer behavior, controls, browser
+audio, recording finalization, saved playback, live span, and restart recovery
+all remained valid. The operator-managed aggregate resource was advanced to the
+installed 0.27.0 digest without giving the App resource-registry authority.
+
+Closure retained the repository-managed 0.27.0 App as the sole scanner owner,
+removed its exact temporary resource-registry rollback copy, deleted the merged
+release branch locally and remotely, and removed the clean temporary wiki,
+known-hosts, and release-note files. No Local App, private integration copy,
+temporary duration card, source directory, staging worktree, private capture,
+credential, or release-validation recording remains.
 
 #### Closed Milestone 31.1 — Duration-based Waterfall history and frequency pointer
 
