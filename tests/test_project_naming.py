@@ -141,38 +141,36 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     assert (
-        "### Milestone 32.1 — Authenticated remote daemon client/server foundation"
+        "### Milestone 32.2 — Packaged remote daemon startup and client profiles"
         in active_milestone
     )
     for required in (
-        "Milestone 31.2 is closed through reviewed pull request 218",
-        "8ae60aa4a8ed02a4e3f2a6657c4f8216634e52be",
-        "first supported authenticated network transport",
-        "one scanner-owning daemon",
-        "multiple independently reconnecting thin clients",
-        "Existing private Unix-domain sockets remain the default",
-        "Every host-facing TCP listener is disabled unless explicitly enabled",
-        "binds one operator-selected private, unique-local, or link-local address "
-        "rather than a wildcard",
-        "uses authenticated encryption",
-        "Reject anonymous access, plaintext fallback, wildcard host publication",
-        "Define least-privilege client authorization at the transport boundary",
-        "A display-only client",
-        "Explicit operator capability",
-        "Create one transport-neutral daemon-client abstraction",
-        "Remote startup must validate the server identity",
-        "advanced Home Assistant App configuration without weakening Ingress",
-        "Authenticated Ingress remains the default dashboard path",
-        "dedicated remote daemon-client port",
-        "native authenticated HTTPS dashboard port",
-        "Home Assistant-only lifecycle workspace remains available solely through Ingress",
-        "one-daemon/multiple-display example",
-        "one remote TUI and one kiosk browser",
-        "disabled-by-default listeners",
-        "authentication and revocation",
-        "one scanner owner",
-        "Trusted reverse-proxy identity, Internet/public exposure, wildcard binding",
-        "The milestone adds no scanner protocol",
+        "Milestone 32.1 is closed through reviewed pull requests 219 and 220",
+        "f2783eb06e901cb05a37bcb06446db951aa658a7",
+        "db6720ad9e42d05b63b9c6eedf02f8186163a260",
+        "ordinary supported Python installation",
+        "daemon-remote.toml",
+        "An absent or explicitly disabled document",
+        "open no TCP listener",
+        "one scanner command transport, one PSI loop, one demand-driven Waterfall "
+        "session, and one RTSP/RTP audio input",
+        "all-or-nothing credential reload boundary",
+        "Bind address, port, certificate, and private-key changes continue to require "
+        "a daemon restart",
+        "dedicated, strict, versioned remote-client profile document",
+        "Credential bytes remain in the referenced secret file",
+        "sdsctl daemon-client",
+        "sdsctl tui --daemon-client",
+        "mutually exclusive with local socket overrides",
+        "Without the selector, all commands retain their current local",
+        "socket defaults byte for byte",
+        "bounded reconnect and ordered resynchronization behavior",
+        "beginner-oriented setup for an ordinary daemon host and one Raspberry Pi "
+        "TUI client",
+        "does not publish a Docker, Compose, systemd, Home Assistant App",
+        "#### Closed Milestone 32.1 — Authenticated remote daemon client/server foundation",
+        "Versioned challenge/proof authentication",
+        "one shared local-or-remote transport boundary",
         "#### Closed Milestone 31.2 — v0.27.0 release and publication closure",
         "synchronized the Python package, import version, and Home Assistant App at 0.27.0",
         "Home Assistant Core integration at 0.1.5",

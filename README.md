@@ -101,7 +101,7 @@ Ethernet, profiles, expected success, and common failures.
 - Monitor structured scanner state and model-aware capabilities
 - Use a responsive Textual terminal interface with semantic controls
 - Run one daemon-owned scanner, PSI, audio, recording, event, and Waterfall
-  runtime for local clients
+  runtime for local or explicitly authenticated private-network CLI/TUI clients
 - Use a loopback web dashboard or explicit authenticated native-TLS LAN mode
 - Publish bounded MQTT state, events, Home Assistant Discovery, and controls
 - Play live SDS200 network audio and create finalized WAV recordings
@@ -148,6 +148,7 @@ Advanced, version-controlled references remain in the repository:
 - [Control transports](docs/transports.md)
 - [Layered configuration](docs/configuration.md)
 - [Daemon deployment](docs/daemon-deployment.md)
+- [Authenticated remote daemon clients](docs/daemon-remote.md)
 - [Web dashboard](docs/web-dashboard.md)
 - [Network audio](docs/audio.md)
 - [Home Assistant App](docs/home-assistant-app.md)

@@ -290,6 +290,7 @@ transport without changing checkpoint, transition, or delivery framing. Remote
 and local consumers therefore increment the same demand count: the first
 combined consumer starts the single scanner publication, an individual
 disconnect releases only its own lease, and the final combined release stops
-publication. Packaged daemon and client startup do not yet construct the remote
-path, and the relative, uncalibrated, inspection-only data contract is
-unchanged.
+publication. Milestone 32.2 packages this path only for an explicitly enabled
+daemon listener and selected client profile. Bounded transport recovery starts
+from a fresh session checkpoint before later records. The relative,
+uncalibrated, inspection-only data contract is unchanged.

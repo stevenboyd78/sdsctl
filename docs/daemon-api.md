@@ -34,21 +34,24 @@ The Python implementation retains the historical public class name
 `DaemonReadOnlyApi` for compatibility even though version 1 now advertises both
 read-only and control operations.
 
-Milestone 32.1 adds transport separation and an explicit-construction remote
-transport without exposing a packaged network service by default.
+Milestone 32.1 added transport separation and an explicit-construction remote
+transport. Milestone 32.2 packages that boundary for an ordinary Python host
+without exposing a network service by default.
 `DaemonApiClient` now consumes the public `DaemonClientTransport` connection
 contract. Passing the existing `DaemonSocketLocation` constructs a
 `UnixDaemonClientTransport` automatically, preserving every local path,
 permission, timeout, error, framing, and protocol behavior. A custom transport,
 including `DaemonRemoteClientTransport`, may be supplied to deterministic
-application code, but the packaged CLI and TUI still resolve only private
-Unix-domain sockets. The remote client validates TLS 1.3 server identity,
+application code. The packaged CLI and daemon-backed TUI construct it only when
+`--remote-profile NAME` explicitly selects a strict named profile; otherwise
+they still resolve only private Unix-domain sockets. The remote client validates
+TLS 1.3 server identity,
 completes the versioned challenge/proof exchange, and selects the `api` service
 before the existing API framing begins. A sanitized remote runtime snapshot
 must recursively omit scanner and audio endpoint fields; their presence fails
-closed. No CLI option, remote profile, container port, Home Assistant App
-mapping, or automatically started TCP service is available in this foundation
-slice.
+closed. The daemon starts the authenticated TCP service only when
+`daemon-remote.toml` explicitly enables it. No container port or Home Assistant
+App mapping is published by this ordinary-host slice.
 
 The server side now consumes the public `DaemonServerListener` and
 `DaemonServerAcceptor` contracts. The existing `DaemonSocketListener` satisfies
@@ -60,14 +63,14 @@ transport-owned peer context through its client worker and lets that context
 apply authorization before request dispatch. Ordinary Unix peer addresses do
 not implement that policy hook, so the private local path is unchanged.
 
-The configuration foundation adds a strict, disabled-by-default
+The configuration boundary uses a strict, disabled-by-default
 [`daemon-remote.toml` configuration and filesystem preflight](daemon-remote.md).
 It models exact non-public binds, TLS file references, independently revocable
-client identities, and `observe`/`control` authorization scopes. The explicit
-`DaemonRemoteTcpListener` constructor preflights and loads that material before
-binding exactly the configured address and port. The daemon command does not
-construct the listener yet, so no TCP/TLS listener, client credential, CLI
-option, container port, or Home Assistant App mapping is active.
+client identities, and `observe`/`control` authorization scopes. The packaged
+daemon preflights and loads that material before `DaemonRemoteTcpListener`
+binds exactly the configured address and port. An absent or disabled document
+constructs no TCP listener. Container and Home Assistant port mappings remain
+inactive.
 
 The authentication foundation also defines a versioned challenge/proof
 contract for the explicit transport. A fresh server nonce and
@@ -597,12 +600,14 @@ against the same SDS200:
 
 `DaemonProcess` starts the event listener, starts the PCMU listener, starts the
 ownership runtime, activates configured destinations, starts the finalized
-recording-file service, and finally opens the request-response API. Every
+recording-file service, opens the local request-response API, and then starts an
+explicitly enabled packaged remote service. Every
 admitted API request therefore observes an initialized runtime and configured
 recording service, while event subscribers may observe startup transitions and
 PCMU subscribers are ready before authoritative audio begins.
 
-Shutdown closes the API listener and clients, closes finalized recording-file
+Shutdown closes the remote listener and clients first, closes the local API,
+closes finalized recording-file
 readers, closes the recording manager so an active WAV can be finalized, stops
 configured destinations, and then stops scanner, PSI, audio, and router
 ownership. The PCMU service stops after the runtime, and the separate event
@@ -618,7 +623,7 @@ The `daemon.sock` protocol intentionally excludes:
 - generic public `KEY` passthrough and unverified key modes or gestures;
 - streaming event responses on an API connection;
 - binary PCM, PCMU, or finalized-WAV delivery on the API connection;
-- packaged TCP or remote-network exposure;
+- automatic, wildcard, plaintext, public, container, or Home Assistant port exposure;
 - daemon discovery or automatic client selection;
 - decoded-PCM CLI client workflows; and
 - destination activation or configuration reload.
@@ -632,6 +637,7 @@ safe-control results through this API while ordered updates and PCMU audio remai
 on their dedicated sockets.
 
 Automatic daemon discovery and decoded-PCM client workflows remain follow-on
-work. Explicit CLI and TUI daemon clients, browser recording operations, saved
-destination activation, and transactional `SIGHUP` destination reload are part
-of the current daemon contract.
+work. Explicit local or named remote-profile CLI and TUI daemon clients,
+browser recording operations, saved destination activation, transactional
+`SIGHUP` destination reload, and all-or-nothing remote credential reload are
+part of the current daemon contract.

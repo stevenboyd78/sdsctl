@@ -7,6 +7,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from contextlib import suppress
 from datetime import datetime
 from math import isfinite
+from time import sleep
 from typing import cast
 
 from .daemon_events import (
@@ -15,6 +16,10 @@ from .daemon_events import (
     DaemonEventKind,
 )
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_remote_reconnect import (
+    DaemonRemoteReconnectPolicy,
+    daemon_remote_error_is_reconnectable,
+)
 from .daemon_transport import (
     DaemonClientTransport,
     UnixDaemonClientTransport,
@@ -186,6 +191,7 @@ class DaemonEventClient:
             | None
         ) = None,
         count: int | None = None,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
     ) -> Iterator[DaemonEvent]:
         """Yield validated events matching an optional bounded kind filter."""
 
@@ -198,9 +204,36 @@ class DaemonEventClient:
                     "Daemon event count must be greater than zero."
                 )
 
+        if reconnect_policy is not None and not isinstance(
+            reconnect_policy,
+            DaemonRemoteReconnectPolicy,
+        ):
+            raise TypeError(
+                "Daemon event reconnect policy must be "
+                "DaemonRemoteReconnectPolicy or None."
+            )
+        if reconnect_policy is not None and not self.sanitizes_private_state:
+            raise ValueError(
+                "Daemon event reconnect policy is available only for "
+                "authenticated remote transports."
+            )
+
         emitted = 0
+        reconnect_attempt = 0
         while count is None or emitted < count:
-            event = self.receive()
+            try:
+                event = self.receive()
+            except Exception as error:
+                if (
+                    reconnect_policy is None
+                    or reconnect_attempt >= reconnect_policy.attempts
+                    or not daemon_remote_error_is_reconnectable(error)
+                ):
+                    raise
+                reconnect_attempt += 1
+                sleep(reconnect_policy.delay(reconnect_attempt))
+                continue
+            reconnect_attempt = 0
             if (
                 normalized_kinds is not None
                 and event.kind not in normalized_kinds

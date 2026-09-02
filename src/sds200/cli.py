@@ -120,6 +120,22 @@ from .daemon_recording_file_server import (
     DAEMON_RECORDING_FILE_DEFAULT_SHUTDOWN_TIMEOUT,
     DaemonRecordingFileServer,
 )
+from .daemon_remote import load_daemon_remote_configuration
+from .daemon_remote_client import (
+    DAEMON_REMOTE_CLIENT_ENDPOINT,
+    DaemonRemoteClientConfiguration,
+    DaemonRemoteClientTransport,
+)
+from .daemon_remote_profiles import load_daemon_remote_client_profiles
+from .daemon_remote_reconnect import (
+    DaemonRemoteReconnectPolicy,
+    daemon_remote_error_is_reconnectable,
+)
+from .daemon_remote_runtime import (
+    PackagedDaemonRemoteService,
+    build_packaged_daemon_remote_service,
+)
+from .daemon_remote_service import DaemonRemoteService
 from .daemon_runtime import DaemonRuntime
 from .daemon_server import (
     DAEMON_API_DEFAULT_CLIENT_TIMEOUT,
@@ -926,6 +942,15 @@ def build_parser(
         ),
     )
     daemon.add_argument(
+        "--remote-config",
+        type=Path,
+        metavar="PATH",
+        help=(
+            "Explicit authenticated remote-listener configuration; otherwise "
+            "use daemon-remote.toml in the user configuration directory"
+        ),
+    )
+    daemon.add_argument(
         "--recording-directory",
         type=Path,
         metavar="PATH",
@@ -1232,6 +1257,14 @@ def build_parser(
         help=(
             "Explicit absolute daemon API socket path; otherwise use "
             "XDG_RUNTIME_DIR or the user state directory"
+        ),
+    )
+    daemon_client.add_argument(
+        "--remote-profile",
+        metavar="PROFILE",
+        help=(
+            "Use one explicitly named authenticated remote profile instead "
+            "of the local Unix sockets"
         ),
     )
     daemon_client.add_argument(
@@ -1748,6 +1781,14 @@ def build_parser(
         help=(
             "Use a running local daemon without opening scanner hardware; "
             "standalone scanner ownership remains the default"
+        ),
+    )
+    tui.add_argument(
+        "--remote-profile",
+        metavar="PROFILE",
+        help=(
+            "Use one explicitly named authenticated remote profile with "
+            "--daemon-client instead of local Unix sockets"
         ),
     )
     tui.add_argument(
@@ -3170,6 +3211,14 @@ def _run_daemon(
     mqtt_configuration = load_daemon_mqtt_configuration(
         mqtt_manifest_path,
     )
+    remote_manifest_path = (
+        args.remote_config
+        if args.remote_config is not None
+        else resolved_paths.daemon_remote_config_file
+    )
+    remote_configuration = load_daemon_remote_configuration(
+        remote_manifest_path,
+    )
     mqtt_broker_factory = (
         PahoMqttBrokerFactory()
         if mqtt_configuration is not None
@@ -3319,6 +3368,7 @@ def _run_daemon(
     mqtt_worker: DaemonMqttWorker | None = None
     destination_coordinator: DaemonDestinationCoordinator | None = None
     destination_reloader: DaemonDestinationReloader | None = None
+    remote_service: PackagedDaemonRemoteService | None = None
     try:
         if mqtt_configuration is not None:
             assert mqtt_broker_factory is not None
@@ -3380,6 +3430,27 @@ def _run_daemon(
             raise ValueError(
                 "Daemon audio destinations require a network audio source."
             )
+
+        if remote_configuration is not None and remote_configuration.enabled:
+            remote_service = build_packaged_daemon_remote_service(
+                remote_manifest_path,
+                remote_configuration,
+                api=daemon_api,
+                event_stream=event_stream,
+                waterfall_session=waterfall_session,
+                pcmu_stream=pcmu_stream,
+                api_max_clients=args.api_max_clients,
+                api_max_request_bytes=args.api_max_request_bytes,
+                api_max_response_bytes=args.api_max_response_bytes,
+                api_client_timeout=args.api_client_timeout,
+                api_shutdown_timeout=args.api_shutdown_timeout,
+                max_event_bytes=args.event_max_bytes,
+                max_waterfall_record_bytes=(
+                    DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES
+                ),
+                max_audio_endpoint_bytes=args.pcmu_max_endpoint_bytes,
+                max_audio_frame_bytes=args.pcmu_max_frame_bytes,
+            )
     except BaseException as construction_error:
         cleanup_errors: list[BaseException] = []
 
@@ -3426,6 +3497,11 @@ def _run_daemon(
         if live_audio_server is not None
         else {}
     )
+    remote_process_options = (
+        {"remote_service": remote_service}
+        if remote_service is not None
+        else {}
+    )
     if mqtt_worker is None:
         process = DaemonProcess(
             runtime,
@@ -3436,6 +3512,7 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, remote_process_options),
             **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
@@ -3450,6 +3527,7 @@ def _run_daemon(
             api_server=api_server,
             event_server=event_server,
             pcmu_server=pcmu_server,
+            **cast(Any, remote_process_options),
             **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
@@ -3514,6 +3592,36 @@ def _reject_daemon_client_scanner_options(args: argparse.Namespace) -> None:
         raise ValueError(
             "Scanner trace, capture, and replay options are not used with "
             "daemon-client."
+        )
+
+
+def _selected_remote_client_configuration(
+    profile_name: str | None,
+    *,
+    configuration_paths: ConfigurationPaths | None,
+    environ: Mapping[str, str] | None,
+) -> DaemonRemoteClientConfiguration | None:
+    if profile_name is None:
+        return None
+    resolved_paths = (
+        configuration_paths
+        if configuration_paths is not None
+        else resolve_configuration_paths(environ=environ)
+    )
+    profiles = load_daemon_remote_client_profiles(paths=resolved_paths)
+    return profiles.select(profile_name)
+
+
+def _reject_remote_profile_socket_options(
+    remote_configuration: DaemonRemoteClientConfiguration | None,
+    *socket_paths: Path | None,
+) -> None:
+    if remote_configuration is not None and any(
+        path is not None for path in socket_paths
+    ):
+        raise ValueError(
+            "--remote-profile cannot be combined with local daemon socket "
+            "overrides."
         )
 
 
@@ -3587,6 +3695,7 @@ def _reject_daemon_stream_api_options(
 def _run_daemon_client_audio(
     args: argparse.Namespace,
     *,
+    remote_configuration: DaemonRemoteClientConfiguration | None = None,
     configuration_paths: ConfigurationPaths | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> int:
@@ -3605,13 +3714,24 @@ def _run_daemon_client_audio(
         )
 
     output = args.output.expanduser() if args.output is not None else None
-    location = resolve_daemon_pcmu_socket_location(
+    _reject_remote_profile_socket_options(
+        remote_configuration,
         args.pcmu_socket_path,
-        environ=environ,
-        configuration_paths=configuration_paths,
+    )
+    endpoint = (
+        DaemonRemoteClientTransport(
+            remote_configuration,
+            DaemonRemoteService.AUDIO,
+        )
+        if remote_configuration is not None
+        else resolve_daemon_pcmu_socket_location(
+            args.pcmu_socket_path,
+            environ=environ,
+            configuration_paths=configuration_paths,
+        )
     )
     client = DaemonPcmuClient(
-        location,
+        endpoint,
         timeout=args.timeout,
         max_endpoint_bytes=args.max_endpoint_bytes,
         max_frame_bytes=args.max_frame_bytes,
@@ -3639,6 +3759,12 @@ def _run_daemon_client_audio(
     expired = threading.Event()
     timer: threading.Timer | None = None
     failure: BaseException | None = None
+    reconnect_policy = (
+        DaemonRemoteReconnectPolicy()
+        if remote_configuration is not None
+        else None
+    )
+    reconnect_attempt = 0
 
     try:
         client.connect()
@@ -3658,10 +3784,22 @@ def _run_daemon_client_audio(
         while not expired.is_set():
             try:
                 delivery = client.receive()
-            except DaemonDisconnectedError:
+            except Exception as error:
                 if expired.is_set():
                     break
-                raise
+                if (
+                    reconnect_policy is None
+                    or reconnect_attempt >= reconnect_policy.attempts
+                    or not daemon_remote_error_is_reconnectable(error)
+                ):
+                    raise
+                reconnect_attempt += 1
+                client.close()
+                if expired.wait(reconnect_policy.delay(reconnect_attempt)):
+                    break
+                continue
+
+            reconnect_attempt = 0
 
             payload = delivery.packet.payload
             if not payload:
@@ -3767,6 +3905,7 @@ def _print_daemon_waterfall_record(
 def _run_daemon_client_waterfall(
     args: argparse.Namespace,
     *,
+    remote_configuration: DaemonRemoteClientConfiguration | None = None,
     configuration_paths: ConfigurationPaths | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> int:
@@ -3775,13 +3914,24 @@ def _run_daemon_client_waterfall(
         action="waterfall",
         socket_option="--waterfall-socket-path",
     )
-    location = resolve_daemon_waterfall_socket_location(
+    _reject_remote_profile_socket_options(
+        remote_configuration,
         args.waterfall_socket_path,
-        environ=environ,
-        configuration_paths=configuration_paths,
+    )
+    endpoint = (
+        DaemonRemoteClientTransport(
+            remote_configuration,
+            DaemonRemoteService.WATERFALL,
+        )
+        if remote_configuration is not None
+        else resolve_daemon_waterfall_socket_location(
+            args.waterfall_socket_path,
+            environ=environ,
+            configuration_paths=configuration_paths,
+        )
     )
     client = DaemonWaterfallClient(
-        location,
+        endpoint,
         timeout=args.timeout,
         max_record_bytes=args.max_record_bytes,
     )
@@ -3796,7 +3946,13 @@ def _run_daemon_client_waterfall(
     timer.start()
     try:
         try:
-            for record in client.watch(count=args.count):
+            watch_options: dict[str, object] = {"count": args.count}
+            if remote_configuration is not None:
+                watch_options.update(
+                    reconnect_policy=DaemonRemoteReconnectPolicy(),
+                    stop_event=expired,
+                )
+            for record in client.watch(**cast(Any, watch_options)):
                 if expired.is_set():
                     break
                 _print_daemon_waterfall_record(record, as_json=args.json)
@@ -3853,6 +4009,32 @@ def _print_daemon_client_status(
     print(f"Last error:         {snapshot.get('last_error') or '-'}")
 
 
+def _print_remote_daemon_client_status(
+    hello: Mapping[str, object],
+    snapshot: Mapping[str, object],
+) -> None:
+    audio = _daemon_client_mapping(snapshot, "audio")
+    router = _daemon_client_mapping(snapshot, "router")
+
+    print(f"Remote daemon:      {DAEMON_REMOTE_CLIENT_ENDPOINT}")
+    print("Endpoint source:    remote-profile")
+    print(
+        "Protocol:           "
+        f"{hello.get('protocol', '-')} v{hello.get('selected_version', '-')}"
+    )
+    print(f"Runtime:            {snapshot.get('state', '-')}")
+    print(
+        "Scanner connected:  "
+        f"{_daemon_client_flag(snapshot.get('scanner_connected'))}"
+    )
+    print("Scanner endpoint:   -")
+    print(f"PSI active:         {_daemon_client_flag(snapshot.get('psi_active'))}")
+    print(f"PSI interval:       {snapshot.get('psi_interval_ms', '-')} ms")
+    print(f"Audio running:      {_daemon_client_flag(audio.get('running'))}")
+    print(f"Router running:     {_daemon_client_flag(router.get('running'))}")
+    print("Last error:         -")
+
+
 def _daemon_client_ready(snapshot: Mapping[str, object]) -> bool:
     return (
         snapshot.get("state") == "running"
@@ -3879,10 +4061,16 @@ def _run_daemon_client(
     environ: Mapping[str, str] | None = None,
 ) -> int:
     _reject_daemon_client_scanner_options(args)
+    remote_configuration = _selected_remote_client_configuration(
+        args.remote_profile,
+        configuration_paths=configuration_paths,
+        environ=environ,
+    )
     action = args.daemon_client_action
     if action == "audio":
         return _run_daemon_client_audio(
             args,
+            remote_configuration=remote_configuration,
             configuration_paths=configuration_paths,
             environ=environ,
         )
@@ -3890,6 +4078,7 @@ def _run_daemon_client(
     if action == "waterfall":
         return _run_daemon_client_waterfall(
             args,
+            remote_configuration=remote_configuration,
             configuration_paths=configuration_paths,
             environ=environ,
         )
@@ -3901,40 +4090,75 @@ def _run_daemon_client(
             socket_option="--event-socket-path",
         )
 
-        event_location = resolve_daemon_event_socket_location(
+        _reject_remote_profile_socket_options(
+            remote_configuration,
             args.event_socket_path,
-            environ=environ,
-            configuration_paths=configuration_paths,
+        )
+        event_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.EVENTS,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_event_socket_location(
+                args.event_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
         )
         with (
             DaemonEventClient(
-                event_location,
+                event_endpoint,
                 timeout=args.timeout,
                 max_event_bytes=args.max_event_bytes,
             ) as event_client,
             _DaemonEventSignalController(event_client),
         ):
             try:
+                watch_options: dict[str, object] = {
+                    "kinds": args.kind,
+                    "count": args.count,
+                }
+                if remote_configuration is not None:
+                    watch_options["reconnect_policy"] = (
+                        DaemonRemoteReconnectPolicy()
+                    )
                 for event in event_client.watch(
-                    kinds=args.kind,
-                    count=args.count,
+                    **cast(Any, watch_options),
                 ):
                     _print_daemon_event(event, as_json=args.json)
             except KeyboardInterrupt:
                 return 0
         return 0
 
-    location = resolve_daemon_socket_location(
+    _reject_remote_profile_socket_options(
+        remote_configuration,
         args.socket_path,
-        environ=environ,
-        configuration_paths=configuration_paths,
     )
+    location = (
+        None
+        if remote_configuration is not None
+        else resolve_daemon_socket_location(
+            args.socket_path,
+            environ=environ,
+            configuration_paths=configuration_paths,
+        )
+    )
+    api_endpoint = (
+        DaemonRemoteClientTransport(
+            remote_configuration,
+            DaemonRemoteService.API,
+        )
+        if remote_configuration is not None
+        else location
+    )
+    assert api_endpoint is not None
 
     snapshot: dict[str, object] | None = None
     control_result: dict[str, object] | None = None
 
     with DaemonApiClient(
-        location,
+        api_endpoint,
         timeout=args.timeout,
         max_response_bytes=(
             DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
@@ -4051,13 +4275,26 @@ def _run_daemon_client(
     assert action == "status"
     assert snapshot is not None
     if args.json:
+        endpoint: dict[str, object]
+        if remote_configuration is None:
+            assert location is not None
+            endpoint = {
+                "socket": {
+                    "path": str(location.path),
+                    "source": location.source.value,
+                }
+            }
+        else:
+            endpoint = {
+                "remote": {
+                    "endpoint": DAEMON_REMOTE_CLIENT_ENDPOINT,
+                    "source": "remote-profile",
+                }
+            }
         print(
             json.dumps(
                 {
-                    "socket": {
-                        "path": str(location.path),
-                        "source": location.source.value,
-                    },
+                    **endpoint,
                     "hello": hello,
                     "runtime": snapshot,
                 },
@@ -4067,6 +4304,10 @@ def _run_daemon_client(
         )
         return 0
 
+    if remote_configuration is not None:
+        _print_remote_daemon_client_status(hello, snapshot)
+        return 0
+    assert location is not None
     _print_daemon_client_status(
         location.path,
         location.source.value,
@@ -4419,6 +4660,7 @@ def _reject_standalone_tui_daemon_options(
             args.daemon_pcmu_socket_path,
             args.daemon_pcmu_max_endpoint_bytes,
             args.daemon_pcmu_max_frame_bytes,
+            args.remote_profile,
         )
     ):
         raise ValueError(
@@ -4810,23 +5052,55 @@ def _run_tui(
             if args.daemon_timeout is None
             else args.daemon_timeout
         )
-        api_location = resolve_daemon_socket_location(
+        remote_configuration = _selected_remote_client_configuration(
+            args.remote_profile,
+            configuration_paths=configuration_paths,
+            environ=environ,
+        )
+        _reject_remote_profile_socket_options(
+            remote_configuration,
             args.daemon_socket_path,
-            environ=environ,
-            configuration_paths=configuration_paths,
-        )
-        event_location = resolve_daemon_event_socket_location(
             args.daemon_event_socket_path,
-            environ=environ,
-            configuration_paths=configuration_paths,
-        )
-        pcmu_location = resolve_daemon_pcmu_socket_location(
             args.daemon_pcmu_socket_path,
-            environ=environ,
-            configuration_paths=configuration_paths,
+        )
+        api_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.API,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_socket_location(
+                args.daemon_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
+        )
+        event_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.EVENTS,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_event_socket_location(
+                args.daemon_event_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
+        )
+        pcmu_endpoint = (
+            DaemonRemoteClientTransport(
+                remote_configuration,
+                DaemonRemoteService.AUDIO,
+            )
+            if remote_configuration is not None
+            else resolve_daemon_pcmu_socket_location(
+                args.daemon_pcmu_socket_path,
+                environ=environ,
+                configuration_paths=configuration_paths,
+            )
         )
         api_client = DaemonApiClient(
-            api_location,
+            api_endpoint,
             timeout=timeout,
             max_response_bytes=(
                 DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
@@ -4835,7 +5109,7 @@ def _run_tui(
             ),
         )
         event_client = DaemonEventClient(
-            event_location,
+            event_endpoint,
             timeout=timeout,
             max_event_bytes=(
                 DAEMON_EVENT_DEFAULT_MAX_BYTES
@@ -4844,7 +5118,7 @@ def _run_tui(
             ),
         )
         pcmu_client = DaemonPcmuClient(
-            pcmu_location,
+            pcmu_endpoint,
             timeout=timeout,
             max_endpoint_bytes=(
                 PCMU_STREAM_DEFAULT_MAX_ENDPOINT_BYTES
@@ -4858,7 +5132,26 @@ def _run_tui(
             ),
         )
 
-        with DaemonTuiRadio(api_client, event_client) as radio:
+        remote_reconnect_policy = (
+            DaemonRemoteReconnectPolicy()
+            if remote_configuration is not None
+            else None
+        )
+        radio_options = (
+            {"reconnect_policy": remote_reconnect_policy}
+            if remote_reconnect_policy is not None
+            else {}
+        )
+        audio_transport_options = (
+            {"reconnect_policy": remote_reconnect_policy}
+            if remote_reconnect_policy is not None
+            else {}
+        )
+        with DaemonTuiRadio(
+            api_client,
+            event_client,
+            **cast(Any, radio_options),
+        ) as radio:
             hello = api_client.hello()
             _require_daemon_client_operation(
                 hello,
@@ -4866,7 +5159,12 @@ def _run_tui(
             )
             initial = radio.initialize(api_client.runtime_snapshot())
             daemon_audio_session = TuiAudioSession(
-                AudioStream(DaemonPcmuAudioTransport(pcmu_client)),
+                AudioStream(
+                    DaemonPcmuAudioTransport(
+                        pcmu_client,
+                        **cast(Any, audio_transport_options),
+                    )
+                ),
                 RecordingPathPolicy(
                     output=(
                         args.audio_output.expanduser()

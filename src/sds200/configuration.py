@@ -21,6 +21,7 @@ CONNECTION_PROFILE_FILENAME = "profiles.toml"
 DAEMON_DESTINATION_CONFIG_FILENAME = "daemon-destinations.toml"
 DAEMON_MQTT_CONFIG_FILENAME = "daemon-mqtt.toml"
 DAEMON_REMOTE_CONFIG_FILENAME = "daemon-remote.toml"
+DAEMON_REMOTE_CLIENT_PROFILES_FILENAME = "daemon-remote-clients.toml"
 DAEMON_RECORDING_DIRECTORY_NAME = "recordings"
 FAVORITES_EXTERNAL_PROVENANCE_FILENAME = "favorites-external-provenance.json"
 THEME_DIRECTORY_NAME = "themes"
@@ -105,6 +106,12 @@ class ConfigurationPaths:
         """Return the optional remote daemon-listener configuration path."""
 
         return self.user_config_dir / DAEMON_REMOTE_CONFIG_FILENAME
+
+    @property
+    def daemon_remote_client_profiles_file(self) -> Path:
+        """Return the optional named remote daemon-client profile path."""
+
+        return self.user_config_dir / DAEMON_REMOTE_CLIENT_PROFILES_FILENAME
 
     @property
     def daemon_recording_dir(self) -> Path:

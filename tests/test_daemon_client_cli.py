@@ -12,16 +12,21 @@ from sds200 import (
     DAEMON_API_VERSION,
     DAEMON_EVENT_PROTOCOL,
     DAEMON_EVENT_VERSION,
+    DAEMON_REMOTE_CLIENT_ENDPOINT,
     DAEMON_WATERFALL_PROTOCOL,
     DAEMON_WATERFALL_VERSION,
     DaemonApiOperation,
     DaemonEvent,
     DaemonEventKind,
+    DaemonRemoteClientTransport,
+    DaemonRemoteReconnectPolicy,
+    DaemonRemoteService,
     DaemonSocketLocation,
     DaemonUnavailableError,
     DaemonWaterfallRecord,
     DaemonWaterfallRecordKind,
     cli,
+    resolve_configuration_paths,
 )
 
 HELLO = {
@@ -327,6 +332,7 @@ class FakeDaemonEventClient:
         self.watch_calls: list[
             tuple[list[str] | None, int | None]
         ] = []
+        self.reconnect_policies: list[DaemonRemoteReconnectPolicy | None] = []
         self.instances.append(self)
 
     def __enter__(self) -> FakeDaemonEventClient:
@@ -346,8 +352,10 @@ class FakeDaemonEventClient:
         *,
         kinds: list[str] | None,
         count: int | None,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
     ) -> Iterator[DaemonEvent]:
         self.watch_calls.append((kinds, count))
+        self.reconnect_policies.append(reconnect_policy)
         events = [EVENT_SNAPSHOT, EVENT_RADIO]
         emitted = 0
         for event in events:
@@ -374,6 +382,7 @@ class FakeDaemonWaterfallClient:
         self.max_record_bytes = max_record_bytes
         self.closed = False
         self.watch_calls: list[int | None] = []
+        self.reconnect_policies: list[DaemonRemoteReconnectPolicy | None] = []
         self.instances.append(self)
 
     def close(self) -> None:
@@ -383,9 +392,35 @@ class FakeDaemonWaterfallClient:
         self,
         *,
         count: int | None = None,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
+        stop_event: object = None,
     ) -> Iterator[DaemonWaterfallRecord]:
+        del stop_event
         self.watch_calls.append(count)
+        self.reconnect_policies.append(reconnect_policy)
         yield from (WATERFALL_CHECKPOINT, WATERFALL_PWF)
+
+
+def _write_remote_profiles(tmp_path: Path):
+    paths = resolve_configuration_paths(
+        environ={},
+        home=tmp_path / "home",
+        system_config_dir=tmp_path / "etc",
+    )
+    path = paths.daemon_remote_client_profiles_file
+    path.parent.mkdir(parents=True)
+    path.write_text(
+        "version = 1\n\n"
+        "[profiles.pi-display]\n"
+        'address = "192.168.20.41"\n'
+        "port = 50443\n"
+        'server_hostname = "scanner.private.example"\n'
+        f'certificate_file = "{tmp_path / "private-ca.pem"}"\n'
+        'client_id = "pi-display"\n'
+        f'credential_file = "{tmp_path / "private-client.secret"}"\n',
+        encoding="utf-8",
+    )
+    return paths
 
 
 def test_daemon_client_parser_accepts_status_options() -> None:
@@ -409,6 +444,122 @@ def test_daemon_client_parser_accepts_status_options() -> None:
     assert args.timeout == 4.0
     assert args.max_response_bytes == 8192
     assert args.json is True
+
+
+def test_daemon_client_parser_accepts_explicit_remote_profile() -> None:
+    args = cli.build_parser().parse_args(
+        ["daemon-client", "--remote-profile", "pi-display", "status"]
+    )
+
+    assert args.remote_profile == "pi-display"
+
+
+def test_daemon_client_remote_profile_selects_redacted_api_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    paths = _write_remote_profiles(tmp_path)
+    FakeDaemonApiClient.instances.clear()
+    monkeypatch.setattr(cli, "DaemonApiClient", FakeDaemonApiClient)
+
+    assert cli.main(
+        ["daemon-client", "--remote-profile", "pi-display", "status"],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+
+    client = FakeDaemonApiClient.instances[0]
+    assert isinstance(client.location, DaemonRemoteClientTransport)
+    assert client.location.service is DaemonRemoteService.API
+    output = capsys.readouterr().out
+    assert DAEMON_REMOTE_CLIENT_ENDPOINT in output
+    assert "remote-profile" in output
+    for private in (
+        "192.168.20.41",
+        "scanner.private.example",
+        "pi-display",
+        str(tmp_path),
+    ):
+        assert private not in output
+
+
+def test_daemon_client_remote_profile_rejects_local_socket_override(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    paths = _write_remote_profiles(tmp_path)
+
+    assert cli.main(
+        [
+            "daemon-client",
+            "--remote-profile",
+            "pi-display",
+            "--socket-path",
+            "/tmp/local.sock",
+            "status",
+        ],
+        configuration_paths=paths,
+        environ={},
+    ) == 2
+    error = capsys.readouterr().err
+    assert "cannot be combined" in error
+    assert "pi-display" not in error
+
+
+def test_daemon_client_remote_streams_select_exact_services_and_reconnect(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    paths = _write_remote_profiles(tmp_path)
+    FakeDaemonEventClient.instances.clear()
+    FakeDaemonWaterfallClient.instances.clear()
+    monkeypatch.setattr(cli, "DaemonEventClient", FakeDaemonEventClient)
+    monkeypatch.setattr(cli, "DaemonWaterfallClient", FakeDaemonWaterfallClient)
+
+    assert cli.main(
+        [
+            "daemon-client",
+            "--remote-profile",
+            "pi-display",
+            "events",
+            "--count",
+            "1",
+        ],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+    event_client = FakeDaemonEventClient.instances[0]
+    assert isinstance(event_client.location, DaemonRemoteClientTransport)
+    assert event_client.location.service is DaemonRemoteService.EVENTS
+    assert isinstance(
+        event_client.reconnect_policies[0],
+        DaemonRemoteReconnectPolicy,
+    )
+
+    assert cli.main(
+        [
+            "daemon-client",
+            "--remote-profile",
+            "pi-display",
+            "waterfall",
+            "--count",
+            "1",
+            "--duration",
+            "1",
+        ],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+    waterfall_client = FakeDaemonWaterfallClient.instances[0]
+    assert isinstance(waterfall_client.location, DaemonRemoteClientTransport)
+    assert waterfall_client.location.service is DaemonRemoteService.WATERFALL
+    assert isinstance(
+        waterfall_client.reconnect_policies[0],
+        DaemonRemoteReconnectPolicy,
+    )
+    capsys.readouterr()
 
 
 def test_daemon_client_parser_accepts_event_watch_options() -> None:

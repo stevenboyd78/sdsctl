@@ -7,9 +7,14 @@ from collections.abc import Iterator, Mapping
 from contextlib import suppress
 from datetime import datetime
 from math import isfinite
+from time import sleep
 from typing import cast
 
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_remote_reconnect import (
+    DaemonRemoteReconnectPolicy,
+    daemon_remote_error_is_reconnectable,
+)
 from .daemon_transport import DaemonClientTransport, UnixDaemonClientTransport
 from .daemon_waterfall_protocol import (
     DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
@@ -70,6 +75,9 @@ class DaemonWaterfallClient:
             )
         self.location = resolved_location
         self.transport = transport
+        self.sanitizes_private_state = (
+            getattr(transport, "sanitizes_private_state", None) is True
+        )
         self.timeout = normalized_timeout
         self.max_record_bytes = max_record_bytes
         self._lifecycle_lock = threading.RLock()
@@ -143,15 +151,57 @@ class DaemonWaterfallClient:
                 raise
             return record
 
-    def watch(self, *, count: int | None = None) -> Iterator[DaemonWaterfallRecord]:
+    def watch(
+        self,
+        *,
+        count: int | None = None,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
+        stop_event: threading.Event | None = None,
+    ) -> Iterator[DaemonWaterfallRecord]:
         if count is not None:
             if type(count) is not int:
                 raise TypeError("Waterfall record count must be an integer or None.")
             if count <= 0:
                 raise ValueError("Waterfall record count must be greater than zero.")
+        if reconnect_policy is not None and not isinstance(
+            reconnect_policy,
+            DaemonRemoteReconnectPolicy,
+        ):
+            raise TypeError(
+                "Waterfall reconnect policy must be "
+                "DaemonRemoteReconnectPolicy or None."
+            )
+        if reconnect_policy is not None and not self.sanitizes_private_state:
+            raise ValueError(
+                "Waterfall reconnect policy is available only for "
+                "authenticated remote transports."
+            )
+        if stop_event is not None and not isinstance(stop_event, threading.Event):
+            raise TypeError("Waterfall stop event must be threading.Event or None.")
         emitted = 0
+        reconnect_attempt = 0
         while count is None or emitted < count:
-            yield self.receive()
+            if stop_event is not None and stop_event.is_set():
+                return
+            try:
+                record = self.receive()
+            except Exception as error:
+                if (
+                    reconnect_policy is None
+                    or reconnect_attempt >= reconnect_policy.attempts
+                    or not daemon_remote_error_is_reconnectable(error)
+                ):
+                    raise
+                reconnect_attempt += 1
+                delay = reconnect_policy.delay(reconnect_attempt)
+                if stop_event is not None:
+                    if stop_event.wait(delay):
+                        return
+                else:
+                    sleep(delay)
+                continue
+            reconnect_attempt = 0
+            yield record
             emitted += 1
 
     def _read_line(self, expected: socket_module.socket) -> bytes:

@@ -76,6 +76,14 @@ class _DaemonRecordingFileServerLike(Protocol):
     def stop(self) -> None: ...
 
 
+class _DaemonRemoteServiceLike(Protocol):
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+    def reload(self) -> object: ...
+
+
 class _DaemonSignalControllerLike(Protocol):
     @property
     def last_signal(self) -> int | None: ...
@@ -228,7 +236,7 @@ class DaemonSignalController:
 
 
 class DaemonProcess:
-    """Host one runtime, local services, and destination reload behavior."""
+    """Host one runtime plus bounded local and optional remote services."""
 
     def __init__(
         self,
@@ -250,6 +258,7 @@ class DaemonProcess:
         pcmu_server: _DaemonPcmuServerLike | None = None,
         live_audio_server: _DaemonLiveAudioServerLike | None = None,
         waterfall_server: _DaemonWaterfallServerLike | None = None,
+        remote_service: _DaemonRemoteServiceLike | None = None,
         signals: _DaemonSignalControllerLike | None = None,
         poll_interval: float = 0.1,
     ) -> None:
@@ -277,6 +286,7 @@ class DaemonProcess:
         self.pcmu_server = pcmu_server
         self.live_audio_server = live_audio_server
         self.waterfall_server = waterfall_server
+        self.remote_service = remote_service
         self.signals = signals or DaemonSignalController()
         self.poll_interval = poll_interval
 
@@ -291,6 +301,7 @@ class DaemonProcess:
             destination_coordinator_attempted = False
             recording_file_server_attempted = False
             api_server_attempted = False
+            remote_service_attempted = False
 
             try:
                 if self.event_server is not None:
@@ -328,6 +339,10 @@ class DaemonProcess:
                     api_server_attempted = True
                     self.api_server.start()
 
+                if self.remote_service is not None:
+                    remote_service_attempted = True
+                    self.remote_service.start()
+
                 while True:
                     self.signals.wait(self.poll_interval)
 
@@ -337,9 +352,10 @@ class DaemonProcess:
                     self.runtime.poll()
 
                     if self.signals.consume_reload_request():
-                        self._reload_destinations()
+                        self._reload_configured_services()
             except BaseException as process_error:
                 cleanup_failures = self._stop_components(
+                    stop_remote_service=remote_service_attempted,
                     stop_api_server=api_server_attempted,
                     stop_recording_file_server=(
                         recording_file_server_attempted
@@ -365,6 +381,7 @@ class DaemonProcess:
                 raise
             else:
                 cleanup_failures = self._stop_components(
+                    stop_remote_service=remote_service_attempted,
                     stop_api_server=api_server_attempted,
                     stop_recording_file_server=(
                         recording_file_server_attempted
@@ -391,6 +408,14 @@ class DaemonProcess:
                     raise cleanup_failures[0]
 
         return DaemonProcessResult(last_signal=self.signals.last_signal)
+
+    def _reload_configured_services(self) -> None:
+        if self.destination_reloader is not None:
+            self._reload_destinations()
+        if self.remote_service is not None:
+            self._reload_remote_service()
+        if self.destination_reloader is None and self.remote_service is None:
+            self._reload_destinations()
 
     def _reload_destinations(self) -> None:
         if self.destination_reloader is None:
@@ -425,9 +450,22 @@ class DaemonProcess:
             ),
         )
 
+    def _reload_remote_service(self) -> None:
+        assert self.remote_service is not None
+        try:
+            self.remote_service.reload()
+        except Exception as error:
+            logger.error(
+                "daemon remote credential reload failed error=%s",
+                error.__class__.__name__,
+            )
+            return
+        logger.info("daemon remote credential reload completed")
+
     def _stop_components(
         self,
         *,
+        stop_remote_service: bool,
         stop_api_server: bool,
         stop_recording_file_server: bool,
         stop_recording_manager: bool,
@@ -440,6 +478,12 @@ class DaemonProcess:
         stop_event_server: bool,
     ) -> list[BaseException]:
         failures: list[BaseException] = []
+
+        if stop_remote_service and self.remote_service is not None:
+            try:
+                self.remote_service.stop()
+            except BaseException as error:
+                failures.append(error)
 
         if stop_api_server and self.api_server is not None:
             try:

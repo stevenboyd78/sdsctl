@@ -9,7 +9,11 @@ from math import isfinite
 
 from .audio_recording import PCMU_SAMPLE_RATE
 from .daemon_ipc import DaemonSocketLocation
-from .daemon_transport import DaemonClientTransport, UnixDaemonClientTransport
+from .daemon_transport import (
+    DaemonClientTransport,
+    UnixDaemonClientTransport,
+    daemon_transport_sanitizes_private_state,
+)
 from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
@@ -111,6 +115,9 @@ class DaemonPcmuClient:
 
         self.location = resolved_location
         self.transport = transport
+        self.sanitizes_private_state = daemon_transport_sanitizes_private_state(
+            transport
+        )
         self.timeout = normalized_timeout
         self.max_endpoint_bytes = max_endpoint_bytes
         self.max_frame_bytes = max_frame_bytes

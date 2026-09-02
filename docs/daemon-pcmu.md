@@ -343,8 +343,8 @@ The PCMU service still does not add:
 - client negotiation, filtering, replay, or seek operations;
 - audio delivery through `daemon.sock` or `events.sock`;
 - scanner-control operations;
-- packaged TCP startup or a remote client option;
-- daemon discovery or automatic client selection;
+- automatic remote-profile selection or daemon discovery;
+- public, container, or Home Assistant port publication;
 - destination activation and configuration reload.
 
 ## Physical SDS200 validation
@@ -425,5 +425,7 @@ either the private Unix socket or an explicitly constructed remote transport.
 It preserves the binary header and delivery framing, PCMU payload bytes, RTP
 continuity, and cumulative bounded-queue loss counters while replacing the
 scanner RTSP endpoint with `sdsctl-remote-daemon`. It never opens another RTSP
-or RTP session. Packaged daemon and client startup do not yet construct the
-remote path, and the private local PCMU protocol remains unchanged.
+or RTP session. Milestone 32.2 packages this path only for an explicitly enabled
+daemon listener and selected client profile. Bounded transport recovery clears
+invalid stream-continuity state before later audio. The private local PCMU
+protocol remains unchanged.

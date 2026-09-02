@@ -380,7 +380,7 @@ print(configuration.as_dict())
 PY
 ```
 
-## Local client access
+## Client access
 
 The daemon sockets use mode `0600` inside a private `0700` directory. With the
 system unit above, they are owned by the `sdsctl` account. Run administrative
@@ -422,6 +422,15 @@ sudo -u sdsctl /opt/sdsctl/bin/sdsctl tui \
 
 Closing a daemon-backed CLI or TUI client does not stop daemon ownership.
 
+For a client on another private-network host, do not expose or forward these
+Unix sockets. Use the strict `daemon-remote.toml` listener plus one explicitly
+selected `daemon-remote-clients.toml` profile described in the
+[authenticated remote daemon guide](daemon-remote.md). That ordinary-host path
+uses direct TLS 1.3, independent client credentials, exact authorization
+scopes, and one exact private or link-local bind. It does not make this example
+systemd unit publish a port automatically; add only the exact reviewed
+configuration and firewall rule for the intended client direction.
+
 ## Upgrade to v0.20.0
 
 1. Record the installed version and service state.
@@ -460,8 +469,10 @@ move or reuse a published version tag.
 ## Security and operational limits
 
 The SDS200 network protocols are unauthenticated and unencrypted. Keep scanner
-control and RTSP/RTP audio on a trusted LAN or secured VPN. The daemon sockets
-are local Unix-domain sockets and are not TCP services.
+control and RTSP/RTP audio on a trusted LAN or secured VPN. The default daemon
+sockets are local Unix-domain sockets and are not TCP services. The optional
+authenticated daemon-client listener is a separate, explicit direct-TLS service
+and must not be treated as permission for public or wildcard exposure.
 
 The daemon does not fork, create a pidfile, change privileges, install a unit,
 perform socket activation, or expose unrestricted raw scanner commands.

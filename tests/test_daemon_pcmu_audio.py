@@ -7,8 +7,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from sds200 import (
+    DaemonDisconnectedError,
     DaemonPcmuAudioTransport,
     DaemonProtocolError,
+    DaemonRemoteReconnectPolicy,
     DaemonSocketLocation,
     DaemonSocketSource,
     PcmuPacket,
@@ -22,6 +24,7 @@ from sds200.audio_session import StatisticalAudioTransport
 def make_delivery(
     stream_sequence: int,
     *,
+    endpoint: str = "rtsp://192.0.2.25/au:scanner.au",
     packets_dropped: int = 0,
     payload_bytes_dropped: int = 0,
     overflows: int = 0,
@@ -35,7 +38,7 @@ def make_delivery(
         publication=PcmuPublication(
             stream_sequence=stream_sequence,
             packet=PcmuPacket(
-                endpoint="rtsp://192.0.2.25/au:scanner.au",
+                endpoint=endpoint,
                 sequence=sequence,
                 timestamp=timestamp,
                 ssrc=0x56650DAA,
@@ -65,6 +68,8 @@ def make_delivery(
 
 
 class FakeDaemonPcmuClient:
+    sanitizes_private_state = False
+
     def __init__(self, path: Path) -> None:
         self.location = DaemonSocketLocation(
             path,
@@ -222,3 +227,60 @@ def test_daemon_pcmu_audio_transport_records_receive_failure(
     assert client.close_calls >= 1
 
     transport.stop()
+
+
+def test_remote_daemon_pcmu_audio_reconnects_with_cleared_continuity() -> None:
+    class RemoteClient:
+        location = None
+        sanitizes_private_state = True
+
+        def __init__(self) -> None:
+            self.connected = False
+            self.connect_calls = 0
+            self.close_calls = 0
+            self.items: list[PcmuPacketDelivery | Exception] = [
+                DaemonDisconnectedError("private endpoint detail"),
+                make_delivery(900, endpoint="sdsctl-remote-daemon"),
+                RuntimeError("finish"),
+            ]
+
+        def connect(self) -> object:
+            self.connect_calls += 1
+            self.connected = True
+            return object()
+
+        def receive(self) -> PcmuPacketDelivery:
+            if not self.connected:
+                self.connect()
+            item = self.items.pop(0)
+            if isinstance(item, Exception):
+                self.connected = False
+                raise item
+            return item
+
+        def close(self) -> None:
+            self.close_calls += 1
+            self.connected = False
+
+    client = RemoteClient()
+    chunks: list[AudioChunk] = []
+    transport = DaemonPcmuAudioTransport(
+        client,
+        reconnect_policy=DaemonRemoteReconnectPolicy(
+            attempts=2,
+            initial_delay=0,
+            max_delay=0,
+        ),
+    )
+
+    transport.start(chunks.append)
+    wait_for(lambda: transport.statistics.receive_errors == 2)
+    transport.stop()
+
+    assert client.connect_calls == 2
+    assert [chunk.data for chunk in chunks] == [b"\xff" * 160]
+    assert transport.statistics.packets_received == 1
+    assert transport.statistics.first_stream_sequence == 900
+    assert transport.statistics.last_stream_sequence == 900
+    assert transport.statistics.receive_errors == 2
+    assert transport.endpoint == "sdsctl-remote-daemon"

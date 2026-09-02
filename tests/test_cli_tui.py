@@ -7,9 +7,14 @@ from pathlib import Path
 import pytest
 
 from sds200 import (
+    DAEMON_REMOTE_CLIENT_ENDPOINT,
     DaemonPcmuAudioTransport,
+    DaemonRemoteClientTransport,
+    DaemonRemoteReconnectPolicy,
+    DaemonRemoteService,
     DaemonTuiRadio,
     cli,
+    resolve_configuration_paths,
 )
 from sds200.models import ScannerInfo
 from sds200.radio import SDSScanner
@@ -359,6 +364,112 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert pcmu_client.close_calls == 0
 
 
+def test_tui_cli_remote_profile_builds_independent_authenticated_services(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    paths = resolve_configuration_paths(
+        environ={},
+        home=tmp_path / "home",
+        system_config_dir=tmp_path / "etc",
+    )
+    profile_path = paths.daemon_remote_client_profiles_file
+    profile_path.parent.mkdir(parents=True)
+    profile_path.write_text(
+        "version = 1\n\n"
+        "[profiles.pi-display]\n"
+        'address = "192.168.20.41"\n'
+        'server_hostname = "scanner.private.example"\n'
+        f'certificate_file = "{tmp_path / "private-ca.pem"}"\n'
+        'client_id = "pi-display"\n'
+        f'credential_file = "{tmp_path / "private-client.secret"}"\n',
+        encoding="utf-8",
+    )
+
+    class FakeApiClient:
+        def __init__(self, location: object, **kwargs: object) -> None:
+            del kwargs
+            self.location = location
+            self.sanitizes_private_state = True
+
+        def hello(self) -> dict[str, object]:
+            return {"operations": ["runtime.snapshot"]}
+
+        def runtime_snapshot(self) -> dict[str, object]:
+            return {
+                "scanner_model": "SDS200",
+                "scanner_firmware": "Version 1.26.01",
+                "scanner_connected": True,
+                "radio_state": {"channel": "Remote Dispatch"},
+            }
+
+        def close(self) -> None:
+            return None
+
+    class FakeEventClient:
+        def __init__(self, location: object, **kwargs: object) -> None:
+            del kwargs
+            self.location = location
+            self.sanitizes_private_state = True
+
+        def receive(self) -> object:
+            pytest.fail("run_tui stub must not start the event stream")
+
+        def close(self) -> None:
+            return None
+
+    class FakePcmuClient:
+        location = None
+        connected = False
+        sanitizes_private_state = True
+
+        def __init__(self, location: object, **kwargs: object) -> None:
+            del kwargs
+            self.transport = location
+
+        def connect(self) -> object:
+            pytest.fail("run_tui stub must not start remote audio")
+
+        def receive(self) -> object:
+            pytest.fail("run_tui stub must not receive remote audio")
+
+        def close(self) -> None:
+            return None
+
+    def fake_run_tui(**kwargs: object) -> None:
+        captured.update(kwargs)
+
+    monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
+    monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
+    monkeypatch.setattr(cli, "DaemonPcmuClient", FakePcmuClient)
+    monkeypatch.setattr("sds200.tui.run_tui", fake_run_tui)
+
+    assert cli.main(
+        ["tui", "--daemon-client", "--remote-profile", "pi-display"],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+
+    radio = captured["radio"]
+    assert isinstance(radio, DaemonTuiRadio)
+    assert isinstance(radio.reconnect_policy, DaemonRemoteReconnectPolicy)
+    assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
+    assert captured["snapshot"].channel == "Remote Dispatch"
+
+    api_transport = radio.api_client.location
+    event_transport = radio.event_client.location
+    audio_transport = captured["audio_session"].stream.transport
+    assert isinstance(api_transport, DaemonRemoteClientTransport)
+    assert isinstance(event_transport, DaemonRemoteClientTransport)
+    assert isinstance(audio_transport, DaemonPcmuAudioTransport)
+    assert isinstance(audio_transport.client.transport, DaemonRemoteClientTransport)
+    assert api_transport.service is DaemonRemoteService.API
+    assert event_transport.service is DaemonRemoteService.EVENTS
+    assert audio_transport.client.transport.service is DaemonRemoteService.AUDIO
+    assert isinstance(audio_transport.reconnect_policy, DaemonRemoteReconnectPolicy)
+
+
 @pytest.mark.parametrize(
     "arguments",
     [
@@ -381,6 +492,7 @@ def test_tui_daemon_client_rejects_scanner_selectors(
         "--daemon-socket-path",
         "--daemon-event-socket-path",
         "--daemon-pcmu-socket-path",
+        "--remote-profile",
     ],
 )
 def test_tui_daemon_options_require_explicit_mode(

@@ -7,6 +7,10 @@ from typing import Protocol
 
 from .audio import AudioChunk, AudioChunkHandler
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_remote_reconnect import (
+    DaemonRemoteReconnectPolicy,
+    daemon_remote_error_is_reconnectable,
+)
 from .pcmu_subscriptions import PcmuPacketDelivery
 
 logger = logging.getLogger(__name__)
@@ -16,6 +20,7 @@ class _DaemonPcmuReceiver(Protocol):
     """Minimal daemon PCMU client contract required by the audio adapter."""
 
     location: DaemonSocketLocation | None
+    sanitizes_private_state: bool
 
     @property
     def connected(self) -> bool: ...
@@ -98,8 +103,29 @@ class _MutableDaemonPcmuAudioStatistics:
 class DaemonPcmuAudioTransport:
     """Expose daemon-owned PCMU deliveries through the AudioTransport contract."""
 
-    def __init__(self, client: _DaemonPcmuReceiver) -> None:
+    def __init__(
+        self,
+        client: _DaemonPcmuReceiver,
+        *,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
+    ) -> None:
+        if reconnect_policy is not None and not isinstance(
+            reconnect_policy,
+            DaemonRemoteReconnectPolicy,
+        ):
+            raise TypeError(
+                "Daemon PCMU reconnect policy must be "
+                "DaemonRemoteReconnectPolicy or None."
+            )
+        remote = getattr(client, "sanitizes_private_state", None) is True
+        if reconnect_policy is not None and not remote:
+            raise ValueError(
+                "Daemon PCMU reconnect policy is available only for "
+                "authenticated remote transports."
+            )
         self.client = client
+        self.sanitizes_private_state = remote
+        self.reconnect_policy = reconnect_policy
         self._lifecycle_lock = threading.RLock()
         self._state_lock = threading.RLock()
         self._statistics_lock = threading.RLock()
@@ -193,20 +219,49 @@ class DaemonPcmuAudioTransport:
 
     def _receive_loop(self) -> None:
         current = threading.current_thread()
+        reconnect_attempt = 0
         try:
             while not self._stop.is_set():
                 try:
                     delivery = self.client.receive()
-                except Exception:
+                except Exception as error:
                     if self._stop.is_set():
                         break
                     with self._statistics_lock:
                         self._statistics.receive_errors += 1
-                    logger.exception(
-                        "Daemon PCMU audio receive failed endpoint=%s",
-                        self.endpoint,
+                    if not self.sanitizes_private_state:
+                        logger.exception(
+                            "Daemon PCMU audio receive failed endpoint=%s",
+                            self.endpoint,
+                        )
+                    policy = self.reconnect_policy
+                    if (
+                        policy is None
+                        or reconnect_attempt >= policy.attempts
+                        or not daemon_remote_error_is_reconnectable(error)
+                    ):
+                        if self.sanitizes_private_state:
+                            logger.warning(
+                                "Authenticated remote daemon PCMU audio stopped "
+                                "after a non-reconnectable or exhausted failure."
+                            )
+                        break
+                    reconnect_attempt += 1
+                    self.client.close()
+                    if self._stop.wait(policy.delay(reconnect_attempt)):
+                        break
+                    continue
+
+                if reconnect_attempt:
+                    reconnect_attempt = 0
+                    with self._state_lock:
+                        self._endpoint = None
+                    with self._statistics_lock:
+                        self._statistics.first_stream_sequence = None
+                        self._statistics.last_stream_sequence = None
+                    logger.info(
+                        "Authenticated remote daemon PCMU audio reconnected."
                     )
-                    break
 
                 if self._stop.is_set():
                     break
