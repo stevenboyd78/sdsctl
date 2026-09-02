@@ -34,34 +34,38 @@ The Python implementation retains the historical public class name
 `DaemonReadOnlyApi` for compatibility even though version 1 now advertises both
 read-only and control operations.
 
-Milestone 32.1 begins transport separation without exposing a network service.
+Milestone 32.1 adds transport separation without exposing a packaged network
+service by default.
 `DaemonApiClient` now consumes the public `DaemonClientTransport` connection
 contract. Passing the existing `DaemonSocketLocation` constructs a
 `UnixDaemonClientTransport` automatically, preserving every local path,
 permission, timeout, error, framing, and protocol behavior. A custom transport
 may be supplied to deterministic application code, but the packaged CLI and TUI
-still resolve only private Unix-domain sockets. No TCP listener, TLS endpoint,
-credential, port, remote profile, or Home Assistant port mapping is available in
-this foundation slice.
+still resolve only private Unix-domain sockets. No CLI option, remote profile,
+container port, Home Assistant App mapping, or automatically started TCP service
+is available in this foundation slice.
 
 The server side now consumes the public `DaemonServerListener` and
 `DaemonServerAcceptor` contracts. The existing `DaemonSocketListener` satisfies
-those contracts as the only concrete runtime implementation. This moves
+those contracts as the default concrete runtime implementation. This moves
 transport-specific startup, acceptance, and cleanup behind a bounded seam so a
-future authenticated listener can return transport-ready streams without
-changing daemon request dispatch. It does not make a network listener
-constructible or configurable.
+separately constructed authenticated listener can return transport-ready
+streams without changing local daemon behavior. The server now preserves a
+transport-owned peer context through its client worker and lets that context
+apply authorization before request dispatch. Ordinary Unix peer addresses do
+not implement that policy hook, so the private local path is unchanged.
 
 The configuration foundation adds a strict, disabled-by-default
 [`daemon-remote.toml` configuration and filesystem preflight](daemon-remote.md).
 It models exact non-public binds, TLS file references, independently revocable
-client identities, and `observe`/`control` authorization scopes without reading
-secret contents or opening a socket. The daemon command does not consume that
-configuration yet, so no TCP/TLS listener, client credential, CLI option,
-container port, or Home Assistant App mapping is available.
+client identities, and `observe`/`control` authorization scopes. The explicit
+`DaemonRemoteTcpListener` constructor preflights and loads that material before
+binding exactly the configured address and port. The daemon command does not
+construct the listener yet, so no TCP/TLS listener, client credential, CLI
+option, container port, or Home Assistant App mapping is active.
 
-The authentication foundation also defines an inert, versioned
-challenge/proof contract for that future transport. A fresh server nonce and
+The authentication foundation also defines a versioned challenge/proof
+contract for the explicit transport. A fresh server nonce and
 client nonce are bound with the client ID into a canonical HMAC-SHA256
 transcript. Single-use sessions reject replay, the active registry performs
 constant-time comparisons across every active credential, and successful proof
@@ -70,14 +74,27 @@ loader requires an exact 32-byte base64url secret in a non-symlink regular file
 with POSIX mode `0600`, using descriptor and path identity checks to detect
 replacement or mutation.
 
-The inert direct-TLS admission layer can now consume one already accepted
-socket, require TLS 1.3 with the configured server identity, and run that exact
-single-use exchange before returning a transport-ready stream. Its opaque peer
-result carries the authenticated identity and authoritative scopes without a
-private address or secret. Plaintext and failed peers are closed. This layer
-does not bind a TCP socket and is not wired into daemon startup. A bounded
-concurrent listener and authorization before request dispatch remain mandatory
-before a remote listener can exist.
+The direct-TLS admission layer consumes one already accepted
+socket, requires TLS 1.3 with the configured server identity, and runs that exact
+single-use exchange before returning a transport-ready stream. One absolute
+deadline covers the handshake and authentication frame, preventing a byte-at-a-
+time peer from extending its admission lifetime. Its opaque peer result carries
+the authenticated identity and authoritative scopes without a private address
+or secret. Plaintext and failed peers are closed.
+
+The separately constructed `DaemonRemoteTcpListener` binds only the exact
+configured IPv4 or IPv6 address, forces IPv6-only behavior for IPv6 sockets,
+and never falls back to a wildcard. Bounded concurrent admission workers and a
+bounded authenticated-client queue isolate silent, malformed, and slow peers.
+Only successfully authenticated TLS streams reach `DaemonApiServer`.
+
+The authenticated peer then invokes the API's fail-closed authorized entry
+point. `observe` exposes negotiation, ping, sanitized runtime/scanner state, and
+audio health. The private scanner endpoint is removed. `control` adds only the
+existing typed scanner-control operations. Neither scope admits recording
+start, stop, inventory, or status operations. Capability responses are filtered
+to the exact operations available to that peer. The listener is not wired into
+daemon startup or any deployment metadata yet.
 
 ## Starting the API
 
@@ -426,6 +443,7 @@ Version 1 defines these stable error codes:
 - `unsupported_protocol`
 - `unsupported_version`
 - `unknown_operation`
+- `authorization_denied`
 - `invalid_parameters`
 - `control_busy`
 - `control_unavailable`
@@ -443,6 +461,7 @@ Important control classifications are:
 
 | Code | Meaning |
 | --- | --- |
+| `authorization_denied` | An authenticated transport peer lacks authority for the requested operation |
 | `control_busy` | Another scanner mutation is already in progress |
 | `control_unavailable` | Runtime or required connection state is unavailable |
 | `unsupported_operation` | Scanner model, capability, or transport cannot safely perform the operation |

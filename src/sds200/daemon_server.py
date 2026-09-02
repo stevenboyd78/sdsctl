@@ -10,7 +10,11 @@ from time import monotonic
 from typing import Protocol
 
 from .daemon_api import DaemonApiErrorCode, DaemonApiResponse
-from .daemon_transport import DaemonServerAcceptor, DaemonServerListener
+from .daemon_transport import (
+    DaemonServerAcceptor,
+    DaemonServerListener,
+    DaemonServerPeerContext,
+)
 from .exceptions import DaemonIpcError
 
 logger = logging.getLogger(__name__)
@@ -283,7 +287,7 @@ class DaemonApiServer:
         try:
             while not self._stop_event.is_set():
                 try:
-                    client, _ = listener_socket.accept()
+                    client, peer = listener_socket.accept()
                 except TimeoutError:
                     continue
                 except OSError as error:
@@ -292,12 +296,16 @@ class DaemonApiServer:
                     self._record_error(error)
                     return
 
-                self._admit_client(client)
+                self._admit_client(client, peer)
         finally:
             with self._state_lock:
                 self._active = False
 
-    def _admit_client(self, client: socket_module.socket) -> None:
+    def _admit_client(
+        self,
+        client: socket_module.socket,
+        peer: object,
+    ) -> None:
         try:
             client.settimeout(self.client_timeout)
         except OSError as error:
@@ -316,7 +324,7 @@ class DaemonApiServer:
                 sequence = self._accepted_clients + 1
                 worker = threading.Thread(
                     target=self._serve_client,
-                    args=(client,),
+                    args=(client, peer),
                     name=f"daemon-api-client-{sequence}",
                     daemon=True,
                 )
@@ -334,7 +342,11 @@ class DaemonApiServer:
         if start_error is not None:
             self._record_error(start_error)
 
-    def _serve_client(self, client: socket_module.socket) -> None:
+    def _serve_client(
+        self,
+        client: socket_module.socket,
+        peer: object,
+    ) -> None:
         buffer = bytearray()
         receive_size = min(
             _DAEMON_API_RECV_BYTES,
@@ -366,7 +378,7 @@ class DaemonApiServer:
                     if len(frame) > self.max_request_bytes:
                         self._send_oversized_request(client)
                         return
-                    if not self._dispatch_frame(client, frame):
+                    if not self._dispatch_frame(client, frame, peer):
                         return
         finally:
             _close_client(client)
@@ -377,12 +389,16 @@ class DaemonApiServer:
         self,
         client: socket_module.socket,
         frame: bytes,
+        peer: object,
     ) -> bool:
         with self._state_lock:
             self._requests += 1
 
         try:
-            response = self.api.handle_json_line(frame)
+            if isinstance(peer, DaemonServerPeerContext):
+                response = peer.handle_daemon_api_json_line(self.api, frame)
+            else:
+                response = self.api.handle_json_line(frame)
         except Exception as error:
             self._record_error(error)
             response = DaemonApiResponse.failure(

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from pathlib import Path
+from time import monotonic
 
 from .daemon_remote import (
     DaemonRemoteAuthorizationScope,
@@ -180,13 +181,14 @@ class DaemonRemoteServerTlsAdmission:
         secured: ssl.SSLSocket | None = None
         tls_established = False
         admitted = False
+        deadline = monotonic() + self.handshake_timeout
         try:
             secured = self.context.wrap_socket(
                 stream,
                 server_side=True,
                 do_handshake_on_connect=False,
             )
-            secured.settimeout(self.handshake_timeout)
+            secured.settimeout(_remaining_admission_seconds(deadline))
             secured.do_handshake()
             tls_established = True
             tls_version = secured.version()
@@ -196,10 +198,14 @@ class DaemonRemoteServerTlsAdmission:
                 )
 
             session = DaemonRemoteAuthenticationSession(self.registry)
+            secured.settimeout(_remaining_admission_seconds(deadline))
             secured.sendall(session.challenge.to_json_line())
-            request = _receive_authentication_frame(secured)
+            request = _receive_authentication_frame(secured, deadline=deadline)
             identity = session.authenticate(request)
-            secured.sendall(DaemonRemoteAuthenticationResult.success(identity).to_json_line())
+            secured.settimeout(_remaining_admission_seconds(deadline))
+            secured.sendall(
+                DaemonRemoteAuthenticationResult.success(identity).to_json_line()
+            )
             admitted = True
             return secured, DaemonRemoteAuthenticatedPeer(
                 identity=identity,
@@ -213,10 +219,20 @@ class DaemonRemoteServerTlsAdmission:
             ) from error
         except DaemonRemoteTlsError:
             raise
-        except (ssl.SSLError, TimeoutError) as error:
-            raise DaemonRemoteTlsError(
-                DaemonRemoteTlsErrorReason.TLS_HANDSHAKE_FAILED
-            ) from error
+        except TimeoutError as error:
+            reason = (
+                DaemonRemoteTlsErrorReason.AUTHENTICATION_FAILED
+                if tls_established
+                else DaemonRemoteTlsErrorReason.TLS_HANDSHAKE_FAILED
+            )
+            raise DaemonRemoteTlsError(reason) from error
+        except ssl.SSLError as error:
+            reason = (
+                DaemonRemoteTlsErrorReason.TRANSPORT_FAILED
+                if tls_established
+                else DaemonRemoteTlsErrorReason.TLS_HANDSHAKE_FAILED
+            )
+            raise DaemonRemoteTlsError(reason) from error
         except OSError as error:
             reason = (
                 DaemonRemoteTlsErrorReason.TRANSPORT_FAILED
@@ -229,9 +245,15 @@ class DaemonRemoteServerTlsAdmission:
                 _close_stream(secured if secured is not None else stream)
 
 
-def _receive_authentication_frame(stream: ssl.SSLSocket) -> bytes:
+def _receive_authentication_frame(
+    stream: ssl.SSLSocket,
+    *,
+    deadline: float | None = None,
+) -> bytes:
     frame = bytearray()
     while len(frame) <= DAEMON_REMOTE_AUTH_MAX_FRAME_BYTES:
+        if deadline is not None:
+            stream.settimeout(_remaining_admission_seconds(deadline))
         chunk = stream.recv(1)
         if not chunk:
             raise DaemonRemoteAuthenticationError(
@@ -286,6 +308,13 @@ def _positive_timeout(value: object) -> float:
             "Remote daemon TLS handshake timeout must be finite and greater than zero."
         )
     return normalized
+
+
+def _remaining_admission_seconds(deadline: float) -> float:
+    remaining = deadline - monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Remote daemon TLS admission deadline expired.")
+    return remaining
 
 
 def _close_stream(stream: socket_module.socket) -> None:

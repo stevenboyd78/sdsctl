@@ -3,14 +3,15 @@
 Milestone 32.1 is building an authenticated network transport for thin CLI and
 TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
 remain the default. This page describes the current configuration, security
-preflight, authentication protocol, and inert direct-TLS admission layer; it
-does **not** announce an available remote listener.
+preflight, authentication protocol, direct-TLS admission, exact-address TCP
+listener, and operation authorization boundary; it does **not** announce a
+packaged remote service.
 
-The packaged `sdsctl daemon` command does not yet read this file, open a TCP
-socket, run the authentication handshake, publish a container port, or add a
-Home Assistant App port. The current model, handshake objects, and TLS admission
-object exist so those later runtime steps cannot define a weaker configuration
-boundary by accident.
+The packaged `sdsctl daemon` command does not yet read this file, construct the
+listener, publish a container port, or add a Home Assistant App port. The
+current listener is an explicit Python construction boundary so later startup
+and deployment steps cannot define weaker bind, admission, or authorization
+behavior by accident.
 
 ## Default behavior
 
@@ -44,9 +45,8 @@ silently becoming reachable after an unrelated change.
 
 ## Configuration shape
 
-The following is a shape example for review and preflight only. It does not
-make the remote service constructible in the current release or development
-branch.
+The following is the configuration shape consumed by the explicit listener
+constructor. Merely creating this file does not start or publish a service.
 
 ```toml
 version = 1
@@ -71,7 +71,7 @@ revoked = true
 ```
 
 The default modeled port is `50443` when an enabled listener table omits
-`port`. It is configurable, but the future runtime must publish only that one
+`port`. It is configurable, but any packaged runtime must publish only that one
 selected TCP port. Scanner control UDP `50536`, scanner audio UDP `50000`, the
 native HTTPS dashboard port, and Home Assistant Ingress are separate services
 with separate trust boundaries.
@@ -123,15 +123,16 @@ The two modeled authorization scopes are:
 Every identity must include `observe`; `control` alone is invalid. Neither scope
 grants raw scanner keys, generic MQTT commands, filesystem access, recording
 contents, Favorites bytes, provider credentials, Home Assistant tokens, or
-Ingress identifiers. Authentication returns scopes only after successful proof,
-but transport-level enforcement before operation dispatch remains a later
-Milestone 32.1 slice.
+Ingress identifiers. Authentication returns scopes only after successful proof.
+The explicit listener then enforces the authenticated scope before operation
+validation or dispatch, filters advertised capabilities to that same scope, and
+removes the scanner endpoint from otherwise permitted remote responses.
 
 ## Filesystem preflight
 
-`preflight_daemon_remote_configuration()` checks filesystem metadata before a
-future listener could open a socket. It performs no network operation and does
-not read certificate, private-key, or credential contents.
+`preflight_daemon_remote_configuration()` checks filesystem metadata before the
+explicit listener opens a socket. It performs no network operation and does not
+read certificate, private-key, or credential contents.
 
 For an enabled configuration, preflight requires:
 
@@ -155,12 +156,12 @@ errors do not echo secret contents, private endpoint values, or secret paths.
 ## Authentication contract
 
 The `sds200.daemon_remote_auth` module defines the version 1 authentication
-frames and verification behavior for a future direct-TLS transport. Constructing
-or using those protocol objects performs no network I/O, and no packaged command
+frames and verification behavior for the direct-TLS transport. Constructing or
+using those protocol objects performs no network I/O, and no packaged command
 invokes them yet.
 
 After a client has authenticated the server through validated direct TLS, the
-future listener can create one fresh 32-byte server nonce. The client answers
+listener creates one fresh 32-byte server nonce. The client answers
 with its configured ID, a fresh 32-byte client nonce, and an HMAC-SHA256 proof
 over a canonical transcript containing the exact protocol, version, algorithm,
 client ID, and both nonces. Frames are strict, versioned UTF-8 JSON Lines no
@@ -192,32 +193,47 @@ or private paths.
 The `sds200.daemon_remote_tls` admission object loads the preflighted server
 certificate, mode-`0600` private key, and active credential registry. It requires
 TLS 1.3, rechecks the certificate and private-key filesystem snapshots around
-context loading, applies a bounded handshake timeout, and begins the one-use
-challenge only after the TLS handshake succeeds. Plaintext, silent, malformed,
+context loading, applies one absolute deadline across the TLS handshake and
+authentication frame, and begins the one-use challenge only after the TLS
+handshake succeeds. Plaintext, silent, byte-at-a-time, malformed,
 oversized, unauthenticated, and abruptly disconnected peers are closed with
 redacted failure behavior. Successful admission returns the TLS stream plus an
 opaque peer carrying the authenticated ID and authoritative scopes.
 
-This object consumes only an already accepted stream. It does not create or bind
-a socket, advertise an endpoint, enter daemon startup, or dispatch an API
-operation. The future listener must bound concurrent admission work so a slow
-TLS peer cannot block another client. The API server must then enforce the
-returned scopes at the daemon-operation boundary before the stream becomes
-usable.
+The `sds200.daemon_remote_server` layer binds one exact configured address and
+port. IPv6 listeners are explicitly IPv6-only. It has separate bounds for the
+kernel backlog, concurrent TLS admissions, and authenticated streams awaiting
+the daemon API server. A slow or silent handshake occupies only one bounded
+admission slot; it does not block another slot. Capacity excess, failed
+authentication, listener failure, and shutdown all close their owned streams.
+Redacted snapshots include only address family, port, capacity, counts, and
+stable failure classes—not the private address, peer, client ID, or secret path.
+
+Only authenticated streams are delivered to the daemon API server, together
+with a transport-owned peer context. That context invokes a distinct
+authorization entry point before dispatch. An `observe` identity receives
+negotiation, ping, sanitized runtime/scanner state, and audio health. The
+private scanner endpoint is removed from state responses. A `control` identity
+adds the existing typed scanner controls. Recording status, start, stop, and
+inventory remain unavailable to both scopes because remote recording contents
+are outside this milestone's authority. Negotiated capabilities are filtered to
+the peer's exact operation set, and a denied operation returns
+`authorization_denied` without reaching runtime dispatch.
+
+These objects still do not enter daemon startup, create a client transport,
+publish a deployment port, or activate Home Assistant configuration.
 
 ## What remains before remote use
 
-This foundation is not sufficient for a remote connection. Milestone 32.1 must
-still add and validate, in bounded slices:
+This foundation is not sufficient for a supported packaged remote deployment.
+Milestone 32.1 must still add and validate, in bounded slices:
 
-1. a bounded exact-address TCP listener that isolates concurrent TLS admission
-   work and passes only authenticated streams to the existing server seam;
-2. transport-level scope enforcement before daemon operation dispatch;
-3. operational credential rotation and revocation without secret disclosure;
-4. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
-5. one shared remote client transport for CLI and TUI consumers;
-6. explicit Docker/Compose and Home Assistant App port metadata; and
-7. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
+1. operational credential rotation and revocation without secret disclosure;
+2. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
+3. one shared remote client transport for CLI and TUI consumers;
+4. explicit opt-in daemon startup and diagnostics;
+5. explicit Docker/Compose and Home Assistant App port metadata; and
+6. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
    and remote-TUI acceptance.
 
 Until those steps are complete and released, use the private local daemon

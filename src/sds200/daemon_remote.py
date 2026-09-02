@@ -1,8 +1,8 @@
-"""Fail-closed configuration for a future authenticated remote daemon listener.
+"""Fail-closed configuration for an authenticated remote daemon listener.
 
-This module deliberately contains no socket or TLS implementation.  It models
-and preflights the security material that a later transport will require while
-the packaged daemon remains local-only.
+This module contains no socket or TLS implementation.  It models and preflights
+the security material consumed by the separately constructed remote listener
+while the packaged daemon remains local-only.
 """
 
 from __future__ import annotations
@@ -164,7 +164,7 @@ class DaemonRemoteClientIdentity:
 
 @dataclass(frozen=True, slots=True)
 class DaemonRemoteListenerConfiguration:
-    """Validated configuration for the not-yet-constructible remote listener."""
+    """Validated configuration for an explicitly constructed remote listener."""
 
     enabled: bool = False
     bind_address: str | None = field(default=None, repr=False)

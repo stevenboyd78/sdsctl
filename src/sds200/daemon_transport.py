@@ -32,6 +32,18 @@ class DaemonServerAcceptor(Protocol):
 
 
 @runtime_checkable
+class DaemonServerPeerContext(Protocol):
+    """Apply transport-owned policy before one daemon API request dispatch."""
+
+    def handle_daemon_api_json_line(
+        self,
+        api: object,
+        data: bytes | str,
+    ) -> bytes:
+        """Return one response without bypassing transport authorization."""
+
+
+@runtime_checkable
 class DaemonServerListener(Protocol):
     """Own one daemon listener and its transport-specific lifecycle."""
 

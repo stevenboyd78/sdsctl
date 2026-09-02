@@ -9,6 +9,7 @@ import subprocess
 import threading
 from pathlib import Path
 from queue import Queue
+from time import monotonic, sleep
 from typing import cast
 
 import pytest
@@ -322,6 +323,36 @@ def test_plaintext_and_silent_peers_never_reach_authentication(
         assert "GET" not in str(failure)
 
 
+def test_tls_admission_uses_one_deadline_for_handshake_and_authentication(
+    tmp_path: Path,
+) -> None:
+    configuration, certificate = _configuration(tmp_path)
+    admission = DaemonRemoteServerTlsAdmission.from_configuration(
+        configuration,
+        handshake_timeout=0.12,
+    )
+    client_raw, server_raw = socket.socketpair()
+    started = monotonic()
+    thread, outcome = _start_admission(admission, server_raw)
+    client = _open_client(_client_context(certificate), client_raw)
+    _receive_line(client)
+
+    for chunk in (b"{", b'"', b"c", b"l", b"i", b"e"):
+        sleep(0.04)
+        try:
+            client.sendall(chunk)
+        except OSError:
+            break
+    client.close()
+    thread.join(0.5)
+
+    assert thread.is_alive() is False
+    assert monotonic() - started < 0.4
+    failure = outcome.get_nowait()
+    assert isinstance(failure, DaemonRemoteTlsError)
+    assert failure.reason is DaemonRemoteTlsErrorReason.AUTHENTICATION_FAILED
+
+
 def test_tls_configuration_errors_are_uniform_and_redacted(tmp_path: Path) -> None:
     credential = tmp_path / "private-client-name.secret"
     _write_credential(credential)
@@ -477,3 +508,8 @@ def test_tls_file_snapshot_rejects_symlink_and_nonprivate_key(tmp_path: Path) ->
 def test_tls_constants_are_explicit() -> None:
     assert DAEMON_REMOTE_TLS_VERSION == "TLSv1.3"
     assert DAEMON_REMOTE_TLS_DEFAULT_HANDSHAKE_TIMEOUT == 5.0
+
+
+def test_expired_total_admission_deadline_is_rejected() -> None:
+    with pytest.raises(TimeoutError, match="deadline expired"):
+        remote_tls._remaining_admission_seconds(monotonic() - 1.0)
