@@ -11,118 +11,134 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.1 — Authenticated remote daemon client/server foundation
+### Milestone 32.2 — Packaged remote daemon startup and client profiles
 
-Milestone 31.2 is closed through reviewed pull request 218, merge commit
-`8ae60aa4a8ed02a4e3f2a6657c4f8216634e52be`, the immutable annotated
-`v0.27.0` tag, complete public-artifact verification, repository-managed Home
-Assistant OS acceptance, reviewed wiki publication, a normal Latest GitHub
-Release, and exact cleanup of its release branch and temporary validation
-artifacts. Version 0.27.0 publishes bounded elapsed-time Waterfall history and
-an optional display-only frequency pointer while retaining legacy frame-depth
-configurations and the relative, uncalibrated, single-owner data contract.
+Milestone 32.1 is closed through reviewed pull requests 219 and 220 and merge
+commits `f2783eb06e901cb05a37bcb06446db951aa658a7` and
+`db6720ad9e42d05b63b9c6eedf02f8186163a260`. Its complete static, test,
+documentation, distribution, CodeQL, generic-image, and Home Assistant App image
+validation passed before and after merge. The source branches were then removed
+locally and remotely without changing any unrelated branch. The completed
+foundation defines strict configuration and filesystem preflight, TLS 1.3
+server admission, challenge/proof authentication, exact-address bounded
+listening, atomic credential generations, least-privilege authorization,
+generation-linked observation leases, strict service selection, and one shared
+local-or-remote transport boundary for API, event, Waterfall, accepted-PCMU, and
+TUI consumers. It deliberately remains an explicit Python construction boundary
+rather than a packaged network service.
 
-Milestone 32.1 establishes the first supported authenticated network transport
-for remote daemon-backed clients. The primary topology is one scanner-owning
-daemon, running on an ordinary host, in a generic container, or in the Home
-Assistant App, with multiple independently reconnecting thin clients. A
-Raspberry Pi or other display may open the existing authenticated HTTPS web
-dashboard in a kiosk browser or run a TUI backed by the new remote daemon-client
-transport; no display client opens its own scanner control, PSI, Waterfall, or
-RTSP/RTP audio session.
+Milestone 32.2 makes that reviewed transport usable from an ordinary supported
+Python installation without weakening any Milestone 32.1 invariant. Wire the
+existing remote listener, credential authority, observation broker, and service
+router into `sdsctl daemon` lifecycle only when one strict versioned
+`daemon-remote.toml` document explicitly enables it. An absent or explicitly
+disabled document must preserve the current private Unix-domain sockets and open
+no TCP listener. Configuration, TLS material, and every active credential must
+pass the existing preflight before a host-facing socket is bound; startup
+failure must close every partially constructed remote object while preserving
+normal daemon shutdown and scanner ownership semantics.
 
-Existing private Unix-domain sockets remain the default and continue to serve
-same-host clients without network configuration. Every host-facing TCP listener
-is disabled unless explicitly enabled, binds one operator-selected private,
-unique-local, or link-local address rather than a wildcard, uses authenticated
-encryption, and publishes one documented, configurable port. A process inside
-an isolated container may bind its container interface only behind one explicit
-orchestrator host-port mapping while host networking remains disabled. Reject
-anonymous access, plaintext fallback, wildcard host publication, public or
-multicast discovery, credentials in URLs, and implicit exposure caused only by
-enabling container host networking. Preserve bounded framing, request IDs,
-protocol-version negotiation, timeouts, backpressure, redacted failures, and
-fail-closed behavior before dispatching any existing daemon operation.
+The packaged daemon must continue to own exactly one scanner command transport,
+one PSI loop, one demand-driven Waterfall session, and one RTSP/RTP audio input.
+The remote router may consume only the same daemon-owned API, event, accepted-
+PCMU, and Waterfall publishers used by local clients. Starting, stopping, or
+disconnecting a remote peer must acquire or release only that peer's bounded
+connection and observation leases. Listener failure must be observable through
+redacted daemon diagnostics and must not silently fall back to plaintext,
+another address, a wildcard bind, or an unconfigured port.
 
-Define least-privilege client authorization at the transport boundary. A
-display-only client may observe bounded state, ordered events, diagnostics, and
-demand-driven relative Waterfall data without control authority. Explicit
-operator capability may additionally use the existing typed semantic controls;
-it must not expose unrestricted raw scanner keys, the generic MQTT command
-envelope, filesystem paths, Home Assistant tokens, Ingress identifiers, scanner
-addresses, recording contents, Favorites bytes, or provider credentials. Client
-identities must be independently revocable and safe to provision in mode-0600
-configuration or an equivalent platform secret store without logging secret
-material.
+Integrate the existing all-or-nothing credential reload boundary with the
+daemon's controlled reload lifecycle. A successful reload must atomically
+install the complete replacement registry, advance its generation, and close
+all prior-generation API and observation connections. A failed reload must
+retain the last-known-good registry and active generation. Bind address, port,
+certificate, and private-key changes continue to require a daemon restart; no
+reload path may partially replace server identity or listener ownership.
 
-Create one transport-neutral daemon-client abstraction shared by local and
-remote CLI/TUI consumers rather than duplicating scanner or application
-semantics. Remote startup must validate the server identity and negotiated
-protocol before presenting cached state. Disconnect, stale-event detection,
-ordered resynchronization, stream-generation changes, credential rotation, and
-server restart must recover without a client restart where safe. Isolate slow,
-malformed, unauthenticated, and abruptly disconnected peers with bounded
-per-client queues and leases so one client cannot block the daemon or another
-display.
+Add one dedicated, strict, versioned remote-client profile document containing
+named profiles. Each profile may reference only the existing literal private or
+link-local server address, selected port, expected TLS server hostname, absolute
+CA certificate file, client ID, and absolute mode-`0600` credential file.
+Credential bytes remain in the referenced secret file and must never enter TOML,
+command-line arguments, environment variables, process listings, logs, object
+representations, or diagnostic output. Reject unknown keys, duplicate profile
+names, unsafe paths or modes, public or wildcard endpoints, and concurrently
+replaced trust or credential files with the existing fail-closed behavior.
 
-Add an advanced Home Assistant App configuration without weakening Ingress.
-Authenticated Ingress remains the default dashboard path and its trusted
-Supervisor listener is never published as a general LAN port. When an operator
-opts in, App metadata and documentation may expose only the dedicated remote
-daemon-client port and the existing native authenticated HTTPS dashboard port.
-The Home Assistant-only lifecycle workspace remains available solely through
-Ingress, even when the native dashboard is reachable directly. Retain the
-existing UDP 50000 scanner-to-daemon RTP mapping as an input rather than
-misrepresenting it as a client/server port.
+Expose one explicit named-profile selector to `sdsctl daemon-client` and to
+`sdsctl tui --daemon-client`. Profile selection must be mutually exclusive with
+local socket overrides and must never occur merely because a profile file is
+present. Without the selector, all commands retain their current local Unix-
+socket defaults byte for byte. The selected profile must create independent
+service transports for API, ordered events, Waterfall, and optional audio while
+presenting only the fixed redacted remote endpoint label. Display-only profiles
+must remain unable to issue controls; a control-capable profile may use only the
+existing typed semantic controls advertised by the authenticated server.
 
-Document beginner and advanced deployment recipes for an ordinary Python host,
-Docker or Compose, and Home Assistant OS. Include firewall direction, TLS trust
-and credential provisioning, port mapping, revocation, service restart,
-diagnostics, and a concrete one-daemon/multiple-display example. The documented
-Raspberry Pi acceptance topology must cover at least two simultaneous display
-clients at the 800 by 480 reference size, including one remote TUI and one kiosk
-browser, plus an independent administrative client. Make clear that direct
-browser access uses the daemon host's native HTTPS dashboard while the TUI uses
-the remote daemon-client transport.
+Remote CLI and TUI startup must validate the TLS server identity, credential
+proof, authoritative scope set, protocol version, and exact service before
+presenting daemon state. Long-lived TUI API, event, Waterfall, and audio
+consumers must use bounded reconnect and ordered resynchronization behavior:
+discard stale state after a disconnect or credential-generation change, accept
+the new authoritative snapshot before later events, clear invalid stream state,
+and avoid a hidden retry loop after deterministic configuration or
+authorization failure. Independent service recovery must not create another
+scanner-side session or block a healthy peer.
 
-Add deterministic unit, integration, hostile-peer, real-browser, container,
-and Home Assistant App coverage for disabled-by-default listeners, exact bind
-policy, authentication and revocation, authorization scopes, protocol mismatch,
-malformed and oversized frames, replay or duplicate requests, connection and
-queue limits, slow consumers, fanout ordering, reconnect, shutdown, and log and
-diagnostic redaction. Physical acceptance must prove all concurrent clients
-share exactly one scanner owner, one PSI stream, one demand-driven Waterfall
-session, and one daemon-owned RTSP/RTP audio input while independent client
-disconnects release only their own leases.
+Document beginner-oriented setup for an ordinary daemon host and one Raspberry
+Pi TUI client: certificate trust, independent credential provisioning, exact
+file permissions, firewall direction, explicit listener enablement, profile
+selection, health checks, credential rotation or revocation, daemon restart,
+and complete disablement. Examples must use private documentation placeholders,
+must not suggest copying the server private key, and must explain that a kiosk
+browser opens the daemon host's separately configured authenticated native HTTPS
+dashboard rather than the daemon-client port.
 
-The implemented foundation now includes the strict remote configuration and
-preflight model, versioned challenge/proof authentication, TLS 1.3 admission,
-exact-address bounded TCP listener, per-scope API authorization, and atomic
-credential generations. Credential reload constructs a complete replacement
-before commit, preserves the last-known-good registry on failure, and closes all
-prior-generation sessions on successful rotation or revocation. Authenticated
-observation leases now attach to the existing ordered-event, shared Waterfall,
-and accepted-PCMU publishers with aggregate and per-identity limits,
-source-specific redaction, independent release, slow-consumer isolation, and
-generation-linked invalidation. A strict post-authentication service-selection
-protocol now routes one TLS connection to the existing API, event, Waterfall,
-or accepted-PCMU service, and the shared daemon clients accept either their
-unchanged private Unix socket or the new TLS client transport. Server identity,
-credential proof, authoritative scopes, and exact service selection must all
-complete within one bounded connection deadline before existing service bytes
-are accepted. Remote API, event, Waterfall, audio, and TUI state reject leaked
-scanner endpoints and retain only the documented redacted endpoint label.
-These objects remain explicit construction boundaries and are not yet wired
-into packaged daemon or client startup, automatic selection, or deployment port
-metadata.
+Add deterministic configuration, CLI, lifecycle, hostile-input, and reconnect
+coverage. Prove absent and disabled configuration open no listener; enabled
+startup uses the exact configured address and port; local and remote clients may
+operate concurrently; scopes remain authoritative; reload success invalidates
+old connections; reload failure preserves them; slow or malformed peers remain
+isolated; shutdown leaves no worker or listener behind; and logs, errors,
+snapshots, help text, and command output disclose no private address, hostname,
+client ID, filesystem path, or credential material. Retain all existing Unix-
+socket, standalone TUI, scanner-control, event, Waterfall, PCMU, and package
+tests.
 
-Trusted reverse-proxy identity, Internet/public exposure, wildcard binding,
-third-party identity providers, browser-stored bearer credentials, automatic
-LAN discovery, multi-user administration, scanner sharing between multiple
-daemons, GUI implementation, and broader scanner-family validation remain
-outside Milestone 32.1. The milestone adds no scanner protocol, Favorites write,
-RadioReference execution, RF calibration, tuning-from-Waterfall, or Home
-Assistant resource-registration authority.
+This milestone does not publish a Docker, Compose, systemd, Home Assistant App,
+Ingress, native-dashboard, or firewall port and does not add automatic LAN
+discovery. Those deployment surfaces and the physical one-daemon/multiple-
+display acceptance topology remain later Milestone 32 slices after packaged
+ordinary-host startup is independently reviewed. Trusted reverse proxies,
+Internet/public exposure, wildcard binding, third-party identity providers,
+browser-held daemon credentials, GUI implementation, unrestricted raw scanner
+keys, recording contents, Favorites bytes, RadioReference execution, scanner
+sharing between daemons, and broader scanner-family validation remain outside
+Milestone 32.2.
+
+#### Closed Milestone 32.1 — Authenticated remote daemon client/server foundation
+
+Milestone 32.1 created the first supported transport and service foundation for
+authenticated thin clients sharing one scanner-owning daemon. The strict remote
+configuration and filesystem preflight model admits only an explicit private,
+unique-local, or link-local address, TLS 1.3 server identity, independently
+revocable mode-`0600` client credentials, and authoritative `observe` or
+`control` scopes. Versioned challenge/proof authentication, bounded admission,
+atomic credential generations, exact service selection, recursive response and
+event redaction, aggregate and per-identity limits, and generation-linked API,
+event, shared-Waterfall, and accepted-PCMU leases all fail closed without
+exposing private state.
+
+The existing API, event, Waterfall, PCMU, and TUI clients now share one
+transport-neutral local-or-remote construction boundary. Local Unix-domain
+sockets remain unchanged, and the explicit remote transport validates its CA,
+expected TLS hostname, client credential, authoritative scopes, and selected
+service within one absolute deadline without plaintext fallback. Remote state
+uses the fixed `sdsctl-remote-daemon` label and rejects nested endpoint, path,
+recording, token, credential, and secret leakage. Milestone 32.1 intentionally
+did not wire these objects into packaged daemon or client startup, deployment
+metadata, or port publication; Milestone 32.2 owns that next ordinary-host
+activation boundary.
 
 #### Closed Milestone 31.2 — v0.27.0 release and publication closure
 
