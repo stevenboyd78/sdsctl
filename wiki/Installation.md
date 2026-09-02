@@ -175,6 +175,55 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.27.0
+
+v0.27.0 publishes Milestones 31.1 and 31.2. It adds bounded 15-, 30-, and
+60-second Waterfall history modes to the authenticated web dashboard and the
+first-party Home Assistant Waterfall card while retaining compatible 60-,
+120-, and 240-frame configurations. It also adds an optional display-only
+frequency pointer that interpolates the scanner-reported span for inspection.
+The pointer does not tune, hold, search, change scanner span, or turn the
+relative and uncalibrated Waterfall into an RF measurement instrument.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the base package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.27.0"
+sdsctl --version
+```
+
+Install or upgrade every optional Python runtime interface with:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.27.0"
+python -m pip check
+sdsctl --version
+```
+
+Linux local playback still needs a working PortAudio runtime. See
+[Audio and recordings](Audio-and-Recordings) for the required operating-system
+package and verification procedure.
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.27.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release,
+but the exact version tag is recommended for controlled deployments.
+Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built and do
+not switch automatically to the Docker Hub image.
+
+The Home Assistant App version tracks 0.27.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, aggregate and individual card resource
+paths, and independently versioned card modules. Upgrade the repository-managed
+App only after the matching release images have published. The optional Core
+integration remains independently versioned at 0.1.5 and does not need
+replacement for this release.
+
 ## Upgrade to v0.26.1
 
 v0.26.1 publishes Milestones 30.1 and 30.2: the concise package README,

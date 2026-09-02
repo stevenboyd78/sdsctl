@@ -141,10 +141,23 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     assert (
-        "### Milestone 31.1 — Duration-based Waterfall history and frequency pointer"
+        "### Milestone 31.2 — v0.27.0 release and publication closure"
         in active_milestone
     )
     for required in (
+        "Milestone 31.1 is closed through reviewed pull request 216",
+        "ebcad4161376ba4c51af06665fd2c5cdb7080506",
+        "Synchronize the Python package metadata, import version, and Home Assistant App at 0.27.0",
+        "Home Assistant Core integration at 0.1.5",
+        "Before any release tag exists",
+        "must not publish release artifacts",
+        "one genuine annotated `v0.27.0` tag",
+        "configured trusted publisher",
+        "complete a clean repository-managed Home Assistant OS upgrade",
+        "published v0.26.1 to v0.27.0",
+        "Create the GitHub Release from the genuine tag",
+        "No new runtime capability enters this release-closure milestone",
+        "#### Closed Milestone 31.1 — Duration-based Waterfall history and frequency pointer",
         "Milestone 30.2 is closed through reviewed pull request 213",
         "9e693474e9bbd7c551a302b3c66df450a86011f9",
         "immutable `v0.26.1` tag",
@@ -344,25 +357,31 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v0261_release_documentation_names_current_generic_image() -> None:
+def test_v0270_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
+    containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
+    normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.26.1`" in readme
-    assert "theboyd78/sdsctl:0.26.1" in readme
+    assert "Version `0.27.0`" in readme
+    assert "bounded elapsed-time" in readme
+    assert "display-only frequency pointer" in readme
+    assert "theboyd78/sdsctl:0.27.0" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
-    for document in (deployment,):
-        assert "v0.26.1" in document
-        assert "theboyd78/sdsctl:0.26.1" in document
+    for document in (deployment, containers):
+        assert "theboyd78/sdsctl:0.27.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.26.1" in installation
-    assert 'python -m pip install --upgrade "sds200==0.26.1"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.26.1"' in installation
-    assert "docker pull theboyd78/sdsctl:0.26.1" in installation
+    assert "## Upgrade to v0.27.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.27.0"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.27.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.27.0" in installation
+    assert "15-, 30-, and 60-second Waterfall history modes" in normalized_installation
+    assert "compatible 60-, 120-, and 240-frame configurations" in normalized_installation
+    assert "does not tune, hold, search, change scanner span" in normalized_installation
     assert (
         "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
     )
@@ -370,19 +389,23 @@ def test_v0261_release_documentation_names_current_generic_image() -> None:
     assert "Core integration remains independently versioned at 0.1.5" in installation
 
 
-def test_v0261_home_assistant_release_gate_is_explicit() -> None:
+def test_v0270_home_assistant_release_gate_is_explicit() -> None:
     guide = _read("docs/home-assistant-app.md")
-    start = guide.index("### v0.26.1 release acceptance gate")
-    end = guide.index("\n### v0.26.0 release acceptance gate", start)
+    start = guide.index("### v0.27.0 release acceptance gate")
+    end = guide.index("\n### v0.26.1 release acceptance gate", start)
     release_gate = guide[start:end]
     normalized = " ".join(release_gate.split())
 
     for required in (
-        "genuine v0.26.1 tag",
+        "genuine v0.27.0 tag",
         "without a Local App, Local integration, retained share, private capture",
         "all twenty-four fixed MQTT Discovery components",
-        "aggregate plus retained individual first-party card resources",
-        "persistent recordings survive the upgrade",
+        "aggregate plus individual card resources",
+        "60-, 120-, and 240-frame Waterfall cards",
+        "15-, 30-, and 60-second choices",
+        "one shared scanner-side Waterfall session",
+        "pointer works across spectrum and history",
+        "does not tune, hold, search, change span",
         "independently versioned at 0.1.5",
         "does not require installation, replacement, key rotation",
         "only runtime owner of scanner control",

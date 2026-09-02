@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.27.0
+
+- Track the sdsctl v0.27.0 release while preserving the App name, slug, image
+  identity, MQTT identities, scanner ownership, persistent recordings, custom-
+  integration 0.1.5 artifact, and installed first-party custom elements.
 - Add an explicit elapsed-time alternative to the Waterfall card's compatible
   60-, 120-, and 240-frame history settings. The 15-, 30-, and 60-second modes
   remain capped at 240 frames and retain delivery gaps rather than stretching

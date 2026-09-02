@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-01
+
 ### Added
 
 - Add explicit 15-, 30-, and 60-second Waterfall history modes to the web
@@ -1650,7 +1652,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...v0.26.0
 [0.25.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.24.0...v0.25.0

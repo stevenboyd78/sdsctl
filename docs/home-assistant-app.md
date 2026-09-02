@@ -805,6 +805,44 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.27.0 release acceptance gate
+
+After the genuine v0.27.0 tag publishes the amd64, aarch64, and generic
+multi-architecture images, upgrade the repository-managed v0.26.1 App and
+record the exact platform, App image, and scanner versions used. The release
+gate must confirm:
+
+- the App reports 0.27.0 and uses the matching published image without a Local
+  App, Local integration, retained share, private capture, or development-source
+  ambiguity;
+- existing configuration, all twenty-four fixed MQTT Discovery components,
+  persistent recordings, Ingress, controls, browser audio, recording
+  finalization, saved playback, and aggregate plus individual card resources
+  survive the upgrade;
+- unchanged 60-, 120-, and 240-frame Waterfall cards remain compatible while a
+  duration card defaults to 30 seconds and supports the bounded 15-, 30-, and
+  60-second choices without stretching delivery gaps or accumulating a paused
+  backlog;
+- pause, resume, Clear, visibility changes, final-consumer cleanup, App restart,
+  and live scanner-span changes preserve one shared scanner-side Waterfall
+  session and recover with fresh bounded history rather than stale rows or a
+  catch-up burst;
+- the optional pointer works across spectrum and history with mouse, touch, and
+  keyboard input, follows validated live lower and upper span bounds, remains
+  display-only, and does not tune, hold, search, change span, or claim calibrated
+  RF power or frequency;
+- the optional Core integration remains independently versioned at 0.1.5 and
+  does not require installation, replacement, key rotation, reauthentication,
+  Core restart, or Core reload for this release; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, Waterfall polling, and RTSP/RTP audio.
+
+Remove any deliberately named release-validation component afterward and
+restore the published App as sole scanner owner. Retain no private capability,
+recording, address, scanner-programming, provider, credential, validation card,
+resource mutation, Local source, or browser-cache data in public release
+evidence.
+
 ### v0.26.1 release acceptance gate
 
 After the genuine v0.26.1 tag publishes the amd64, aarch64, and generic

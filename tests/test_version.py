@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.27.0]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.26.1...v0.27.0"
+        in changelog
+    )
+    assert (
         "[0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.26.0...v0.26.1"
         in changelog
@@ -232,5 +237,27 @@ def test_current_release_changelog_covers_v0261_installation_release() -> None:
         "PyPI now renders that same concise account",
         "350-line README ceiling",
         "validate documented Python extras against package metadata",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_release_changelog_covers_v027_waterfall_inspection() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.27.0] - ")
+    end = changelog.index("\n## [0.26.1]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "15-, 30-, and 60-second Waterfall history modes",
+        "monotonic receipt time",
+        "capped at 240 frames",
+        "optional display-only Waterfall frequency pointer",
+        "scanner-reported lower and upper bounds",
+        "without tuning, holding, searching, changing span",
+        "60-, 120-, and 240-frame configurations",
+        "new picker-created cards start with 30-second history",
+        "without accumulating a hidden backlog",
+        "remove retained history deterministically",
     ):
         assert required in release or required in normalized
