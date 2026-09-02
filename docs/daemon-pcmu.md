@@ -416,3 +416,11 @@ events without a gap, and 410 identical loss-free frames per PCMU client before
 clean `SIGTERM` shutdown and removal of all three sockets. The control path
 requires an initially unheld controllable channel and binds reversible navigation
 to the actual PSI-reported held selection.
+
+Milestone 32.1 adds an explicit-construction
+[authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
+over this same accepted-packet publisher. It preserves PCMU payload bytes, RTP
+continuity, and cumulative bounded-queue loss counters while replacing the
+scanner RTSP endpoint with `sdsctl-remote-daemon`. It never opens another RTSP
+or RTP session. The packaged daemon does not yet expose this lease on TCP, and
+the private local PCMU protocol remains unchanged.

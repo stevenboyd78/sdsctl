@@ -311,3 +311,11 @@ restart, resumed from the same daemon-owned recording state, and finalized
 normally. A separate daemon SIGTERM test finalized an active WAV and metadata
 before audio-runtime teardown, and the restarted daemon rediscovered that entry
 as playable.
+
+Milestone 32.1 adds an explicit-construction
+[authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
+over this same publisher. It preserves snapshot and sequence ordering but
+omits `recording.state` and recursively removes recording, scanner endpoint,
+filesystem, credential, token, secret, and last-error fields. The packaged
+daemon does not yet expose that lease on TCP; the private local event socket and
+its unchanged full-fidelity contract remain the default.

@@ -91,6 +91,8 @@ class DaemonApiErrorCode(StrEnum):
     UNSUPPORTED_PROTOCOL = "unsupported_protocol"
     UNSUPPORTED_VERSION = "unsupported_version"
     UNKNOWN_OPERATION = "unknown_operation"
+    AUTHORIZATION_DENIED = "authorization_denied"
+    AUTHENTICATION_EXPIRED = "authentication_expired"
     INVALID_PARAMETERS = "invalid_parameters"
     CONTROL_BUSY = "control_busy"
     CONTROL_UNAVAILABLE = "control_unavailable"
@@ -456,19 +458,31 @@ class DaemonReadOnlyApi:
         )
 
     def handle_payload(self, payload: object) -> DaemonApiResponse:
-        return self._handle_payload(payload, control_only=False)
+        return self._handle_payload(
+            payload,
+            control_only=False,
+            allowed_operations=None,
+            redacted_result_fields=frozenset(),
+        )
 
     def handle_control_payload(
         self,
         payload: object,
     ) -> DaemonApiResponse:
-        return self._handle_payload(payload, control_only=True)
+        return self._handle_payload(
+            payload,
+            control_only=True,
+            allowed_operations=None,
+            redacted_result_fields=frozenset(),
+        )
 
     def _handle_payload(
         self,
         payload: object,
         *,
         control_only: bool,
+        allowed_operations: frozenset[DaemonApiOperation] | None,
+        redacted_result_fields: frozenset[str],
     ) -> DaemonApiResponse:
         try:
             request = DaemonApiRequest.from_payload(payload)
@@ -502,6 +516,17 @@ class DaemonReadOnlyApi:
                 request.request_id,
                 DaemonApiErrorCode.UNKNOWN_OPERATION,
                 f"Unknown daemon API operation: {request.operation!r}.",
+            )
+
+        if (
+            allowed_operations is not None
+            and operation not in allowed_operations
+        ):
+            return DaemonApiResponse.failure(
+                request.request_id,
+                DaemonApiErrorCode.AUTHORIZATION_DENIED,
+                "The authenticated client is not authorized for this daemon "
+                "operation.",
             )
 
         if control_only and operation not in DAEMON_API_CONTROL_OPERATIONS:
@@ -540,7 +565,11 @@ class DaemonReadOnlyApi:
             )
 
         try:
-            result = self._dispatch(operation, request.params)
+            result = self._dispatch(
+                operation,
+                request.params,
+                allowed_operations=allowed_operations,
+            )
         except (_ControlDispatchError, _RecordingDispatchError) as error:
             return DaemonApiResponse.failure(
                 request.request_id,
@@ -554,9 +583,46 @@ class DaemonReadOnlyApi:
                 "The daemon could not complete the request.",
             )
 
+        if redacted_result_fields:
+            result = {
+                field: value
+                for field, value in result.items()
+                if field not in redacted_result_fields
+            }
+
         return DaemonApiResponse.success(request.request_id, result)
 
     def handle_json_line(self, data: bytes | str) -> bytes:
+        return self._handle_json_line(
+            data,
+            allowed_operations=None,
+            redacted_result_fields=frozenset(),
+        )
+
+    def handle_authorized_json_line(
+        self,
+        data: bytes | str,
+        *,
+        allowed_operations: tuple[DaemonApiOperation, ...],
+        redacted_result_fields: tuple[str, ...] = (),
+    ) -> bytes:
+        """Dispatch only operations explicitly authorized by a transport peer."""
+
+        return self._handle_json_line(
+            data,
+            allowed_operations=_authorized_operation_set(allowed_operations),
+            redacted_result_fields=_redacted_result_field_set(
+                redacted_result_fields
+            ),
+        )
+
+    def _handle_json_line(
+        self,
+        data: bytes | str,
+        *,
+        allowed_operations: frozenset[DaemonApiOperation] | None,
+        redacted_result_fields: frozenset[str],
+    ) -> bytes:
         try:
             text = data.decode("utf-8") if isinstance(data, bytes) else data
             payload = json.loads(text)
@@ -567,21 +633,28 @@ class DaemonReadOnlyApi:
                 "Request must contain one valid UTF-8 JSON value.",
             )
         else:
-            response = self.handle_payload(payload)
+            response = self._handle_payload(
+                payload,
+                control_only=False,
+                allowed_operations=allowed_operations,
+                redacted_result_fields=redacted_result_fields,
+            )
         return response.to_json_line()
 
     def _dispatch(
         self,
         operation: DaemonApiOperation,
         params: Mapping[str, object],
+        *,
+        allowed_operations: frozenset[DaemonApiOperation] | None,
     ) -> Mapping[str, object]:
         if operation is DaemonApiOperation.HELLO:
             return {
-                **self._capabilities(),
+                **self._capabilities(allowed_operations=allowed_operations),
                 "selected_version": DAEMON_API_VERSION,
             }
         if operation is DaemonApiOperation.CAPABILITIES:
-            return self._capabilities()
+            return self._capabilities(allowed_operations=allowed_operations)
         if operation is DaemonApiOperation.PING:
             return {"pong": True}
         if operation in DAEMON_API_RECORDING_OPERATIONS:
@@ -743,7 +816,11 @@ class DaemonReadOnlyApi:
             f"Unhandled daemon API control operation: {operation!r}"
         )
 
-    def _capabilities(self) -> dict[str, object]:
+    def _capabilities(
+        self,
+        *,
+        allowed_operations: frozenset[DaemonApiOperation] | None,
+    ) -> dict[str, object]:
         recording_available = self.recording_manager is not None
         control_operations = self._control_operations()
         operations = [
@@ -758,13 +835,29 @@ class DaemonReadOnlyApi:
                     operation not in DAEMON_API_CONTROL_OPERATIONS
                     or operation in control_operations
                 )
+                and (
+                    allowed_operations is None
+                    or operation in allowed_operations
+                )
             )
         ]
+        advertised_control_operations = tuple(
+            operation
+            for operation in control_operations
+            if operation in operations
+        )
         return {
             "protocol": DAEMON_API_PROTOCOL,
             "supported_versions": list(DAEMON_API_SUPPORTED_VERSIONS),
             "operations": [operation.value for operation in operations],
-            "read_only": False,
+            "read_only": (
+                False
+                if allowed_operations is None
+                else all(
+                    operation in DAEMON_API_READ_ONLY_OPERATIONS
+                    for operation in operations
+                )
+            ),
             "read_only_operations": [
                 operation.value
                 for operation in DAEMON_API_READ_ONLY_OPERATIONS
@@ -772,11 +865,39 @@ class DaemonReadOnlyApi:
             ],
             "control_operations": [
                 operation.value
-                for operation in control_operations
+                for operation in advertised_control_operations
             ],
             "max_control_timeout": DAEMON_API_MAX_CONTROL_TIMEOUT,
             "max_hold_state_timeout": DAEMON_API_MAX_HOLD_STATE_TIMEOUT,
         }
+
+
+def _authorized_operation_set(
+    operations: object,
+) -> frozenset[DaemonApiOperation]:
+    if type(operations) is not tuple:
+        raise TypeError("Authorized daemon API operations must be a tuple.")
+    if not operations:
+        raise ValueError("Authorized daemon API operations must not be empty.")
+    if any(not isinstance(operation, DaemonApiOperation) for operation in operations):
+        raise TypeError(
+            "Authorized daemon API operations contain an unsupported value."
+        )
+    if len(set(operations)) != len(operations):
+        raise ValueError("Authorized daemon API operations must be unique.")
+    return frozenset(operations)
+
+
+def _redacted_result_field_set(fields: object) -> frozenset[str]:
+    if type(fields) is not tuple:
+        raise TypeError("Redacted daemon API result fields must be a tuple.")
+    if any(type(field) is not str or not field for field in fields):
+        raise TypeError(
+            "Redacted daemon API result fields must contain non-empty strings."
+        )
+    if len(set(fields)) != len(fields):
+        raise ValueError("Redacted daemon API result fields must be unique.")
+    return frozenset(fields)
 
 
 class _ControlParameterError(ValueError):
