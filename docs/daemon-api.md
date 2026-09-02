@@ -44,6 +44,14 @@ still resolve only private Unix-domain sockets. No TCP listener, TLS endpoint,
 credential, port, remote profile, or Home Assistant port mapping is available in
 this foundation slice.
 
+The server side now consumes the public `DaemonServerListener` and
+`DaemonServerAcceptor` contracts. The existing `DaemonSocketListener` satisfies
+those contracts as the only concrete runtime implementation. This moves
+transport-specific startup, acceptance, and cleanup behind a bounded seam so a
+future authenticated listener can return transport-ready streams without
+changing daemon request dispatch. It does not make a network listener
+constructible or configurable.
+
 ## Starting the API
 
 The local API starts automatically with the foreground daemon:

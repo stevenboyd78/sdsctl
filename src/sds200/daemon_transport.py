@@ -20,6 +20,28 @@ class DaemonClientTransport(Protocol):
         """Return one connected stream or raise ``DaemonUnavailableError``."""
 
 
+@runtime_checkable
+class DaemonServerAcceptor(Protocol):
+    """Accept bounded client streams for one daemon service."""
+
+    def settimeout(self, value: float | None) -> None:
+        """Set the bounded interval used while waiting for one client."""
+
+    def accept(self) -> tuple[socket_module.socket, object]:
+        """Return one transport-ready client stream and opaque peer address."""
+
+
+@runtime_checkable
+class DaemonServerListener(Protocol):
+    """Own one daemon listener and its transport-specific lifecycle."""
+
+    def start(self) -> DaemonServerAcceptor:
+        """Start once and return the acceptor owned by this listener."""
+
+    def stop(self) -> None:
+        """Stop accepting clients and release all listener resources."""
+
+
 @dataclass(frozen=True, slots=True)
 class UnixDaemonClientTransport:
     """Open one private local daemon stream through a Unix-domain socket."""

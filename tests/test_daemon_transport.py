@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import errno
 import json
+import queue
 import socket
 import threading
 from pathlib import Path
@@ -13,7 +14,11 @@ from sds200 import (
     DAEMON_API_VERSION,
     DaemonApiClient,
     DaemonApiOperation,
+    DaemonApiServer,
     DaemonClientTransport,
+    DaemonServerAcceptor,
+    DaemonServerListener,
+    DaemonSocketListener,
     DaemonSocketLocation,
     DaemonSocketSource,
     DaemonUnavailableError,
@@ -81,6 +86,74 @@ class FailingUnixSocket:
         self.closed = True
 
 
+class ScriptedServerAcceptor:
+    def __init__(self) -> None:
+        self.timeout: float | None = None
+        self.clients: queue.Queue[socket.socket] = queue.Queue()
+
+    def settimeout(self, value: float | None) -> None:
+        self.timeout = value
+
+    def accept(self) -> tuple[socket.socket, object]:
+        if self.timeout is None:
+            raise AssertionError("Server accept timeout was not configured.")
+        try:
+            client = self.clients.get(timeout=self.timeout)
+        except queue.Empty as error:
+            raise TimeoutError from error
+        return client, None
+
+
+class ScriptedServerListener:
+    def __init__(self) -> None:
+        self.acceptor = ScriptedServerAcceptor()
+        self.starts = 0
+        self.stops = 0
+
+    def start(self) -> ScriptedServerAcceptor:
+        self.starts += 1
+        return self.acceptor
+
+    def stop(self) -> None:
+        self.stops += 1
+
+
+class SetTimeoutFailingAcceptor:
+    def settimeout(self, value: float | None) -> None:
+        del value
+        raise OSError("private-listener-detail=must-not-enter-snapshot")
+
+    def accept(self) -> tuple[socket.socket, object]:
+        raise AssertionError("A failed acceptor must never accept clients.")
+
+
+class SetTimeoutFailingListener:
+    def __init__(self) -> None:
+        self.acceptor = SetTimeoutFailingAcceptor()
+        self.stops = 0
+
+    def start(self) -> SetTimeoutFailingAcceptor:
+        return self.acceptor
+
+    def stop(self) -> None:
+        self.stops += 1
+
+
+class PingApi:
+    maximum_request_seconds = 0.0
+
+    def handle_json_line(self, data: bytes | str) -> bytes:
+        request = json.loads(data)
+        response = {
+            "protocol": DAEMON_API_PROTOCOL,
+            "version": DAEMON_API_VERSION,
+            "request_id": request["request_id"],
+            "ok": True,
+            "result": {"pong": True},
+        }
+        return (json.dumps(response, separators=(",", ":")) + "\n").encode()
+
+
 def _location(tmp_path: Path) -> DaemonSocketLocation:
     return DaemonSocketLocation(
         tmp_path / "daemon.sock",
@@ -93,6 +166,12 @@ def test_unix_transport_satisfies_transport_contract(tmp_path: Path) -> None:
 
     assert isinstance(transport, DaemonClientTransport)
     assert transport.service_label == "Daemon"
+
+
+def test_unix_listener_satisfies_server_listener_contract(tmp_path: Path) -> None:
+    listener = DaemonSocketListener(_location(tmp_path))
+
+    assert isinstance(listener, DaemonServerListener)
 
 
 @pytest.mark.parametrize(
@@ -249,3 +328,67 @@ def test_api_client_redacts_unclassified_transport_os_error() -> None:
         client.connect()
 
     assert "must-not-escape" not in str(captured.value)
+
+
+def test_api_server_uses_listener_without_assuming_unix_location() -> None:
+    listener = ScriptedServerListener()
+    client, accepted = socket.socketpair()
+    client.settimeout(1.0)
+    listener.acceptor.clients.put(accepted)
+    server = DaemonApiServer(
+        listener,
+        PingApi(),
+        accept_poll_interval=0.01,
+        shutdown_timeout=0.5,
+    )
+
+    try:
+        with server:
+            client.sendall(
+                json.dumps(
+                    {
+                        "protocol": DAEMON_API_PROTOCOL,
+                        "version": DAEMON_API_VERSION,
+                        "request_id": "transport-server-1",
+                        "operation": "ping",
+                    }
+                ).encode()
+                + b"\n"
+            )
+            response_bytes = bytearray()
+            while not response_bytes.endswith(b"\n"):
+                response_bytes.extend(client.recv(4096))
+            response = json.loads(response_bytes)
+
+            assert response["request_id"] == "transport-server-1"
+            assert response["result"] == {"pong": True}
+            assert isinstance(listener, DaemonServerListener)
+            assert isinstance(listener.acceptor, DaemonServerAcceptor)
+    finally:
+        client.close()
+
+    snapshot = server.snapshot()
+    assert snapshot.accepted_clients == 1
+    assert snapshot.requests == 1
+    assert snapshot.responses == 1
+    assert listener.acceptor.timeout == 0.01
+    assert listener.starts == 1
+    assert listener.stops == 1
+
+
+def test_api_server_rejects_non_listener() -> None:
+    with pytest.raises(TypeError, match="DaemonServerListener"):
+        DaemonApiServer(object(), PingApi())  # type: ignore[arg-type]
+
+
+def test_api_server_listener_startup_cleanup_is_transport_neutral() -> None:
+    listener = SetTimeoutFailingListener()
+    server = DaemonApiServer(listener, PingApi())
+
+    with pytest.raises(OSError, match="private-listener-detail"):
+        server.start()
+
+    assert listener.stops == 1
+    assert server.active is False
+    assert server.snapshot().last_error == "OSError"
+    assert "private-listener-detail" not in str(server.snapshot().as_dict())

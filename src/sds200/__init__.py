@@ -306,6 +306,8 @@ from .daemon_server import (
 )
 from .daemon_transport import (
     DaemonClientTransport,
+    DaemonServerAcceptor,
+    DaemonServerListener,
     UnixDaemonClientTransport,
 )
 from .daemon_tui import (
@@ -1326,6 +1328,8 @@ __all__ = [
     "DaemonRecordingFileServerSnapshot",
     "DaemonReadOnlyApi",
     "DaemonRequestError",
+    "DaemonServerAcceptor",
+    "DaemonServerListener",
     "DaemonRuntime",
     "DaemonRuntimeSnapshot",
     "DaemonRuntimeState",

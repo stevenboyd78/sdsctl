@@ -10,7 +10,7 @@ from time import monotonic
 from typing import Protocol
 
 from .daemon_api import DaemonApiErrorCode, DaemonApiResponse
-from .daemon_ipc import DaemonSocketListener
+from .daemon_transport import DaemonServerAcceptor, DaemonServerListener
 from .exceptions import DaemonIpcError
 
 logger = logging.getLogger(__name__)
@@ -64,11 +64,11 @@ class DaemonApiServerSnapshot:
 
 
 class DaemonApiServer:
-    """Serve bounded local daemon API requests over one owned Unix socket."""
+    """Serve bounded daemon API requests over one owned listener transport."""
 
     def __init__(
         self,
-        listener: DaemonSocketListener,
+        listener: DaemonServerListener,
         api: _DaemonApiLike,
         *,
         max_clients: int = DAEMON_API_DEFAULT_MAX_CLIENTS,
@@ -78,6 +78,10 @@ class DaemonApiServer:
         accept_poll_interval: float = DAEMON_API_DEFAULT_ACCEPT_POLL_INTERVAL,
         shutdown_timeout: float = DAEMON_API_DEFAULT_SHUTDOWN_TIMEOUT,
     ) -> None:
+        if not isinstance(listener, DaemonServerListener):
+            raise TypeError(
+                "Daemon API server listener must be a DaemonServerListener."
+            )
         _require_positive_integer(max_clients, label="Maximum daemon API clients")
         _require_positive_integer(
             max_request_bytes,
@@ -274,7 +278,7 @@ class DaemonApiServer:
 
     def _accept_loop(
         self,
-        listener_socket: socket_module.socket,
+        listener_socket: DaemonServerAcceptor,
     ) -> None:
         try:
             while not self._stop_event.is_set():
