@@ -140,10 +140,11 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    assert (
-        "### Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment"
-        in active_milestone
+    expected_heading = (
+        "### Milestone 32.4 — Advanced Home Assistant App remote access and "
+        "multi-display deployment"
     )
+    assert expected_heading in active_milestone
     for required in (
         "Milestone 32.3 is closed through reviewed pull request 222",
         "bbe9054407344ccf4ac11f79119e24728eeb86ae",
