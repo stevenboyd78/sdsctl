@@ -117,6 +117,35 @@ port/firewall observations. Remove only the named validation project,
 containers, network, test credentials, and staging files after an exact
 operator-approved cleanup.
 
+Physical acceptance completed on native Linux with Docker Engine 29.7.2, an
+SDS200 running firmware 1.26.01, and a separate Raspberry Pi 4 running Debian
+13 on aarch64. The isolated preflight passed before startup; container
+inspection confirmed the unprivileged, read-only, capability-free boundary;
+and only the selected private TCP mapping plus scanner-to-host UDP 50000 were
+published. The Home Assistant App was stopped before Docker acquired the
+scanner, the container remained the sole scanner owner, a private Unix-socket
+client remained usable, and the separate Pi authenticated through its exact
+observe-only profile without receiving a scanner or audio endpoint. Remote
+status, authoritative events, PSI, a shared Waterfall checkpoint/PWF/GWF stream
+with 240-bin frames, and three seconds of 8 kHz mono PCM audio all passed. A
+separate control identity exercised and released scanner hold state while the
+Pi identity's control attempt was rejected before dispatch.
+
+Two distinct remote identities consumed the same Waterfall publication
+concurrently while the local client remained healthy. Credential rotation
+closed the old generation immediately, rejected the retired credential,
+preserved the independent control identity, and admitted the replacement only
+after its client file was installed. Revoking only the display identity denied
+that identity while the control identity remained usable; restoring and
+reloading the reviewed document recovered the display client. A running Pi TUI
+survived a daemon-container restart in the same process, re-established its
+remote services without a manual reload, and released its event and audio
+leases cleanly on exit. Final approved cleanup removed the named containers,
+network, volumes, validation image tags, credentials, and host/Pi staging trees;
+confirmed no validation listener remained; and restored the production Home
+Assistant App to its started state. The implementation and physical gate are
+complete pending review and merge of pull request 222.
+
 This milestone does not change the published generic image tag, create a
 release, validate rootless Podman or Docker Desktop, publish a native-dashboard
 port, or modify Home Assistant App metadata. Advanced Home Assistant App
