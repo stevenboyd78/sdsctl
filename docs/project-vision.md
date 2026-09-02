@@ -318,9 +318,12 @@ including fixed Screen Kind and optional Site, Frequency, Modulation, Service
 Type, and configured Tone-Out Tone A and Tone B sensors, plus the seven bounded
 scanner controls. Broader mode-specific entity growth, destination health,
 richer scanner events, and GUI implementation remain separate future
-considerations. Milestone 32.1 now owns the first authenticated remote
-daemon-client transport for CLI/TUI use plus its advanced Home Assistant App
-port-exposure boundary; it does not make GUI support or public access available.
+considerations. Milestone 32.1 established the first authenticated remote
+daemon-client transport and shared-service construction boundary. Milestone 32.2
+owns packaged ordinary-host daemon startup and explicit CLI/TUI client profiles;
+later Milestone 32 slices retain advanced Home Assistant App port exposure and
+multi-display physical acceptance. This work does not make GUI support or public
+access available.
 
 Milestone 26.7 adds a separate responsive SDS200 Display Lovelace presentation
 without changing the original compact card. Five explicit scanner-style layout
@@ -375,18 +378,20 @@ browser session behind the existing daemon fanout. Default standalone operation
 remains loopback-only. Neither mode creates another scanner control, PSI, or
 RTSP/RTP owner, and the native mode does not weaken the Ingress peer guard.
 
-Milestone 32.1 owns the next client/server boundary: one scanner-owning daemon
-may serve multiple authenticated thin displays, including a Raspberry Pi kiosk
-browser using the native HTTPS dashboard and a Raspberry Pi TUI using a new
-remote daemon-client transport. Local Unix-domain sockets remain the default.
-Host-facing remote listeners are opt-in, encrypted, authenticated, bound to an
-exact operator-selected non-public address and documented port, and isolated by
-least-privilege client identities and bounded per-client queues. A listener in
-an isolated container may instead use its container interface behind one
-explicit orchestrator host-port mapping while host networking remains disabled.
-An advanced Home Assistant App configuration may publish dedicated native-
-dashboard and daemon-client ports, but never republishes the trusted Ingress
-listener or turns UDP 50000 scanner RTP input into a client-facing service.
+Milestone 32.1 established the next client/server transport boundary, and
+Milestone 32.2 wires it into packaged ordinary-host startup and explicit client
+profiles: one scanner-owning daemon may serve multiple authenticated thin
+displays, including a Raspberry Pi kiosk browser using the native HTTPS
+dashboard and a Raspberry Pi TUI using the remote daemon-client transport. Local
+Unix-domain sockets remain the default. Host-facing remote listeners are opt-in,
+encrypted, authenticated, bound to an exact operator-selected non-public
+address and documented port, and isolated by least-privilege client identities
+and bounded per-client queues. A later deployment slice may let a listener in an
+isolated container use its container interface behind one explicit orchestrator
+host-port mapping while host networking remains disabled. A later advanced Home
+Assistant App configuration may publish dedicated native-dashboard and daemon-
+client ports, but never republishes the trusted Ingress listener or turns UDP
+50000 scanner RTP input into a client-facing service.
 
 Trusted reverse-proxy deployment, wildcard binding, and public/Internet
 exposure remain unsupported future boundaries.

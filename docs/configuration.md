@@ -42,8 +42,15 @@ The default optional daemon MQTT manifest is:
 
 - `${XDG_CONFIG_HOME:-~/.config}/sdsctl/daemon-mqtt.toml`.
 
-The destination and MQTT manifests are separate versioned daemon documents; they
-are not fields in the flat application configuration schema.
+The default authenticated remote-daemon documents are:
+
+- server listener: `${XDG_CONFIG_HOME:-~/.config}/sdsctl/daemon-remote.toml`;
+- named clients: `${XDG_CONFIG_HOME:-~/.config}/sdsctl/daemon-remote-clients.toml`.
+
+The destination, MQTT, remote-listener, and remote-client manifests are separate
+strict versioned documents; they are not fields in the flat application
+configuration schema. See [Authenticated remote daemon clients](daemon-remote.md)
+for their security and explicit-selection boundaries.
 
 Path resolution also defines persistent service locations:
 
@@ -106,6 +113,12 @@ path without including unsupported field values.
 `reconnect_attempts = 0` means retry indefinitely. Delay values must be positive,
 the multiplier must be at least `1`, and the maximum delay must be at least the
 initial delay.
+
+These general scanner-connection settings do not control authenticated remote
+daemon streams. Remote daemon-client event, Waterfall, and accepted-PCMU
+consumers use a separate finite built-in reconnect policy and do not retry
+deterministic configuration, TLS, authentication, authorization, service, or
+protocol failures.
 
 `color` accepts `auto`, `always`, or `never`. When the resolved value is `auto`,
 the presentation layer continues to honor `NO_COLOR` and `FORCE_COLOR` as

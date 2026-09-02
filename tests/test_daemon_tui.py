@@ -8,9 +8,11 @@ from datetime import UTC, datetime
 import pytest
 
 from sds200 import (
+    DaemonDisconnectedError,
     DaemonEvent,
     DaemonEventKind,
     DaemonProtocolError,
+    DaemonRemoteReconnectPolicy,
     DaemonTuiRadio,
     RadioStateSnapshot,
     ScannerScreenKind,
@@ -299,6 +301,117 @@ def test_daemon_tui_radio_reports_event_stream_failure_as_diagnostic() -> None:
         assert "event client closed" in diagnostics[0].message
         assert connections == [True, False]
         assert radio.connected is False
+
+
+def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> None:
+    class RemoteApiClient(FakeApiClient):
+        sanitizes_private_state = True
+
+    class RemoteEventClient:
+        sanitizes_private_state = True
+
+        def __init__(self) -> None:
+            initial = runtime_snapshot(channel="Initial Remote Dispatch")
+            initial.pop("scanner_endpoint")
+            replacement = runtime_snapshot(channel="Recovered Dispatch")
+            replacement.pop("scanner_endpoint")
+            self.items: list[DaemonEvent | Exception] = [
+                event(0, DaemonEventKind.SNAPSHOT, initial),
+                DaemonDisconnectedError("private endpoint detail"),
+                event(20, DaemonEventKind.SNAPSHOT, replacement),
+                event(
+                    21,
+                    DaemonEventKind.PSI_STATE,
+                    {"state": {"channel": "Post-reconnect Dispatch"}},
+                ),
+                DaemonProtocolError("stop after recovered state"),
+            ]
+            self.close_calls = 0
+
+        def receive(self) -> DaemonEvent:
+            item = self.items.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        def close(self) -> None:
+            self.close_calls += 1
+
+    api = RemoteApiClient()
+    events = RemoteEventClient()
+    radio = DaemonTuiRadio(
+        api,
+        events,
+        reconnect_policy=DaemonRemoteReconnectPolicy(
+            attempts=2,
+            initial_delay=0,
+            max_delay=0,
+        ),
+    )
+    states: list[RadioStateSnapshot] = []
+    diagnostics: list[TransportDiagnostic] = []
+    radio.on_state(states.append)
+    radio.on_diagnostic(diagnostics.append)
+
+    with radio.radio_state_push() as first:
+        assert first.channel == "Initial Remote Dispatch"
+        wait_for(lambda: not radio.event_thread_alive)
+
+    assert [state.channel for state in states] == [
+        "Recovered Dispatch",
+        "Post-reconnect Dispatch",
+    ]
+    assert [diagnostic.kind for diagnostic in diagnostics] == [
+        "daemon_event_disconnected",
+        "daemon_event_reconnected",
+        "daemon_event_disconnected",
+    ]
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "private endpoint detail" not in rendered
+    assert "stop after recovered state" not in rendered
+
+
+def test_remote_daemon_tui_does_not_retry_protocol_failure() -> None:
+    class RemoteApiClient(FakeApiClient):
+        sanitizes_private_state = True
+
+    class RemoteEventClient:
+        sanitizes_private_state = True
+
+        def __init__(self) -> None:
+            initial = runtime_snapshot()
+            initial.pop("scanner_endpoint")
+            self.items: list[DaemonEvent | Exception] = [
+                event(0, DaemonEventKind.SNAPSHOT, initial),
+                DaemonProtocolError("private malformed value"),
+            ]
+            self.receive_calls = 0
+
+        def receive(self) -> DaemonEvent:
+            self.receive_calls += 1
+            item = self.items.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        def close(self) -> None:
+            return None
+
+    events = RemoteEventClient()
+    radio = DaemonTuiRadio(
+        RemoteApiClient(),
+        events,
+        reconnect_policy=DaemonRemoteReconnectPolicy(
+            attempts=5,
+            initial_delay=0,
+            max_delay=0,
+        ),
+    )
+
+    with radio.radio_state_push():
+        wait_for(lambda: not radio.event_thread_alive)
+
+    assert events.receive_calls == 2
 
 
 @pytest.mark.parametrize(

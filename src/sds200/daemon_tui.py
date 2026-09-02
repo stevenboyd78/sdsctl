@@ -10,6 +10,10 @@ from typing import Any, Protocol, Self
 from .commands import NavigationTarget
 from .daemon_events import DaemonEvent, DaemonEventKind
 from .daemon_remote_client import DAEMON_REMOTE_CLIENT_ENDPOINT
+from .daemon_remote_reconnect import (
+    DaemonRemoteReconnectPolicy,
+    daemon_remote_error_is_reconnectable,
+)
 from .events import EventBus
 from .exceptions import DaemonProtocolError
 from .state import RadioStateSnapshot, ScannerScreenKind
@@ -105,6 +109,7 @@ class DaemonTuiRadio:
         event_client: _DaemonEventClient,
         *,
         event_thread_join_timeout: float = 2.0,
+        reconnect_policy: DaemonRemoteReconnectPolicy | None = None,
     ) -> None:
         if isinstance(event_thread_join_timeout, bool) or not isinstance(
             event_thread_join_timeout,
@@ -131,10 +136,24 @@ class DaemonTuiRadio:
                 "Daemon TUI API and event clients must use the same privacy "
                 "boundary."
             )
+        if reconnect_policy is not None and not isinstance(
+            reconnect_policy,
+            DaemonRemoteReconnectPolicy,
+        ):
+            raise TypeError(
+                "Daemon TUI reconnect policy must be "
+                "DaemonRemoteReconnectPolicy or None."
+            )
+        if reconnect_policy is not None and not api_sanitizes_private_state:
+            raise ValueError(
+                "Daemon TUI reconnect policy is available only for "
+                "authenticated remote transports."
+            )
 
         self.api_client = api_client
         self.event_client = event_client
         self.sanitizes_private_state = api_sanitizes_private_state
+        self.reconnect_policy = reconnect_policy
         self.event_thread_join_timeout = normalized_timeout
         self._events = EventBus()
         self._lock = RLock()
@@ -348,21 +367,69 @@ class DaemonTuiRadio:
         return self._apply_runtime_snapshot(event.payload)
 
     def _run_event_stream(self) -> None:
+        reconnect_attempt = 0
+        awaiting_snapshot = False
         try:
             while not self._stream_stop.is_set():
-                event = self.event_client.receive()
-                self._apply_event(event)
-        except Exception as error:
-            if self._stream_stop.is_set():
-                return
-            self._set_connected(False)
-            self._events.emit(
-                "diagnostic",
-                TransportDiagnostic(
-                    kind="daemon_event_disconnected",
-                    message=str(error),
-                ),
-            )
+                try:
+                    event = self.event_client.receive()
+                    if awaiting_snapshot:
+                        state = self._initial_snapshot(event)
+                        self._events.emit("state", state)
+                        self._events.emit(
+                            "diagnostic",
+                            TransportDiagnostic(
+                                kind="daemon_event_reconnected",
+                                message=(
+                                    "Authenticated remote daemon event stream "
+                                    "reconnected from an authoritative snapshot."
+                                ),
+                            ),
+                        )
+                        reconnect_attempt = 0
+                        awaiting_snapshot = False
+                    else:
+                        self._apply_event(event)
+                except Exception as error:
+                    if self._stream_stop.is_set():
+                        return
+                    self.event_client.close()
+                    self._set_connected(False)
+                    policy = self.reconnect_policy
+                    if reconnect_attempt == 0:
+                        self._events.emit(
+                            "diagnostic",
+                            TransportDiagnostic(
+                                kind="daemon_event_disconnected",
+                                message=(
+                                    "Authenticated remote daemon event stream "
+                                    "disconnected."
+                                    if self.sanitizes_private_state
+                                    else str(error)
+                                ),
+                            ),
+                        )
+                    if (
+                        policy is None
+                        or reconnect_attempt >= policy.attempts
+                        or not daemon_remote_error_is_reconnectable(error)
+                    ):
+                        if policy is not None and reconnect_attempt:
+                            self._events.emit(
+                                "diagnostic",
+                                TransportDiagnostic(
+                                    kind="daemon_event_reconnect_exhausted",
+                                    message=(
+                                        "Authenticated remote daemon event "
+                                        "reconnect attempts were exhausted."
+                                    ),
+                                ),
+                            )
+                        return
+                    reconnect_attempt += 1
+                    awaiting_snapshot = True
+                    if self._stream_stop.wait(policy.delay(reconnect_attempt)):
+                        return
         finally:
             self.event_client.close()
 

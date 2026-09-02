@@ -248,7 +248,10 @@ The client validates every received envelope, requires the initial authoritative
 `stream.snapshot`, and enforces strictly increasing gap-free sequence delivery.
 A malformed frame, incompatible protocol or version, repeated snapshot,
 regression, or sequence gap closes the client connection and reports a protocol
-error. Reconnect to obtain a new authoritative checkpoint after a true gap.
+error. An explicitly selected authenticated remote profile performs only
+bounded transport reconnects and requires a new authoritative snapshot before
+accepting later events. Protocol, TLS, authentication, authorization, service,
+and configuration failures do not retry.
 
 `--kind` is a local output filter; the server still sends the complete stream and
 the client still validates every event. Therefore filtered output may skip
@@ -267,8 +270,8 @@ The event service and Milestone 19.9 client still do not add:
 - event replay or server-side filtering;
 - binary PCM delivery or PCMU delivery on the event socket;
 - scanner-control operations on the event socket;
-- packaged TCP startup or a remote client option;
-- daemon discovery or automatic client selection;
+- automatic remote-profile selection or daemon discovery;
+- container or Home Assistant port publication;
 - decoded-PCM CLI client workflows; or
 - destination activation and configuration reload.
 
@@ -320,6 +323,8 @@ private Unix socket or an explicitly constructed remote transport. Remote
 delivery preserves snapshot and sequence ordering but omits `recording.state`
 and recursively removes recording, scanner endpoint, filesystem, credential,
 token, secret, and last-error fields; the client fails closed if required
-private fields reappear. Packaged daemon and client startup do not yet construct
-the remote path. The private local event socket and its unchanged full-fidelity
-contract remain the default.
+private fields reappear. Milestone 32.2 packages this path only for an explicitly
+enabled daemon listener and an explicitly selected client profile. A transport
+disconnect uses finite reconnect attempts and requires a fresh authoritative
+snapshot; deterministic validation failures stop immediately. The private local
+event socket and its unchanged full-fidelity contract remain the default.

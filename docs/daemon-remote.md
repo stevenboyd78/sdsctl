@@ -1,24 +1,28 @@
-# Remote daemon client/server foundation
+# Authenticated remote daemon clients
 
-Milestone 32.1 is building an authenticated network transport for thin CLI and
-TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
-remain the default. This page describes the current configuration, security
-preflight, authentication protocol, direct-TLS admission, exact-address TCP
-listener, credential lifecycle, operation authorization, and bounded
-observation-lease and service-routing boundaries; it does **not** announce a
-packaged remote service.
+Milestone 32.2 packages the authenticated transport foundation for ordinary
+Python installations. One `sdsctl daemon` process can own the scanner, PSI,
+Waterfall, and SDS200 audio sessions while explicitly configured CLI and TUI
+clients connect from another private or link-local host. Local Unix-domain
+sockets remain enabled and remain the default for same-host clients.
 
-The packaged `sdsctl daemon` and `sdsctl daemon-client` commands do not yet read
-these settings, construct the remote listener, router, broker, or client
-transport, publish a container port, or add a Home Assistant App port. The
-current objects are explicit Python construction boundaries so later startup
-and deployment steps cannot define weaker bind, admission, authorization,
-service-selection, or stream-lifecycle behavior by accident.
+The remote listener is opt-in. `sdsctl daemon` reads one strict
+`daemon-remote.toml` document and opens the configured TLS listener only when
+that document explicitly enables it. `sdsctl daemon-client` and
+`sdsctl tui --daemon-client` continue to use local sockets unless the operator
+selects one exact named remote profile with `--remote-profile`.
+
+This milestone does not publish a Docker, Compose, systemd, Home Assistant App,
+Ingress, or native-dashboard port. Those deployment surfaces require separate
+configuration and review. The authenticated daemon-client port is also not a
+browser dashboard port.
 
 ## Default behavior
 
-If `daemon-remote.toml` is absent, no remote configuration exists. The daemon
-continues to use its private local sockets exactly as before.
+If `daemon-remote.toml` is absent, no remote configuration exists and no TCP
+listener is constructed. The daemon continues to use its private local sockets
+exactly as before. Merely creating a client-profile document does not enable a
+listener and does not change client selection.
 
 The deterministic user path is:
 
@@ -47,8 +51,9 @@ silently becoming reachable after an unrelated change.
 
 ## Configuration shape
 
-The following is the configuration shape consumed by the explicit listener
-constructor. Merely creating this file does not start or publish a service.
+The following is the server configuration consumed by `sdsctl daemon`. An
+enabled document starts the listener on the next daemon start after every
+preflight check passes.
 
 ```toml
 version = 1
@@ -159,8 +164,9 @@ errors do not echo secret contents, private endpoint values, or secret paths.
 
 The `sds200.daemon_remote_auth` module defines the version 1 authentication
 frames and verification behavior for the direct-TLS transport. Constructing or
-using those protocol objects performs no network I/O, and no packaged command
-invokes them yet.
+using those protocol objects performs no network I/O. The packaged daemon and
+explicit remote-profile clients invoke them only when their opt-in settings are
+selected.
 
 After a client has authenticated the server through validated direct TLS, the
 listener creates one fresh 32-byte server nonce. The client answers
@@ -215,9 +221,8 @@ stable failure classes—not the private address, peer, client ID, or secret pat
 
 The explicit listener owns a generation-based credential authority. Initial
 construction loads one complete immutable registry before the listener binds.
-`reload_credentials()` then provides the operational rotation boundary for a
-separately constructed listener; it is not yet exposed through a packaged CLI
-command or service signal.
+`reload_credentials()` provides the operational rotation boundary used by the
+packaged daemon's controlled `SIGHUP` lifecycle.
 
 For one reload, the authority:
 
@@ -273,8 +278,9 @@ are outside this milestone's authority. Negotiated capabilities are filtered to
 the peer's exact operation set, and a denied operation returns
 `authorization_denied` without reaching runtime dispatch.
 
-These objects still do not enter packaged daemon startup, publish a deployment
-port, or activate Home Assistant configuration.
+The packaged daemon now constructs these objects after local services and the
+single scanner-owning runtime have been created. It still publishes no
+container or Home Assistant port metadata.
 
 ## Authenticated observation leases
 
@@ -376,21 +382,216 @@ the constant `sdsctl-remote-daemon`; the TUI uses that same label and never
 caches or renders the scanner address. A purported sanitized transport that
 leaks a private endpoint fails closed.
 
-These are programmatic construction seams, not packaged configuration. The CLI
-and TUI still choose only local Unix sockets because no released argument,
-profile parser, discovery mechanism, or startup wiring constructs the remote
-client transport. The local protocols and same-host defaults are unchanged.
+## Named client profiles
 
-## What remains before remote use
+Remote clients use a separate strict document. Its default path is:
 
-This foundation is not sufficient for a supported packaged remote deployment.
-Milestone 32.1 must still add and validate, in bounded slices:
+```text
+$XDG_CONFIG_HOME/sdsctl/daemon-remote-clients.toml
+```
 
-1. explicit opt-in daemon and client startup, profile loading, and diagnostics;
-2. explicit Docker/Compose and Home Assistant App port metadata; and
-3. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
-   and remote-TUI acceptance.
+When `XDG_CONFIG_HOME` is unset, the usual location is:
 
-Until those steps are complete and released, use the private local daemon
-sockets, or use the separately authenticated native HTTPS dashboard where its
-documented LAN mode is appropriate.
+```text
+~/.config/sdsctl/daemon-remote-clients.toml
+```
+
+Each table is selected by its exact name. The document may contain several
+independent client identities, but one command selects only one:
+
+```toml
+version = 1
+
+[profiles.pi-display]
+address = "192.168.20.10"
+port = 50443
+server_hostname = "sdsctl-daemon.lan"
+certificate_file = "/home/pi/.config/sdsctl/remote-server.crt"
+client_id = "pi-display"
+credential_file = "/home/pi/.config/sdsctl/pi-display.secret"
+```
+
+`address` is the literal private or link-local address used for the TCP
+connection. `server_hostname` is the DNS identity encoded in the server
+certificate and is checked during TLS; it is not used to discover or replace
+the literal address. The certificate path contains the public CA or server
+certificate used for trust. The credential path contains that client's exact
+32-byte base64url secret and must have mode `0600` on POSIX.
+
+The profile parser rejects unknown fields, unsafe names, public or wildcard
+addresses, relative file paths, and invalid values. Selection is explicit:
+
+```bash
+sdsctl daemon-client --remote-profile pi-display status
+sdsctl tui --daemon-client --remote-profile pi-display
+```
+
+Do not put a credential value in TOML, an environment variable, a command-line
+argument, a process-manager unit, or a screenshot. Profile names and files are
+never selected automatically. `--remote-profile` cannot be combined with local
+daemon socket overrides.
+
+## Beginner setup: one daemon host and one Raspberry Pi TUI
+
+The following order keeps the scanner-owning host private until trust and one
+client identity are ready. Replace the documentation addresses and names with
+values from your own private network.
+
+### 1. Install the two hosts
+
+On the daemon host, install the interfaces the scanner owner needs. On the Pi,
+install the TUI and optional local playback support:
+
+```bash
+python -m pip install "sds200[all]"
+python -m pip install "sds200[tui,playback]"
+```
+
+Use separate virtual environments when that is how Python applications are
+managed on the hosts. Raspberry Pi OS also normally needs `libportaudio2` for
+speaker or headphone playback.
+
+### 2. Create server identity and one independent client credential
+
+Create a TLS certificate whose subject alternative name contains the exact
+`server_hostname` that the Pi profile will expect. Keep the certificate's
+private key only on the daemon host with mode `0600`. Create one independent
+random 32-byte base64url credential for each client, store each in a distinct
+mode-`0600` file, and transfer only that client's credential through a trusted
+out-of-band method.
+
+The Pi needs the public certificate and its own client credential. It never
+needs, and must never receive, the server private key or another client's
+credential. After provisioning, verify secret permissions on both hosts:
+
+```bash
+chmod 600 /etc/sdsctl/remote-server.key
+chmod 600 /etc/sdsctl/clients/pi-display.secret
+chmod 600 ~/.config/sdsctl/pi-display.secret
+```
+
+The containing directories should be writable only by their intended owner.
+Certificate files may be readable without exposing the server private key.
+
+### 3. Configure the daemon host
+
+Create `daemon-remote.toml` at the default path shown above, or pass an absolute
+path with `sdsctl daemon --remote-config PATH`. Start with an `observe`-only Pi:
+
+```toml
+version = 1
+
+[listener]
+enabled = true
+bind_address = "192.168.20.10"
+port = 50443
+certificate_file = "/etc/sdsctl/remote-server.crt"
+private_key_file = "/etc/sdsctl/remote-server.key"
+
+[[clients]]
+client_id = "pi-display"
+credential_file = "/etc/sdsctl/clients/pi-display.secret"
+scopes = ["observe"]
+```
+
+An observe-only display can read sanitized state, events, Waterfall data, and
+accepted PCMU audio. It cannot issue scanner controls. Add `"control"` only for
+an identity whose operator is meant to use the existing typed hold,
+next/previous, volume, squelch, and reconnect controls:
+
+```toml
+scopes = ["observe", "control"]
+```
+
+Start the daemon with the same scanner selector used for local operation. The
+remote service reuses that daemon's existing sources; it does not create a
+second scanner command, PSI, Waterfall, RTSP, or RTP session:
+
+```bash
+sdsctl --host SCANNER_PRIVATE_IP daemon
+```
+
+If preflight or listener startup fails, fix the reported stable failure class.
+The daemon does not fall back to plaintext, a wildcard address, another port,
+or a weaker credential registry.
+
+### 4. Allow only the intended firewall direction
+
+Permit TCP traffic to the exact configured port from the Pi or its dedicated
+private client subnet to the daemon host. No inbound daemon-client port is
+needed on the Pi. Do not expose scanner UDP control, scanner RTP audio, the
+daemon-client port, or this direct-TLS service to the public Internet.
+
+The intended path is:
+
+```text
+Raspberry Pi client  -- TCP/TLS 50443 -->  daemon host  -->  scanner
+```
+
+Keep the daemon host's local Unix sockets private; local and authenticated
+remote clients can operate concurrently without sharing a client connection.
+
+### 5. Configure and verify the Pi
+
+Create the Pi's `daemon-remote-clients.toml` using the profile example above.
+Then verify read-only status before opening the TUI:
+
+```bash
+sdsctl daemon-client --remote-profile pi-display status
+sdsctl daemon-client --remote-profile pi-display events --count 2 --json
+sdsctl tui --daemon-client --remote-profile pi-display --audio-playback
+```
+
+Successful output uses only the fixed endpoint label
+`sdsctl-remote-daemon`. It must not print the private address, TLS hostname,
+client ID, certificate path, credential path, credential bytes, scanner
+endpoint, or private daemon error detail.
+
+Long-lived remote event, Waterfall, and accepted-PCMU consumers use a finite
+exponential reconnect policy for connection loss. A recovered event stream
+must begin with a new authoritative snapshot, and a recovered Waterfall stream
+must begin with a new session checkpoint. Audio continuity state is reset at
+reconnection. Protocol, TLS identity, authentication, authorization, service,
+and local configuration failures stop immediately instead of entering a hidden
+retry loop.
+
+### 6. Rotate or revoke a client
+
+Provision the complete replacement set of credential files and update the full
+server document first. Send `SIGHUP` to the foreground daemon through the
+process manager or shell that owns it. A successful reload atomically advances
+the credential generation and disconnects every previous-generation API,
+event, Waterfall, and audio connection. Each remote client then authenticates
+again and resynchronizes.
+
+A failed reload keeps the last-known-good registry and its generation. Review
+the redacted daemon log, correct the complete replacement set, and retry. Bind
+address, port, certificate, and server-private-key changes require a daemon
+restart; `SIGHUP` never partially changes listener identity.
+
+To revoke one client, set `revoked = true` on that server-side `[[clients]]`
+entry while retaining at least one active identity, then perform the same
+controlled reload. Delete retired secret files only after the new generation
+is active and rollback is no longer required.
+
+### 7. Disable remote access completely
+
+Stop the daemon, replace the remote document with the minimal disabled form
+shown under [Default behavior](#default-behavior), and restart the daemon. Verify
+that local `sdsctl daemon-client status` still works and that no TCP listener
+exists on the previously selected port. Removing the file entirely has the same
+disabled result on the next daemon start. Disablement is a restart operation,
+not a credential-only reload.
+
+## Browser kiosks and later deployment surfaces
+
+A Raspberry Pi TUI uses the authenticated daemon-client profile and port. A
+browser kiosk does not: it opens the daemon host's separately configured
+authenticated native HTTPS dashboard. Never place daemon client credentials in
+browser storage or JavaScript.
+
+Container port publication, Home Assistant App options, Ingress interaction,
+managed service units, and physical one-daemon/multiple-display acceptance are
+later Milestone 32 slices. Until those surfaces explicitly publish and validate
+their own settings, this ordinary-host configuration does not imply that they
+are exposed.

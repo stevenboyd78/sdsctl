@@ -310,6 +310,43 @@ class FakeWaterfallServer:
             raise self.stop_error
 
 
+class FakeRemoteService:
+    def __init__(
+        self,
+        order: list[str],
+        *,
+        start_error: BaseException | None = None,
+        stop_error: BaseException | None = None,
+        reload_error: Exception | None = None,
+    ) -> None:
+        self.order = order
+        self.start_error = start_error
+        self.stop_error = stop_error
+        self.reload_error = reload_error
+        self.start_calls = 0
+        self.stop_calls = 0
+        self.reload_calls = 0
+
+    def start(self) -> None:
+        self.order.append("remote.start")
+        self.start_calls += 1
+        if self.start_error is not None:
+            raise self.start_error
+
+    def stop(self) -> None:
+        self.order.append("remote.stop")
+        self.stop_calls += 1
+        if self.stop_error is not None:
+            raise self.stop_error
+
+    def reload(self) -> object:
+        self.order.append("remote.reload")
+        self.reload_calls += 1
+        if self.reload_error is not None:
+            raise self.reload_error
+        return object()
+
+
 class FakeSignalController:
     def __init__(
         self,
@@ -1052,6 +1089,115 @@ def test_process_rejects_reloader_without_coordinator() -> None:
             FakeRuntime([]),
             destination_reloader=FakeDestinationReloader([]),  # type: ignore[arg-type]
         )
+
+
+def test_process_starts_remote_after_local_api_and_stops_remote_first() -> None:
+    order: list[str] = []
+    runtime = FakeRuntime(order)
+    api_server = FakeApiServer(order)
+    remote = FakeRemoteService(order)
+    signals = FakeSignalController(order, (True,))
+
+    DaemonProcess(
+        runtime,
+        api_server=api_server,
+        remote_service=remote,
+        signals=signals,
+        poll_interval=0.25,
+    ).run()
+
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "api.start",
+        "remote.start",
+        "signals.wait",
+        "remote.stop",
+        "api.stop",
+        "runtime.stop",
+        "signals.exit",
+    ]
+
+
+def test_process_reloads_remote_service_and_keeps_running(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    order: list[str] = []
+    remote = FakeRemoteService(order)
+    signals = FakeSignalController(order, ("reload", True))
+
+    with caplog.at_level(logging.INFO, logger="sds200.daemon_process"):
+        DaemonProcess(
+            FakeRuntime(order),
+            remote_service=remote,
+            signals=signals,
+            poll_interval=0.25,
+        ).run()
+
+    assert remote.reload_calls == 1
+    assert "daemon remote credential reload completed" in caplog.text
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "remote.start",
+        "signals.wait",
+        "remote.reload",
+        "signals.wait",
+        "remote.stop",
+        "runtime.stop",
+        "signals.exit",
+    ]
+
+
+def test_process_isolates_and_redacts_remote_reload_failure(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    order: list[str] = []
+    remote = FakeRemoteService(
+        order,
+        reload_error=RuntimeError("private path and credential"),
+    )
+    signals = FakeSignalController(order, ("reload", True))
+
+    with caplog.at_level(logging.ERROR, logger="sds200.daemon_process"):
+        DaemonProcess(
+            FakeRuntime(order),
+            remote_service=remote,
+            signals=signals,
+            poll_interval=0.25,
+        ).run()
+
+    assert remote.reload_calls == 1
+    assert "remote credential reload failed error=RuntimeError" in caplog.text
+    assert "private path" not in caplog.text
+    assert "credential" in caplog.text
+
+
+def test_remote_startup_failure_is_cleaned_before_local_api_and_runtime() -> None:
+    order: list[str] = []
+    failure = RuntimeError("private remote startup detail")
+    remote = FakeRemoteService(order, start_error=failure)
+
+    with pytest.raises(RuntimeError) as raised:
+        DaemonProcess(
+            FakeRuntime(order),
+            api_server=FakeApiServer(order),
+            remote_service=remote,
+            signals=FakeSignalController(order, ()),
+            poll_interval=0.25,
+        ).run()
+
+    assert raised.value is failure
+    assert order == [
+        "signals.enter",
+        "runtime.start",
+        "api.start",
+        "remote.start",
+        "remote.stop",
+        "api.stop",
+        "runtime.stop",
+        "signals.exit",
+    ]
 
 
 def test_process_starts_api_after_runtime_and_stops_it_first() -> None:

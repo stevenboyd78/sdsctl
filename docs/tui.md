@@ -69,12 +69,29 @@ sdsctl tui --daemon-client \
   --audio-metadata
 ```
 
+For an authenticated ordinary-host daemon on a private network, select one
+exact named profile from `daemon-remote-clients.toml`:
+
+```bash
+sdsctl tui --daemon-client --remote-profile pi-display
+```
+
+The profile is never selected merely because its file exists and cannot be
+combined with local daemon socket overrides. See the
+[authenticated remote daemon guide](daemon-remote.md) for certificate trust,
+per-client credential provisioning, permissions, firewall direction, and
+rotation or revocation.
+
 Standalone mode starts continuous PSI scanner-information updates after loading
 the model, firmware, and initial GSI snapshot. Daemon mode obtains authoritative
 identity and initial state from `daemon.sock`, follows ordered state and
 connection updates from `events.sock`, delegates safe controls through the API,
-and consumes audio from `pcmu.sock`. It does not open scanner hardware or
-another RTSP/RTP session.
+and consumes audio from `pcmu.sock`. A named remote profile uses independent
+authenticated API, event, and accepted-PCMU service connections instead. A
+recovered event stream must begin with a new authoritative snapshot; recovered
+audio clears invalid continuity state. Deterministic configuration, TLS,
+authentication, authorization, service, and protocol failures do not retry.
+Neither daemon mode opens scanner hardware or another RTSP/RTP session.
 
 The default 500 ms update interval and 3 second freshness threshold may be
 adjusted independently:

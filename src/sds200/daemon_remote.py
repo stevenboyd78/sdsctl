@@ -308,7 +308,7 @@ def load_daemon_remote_configuration(
         document = tomllib.loads(config_path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as error:
         raise ConfigurationError(
-            f"Could not read remote daemon configuration {config_path}."
+            "Could not read remote daemon configuration."
         ) from error
 
     _reject_unexpected_fields(

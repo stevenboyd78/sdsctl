@@ -6,7 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from sds200 import DaemonSocketSource, cli, resolve_configuration_paths
+from sds200 import (
+    DaemonRemoteClientIdentity,
+    DaemonRemoteListenerConfiguration,
+    DaemonSocketSource,
+    cli,
+    resolve_configuration_paths,
+)
 from sds200.audio import AudioChunkHandler
 from sds200.daemon_process import DaemonProcessResult
 from sds200.pcmu import PcmuPacketHandler
@@ -126,6 +132,8 @@ def test_daemon_parser_accepts_process_and_audio_options() -> None:
             "/tmp/sdsctl-destinations.toml",
             "--mqtt-config",
             "/tmp/sdsctl-mqtt.toml",
+            "--remote-config",
+            "/tmp/sdsctl-remote.toml",
             "--recording-directory",
             "/tmp/sdsctl-recordings",
             "--recording-file-socket-path",
@@ -192,6 +200,7 @@ def test_daemon_parser_accepts_process_and_audio_options() -> None:
         "/tmp/sdsctl-destinations.toml"
     )
     assert args.mqtt_config == Path("/tmp/sdsctl-mqtt.toml")
+    assert args.remote_config == Path("/tmp/sdsctl-remote.toml")
     assert args.recording_directory == Path("/tmp/sdsctl-recordings")
     assert args.recording_file_socket_path == Path(
         "/tmp/sdsctl-recording-files-test.sock"
@@ -345,6 +354,18 @@ def test_daemon_cli_constructs_one_runtime_and_process(
         FakeDaemonDestinationCoordinator,
     )
     monkeypatch.setattr(cli, "DaemonEventStream", FakeDaemonEventStream)
+    monkeypatch.setattr(
+        cli,
+        "load_daemon_remote_configuration",
+        lambda path: DaemonRemoteListenerConfiguration(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "build_packaged_daemon_remote_service",
+        lambda *args, **kwargs: pytest.fail(
+            "Disabled remote configuration must not construct a listener."
+        ),
+    )
     monkeypatch.setattr(cli, "DaemonProcess", FakeProcess)
 
     paths = resolve_configuration_paths(
@@ -678,6 +699,11 @@ def test_daemon_cli_loads_explicit_destination_manifest(
         cli,
         "NetworkAudioTransport",
         lambda *args, **kwargs: FakeAudioTransport(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "DaemonDestinationCoordinator",
+        FakeDaemonDestinationCoordinator,
     )
     monkeypatch.setattr(
         cli,
@@ -1450,6 +1476,99 @@ def test_daemon_cli_closes_pcmu_stream_after_server_validation_failure(
     assert len(event_streams) == 1
     assert event_streams[0].close_calls == 1
     assert "must be at least" in capsys.readouterr().err
+
+
+def test_daemon_cli_enabled_remote_configuration_builds_packaged_service(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scanner = object()
+    remote_configuration = DaemonRemoteListenerConfiguration(
+        enabled=True,
+        bind_address="192.168.20.10",
+        port=50443,
+        certificate_file=tmp_path / "private-server.crt",
+        private_key_file=tmp_path / "private-server.key",
+        clients=(
+            DaemonRemoteClientIdentity(
+                "pi-display",
+                tmp_path / "private-client.secret",
+            ),
+        ),
+    )
+    remote_service = object()
+    build_calls: list[tuple[object, object, dict[str, object]]] = []
+    process_options: list[dict[str, object]] = []
+
+    def build_remote(
+        path: object,
+        configuration: object,
+        **kwargs: object,
+    ) -> object:
+        build_calls.append((path, configuration, kwargs))
+        return remote_service
+
+    class FakeProcess:
+        def __init__(self, runtime: object, **kwargs: object) -> None:
+            del runtime
+            process_options.append(kwargs)
+
+        def run(self) -> DaemonProcessResult:
+            return DaemonProcessResult(last_signal=int(signal.SIGTERM))
+
+    monkeypatch.setattr(
+        cli,
+        "selected_radio",
+        lambda args, profile_store=None: scanner,
+    )
+    monkeypatch.setattr(
+        cli,
+        "NetworkAudioTransport",
+        lambda *args, **kwargs: FakeAudioTransport(),
+    )
+    monkeypatch.setattr(
+        cli,
+        "DaemonDestinationCoordinator",
+        FakeDaemonDestinationCoordinator,
+    )
+    monkeypatch.setattr(cli, "DaemonEventStream", FakeDaemonEventStream)
+    monkeypatch.setattr(
+        cli,
+        "load_daemon_remote_configuration",
+        lambda path: remote_configuration,
+    )
+    monkeypatch.setattr(cli, "build_packaged_daemon_remote_service", build_remote)
+    monkeypatch.setattr(cli, "DaemonProcess", FakeProcess)
+    paths = resolve_configuration_paths(
+        environ={},
+        home=tmp_path / "home",
+        system_config_dir=tmp_path / "etc",
+    )
+    explicit = tmp_path / "private-remote.toml"
+
+    assert cli.main(
+        [
+            "--host",
+            "192.0.2.25",
+            "daemon",
+            "--remote-config",
+            str(explicit),
+        ],
+        configuration_paths=paths,
+        environ={},
+    ) == 0
+
+    assert len(build_calls) == 1
+    path, configuration, options = build_calls[0]
+    assert path == explicit
+    assert configuration is remote_configuration
+    assert options["waterfall_session"] is None
+    assert options["pcmu_stream"] is not None
+    assert len(process_options) == 1
+    assert process_options[0]["remote_service"] is remote_service
+    assert options["api"] is process_options[0]["api_server"].api
+    assert options["event_stream"] is process_options[0]["event_server"].stream
+    assert options["pcmu_stream"] is process_options[0]["pcmu_server"].stream
 
 
 
