@@ -11,7 +11,87 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 31.1 — Duration-based Waterfall history and frequency pointer
+### Milestone 31.2 — v0.27.0 release and publication closure
+
+Milestone 31.1 is closed through reviewed pull request 216, merge commit
+`ebcad4161376ba4c51af06665fd2c5cdb7080506`, complete post-merge validation on
+`main`, physical SDS200 and Home Assistant OS acceptance, published-runtime
+restoration, and exact cleanup of its deliberately named validation App,
+source, card, and staging artifacts. The merged implementation adds bounded
+elapsed-time Waterfall history and an optional display-only frequency pointer
+to the authenticated web dashboard and first-party Home Assistant card while
+preserving legacy frame-depth configurations, one scanner-side session, and
+the relative and uncalibrated data contract.
+
+Milestone 31.2 is release closure rather than another runtime feature slice.
+Synchronize the Python package metadata, import version, and Home Assistant App
+at 0.27.0. Keep the independently packaged Home Assistant Core integration at
+0.1.5 unless a reviewed integration change requires a new artifact version.
+Freeze both changelogs with one coherent account of duration retention,
+pause/clear and reconnect behavior, pointer accessibility and inspection-only
+semantics, live scanner-span tracking, legacy-card compatibility, physical
+acceptance, and the unchanged scanner, audio, MQTT, recording, Favorites, and
+security boundaries.
+
+Audit the concise README, reviewed wiki source, release guide, Waterfall
+protocol and renderer documentation, web-dashboard guide, Home Assistant App
+guide, project vision, screenshots, package metadata, and repository links.
+Public instructions must distinguish elapsed-time modes from retained
+frame-count modes, state that pointer values interpolate scanner-reported span
+bounds without tuning, and retain the relative and uncalibrated signal warning.
+Documentation must contain no private host, scanner, capability, credential,
+recording, Favorites, provider, or browser-cache data.
+
+Before any release tag exists, run the complete Ruff, MyPy, Python 3.11 through
+3.14 test, documentation, distribution, release-integrity, clean-install,
+declared-extra, browser, screenshot, generic-container, and Home Assistant App
+validation appropriate to the accumulated v0.27.0 surface. Validate wheel and
+source-distribution contents and metadata from clean environments. Pull-request,
+`main`, and manual workflow runs may build and inspect images but must not
+publish release artifacts.
+
+Publish the reviewed wiki source before tagging, and verify its commit and
+content against the repository-managed source. Only after the release pull
+request is reviewed, green, and merged may one genuine annotated `v0.27.0` tag
+be created from the exact reviewed `main` commit. The tag must be absent both
+locally and remotely beforehand and must exactly match all three synchronized
+0.27.0 version surfaces. Never move, replace, recreate, or use a synthetic tag
+after publication begins.
+
+The genuine matching tag may publish the Python distributions to PyPI through
+the configured trusted publisher, amd64 and aarch64 Home Assistant App images
+plus their multi-architecture manifest to GHCR, and the generic
+multi-architecture image to Docker Hub. Verify public package metadata,
+checksums, imports, command versions, optional extras, image architectures,
+labels, App metadata, immutable digests, and tag-to-commit identity without
+mutating published artifacts or credentials.
+
+Before creating the GitHub Release, complete a clean repository-managed Home
+Assistant OS upgrade from published v0.26.1 to v0.27.0. Preserve operator
+configuration, MQTT identities, persistent recordings, aggregate and
+individual first-party card compatibility, and the optional 0.1.5 Core
+integration boundary. Revalidate Ingress, scanner controls, browser audio,
+recording finalization and saved playback, legacy and duration Waterfall cards,
+frequency-pointer interaction, live span changes, restart recovery, and the
+single-owner scanner, Waterfall, and RTSP/RTP audio contract. Restore the
+published App as sole owner and retain no Local App, integration copy, resource
+mutation, validation dashboard artifact, private capture, source directory, or
+staging worktree.
+
+Create the GitHub Release from the genuine tag and mark it Latest only after
+all public artifacts and Home Assistant acceptance pass. Release notes must
+link the exact comparison, summarize user-visible additions and compatibility,
+identify the inspection-only and uncalibrated limits, and make no unsupported
+RF, scanner-family, public-access, or synchronization claim.
+
+Weather-alert state or recording, TUI Waterfall rendering, GUI implementation,
+scanner tuning from the pointer, click-to-hold or click-to-search behavior,
+alternative GW2 syntax, binary negotiation, ProScan wire comparison, FFT or
+power calibration, anonymous endpoints, automatic RadioReference execution,
+and broader scanner-family validation remain outside Milestone 31.2. No new
+runtime capability enters this release-closure milestone.
+
+#### Closed Milestone 31.1 — Duration-based Waterfall history and frequency pointer
 
 Milestone 30.2 is closed through reviewed pull request 213, merge commit
 `9e693474e9bbd7c551a302b3c66df450a86011f9`, and the immutable `v0.26.1` tag.
