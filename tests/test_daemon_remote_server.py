@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import queue
 import socket
@@ -30,6 +31,8 @@ from sds200 import (
     DaemonRemoteAuthenticatedPeer,
     DaemonRemoteAuthorizationScope,
     DaemonRemoteClientIdentity,
+    DaemonRemoteCredentialAuthority,
+    DaemonRemoteCredentialLifecycleSnapshot,
     DaemonRemoteListenerConfiguration,
     DaemonRemoteListenerError,
     DaemonRemoteListenerErrorReason,
@@ -192,6 +195,20 @@ class FakeAdmission:
         self.failures: set[str] = set()
         self.unexpected_failures: set[str] = set()
         self.calls: list[str] = []
+        self.reloads: list[DaemonRemoteListenerConfiguration] = []
+        self.lifecycle = DaemonRemoteCredentialLifecycleSnapshot(
+            generation=1,
+            configured_clients=1,
+            active_clients=1,
+            revoked_clients=0,
+            control_clients=0,
+            active_sessions=0,
+            successful_reloads=0,
+            failed_reloads=0,
+            invalidated_sessions=0,
+            invalidation_failures=0,
+            last_error=None,
+        )
 
     def admit(
         self,
@@ -210,6 +227,49 @@ class FakeAdmission:
                 DaemonRemoteTlsErrorReason.AUTHENTICATION_FAILED
             )
         return stream, self.peer
+
+    def credential_snapshot(self) -> DaemonRemoteCredentialLifecycleSnapshot:
+        return self.lifecycle
+
+    def reload_credentials(
+        self,
+        configuration: DaemonRemoteListenerConfiguration,
+    ) -> DaemonRemoteCredentialLifecycleSnapshot:
+        self.reloads.append(configuration)
+        self.lifecycle = DaemonRemoteCredentialLifecycleSnapshot(
+            generation=self.lifecycle.generation + 1,
+            configured_clients=1,
+            active_clients=1,
+            revoked_clients=0,
+            control_clients=0,
+            active_sessions=0,
+            successful_reloads=self.lifecycle.successful_reloads + 1,
+            failed_reloads=0,
+            invalidated_sessions=self.lifecycle.invalidated_sessions + 1,
+            invalidation_failures=0,
+            last_error=None,
+        )
+        return self.lifecycle
+
+
+class LifecyclePeer:
+    def __init__(
+        self,
+        *,
+        current: bool,
+        on_close: object | None = None,
+    ) -> None:
+        self.current = current
+        self.on_close = on_close
+        self.close_calls = 0
+
+    def daemon_api_connection_current(self) -> bool:
+        return self.current
+
+    def close_daemon_api_peer_context(self) -> None:
+        self.close_calls += 1
+        if callable(self.on_close):
+            self.on_close()
 
 
 def _request(
@@ -454,6 +514,58 @@ def test_remote_peer_fails_closed_when_authorized_entry_point_returns_nonbytes()
     assert response["error"]["code"] == "internal_error"
 
 
+def test_remote_peer_rejects_request_after_credential_generation_changes(
+    tmp_path: Path,
+) -> None:
+    credential = tmp_path / "client.secret"
+    credential.write_text(
+        base64.urlsafe_b64encode(bytes(range(32))).rstrip(b"=").decode("ascii")
+        + "\n",
+        encoding="ascii",
+    )
+    credential.chmod(0o600)
+    configuration = DaemonRemoteListenerConfiguration(
+        enabled=True,
+        bind_address="192.168.20.10",
+        port=50443,
+        certificate_file=tmp_path / "server.crt",
+        private_key_file=tmp_path / "server.key",
+        clients=(DaemonRemoteClientIdentity("pi-kiosk", credential),),
+    )
+    authority = DaemonRemoteCredentialAuthority(configuration)
+    session = authority.register_session(
+        authority.current_generation(),
+        DaemonRemoteAuthenticatedIdentity(
+            "pi-kiosk",
+            (DaemonRemoteAuthorizationScope.OBSERVE,),
+        ),
+        invalidator=lambda: None,
+    )
+    peer = DaemonRemoteApiPeer(
+        DaemonRemoteAuthenticatedPeer(
+            DaemonRemoteAuthenticatedIdentity(
+                "pi-kiosk",
+                (DaemonRemoteAuthorizationScope.OBSERVE,),
+            ),
+            credential_session=session,
+        )
+    )
+
+    authority.reload(configuration)
+    response = json.loads(
+        peer.handle_daemon_api_json_line(
+            DaemonReadOnlyApi(FakeRuntime()),
+            _request(DaemonApiOperation.PING, "expired"),
+        )
+    )
+
+    assert response["ok"] is False
+    assert response["request_id"] is None
+    assert response["error"]["code"] == "authentication_expired"
+    assert peer.daemon_api_connection_current() is False
+    peer.close_daemon_api_peer_context()
+
+
 def test_api_server_preserves_peer_context_through_worker_dispatch() -> None:
     listener = ScriptedListener()
     client, accepted = socket.socketpair()
@@ -587,6 +699,171 @@ def test_listener_delivers_only_admitted_peer(
     finally:
         stream.close()
         listener.stop()
+
+
+def test_listener_reload_discards_invalid_queued_peers_and_retains_current(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    admission = FakeAdmission(_peer().authenticated)
+    listener = _listener(monkeypatch, admission, FakeListeningSocket())
+    listener._started = True
+    invalid_stream = FakeStream("invalid-after-reload")
+    current_stream = FakeStream("current-after-reload")
+    invalid_peer = LifecyclePeer(current=False)
+    current_peer = LifecyclePeer(current=True)
+    listener._ready.put_nowait(
+        remote_server._ReadyClient(
+            cast(socket.socket, invalid_stream),
+            cast(DaemonRemoteApiPeer, invalid_peer),
+        )
+    )
+    listener._ready.put_nowait(
+        remote_server._ReadyClient(
+            cast(socket.socket, current_stream),
+            cast(DaemonRemoteApiPeer, current_peer),
+        )
+    )
+    listener._ready.put_nowait(remote_server._STOPPED_DELIVERY)
+    listener._ready_clients = 2
+
+    assert listener.credential_snapshot() == admission.lifecycle
+    snapshot = listener.reload_credentials(_configuration())
+
+    assert snapshot.generation == 2
+    assert admission.reloads == [_configuration()]
+    assert invalid_stream.closed is True
+    assert invalid_peer.close_calls == 1
+    assert listener.snapshot().ready_clients == 1
+    delivered, peer = listener.accept()
+    assert cast(object, delivered) is current_stream
+    assert cast(object, peer) is current_peer
+    assert current_peer.close_calls == 0
+    current_stream.close()
+    listener.stop()
+
+
+def test_listener_accept_skips_expired_peer_within_original_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listener = _listener(
+        monkeypatch,
+        FakeAdmission(_peer().authenticated),
+        FakeListeningSocket(),
+    )
+    listener._started = True
+    listener.settimeout(0.5)
+    expired_stream = FakeStream("expired")
+    current_stream = FakeStream("current")
+    expired_peer = LifecyclePeer(current=False)
+    current_peer = LifecyclePeer(current=True)
+    for stream, lifecycle_peer in (
+        (expired_stream, expired_peer),
+        (current_stream, current_peer),
+    ):
+        listener._ready.put_nowait(
+            remote_server._ReadyClient(
+                cast(socket.socket, stream),
+                cast(DaemonRemoteApiPeer, lifecycle_peer),
+            )
+        )
+    listener._ready_clients = 2
+
+    delivered, delivered_peer = listener.accept()
+
+    assert cast(object, delivered) is current_stream
+    assert cast(object, delivered_peer) is current_peer
+    assert expired_stream.closed is True
+    assert expired_peer.close_calls == 1
+    assert listener.snapshot().ready_clients == 0
+    current_stream.close()
+    listener.stop()
+
+
+def test_listener_accept_reports_stop_after_discarding_last_expired_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listener = _listener(
+        monkeypatch,
+        FakeAdmission(_peer().authenticated),
+        FakeListeningSocket(),
+    )
+    listener._started = True
+    expired_stream = FakeStream("expired-before-stop")
+    expired_peer = LifecyclePeer(
+        current=False,
+        on_close=lambda: setattr(listener, "_stopped", True),
+    )
+    listener._ready.put_nowait(
+        remote_server._ReadyClient(
+            cast(socket.socket, expired_stream),
+            cast(DaemonRemoteApiPeer, expired_peer),
+        )
+    )
+    listener._ready_clients = 1
+
+    with pytest.raises(OSError, match="listener is closed"):
+        listener.accept()
+
+    assert expired_stream.closed is True
+    assert expired_peer.close_calls == 1
+
+
+def test_listener_accept_honors_expired_absolute_delivery_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listener = _listener(
+        monkeypatch,
+        FakeAdmission(_peer().authenticated),
+        FakeListeningSocket(),
+    )
+    listener._started = True
+    listener.settimeout(0.5)
+    clock = iter((10.0, 10.6))
+    monkeypatch.setattr(remote_server, "monotonic", lambda: next(clock))
+
+    with pytest.raises(TimeoutError):
+        listener.accept()
+
+
+def test_reload_queue_refill_race_closes_retained_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listener = _listener(
+        monkeypatch,
+        FakeAdmission(_peer().authenticated),
+        FakeListeningSocket(),
+    )
+    stream = FakeStream("retained-refill-race")
+    peer = LifecyclePeer(current=True)
+    ready = remote_server._ReadyClient(
+        cast(socket.socket, stream),
+        cast(DaemonRemoteApiPeer, peer),
+    )
+
+    class RefilledQueue:
+        def __init__(self) -> None:
+            self.delivery: object | None = ready
+
+        def get_nowait(self) -> object:
+            if self.delivery is None:
+                raise queue.Empty
+            delivery = self.delivery
+            self.delivery = None
+            return delivery
+
+        def put_nowait(self, delivery: object) -> None:
+            del delivery
+            raise queue.Full
+
+    listener._ready = RefilledQueue()  # type: ignore[assignment]
+    listener._ready_clients = 1
+
+    listener._discard_invalid_ready_clients()
+
+    assert listener.snapshot().ready_clients == 0
+    assert listener.snapshot().rejected_connections == 1
+    assert stream.closed is True
+    assert peer.close_calls == 1
 
 
 def test_slow_admission_does_not_block_second_authenticated_client(

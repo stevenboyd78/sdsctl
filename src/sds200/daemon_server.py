@@ -13,6 +13,7 @@ from .daemon_api import DaemonApiErrorCode, DaemonApiResponse
 from .daemon_transport import (
     DaemonServerAcceptor,
     DaemonServerListener,
+    DaemonServerManagedPeerContext,
     DaemonServerPeerContext,
 )
 from .exceptions import DaemonIpcError
@@ -310,6 +311,7 @@ class DaemonApiServer:
             client.settimeout(self.client_timeout)
         except OSError as error:
             _close_client(client)
+            _close_peer_context(peer)
             self._record_error(error)
             return
 
@@ -339,6 +341,7 @@ class DaemonApiServer:
 
         if worker is None or start_error is not None:
             _close_client(client)
+            _close_peer_context(peer)
         if start_error is not None:
             self._record_error(start_error)
 
@@ -382,6 +385,7 @@ class DaemonApiServer:
                         return
         finally:
             _close_client(client)
+            _close_peer_context(peer)
             with self._state_lock:
                 self._clients.pop(client, None)
 
@@ -394,9 +398,12 @@ class DaemonApiServer:
         with self._state_lock:
             self._requests += 1
 
+        close_after_response = False
         try:
             if isinstance(peer, DaemonServerPeerContext):
                 response = peer.handle_daemon_api_json_line(self.api, frame)
+                if isinstance(peer, DaemonServerManagedPeerContext):
+                    close_after_response = not peer.daemon_api_connection_current()
             else:
                 response = self.api.handle_json_line(frame)
         except Exception as error:
@@ -423,7 +430,7 @@ class DaemonApiServer:
 
         with self._state_lock:
             self._responses += 1
-        return True
+        return not close_after_response
 
     def _send_oversized_request(
         self,
@@ -451,6 +458,12 @@ def _close_client(client: socket_module.socket) -> None:
         client.shutdown(socket_module.SHUT_RDWR)
     with suppress(OSError):
         client.close()
+
+
+def _close_peer_context(peer: object) -> None:
+    if isinstance(peer, DaemonServerManagedPeerContext):
+        with suppress(Exception):
+            peer.close_daemon_api_peer_context()
 
 
 def _require_positive_integer(value: object, *, label: str) -> None:

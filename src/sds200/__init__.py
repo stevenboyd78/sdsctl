@@ -324,6 +324,15 @@ from .daemon_remote_auth import (
     load_daemon_remote_credential,
     load_daemon_remote_credential_registry,
 )
+from .daemon_remote_credentials import (
+    DaemonRemoteCredentialAuthority,
+    DaemonRemoteCredentialGeneration,
+    DaemonRemoteCredentialLifecycleSnapshot,
+    DaemonRemoteCredentialReloadError,
+    DaemonRemoteCredentialReloadErrorReason,
+    DaemonRemoteCredentialSession,
+    DaemonRemoteCredentialSessionExpired,
+)
 from .daemon_remote_server import (
     DAEMON_REMOTE_CONTROL_OPERATIONS,
     DAEMON_REMOTE_LISTENER_DEFAULT_ACCEPT_POLL_INTERVAL,
@@ -369,6 +378,7 @@ from .daemon_transport import (
     DaemonClientTransport,
     DaemonServerAcceptor,
     DaemonServerListener,
+    DaemonServerManagedPeerContext,
     DaemonServerPeerContext,
     UnixDaemonClientTransport,
 )
@@ -1416,6 +1426,13 @@ __all__ = [
     "DaemonRemoteChallenge",
     "DaemonRemoteClientIdentity",
     "DaemonRemoteConfigurationPreflight",
+    "DaemonRemoteCredentialAuthority",
+    "DaemonRemoteCredentialGeneration",
+    "DaemonRemoteCredentialLifecycleSnapshot",
+    "DaemonRemoteCredentialReloadError",
+    "DaemonRemoteCredentialReloadErrorReason",
+    "DaemonRemoteCredentialSession",
+    "DaemonRemoteCredentialSessionExpired",
     "DaemonRemoteListenerConfiguration",
     "DaemonRemoteListenerError",
     "DaemonRemoteListenerErrorReason",
@@ -1438,6 +1455,7 @@ __all__ = [
     "DaemonRequestError",
     "DaemonServerAcceptor",
     "DaemonServerListener",
+    "DaemonServerManagedPeerContext",
     "DaemonServerPeerContext",
     "DaemonRuntime",
     "DaemonRuntimeSnapshot",

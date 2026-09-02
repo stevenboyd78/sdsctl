@@ -95,6 +95,15 @@ share exactly one scanner owner, one PSI stream, one demand-driven Waterfall
 session, and one daemon-owned RTSP/RTP audio input while independent client
 disconnects release only their own leases.
 
+The implemented foundation now includes the strict remote configuration and
+preflight model, versioned challenge/proof authentication, TLS 1.3 admission,
+exact-address bounded TCP listener, per-scope API authorization, and atomic
+credential generations. Credential reload constructs a complete replacement
+before commit, preserves the last-known-good registry on failure, and closes all
+prior-generation sessions on successful rotation or revocation. These objects
+remain explicit construction boundaries and are not yet wired into packaged
+daemon startup or deployment port metadata.
+
 Trusted reverse-proxy identity, Internet/public exposure, wildcard binding,
 third-party identity providers, browser-stored bearer credentials, automatic
 LAN discovery, multi-user administration, scanner sharing between multiple

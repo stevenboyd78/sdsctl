@@ -92,6 +92,7 @@ class DaemonApiErrorCode(StrEnum):
     UNSUPPORTED_VERSION = "unsupported_version"
     UNKNOWN_OPERATION = "unknown_operation"
     AUTHORIZATION_DENIED = "authorization_denied"
+    AUTHENTICATION_EXPIRED = "authentication_expired"
     INVALID_PARAMETERS = "invalid_parameters"
     CONTROL_BUSY = "control_busy"
     CONTROL_UNAVAILABLE = "control_unavailable"

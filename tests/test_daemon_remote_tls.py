@@ -7,6 +7,7 @@ import socket
 import ssl
 import subprocess
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from queue import Queue
 from time import monotonic, sleep
@@ -28,11 +29,15 @@ from sds200 import (
     DaemonRemoteChallenge,
     DaemonRemoteClientIdentity,
     DaemonRemoteCredential,
+    DaemonRemoteCredentialAuthority,
+    DaemonRemoteCredentialGeneration,
+    DaemonRemoteCredentialSession,
     DaemonRemoteListenerConfiguration,
     DaemonRemoteServerTlsAdmission,
     DaemonRemoteTlsError,
     DaemonRemoteTlsErrorReason,
     build_daemon_remote_authentication_request,
+    create_daemon_remote_challenge,
 )
 
 CLIENT_ID = "pi-kiosk"
@@ -46,11 +51,14 @@ class ScriptedTlsStream:
         tls_version: str = DAEMON_REMOTE_TLS_VERSION,
         handshake_error: OSError | None = None,
         send_error: OSError | None = None,
+        fail_send_number: int | None = None,
         received: bytes = b"",
     ) -> None:
         self.tls_version = tls_version
         self.handshake_error = handshake_error
         self.send_error = send_error
+        self.fail_send_number = fail_send_number
+        self.send_calls = 0
         self.received = bytearray(received)
         self.timeout: float | None = None
         self.closed = False
@@ -67,7 +75,10 @@ class ScriptedTlsStream:
 
     def sendall(self, data: bytes) -> None:
         del data
-        if self.send_error is not None:
+        self.send_calls += 1
+        if self.send_error is not None and (
+            self.fail_send_number is None or self.send_calls == self.fail_send_number
+        ):
             raise self.send_error
 
     def recv(self, size: int) -> bytes:
@@ -248,11 +259,148 @@ def test_direct_tls_admission_authenticates_and_returns_authoritative_scopes(
     assert peer.scopes == result.scopes
     assert peer.allows(DaemonRemoteAuthorizationScope.CONTROL) is True
     assert peer.tls_version == DAEMON_REMOTE_TLS_VERSION
+    assert peer.credentials_current is True
+    assert peer.execute_if_credentials_current(lambda: b"current") == b"current"
+    assert admission.credential_snapshot() is not None
+    peer.close()
+    peer.close()
+    assert admission.reload_credentials(configuration).generation == 2
     server.close()
     assert admission.context.minimum_version is ssl.TLSVersion.TLSv1_3
     assert admission.context.maximum_version is ssl.TLSVersion.TLSv1_3
     assert admission.registry.active_credentials == 1
     assert admission.handshake_timeout == DAEMON_REMOTE_TLS_DEFAULT_HANDSHAKE_TIMEOUT
+
+
+def test_direct_tls_rotation_closes_old_session_and_requires_reauthentication(
+    tmp_path: Path,
+) -> None:
+    configuration, certificate = _configuration(tmp_path)
+    admission = DaemonRemoteServerTlsAdmission.from_configuration(configuration)
+    context = _client_context(certificate)
+
+    old_client_raw, old_server_raw = socket.socketpair()
+    old_thread, old_outcome = _start_admission(admission, old_server_raw)
+    old_client = _open_client(context, old_client_raw)
+    old_challenge = DaemonRemoteChallenge.from_json_line(_receive_line(old_client))
+    old_client.sendall(
+        build_daemon_remote_authentication_request(
+            old_challenge,
+            client_id=CLIENT_ID,
+            credential=DaemonRemoteCredential(CREDENTIAL_KEY),
+        ).to_json_line()
+    )
+    assert DaemonRemoteAuthenticationResult.from_json_line(
+        _receive_line(old_client)
+    ).ok
+    old_thread.join(2.0)
+    old_accepted = old_outcome.get_nowait()
+    assert isinstance(old_accepted, tuple)
+    old_server, old_peer = old_accepted
+    assert isinstance(old_server, ssl.SSLSocket)
+    assert isinstance(old_peer, DaemonRemoteAuthenticatedPeer)
+    assert admission.credential_snapshot() is not None
+    assert admission.credential_snapshot().active_sessions == 1
+
+    rotated_key = bytes(reversed(CREDENTIAL_KEY))
+    _write_credential(configuration.clients[0].credential_file, rotated_key)
+    rotated = admission.reload_credentials(configuration)
+
+    assert rotated.generation == 2
+    assert rotated.invalidated_sessions == 1
+    assert old_peer.credentials_current is False
+    assert old_server.fileno() == -1
+    old_client.close()
+
+    rejected_client_raw, rejected_server_raw = socket.socketpair()
+    rejected_thread, rejected_outcome = _start_admission(
+        admission,
+        rejected_server_raw,
+    )
+    rejected_client = _open_client(context, rejected_client_raw)
+    rejected_challenge = DaemonRemoteChallenge.from_json_line(
+        _receive_line(rejected_client)
+    )
+    rejected_client.sendall(
+        build_daemon_remote_authentication_request(
+            rejected_challenge,
+            client_id=CLIENT_ID,
+            credential=DaemonRemoteCredential(CREDENTIAL_KEY),
+        ).to_json_line()
+    )
+    rejected_result = DaemonRemoteAuthenticationResult.from_json_line(
+        _receive_line(rejected_client)
+    )
+    rejected_client.close()
+    rejected_thread.join(2.0)
+    rejected_failure = rejected_outcome.get_nowait()
+    assert rejected_result.ok is False
+    assert isinstance(rejected_failure, DaemonRemoteTlsError)
+    assert (
+        rejected_failure.reason
+        is DaemonRemoteTlsErrorReason.AUTHENTICATION_FAILED
+    )
+
+    current_client_raw, current_server_raw = socket.socketpair()
+    current_thread, current_outcome = _start_admission(admission, current_server_raw)
+    current_client = _open_client(context, current_client_raw)
+    current_challenge = DaemonRemoteChallenge.from_json_line(
+        _receive_line(current_client)
+    )
+    current_client.sendall(
+        build_daemon_remote_authentication_request(
+            current_challenge,
+            client_id=CLIENT_ID,
+            credential=DaemonRemoteCredential(rotated_key),
+        ).to_json_line()
+    )
+    assert DaemonRemoteAuthenticationResult.from_json_line(
+        _receive_line(current_client)
+    ).ok
+    current_thread.join(2.0)
+    current_accepted = current_outcome.get_nowait()
+    assert isinstance(current_accepted, tuple)
+    current_server, current_peer = current_accepted
+    assert isinstance(current_server, ssl.SSLSocket)
+    assert isinstance(current_peer, DaemonRemoteAuthenticatedPeer)
+    assert current_peer.credentials_current is True
+    current_peer.close()
+    current_server.close()
+    current_client.close()
+
+
+def test_direct_tls_manual_registry_admission_remains_compatible(
+    tmp_path: Path,
+) -> None:
+    configuration, certificate = _configuration(tmp_path)
+    managed = DaemonRemoteServerTlsAdmission.from_configuration(configuration)
+    admission = DaemonRemoteServerTlsAdmission(managed.context, managed.registry)
+    client_raw, server_raw = socket.socketpair()
+    thread, outcome = _start_admission(admission, server_raw)
+
+    client = _open_client(_client_context(certificate), client_raw)
+    challenge = DaemonRemoteChallenge.from_json_line(_receive_line(client))
+    client.sendall(
+        build_daemon_remote_authentication_request(
+            challenge,
+            client_id=CLIENT_ID,
+            credential=DaemonRemoteCredential(CREDENTIAL_KEY),
+        ).to_json_line()
+    )
+    result = DaemonRemoteAuthenticationResult.from_json_line(_receive_line(client))
+    client.close()
+    thread.join(2.0)
+
+    accepted = outcome.get_nowait()
+    assert result.ok is True
+    assert isinstance(accepted, tuple)
+    server, peer = accepted
+    assert isinstance(server, ssl.SSLSocket)
+    assert isinstance(peer, DaemonRemoteAuthenticatedPeer)
+    assert peer.credentials_current is True
+    assert peer.credential_session is None
+    peer.close()
+    server.close()
 
 
 @pytest.mark.parametrize(
@@ -443,6 +591,120 @@ def test_tls_admission_maps_internal_transport_failures_without_detail(
     assert scripted.closed is True
 
 
+def test_tls_admission_rejects_generation_changed_before_session_registration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configuration, _ = _configuration(tmp_path)
+    admission = DaemonRemoteServerTlsAdmission.from_configuration(configuration)
+    authority = admission.credential_authority
+    assert authority is not None
+    scripted = ScriptedTlsStream(received=b"{}\n")
+    identity = DaemonRemoteAuthenticatedIdentity(
+        CLIENT_ID,
+        (DaemonRemoteAuthorizationScope.OBSERVE,),
+    )
+
+    class DeterministicAuthenticationSession:
+        def __init__(self, registry: object) -> None:
+            del registry
+            self.challenge = create_daemon_remote_challenge(
+                nonce_factory=lambda size: b"s" * size
+            )
+
+        def authenticate(self, request: bytes) -> DaemonRemoteAuthenticatedIdentity:
+            assert request == b"{}"
+            return identity
+
+    original_register = authority.register_session
+
+    def register_after_reload(
+        generation: DaemonRemoteCredentialGeneration,
+        authenticated: DaemonRemoteAuthenticatedIdentity,
+        *,
+        invalidator: Callable[[], None],
+    ) -> DaemonRemoteCredentialSession:
+        authority.reload(configuration)
+        return original_register(
+            generation,
+            authenticated,
+            invalidator=invalidator,
+        )
+
+    monkeypatch.setattr(
+        remote_tls,
+        "DaemonRemoteAuthenticationSession",
+        DeterministicAuthenticationSession,
+    )
+    monkeypatch.setattr(authority, "register_session", register_after_reload)
+    monkeypatch.setattr(
+        admission.context,
+        "wrap_socket",
+        lambda *args, **kwargs: cast(ssl.SSLSocket, scripted),
+    )
+    client, server = socket.socketpair()
+
+    with pytest.raises(DaemonRemoteTlsError) as captured:
+        admission.admit(server)
+    client.close()
+
+    assert captured.value.reason is DaemonRemoteTlsErrorReason.AUTHENTICATION_FAILED
+    assert authority.snapshot().generation == 2
+    assert authority.snapshot().active_sessions == 0
+    assert scripted.closed is True
+
+
+def test_tls_admission_releases_registered_session_when_success_send_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    configuration, _ = _configuration(tmp_path)
+    admission = DaemonRemoteServerTlsAdmission.from_configuration(configuration)
+    authority = admission.credential_authority
+    assert authority is not None
+    scripted = ScriptedTlsStream(
+        send_error=OSError("private result send detail"),
+        fail_send_number=2,
+        received=b"{}\n",
+    )
+    identity = DaemonRemoteAuthenticatedIdentity(
+        CLIENT_ID,
+        (DaemonRemoteAuthorizationScope.OBSERVE,),
+    )
+
+    class DeterministicAuthenticationSession:
+        def __init__(self, registry: object) -> None:
+            del registry
+            self.challenge = create_daemon_remote_challenge(
+                nonce_factory=lambda size: b"s" * size
+            )
+
+        def authenticate(self, request: bytes) -> DaemonRemoteAuthenticatedIdentity:
+            assert request == b"{}"
+            return identity
+
+    monkeypatch.setattr(
+        remote_tls,
+        "DaemonRemoteAuthenticationSession",
+        DeterministicAuthenticationSession,
+    )
+    monkeypatch.setattr(
+        admission.context,
+        "wrap_socket",
+        lambda *args, **kwargs: cast(ssl.SSLSocket, scripted),
+    )
+    client, server = socket.socketpair()
+
+    with pytest.raises(DaemonRemoteTlsError) as captured:
+        admission.admit(server)
+    client.close()
+
+    assert captured.value.reason is DaemonRemoteTlsErrorReason.TRANSPORT_FAILED
+    assert scripted.send_calls == 2
+    assert authority.snapshot().active_sessions == 0
+    assert scripted.closed is True
+
+
 @pytest.mark.parametrize("payload", [b"", b"\n", b"bad\rframe\n"])
 def test_authentication_frame_reader_rejects_eof_empty_and_carriage_return(
     payload: bytes,
@@ -478,6 +740,38 @@ def test_tls_admission_and_peer_constructors_are_strict(tmp_path: Path) -> None:
         DaemonRemoteAuthenticatedPeer(object())  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="version is unsupported"):
         DaemonRemoteAuthenticatedPeer(identity, tls_version="TLSv1.2")
+    with pytest.raises(TypeError, match="credential session is invalid"):
+        DaemonRemoteAuthenticatedPeer(
+            identity,
+            credential_session=cast(DaemonRemoteCredentialSession, object()),
+        )
+    peer = DaemonRemoteAuthenticatedPeer(identity)
+    with pytest.raises(TypeError, match="action must be callable"):
+        peer.execute_if_credentials_current(None)  # type: ignore[arg-type]
+    assert peer.execute_if_credentials_current(lambda: b"legacy") == b"legacy"
+    peer.close()
+    with pytest.raises(TypeError, match="credential authority is invalid"):
+        DaemonRemoteServerTlsAdmission(
+            admission.context,
+            admission.registry,
+            credential_authority=cast(DaemonRemoteCredentialAuthority, object()),
+        )
+    authority = DaemonRemoteCredentialAuthority(configuration)
+    other_registry = DaemonRemoteCredentialAuthority(
+        configuration
+    ).current_generation().registry
+    with pytest.raises(ValueError, match="registry must match"):
+        DaemonRemoteServerTlsAdmission(
+            admission.context,
+            other_registry,
+            credential_authority=authority,
+        )
+    assert admission.credential_snapshot() is not None
+    legacy = DaemonRemoteServerTlsAdmission(admission.context, admission.registry)
+    assert legacy.registry is admission.registry
+    assert legacy.credential_snapshot() is None
+    with pytest.raises(RuntimeError, match="does not own reloadable credentials"):
+        legacy.reload_credentials(configuration)
     with pytest.raises(TypeError, match="TLS error reason"):
         DaemonRemoteTlsError("tls_handshake_failed")  # type: ignore[arg-type]
 

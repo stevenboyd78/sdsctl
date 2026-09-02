@@ -44,6 +44,17 @@ class DaemonServerPeerContext(Protocol):
 
 
 @runtime_checkable
+class DaemonServerManagedPeerContext(DaemonServerPeerContext, Protocol):
+    """Add revocable lifecycle state to an authorized transport peer."""
+
+    def daemon_api_connection_current(self) -> bool:
+        """Return whether this transport-authenticated connection remains valid."""
+
+    def close_daemon_api_peer_context(self) -> None:
+        """Release transport-owned authentication or authorization state."""
+
+
+@runtime_checkable
 class DaemonServerListener(Protocol):
     """Own one daemon listener and its transport-specific lifecycle."""
 

@@ -4,8 +4,8 @@ Milestone 32.1 is building an authenticated network transport for thin CLI and
 TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
 remain the default. This page describes the current configuration, security
 preflight, authentication protocol, direct-TLS admission, exact-address TCP
-listener, and operation authorization boundary; it does **not** announce a
-packaged remote service.
+listener, credential lifecycle, and operation authorization boundary; it does
+**not** announce a packaged remote service.
 
 The packaged `sdsctl daemon` command does not yet read this file, construct the
 listener, publish a container port, or add a Home Assistant App port. The
@@ -185,10 +185,10 @@ An active credential file contains exactly one unpadded base64url value encoding
 `0600`. The credential loader rejects relative paths, symlinks, non-regular
 files, malformed or oversized contents, and files whose identity or metadata
 changes between path inspection, descriptor opening, reading, and final
-inspection. Active credentials are loaded once into an immutable registry so a
-remote authentication attempt cannot probe credential-file existence or parse
-behavior. Exceptions and object representations never include credential bytes
-or private paths.
+inspection. Active credentials are loaded into an immutable registry before the
+listener admits peers. A remote authentication attempt therefore cannot probe
+credential-file existence or parse behavior. Exceptions and object
+representations never include credential bytes or private paths.
 
 The `sds200.daemon_remote_tls` admission object loads the preflighted server
 certificate, mode-`0600` private key, and active credential registry. It requires
@@ -209,6 +209,51 @@ authentication, listener failure, and shutdown all close their owned streams.
 Redacted snapshots include only address family, port, capacity, counts, and
 stable failure classes—not the private address, peer, client ID, or secret path.
 
+## Credential rotation and revocation
+
+The explicit listener owns a generation-based credential authority. Initial
+construction loads one complete immutable registry before the listener binds.
+`reload_credentials()` then provides the operational rotation boundary for a
+separately constructed listener; it is not yet exposed through a packaged CLI
+command or service signal.
+
+For one reload, the authority:
+
+1. verifies that enabled state, bind address, port, certificate path, and
+   private-key path still describe the running listener;
+2. loads and validates the complete replacement client registry without
+   changing the current generation;
+3. atomically installs that registry and advances the generation; and
+4. invalidates and closes every connection authenticated under the preceding
+   generation, including unchanged identities and authenticated clients still
+   waiting in the ready queue.
+
+This all-or-nothing sequence means a malformed, missing, non-private, or
+concurrently replaced active credential cannot partially alter the registry.
+A failed reload reports a stable redacted failure class and leaves the
+last-known-good generation and its sessions active. A successful reload always
+requires every client to reconnect and complete a new challenge/proof exchange,
+even when only one identity changed or the replacement bytes are identical.
+That rule makes revocation immediate and avoids trying to infer which
+established connection should survive a registry change.
+
+Admission and authorized dispatch are linearized against the generation swap.
+If a reload wins after an old registry verifies a proof but before the session
+is registered, admission fails. If an authorized request is already executing,
+the reload waits for that bounded request to finish, then advances the
+generation and closes the connection. An expired request that can still reach
+the API boundary receives `authentication_expired` and its connection is
+closed; clients must reconnect rather than retry on the old stream.
+
+Credential-only reload deliberately cannot change network or server-identity
+settings. Changing the bind address, port, certificate, or private key requires
+a separately controlled listener replacement. Credential files remain
+operator-owned: this boundary reads exact mode-`0600` files but does not create,
+overwrite, distribute, reveal, or delete secrets. Its diagnostics contain only
+generation, configured/active/revoked/control client counts, live-session and
+invalidation counts, reload totals, and stable failure classes. They contain no
+client ID, endpoint, path, or credential material.
+
 Only authenticated streams are delivered to the daemon API server, together
 with a transport-owned peer context. That context invokes a distinct
 authorization entry point before dispatch. An `observe` identity receives
@@ -228,12 +273,11 @@ publish a deployment port, or activate Home Assistant configuration.
 This foundation is not sufficient for a supported packaged remote deployment.
 Milestone 32.1 must still add and validate, in bounded slices:
 
-1. operational credential rotation and revocation without secret disclosure;
-2. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
-3. one shared remote client transport for CLI and TUI consumers;
-4. explicit opt-in daemon startup and diagnostics;
-5. explicit Docker/Compose and Home Assistant App port metadata; and
-6. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
+1. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
+2. one shared remote client transport for CLI and TUI consumers;
+3. explicit opt-in daemon startup and diagnostics;
+4. explicit Docker/Compose and Home Assistant App port metadata; and
+5. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
    and remote-TUI acceptance.
 
 Until those steps are complete and released, use the private local daemon

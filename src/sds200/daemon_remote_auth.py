@@ -1,4 +1,4 @@
-"""Versioned challenge/proof authentication for a future TLS daemon transport.
+"""Versioned challenge/proof authentication for the direct-TLS daemon transport.
 
 The primitives in this module perform no network I/O.  A later listener may use
 one single-use session only after direct TLS has authenticated the server.

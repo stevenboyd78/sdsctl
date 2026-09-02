@@ -14,6 +14,8 @@ from sds200 import (
     DaemonApiServer,
     DaemonIpcError,
     DaemonReadOnlyApi,
+    DaemonServerManagedPeerContext,
+    DaemonServerPeerContext,
     DaemonSocketListener,
     DaemonSocketLocation,
     DaemonSocketSource,
@@ -43,6 +45,20 @@ class OversizedResponseApi:
     def handle_json_line(self, data: bytes | str) -> bytes:
         del data
         return b"x" * 300
+
+
+class ExistingPeerContext:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def handle_daemon_api_json_line(
+        self,
+        api: object,
+        data: bytes | str,
+    ) -> bytes:
+        self.calls += 1
+        assert isinstance(api, DaemonReadOnlyApi)
+        return api.handle_json_line(data)
 
 
 def request(operation: str, request_id: str) -> bytes:
@@ -154,6 +170,28 @@ def test_server_handles_ping_over_real_unix_socket(tmp_path: Path) -> None:
     assert snapshot.requests == 1
     assert snapshot.responses == 1
     assert path.exists() is False
+
+
+def test_existing_authorization_peer_remains_compatible_without_lifecycle_hooks(
+    tmp_path: Path,
+) -> None:
+    server, _ = make_server(tmp_path)
+    client, accepted = socket.socketpair()
+    client.settimeout(1.0)
+    peer = ExistingPeerContext()
+
+    try:
+        assert isinstance(peer, DaemonServerPeerContext)
+        assert not isinstance(peer, DaemonServerManagedPeerContext)
+        assert server._dispatch_frame(accepted, request("ping", "legacy-peer"), peer)
+        payload = json.loads(read_line(client))
+    finally:
+        client.close()
+        accepted.close()
+
+    assert payload["ok"] is True
+    assert payload["request_id"] == "legacy-peer"
+    assert peer.calls == 1
 
 
 def test_connection_can_process_multiple_ordered_requests(

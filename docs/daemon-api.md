@@ -88,6 +88,17 @@ and never falls back to a wildcard. Bounded concurrent admission workers and a
 bounded authenticated-client queue isolate silent, malformed, and slow peers.
 Only successfully authenticated TLS streams reach `DaemonApiServer`.
 
+The listener's credential authority loads a complete replacement registry
+before atomically advancing its generation. A failed credential reload preserves
+the last-known-good registry and sessions. A successful reload closes every
+session from the preceding generation and requires all clients to reconnect,
+including identities whose configuration did not change. A proof verified
+against an old registry cannot register after the generation swap, and an
+already executing bounded request finishes before the swap commits. Listener
+address, port, certificate path, and private-key path cannot change through this
+credential-only boundary. Lifecycle diagnostics expose counts and stable error
+classes, never client IDs, private addresses, paths, or secret bytes.
+
 The authenticated peer then invokes the API's fail-closed authorized entry
 point. `observe` exposes negotiation, ping, sanitized runtime/scanner state, and
 audio health. The private scanner endpoint is removed. `control` adds only the
@@ -444,6 +455,7 @@ Version 1 defines these stable error codes:
 - `unsupported_version`
 - `unknown_operation`
 - `authorization_denied`
+- `authentication_expired`
 - `invalid_parameters`
 - `control_busy`
 - `control_unavailable`
@@ -462,6 +474,7 @@ Important control classifications are:
 | Code | Meaning |
 | --- | --- |
 | `authorization_denied` | An authenticated transport peer lacks authority for the requested operation |
+| `authentication_expired` | The transport credential generation changed; reconnect and authenticate again |
 | `control_busy` | Another scanner mutation is already in progress |
 | `control_unavailable` | Runtime or required connection state is unavailable |
 | `unsupported_operation` | Scanner model, capability, or transport cannot safely perform the operation |

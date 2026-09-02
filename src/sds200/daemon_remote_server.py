@@ -29,6 +29,10 @@ from .daemon_remote import (
     DaemonRemoteAuthorizationScope,
     DaemonRemoteListenerConfiguration,
 )
+from .daemon_remote_credentials import (
+    DaemonRemoteCredentialLifecycleSnapshot,
+    DaemonRemoteCredentialSessionExpired,
+)
 from .daemon_remote_tls import (
     DAEMON_REMOTE_TLS_DEFAULT_HANDSHAKE_TIMEOUT,
     DaemonRemoteAuthenticatedPeer,
@@ -120,25 +124,41 @@ class DaemonRemoteApiPeer:
     ) -> bytes:
         """Use only the API's fail-closed authorized dispatch entry point."""
 
-        handler = getattr(api, "handle_authorized_json_line", None)
-        if not callable(handler):
+        def dispatch() -> bytes:
+            handler = getattr(api, "handle_authorized_json_line", None)
+            if not callable(handler):
+                return DaemonApiResponse.failure(
+                    None,
+                    DaemonApiErrorCode.INTERNAL_ERROR,
+                    "The daemon authorization boundary is unavailable.",
+                ).to_json_line()
+            response = handler(
+                data,
+                allowed_operations=self.allowed_operations,
+                redacted_result_fields=DAEMON_REMOTE_REDACTED_RESULT_FIELDS,
+            )
+            if not isinstance(response, bytes):
+                return DaemonApiResponse.failure(
+                    None,
+                    DaemonApiErrorCode.INTERNAL_ERROR,
+                    "The daemon authorization boundary is unavailable.",
+                ).to_json_line()
+            return response
+
+        try:
+            return self.authenticated.execute_if_credentials_current(dispatch)
+        except DaemonRemoteCredentialSessionExpired:
             return DaemonApiResponse.failure(
                 None,
-                DaemonApiErrorCode.INTERNAL_ERROR,
-                "The daemon authorization boundary is unavailable.",
+                DaemonApiErrorCode.AUTHENTICATION_EXPIRED,
+                "The remote daemon authentication session is no longer current.",
             ).to_json_line()
-        response = handler(
-            data,
-            allowed_operations=self.allowed_operations,
-            redacted_result_fields=DAEMON_REMOTE_REDACTED_RESULT_FIELDS,
-        )
-        if not isinstance(response, bytes):
-            return DaemonApiResponse.failure(
-                None,
-                DaemonApiErrorCode.INTERNAL_ERROR,
-                "The daemon authorization boundary is unavailable.",
-            ).to_json_line()
-        return response
+
+    def daemon_api_connection_current(self) -> bool:
+        return self.authenticated.credentials_current
+
+    def close_daemon_api_peer_context(self) -> None:
+        self.authenticated.close()
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,6 +309,21 @@ class DaemonRemoteTcpListener:
                 last_error=self._last_error,
             )
 
+    def credential_snapshot(
+        self,
+    ) -> DaemonRemoteCredentialLifecycleSnapshot | None:
+        return self.admission.credential_snapshot()
+
+    def reload_credentials(
+        self,
+        configuration: DaemonRemoteListenerConfiguration,
+    ) -> DaemonRemoteCredentialLifecycleSnapshot:
+        """Atomically replace credentials and discard invalid queued peers."""
+
+        snapshot = self.admission.reload_credentials(configuration)
+        self._discard_invalid_ready_clients()
+        return snapshot
+
     def start(self) -> DaemonRemoteTcpListener:
         with self._lock:
             if self._listener is not None:
@@ -353,28 +388,44 @@ class DaemonRemoteTcpListener:
             if (self._stopped or self._accept_failed) and self._ready.empty():
                 raise OSError(errno.EBADF, "Remote daemon TCP listener is closed.")
             timeout = self._delivery_timeout
+        deadline = None if timeout is None else monotonic() + timeout
 
-        try:
-            delivery = self._ready.get(timeout=timeout)
-        except Empty as error:
+        while True:
             with self._lock:
-                unavailable = self._stopped or self._accept_failed
-            if unavailable:
-                raise OSError(
-                    errno.EBADF,
-                    "Remote daemon TCP listener is closed.",
-                ) from error
-            raise TimeoutError from error
+                if (self._stopped or self._accept_failed) and self._ready.empty():
+                    raise OSError(
+                        errno.EBADF,
+                        "Remote daemon TCP listener is closed.",
+                    )
+            remaining = None if deadline is None else deadline - monotonic()
+            if remaining is not None and remaining <= 0:
+                raise TimeoutError
+            try:
+                delivery = self._ready.get(timeout=remaining)
+            except Empty as error:
+                with self._lock:
+                    unavailable = self._stopped or self._accept_failed
+                if unavailable:
+                    raise OSError(
+                        errno.EBADF,
+                        "Remote daemon TCP listener is closed.",
+                    ) from error
+                raise TimeoutError from error
 
-        if not isinstance(delivery, _ReadyClient):
-            raise OSError(errno.EBADF, "Remote daemon TCP listener is closed.")
-        with self._lock:
-            stopped = self._stopped
-            self._ready_clients -= 1
-        if stopped:
-            _close_stream(delivery.stream)
-            raise OSError(errno.EBADF, "Remote daemon TCP listener is closed.")
-        return delivery.stream, delivery.peer
+            if not isinstance(delivery, _ReadyClient):
+                raise OSError(errno.EBADF, "Remote daemon TCP listener is closed.")
+            with self._lock:
+                stopped = self._stopped
+                self._ready_clients -= 1
+            if stopped:
+                _close_stream(delivery.stream)
+                delivery.peer.close_daemon_api_peer_context()
+                raise OSError(errno.EBADF, "Remote daemon TCP listener is closed.")
+            if not delivery.peer.daemon_api_connection_current():
+                _close_stream(delivery.stream)
+                delivery.peer.close_daemon_api_peer_context()
+                continue
+            return delivery.stream, delivery.peer
 
     def stop(self) -> None:
         with self._lock:
@@ -522,6 +573,7 @@ class DaemonRemoteTcpListener:
                     self._ready_clients += 1
         if close_secured:
             _close_stream(secured)
+            delivery.peer.close_daemon_api_peer_context()
 
     def _drain_ready_clients(self) -> tuple[socket_module.socket, ...]:
         streams: list[socket_module.socket] = []
@@ -534,7 +586,37 @@ class DaemonRemoteTcpListener:
                 continue
             with self._lock:
                 self._ready_clients -= 1
+            delivery.peer.close_daemon_api_peer_context()
             streams.append(delivery.stream)
+
+    def _discard_invalid_ready_clients(self) -> None:
+        retained: list[_ReadyClient | object] = []
+        while True:
+            try:
+                delivery = self._ready.get_nowait()
+            except Empty:
+                break
+            if not isinstance(delivery, _ReadyClient):
+                retained.append(delivery)
+                continue
+            if delivery.peer.daemon_api_connection_current():
+                retained.append(delivery)
+                continue
+            with self._lock:
+                self._ready_clients -= 1
+            _close_stream(delivery.stream)
+            delivery.peer.close_daemon_api_peer_context()
+
+        for delivery in retained:
+            try:
+                self._ready.put_nowait(delivery)
+            except Full:
+                if isinstance(delivery, _ReadyClient):
+                    with self._lock:
+                        self._ready_clients -= 1
+                        self._rejected_connections += 1
+                    _close_stream(delivery.stream)
+                    delivery.peer.close_daemon_api_peer_context()
 
 
 def _listener_endpoint(
