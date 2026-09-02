@@ -1,0 +1,140 @@
+name: sdsctl-remote
+
+services:
+  remote-preflight:
+    build:
+      context: .
+    entrypoint:
+      - sdsctl
+      - daemon-remote-preflight
+    command:
+      - --published-address
+      - "${SDSCTL_REMOTE_HOST_ADDRESS:?Set SDSCTL_REMOTE_HOST_ADDRESS to one exact private Docker-host address}"
+      - --expected-port
+      - "${SDSCTL_REMOTE_PORT:-50443}"
+      - --remote-config
+      - /config/sdsctl/daemon-remote.toml
+    network_mode: none
+    read_only: true
+    healthcheck:
+      disable: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: "${SDSCTL_REMOTE_CONFIG_DIRECTORY:?Set SDSCTL_REMOTE_CONFIG_DIRECTORY to the absolute server configuration directory}"
+        target: /config/sdsctl
+        read_only: true
+        bind:
+          create_host_path: false
+
+  daemon:
+    build:
+      context: .
+    command:
+      - --log-level
+      - "${SDS200_LOG_LEVEL:-INFO}"
+      - --host
+      - "${SDS200_HOST:?Set SDS200_HOST to the scanner IPv4 address}"
+      - daemon
+      - --remote-config
+      - /config/sdsctl/daemon-remote.toml
+      - --rtp-bind-port
+      - "50000"
+    depends_on:
+      remote-preflight:
+        condition: service_completed_successfully
+    networks:
+      remote:
+        ipv4_address: 172.30.32.2
+    ports:
+      - name: daemon-client
+        target: "${SDSCTL_REMOTE_PORT:-50443}"
+        published: "${SDSCTL_REMOTE_PORT:-50443}"
+        host_ip: "${SDSCTL_REMOTE_HOST_ADDRESS:?Set SDSCTL_REMOTE_HOST_ADDRESS to one exact private Docker-host address}"
+        protocol: tcp
+      - name: scanner-rtp
+        target: 50000
+        published: "50000"
+        host_ip: "${SDSCTL_REMOTE_HOST_ADDRESS:?Set SDSCTL_REMOTE_HOST_ADDRESS to one exact private Docker-host address}"
+        protocol: udp
+    read_only: true
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - type: bind
+        source: "${SDSCTL_REMOTE_CONFIG_DIRECTORY:?Set SDSCTL_REMOTE_CONFIG_DIRECTORY to the absolute server configuration directory}"
+        target: /config/sdsctl
+        read_only: true
+        bind:
+          create_host_path: false
+      - state:/state
+      - cache:/cache
+      - runtime:/run/sdsctl
+
+  daemon-client:
+    profiles:
+      - client
+    build:
+      context: .
+    entrypoint:
+      - sdsctl
+      - daemon-client
+    network_mode: none
+    healthcheck:
+      disable: true
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - runtime:/run/sdsctl
+
+  web-dashboard:
+    profiles:
+      - web
+    build:
+      context: .
+    entrypoint:
+      - sdsctl
+      - web
+      - --container-exposure
+    networks:
+      - remote
+    ports:
+      - "127.0.0.1:${SDSCTL_WEB_PORT:-8000}:8000"
+    read_only: true
+    restart: unless-stopped
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=5)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    volumes:
+      - runtime:/run/sdsctl
+
+networks:
+  remote:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.32.0/24
+
+volumes:
+  state:
+  cache:
+  runtime:

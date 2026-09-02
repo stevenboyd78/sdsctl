@@ -27,6 +27,14 @@ private daemon-client and web sidecars. Milestone 25.17 hardens that persistent
 USB path for unplug/replug, device re-enumeration, confirmed PSI readiness,
 ordinary Podman restart rebinding, and Linux security-policy diagnostics.
 
+Milestone 32.3 adds a separate `compose.remote.yaml` deployment for one
+native-Linux Docker Engine daemon and explicitly authenticated private-LAN CLI
+or TUI clients. It does not change this document's existing `compose.yaml` or
+`compose.usb.yaml` contracts. Follow the
+[remote daemon container deployment guide](remote-container-deployment.md)
+when that is the intended topology; do not add a daemon-client port to the
+ordinary manifests.
+
 Native systemd deployment remains the preferred production option when direct
 host-device, local-audio, or other operating-system integration is important.
 

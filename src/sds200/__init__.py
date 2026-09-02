@@ -300,6 +300,7 @@ from .daemon_remote import (
     DaemonRemoteListenerConfiguration,
     default_daemon_remote_config_path,
     load_daemon_remote_configuration,
+    normalize_daemon_remote_address,
     preflight_daemon_remote_configuration,
 )
 from .daemon_remote_auth import (
@@ -340,6 +341,16 @@ from .daemon_remote_credentials import (
     DaemonRemoteCredentialReloadErrorReason,
     DaemonRemoteCredentialSession,
     DaemonRemoteCredentialSessionExpired,
+)
+from .daemon_remote_deployment import (
+    DAEMON_REMOTE_COMPOSE_CONFIG_PATH,
+    DAEMON_REMOTE_COMPOSE_CONTAINER_ADDRESS,
+    DAEMON_REMOTE_COMPOSE_RTP_PORT,
+    DAEMON_REMOTE_DEPLOYMENT_ERROR,
+    DaemonRemoteDeploymentPreflight,
+    DaemonRemoteDeploymentPreflightError,
+    preflight_daemon_remote_container_configuration,
+    preflight_daemon_remote_container_deployment,
 )
 from .daemon_remote_observation import (
     DAEMON_REMOTE_AUDIO_ENDPOINT,
@@ -1518,6 +1529,8 @@ __all__ = [
     "DaemonRemoteCredentialReloadErrorReason",
     "DaemonRemoteCredentialSession",
     "DaemonRemoteCredentialSessionExpired",
+    "DaemonRemoteDeploymentPreflight",
+    "DaemonRemoteDeploymentPreflightError",
     "DaemonRemoteAudioLease",
     "DaemonRemoteEventLease",
     "DaemonRemoteListenerConfiguration",
@@ -1545,6 +1558,10 @@ __all__ = [
     "DaemonRemoteCredential",
     "DaemonRemoteCredentialError",
     "DaemonRemoteCredentialRegistry",
+    "DAEMON_REMOTE_COMPOSE_CONFIG_PATH",
+    "DAEMON_REMOTE_COMPOSE_CONTAINER_ADDRESS",
+    "DAEMON_REMOTE_COMPOSE_RTP_PORT",
+    "DAEMON_REMOTE_DEPLOYMENT_ERROR",
     "DaemonProcessResult",
     "DaemonProtocolError",
     "DaemonRecordingFileClient",
@@ -1836,6 +1853,9 @@ __all__ = [
     "Packet",
     "PackagedDaemonRemoteService",
     "PackagedDaemonRemoteServiceSnapshot",
+    "normalize_daemon_remote_address",
+    "preflight_daemon_remote_container_configuration",
+    "preflight_daemon_remote_container_deployment",
     "PwfResponse",
     "PcmSink",
     "PcmSinkRouter",

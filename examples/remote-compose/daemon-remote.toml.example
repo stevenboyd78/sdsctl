@@ -1,0 +1,13 @@
+version = 1
+
+[listener]
+enabled = true
+bind_address = "172.30.32.2"
+port = 50443
+certificate_file = "/config/sdsctl/tls/server.crt"
+private_key_file = "/config/sdsctl/tls/server.key"
+
+[[clients]]
+client_id = "pi-display"
+credential_file = "/config/sdsctl/clients/pi-display.secret"
+scopes = ["observe"]
