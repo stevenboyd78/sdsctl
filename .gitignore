@@ -12,3 +12,4 @@ dist/
 *.log
 *.trace
 .env
+.env.remote

@@ -33,6 +33,7 @@ Choose the installation that matches where you want to run `sdsctl`:
 | Every optional Python runtime interface | Install `sds200[all]` |
 | Base CLI or Python library only | Install `sds200` |
 | Docker or Podman | Follow the [container guide](https://github.com/stevenboyd78/sdsctl/wiki/Containers) |
+| One Docker daemon with remote CLI or TUI clients | Follow the [remote container guide](docs/remote-container-deployment.md) |
 | Development and contribution | Install `.[dev,all]` from a source checkout |
 
 The [Installation wiki page](https://github.com/stevenboyd78/sdsctl/wiki/Installation)
@@ -149,6 +150,7 @@ Advanced, version-controlled references remain in the repository:
 - [Layered configuration](docs/configuration.md)
 - [Daemon deployment](docs/daemon-deployment.md)
 - [Authenticated remote daemon clients](docs/daemon-remote.md)
+- [Remote daemon container deployment](docs/remote-container-deployment.md)
 - [Web dashboard](docs/web-dashboard.md)
 - [Network audio](docs/audio.md)
 - [Home Assistant App](docs/home-assistant-app.md)

@@ -1,0 +1,9 @@
+version = 1
+
+[profiles.docker-host]
+address = "192.168.20.10"
+port = 50443
+server_hostname = "sdsctl-daemon.home.arpa"
+certificate_file = "/home/pi/.config/sdsctl/remote-ca.crt"
+client_id = "pi-display"
+credential_file = "/home/pi/.config/sdsctl/pi-display.secret"

@@ -11,7 +11,154 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.2 — Packaged remote daemon startup and client profiles
+### Milestone 32.3 — Isolated container remote-daemon and thin-client deployment
+
+Milestone 32.2 is closed through reviewed pull request 221 and merge commit
+`ebc987926b846dc62c83478341a0c6b2ef250603`. Its complete static, test,
+documentation, distribution, browser, screenshot, CodeQL, generic-image, and
+Home Assistant App image validation passed before and after merge. The packaged
+ordinary-host daemon now starts the authenticated remote listener only from one
+explicit enabled configuration, performs fail-closed TLS and credential
+preflight before binding, reloads complete credential generations atomically,
+and supplies strict named remote profiles plus bounded resynchronizing CLI and
+TUI clients without changing local Unix-socket defaults.
+
+Milestone 32.3 packages that reviewed service boundary for one explicit
+native-Linux Docker Engine deployment and one ordinary Raspberry Pi TUI client.
+Add a standalone remote Compose manifest rather than changing or layering onto
+the existing network, USB, local daemon-client, or loopback web-dashboard
+contracts. Ordinary `compose.yaml` and `compose.usb.yaml` operation must remain
+unchanged, continue to publish no daemon-client TCP port, and require no remote
+configuration merely because the new manifest exists.
+
+Run the remote scanner-owning daemon as unprivileged UID/GID `10001:10001` on
+one dedicated bridge network with one fixed private container address. It must
+not use host networking, privileged mode, a host device, added capabilities, or
+a broad host filesystem mount. The daemon remains the sole owner of scanner
+control, PSI, RTSP/RTP audio, recordings, events, and the demand-driven
+Waterfall session. Container isolation must not introduce another scanner-side
+session or an independent state publisher.
+
+Publish exactly two host mappings on one operator-selected literal private or
+link-local LAN address: the configured authenticated daemon-client TCP port and
+UDP 50000 for the scanner's existing RTP input. The host TCP port, container
+TCP port, and enabled `daemon-remote.toml` listener port must agree exactly.
+The listener must bind only the manifest's fixed private container address.
+Reject wildcard, loopback, multicast, documentation, reserved, and public host
+publication addresses before starting the daemon. Do not add Dockerfile
+`EXPOSE` metadata, a port range, automatic address selection, host networking,
+or a mapping for scanner control UDP 50536, RTSP TCP 554, local Unix sockets,
+the loopback dashboard, or any Home Assistant listener.
+
+Add one non-mutating deployment-preflight command and an isolated one-shot
+Compose preflight service. The command must validate the published host address,
+the exact expected container address and port, the enabled listener document,
+and the existing TLS/private-key/client-credential filesystem preflight while
+emitting only a fixed success or redacted failure class. The preflight service
+must have no network, state, cache, runtime socket, device, capability,
+privileged, or restart authority; it may read only the same server
+configuration tree mounted read-only by the daemon. Compose must require that
+service to complete successfully before starting the daemon. The daemon must
+still repeat its own authoritative configuration and filesystem preflight
+immediately before constructing its listener.
+
+Mount one operator-owned configuration tree read-only at the deterministic
+container configuration root. Server certificate, mode-`0600` private key, and
+independent mode-`0600` client credentials remain files beneath that tree and
+must be readable by UID/GID `10001:10001`. Secret bytes must never appear in an
+environment file, Compose interpolation, command line, image layer, generated
+manifest, health check, log, diagnostic, object representation, or committed
+example. The non-secret example environment and TOML documents may contain only
+clearly labeled private documentation placeholders and fixed container paths.
+Client credentials are provisioned to each Raspberry Pi independently through
+an operator-controlled out-of-band transfer; the server private key is never
+copied to a client.
+
+Retain private local Unix sockets and the daemon's current socket health check
+inside the deployment. Optional same-project local CLI and loopback-only web
+sidecars may continue to consume the shared runtime volume, but they must not
+gain the remote configuration tree or a LAN port. A Raspberry Pi TUI runs from
+an ordinary `sds200[tui,playback]` installation outside Compose and selects one
+exact `daemon-remote-clients.toml` profile. The remote port is not HTTP and must
+never be opened in a browser. A browser kiosk continues to require the separate
+password-authenticated native HTTPS dashboard boundary; containerized native
+dashboard publication is not introduced here.
+
+Document a beginner-oriented Docker-host and Raspberry Pi procedure: choose the
+one scanner-facing private host address, create the read-only configuration
+tree, issue distinct server and client material, set exact ownership and modes,
+validate the resolved Compose model, run the deployment preflight, start the
+daemon, install the Pi client, verify TLS identity and scopes, and add only the
+one TCP firewall direction needed by intended clients. Document UDP 50000 as
+scanner-to-host RTP input rather than a client service. Include status,
+snapshot, event, TUI, rotation, revocation, restart, rollback, disablement, and
+complete non-destructive shutdown checks without printing a private endpoint or
+secret.
+
+Add deterministic manifest, CLI, address, hostile-input, permissions,
+lifecycle, and documentation coverage. Prove the old Compose files remain
+unchanged; missing required interpolation fails before startup; invalid host,
+container, port, listener, TLS, or credential state blocks the daemon; the
+preflight service has no network or write authority; the daemon exposes only
+the exact two mappings; local and remote clients can coexist; remote observe
+and control scopes remain authoritative; and stopping or replacing containers
+leaves no listener, worker, or scanner-side ownership behind. Render the
+manifest with Docker Compose, inspect the built image and containers, and run
+the complete static, test, documentation, distribution, generic-image, and
+Home Assistant App image validation appropriate to the changed surfaces.
+
+Physical acceptance must use a native-Linux Docker Engine host and a separate
+LAN client. Prove scanner control, PSI, RTSP/RTP audio, remote status/events,
+shared Waterfall, and TUI recovery through the bridge deployment while a local
+client remains usable. Confirm one scanner-owner session, one Waterfall source,
+independent bounded clients, immediate old-generation invalidation after
+credential rotation or revocation, clean daemon restart recovery, and exact
+port/firewall observations. Remove only the named validation project,
+containers, network, test credentials, and staging files after an exact
+operator-approved cleanup.
+
+Physical acceptance completed on native Linux with Docker Engine 29.7.2, an
+SDS200 running firmware 1.26.01, and a separate Raspberry Pi 4 running Debian
+13 on aarch64. The isolated preflight passed before startup; container
+inspection confirmed the unprivileged, read-only, capability-free boundary;
+and only the selected private TCP mapping plus scanner-to-host UDP 50000 were
+published. The Home Assistant App was stopped before Docker acquired the
+scanner, the container remained the sole scanner owner, a private Unix-socket
+client remained usable, and the separate Pi authenticated through its exact
+observe-only profile without receiving a scanner or audio endpoint. Remote
+status, authoritative events, PSI, a shared Waterfall checkpoint/PWF/GWF stream
+with 240-bin frames, and three seconds of 8 kHz mono PCM audio all passed. A
+separate control identity exercised and released scanner hold state while the
+Pi identity's control attempt was rejected before dispatch.
+
+Two distinct remote identities consumed the same Waterfall publication
+concurrently while the local client remained healthy. Credential rotation
+closed the old generation immediately, rejected the retired credential,
+preserved the independent control identity, and admitted the replacement only
+after its client file was installed. Revoking only the display identity denied
+that identity while the control identity remained usable; restoring and
+reloading the reviewed document recovered the display client. A running Pi TUI
+survived a daemon-container restart in the same process, re-established its
+remote services without a manual reload, and released its event and audio
+leases cleanly on exit. Final approved cleanup removed the named containers,
+network, volumes, validation image tags, credentials, and host/Pi staging trees;
+confirmed no validation listener remained; and restored the production Home
+Assistant App to its started state. The implementation and physical gate are
+complete pending review and merge of pull request 222.
+
+This milestone does not change the published generic image tag, create a
+release, validate rootless Podman or Docker Desktop, publish a native-dashboard
+port, or modify Home Assistant App metadata. Advanced Home Assistant App
+native-dashboard and daemon-client port options, their Supervisor-facing
+validation, and the one-daemon/multiple-physical-display acceptance topology
+belong to Milestone 32.4. Trusted reverse proxies, Internet/public exposure,
+wildcard publication, automatic LAN discovery, third-party identity providers,
+browser-held daemon credentials, GUI implementation, unrestricted raw scanner
+keys, recording contents, Favorites bytes, RadioReference execution, scanner
+sharing between daemons, and broader scanner-family validation remain outside
+Milestone 32.3.
+
+#### Closed Milestone 32.2 — Packaged remote daemon startup and client profiles
 
 Milestone 32.1 is closed through reviewed pull requests 219 and 220 and merge
 commits `f2783eb06e901cb05a37bcb06446db951aa658a7` and

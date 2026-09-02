@@ -1,10 +1,12 @@
 # Authenticated remote daemon clients
 
 Milestone 32.2 packages the authenticated transport foundation for ordinary
-Python installations. One `sdsctl daemon` process can own the scanner, PSI,
-Waterfall, and SDS200 audio sessions while explicitly configured CLI and TUI
-clients connect from another private or link-local host. Local Unix-domain
-sockets remain enabled and remain the default for same-host clients.
+Python installations. Milestone 32.3 adds one separate, isolated native-Linux
+Docker Engine deployment without changing the ordinary local Compose paths.
+One `sdsctl daemon` process can own the scanner, PSI, Waterfall, and SDS200
+audio sessions while explicitly configured CLI and TUI clients connect from
+another private or link-local host. Local Unix-domain sockets remain enabled
+and remain the default for same-host clients.
 
 The remote listener is opt-in. `sdsctl daemon` reads one strict
 `daemon-remote.toml` document and opens the configured TLS listener only when
@@ -12,10 +14,12 @@ that document explicitly enables it. `sdsctl daemon-client` and
 `sdsctl tui --daemon-client` continue to use local sockets unless the operator
 selects one exact named remote profile with `--remote-profile`.
 
-This milestone does not publish a Docker, Compose, systemd, Home Assistant App,
-Ingress, or native-dashboard port. Those deployment surfaces require separate
-configuration and review. The authenticated daemon-client port is also not a
-browser dashboard port.
+The ordinary-host setup in this document publishes no Docker, systemd, Home
+Assistant App, Ingress, or native-dashboard port. The opt-in Docker boundary is
+documented separately in
+[Remote daemon container deployment](remote-container-deployment.md). The
+authenticated daemon-client port is not a browser dashboard port in either
+deployment.
 
 ## Default behavior
 
@@ -583,15 +587,16 @@ exists on the previously selected port. Removing the file entirely has the same
 disabled result on the next daemon start. Disablement is a restart operation,
 not a credential-only reload.
 
-## Browser kiosks and later deployment surfaces
+## Browser kiosks and other deployment surfaces
 
 A Raspberry Pi TUI uses the authenticated daemon-client profile and port. A
 browser kiosk does not: it opens the daemon host's separately configured
 authenticated native HTTPS dashboard. Never place daemon client credentials in
 browser storage or JavaScript.
 
-Container port publication, Home Assistant App options, Ingress interaction,
-managed service units, and physical one-daemon/multiple-display acceptance are
-later Milestone 32 slices. Until those surfaces explicitly publish and validate
-their own settings, this ordinary-host configuration does not imply that they
-are exposed.
+The standalone native-Linux Docker Engine listener publication is defined in
+[Remote daemon container deployment](remote-container-deployment.md). Home
+Assistant App options, Ingress interaction, managed service units, and physical
+one-daemon/multiple-display acceptance remain later Milestone 32 slices. Until
+those surfaces explicitly publish and validate their own settings, neither the
+ordinary-host nor container configuration implies that they are exposed.

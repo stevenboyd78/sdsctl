@@ -120,11 +120,18 @@ from .daemon_recording_file_server import (
     DAEMON_RECORDING_FILE_DEFAULT_SHUTDOWN_TIMEOUT,
     DaemonRecordingFileServer,
 )
-from .daemon_remote import load_daemon_remote_configuration
+from .daemon_remote import (
+    DAEMON_REMOTE_DEFAULT_PORT,
+    load_daemon_remote_configuration,
+)
 from .daemon_remote_client import (
     DAEMON_REMOTE_CLIENT_ENDPOINT,
     DaemonRemoteClientConfiguration,
     DaemonRemoteClientTransport,
+)
+from .daemon_remote_deployment import (
+    DAEMON_REMOTE_COMPOSE_CONFIG_PATH,
+    preflight_daemon_remote_container_deployment,
 )
 from .daemon_remote_profiles import load_daemon_remote_client_profiles
 from .daemon_remote_reconnect import (
@@ -1243,6 +1250,37 @@ def build_parser(
         help=(
             "Local PCMU worker shutdown deadline "
             f"(default: {DAEMON_PCMU_DEFAULT_SHUTDOWN_TIMEOUT})"
+        ),
+    )
+
+    daemon_remote_preflight = subparsers.add_parser(
+        "daemon-remote-preflight",
+        help="Validate the isolated remote-daemon Compose deployment",
+    )
+    daemon_remote_preflight.add_argument(
+        "--published-address",
+        required=True,
+        metavar="ADDRESS",
+        help="Exact private or link-local Docker-host publication address",
+    )
+    daemon_remote_preflight.add_argument(
+        "--expected-port",
+        type=_remote_port,
+        default=DAEMON_REMOTE_DEFAULT_PORT,
+        metavar="PORT",
+        help=(
+            "Expected matching host, container, and listener TCP port "
+            f"(default: {DAEMON_REMOTE_DEFAULT_PORT})"
+        ),
+    )
+    daemon_remote_preflight.add_argument(
+        "--remote-config",
+        type=Path,
+        default=DAEMON_REMOTE_COMPOSE_CONFIG_PATH,
+        metavar="PATH",
+        help=(
+            "Container listener configuration path "
+            f"(default: {DAEMON_REMOTE_COMPOSE_CONFIG_PATH})"
         ),
     )
 
@@ -3549,6 +3587,16 @@ def _run_daemon(
         waterfall_socket_location.path,
         result.last_signal,
     )
+    return 0
+
+
+def _run_daemon_remote_preflight(args: argparse.Namespace) -> int:
+    preflight_daemon_remote_container_deployment(
+        args.remote_config,
+        published_address=args.published_address,
+        expected_port=args.expected_port,
+    )
+    print("Remote daemon container deployment preflight passed.")
     return 0
 
 
@@ -5920,6 +5968,9 @@ def main(
 
         if args.action == "audio-devices":
             return _run_audio_devices()
+
+        if args.action == "daemon-remote-preflight":
+            return _run_daemon_remote_preflight(args)
 
         if args.action == "daemon":
             return _run_daemon(

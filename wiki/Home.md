@@ -25,6 +25,7 @@ safety-critical or emergency-dispatch system.
 | Run a browser dashboard or MQTT service | [Server-oriented Python installation](Installation#choose-an-installation) |
 | Run all optional Python interfaces | `python -m pip install "sds200[all]"` |
 | Deploy with Docker or Podman | [Containers](Containers) |
+| Run one Docker daemon with a Raspberry Pi CLI or TUI | [Containers](Containers#remote-daemon-and-thin-clients) |
 | Use only the CLI or Python library | [Base Python installation](Installation#install-from-pypi) |
 | Edit Favorites or import selected RadioReference data | [Favorites and RadioReference](Favorites-and-RadioReference) |
 | Develop an integration | [Python API](Python-API) |

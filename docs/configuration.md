@@ -52,6 +52,13 @@ strict versioned documents; they are not fields in the flat application
 configuration schema. See [Authenticated remote daemon clients](daemon-remote.md)
 for their security and explicit-selection boundaries.
 
+The standalone native-Linux remote Compose deployment intentionally mounts its
+operator-owned server tree at `/config/sdsctl/`, so its listener document is
+`/config/sdsctl/daemon-remote.toml`. Its host-side path is selected only by
+`SDSCTL_REMOTE_CONFIG_DIRECTORY`; secret values never belong in that
+environment variable or in the Compose model. See
+[Remote daemon container deployment](remote-container-deployment.md).
+
 Path resolution also defines persistent service locations:
 
 - state: `${XDG_STATE_HOME:-~/.local/state}/sdsctl/`;

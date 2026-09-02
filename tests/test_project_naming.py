@@ -141,10 +141,26 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     assert (
-        "### Milestone 32.2 — Packaged remote daemon startup and client profiles"
+        "### Milestone 32.3 — Isolated container remote-daemon and thin-client deployment"
         in active_milestone
     )
     for required in (
+        "Milestone 32.2 is closed through reviewed pull request 221",
+        "ebc987926b846dc62c83478341a0c6b2ef250603",
+        "one explicit native-Linux Docker Engine deployment",
+        "standalone remote Compose manifest",
+        "fixed private container address",
+        "Publish exactly two host mappings",
+        "UDP 50000 for the scanner's existing RTP input",
+        "non-mutating deployment-preflight command",
+        "one operator-owned configuration tree read-only",
+        "ordinary `sds200[tui,playback]` installation",
+        "Raspberry Pi TUI runs",
+        "containerized native dashboard publication is not introduced here",
+        "Physical acceptance must use a native-Linux Docker Engine host",
+        "Advanced Home Assistant App native-dashboard and daemon-client port options",
+        "belong to Milestone 32.4",
+        "#### Closed Milestone 32.2 — Packaged remote daemon startup and client profiles",
         "Milestone 32.1 is closed through reviewed pull requests 219 and 220",
         "f2783eb06e901cb05a37bcb06446db951aa658a7",
         "db6720ad9e42d05b63b9c6eedf02f8186163a260",

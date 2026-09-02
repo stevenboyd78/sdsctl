@@ -92,7 +92,9 @@ def _require_port(value: object) -> int:
     return value
 
 
-def _require_bind_address(value: object) -> str:
+def normalize_daemon_remote_address(value: object) -> str:
+    """Return one supported literal remote-daemon network address."""
+
     candidate = _require_text(
         value,
         label="Remote daemon bind address",
@@ -198,7 +200,7 @@ class DaemonRemoteListenerConfiguration:
         object.__setattr__(
             self,
             "bind_address",
-            _require_bind_address(self.bind_address),
+            normalize_daemon_remote_address(self.bind_address),
         )
         object.__setattr__(self, "port", _require_port(self.port))
         object.__setattr__(
