@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import errno
 import json
-import os
 import socket as socket_module
 import threading
 from collections.abc import Iterable, Iterator, Mapping
@@ -17,6 +15,11 @@ from .daemon_events import (
     DaemonEventKind,
 )
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_transport import (
+    DaemonClientTransport,
+    UnixDaemonClientTransport,
+    daemon_transport_sanitizes_private_state,
+)
 from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
@@ -24,6 +27,26 @@ from .exceptions import (
 )
 
 DAEMON_EVENT_CLIENT_DEFAULT_TIMEOUT = 5.0
+_REMOTE_PRIVATE_EVENT_FIELDS = frozenset(
+    {
+        "access_token",
+        "credential",
+        "credentials",
+        "directory",
+        "endpoint",
+        "file",
+        "filename",
+        "ingress",
+        "ingress_id",
+        "last_error",
+        "path",
+        "recording",
+        "recordings",
+        "scanner_endpoint",
+        "secret",
+        "token",
+    }
+)
 
 
 class DaemonEventClient:
@@ -31,11 +54,29 @@ class DaemonEventClient:
 
     def __init__(
         self,
-        location: DaemonSocketLocation,
+        location: DaemonSocketLocation | DaemonClientTransport,
         *,
         timeout: float = DAEMON_EVENT_CLIENT_DEFAULT_TIMEOUT,
         max_event_bytes: int = DAEMON_EVENT_DEFAULT_MAX_BYTES,
     ) -> None:
+        if isinstance(location, DaemonSocketLocation):
+            resolved_location: DaemonSocketLocation | None = location
+            transport: DaemonClientTransport = UnixDaemonClientTransport(
+                location,
+                service_label="Daemon event",
+            )
+        elif isinstance(location, DaemonClientTransport):
+            resolved_location = (
+                location.location
+                if isinstance(location, UnixDaemonClientTransport)
+                else None
+            )
+            transport = location
+        else:
+            raise TypeError(
+                "Daemon event client endpoint must be a DaemonSocketLocation "
+                "or DaemonClientTransport."
+            )
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise TypeError("Daemon event connect timeout must be a number.")
         normalized_timeout = float(timeout)
@@ -50,7 +91,11 @@ class DaemonEventClient:
                 "Maximum daemon event size must be greater than zero."
             )
 
-        self.location = location
+        self.location = resolved_location
+        self.transport = transport
+        self.sanitizes_private_state = daemon_transport_sanitizes_private_state(
+            transport
+        )
         self.timeout = normalized_timeout
         self.max_event_bytes = max_event_bytes
         self._lifecycle_lock = threading.RLock()
@@ -74,18 +119,20 @@ class DaemonEventClient:
             if self._socket is not None:
                 return self._socket
 
-            client = socket_module.socket(
-                socket_module.AF_UNIX,
-                socket_module.SOCK_STREAM,
-            )
-            client.settimeout(self.timeout)
+            client: socket_module.socket | None = None
             try:
-                client.connect(os.fspath(self.location.path))
+                client = self.transport.connect(timeout=self.timeout)
                 client.settimeout(None)
+            except DaemonUnavailableError:
+                raise
             except OSError as error:
-                _close_socket(client)
-                self._raise_connect_error(error)
+                if client is not None:
+                    _close_socket(client)
+                raise DaemonUnavailableError(
+                    "Could not establish daemon event client transport."
+                ) from error
 
+            assert client is not None
             self._socket = client
             self._buffer.clear()
             self._last_sequence = None
@@ -121,6 +168,8 @@ class DaemonEventClient:
             try:
                 frame = self._read_line(client)
                 event = _decode_event(frame)
+                if self.sanitizes_private_state:
+                    _validate_remote_event_payload(event)
                 self._validate_order(event)
             except (DaemonDisconnectedError, DaemonProtocolError):
                 self._discard_socket(client)
@@ -209,7 +258,10 @@ class DaemonEventClient:
                         "The daemon event stream did not begin with an "
                         "authoritative stream.snapshot checkpoint."
                     )
-                _validate_snapshot_payload(event.payload)
+                _validate_snapshot_payload(
+                    event.payload,
+                    sanitized=self.sanitizes_private_state,
+                )
                 self._last_sequence = event.sequence
                 return
 
@@ -239,33 +291,6 @@ class DaemonEventClient:
                 self._buffer.clear()
                 self._last_sequence = None
         _close_socket(expected)
-
-    def _raise_connect_error(self, error: OSError) -> None:
-        path = self.location.path
-        if error.errno == errno.ENOENT:
-            raise DaemonUnavailableError(
-                f"Daemon event socket was not found: {path}"
-            ) from error
-        if error.errno == errno.ECONNREFUSED:
-            raise DaemonUnavailableError(
-                "Daemon event socket is present but not accepting "
-                f"connections: {path}"
-            ) from error
-        if error.errno in {errno.EACCES, errno.EPERM}:
-            raise DaemonUnavailableError(
-                "Permission denied while connecting to daemon event "
-                f"socket: {path}"
-            ) from error
-        if isinstance(error, TimeoutError):
-            raise DaemonUnavailableError(
-                f"Timed out connecting to daemon event socket: {path}"
-            ) from error
-
-        detail = error.strerror or error.__class__.__name__
-        raise DaemonUnavailableError(
-            f"Could not connect to daemon event socket {path}: {detail}"
-        ) from error
-
 
 def _decode_event(frame: bytes) -> DaemonEvent:
     try:
@@ -365,7 +390,11 @@ def _normalize_event_kinds(
     return frozenset(normalized)
 
 
-def _validate_snapshot_payload(payload: Mapping[str, object]) -> None:
+def _validate_snapshot_payload(
+    payload: Mapping[str, object],
+    *,
+    sanitized: bool = False,
+) -> None:
     required = {
         "state",
         "scanner_endpoint",
@@ -382,6 +411,15 @@ def _validate_snapshot_payload(payload: Mapping[str, object]) -> None:
         "last_failure_at",
         "last_error",
     }
+    sensitive = {"scanner_endpoint", "last_error"}
+    if sanitized:
+        leaked = sorted(sensitive & set(payload))
+        if leaked:
+            raise DaemonProtocolError(
+                "The remote daemon event snapshot exposed private runtime fields: "
+                f"{leaked!r}."
+            )
+        required -= sensitive
     missing = sorted(required - set(payload))
     if missing:
         raise DaemonProtocolError(
@@ -390,7 +428,8 @@ def _validate_snapshot_payload(payload: Mapping[str, object]) -> None:
         )
 
     _non_empty_string(payload["state"], "state")
-    _non_empty_string(payload["scanner_endpoint"], "scanner_endpoint")
+    if not sanitized:
+        _non_empty_string(payload["scanner_endpoint"], "scanner_endpoint")
     for name in ("scanner_model", "scanner_firmware"):
         if name in payload:
             _optional_string(payload[name], name)
@@ -427,7 +466,48 @@ def _validate_snapshot_payload(payload: Mapping[str, object]) -> None:
             "must be a non-negative integer."
         )
     _optional_string(payload["last_failure_at"], "last_failure_at")
-    _optional_string(payload["last_error"], "last_error")
+    if not sanitized:
+        _optional_string(payload["last_error"], "last_error")
+
+
+def _validate_remote_event_payload(event: DaemonEvent) -> None:
+    if event.kind == DaemonEventKind.RECORDING_STATE:
+        raise DaemonProtocolError(
+            "The remote daemon event stream exposed recording state."
+        )
+    leaked = _remote_private_fields(event.payload)
+    if leaked:
+        raise DaemonProtocolError(
+            "The remote daemon event stream exposed private fields: "
+            f"{sorted(leaked)!r}."
+        )
+
+
+def _remote_private_fields(value: object) -> set[str]:
+    if isinstance(value, Mapping):
+        leaked: set[str] = set()
+        for key, child in value.items():
+            if not isinstance(key, str):
+                continue
+            normalized = key.casefold()
+            if (
+                normalized in _REMOTE_PRIVATE_EVENT_FIELDS
+                or normalized.endswith("_path")
+                or normalized.endswith("_file")
+                or normalized.endswith("_directory")
+                or normalized.endswith("_token")
+                or normalized.endswith("_credential")
+                or normalized.endswith("_secret")
+            ):
+                leaked.add(key)
+            leaked.update(_remote_private_fields(child))
+        return leaked
+    if isinstance(value, (list, tuple)):
+        leaked = set()
+        for child in value:
+            leaked.update(_remote_private_fields(child))
+        return leaked
+    return set()
 
 
 def _non_empty_string(value: object, name: str) -> None:

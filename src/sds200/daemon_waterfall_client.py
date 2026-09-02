@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import errno
 import json
-import os
 import socket as socket_module
 import threading
 from collections.abc import Iterator, Mapping
@@ -12,6 +10,7 @@ from math import isfinite
 from typing import cast
 
 from .daemon_ipc import DaemonSocketLocation
+from .daemon_transport import DaemonClientTransport, UnixDaemonClientTransport
 from .daemon_waterfall_protocol import (
     DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
     DAEMON_WATERFALL_PROTOCOL,
@@ -33,11 +32,29 @@ class DaemonWaterfallClient:
 
     def __init__(
         self,
-        location: DaemonSocketLocation,
+        location: DaemonSocketLocation | DaemonClientTransport,
         *,
         timeout: float = DAEMON_WATERFALL_CLIENT_DEFAULT_TIMEOUT,
         max_record_bytes: int = DAEMON_WATERFALL_DEFAULT_MAX_RECORD_BYTES,
     ) -> None:
+        if isinstance(location, DaemonSocketLocation):
+            resolved_location: DaemonSocketLocation | None = location
+            transport: DaemonClientTransport = UnixDaemonClientTransport(
+                location,
+                service_label="Daemon waterfall",
+            )
+        elif isinstance(location, DaemonClientTransport):
+            resolved_location = (
+                location.location
+                if isinstance(location, UnixDaemonClientTransport)
+                else None
+            )
+            transport = location
+        else:
+            raise TypeError(
+                "Daemon waterfall client endpoint must be a DaemonSocketLocation "
+                "or DaemonClientTransport."
+            )
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
             raise TypeError("Waterfall connect timeout must be a number.")
         normalized_timeout = float(timeout)
@@ -51,7 +68,8 @@ class DaemonWaterfallClient:
             raise ValueError(
                 "Maximum waterfall record size must be greater than zero."
             )
-        self.location = location
+        self.location = resolved_location
+        self.transport = transport
         self.timeout = normalized_timeout
         self.max_record_bytes = max_record_bytes
         self._lifecycle_lock = threading.RLock()
@@ -74,17 +92,19 @@ class DaemonWaterfallClient:
         with self._lifecycle_lock:
             if self._socket is not None:
                 return self._socket
-            client = socket_module.socket(
-                socket_module.AF_UNIX,
-                socket_module.SOCK_STREAM,
-            )
-            client.settimeout(self.timeout)
+            client: socket_module.socket | None = None
             try:
-                client.connect(os.fspath(self.location.path))
+                client = self.transport.connect(timeout=self.timeout)
                 client.settimeout(None)
+            except DaemonUnavailableError:
+                raise
             except OSError as error:
-                _close_socket(client)
-                self._raise_connect_error(error)
+                if client is not None:
+                    _close_socket(client)
+                raise DaemonUnavailableError(
+                    "Could not establish daemon waterfall client transport."
+                ) from error
+            assert client is not None
             self._socket = client
             self._buffer.clear()
             self._last_sequence = None
@@ -199,31 +219,6 @@ class DaemonWaterfallClient:
                 self._buffer.clear()
                 self._last_sequence = None
         _close_socket(expected)
-
-    def _raise_connect_error(self, error: OSError) -> None:
-        path = self.location.path
-        if error.errno == errno.ENOENT:
-            raise DaemonUnavailableError(
-                f"Daemon waterfall socket was not found: {path}"
-            ) from error
-        if error.errno == errno.ECONNREFUSED:
-            raise DaemonUnavailableError(
-                "Daemon waterfall socket is present but not accepting "
-                f"connections: {path}"
-            ) from error
-        if error.errno in {errno.EACCES, errno.EPERM}:
-            raise DaemonUnavailableError(
-                f"Permission denied connecting to daemon waterfall socket: {path}"
-            ) from error
-        if isinstance(error, TimeoutError):
-            raise DaemonUnavailableError(
-                f"Timed out connecting to daemon waterfall socket: {path}"
-            ) from error
-        detail = error.strerror or error.__class__.__name__
-        raise DaemonUnavailableError(
-            f"Could not connect to daemon waterfall socket {path}: {detail}"
-        ) from error
-
 
 def _decode_record(frame: bytes) -> DaemonWaterfallRecord:
     try:

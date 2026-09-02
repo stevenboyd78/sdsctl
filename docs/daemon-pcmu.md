@@ -343,7 +343,7 @@ The PCMU service still does not add:
 - client negotiation, filtering, replay, or seek operations;
 - audio delivery through `daemon.sock` or `events.sock`;
 - scanner-control operations;
-- TCP transport or remote authentication;
+- packaged TCP startup or a remote client option;
 - daemon discovery or automatic client selection;
 - destination activation and configuration reload.
 
@@ -419,8 +419,11 @@ to the actual PSI-reported held selection.
 
 Milestone 32.1 adds an explicit-construction
 [authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
-over this same accepted-packet publisher. It preserves PCMU payload bytes, RTP
+and [service router](daemon-remote.md#service-selection-and-shared-client-transport)
+over this same accepted-packet publisher. The existing PCMU client can consume
+either the private Unix socket or an explicitly constructed remote transport.
+It preserves the binary header and delivery framing, PCMU payload bytes, RTP
 continuity, and cumulative bounded-queue loss counters while replacing the
 scanner RTSP endpoint with `sdsctl-remote-daemon`. It never opens another RTSP
-or RTP session. The packaged daemon does not yet expose this lease on TCP, and
-the private local PCMU protocol remains unchanged.
+or RTP session. Packaged daemon and client startup do not yet construct the
+remote path, and the private local PCMU protocol remains unchanged.

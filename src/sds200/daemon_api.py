@@ -584,11 +584,7 @@ class DaemonReadOnlyApi:
             )
 
         if redacted_result_fields:
-            result = {
-                field: value
-                for field, value in result.items()
-                if field not in redacted_result_fields
-            }
+            result = _redact_result_mapping(result, redacted_result_fields)
 
         return DaemonApiResponse.success(request.request_id, result)
 
@@ -898,6 +894,27 @@ def _redacted_result_field_set(fields: object) -> frozenset[str]:
     if len(set(fields)) != len(fields):
         raise ValueError("Redacted daemon API result fields must be unique.")
     return frozenset(fields)
+
+
+def _redact_result_mapping(
+    value: Mapping[str, object],
+    fields: frozenset[str],
+) -> dict[str, object]:
+    return {
+        key: _redact_result_value(child, fields)
+        for key, child in value.items()
+        if key not in fields
+    }
+
+
+def _redact_result_value(value: object, fields: frozenset[str]) -> object:
+    if isinstance(value, Mapping):
+        return _redact_result_mapping(value, fields)
+    if isinstance(value, list):
+        return [_redact_result_value(child, fields) for child in value]
+    if isinstance(value, tuple):
+        return tuple(_redact_result_value(child, fields) for child in value)
+    return value
 
 
 class _ControlParameterError(ValueError):
