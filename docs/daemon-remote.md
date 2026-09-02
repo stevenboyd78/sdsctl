@@ -4,14 +4,15 @@ Milestone 32.1 is building an authenticated network transport for thin CLI and
 TUI clients that share one scanner-owning daemon. Local Unix-domain sockets
 remain the default. This page describes the current configuration, security
 preflight, authentication protocol, direct-TLS admission, exact-address TCP
-listener, credential lifecycle, and operation authorization boundary; it does
-**not** announce a packaged remote service.
+listener, credential lifecycle, operation authorization, and bounded
+observation-lease boundaries; it does **not** announce a packaged remote
+service.
 
 The packaged `sdsctl daemon` command does not yet read this file, construct the
-listener, publish a container port, or add a Home Assistant App port. The
-current listener is an explicit Python construction boundary so later startup
-and deployment steps cannot define weaker bind, admission, or authorization
-behavior by accident.
+listener or observation broker, publish a container port, or add a Home
+Assistant App port. The current objects are explicit Python construction
+boundaries so later startup and deployment steps cannot define weaker bind,
+admission, authorization, or stream-lifecycle behavior by accident.
 
 ## Default behavior
 
@@ -268,16 +269,63 @@ the peer's exact operation set, and a denied operation returns
 These objects still do not enter daemon startup, create a client transport,
 publish a deployment port, or activate Home Assistant configuration.
 
+## Authenticated observation leases
+
+The `sds200.daemon_remote_observation` module adds a transport-neutral broker
+over the daemon's existing event, shared Waterfall, and accepted-PCMU
+publishers. The broker does not bind a socket and does not own or create a
+scanner command transport, PSI stream, Waterfall poller, RTSP session, RTP
+receiver, or audio decoder. A later remote service router can therefore attach
+an authenticated connection to these leases without becoming a second scanner
+owner.
+
+Every lease requires a `DaemonRemoteAuthenticatedPeer` with `observe` scope.
+Acquisition is linearized with that peer's credential generation. One
+credential identity may hold at most one event lease, one Waterfall lease, and
+one audio lease at a time. The broker defaults to 24 leases in total and three
+per identity; the lower capacity of an underlying publisher continues to apply.
+Capacity, duplicate, unavailable-source, expired-generation, and closed-broker
+failures use stable messages without a client ID, endpoint, path, or secret.
+
+Credential sessions accept child invalidators. A successful credential reload
+closes the authenticated socket and every event, Waterfall, and audio lease
+registered beneath that session. Unchanged identities are treated exactly like
+rotated or revoked identities: all old-generation leases are released and the
+client must authenticate again. A normally released child lease unregisters
+its invalidator without closing the parent authenticated session or another
+lease.
+
+The three lease kinds retain these source-specific contracts:
+
+| Kind | Remote boundary |
+| --- | --- |
+| Events | Preserves the authoritative snapshot and global event sequence, recursively removes endpoint, path, token, credential, secret, and recording fields, and omits every `recording.state` event. |
+| Waterfall | Acquires one lease on the existing demand-driven `WaterfallSession`; overlapping clients share its single GST/PWF/GWF lifecycle, and only the final lease release stops scanner publication. |
+| Audio | Preserves accepted PCMU payload and RTP continuity and queue-loss metadata while replacing the scanner RTSP endpoint with the constant `sdsctl-remote-daemon`. |
+
+Each source already supplies an independent bounded queue per subscription.
+The broker adds no unbounded intermediary. A slow event, Waterfall, or audio
+consumer can lose only its own oldest queued observations and cannot wait on a
+healthy consumer's receive path. Closing the broker releases its child leases
+but deliberately leaves all daemon-owned publishers open for local clients and
+other daemon services. Its snapshot reports only capacities and aggregate
+lease, rejection, expiration, and filtered-event counts; it contains no client
+identity or private endpoint.
+
+This boundary is not yet the on-wire service-selection protocol. It neither
+adds remote client configuration nor changes the existing local Unix socket
+formats. The next slice can build one shared local/remote client transport on
+top of these source-preserving leases.
+
 ## What remains before remote use
 
 This foundation is not sufficient for a supported packaged remote deployment.
 Milestone 32.1 must still add and validate, in bounded slices:
 
-1. bounded remote event, Waterfall, and audio leases with slow-peer isolation;
-2. one shared remote client transport for CLI and TUI consumers;
-3. explicit opt-in daemon startup and diagnostics;
-4. explicit Docker/Compose and Home Assistant App port metadata; and
-5. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
+1. one shared remote client transport for CLI and TUI consumers;
+2. explicit opt-in daemon startup and diagnostics;
+3. explicit Docker/Compose and Home Assistant App port metadata; and
+4. concurrent ordinary-host, container, Home Assistant OS, Raspberry Pi kiosk,
    and remote-TUI acceptance.
 
 Until those steps are complete and released, use the private local daemon

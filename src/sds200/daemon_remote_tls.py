@@ -18,6 +18,7 @@ from enum import StrEnum
 from math import isfinite
 from pathlib import Path
 from time import monotonic
+from typing import TypeVar
 
 from .daemon_remote import (
     DaemonRemoteAuthorizationScope,
@@ -45,6 +46,8 @@ from .exceptions import ConfigurationError
 
 DAEMON_REMOTE_TLS_VERSION = "TLSv1.3"
 DAEMON_REMOTE_TLS_DEFAULT_HANDSHAKE_TIMEOUT = 5.0
+
+_Result = TypeVar("_Result")
 
 
 class DaemonRemoteTlsErrorReason(StrEnum):
@@ -123,7 +126,10 @@ class DaemonRemoteAuthenticatedPeer:
         session = self.credential_session
         return session is None or session.active
 
-    def execute_if_credentials_current(self, action: Callable[[], bytes]) -> bytes:
+    def execute_if_credentials_current(
+        self,
+        action: Callable[[], _Result],
+    ) -> _Result:
         """Run one authorized request in the current credential generation."""
 
         if not callable(action):
@@ -132,6 +138,21 @@ class DaemonRemoteAuthenticatedPeer:
         if session is None:
             return action()
         return session.execute(action)
+
+    def on_credentials_invalidated(
+        self,
+        invalidator: Callable[[], None],
+    ) -> Callable[[], None]:
+        """Attach one child lease to this peer's credential generation."""
+
+        if not callable(invalidator):
+            raise TypeError(
+                "Remote daemon TLS peer invalidator must be callable."
+            )
+        session = self.credential_session
+        if session is None:
+            return lambda: None
+        return session.on_invalidate(invalidator)
 
     def close(self) -> None:
         """Release this peer's credential session; safe to repeat."""

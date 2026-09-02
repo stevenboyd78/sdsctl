@@ -749,6 +749,10 @@ def test_tls_admission_and_peer_constructors_are_strict(tmp_path: Path) -> None:
     with pytest.raises(TypeError, match="action must be callable"):
         peer.execute_if_credentials_current(None)  # type: ignore[arg-type]
     assert peer.execute_if_credentials_current(lambda: b"legacy") == b"legacy"
+    with pytest.raises(TypeError, match="invalidator must be callable"):
+        peer.on_credentials_invalidated(None)  # type: ignore[arg-type]
+    remove_invalidator = peer.on_credentials_invalidated(lambda: None)
+    remove_invalidator()
     peer.close()
     with pytest.raises(TypeError, match="credential authority is invalid"):
         DaemonRemoteServerTlsAdmission(

@@ -280,3 +280,12 @@ The stopped Local App was uninstalled, its exact Home Assistant source and
 local staging directories were deleted, and the App catalog was reloaded.
 Post-cleanup audit found no installed Milestone 31.1 App or temporary source
 while the published App remained started.
+
+Milestone 32.1 adds an explicit-construction
+[authenticated remote observation lease](daemon-remote.md#authenticated-observation-leases)
+over this same shared `WaterfallSession`. Remote and local consumers therefore
+increment the same demand count: the first combined consumer starts the single
+scanner publication, an individual disconnect releases only its own lease, and
+the final combined release stops publication. The packaged daemon does not yet
+route remote TCP clients to this lease, and the relative, uncalibrated,
+inspection-only data contract is unchanged.

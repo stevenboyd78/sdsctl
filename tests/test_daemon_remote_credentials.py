@@ -178,6 +178,39 @@ def test_session_executes_only_while_registered_and_close_is_idempotent(
         session.execute(lambda: "denied")
 
 
+def test_session_child_invalidators_follow_the_parent_generation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "client.secret"
+    _write_credential(path, KEY_A)
+    configuration = _configuration(
+        tmp_path,
+        (_client(path, client_id="display"),),
+    )
+    authority = DaemonRemoteCredentialAuthority(configuration)
+    invalidations: list[str] = []
+    session = authority.register_session(
+        authority.current_generation(),
+        _identity("display"),
+        invalidator=lambda: invalidations.append("connection"),
+    )
+    remove_retired = session.on_invalidate(lambda: invalidations.append("retired-child"))
+    session.on_invalidate(lambda: invalidations.append("active-child"))
+    remove_retired()
+    remove_retired()
+
+    snapshot = authority.reload(configuration)
+
+    assert invalidations == ["connection", "active-child"]
+    assert snapshot.invalidated_sessions == 1
+    assert snapshot.invalidation_failures == 0
+    assert session.active is False
+    with pytest.raises(DaemonRemoteCredentialSessionExpired):
+        session.on_invalidate(lambda: None)
+    with pytest.raises(TypeError, match="invalidator must be callable"):
+        session.on_invalidate(None)  # type: ignore[arg-type]
+
+
 def test_successful_rotation_commits_new_key_and_invalidates_old_generation(
     tmp_path: Path,
 ) -> None:

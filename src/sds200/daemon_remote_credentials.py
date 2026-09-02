@@ -120,10 +120,11 @@ class DaemonRemoteCredentialLifecycleSnapshot:
         }
 
 
-@dataclass(frozen=True, slots=True, repr=False)
+@dataclass(slots=True, repr=False)
 class _SessionRecord:
     generation: int
-    invalidator: _Invalidator = field(repr=False)
+    invalidators: dict[int, _Invalidator] = field(repr=False)
+    next_invalidator_token: int = 2
 
 
 class DaemonRemoteCredentialSession:
@@ -181,6 +182,15 @@ class DaemonRemoteCredentialSession:
             token=self._token,
             generation=self._generation,
             action=action,
+        )
+
+    def on_invalidate(self, invalidator: _Invalidator) -> Callable[[], None]:
+        """Attach one child lease to this credential generation."""
+
+        return self._authority._register_session_invalidator(
+            token=self._token,
+            generation=self._generation,
+            invalidator=invalidator,
         )
 
     def close(self) -> None:
@@ -277,7 +287,7 @@ class DaemonRemoteCredentialAuthority:
             self._next_token += 1
             self._sessions[token] = _SessionRecord(
                 generation=self._generation,
-                invalidator=invalidator,
+                invalidators={1: invalidator},
             )
         return DaemonRemoteCredentialSession(
             self,
@@ -334,10 +344,11 @@ class DaemonRemoteCredentialAuthority:
 
             invalidation_failures = 0
             for record in records:
-                try:
-                    record.invalidator()
-                except Exception:
-                    invalidation_failures += 1
+                for invalidator in tuple(record.invalidators.values()):
+                    try:
+                        invalidator()
+                    except Exception:
+                        invalidation_failures += 1
             if invalidation_failures:
                 with self._lock:
                     self._invalidation_failures += invalidation_failures
@@ -386,6 +397,37 @@ class DaemonRemoteCredentialAuthority:
             ):
                 raise DaemonRemoteCredentialSessionExpired()
             return action()
+
+    def _register_session_invalidator(
+        self,
+        *,
+        token: int,
+        generation: int,
+        invalidator: _Invalidator,
+    ) -> Callable[[], None]:
+        if not callable(invalidator):
+            raise TypeError(
+                "Remote daemon session invalidator must be callable."
+            )
+        with self._lock:
+            record = self._sessions.get(token)
+            if (
+                generation != self._generation
+                or record is None
+                or record.generation != generation
+            ):
+                raise DaemonRemoteCredentialSessionExpired()
+            invalidator_token = record.next_invalidator_token
+            record.next_invalidator_token += 1
+            record.invalidators[invalidator_token] = invalidator
+
+        def unsubscribe() -> None:
+            with self._lock:
+                current = self._sessions.get(token)
+                if current is record:
+                    current.invalidators.pop(invalidator_token, None)
+
+        return unsubscribe
 
     def _release_session(self, *, token: int) -> None:
         with self._lock:
