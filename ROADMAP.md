@@ -11,7 +11,171 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.3 — Isolated container remote-daemon and thin-client deployment
+### Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment
+
+Milestone 32.3 is closed through reviewed pull request 222 and merge commit
+`bbe9054407344ccf4ac11f79119e24728eeb86ae`. Its complete static, test,
+documentation, distribution, browser, screenshot, CodeQL, generic-image, Home
+Assistant App image, native-Linux Docker Engine, scanner-hardware, and separate
+Raspberry Pi acceptance passed before and after merge. The reviewed deployment
+keeps one unprivileged container as the sole scanner owner, publishes only one
+explicit private-host authenticated daemon-client TCP mapping plus scanner RTP
+UDP 50000, and serves independent least-privilege clients from the daemon's
+shared bounded API, event, audio, and Waterfall publishers. Its source branch,
+validation project, credentials, containers, network, volumes, image tags, and
+temporary wiki checkout were removed after the exact reviewed evidence was
+preserved; the production Home Assistant App was restored.
+
+Milestone 32.4 brings the same authenticated remote-daemon and native-dashboard
+boundaries to the official Home Assistant App for advanced private-LAN
+deployments. Preserve the current beginner-safe default exactly: installation
+or upgrade must continue to expose no daemon-client or native-dashboard TCP
+port, authenticated Ingress on internal port 8099 remains the only dashboard,
+and existing scanner control, MQTT, recording, media-source, integration,
+Waterfall, and UDP 50000 behavior remains unchanged. Each new listener requires
+an independent explicit enable option, complete configuration and credential
+preflight, and a non-null matching Supervisor network mapping before any new
+socket is constructed.
+
+Declare exactly two optional App TCP mappings with disabled `null` defaults:
+the authenticated daemon-client listener on container port 50443 and the
+password-authenticated native HTTPS dashboard on container port 8443. The
+operator may select a private-LAN host port through Home Assistant's Network
+configuration, but the App must query `/addons/self/info` at startup and treat
+the returned `network`, `options`, and `ip_address` values as authoritative.
+Reject an enabled feature with a missing, malformed, conflicting, reserved, or
+unexpected mapping; reject a disabled feature with an active mapping; and bind
+each enabled listener only to the App's exact Supervisor-assigned private
+container address. Never bind either listener to wildcard, loopback, multicast,
+documentation, reserved, or public space, and never reuse or publish the trusted
+Ingress listener.
+
+Home Assistant Supervisor currently creates host-wide Docker port bindings and
+does not provide an App metadata field for selecting one host interface. State
+that limitation plainly in the UI and documentation: enabling either mapping
+publishes it on the Home Assistant host's interfaces, even though the process
+inside the App binds only its private container address. Support only a trusted
+private LAN with host firewall rules restricted to intended client addresses.
+Do not document Internet exposure, router port forwarding, an open firewall,
+Home Assistant Cloud tunneling, trusted reverse proxies, public DNS, or a
+wildcard listener as supported. Operators that require an exact host-interface
+binding must use the isolated native-Linux Docker deployment from Milestone
+32.3 instead.
+
+Build the remote-daemon listener from the same daemon-owned transport, router,
+credential authority, and observation broker qualified in Milestones 32.1–32.3.
+It must not create a second scanner command session, PSI loop, RTSP/RTP audio
+input, event source, recording owner, or Waterfall source. Store the persistent
+server certificate, mode-`0600` private key, and independent mode-`0600` client
+credential files beneath the App's private `/data` tree. Materialize only a
+mode-restricted runtime configuration containing the current container address;
+never place secret bytes in App options, environment variables, command lines,
+Supervisor responses, diagnostics, logs, browser state, examples, or image
+layers. Preserve atomic all-or-nothing credential reload, immediate retirement
+of the prior generation, least-privilege per-client scopes, and independent
+bounded connection and observation queues.
+
+Run the native dashboard as a second, independently authenticated web child
+beside Ingress. It must use one exact HTTPS origin, App-private password
+material, and operator-provided or App-owned TLS identity; validate the
+externally mapped host port separately from internal listener port 8443. Reuse
+the current dashboard and daemon-owned Unix-socket services, but construct it
+without the Home Assistant Ingress context so the Home Assistant management tab,
+bridge-key workflow, and Core-integration routes are absent even when the same
+App also serves Ingress. Origin, Host, WebSocket, event-stream, audio, recording,
+control, and session protections remain identical to the qualified native-host
+dashboard boundary.
+
+Add an Ingress-only advanced-access workspace that explains the exposure model,
+reports redacted requested/effective state, and supports a deliberate lifecycle
+for server identity, native-dashboard password, and multiple named remote-client
+identities without displaying stored secret values. Any one-time credential
+reveal or download must require an authenticated Ingress session, explicit user
+action, short-lived memory-only handling, and no persistence in browser storage.
+Revocation or rotation must be granular, auditable without identifying secret
+material, and must not interrupt an unrelated identity. Configuration changes
+that require an App restart must say so before execution; the App must never
+restart Home Assistant Core automatically.
+
+Document two beginner-oriented supported topologies: a Home Assistant Ingress
+user who leaves both mappings disabled, and an advanced private-LAN deployment
+with one App-owned daemon serving any combination of separate Raspberry Pi TUI,
+CLI, and browser-kiosk clients. Explain the difference between the encrypted
+daemon-client protocol and HTTPS dashboard, the fact that TCP 50443 is not a web
+page, the host-wide Supervisor publication constraint, exact firewall direction,
+certificate trust, per-device credential enrollment, revocation, password and
+server-identity rotation, client profile construction, App restart recovery,
+disablement, rollback, and complete cleanup. Keep UDP 50000 described only as
+scanner-to-App RTP input. Do not instruct users to copy the server private key
+to a client or to share one credential among displays.
+
+Add deterministic option-schema, Supervisor-response, address, mapping,
+credential, permission, process-lifecycle, HTTP-origin, hostile-input,
+multi-client, reload, restart, rollback, and documentation coverage. Prove both
+features remain absent by default; incomplete or contradictory exposure fails
+closed; secret-bearing files are mode-restricted; logs, errors, snapshots, and
+diagnostics remain redacted; Ingress stays Supervisor-peer-only; the native
+dashboard never gains Home Assistant-only controls; local Ingress and remote
+clients coexist; scope enforcement and bounded resynchronization remain
+authoritative; and shutdown leaves no listener, client worker, observation
+lease, or scanner-side owner behind. Run the complete static, test,
+documentation, distribution, browser, screenshot, CodeQL, generic-image, and
+Home Assistant App image validation appropriate to every changed surface.
+
+Physical acceptance must use the production-class HAOS environment, an SDS200,
+and at least two independent private-LAN consumers, including a separate
+Raspberry Pi display host. Verify disabled defaults first, then one exact
+reviewed configuration at a time. Prove authenticated CLI/TUI status, events,
+controls, audio, and shared Waterfall service; native HTTPS browser operation
+with the Home Assistant-only tab absent; simultaneous Ingress and multiple
+external clients; independent pause or disconnect behavior; credential rotation
+and selective revocation; App restart recovery without a manual browser reload
+or second scanner session; exact effective host ports and firewall observations;
+and restoration of the production App. Preserve redacted evidence and remove
+only the exact named temporary App, configuration, credentials, client profiles,
+firewall rules, and host staging paths after separate review.
+
+Physical acceptance passed on Home Assistant OS 18.2 with Home Assistant Core
+2026.8.3, Supervisor 2026.08.0, an SDS200 running firmware 1.26.01, a separate
+Raspberry Pi display host, and an independent workstation operator client. The
+staged App remained the sole scanner owner while its exact reviewed
+configuration published Supervisor host ports 50443/tcp and 8443/tcp plus the
+unchanged scanner-to-App 50000/udp input. No temporary firewall rule was added;
+the host-wide Supervisor publication constraint was observed from both private
+LAN clients. The Pi's observe-only profile and the workstation's control profile
+authenticated independently, received current status and events, shared live
+audio and four-frame-per-second Waterfall service, and coexisted with the live
+Ingress dashboard without creating another scanner session. The Pi TUI launched
+successfully, an observe-only control was denied, and a harmless operator volume
+write left the scanner at its original value.
+
+Native HTTPS required its dedicated password, accepted the exact configured
+origin and App-owned certificate, served the scanner dashboard, and omitted the
+Home Assistant-only tab. App restart recovery restored the already-open Ingress
+page and both remote clients without a manual browser reload. Disconnecting the
+Pi did not disturb Ingress or the operator Waterfall consumer. Revoking only the
+Pi credential rejected that identity while the operator remained authenticated;
+restoring it immediately recovered the Pi. Rotating only the operator credential
+rejected the prior secret, accepted the new secret, and did not interrupt the Pi.
+
+The reviewed disabled configuration then restored both optional mappings to
+`null`. Ports 50443/tcp and 8443/tcp were closed from both external hosts while
+ordinary Ingress automatically recovered and scanner RTP remained unchanged.
+The temporary App was stopped and production App `6fc0784f_sds200` version
+0.27.0 was restored as the sole scanner owner. The exact credential-bearing Home
+Assistant, Pi, and workstation cleanup set was separately reviewed, approved,
+and permanently removed. The production repository, SSH credential, unrelated
+Pi configuration, and production App were preserved.
+
+This milestone does not create a public or Internet-facing service, trusted
+reverse-proxy mode, automatic LAN discovery, third-party identity provider,
+browser-held daemon credential, GUI, remote Favorites editor, unrestricted raw
+scanner keys, recording-content service, scanner sharing between daemons, or
+support claim for another scanner family. Release publication remains a later
+explicit milestone after this advanced App boundary is independently reviewed
+and merged.
+
+#### Closed Milestone 32.3 — Isolated container remote-daemon and thin-client deployment
 
 Milestone 32.2 is closed through reviewed pull request 221 and merge commit
 `ebc987926b846dc62c83478341a0c6b2ef250603`. Its complete static, test,
@@ -143,8 +307,9 @@ remote services without a manual reload, and released its event and audio
 leases cleanly on exit. Final approved cleanup removed the named containers,
 network, volumes, validation image tags, credentials, and host/Pi staging trees;
 confirmed no validation listener remained; and restored the production Home
-Assistant App to its started state. The implementation and physical gate are
-complete pending review and merge of pull request 222.
+Assistant App to its started state. Pull request 222 was reviewed and merged at
+`bbe9054407344ccf4ac11f79119e24728eeb86ae`; post-merge validation passed and
+the reviewed source branch and temporary wiki checkout were removed.
 
 This milestone does not change the published generic image tag, create a
 release, validate rootless Podman or Docker Desktop, publish a native-dashboard

@@ -13,11 +13,13 @@ from sds200.web_server import (
     WEB_DASHBOARD_DEFAULT_HOST,
     WEB_DASHBOARD_DEFAULT_PORT,
     WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST,
+    WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES,
     WEB_DASHBOARD_MAX_TLS_FILE_BYTES,
     _default_server_factory,
     normalize_authenticated_lan_host,
     normalize_web_dashboard_host,
     normalize_web_dashboard_port,
+    read_authenticated_lan_password_file,
     run_web_dashboard_server,
 )
 
@@ -136,6 +138,88 @@ def test_normalize_authenticated_lan_host_rejects_non_lan_addresses(
 ) -> None:
     with pytest.raises(ValueError, match="Authenticated LAN listen address"):
         normalize_authenticated_lan_host(value)
+
+
+def test_read_authenticated_lan_password_file_accepts_exact_private_file(
+    tmp_path: Path,
+) -> None:
+    password_file = tmp_path / "dashboard-password.secret"
+    password_file.write_text("correct horse battery staple\n", encoding="utf-8")
+    password_file.chmod(0o600)
+
+    assert (
+        read_authenticated_lan_password_file(password_file)
+        == "correct horse battery staple"
+    )
+
+
+def test_read_authenticated_lan_password_file_completes_partial_reads(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    password_file = tmp_path / "dashboard-password.secret"
+    password_file.write_text("correct horse battery staple\n", encoding="utf-8")
+    password_file.chmod(0o600)
+    real_read = os.read
+
+    monkeypatch.setattr(
+        os,
+        "read",
+        lambda descriptor, count: real_read(descriptor, min(count, 3)),
+    )
+
+    assert (
+        read_authenticated_lan_password_file(password_file)
+        == "correct horse battery staple"
+    )
+
+
+@pytest.mark.parametrize("mode", [0o400, 0o640, 0o644])
+def test_read_authenticated_lan_password_file_requires_exact_mode(
+    tmp_path: Path,
+    mode: int,
+) -> None:
+    password_file = tmp_path / "dashboard-password.secret"
+    password_file.write_text("correct horse battery staple\n", encoding="utf-8")
+    password_file.chmod(mode)
+
+    with pytest.raises(ValueError, match="mode-0600 regular file"):
+        read_authenticated_lan_password_file(password_file)
+
+
+def test_read_authenticated_lan_password_file_rejects_symlink(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target.secret"
+    target.write_text("correct horse battery staple\n", encoding="utf-8")
+    target.chmod(0o600)
+    link = tmp_path / "dashboard-password.secret"
+    link.symlink_to(target)
+
+    with pytest.raises(ValueError, match="mode-0600 regular file"):
+        read_authenticated_lan_password_file(link)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"too-short\n",
+        b"correct horse\nbattery staple\n",
+        b"correct horse battery staple\r\n",
+        b"x" * (WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES + 1),
+        b"\xff" * 20,
+    ],
+)
+def test_read_authenticated_lan_password_file_rejects_invalid_content(
+    tmp_path: Path,
+    payload: bytes,
+) -> None:
+    password_file = tmp_path / "dashboard-password.secret"
+    password_file.write_bytes(payload)
+    password_file.chmod(0o600)
+
+    with pytest.raises(ValueError, match="password file"):
+        read_authenticated_lan_password_file(password_file)
 
 
 def test_run_web_dashboard_server_uses_normalized_configuration() -> None:

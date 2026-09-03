@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import stat
+from contextlib import suppress
 from ipaddress import ip_address, ip_network
 from pathlib import Path
 from typing import Any, Protocol, cast
@@ -14,6 +15,7 @@ WEB_DASHBOARD_CONTAINER_EXPOSURE_HOST = "0.0.0.0"
 WEB_DASHBOARD_DEFAULT_PORT = 8000
 WEB_DASHBOARD_DEFAULT_GRACEFUL_SHUTDOWN_TIMEOUT = 2
 WEB_DASHBOARD_MAX_TLS_FILE_BYTES = 1024 * 1024
+WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES = 512
 _AUTHENTICATED_LAN_NETWORKS = (
     ip_network("10.0.0.0/8"),
     ip_network("172.16.0.0/12"),
@@ -96,6 +98,84 @@ def normalize_web_dashboard_port(port: int) -> int:
         )
 
     return port
+
+
+def read_authenticated_lan_password_file(path: Path) -> str:
+    """Read one exact mode-0600 password file with identity checks."""
+
+    if not isinstance(path, Path) or not path.is_absolute():
+        raise ValueError(
+            "Authenticated LAN password file must be one absolute path."
+        )
+    descriptor: int | None = None
+    try:
+        initial = path.lstat()
+        _validate_password_file_metadata(initial)
+        descriptor = os.open(
+            path,
+            os.O_RDONLY
+            | getattr(os, "O_CLOEXEC", 0)
+            | getattr(os, "O_NOFOLLOW", 0),
+        )
+        opened = os.fstat(descriptor)
+        _validate_password_file_metadata(opened)
+        if (initial.st_dev, initial.st_ino) != (opened.st_dev, opened.st_ino):
+            raise ValueError("Authenticated LAN password file is unsafe.")
+        chunks: list[bytes] = []
+        remaining = WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES + 1
+        while remaining > 0:
+            chunk = os.read(descriptor, remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining -= len(chunk)
+        raw = b"".join(chunks)
+        after = os.fstat(descriptor)
+        final = path.lstat()
+        _validate_password_file_metadata(final)
+        snapshots = tuple(
+            (
+                observed.st_dev,
+                observed.st_ino,
+                observed.st_mode,
+                observed.st_size,
+                observed.st_mtime_ns,
+                observed.st_ctime_ns,
+            )
+            for observed in (opened, after, final)
+        )
+        if len(set(snapshots)) != 1:
+            raise ValueError("Authenticated LAN password file changed while reading.")
+    except ValueError:
+        raise
+    except OSError as error:
+        raise ValueError(
+            "Authenticated LAN password file is unavailable."
+        ) from error
+    finally:
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeError as error:
+        raise ValueError("Authenticated LAN password file is invalid.") from error
+    password = decoded[:-1] if decoded.endswith("\n") else decoded
+    if decoded not in {password, password + "\n"} or "\r" in password or "\n" in password:
+        raise ValueError("Authenticated LAN password file is invalid.")
+    return password
+
+
+def _validate_password_file_metadata(observed: os.stat_result) -> None:
+    if (
+        stat.S_ISLNK(observed.st_mode)
+        or not stat.S_ISREG(observed.st_mode)
+        or not 16 <= observed.st_size <= WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES
+        or (os.name == "posix" and stat.S_IMODE(observed.st_mode) != 0o600)
+    ):
+        raise ValueError(
+            "Authenticated LAN password file must be a mode-0600 regular file."
+        )
 
 
 def normalize_authenticated_lan_host(host: str) -> str:
@@ -328,6 +408,7 @@ __all__ = [
     "WEB_DASHBOARD_DEFAULT_PORT",
     "WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_HOST",
     "WEB_DASHBOARD_INSTALL_ERROR",
+    "WEB_DASHBOARD_MAX_PASSWORD_FILE_BYTES",
     "WEB_DASHBOARD_MAX_TLS_FILE_BYTES",
     "WebDashboardServer",
     "WebDashboardServerFactory",
@@ -335,5 +416,6 @@ __all__ = [
     "normalize_authenticated_lan_tls_files",
     "normalize_web_dashboard_host",
     "normalize_web_dashboard_port",
+    "read_authenticated_lan_password_file",
     "run_web_dashboard_server",
 ]

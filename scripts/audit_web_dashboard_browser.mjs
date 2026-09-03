@@ -1555,44 +1555,62 @@ function browserAuditLibrary() {
     const failures = paneState("home-assistant");
     failures.push(...subpanelButtonGeometry("home-assistant"));
     const pane = document.querySelector("#pane-home-assistant");
-    const panel = pane?.querySelector(":scope > .home-assistant-integration-panel");
-    const guidance = panel?.querySelector(".home-assistant-integration-guidance");
-    if (!(pane instanceof HTMLElement) || !(panel instanceof HTMLElement)) {
+    const workspace = pane?.querySelector(":scope > .home-assistant-workspace");
+    const panels = Array.from(
+      workspace?.querySelectorAll(":scope > .home-assistant-integration-panel") ?? [],
+    );
+    const lifecyclePanel = panels.find(
+      (candidate) => !candidate.classList.contains("advanced-access-panel"),
+    );
+    const advancedPanel = panels.find((candidate) =>
+      candidate.classList.contains("advanced-access-panel"),
+    );
+    const guidance = advancedPanel?.querySelector(".home-assistant-integration-guidance");
+    if (
+      !(pane instanceof HTMLElement) ||
+      !(workspace instanceof HTMLElement) ||
+      !(lifecyclePanel instanceof HTMLElement) ||
+      !(advancedPanel instanceof HTMLElement)
+    ) {
       return {failures: [...failures, "Home Assistant workspace is unavailable"]};
     }
-    if (!(guidance instanceof HTMLElement)) {
-      return {failures: [...failures, "Home Assistant operator guidance is unavailable"]};
+    if (panels.length !== 2) {
+      failures.push(`Home Assistant workspace exposes ${panels.length} panels instead of two`);
     }
-    const paneRect = pane.getBoundingClientRect();
-    const panelRect = panel.getBoundingClientRect();
-    if (panelRect.width < paneRect.width - tolerance * 2) {
+    if (!(guidance instanceof HTMLElement)) {
+      return {failures: [...failures, "Advanced Home Assistant guidance is unavailable"]};
+    }
+    const workspaceRect = workspace.getBoundingClientRect();
+    const lifecycleRect = lifecyclePanel.getBoundingClientRect();
+    const advancedRect = advancedPanel.getBoundingClientRect();
+    if (lifecycleRect.width < workspace.clientWidth - tolerance * 2) {
       failures.push("Home Assistant integration panel does not fill its workspace");
     }
-    if (panelRect.height < paneRect.height - tolerance * 2) {
-      failures.push("Home Assistant integration panel does not fill its workspace height");
+    if (advancedRect.width < workspace.clientWidth - tolerance * 2) {
+      failures.push("Advanced Home Assistant panel does not fill its workspace");
     }
     if (document.querySelector("#pane-diagnostics .home-assistant-integration-panel")) {
       failures.push("Home Assistant integration panel remains inside Diagnostics");
     }
-    const panelStyle = getComputedStyle(panel);
-    const requiresScroll = panel.scrollHeight > panel.clientHeight + tolerance;
-    if (requiresScroll && !["auto", "scroll"].includes(panelStyle.overflowY)) {
+    const workspaceStyle = getComputedStyle(workspace);
+    const requiresScroll = workspace.scrollHeight > workspace.clientHeight + tolerance;
+    if (requiresScroll && !["auto", "scroll"].includes(workspaceStyle.overflowY)) {
       failures.push(
-        `Home Assistant integration content overflows with overflow-y ${panelStyle.overflowY}`,
+        `Home Assistant integration content overflows with overflow-y ${workspaceStyle.overflowY}`,
       );
     }
-    const originalScrollTop = panel.scrollTop;
-    panel.scrollTop = panel.scrollHeight;
+    const originalScrollTop = workspace.scrollTop;
+    workspace.scrollTop = workspace.scrollHeight;
     const guidanceRect = guidance.getBoundingClientRect();
-    const visibleTop = panelRect.top + panel.clientTop;
-    const visibleBottom = visibleTop + panel.clientHeight;
+    const visibleTop = workspaceRect.top + workspace.clientTop;
+    const visibleBottom = visibleTop + workspace.clientHeight;
     if (
       guidanceRect.top < visibleTop - tolerance ||
       guidanceRect.bottom > visibleBottom + tolerance
     ) {
-      failures.push("Home Assistant operator guidance is unreachable at the end of the panel");
+      failures.push("Advanced Home Assistant guidance is unreachable at the end of the workspace");
     }
-    panel.scrollTop = originalScrollTop;
+    workspace.scrollTop = originalScrollTop;
     return {failures};
   }
 

@@ -122,7 +122,9 @@ def test_web_parser_uses_loopback_defaults() -> None:
     assert args.authenticated_lan is False
     assert args.lan_listen_address is None
     assert args.lan_origin is None
+    assert args.lan_public_port is None
     assert args.lan_password_env is None
+    assert args.lan_password_file is None
     assert args.lan_tls_certfile is None
     assert args.lan_tls_keyfile is None
     assert args.daemon_socket_path is None
@@ -182,7 +184,9 @@ def test_web_parser_accepts_authenticated_lan_options() -> None:
     assert args.authenticated_lan is True
     assert args.lan_listen_address == "192.168.0.25"
     assert args.lan_origin == "https://scanner.example:8443"
+    assert args.lan_public_port is None
     assert args.lan_password_env == "SDSCTL_WEB_PASSWORD"
+    assert args.lan_password_file is None
     assert args.lan_tls_certfile == Path("/run/secrets/dashboard.crt")
     assert args.lan_tls_keyfile == Path("/run/secrets/dashboard.key")
     assert args.listen_port == 8443
@@ -195,6 +199,21 @@ def test_web_parser_accepts_authenticated_lan_options() -> None:
 def test_web_parser_rejects_invalid_password_environment_names(name: str) -> None:
     with pytest.raises(SystemExit) as error:
         cli.build_parser().parse_args(["web", "--lan-password-env", name])
+
+    assert error.value.code == 2
+
+
+def test_web_parser_rejects_multiple_authenticated_lan_password_sources() -> None:
+    with pytest.raises(SystemExit) as error:
+        cli.build_parser().parse_args(
+            [
+                "web",
+                "--lan-password-env",
+                "SDSCTL_WEB_PASSWORD",
+                "--lan-password-file",
+                "/run/secrets/dashboard-password",
+            ]
+        )
 
     assert error.value.code == 2
 
@@ -778,6 +797,87 @@ def test_web_cli_authenticated_lan_resolves_secret_and_configures_tls(
             private_key,
         )
     ]
+
+
+def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    app = object()
+    authentications: list[WebDashboardAuthentication] = []
+    server_calls: list[tuple[str, int]] = []
+
+    def fake_create_app(
+        *args: object,
+        home_assistant_ingress: bool = False,
+        lan_authentication: WebDashboardAuthentication | None = None,
+        managed_theme_root: Path | None = None,
+    ) -> object:
+        del args
+        assert home_assistant_ingress is False
+        assert lan_authentication is not None
+        assert managed_theme_root is not None
+        authentications.append(lan_authentication)
+        return app
+
+    def fake_run_server(
+        selected_app: object,
+        *,
+        host: str,
+        port: int,
+        access_log: bool,
+        home_assistant_ingress: bool = False,
+        container_exposure: bool = False,
+        authenticated_lan: bool = False,
+        ssl_certfile: Path | None = None,
+        ssl_keyfile: Path | None = None,
+    ) -> int:
+        del access_log, ssl_certfile, ssl_keyfile
+        assert selected_app is app
+        assert home_assistant_ingress is False
+        assert container_exposure is False
+        assert authenticated_lan is True
+        server_calls.append((host, port))
+        return 0
+
+    monkeypatch.setattr(web_dashboard, "create_web_dashboard_app", fake_create_app)
+    monkeypatch.setattr(cli, "run_web_dashboard_server", fake_run_server)
+    certificate = tmp_path / "dashboard.crt"
+    private_key = tmp_path / "dashboard.key"
+    password_file = tmp_path / "dashboard-password.secret"
+    certificate.write_text("certificate", encoding="utf-8")
+    private_key.write_text("private key", encoding="utf-8")
+    private_key.chmod(0o600)
+    password_file.write_text("correct horse battery staple\n", encoding="utf-8")
+    password_file.chmod(0o600)
+
+    result = cli.main(
+        [
+            "web",
+            "--authenticated-lan",
+            "--lan-listen-address",
+            "172.30.33.7",
+            "--lan-origin",
+            "https://scanner.local:10443",
+            "--lan-public-port",
+            "10443",
+            "--lan-password-file",
+            str(password_file),
+            "--lan-tls-certfile",
+            str(certificate),
+            "--lan-tls-keyfile",
+            str(private_key),
+            "--listen-port",
+            "8443",
+        ],
+        environ={},
+    )
+
+    assert result == 0
+    assert len(authentications) == 1
+    assert authentications[0].origin == "https://scanner.local:10443"
+    assert authentications[0].password_matches("correct horse battery staple")
+    assert server_calls == [("172.30.33.7", 8443)]
 
 
 def test_web_cli_authenticated_lan_requires_secret_and_matching_origin_port(

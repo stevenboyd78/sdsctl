@@ -8,16 +8,21 @@ Home Assistant-specific scanner state machine.
 
 ## Architecture
 
-The App starts two child processes:
+The App normally starts three child processes:
 
 1. the existing foreground `sdsctl daemon`, which remains the only scanner owner;
-2. the existing `sdsctl web` service in explicit Home Assistant Ingress mode.
+2. the private HTTP adapter used by the optional Home Assistant Core live-audio
+   integration; and
+3. the existing `sdsctl web` service in explicit Home Assistant Ingress mode.
+
+Advanced mode can add one fourth child: a password-authenticated native HTTPS
+dashboard. It is a second view of the same daemon, not another scanner owner.
 
 The App supervisor starts the daemon first, probes the private daemon API until it
-is ready, and only then starts the web child. Failure of either child fails the
-App and stops the sibling. Shutdown stops the web child before the daemon so
-active browser streams close before daemon-owned recordings, audio, MQTT, and
-scanner ownership are finalized.
+is ready, and only then starts the HTTP children. Failure of any required child
+fails the App and stops its siblings. Shutdown stops browser and media children
+before the daemon so active streams close before daemon-owned recordings, audio,
+MQTT, and scanner ownership are finalized.
 
 Private runtime files live under `/run/sdsctl`:
 
@@ -26,6 +31,9 @@ Private runtime files live under `/run/sdsctl`:
 - `pcmu.sock`
 - `recordings.sock`
 - `waterfall.sock`
+- generated `home-assistant-advanced-context.json`, containing only the
+  Supervisor-reconciled non-secret advanced options and port state
+- generated `daemon-remote.toml` when advanced daemon access is enabled
 - generated `daemon-mqtt.toml`
 
 These remain container-private Unix-domain interfaces. The Home Assistant App
@@ -52,13 +60,17 @@ or misconfiguring transport security.
 
 ## Configuration
 
-The App exposes three options:
+The App exposes these options:
 
 | Option | Required | Default | Meaning |
 | --- | --- | --- | --- |
 | `scanner_host` | yes | none | SDS200 LAN hostname or IPv4 address |
 | `mqtt_topic_prefix` | no | `sdsctl` | Generic daemon MQTT topic root |
 | `recording_directory` | no | `sdsctl/recordings` | Path below `/media` |
+| `remote_daemon_enabled` | no | `false` | Enable the authenticated daemon-client listener after its matching Network mapping and private credentials are ready |
+| `native_dashboard_enabled` | no | `false` | Enable the password-authenticated native HTTPS dashboard after its matching Network mapping and private credentials are ready |
+| `advanced_access_server_name` | advanced only | empty | Private certificate identity used by both advanced services |
+| `advanced_access_host_address` | remote daemon only | empty | Literal private Home Assistant host address placed in downloaded daemon-client profiles |
 
 Home Assistant writes these values to `/data/options.json`. The App reads that
 file at startup and converts the Supervisor MQTT service response into the
@@ -76,6 +88,13 @@ from both daemon and web child environments.
 
 Home Assistant Discovery is enabled by the App adapter. Semantic MQTT scanner
 commands remain disabled.
+
+Leave both advanced enable switches off, both advanced names empty, and both
+optional TCP Network mappings disabled for an ordinary Ingress installation.
+For a trusted-private-LAN client/server or kiosk deployment, follow the
+[advanced Home Assistant access guide](home-assistant-advanced-access.md). The
+App intentionally rejects a switch/mapping mismatch instead of guessing which
+service the operator meant to publish.
 
 ## Networking
 
@@ -652,15 +671,32 @@ node scripts/audit_web_dashboard_browser.mjs \
 
 The default App deliberately avoids `host_network`.
 
-Only SDS200 RTP UDP `50000` is published. The web dashboard remains behind
-authenticated Home Assistant Ingress, and the daemon API/event/PCMU/recording
-interfaces remain private Unix-domain sockets.
+By default, only SDS200 RTP UDP `50000` is published. The web dashboard remains
+behind authenticated Home Assistant Ingress, and the daemon
+API/event/PCMU/recording interfaces remain private Unix-domain sockets.
 
-Enabling host networking alone would not make remote `sdsctl daemon-client`, TUI,
-or future GUI clients work because those clients currently consume Unix-domain
-sockets rather than LAN TCP services. A network daemon-client transport,
-authentication/access policy, and any optional host-network App variant belong
-to a separate future security boundary.
+Advanced mode can publish either of two separate TCP services through explicit
+Supervisor Network mappings:
+
+| Container port | Protocol and client | Authentication |
+| --- | --- | --- |
+| `50443/tcp` | encrypted `sdsctl daemon-client` protocol for CLI/TUI clients | independent client ID, secret, TLS certificate, and observe/control scopes |
+| `8443/tcp` | native HTTPS dashboard for an ordinary browser or kiosk | private TLS certificate and dedicated dashboard password |
+
+Neither port is enabled by default. Supervisor publishes an enabled App port on
+the Home Assistant host rather than binding it to one selected host interface.
+Use this mode only on a trusted private LAN, restrict the selected host port with
+the network firewall, and never port-forward it to the public Internet. Exact
+private-interface binding remains available through the ordinary-host or native
+Docker deployment instead.
+
+The advanced lifecycle panel exists only inside authenticated Home Assistant
+Ingress. The directly published dashboard excludes the Home Assistant tab,
+bridge-key workflow, Core-integration management routes, and advanced credential
+routes. One-time client secrets and dashboard passwords are held only in page
+memory and are cleared after 60 seconds, when explicitly cleared, or when the
+page is hidden or left. Persistent private keys and credentials remain below
+App-owned `/data/advanced-access` with private permissions.
 
 The SDS200's own LAN protocols and the current non-TLS MQTT adapter are not
 encrypted. The App keeps generic daemon MQTT commands disabled, but its seven

@@ -65,6 +65,24 @@ explicit operator actions. Follow the
 and keep capability material out of screenshots, logs, messages, and source
 control.
 
+## Advanced private-LAN clients and displays
+
+The App can optionally expose two independently authenticated private-LAN
+services: the encrypted daemon-client protocol for CLI/TUI devices, and a native
+HTTPS dashboard for an ordinary browser or kiosk. Both are disabled by default;
+neither replaces the recommended authenticated Ingress dashboard.
+
+This supports one Home Assistant-hosted scanner daemon feeding multiple Pi or
+workstation displays without creating another scanner, PSI, audio, recording, or
+Waterfall owner. Home Assistant publishes enabled App ports host-wide, so this
+mode requires an intentional trusted-LAN firewall boundary and must never be
+port-forwarded to the Internet.
+
+Follow [Advanced Home Assistant access](Advanced-Home-Assistant) for the
+beginner-oriented two-restart setup, one-time credential download, Raspberry Pi
+TUI commands, native browser setup, per-client scopes, rotation, revocation, and
+safe disable workflow.
+
 ## Update or remove
 
 Use the normal App update offered by Home Assistant. Before a controlled
@@ -82,5 +100,7 @@ Read the canonical
 [Home Assistant App guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/home-assistant-app.md)
 for architecture, configuration, networking, Ingress, MQTT entities, cards,
 local development, upgrades, persistent recordings, acceptance evidence, and
-security boundaries. Use [Troubleshooting](Troubleshooting#home-assistant-app-problems)
+security boundaries. Use [Advanced Home Assistant access](Advanced-Home-Assistant)
+for private-LAN clients and displays, and use
+[Troubleshooting](Troubleshooting#home-assistant-app-problems)
 when the repository, App, audio, MQTT entities, cards, or recordings fail.

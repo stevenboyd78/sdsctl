@@ -28,6 +28,7 @@ Choose the installation that matches where you want to run `sdsctl`:
 | Goal | Recommended path |
 | --- | --- |
 | Home Assistant OS | [Install the Home Assistant App](https://github.com/stevenboyd78/sdsctl/wiki/Home-Assistant) |
+| One Home Assistant App with private-LAN Pi or browser displays | [Advanced Home Assistant access](https://github.com/stevenboyd78/sdsctl/wiki/Advanced-Home-Assistant) |
 | Linux or Raspberry Pi terminal workstation | Install `sds200[tui,playback]` |
 | Linux web or MQTT server | Install `sds200[web,mqtt]` |
 | Every optional Python runtime interface | Install `sds200[all]` |
@@ -139,6 +140,7 @@ and validation matrix.
 - [CLI, TUI, web, daemon, MQTT, controls, and themes](https://github.com/stevenboyd78/sdsctl/wiki/Using-sdsctl)
 - [Audio and recordings](https://github.com/stevenboyd78/sdsctl/wiki/Audio-and-Recordings)
 - [Home Assistant](https://github.com/stevenboyd78/sdsctl/wiki/Home-Assistant)
+- [Advanced Home Assistant access](https://github.com/stevenboyd78/sdsctl/wiki/Advanced-Home-Assistant)
 - [Favorites and RadioReference](https://github.com/stevenboyd78/sdsctl/wiki/Favorites-and-RadioReference)
 - [Operations and diagnostics](https://github.com/stevenboyd78/sdsctl/wiki/Operations-and-Diagnostics)
 - [Python API](https://github.com/stevenboyd78/sdsctl/wiki/Python-API)
@@ -154,6 +156,7 @@ Advanced, version-controlled references remain in the repository:
 - [Web dashboard](docs/web-dashboard.md)
 - [Network audio](docs/audio.md)
 - [Home Assistant App](docs/home-assistant-app.md)
+- [Advanced Home Assistant App access](docs/home-assistant-advanced-access.md)
 - [Favorites Workspace](docs/favorites-workspace-editor.md)
 - [Capability and field-parity audit](docs/capability-field-parity-audit.md)
 
