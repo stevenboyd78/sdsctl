@@ -157,9 +157,10 @@ _HOLD_STATE_KEYS = {
 }
 _SCANNER_INDEX_UNAVAILABLE = (1 << 32) - 1
 
-# Physical SDS200 1.26.01 testing observed that an otherwise healthy network PSI
-# push stops after roughly 184 seconds. Refresh the active push conservatively
-# before that observed boundary without reopening scanner control.
+# Physical SDS200 1.26.01 network testing and SDS100 1.26.01 serial testing
+# observed that an otherwise healthy PSI push stops after roughly three minutes.
+# Refresh the active push conservatively before that boundary without reopening
+# scanner control.
 _PSI_RENEWAL_INTERVAL_SECONDS = 120.0
 _PSI_RENEWAL_DEFER_SECONDS = 1.0
 _PSI_RENEWAL_TIMEOUT_SECONDS = 2.0
@@ -226,6 +227,7 @@ class SDSScanner:
         fallback_transport = (
             self.transport if isinstance(self.transport, FallbackTransport) else None
         )
+        direct_serial_psi_supported = isinstance(self.transport, SerialTransport)
         direct_udp_msi_supported = isinstance(self.transport, UdpTransport)
         if capture_path is not None:
             self.transport = RecordingTransport(
@@ -262,7 +264,9 @@ class SDSScanner:
         self._psi_interval_ms: int | None = None
         self._psi_active = False
         self._psi_renewal_supported = (
-            self.endpoint.startswith("udp://") or self._fallback_transport is not None
+            direct_serial_psi_supported
+            or self.endpoint.startswith("udp://")
+            or self._fallback_transport is not None
         )
         self._psi_renewal_interval = _PSI_RENEWAL_INTERVAL_SECONDS
         self._psi_renewal_defer = _PSI_RENEWAL_DEFER_SECONDS
@@ -1255,11 +1259,10 @@ class SDSScanner:
         )
 
     def _renew_psi_if_idle(self) -> bool:
-        """Refresh an active network PSI push without overlapping a command."""
+        """Refresh an active PSI push without overlapping a command."""
 
         if (
             not self._psi_renewal_supported
-            or not self.endpoint.startswith("udp://")
             or self._psi_renewal_stop.is_set()
             or not self._command_lock.acquire(blocking=False)
         ):
@@ -1330,7 +1333,7 @@ class SDSScanner:
     def _psi_renewal_loop(self) -> None:
         wait_seconds = self._psi_renewal_interval
         while not self._psi_renewal_stop.wait(wait_seconds):
-            if not self.endpoint.startswith("udp://") or self._renew_psi_if_idle():
+            if self._renew_psi_if_idle():
                 wait_seconds = self._psi_renewal_interval
             else:
                 wait_seconds = min(

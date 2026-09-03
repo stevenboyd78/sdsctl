@@ -192,14 +192,28 @@ def create_demo_recordings(directory: Path) -> None:
         )
 
 
-def create_log_buffer() -> TuiLogBuffer:
+def create_log_buffer(*, audio_controls: bool) -> TuiLogBuffer:
     buffer = TuiLogBuffer()
-    for line in (
+    common = (
         "2026-07-30 23:14:54 INFO sds200.radio: Connected to demonstration scanner",
         "2026-07-30 23:14:55 INFO sds200.psi: Live PSI stream started at 500 ms",
-        "2026-07-30 23:14:56 INFO sds200.audio: Shared demo audio stream ready",
-        "2026-07-30 23:14:57 INFO sds200.tui_audio: Live playback enabled",
-        "2026-07-30 23:14:58 INFO sds200.tui_audio: Recording library contains 3 files",
+    )
+    transport_specific = (
+        (
+            "2026-07-30 23:14:56 INFO sds200.audio: Shared demo audio stream ready",
+            "2026-07-30 23:14:57 INFO sds200.tui_audio: Live playback enabled",
+            "2026-07-30 23:14:58 INFO sds200.tui_audio: Recording library contains 3 files",
+        )
+        if audio_controls
+        else (
+            "2026-07-30 23:14:56 INFO sds200.serial: Direct USB control transport ready",
+            "2026-07-30 23:14:57 INFO sds200.tui: Network-audio controls omitted",
+            "2026-07-30 23:14:58 INFO sds200.tui: Compact 100x30 layout ready",
+        )
+    )
+    for line in (
+        *common,
+        *transport_specific,
         "2026-07-30 23:14:59 INFO sds200.tui: Demonstration data loaded",
     ):
         buffer.append(line)
@@ -223,35 +237,41 @@ async def capture(
     size: tuple[int, int],
     show_library: bool = False,
     active_recording: bool = False,
+    audio_controls: bool = True,
 ) -> None:
     info = ScannerInfoParser().parse("GSI", DEMO_XML)
+    snapshot = snapshot_from_scanner_info(info)
     transport = DemoAudioTransport()
     playback = DemoPlaybackSink()
     session_clock = [100.0]
 
-    session = TuiAudioSession(
-        AudioStream(transport),
-        RecordingPathPolicy(
-            directory=Path("demo-recordings"),
-            template="demo-{timestamp}.wav",
-        ),
-        live_playback=True,
-        playback_sink=playback,
-        history_limit=10,
-        scanner="Fictional SDS200",
-        clock=lambda: session_clock[0],
-        now=lambda: FIXED_NOW,
+    session = (
+        TuiAudioSession(
+            AudioStream(transport),
+            RecordingPathPolicy(
+                directory=Path("demo-recordings"),
+                template="demo-{timestamp}.wav",
+            ),
+            live_playback=True,
+            playback_sink=playback,
+            history_limit=10,
+            scanner="Fictional SDS200",
+            clock=lambda: session_clock[0],
+            now=lambda: FIXED_NOW,
+        )
+        if audio_controls
+        else None
     )
 
     app = ScannerTuiApp(
         ScannerIdentity(
-            endpoint="demo://fictional-sds200",
-            model="SDS200",
+            endpoint=("demo://fictional-sds200" if audio_controls else "/dev/ttyACM0"),
+            model="SDS200" if audio_controls else "SDS100",
             firmware="Version 1.26.01 (demo)",
         ),
-        info,
+        snapshot,
         audio_session=session,
-        log_buffer=create_log_buffer(),
+        log_buffer=create_log_buffer(audio_controls=audio_controls),
         connected=True,
         stale_after=3_600.0,
         psi_auto_recover=False,
@@ -260,33 +280,43 @@ async def capture(
     )
 
     async with app.run_test(size=size) as pilot:
-        await wait_until(
-            lambda: session.open and not app._audio_pending,
-            "demo audio stream startup",
-        )
+        if session is not None:
+            await wait_until(
+                lambda: session.open and not app._audio_pending,
+                "demo audio stream startup",
+            )
 
         # Use the same state-application path exercised by the TUI test suite.
-        app._apply_radio_state(snapshot_from_scanner_info(info))
+        app._apply_radio_state(snapshot)
 
-        await wait_until(
-            lambda: session.live_playback_active and not app._audio_pending,
-            "demo live playback activation",
-        )
+        if session is not None:
+            await wait_until(
+                lambda: session.live_playback_active and not app._audio_pending,
+                "demo live playback activation",
+            )
 
         if active_recording:
+            assert session is not None
             await pilot.press("r")
             await wait_until(
                 lambda: session.status is AudioSessionStatus.RECORDING,
                 "demo recording startup",
             )
 
-            for _ in range(300):
+            for expected_packets in range(1, 301):
                 transport.feed(AudioChunk(b"\xff" * 160))
+                await wait_until(
+                    lambda expected=expected_packets: (
+                        session.snapshot().packets == expected
+                    ),
+                    f"synthetic recording packet {expected_packets}",
+                )
 
             session_clock[0] = 106.0
             await pilot.pause()
 
         if show_library:
+            assert session is not None
             await pilot.press("l")
             await pilot.pause()
             await pilot.press("down")
@@ -312,15 +342,17 @@ async def generate() -> None:
     output_directory.mkdir(parents=True, exist_ok=True)
 
     captures = (
-        ("tui-overview.svg", (120, 40), False, True),
-        ("tui-recordings.svg", (100, 50), True, False),
-        ("tui-compact.svg", (79, 24), False, False),
+        ("tui-overview.svg", (120, 40), False, True, True),
+        ("tui-recordings.svg", (100, 50), True, False, True),
+        ("tui-compact.svg", (79, 24), False, False, True),
+        ("tui-pi-network-compact.svg", (100, 30), False, False, True),
+        ("tui-usb-compact.svg", (100, 30), False, False, False),
     )
 
     with tempfile.TemporaryDirectory(prefix="sdsctl-tui-demo-") as temporary:
         temporary_root = Path(temporary)
 
-        for filename, size, show_library, active_recording in captures:
+        for filename, size, show_library, active_recording, audio_controls in captures:
             work_directory = temporary_root / Path(filename).stem
             work_directory.mkdir()
             create_demo_recordings(work_directory / "demo-recordings")
@@ -332,6 +364,7 @@ async def generate() -> None:
                     size=size,
                     show_library=show_library,
                     active_recording=active_recording,
+                    audio_controls=audio_controls,
                 )
                 print(f"Generated {output.relative_to(repository)}")
 

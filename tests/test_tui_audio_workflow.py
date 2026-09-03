@@ -179,7 +179,7 @@ def test_tui_short_layout_summarizes_audio_and_status_and_restores_detail(
 
             assert compact_audio.splitlines() == [
                 "Live: ON | device ACTIVE",
-                "Saved / recording: STOPPED | IDLE",
+                "Saved / audio recording: STOPPED | IDLE",
                 "Session: 0.0s | 0 packets | 0 completed",
                 "Audio: Live playback active | loss/dup 0/0",
             ]

@@ -266,6 +266,12 @@ Automatic recovery is enabled by default. The command-line policy is:
 --psi-recovery-cooldown SECONDS
 ```
 
+Before stale recovery is needed, directly owned UDP and serial transports renew
+an active PSI push every 120 seconds under the scanner command lock. This stays
+inside the observed approximately three-minute hardware push lifetime and does
+not reopen scanner control. If renewal cannot acquire the command lock, it
+defers briefly rather than overlapping an API, TUI, or browser mutation.
+
 PSI activity means a confirmed parsed PSI scanner-information frame, not merely
 a configured interval or an in-flight start transaction. The scanner retains the
 configured interval separately as restart intent while `psi_active` stays false

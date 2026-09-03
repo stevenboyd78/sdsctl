@@ -1638,6 +1638,62 @@ def test_network_psi_push_renews_before_observed_hardware_expiry() -> None:
     radio.close()
 
 
+def test_serial_psi_push_renews_before_observed_hardware_expiry() -> None:
+    serial = FakeSerial()
+    radio = SDS200(
+        "/dev/fake",
+        reconnect=False,
+        serial_factory=lambda **kwargs: serial,
+    )
+    radio._psi_renewal_interval = 0.02
+    radio._psi_renewal_defer = 0.005
+    radio._psi_renewal_timeout = 0.1
+    xml = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">\n'
+        '<Property VOL="10" SQL="2" Sig="0" />\n'
+        "</ScannerInfo>"
+    )
+
+    radio.connect()
+
+    def respond_to_psi_commands() -> None:
+        responded = 0
+        while responded < 2:
+            if serial.writes.count(b"PSI,500\r") <= responded:
+                time.sleep(0.001)
+                continue
+            serial.feed(b"PSI,<XML>,\r")
+            for line in xml.splitlines():
+                serial.feed(line.encode("utf-8") + b"\r")
+            responded += 1
+
+    responder = threading.Thread(target=respond_to_psi_commands, daemon=True)
+    responder.start()
+    radio.start_scanner_info_push(timeout=1.0)
+
+    deadline = time.monotonic() + 1.0
+    while serial.writes.count(b"PSI,500\r") < 2 and time.monotonic() < deadline:
+        time.sleep(0.001)
+    responder.join(timeout=1.0)
+
+    assert not responder.is_alive()
+    assert serial.writes.count(b"PSI,500\r") >= 2
+    renewal_thread = radio._psi_renewal_thread
+    assert renewal_thread is not None
+    assert renewal_thread.is_alive()
+
+    radio.stop_scanner_info_push()
+    writes_after_stop = list(serial.writes)
+    time.sleep(0.05)
+
+    assert serial.writes == writes_after_stop
+    assert serial.writes[-1] == b"PSI,0\r"
+    assert radio._psi_renewal_thread is None
+    assert not renewal_thread.is_alive()
+    radio.close()
+
+
 def test_psi_renewal_defers_while_response_command_is_pending() -> None:
     transport = FakeTransport("udp://scanner")
     radio = SDS200.from_transport(transport, expected_model="SDS200")
@@ -2081,6 +2137,17 @@ def test_recorded_udp_transport_keeps_psi_renewal_support(tmp_path) -> None:
     radio = SDS200.from_transport(
         transport,
         expected_model="SDS200",
+        capture_path=tmp_path / "session.jsonl",
+    )
+
+    assert radio._psi_renewal_supported is True
+
+
+def test_recorded_serial_transport_keeps_psi_renewal_support(tmp_path) -> None:
+    radio = SDS200(
+        "/dev/fake",
+        reconnect=False,
+        serial_factory=lambda **kwargs: FakeSerial(),
         capture_path=tmp_path / "session.jsonl",
     )
 

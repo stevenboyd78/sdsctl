@@ -11,7 +11,75 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
+### Milestone 33.1 — Transport-aware compact TUI
+
+Adapt the Textual TUI to the physically observed Raspberry Pi display geometry
+of 100 columns by 30 rows. Preserve the scanner's own recording state under the
+explicit `Scanner recording` label and distinguish it from the sdsctl-owned
+network-audio WAV capture under `Audio recording`.
+
+Derive audio presentation from the service actually supplied to the TUI, not a
+scanner-model-name guess. Direct USB sessions have no scanner network-audio
+source, so omit live playback, saved playback, audio recording, audio-control,
+and audio-only compact-help content entirely. Ethernet SDS200 and daemon-backed
+sessions retain their complete audio workflow even when it is temporarily idle
+or unhealthy. Removing an incapable panel must reclaim its layout space rather
+than leave an empty placeholder.
+
+Use measured terminal geometry rather than a device-name special case for
+layout. On short terminals from 100 through 119 columns, pair Connection with
+System / Site and Channel with Scanner State. Pair Network Audio with Live PSI /
+Controls when audio exists; otherwise let Live PSI / Controls span both
+columns. Keyboard help and Operational Logs remain full width, narrower and
+taller terminals retain their established layouts, and the existing wide
+layout begins at 120 columns.
+
+Add deterministic 100-by-30 regression coverage and regenerated fictional
+screenshots and documentation, including tight theme-colored panel frames that
+retain visual grouping without restoring wide-layout spacing. Keep only the
+newest two operational records on non-wrapping rows so long warnings cannot make
+the physical short-screen application scroll. Validate the final branch with
+focused Textual tests and the complete repository gate, then
+physically accept both a direct SDS100 USB session on the Raspberry Pi display
+and an Ethernet SDS200 session that proves the audio controls remain available.
+
+Use private timing-only analysis during the USB acceptance run to distinguish
+transport loss from the scanner's finite PSI push lifetime. Extend the existing
+conservative 120-second renewal to serial transports when complete frames stop
+periodically without USB or command failures, and prove that renewal preserves
+an uninterrupted 500 ms stream without reopening scanner control.
+
+Physical acceptance completed against exact candidate commit `d382ae8`. A
+direct SDS100 USB session ran for 625.429 seconds on the 100-column by 30-row
+Raspberry Pi display and received 1,167 complete PSI frames. Six proactive
+renewals remained approximately 120 seconds apart, the longest complete-frame
+gap was 0.594 seconds, and no stale recovery, disconnect, reconnect, malformed
+frame, USB failure, or scanner-control reopen occurred. The framed USB layout
+kept its footer visible and reclaimed the full lower row for Live PSI / Controls
+without presenting unavailable network-audio controls.
+
+The same candidate then passed a daemon-backed SDS200 session from the physical
+display through the production Home Assistant App's temporary, observe-only
+private-LAN service. The framed Network Audio and Live PSI / Controls panels,
+two-row bounded log, audio and recording shortcuts, and footer all remained in
+the initial viewport. A 20.68-second mono 8 kHz WAV and its metadata sidecar
+finalized successfully with the fixed `sdsctl-remote-daemon` endpoint, no private
+address in metadata or logs, and no TUI warning, error, disconnect, or reconnect.
+The production App remained the sole scanner owner. Acceptance ended by closing
+the Pi client, restoring the App's disabled TCP mappings while preserving UDP
+50000, revoking the temporary identity, verifying scanner, PSI, audio, Ingress,
+and media-service recovery, and removing every exact secret-bearing acceptance
+artifact.
+
+#### Closed Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
+
+Milestone 32.6 closed through reviewed pull request 225 and merge commit
+`cfe7876196361f9bc241b76da7130aa008ff298e`. The genuine annotated v0.28.1 tag
+published the corrected Python and multi-architecture container artifacts, and
+the reviewed GitHub Release was marked Latest. Production Home Assistant,
+native-dashboard, Ingress, remote-client identity, audio, recording, controls,
+Waterfall, restart-recovery, disablement, credential invalidation, and exact
+cleanup acceptance all passed before Milestone 33.1 began.
 
 Milestone 32.5 merged through reviewed pull request 224 and merge commit
 `3ba9031fbe6cb17ec059c4c5ef97bf4c2a50bf9d`, published the immutable v0.28.0

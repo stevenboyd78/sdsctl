@@ -33,9 +33,35 @@ supports selection, playback, pause, resume, and return to live audio.
 
 ![Compact sdsctl TUI rendered at a small terminal size](assets/screenshots/tui-compact.svg)
 
-The compact layout removes decorative borders and unused spacing, replaces the
-full footer with essential controls, and keeps concise audio and PSI health
-summaries visible on short terminals and Raspberry Pi displays.
+The compact layout removes decorative borders and unused spacing and replaces
+the full footer with essential controls. Network sessions keep concise audio and
+PSI health summaries visible; direct USB sessions omit audio-only rows and
+shortcuts that their transport cannot use.
+
+### Raspberry Pi network layout
+
+![Compact two-column sdsctl TUI at 100 by 30 cells with network-audio controls](assets/screenshots/tui-pi-network-compact.svg)
+
+On short terminals at 100 through 119 columns, the compact split layout pairs
+connection and scanner panels across two columns. An Ethernet or daemon-backed
+session places Network Audio beside Live PSI / Controls; keyboard help and
+operational logs retain the full width. Tight theme-colored frames preserve the
+same panel titles and visual grouping as the larger dashboard without restoring
+its extra spacing. The short-screen log panel keeps the newest two records on
+single ellipsized rows, preventing long diagnostics or accumulated warnings from
+growing the application beyond the physical display. Narrower or taller
+terminals retain their established layouts, and the ordinary wide layout remains
+available from 120 columns.
+
+### Direct USB compact layout
+
+![Compact sdsctl TUI at 100 by 30 cells without network-audio controls on a direct USB transport](assets/screenshots/tui-usb-compact.svg)
+
+This deterministic SDS100 USB view uses the same 100-column by 30-row geometry
+reported by the physical Raspberry Pi display. Removing the incapable Network
+Audio panel lets Live PSI / Controls span both columns while scanner hierarchy,
+channel, and state use paired framed rows above full-width logs. The scanner's
+own recording indicator remains explicit.
 
 Install the optional interface from PyPI:
 
@@ -100,10 +126,15 @@ adjusted independently:
 sdsctl --host 192.168.0.251 tui --interval 250 --stale-after 2
 ```
 
-When a UDP transport remains logically connected but stops delivering PSI frames,
-the TUI warns at the stale threshold and automatically queues the existing
-nonblocking reconnect operation after 10 seconds. Attempts are rate-limited to
-one per 60 seconds and do not stop an active SDS200 network-audio recording:
+Physical SDS200 network and SDS100 serial testing showed that the scanners can
+end an otherwise healthy PSI push after roughly three minutes. Active direct
+network and serial sessions therefore renew the configured push conservatively
+after 120 seconds, under the shared nonblocking command lock and without
+reopening scanner control. If a stream nevertheless remains logically connected
+but stops delivering PSI frames, the TUI warns at the stale threshold and
+automatically queues its recovery operation after 10 seconds. Attempts are
+rate-limited to one per 60 seconds and do not stop an active SDS200 network-audio
+recording:
 
 ```bash
 sdsctl --host 192.168.0.251 tui \
@@ -132,7 +163,7 @@ The interface shows:
 - mode-aware Tone Out panels showing the raw screen mode, `ToneOutChannel` state
   node, profile and channel number, monitored frequency, modulation, Tone A and
   Tone B values, hold state, signal, and RSSI
-- semantic activity, signal, hold, mute, and recording state
+- semantic activity, signal, hold, mute, and scanner recording state
 - live PSI, reconnect, diagnostic, and stale-data status
 - automatic PSI recovery attempt, success, and failure totals
 - a bounded newest-last operational log panel, visible by default
@@ -243,33 +274,49 @@ order. Quit and restart the replay to reset its command cursor after any deviati
 
 The interface adapts automatically to terminal dimensions; no compact-mode flag is
 required. Terminals narrower than 80 columns remove decorative borders and spacing.
-At fewer than 32 rows, the dedicated identity panel is hidden, panel borders and
-vertical gaps are removed, and the full Textual footer is replaced by a one-line
-essential-controls footer. The model remains in the title, while the endpoint and
-firmware remain in the header subtitle.
+At fewer than 32 rows, the dedicated identity panel is hidden, vertical gaps are
+removed, and the full Textual footer is replaced by a one-line essential-controls
+footer. Short layouts normally remove panel borders as well; the 100-through-119
+column split layout instead retains tight theme-colored frames so each paired panel
+keeps its visible title and boundary. The model remains in the title, while the
+endpoint and firmware remain in the header subtitle.
 
-Short layouts use four-line audio and PSI health summaries. They retain playback,
-recording, elapsed-session, packet-loss, availability, severity, stream-recovery,
-volume, squelch, and current-status information without forcing the status panel
-below the initial viewport. Opening the recording library still shows its detailed
-entries, and the main content remains vertically scrollable.
+Short layouts with a network-audio session use four-line audio and PSI health
+summaries. They retain playback, audio recording, elapsed-session, packet-loss,
+availability, severity, stream-recovery, volume, squelch, and current-status
+information without forcing the status panel below the initial viewport. A
+direct USB session has no scanner network-audio source, so its playback, saved
+playback, audio-recording, and audio-control rows are omitted entirely. The
+scanner's own memory-card state remains visible as `Scanner recording`.
+Opening the recording library still shows its detailed entries, and the main
+content remains vertically scrollable.
 
 At 120 columns or wider, panels switch to a two-column dashboard. An 80 by 24
 terminal is the recommended Raspberry Pi starting size. The deterministic suite
 also covers 64 by 20 compact and 90 by 28 Raspberry Pi-like terminals. The compact
-footer exposes `Q` quit, `A` audio, `R` record, `C` reconnect, `G` logs, and `?`
-keyboard help.
+footer exposes `Q` quit, `C` reconnect, `G` logs, and `?` keyboard help. When
+network audio is available, it also exposes `A` audio and `R` record.
 
 Headless Textual tests exercise compact, Raspberry Pi-like, standard, and wide
 terminal sizes, including a live resize from the short summary view back to the
 full detailed layout.
 
-Physical validation passed on a Raspberry Pi 4 driving an 800 by 480 display at
-100 by 30 terminal cells. The initial display rendered cleanly; the compact
-footer, operational summaries, and logs were visible; live playback and its
-mute toggle worked; logs and keyboard help opened and closed correctly; a WAV
-recording finalized successfully and appeared in the recording library; scrolling
-remained usable; and the TUI exited cleanly.
+Physical network-audio validation passed on a Raspberry Pi 4 driving an 800 by
+480 display at 100 by 30 terminal cells. The initial display rendered cleanly;
+the compact footer, operational summaries, and logs were visible; live playback
+and its mute toggle worked; logs and keyboard help opened and closed correctly;
+a WAV recording finalized successfully and appeared in the recording library;
+scrolling remained usable; and the TUI exited cleanly. Direct SDS100 USB
+and daemon-backed SDS200 validation of the transport-aware split layout also
+passed on this physical display for Milestone 33.1. The direct session omitted
+all unavailable network-audio rows and shortcuts, gave Live PSI / Controls the
+full lower row, and maintained complete 500 ms PSI frames across proactive
+serial renewals without a reconnect. The observe-only daemon session retained
+Network Audio beside Live PSI / Controls, kept the newest two log records and
+footer in the initial viewport, and finalized a 20.68-second mono 8 kHz WAV plus
+metadata without a warning, error, disconnect, or reconnect. The Home Assistant
+App remained the only scanner owner throughout the remote pass and returned to
+its default-closed TCP configuration afterward.
 
 ## Network audio playback, recording, and library
 

@@ -20,6 +20,7 @@ from sds200.recording_metadata import recording_metadata_path
 from sds200.state import RadioStateSnapshot, snapshot_from_scanner_info
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_audio import RecordingPathPolicy, TuiAudioSession
+from sds200.tui_logging import TuiLogBuffer
 from sds200.xml_protocol import ScannerInfoParser
 
 from .fakes import BlockingStartAudioTransport, FakeAudioTransport
@@ -56,6 +57,8 @@ XML = (
 
 def _app(
     session: AudioRecordingSession | TuiAudioSession,
+    *,
+    log_buffer: TuiLogBuffer | None = None,
 ) -> ScannerTuiApp:
     return ScannerTuiApp(
         ScannerIdentity(
@@ -65,6 +68,7 @@ def _app(
         ),
         snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
         audio_session=session,
+        log_buffer=log_buffer,
     )
 
 
@@ -105,7 +109,7 @@ def test_tui_audio_binding_records_updates_and_stops(tmp_path: Path) -> None:
             await pilot.pause()
             app._poll_audio_state()
             audio = _plain(app.query_one("#audio", Static))
-            assert "Audio: RECORDING" in audio
+            assert "Audio recording: RECORDING" in audio
             assert "Packets / samples: 1 / 4" in audio
             assert f"Output: {output}" in audio
             assert "RTP loss / duplicate: 2 / 3" in audio
@@ -113,12 +117,15 @@ def test_tui_audio_binding_records_updates_and_stops(tmp_path: Path) -> None:
             assert "Source / SSRC: 6 / 7" in audio
             assert "Receive / callback: 9 / 10" in audio
             assert "Timestamp gaps: 8" in audio
+            assert "Audio recording" in audio
+            assert app.audio_controls_available
+            assert app.query_one("#audio", Static).border_title == "Network Audio"
 
             await pilot.press("r")
             await _wait_for_status(session, AudioSessionStatus.STOPPED)
             await pilot.pause()
             audio = _plain(app.query_one("#audio", Static))
-            assert "Audio: STOPPED" in audio
+            assert "Audio recording: STOPPED" in audio
             assert "Recording completed" in audio
             assert not recorder.open
 
@@ -134,6 +141,80 @@ def test_tui_audio_binding_records_updates_and_stops(tmp_path: Path) -> None:
                 -32124,
                 0,
             )
+
+    asyncio.run(exercise())
+
+
+def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        session = TuiAudioSession(
+            AudioStream(FakeAudioTransport()),
+            RecordingPathPolicy(output=tmp_path / "pi-network-audio.wav"),
+            scanner="SDS200",
+        )
+        log_buffer = TuiLogBuffer(limit=10)
+        for index in range(6):
+            log_buffer.append(
+                f"2026-09-03 WARNING sds200.test: event {index} "
+                + "long diagnostic context " * 8
+            )
+        app = _app(session, log_buffer=log_buffer)
+
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            assert app.audio_controls_available
+            assert app.screen.has_class("-split")
+            assert app.screen.has_class("-short")
+            assert not app.screen.has_class("-no-audio")
+            audio = app.query_one("#audio", Static)
+            assert audio.border_title == "Network Audio"
+            audio_text = _plain(audio)
+            assert "Saved playback: STOPPED" in audio_text
+            assert "Audio recording: IDLE" in audio_text
+            assert "Saved / audio recording" not in audio_text
+            assert app.check_action("toggle_audio_playback", ())
+            assert app.check_action("toggle_audio_recording", ())
+            assert app.check_action("toggle_recording_library", ())
+            assert _plain(app.query_one("#compact-footer", Static)) == (
+                "Q Quit | A Audio | R Record | C Reconnect | G Logs | ? Keys"
+            )
+
+            body = app.query_one("#body")
+            connection = app.query_one("#connection")
+            system = app.query_one("#system")
+            channel = app.query_one("#channel")
+            state = app.query_one("#state")
+            status = app.query_one("#status")
+            logs = app.query_one("#logs")
+            log_text = _plain(logs)
+
+            assert connection.region.y == system.region.y == body.region.y
+            assert connection.region.right < system.region.x
+            assert channel.region.y == state.region.y
+            assert channel.region.y == max(connection.region.bottom, system.region.bottom)
+            assert channel.region.right < state.region.x
+            assert audio.region.y == status.region.y
+            assert audio.region.y == max(channel.region.bottom, state.region.bottom)
+            assert audio.region.right < status.region.x
+            assert logs.region.y == max(audio.region.bottom, status.region.bottom)
+            assert logs.region.x == body.region.x
+            assert logs.region.bottom <= body.region.bottom
+            assert "event 3" not in log_text
+            assert "event 4" in log_text
+            assert "event 5" in log_text
+            assert logs.region.height == 5
+            assert body.max_scroll_y == 0
+
+            for panel in (
+                connection,
+                system,
+                channel,
+                state,
+                audio,
+                status,
+                logs,
+            ):
+                assert panel.styles.border_top[0] == "round"
 
     asyncio.run(exercise())
 
@@ -238,7 +319,7 @@ def test_tui_rejects_repeated_record_requests_while_starting(
             await pilot.press("r")
             await pilot.pause()
             audio = _plain(app.query_one("#audio", Static))
-            assert "Audio: STARTING" in audio
+            assert "Audio recording: STARTING" in audio
             assert "Audio operation already queued" in audio
             assert transport.start_calls == 1
 

@@ -6,6 +6,34 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Changed
+
+- Make the Textual TUI transport-aware on compact Raspberry Pi displays. Direct
+  USB sessions now omit network-audio playback, WAV-recording, saved-playback,
+  and audio-control rows and shortcuts instead of spending screen space on
+  unavailable features; Ethernet and daemon-backed audio sessions retain them.
+- Use a compact two-column layout on short terminals from 100 through 119
+  columns. The physical 100-by-30 Raspberry Pi geometry pairs scanner panels,
+  preserves their titles in tight theme-colored frames, keeps logs and keyboard
+  help full width, and lets USB Live PSI / Controls reclaim both columns when
+  Network Audio is absent.
+- Bound short-screen operational logs to the newest two single-line entries.
+  Long warnings are ellipsized inside a five-row framed panel instead of wrapping
+  until the Raspberry Pi application becomes vertically scrollable.
+- Extend the existing proactive 120-second PSI renewal to direct serial
+  transports. Physical SDS100 USB timing showed complete 500 ms pushes expiring
+  regularly after about three minutes; renewing before that boundary avoids the
+  TUI's stale warning, ten-second outage, and full serial reconnect.
+- Distinguish the scanner's own `Rec` state as `Scanner recording` from the
+  sdsctl-owned WAV workflow as `Audio recording` in every responsive layout.
+- Physically accept the exact candidate on the 100-by-30 Raspberry Pi display
+  with both a direct SDS100 USB session and an observe-only, daemon-backed
+  SDS200 session through the production Home Assistant App. The USB pass kept
+  500 ms PSI continuous across proactive serial renewals without reconnecting;
+  the remote pass retained the complete network-audio workflow, finalized a WAV
+  and metadata sidecar, and ended with the temporary listener, credential, and
+  secret-bearing artifacts removed and the production App restored.
+
 ## [0.28.1] - 2026-09-02
 
 ### Fixed
