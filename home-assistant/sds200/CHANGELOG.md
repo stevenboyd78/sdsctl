@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.28.1
+
+- Allow an ordinary browser to submit the native HTTPS dashboard's own login
+  form with the exact same-origin value required by its CSRF protection.
+- Preserve the v0.28.0 advanced-access feature boundary, disabled defaults,
+  independently scoped clients, private-LAN restriction, and separately
+  authenticated non-Ingress dashboard.
+
 ## 0.28.0
 
 - Track the sdsctl v0.28.0 release while preserving the App name, slug, image

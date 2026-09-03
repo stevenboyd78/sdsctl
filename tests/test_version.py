@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.28.0...v0.28.1"
+        in changelog
+    )
+    assert (
         "[0.28.0]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.27.0...v0.28.0"
         in changelog
@@ -293,5 +298,23 @@ def test_current_release_changelog_covers_v028_remote_clients() -> None:
         "Supervisor-assigned private container address",
         "private-LAN-only support",
         "Internet exposure, router port forwarding, trusted reverse proxies",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_patch_changelog_covers_native_browser_login() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.28.1] - ")
+    end = changelog.index("\n## [0.28.0]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "same-origin `Origin` header",
+        "password-authenticated native HTTPS dashboard login form",
+        "mandatory CSRF check",
+        "exact HTTPS host and origin checks",
+        "secure strict-same-site session cookie",
+        "denial of cross-origin requests",
     ):
         assert required in release or required in normalized

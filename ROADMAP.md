@@ -11,24 +11,19 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.5 — v0.28.0 release and publication closure
+### Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
 
-Milestone 32.4 is closed through reviewed pull request 223 and merge commit
-`ea61515460d5f38d39bea0323e83f458e73e112d`. Its complete static, test,
-documentation, distribution, browser, screenshot, CodeQL, generic-image, and
-Home Assistant App image validation passed before and after merge. Physical
-acceptance on Home Assistant OS 18.2, Home Assistant Core 2026.8.3, Supervisor
-2026.08.0, an SDS200 running firmware 1.26.01, a separate Raspberry Pi display,
-and an independent workstation operator proved the disabled defaults, exact
-private-LAN exposure, native HTTPS dashboard, scoped client identities, shared
-scanner services, selective revocation, credential rotation, restart recovery,
-rollback, and exact cleanup. Reviewed wiki source was published as commit
-`076c76a6d97fba5744d72eb78a9b508b278a0306`; the merged source branch and
-temporary validation surfaces were removed while the production App remained
-the sole scanner owner.
+Milestone 32.5 merged through reviewed pull request 224 and merge commit
+`3ba9031fbe6cb17ec059c4c5ef97bf4c2a50bf9d`, published the immutable v0.28.0
+Python and container artifacts, and upgraded the production Home Assistant App.
+Physical release acceptance then found that the native login page's
+`no-referrer` policy can make an ordinary browser submit an opaque `Origin`,
+which the dashboard's mandatory exact-origin CSRF check correctly rejects. The
+human-facing GitHub Release was withheld, the v0.28.0 tag and artifacts remain
+immutable, and Milestone 32.6 corrects the real-browser path as v0.28.1.
 
-Milestone 32.5 publishes the complete Milestones 32.1 through 32.4
-authenticated remote-client boundary as sdsctl 0.28.0. Freeze the feature
+Milestone 32.6 republishes the complete Milestones 32.1 through 32.5
+authenticated remote-client boundary as sdsctl 0.28.1. Freeze the feature
 boundary and synchronize the Python package and import version, Home Assistant
 App version and changelog, main changelog, concise README, beginner installation
 and upgrade guidance, container examples, version-selected image references,
@@ -53,7 +48,7 @@ generic-container, Home Assistant App image, version-contract, secret-leakage,
 authentication, authorization, bounded-client, reconnect, rollback, and
 shutdown validation appropriate to every release surface. Review one release
 pull request and require all branch and post-merge checks to pass. Only one
-genuine annotated `v0.28.0` tag matching the merged package version may trigger
+genuine annotated `v0.28.1` tag matching the merged package version may trigger
 publication; workflow success alone is not release acceptance.
 
 Verify the public Python wheel and source distribution, GitHub Release, amd64
@@ -61,7 +56,7 @@ and arm64 generic Docker images, and amd64 and aarch64 Home Assistant App images
 plus their multi-architecture manifests. Published-artifact acceptance must
 include clean base and `all` Python installations, one published isolated
 container deployment, and a production-class Home Assistant upgrade from
-0.27.0 to 0.28.0. Prove the advanced App ports remain closed by default before
+0.28.0 to 0.28.1. Prove the advanced App ports remain closed by default before
 one exact reviewed private-LAN configuration validates independent Raspberry Pi
 observe and workstation control identities, native HTTPS without Home
 Assistant-only controls, simultaneous Ingress, shared audio and Waterfall,
@@ -74,7 +69,19 @@ temporary wiki checkout, and staging paths. Publish the reviewed wiki source,
 record immutable public artifact and physical evidence, delete the merged
 release branch locally and remotely, and leave unrelated operator data,
 production recordings, SSH credentials, and Home Assistant configuration
-untouched. Milestone 33 planning begins only after this public release closure.
+untouched. Milestone 33 planning begins only after this corrected public release
+closure.
+
+#### Closed Milestone 32.5 — v0.28.0 release candidate publication
+
+Milestone 32.5 merged the reviewed release source, published its reviewed wiki,
+created the genuine annotated v0.28.0 tag, and verified the Python, generic
+container, and Home Assistant App artifacts. The production upgrade preserved
+ordinary Ingress, scanner ownership, controls, audio, recordings, Waterfall,
+restart recovery, and disabled-by-default advanced mappings. Final advanced
+browser acceptance exposed the same-origin login incompatibility described
+above before a human-facing GitHub Release was created, so v0.28.1 supersedes
+v0.28.0 for public release closure.
 
 #### Closed Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment
 

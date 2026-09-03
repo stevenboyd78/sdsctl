@@ -841,6 +841,23 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.28.1 release acceptance gate
+
+After the genuine v0.28.1 tag publishes the matching Python and container
+artifacts, upgrade the repository-managed App from v0.28.0. Confirm that a real
+ordinary browser can load the native HTTPS login page, submit its same-origin
+password form, receive the secure session redirect, and render the dashboard
+without a Home Assistant tab. The login response must preserve the form's real
+same-origin `Origin` value while the exact host and origin checks, self-only
+form action, no-store policy, HSTS, secure strict-same-site cookie, and denial
+of missing, opaque, wrong, or cross-origin requests remain intact.
+
+Repeat the v0.28.0 advanced-access scope, shared-service, revocation, rotation,
+restart-recovery, rollback, and cleanup acceptance against v0.28.1. The App
+must remain default-closed after an ordinary upgrade, continue to preserve its
+scanner, MQTT, recording, Ingress, integration, card, audio, control, and
+Waterfall compatibility, and introduce no public or Internet exposure.
+
 ### v0.28.0 release acceptance gate
 
 After the genuine v0.28.0 tag publishes the amd64, aarch64, and generic

@@ -175,9 +175,9 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
-## Upgrade to v0.28.0
+## Upgrade to v0.28.1
 
-v0.28.0 publishes Milestones 32.1 through 32.5. It lets one scanner-owning
+v0.28.1 publishes Milestones 32.1 through 32.6. It lets one scanner-owning
 daemon serve explicitly authenticated private-LAN CLI, TUI, Raspberry Pi,
 container, browser, and advanced Home Assistant clients. Each daemon client
 receives an independent `observe` or `control` identity for its authorized
@@ -189,14 +189,14 @@ The compatibility-sensitive Python distribution and import package remain
 `sds200`, while the command remains `sdsctl`. Upgrade the base package with:
 
 ```bash
-python -m pip install --upgrade "sds200==0.28.0"
+python -m pip install --upgrade "sds200==0.28.1"
 sdsctl --version
 ```
 
 Install or upgrade every optional Python runtime interface with:
 
 ```bash
-python -m pip install --upgrade "sds200[all]==0.28.0"
+python -m pip install --upgrade "sds200[all]==0.28.1"
 python -m pip check
 sdsctl --version
 ```
@@ -208,7 +208,7 @@ package and verification procedure.
 For the generic container, prefer the exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.28.0
+docker pull theboyd78/sdsctl:0.28.1
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release,
@@ -218,11 +218,16 @@ source-built and local-only. The separate `compose.remote.yaml` topology is
 documented in [Containers](Containers) and requires deliberate private-LAN TLS,
 identity, address, port, and firewall configuration.
 
-The Home Assistant App version tracks 0.28.0 while preserving its
+The Home Assistant App version tracks 0.28.1 while preserving its
 compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
 identities, persistent recordings, aggregate and individual card resource
 paths, and independently versioned card modules. Upgrade the repository-managed
 App only after the matching release images have published.
+
+v0.28.1 also corrects the v0.28.0 native-dashboard login response so an
+ordinary browser preserves the exact same-origin value required by the
+dashboard's CSRF protection. It does not broaden listener exposure, client
+scope, or the supported private-LAN boundary.
 
 **Upgrading does not expose an advanced Home Assistant service.** The
 authenticated daemon-client and native HTTPS dashboard mappings remain

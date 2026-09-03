@@ -6,6 +6,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-09-02
+
+### Fixed
+
+- Preserve a real browser's exact same-origin `Origin` header when submitting
+  the password-authenticated native HTTPS dashboard login form. The login page
+  now uses a same-origin referrer policy instead of converting its own basic
+  form POST into an opaque origin that the mandatory CSRF check rejects.
+
+### Security
+
+- Retain the exact HTTPS host and origin checks, self-only form action, secure
+  strict-same-site session cookie, no-store responses, HSTS, and denial of
+  cross-origin requests while correcting the same-origin browser path.
+
 ## [0.28.0] - 2026-09-02
 
 ### Added
@@ -1715,7 +1730,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...HEAD
+[0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...v0.26.1
