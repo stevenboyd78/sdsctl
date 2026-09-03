@@ -39,6 +39,7 @@ sudo adduser --system --group \
   --home /var/lib/sdsctl-display \
   --shell /usr/sbin/nologin \
   sdsctl-display
+sudo chmod 0700 /var/lib/sdsctl-display
 sudo usermod --append --groups tty,audio sdsctl-display
 sudo python3 -m venv /opt/sdsctl-display
 sudo /opt/sdsctl-display/bin/python -m pip install --upgrade pip
