@@ -26,6 +26,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   TUI's stale warning, ten-second outage, and full serial reconnect.
 - Distinguish the scanner's own `Rec` state as `Scanner recording` from the
   sdsctl-owned WAV workflow as `Audio recording` in every responsive layout.
+- Physically accept the exact candidate on the 100-by-30 Raspberry Pi display
+  with both a direct SDS100 USB session and an observe-only, daemon-backed
+  SDS200 session through the production Home Assistant App. The USB pass kept
+  500 ms PSI continuous across proactive serial renewals without reconnecting;
+  the remote pass retained the complete network-audio workflow, finalized a WAV
+  and metadata sidecar, and ended with the temporary listener, credential, and
+  secret-bearing artifacts removed and the production App restored.
 
 ## [0.28.1] - 2026-09-02
 

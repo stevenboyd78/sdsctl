@@ -307,8 +307,16 @@ the compact footer, operational summaries, and logs were visible; live playback
 and its mute toggle worked; logs and keyboard help opened and closed correctly;
 a WAV recording finalized successfully and appeared in the recording library;
 scrolling remained usable; and the TUI exited cleanly. Direct SDS100 USB
-validation of the transport-aware compact layout is the Milestone 33.1 physical
-acceptance target.
+and daemon-backed SDS200 validation of the transport-aware split layout also
+passed on this physical display for Milestone 33.1. The direct session omitted
+all unavailable network-audio rows and shortcuts, gave Live PSI / Controls the
+full lower row, and maintained complete 500 ms PSI frames across proactive
+serial renewals without a reconnect. The observe-only daemon session retained
+Network Audio beside Live PSI / Controls, kept the newest two log records and
+footer in the initial viewport, and finalized a 20.68-second mono 8 kHz WAV plus
+metadata without a warning, error, disconnect, or reconnect. The Home Assistant
+App remained the only scanner owner throughout the remote pass and returned to
+its default-closed TCP configuration afterward.
 
 ## Network audio playback, recording, and library
 

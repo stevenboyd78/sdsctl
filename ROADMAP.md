@@ -49,6 +49,28 @@ conservative 120-second renewal to serial transports when complete frames stop
 periodically without USB or command failures, and prove that renewal preserves
 an uninterrupted 500 ms stream without reopening scanner control.
 
+Physical acceptance completed against exact candidate commit `d382ae8`. A
+direct SDS100 USB session ran for 625.429 seconds on the 100-column by 30-row
+Raspberry Pi display and received 1,167 complete PSI frames. Six proactive
+renewals remained approximately 120 seconds apart, the longest complete-frame
+gap was 0.594 seconds, and no stale recovery, disconnect, reconnect, malformed
+frame, USB failure, or scanner-control reopen occurred. The framed USB layout
+kept its footer visible and reclaimed the full lower row for Live PSI / Controls
+without presenting unavailable network-audio controls.
+
+The same candidate then passed a daemon-backed SDS200 session from the physical
+display through the production Home Assistant App's temporary, observe-only
+private-LAN service. The framed Network Audio and Live PSI / Controls panels,
+two-row bounded log, audio and recording shortcuts, and footer all remained in
+the initial viewport. A 20.68-second mono 8 kHz WAV and its metadata sidecar
+finalized successfully with the fixed `sdsctl-remote-daemon` endpoint, no private
+address in metadata or logs, and no TUI warning, error, disconnect, or reconnect.
+The production App remained the sole scanner owner. Acceptance ended by closing
+the Pi client, restoring the App's disabled TCP mappings while preserving UDP
+50000, revoking the temporary identity, verifying scanner, PSI, audio, Ingress,
+and media-service recovery, and removing every exact secret-bearing acceptance
+artifact.
+
 #### Closed Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
 
 Milestone 32.6 closed through reviewed pull request 225 and merge commit
