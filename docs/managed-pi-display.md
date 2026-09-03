@@ -186,6 +186,13 @@ sudo systemctl status sdsctl-display@CLIENT_ID.service
 The unit deliberately:
 
 - waits for `network-online.target`;
+- starts after Plymouth and cloud-init when those boot-console producers are
+  present, so their final status line cannot overwrite the TUI;
+- opts out of the normal `multi-user.target` ordering edge, while explicitly
+  retaining basic-system and clean-shutdown ordering, so waiting for a
+  post-`multi-user.target` cloud-init target cannot create a boot cycle;
+- binds standard input, output, and error to the physical console because
+  Textual renders terminal frames through standard error;
 - claims `/dev/tty1` and stops the competing `getty@tty1` login prompt;
 - uses the exact `/opt/sdsctl-display` virtual environment;
 - cannot open an SDS USB serial device;

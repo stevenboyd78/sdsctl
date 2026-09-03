@@ -15,7 +15,18 @@ def test_managed_display_service_is_opt_in_observe_only_and_console_bound() -> N
     )
     assert "--daemon-client --remote-profile %i --managed-display" in unit
     assert "TTYPath=/dev/tty1" in unit
+    assert "StandardInput=tty-force" in unit
+    assert "StandardOutput=tty" in unit
+    assert "StandardError=tty" in unit
+    assert "StandardError=journal" not in unit
     assert "Conflicts=getty@tty1.service" in unit
+    assert "DefaultDependencies=no" in unit
+    assert "After=basic.target network-online.target" in unit
+    assert "Conflicts=getty@tty1.service shutdown.target" in unit
+    assert "Before=shutdown.target" in unit
+    assert "Slice=system.slice" in unit
+    assert "plymouth-quit-wait.service" in unit
+    assert "cloud-init.target" in unit
     assert "WantedBy=multi-user.target" in unit
     assert "DevicePolicy=closed" in unit
     assert "DeviceAllow=/dev/tty1 rw" in unit

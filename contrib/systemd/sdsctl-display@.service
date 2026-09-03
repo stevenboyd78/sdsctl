@@ -1,13 +1,16 @@
 [Unit]
 Description=sdsctl observe-only remote TUI display (%i)
 Documentation=https://github.com/stevenboyd78/sdsctl/blob/main/docs/managed-pi-display.md
+DefaultDependencies=no
 Wants=network-online.target
-After=network-online.target systemd-user-sessions.service
-Conflicts=getty@tty1.service
+After=basic.target network-online.target systemd-user-sessions.service plymouth-quit-wait.service cloud-init.target
+Conflicts=getty@tty1.service shutdown.target
+Before=shutdown.target
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
+Slice=system.slice
 User=sdsctl-display
 Group=sdsctl-display
 WorkingDirectory=/var/lib/sdsctl-display
@@ -24,7 +27,7 @@ TimeoutStopSec=20s
 
 StandardInput=tty-force
 StandardOutput=tty
-StandardError=journal
+StandardError=tty
 TTYPath=/dev/tty1
 TTYReset=yes
 TTYVHangup=yes

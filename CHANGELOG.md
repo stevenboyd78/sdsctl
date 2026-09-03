@@ -17,7 +17,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   `sdsctl-display@.service` Raspberry Pi console template. Temporary connection
   failures use exit 75 and a delayed restart; permanent profile, TLS,
   authentication, authorization, or service failures use exit 78 and stop.
-  Unexpected local failures and an intentional quit also remain stopped.
+  Unexpected local failures and an intentional quit also remain stopped. Boot
+  ordering keeps late Plymouth and cloud-init status output from overwriting
+  the managed TUI without creating a `multi-user.target` ordering cycle, and
+  all three standard streams reach the console so Textual's standard-error
+  display frames remain visible.
 - Add canonical and beginner wiki guidance for a dedicated service account,
   isolated virtual environment, private client files, preflight, interactive
   validation, boot startup, journald, recovery, credential changes, upgrade,
