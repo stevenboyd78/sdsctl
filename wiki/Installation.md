@@ -175,6 +175,76 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.28.0
+
+v0.28.0 publishes Milestones 32.1 through 32.5. It lets one scanner-owning
+daemon serve explicitly authenticated private-LAN CLI, TUI, Raspberry Pi,
+container, browser, and advanced Home Assistant clients. Each daemon client
+receives an independent `observe` or `control` identity for its authorized
+status, events, accepted-PCMU audio, Waterfall, and typed controls. Recording
+content is not granted by either daemon-client scope; the same daemon continues
+to own recordings without opening another scanner connection.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the base package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.28.0"
+sdsctl --version
+```
+
+Install or upgrade every optional Python runtime interface with:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.28.0"
+python -m pip check
+sdsctl --version
+```
+
+Linux local playback still needs a working PortAudio runtime. See
+[Audio and recordings](Audio-and-Recordings) for the required operating-system
+package and verification procedure.
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.28.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release,
+but the exact version tag is recommended for controlled deployments. The
+ordinary repository-root `compose.yaml` and `compose.usb.yaml` paths remain
+source-built and local-only. The separate `compose.remote.yaml` topology is
+documented in [Containers](Containers) and requires deliberate private-LAN TLS,
+identity, address, port, and firewall configuration.
+
+The Home Assistant App version tracks 0.28.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, aggregate and individual card resource
+paths, and independently versioned card modules. Upgrade the repository-managed
+App only after the matching release images have published.
+
+**Upgrading does not expose an advanced Home Assistant service.** The
+authenticated daemon-client and native HTTPS dashboard mappings remain
+disabled and `null` by default. Existing Ingress-only users do not need to
+create a server identity, dashboard password, client credential, firewall rule,
+or TCP mapping. The App continues to expose only authenticated Ingress and the
+existing scanner-to-App RTP input unless an operator deliberately completes the
+advanced configuration.
+
+Operators who need one App-owned daemon to serve Raspberry Pi or workstation
+clients should follow [Advanced Home Assistant](Advanced-Home-Assistant). That
+guide explains Supervisor's host-wide mapping limitation, private-LAN firewall
+direction, certificate trust, per-device enrollment, least-privilege scopes,
+revocation, rotation, restart recovery, rollback, and cleanup. Do not expose
+either service to the Internet, forward it through a router, use a wildcard
+listener, share one client identity across displays, or copy the server private
+key to a client.
+
+The optional Home Assistant Core integration remains independently versioned
+at 0.1.5 and does not need replacement, bridge-key rotation, reauthentication,
+Core restart, or Core reload for this release.
+
 ## Upgrade to v0.27.0
 
 v0.27.0 publishes Milestones 31.1 and 31.2. It adds bounded 15-, 30-, and

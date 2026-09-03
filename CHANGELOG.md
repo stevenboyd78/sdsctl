@@ -6,6 +6,69 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-09-02
+
+### Added
+
+- Add an explicit TLS 1.3 authenticated remote-daemon service for trusted
+  private-LAN clients. Versioned challenge/proof authentication, independently
+  revocable mode-`0600` client credentials, exact `observe` or `control`
+  scopes, aggregate and per-identity limits, and bounded API, event, accepted-
+  PCMU, and shared-Waterfall leases fail closed without exposing secret or
+  scanner-private state.
+- Add packaged `sdsctl daemon-client` and `sdsctl tui --daemon-client`
+  selection through strict named remote profiles. Local Unix-domain sockets
+  remain the default; remote profiles validate their CA, expected TLS hostname,
+  referenced credential, service capabilities, deadlines, reconnect, and
+  ordered resynchronization behavior without plaintext fallback.
+- Add a separate `compose.remote.yaml` native-Linux Docker Engine deployment
+  for one unprivileged scanner-owning daemon and authenticated private-LAN CLI,
+  TUI, or native-dashboard clients. Exact-address preflight, read-only
+  configuration and secret mounts, persistent state, scanner RTP UDP 50000,
+  explicit daemon-client publication, and complete cleanup remain independent
+  of the ordinary local Compose paths.
+- Add disabled-by-default advanced Home Assistant App mappings for the
+  authenticated daemon-client service on container port 50443 and a password-
+  authenticated native HTTPS dashboard on container port 8443. App startup
+  verifies enabled options against Supervisor's authoritative network mapping
+  and private container address before constructing either listener.
+- Add an Ingress-only advanced-access workspace for App-owned server identity,
+  native-dashboard password, and multiple named, least-privilege client
+  identities. One-time credential reveals and downloads are explicit and
+  memory-only; granular revocation and rotation do not expose stored secret
+  values or interrupt unrelated identities.
+
+### Changed
+
+- Reuse one transport-neutral client and daemon-owned service boundary across
+  local sockets, native hosts, isolated containers, the Home Assistant App,
+  Raspberry Pi displays, CLI, TUI, and browser clients. Remote daemon clients
+  consume only their authorized status, event, accepted-PCMU audio, typed-
+  control, and Waterfall services while recordings remain daemon-owned, all
+  without opening another scanner session.
+- Serve the advanced Home Assistant native dashboard as an independently
+  authenticated exact HTTPS origin without the Ingress context, Home Assistant
+  management tab, bridge-key workflow, or Core-integration routes. Ordinary
+  Ingress remains Supervisor-peer-only and continues to recover independently
+  alongside remote clients after an App restart.
+- Document beginner local-only operation and advanced one-daemon/multiple-
+  display deployments for native Linux, Docker, Home Assistant, Raspberry Pi,
+  CLI, TUI, and browser consumers, including enrollment, certificate trust,
+  firewall direction, rotation, revocation, rollback, and cleanup.
+
+### Security
+
+- Keep every remote listener opt-in and reject incomplete, contradictory,
+  wildcard, loopback, multicast, reserved, documentation, public, conflicting,
+  or unexpected bind and mapping state. Home Assistant's optional TCP mappings
+  remain `null` by default, and the App binds only its Supervisor-assigned
+  private container address when explicitly enabled.
+- Preserve private-LAN-only support. Home Assistant Supervisor publishes an
+  enabled mapping across host interfaces, so operators must restrict access
+  with host firewall rules. Internet exposure, router port forwarding, trusted
+  reverse proxies, wildcard listeners, shared client identities, and copying a
+  server private key to clients remain unsupported.
+
 ## [0.27.0] - 2026-09-01
 
 ### Added
@@ -1652,7 +1715,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...v0.27.0
 [0.26.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.0...v0.26.1
 [0.26.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.25.0...v0.26.0

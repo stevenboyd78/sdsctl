@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+## 0.28.0
+
+- Track the sdsctl v0.28.0 release while preserving the App name, slug, image
+  identity, MQTT identities, scanner ownership, persistent recordings, custom-
+  integration 0.1.5 artifact, and installed first-party custom elements.
+- Keep both advanced TCP mappings disabled with `null` defaults. An upgrade
+  alone continues to expose only authenticated Ingress and the existing SDS200
+  RTP input; it does not publish the daemon-client or native-dashboard service.
+- Add explicit, independently enabled private-LAN mappings for authenticated
+  daemon clients on container port 50443 and the password-authenticated native
+  HTTPS dashboard on container port 8443. Startup requires matching options,
+  valid Supervisor mappings, and the exact assigned private container address
+  before either listener is constructed.
+- Add an Ingress-only advanced-access workspace for App-owned TLS identity,
+  native-dashboard password, and multiple named `observe` or `control` client
+  credentials with explicit one-time reveal, download, granular revocation,
+  and rotation lifecycles.
+- Serve native HTTPS without the Home Assistant tab, bridge-key controls, or
+  Core-integration routes while the same App continues to serve authenticated
+  Ingress, Raspberry Pi displays, and other scoped remote clients from one
+  daemon-owned scanner, audio, event, recording, and Waterfall service set.
+- State the Supervisor exposure boundary directly: an enabled mapping is
+  published on Home Assistant host interfaces and is supported only on a
+  trusted private LAN protected by host firewall rules. Internet exposure,
+  router forwarding, wildcard binding, and trusted proxy mode remain
+  unsupported.
+
 ## 0.27.0
 
 - Track the sdsctl v0.27.0 release while preserving the App name, slug, image

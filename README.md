@@ -66,7 +66,7 @@ PortAudio runtime; Debian and Raspberry Pi OS users normally install
 Published container users can pull the current exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.27.0
+docker pull theboyd78/sdsctl:0.28.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -202,10 +202,11 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.27.0` is the current published release. It adds bounded elapsed-time
-Waterfall history and an optional display-only frequency pointer to the web
-dashboard and first-party Home Assistant card while preserving legacy
-frame-depth settings and the relative, uncalibrated signal contract. See the
+Version `0.28.0` is the current published release. It adds authenticated,
+encrypted private-LAN daemon clients, remote CLI and TUI profiles, an isolated
+container server deployment, and disabled-by-default advanced Home Assistant
+access for multiple thin displays while preserving one scanner-owning daemon.
+See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and
 [project vision](docs/project-vision.md) for released changes, ordered work,
