@@ -5502,8 +5502,17 @@ def _run_tui(
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,
+                terminal_failure_subscribe=(
+                    radio.on_terminal_stream_failure
+                    if args.managed_display
+                    else None
+                ),
                 log_buffer=log_buffer,
             )
+            if args.managed_display:
+                terminal_failure = radio.terminal_stream_failure
+                if terminal_failure is not None:
+                    raise terminal_failure
         return 0
 
     _reject_standalone_tui_daemon_options(args)

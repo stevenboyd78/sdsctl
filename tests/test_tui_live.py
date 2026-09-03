@@ -58,6 +58,9 @@ class FakeLiveRadio:
         self._state_callbacks: list[Callable[[RadioStateSnapshot], None]] = []
         self._connection_callbacks: list[Callable[[bool], None]] = []
         self._diagnostic_callbacks: list[Callable[[TransportDiagnostic], None]] = []
+        self._terminal_failure_callbacks: list[
+            Callable[[BaseException], None]
+        ] = []
 
     def reconnect(self) -> None:
         self.reconnect_calls += 1
@@ -74,6 +77,12 @@ class FakeLiveRadio:
         callback: Callable[[TransportDiagnostic], None],
     ) -> Unsubscribe:
         return self._subscribe(self._diagnostic_callbacks, callback)
+
+    def on_terminal_stream_failure(
+        self,
+        callback: Callable[[BaseException], None],
+    ) -> Unsubscribe:
+        return self._subscribe(self._terminal_failure_callbacks, callback)
 
     @contextmanager
     def radio_state_push(
@@ -99,6 +108,9 @@ class FakeLiveRadio:
 
     def emit_diagnostic(self, diagnostic: TransportDiagnostic) -> None:
         self._emit(self._diagnostic_callbacks, diagnostic)
+
+    def emit_terminal_stream_failure(self, error: BaseException) -> None:
+        self._emit(self._terminal_failure_callbacks, error)
 
     def _subscribe(
         self,
@@ -136,6 +148,7 @@ def _app(
     psi_auto_recover: bool = True,
     psi_recover_after: float = 10.0,
     psi_recovery_cooldown: float = 60.0,
+    exit_on_terminal_stream_failure: bool = False,
 ) -> ScannerTuiApp:
     kwargs: dict[str, object] = {}
     if clock is not None:
@@ -154,6 +167,11 @@ def _app(
         psi_auto_recover=psi_auto_recover,
         psi_recover_after=psi_recover_after,
         psi_recovery_cooldown=psi_recovery_cooldown,
+        terminal_failure_subscribe=(
+            radio.on_terminal_stream_failure
+            if exit_on_terminal_stream_failure
+            else None
+        ),
         **kwargs,
     )
 
@@ -237,6 +255,49 @@ def test_connection_and_diagnostic_callbacks_show_recovery_state() -> None:
             status = _plain(app.query_one("#status", Static))
             assert "RECONNECT ATTEMPT" in status
             assert "Reconnect attempt 2" in status
+
+    asyncio.run(exercise())
+
+
+def test_managed_terminal_stream_failure_exits_the_tui() -> None:
+    async def exercise() -> None:
+        radio = FakeLiveRadio(_info())
+        app = _app(radio, exit_on_terminal_stream_failure=True)
+        exited = Event()
+        original_exit = app.exit
+
+        def exit_app() -> None:
+            exited.set()
+            original_exit()
+
+        app.exit = exit_app
+        async with app.run_test(size=(80, 34)):
+            assert await asyncio.to_thread(radio.started.wait, 1.0)
+            await asyncio.to_thread(
+                radio.emit_terminal_stream_failure,
+                RuntimeError("private remote failure"),
+            )
+            assert await asyncio.to_thread(exited.wait, 1.0)
+
+        assert await asyncio.to_thread(radio.stopped.wait, 1.0)
+        assert radio.unsubscribe_count == 4
+
+    asyncio.run(exercise())
+
+
+def test_interactive_tui_does_not_subscribe_to_terminal_stream_failure() -> None:
+    async def exercise() -> None:
+        radio = FakeLiveRadio(_info())
+        app = _app(radio)
+
+        async with app.run_test(size=(80, 34)) as pilot:
+            assert await asyncio.to_thread(radio.started.wait, 1.0)
+            await asyncio.to_thread(
+                radio.emit_terminal_stream_failure,
+                RuntimeError("ordinary interactive failure"),
+            )
+            await pilot.pause()
+            assert app.is_running
 
     asyncio.run(exercise())
 

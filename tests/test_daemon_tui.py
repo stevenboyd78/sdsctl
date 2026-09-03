@@ -371,6 +371,57 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
     assert "stop after recovered state" not in rendered
 
 
+def test_remote_daemon_tui_reports_exhausted_reconnect_as_terminal_failure() -> None:
+    class RemoteApiClient(FakeApiClient):
+        sanitizes_private_state = True
+
+    class RemoteEventClient:
+        sanitizes_private_state = True
+
+        def __init__(self) -> None:
+            initial = runtime_snapshot()
+            initial.pop("scanner_endpoint")
+            self.items: list[DaemonEvent | Exception] = [
+                event(0, DaemonEventKind.SNAPSHOT, initial),
+                DaemonDisconnectedError("private first disconnect"),
+                DaemonDisconnectedError("private retry one"),
+                DaemonDisconnectedError("private retry two"),
+            ]
+
+        def receive(self) -> DaemonEvent:
+            item = self.items.pop(0)
+            if isinstance(item, Exception):
+                raise item
+            return item
+
+        def close(self) -> None:
+            return None
+
+    radio = DaemonTuiRadio(
+        RemoteApiClient(),
+        RemoteEventClient(),
+        reconnect_policy=DaemonRemoteReconnectPolicy(
+            attempts=2,
+            initial_delay=0,
+            max_delay=0,
+        ),
+    )
+    failures: list[BaseException] = []
+    diagnostics: list[TransportDiagnostic] = []
+    radio.on_terminal_stream_failure(failures.append)
+    radio.on_diagnostic(diagnostics.append)
+
+    with radio.radio_state_push():
+        wait_for(lambda: not radio.event_thread_alive)
+
+    assert len(failures) == 1
+    assert isinstance(failures[0], DaemonDisconnectedError)
+    assert radio.terminal_stream_failure is failures[0]
+    assert diagnostics[-1].kind == "daemon_event_reconnect_exhausted"
+    rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
+    assert "private" not in rendered
+
+
 def test_remote_daemon_tui_does_not_retry_protocol_failure() -> None:
     class RemoteApiClient(FakeApiClient):
         sanitizes_private_state = True
@@ -407,11 +458,34 @@ def test_remote_daemon_tui_does_not_retry_protocol_failure() -> None:
             max_delay=0,
         ),
     )
+    failures: list[BaseException] = []
+    radio.on_terminal_stream_failure(failures.append)
 
     with radio.radio_state_push():
         wait_for(lambda: not radio.event_thread_alive)
 
     assert events.receive_calls == 2
+    assert len(failures) == 1
+    assert isinstance(failures[0], DaemonProtocolError)
+    assert radio.terminal_stream_failure is failures[0]
+
+
+def test_daemon_tui_records_failure_before_initial_event_snapshot() -> None:
+    class FailedEventClient:
+        def receive(self) -> DaemonEvent:
+            raise DaemonProtocolError("initial event was malformed")
+
+        def close(self) -> None:
+            return None
+
+    radio = DaemonTuiRadio(FakeApiClient(), FailedEventClient())
+    failures: list[BaseException] = []
+    radio.on_terminal_stream_failure(failures.append)
+
+    with pytest.raises(DaemonProtocolError), radio.radio_state_push():
+        pass
+
+    assert failures == [radio.terminal_stream_failure]
 
 
 @pytest.mark.parametrize(

@@ -53,6 +53,10 @@ from .tui_themes import built_in_tui_theme_stylesheets
 Unsubscribe = Callable[[], None]
 Clock = Callable[[], float]
 WallClock = Callable[[], datetime]
+TerminalFailureSubscribe = Callable[
+    [Callable[[BaseException], None]],
+    Unsubscribe,
+]
 logger = logging.getLogger(__name__)
 AUTO_PSI_RECOVERY_LABEL = "Recover stale PSI"
 
@@ -433,6 +437,7 @@ class ScannerTuiApp(App[None]):
         palette: ThemePalette = DEFAULT_DARK_THEME,
         screen_class: str | None = None,
         managed_stylesheet: str | None = None,
+        terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -497,6 +502,7 @@ class ScannerTuiApp(App[None]):
             else screen_class
         )
         self._applied_theme_screen_class: str | None = None
+        self._terminal_failure_subscribe = terminal_failure_subscribe
         self._clock = clock
         self._now = now
         self._transition_values: dict[str, str] = {}
@@ -629,6 +635,12 @@ class ScannerTuiApp(App[None]):
             self.screen.add_class("-no-audio")
         self._refresh_view()
         self._poll_timers.append(self.set_interval(0.25, self._poll_log_buffer))
+        if self._terminal_failure_subscribe is not None:
+            self._unsubscribers.append(
+                self._terminal_failure_subscribe(
+                    self._on_terminal_stream_failure
+                )
+            )
         if self._radio is not None:
             self._control_worker.start()
             check_interval = min(max(self._stale_after / 4, 0.1), 1.0)
@@ -1162,6 +1174,18 @@ class ScannerTuiApp(App[None]):
 
     def _on_radio_diagnostic(self, diagnostic: TransportDiagnostic) -> None:
         self._dispatch_from_radio(self._apply_diagnostic, diagnostic)
+
+    def _on_terminal_stream_failure(self, error: BaseException) -> None:
+        del error
+        self._dispatch_from_radio(self._exit_after_terminal_stream_failure)
+
+    def _exit_after_terminal_stream_failure(self) -> None:
+        if self._shutdown_started.is_set():
+            return
+        self._stream_mode = "REMOTE STREAM ENDED"
+        self._status_message = "Managed display service recovery requested"
+        self._refresh_view()
+        self.exit()
 
     def _on_audio_state(self, snapshot: AudioSessionSnapshot) -> None:
         self._dispatch_from_radio(self._apply_audio_state, snapshot)
@@ -2152,6 +2176,7 @@ def run_tui(
     palette: ThemePalette,
     screen_class: str | None = None,
     managed_stylesheet: str | None = None,
+    terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2171,6 +2196,7 @@ def run_tui(
         palette=palette,
         screen_class=screen_class,
         managed_stylesheet=managed_stylesheet,
+        terminal_failure_subscribe=terminal_failure_subscribe,
     )
     try:
         app.run()

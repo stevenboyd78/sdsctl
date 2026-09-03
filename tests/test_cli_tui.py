@@ -464,6 +464,8 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     radio = captured["radio"]
     assert isinstance(radio, DaemonTuiRadio)
     assert isinstance(radio.reconnect_policy, DaemonRemoteReconnectPolicy)
+    terminal_failure_subscribe = captured["terminal_failure_subscribe"]
+    assert callable(terminal_failure_subscribe)
     assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
     assert captured["snapshot"].channel == "Remote Dispatch"
 

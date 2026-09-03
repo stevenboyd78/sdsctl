@@ -90,15 +90,28 @@ to the Pi.
 
 Keep the daemon's private-LAN listener disabled until its complete server
 identity and client registry are ready. When the listener is deliberately
-enabled, validate this Pi before installing the service:
+enabled, keep a separate SSH recovery session open and release the physical
+login prompt before inspecting the console:
 
 ```bash
-sudo -u sdsctl-display -H \
+sudo systemctl stop getty@tty1.service
+sudo env \
+  XDG_CONFIG_HOME=/var/lib/sdsctl-display/.config \
+  XDG_STATE_HOME=/var/lib/sdsctl-display/.local/state \
+  XDG_CACHE_HOME=/var/cache/sdsctl-display \
   /opt/sdsctl-display/bin/sdsctl \
   display-client-preflight \
   --remote-profile CLIENT_ID \
   --terminal /dev/tty1
 ```
+
+Raspberry Pi OS returns the released virtual console to root ownership and mode
+`0600`. Only this bounded, read-only preflight runs through `sudo` so it can
+inspect that exact character device. It uses the service account's explicit
+configuration paths and prints only sanitized evidence. The long-running TUI
+still runs as the unprivileged `sdsctl-display` account. If preflight does not
+pass and you are not continuing immediately, restore the login prompt with
+`sudo systemctl start getty@tty1.service`.
 
 Add `--audio-playback` to require a locally discoverable PortAudio output
 device, and optionally select an exact name or index with `--audio-device`.
@@ -123,30 +136,10 @@ unavailable. Exit status `78` means configuration, certificate,
 authentication, authorization, or service negotiation must be corrected. An
 unexpected local dependency or device error exits `2`.
 
-## 4. Perform one interactive test
-
-Before assigning the console to systemd, verify the same identity manually:
-
-```bash
-sudo -u sdsctl-display -H \
-  /opt/sdsctl-display/bin/sdsctl tui \
-  --daemon-client \
-  --remote-profile CLIENT_ID \
-  --managed-display \
-  --audio-directory /var/lib/sdsctl-display/recordings \
-  --audio-metadata
-```
-
-Press `Q` to exit. If playback was installed, press `A` only after the local
-audio backend and selected physical output have been verified. The TUI derives
-its compact, split, standard, or wide layout from the terminal geometry; do not
-add a device-model layout override.
-
-## 5. Install and start the console service
+## 4. Install the template and perform one interactive start
 
 Export the reviewed template from the installed Python package, install it,
-remove the non-secret staging copy, and validate it before enabling the
-instance:
+remove the non-secret staging copy, and validate it:
 
 ```bash
 /opt/sdsctl-display/bin/sdsctl display-client-service \
@@ -157,18 +150,38 @@ sudo install -o root -g root -m 0644 \
 rm sdsctl-display@.service
 sudo systemctl daemon-reload
 sudo systemd-analyze verify /etc/systemd/system/sdsctl-display@.service
-sudo systemctl enable --now sdsctl-display@CLIENT_ID.service
+```
+
+Start the instance once without enabling boot startup:
+
+```bash
+sudo systemctl start sdsctl-display@CLIENT_ID.service
 sudo systemctl status sdsctl-display@CLIENT_ID.service
 ```
 
-A source checkout carries the byte-identical template at
+Confirm the physical display, then press `Q`. An intentional quit leaves the
+disabled service inactive. If playback was installed, press `A` only after the
+local audio backend and selected physical output have been verified. The TUI
+derives its compact, split, standard, or wide layout from terminal geometry; do
+not add a device-model layout override.
+
+The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
 and packaged copies to remain identical.
 
 The template passes the systemd instance name to `--remote-profile`. Use
-`systemd-escape` before enabling the unit if an existing profile name requires
-systemd instance escaping. A simple identifier containing letters, digits, and
-hyphens needs no conversion.
+`systemd-escape` before starting or enabling the unit if an existing profile
+name requires systemd instance escaping. A simple identifier containing
+letters, digits, and hyphens needs no conversion.
+
+## 5. Enable boot startup
+
+Only after the one-start physical test passes, enable the exact instance:
+
+```bash
+sudo systemctl enable --now sdsctl-display@CLIENT_ID.service
+sudo systemctl status sdsctl-display@CLIENT_ID.service
+```
 
 The unit deliberately:
 
@@ -200,14 +213,10 @@ session. A fresh session begins from a new authoritative snapshot.
 Revocation, a replaced certificate, or an invalid credential is permanent from
 the Pi's perspective. The display stops instead of repeatedly authenticating.
 After deliberately restoring or rotating the identity and replacing the exact
-client files, rerun preflight and restart the unit:
+client files, rerun the bounded preflight from section 3 with `getty@tty1`
+stopped, then restart the unit:
 
 ```bash
-sudo -u sdsctl-display -H \
-  /opt/sdsctl-display/bin/sdsctl \
-  display-client-preflight \
-  --remote-profile CLIENT_ID \
-  --terminal /dev/tty1
 sudo systemctl restart sdsctl-display@CLIENT_ID.service
 ```
 
