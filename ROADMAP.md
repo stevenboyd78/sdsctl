@@ -11,7 +11,72 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment
+### Milestone 32.5 — v0.28.0 release and publication closure
+
+Milestone 32.4 is closed through reviewed pull request 223 and merge commit
+`ea61515460d5f38d39bea0323e83f458e73e112d`. Its complete static, test,
+documentation, distribution, browser, screenshot, CodeQL, generic-image, and
+Home Assistant App image validation passed before and after merge. Physical
+acceptance on Home Assistant OS 18.2, Home Assistant Core 2026.8.3, Supervisor
+2026.08.0, an SDS200 running firmware 1.26.01, a separate Raspberry Pi display,
+and an independent workstation operator proved the disabled defaults, exact
+private-LAN exposure, native HTTPS dashboard, scoped client identities, shared
+scanner services, selective revocation, credential rotation, restart recovery,
+rollback, and exact cleanup. Reviewed wiki source was published as commit
+`076c76a6d97fba5744d72eb78a9b508b278a0306`; the merged source branch and
+temporary validation surfaces were removed while the production App remained
+the sole scanner owner.
+
+Milestone 32.5 publishes the complete Milestones 32.1 through 32.4
+authenticated remote-client boundary as sdsctl 0.28.0. Freeze the feature
+boundary and synchronize the Python package and import version, Home Assistant
+App version and changelog, main changelog, concise README, beginner installation
+and upgrade guidance, container examples, version-selected image references,
+release comparison links, and every checked version contract. Retain the
+independently versioned Home Assistant Core integration and first-party card
+artifacts unless a separately reviewed compatibility fix requires a change.
+
+Keep local Unix-domain clients and Home Assistant Ingress as the beginner-safe
+defaults. Installing or upgrading must not expose the authenticated daemon
+client or native-dashboard TCP service. Release notes and public instructions
+must preserve the private-LAN-only security boundary, exact-address and
+credential preflight, independent least-privilege identities, Supervisor's
+host-wide port-publication limitation, and the requirement that public or
+Internet exposure, router forwarding, wildcard binding, and trusted proxy mode
+remain unsupported. One scanner-owning daemon must continue to serve local,
+container, Home Assistant, Raspberry Pi, CLI, TUI, browser, audio, control,
+event, and Waterfall consumers without a second scanner session.
+
+Before tagging, run the complete Ruff, strict mypy, Python 3.11 through 3.14,
+coverage, documentation, browser, screenshot, distribution, clean-install,
+generic-container, Home Assistant App image, version-contract, secret-leakage,
+authentication, authorization, bounded-client, reconnect, rollback, and
+shutdown validation appropriate to every release surface. Review one release
+pull request and require all branch and post-merge checks to pass. Only one
+genuine annotated `v0.28.0` tag matching the merged package version may trigger
+publication; workflow success alone is not release acceptance.
+
+Verify the public Python wheel and source distribution, GitHub Release, amd64
+and arm64 generic Docker images, and amd64 and aarch64 Home Assistant App images
+plus their multi-architecture manifests. Published-artifact acceptance must
+include clean base and `all` Python installations, one published isolated
+container deployment, and a production-class Home Assistant upgrade from
+0.27.0 to 0.28.0. Prove the advanced App ports remain closed by default before
+one exact reviewed private-LAN configuration validates independent Raspberry Pi
+observe and workstation control identities, native HTTPS without Home
+Assistant-only controls, simultaneous Ingress, shared audio and Waterfall,
+selective revocation or rotation, and App restart recovery.
+
+After acceptance, restore the preferred production configuration and remove
+only the exact reviewed release-validation App, integration, credentials,
+profiles, containers, networks, volumes, recordings, resource rollback copies,
+temporary wiki checkout, and staging paths. Publish the reviewed wiki source,
+record immutable public artifact and physical evidence, delete the merged
+release branch locally and remotely, and leave unrelated operator data,
+production recordings, SSH credentials, and Home Assistant configuration
+untouched. Milestone 33 planning begins only after this public release closure.
+
+#### Closed Milestone 32.4 — Advanced Home Assistant App remote access and multi-display deployment
 
 Milestone 32.3 is closed through reviewed pull request 222 and merge commit
 `bbe9054407344ccf4ac11f79119e24728eeb86ae`. Its complete static, test,
