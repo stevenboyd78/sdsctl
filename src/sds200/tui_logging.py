@@ -17,6 +17,7 @@ from .logging_config import (
 DEFAULT_TUI_LOG_HISTORY_LIMIT = 200
 TUI_LOG_VISIBLE_LINES = 6
 TUI_SHORT_LOG_VISIBLE_LINES = 2
+TUI_SHORT_LOG_DRAWER_VISIBLE_LINES = 4
 
 
 @dataclass(frozen=True, slots=True)

@@ -163,7 +163,17 @@ Confirm the physical display, then press `Q`. An intentional quit leaves the
 disabled service inactive. If playback was installed, press `A` only after the
 local audio backend and selected physical output have been verified. The TUI
 derives its compact, split, standard, or wide layout from terminal geometry; do
-not add a device-model layout override.
+not add a device-model layout override. On the normal 100-by-30 dashboard,
+Connection sits beside Channel Details, System / Site / Channel spans the next
+row, Scanner State sits beside Live PSI / Controls, and Network Audio spans the
+lower row when available. A named remote profile also shows its resolved
+`host:port` as `Target` in Connection.
+
+Press `G` to replace Network Audio with a bounded full-width Operational Logs
+drawer showing the newest four single-line records. Logs continue buffering while
+hidden. Press `G` again to return to the normal dashboard. `?` opens the Keyboard
+Reference instead; the two drawers are mutually exclusive so they cannot compete
+for the physical viewport.
 
 The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
@@ -267,6 +277,11 @@ Those paths are deliberately exact. Do not recursively remove a parent such as
 - Reboot the Pi and confirm the TUI appears without a typed command.
 - Confirm the expected terminal geometry and responsive layout.
 - Confirm the footer remains visible and the application does not scroll.
+- Press `G` and confirm the full-width Operational Logs drawer opens without
+  scrolling; press `G` again and confirm the normal lower panel returns.
+- Press `?` and confirm the Keyboard Reference replaces any open log drawer.
+- For a named remote profile, confirm Connection shows the expected resolved
+  private-LAN `Target` without exposing credential material.
 - Restart the daemon or Home Assistant App and confirm automatic recovery.
 - Interrupt and restore the private-LAN path and confirm bounded recovery.
 - Revoke the Pi identity and confirm a sanitized permanent failure without a

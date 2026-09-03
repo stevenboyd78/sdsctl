@@ -265,9 +265,10 @@ async def capture(
 
     app = ScannerTuiApp(
         ScannerIdentity(
-            endpoint=("demo://fictional-sds200" if audio_controls else "/dev/ttyACM0"),
+            endpoint=("sdsctl-remote-daemon" if audio_controls else "/dev/ttyACM0"),
             model="SDS200" if audio_controls else "SDS100",
             firmware="Version 1.26.01 (demo)",
+            connection_target=("192.0.2.25:50443" if audio_controls else None),
         ),
         snapshot,
         audio_session=session,

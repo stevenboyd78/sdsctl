@@ -45,6 +45,7 @@ from .tui_controls import (
 )
 from .tui_logging import (
     TUI_LOG_VISIBLE_LINES,
+    TUI_SHORT_LOG_DRAWER_VISIBLE_LINES,
     TUI_SHORT_LOG_VISIBLE_LINES,
     TuiLogBuffer,
 )
@@ -244,6 +245,10 @@ _SHARED_TUI_STYLESHEET = """
         min-height: 5;
     }
 
+    Screen.-wide.-connection-target #connection {
+        min-height: 6;
+    }
+
     Screen.hide-logs #logs {
         display: none;
     }
@@ -338,6 +343,26 @@ _SHARED_TUI_STYLESHEET = """
     Screen.-split.-short #logs,
     Screen.-wide #logs {
         column-span: 2;
+    }
+
+    Screen.-pi-dashboard #system,
+    Screen.-pi-dashboard #audio,
+    Screen.-pi-dashboard #logs {
+        column-span: 2;
+    }
+
+    Screen.-pi-dashboard #system {
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
+    }
+
+    Screen.-pi-dashboard #logs {
+        height: 7;
+        max-height: 7;
+    }
+
+    Screen.-pi-dashboard.show-logs #audio {
+        display: none;
     }
 
     Screen.-split.-short.-no-audio #status {
@@ -522,6 +547,7 @@ class ScannerTuiApp(App[None]):
         self._status_message = "Initial scanner information loaded"
         self._control_message = "Ready"
         self._key_help_visible = False
+        self._pi_dashboard_layout: bool | None = None
         self._unsubscribers: list[Unsubscribe] = []
         self._psi_stop = Event()
         self._shutdown_started = Event()
@@ -630,10 +656,15 @@ class ScannerTuiApp(App[None]):
 
     def on_mount(self) -> None:
         self._shutdown_started.clear()
+        if self._identity.connection_target is not None:
+            self.screen.add_class("-connection-target")
+        else:
+            self.screen.remove_class("-connection-target")
         if self.audio_controls_available:
             self.screen.remove_class("-no-audio")
         else:
             self.screen.add_class("-no-audio")
+        self._apply_responsive_panel_layout()
         self._refresh_view()
         self._poll_timers.append(self.set_interval(0.25, self._poll_log_buffer))
         if self._terminal_failure_subscribe is not None:
@@ -663,7 +694,7 @@ class ScannerTuiApp(App[None]):
         """Refresh size-dependent summaries after terminal resizing."""
 
         del event
-        self.call_after_refresh(self._refresh_view)
+        self.call_after_refresh(self._refresh_responsive_view)
 
     def on_unmount(self) -> None:
         self._shutdown_started.set()
@@ -690,6 +721,7 @@ class ScannerTuiApp(App[None]):
 
         self._key_help_visible = not self._key_help_visible
         if self._key_help_visible:
+            self._set_logs_visible(False)
             self.screen.add_class("show-keys")
             self._control_message = "Keyboard help shown"
         else:
@@ -700,15 +732,90 @@ class ScannerTuiApp(App[None]):
     def action_toggle_logs(self) -> None:
         """Show or hide the bounded operational log panel."""
 
-        self._logs_visible = not self._logs_visible
-        if self._logs_visible:
-            self.screen.remove_class("hide-logs")
+        show_logs = not self._logs_visible
+        if show_logs:
+            self._key_help_visible = False
+            self.screen.remove_class("show-keys")
+            self._set_logs_visible(True)
             self._control_message = "Operational logs shown"
         else:
-            self.screen.add_class("hide-logs")
+            self._set_logs_visible(False)
             self._control_message = "Operational logs hidden"
         self._refresh_log_panel(force=True)
         self._refresh_view()
+
+    def _set_logs_visible(self, visible: bool) -> None:
+        self._logs_visible = visible
+        if visible:
+            self.screen.remove_class("hide-logs")
+            self.screen.add_class("show-logs")
+        else:
+            self.screen.add_class("hide-logs")
+            self.screen.remove_class("show-logs")
+
+    def _refresh_responsive_view(self) -> None:
+        self._apply_responsive_panel_layout()
+        self._refresh_view()
+
+    def _uses_pi_dashboard_layout(self) -> bool:
+        return (
+            self._uses_short_layout()
+            and 100 <= self.screen.size.width < 120
+            and self._snapshot.screen_kind
+            not in {
+                ScannerScreenKind.SEARCH,
+                ScannerScreenKind.CLOSE_CALL,
+                ScannerScreenKind.WEATHER,
+                ScannerScreenKind.TONE_OUT,
+            }
+        )
+
+    def _apply_responsive_panel_layout(self) -> None:
+        use_pi_layout = self._uses_pi_dashboard_layout()
+        if use_pi_layout:
+            self.screen.add_class("-pi-dashboard")
+        else:
+            self.screen.remove_class("-pi-dashboard")
+        if self._pi_dashboard_layout is use_pi_layout:
+            return
+
+        panel_ids = (
+            (
+                "keys",
+                "connection",
+                "channel",
+                "system",
+                "state",
+                "status",
+                "audio",
+                "logs",
+                "identity",
+            )
+            if use_pi_layout
+            else (
+                "keys",
+                "connection",
+                "identity",
+                "system",
+                "channel",
+                "state",
+                "audio",
+                "status",
+                "logs",
+            )
+        )
+        body = self.query_one("#body", VerticalScroll)
+        panels = [
+            panel
+            for panel_id in panel_ids
+            if (panel := self.query_one_optional(f"#{panel_id}", Static)) is not None
+        ]
+        for previous, panel in zip(panels, panels[1:], strict=False):
+            body.move_child(panel, after=previous)
+        self._pi_dashboard_layout = use_pi_layout
+        self._set_logs_visible(
+            False if self._key_help_visible else not use_pi_layout
+        )
 
     def action_reconnect(self) -> None:
         """Restart the scanner transport and resume the active PSI stream."""
@@ -1215,14 +1322,18 @@ class ScannerTuiApp(App[None]):
         if not force and snapshot.version == self._log_version:
             return
         self._log_version = snapshot.version
-        visible_limit = (
-            TUI_SHORT_LOG_VISIBLE_LINES
-            if self.screen.size.height < 32
-            else TUI_LOG_VISIBLE_LINES
-        )
+        if self._uses_pi_dashboard_layout():
+            visible_limit = TUI_SHORT_LOG_DRAWER_VISIBLE_LINES
+        elif self.screen.size.height < 32:
+            visible_limit = TUI_SHORT_LOG_VISIBLE_LINES
+        else:
+            visible_limit = TUI_LOG_VISIBLE_LINES
         visible = snapshot.lines[-visible_limit:]
         lines = [
-            f"{len(snapshot.lines)} retained; newest last; G toggles",
+            (
+                f"{len(snapshot.lines)} retained; newest last; "
+                f"G {'closes' if self._logs_visible else 'opens'}"
+            ),
         ]
         if visible:
             lines.extend(visible)
@@ -1489,6 +1600,7 @@ class ScannerTuiApp(App[None]):
     def _refresh_view(self) -> None:
         if self._shutdown_started.is_set():
             return
+        self._apply_responsive_panel_layout()
         presentation = present_radio_state(
             self._snapshot,
             connected=self._connected,
@@ -1542,8 +1654,12 @@ class ScannerTuiApp(App[None]):
             system_widget.border_title = "Screen Mode"
             channel_widget.border_title = "Tone Out"
         else:
-            system_widget.border_title = "System / Site"
-            channel_widget.border_title = "Channel"
+            if self._uses_pi_dashboard_layout():
+                system_widget.border_title = "System / Site / Channel"
+                channel_widget.border_title = "Channel Details"
+            else:
+                system_widget.border_title = "System / Site"
+                channel_widget.border_title = "Channel"
 
         system_widget.update(self._system_panel())
         channel_widget.update(self._channel_panel(presentation, roles))
@@ -1659,11 +1775,20 @@ class ScannerTuiApp(App[None]):
                 ),
             )
 
-        return self._panel(
+        rows = [
             ("System", _display(self._snapshot.system), ThemeRole.TEXT_PRIMARY),
             ("Department", _display(self._snapshot.department), ThemeRole.TEXT_PRIMARY),
             ("Site", _display(self._snapshot.site), ThemeRole.TEXT_PRIMARY),
-        )
+        ]
+        if self._uses_pi_dashboard_layout():
+            rows.append(
+                (
+                    "Channel",
+                    _display(self._snapshot.channel),
+                    ThemeRole.TEXT_PRIMARY,
+                )
+            )
+        return self._panel(*rows)
 
     def _channel_panel(
         self,
@@ -1677,24 +1802,35 @@ class ScannerTuiApp(App[None]):
             ScannerScreenKind.WEATHER,
             ScannerScreenKind.TONE_OUT,
         }:
-            return self._panel(
-                ("Channel", _display(self._snapshot.channel), ThemeRole.TEXT_PRIMARY),
+            channel_rows = []
+            if not self._uses_pi_dashboard_layout():
+                channel_rows.append(
+                    (
+                        "Channel",
+                        _display(self._snapshot.channel),
+                        ThemeRole.TEXT_PRIMARY,
+                    )
+                )
+            channel_rows.extend(
                 (
-                    "Frequency",
-                    _display(self._snapshot.frequency),
-                    ThemeRole.TEXT_PRIMARY,
-                ),
-                (
-                    "Modulation",
-                    _display(self._snapshot.modulation),
-                    ThemeRole.TEXT_PRIMARY,
-                ),
-                (
-                    "Service",
-                    _display(self._snapshot.service_type),
-                    ThemeRole.TEXT_PRIMARY,
-                ),
+                    (
+                        "Frequency",
+                        _display(self._snapshot.frequency),
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                    (
+                        "Modulation",
+                        _display(self._snapshot.modulation),
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                    (
+                        "Service",
+                        _display(self._snapshot.service_type),
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                )
             )
+            return self._panel(*channel_rows)
 
         if screen_kind is ScannerScreenKind.WEATHER:
             weather_channel = _display(self._snapshot.channel)

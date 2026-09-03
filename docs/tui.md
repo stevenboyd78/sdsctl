@@ -43,15 +43,22 @@ shortcuts that their transport cannot use.
 ![Compact two-column sdsctl TUI at 100 by 30 cells with network-audio controls](assets/screenshots/tui-pi-network-compact.svg)
 
 On short terminals at 100 through 119 columns, the compact split layout pairs
-connection and scanner panels across two columns. An Ethernet or daemon-backed
-session places Network Audio beside Live PSI / Controls; keyboard help and
-operational logs retain the full width. Tight theme-colored frames preserve the
-same panel titles and visual grouping as the larger dashboard without restoring
-its extra spacing. The short-screen log panel keeps the newest two records on
-single ellipsized rows, preventing long diagnostics or accumulated warnings from
-growing the application beyond the physical display. Narrower or taller
-terminals retain their established layouts, and the ordinary wide layout remains
-available from 120 columns.
+Connection with Channel Details, followed by a fixed-height, full-width System /
+Site / Channel row. Scanner State then sits beside Live PSI / Controls, and an
+Ethernet or daemon-backed Network Audio panel uses the full lower row. Tight
+theme-colored frames preserve the same panel titles and visual grouping as the
+larger dashboard without restoring its extra spacing. Long hierarchy values are
+ellipsized instead of increasing the row height and pushing lower content off the
+display.
+
+Operational Logs start hidden at this geometry. `G` replaces Network Audio with
+a seven-row, full-width drawer containing the newest four single-line records;
+the bounded buffer continues collecting while the drawer is closed. `?` opens
+the keyboard reference, and opening either drawer closes the other. This keeps
+the ordinary dashboard and footer in the initial viewport while allowing more
+useful log width when diagnosing an issue. Narrower or taller terminals retain
+their established layout and visible bounded log panel, and the ordinary wide
+layout remains available from 120 columns.
 
 ### Direct USB compact layout
 
@@ -59,9 +66,11 @@ available from 120 columns.
 
 This deterministic SDS100 USB view uses the same 100-column by 30-row geometry
 reported by the physical Raspberry Pi display. Removing the incapable Network
-Audio panel lets Live PSI / Controls span both columns while scanner hierarchy,
-channel, and state use paired framed rows above full-width logs. The scanner's
-own recording indicator remains explicit.
+Audio panel leaves the full lower row available until the Operational Logs drawer
+is requested. Connection and Channel Details share the first row, System / Site /
+Channel uses the fixed full-width second row, and Scanner State shares the third
+row with Live PSI / Controls. The scanner's own recording indicator remains
+explicit.
 
 Install the optional interface from PyPI:
 
@@ -260,10 +269,11 @@ automatic recovery.
 
 While the full-screen TUI is active, package log records are routed to the bounded
 in-app panel instead of stderr so they cannot corrupt the Textual display. The
-panel retains the newest 200 lines and displays the newest six; hiding it with `G`
-does not stop collection. An optional `--log-file` handler remains active and
-continues receiving every record allowed by the selected log level. Normal stderr
-logging is restored when the TUI exits.
+panel retains the newest 200 lines and normally displays the newest six; hiding it
+with `G` does not stop collection. The 100-through-119-column short dashboard uses
+`G` as a full-width drawer and displays its newest four records. An optional
+`--log-file` handler remains active and continues receiving every record allowed
+by the selected log level. Normal stderr logging is restored when the TUI exits.
 
 The deterministic `sds100-tui-controls.jsonl` replay is a strict, one-shot command
 script rather than a scanner simulator. For a manual control pass, start a fresh TUI
@@ -291,6 +301,16 @@ scanner's own memory-card state remains visible as `Scanner recording`.
 Opening the recording library still shows its detailed entries, and the main
 content remains vertically scrollable.
 
+At the physical 100-by-30 geometry, normal scanner screens use a fixed compact
+dashboard: Connection and Channel Details share the first row, System / Site /
+Channel spans the second, Scanner State and Live PSI / Controls share the third,
+and Network Audio spans the fourth when available. Named remote-daemon sessions
+also show the resolved `host:port` as `Target` in Connection; direct USB and
+standalone network-host sessions do not add that row. Hierarchy values stay on
+one ellipsized line so changing systems or departments cannot shift the lower
+panels. `G` replaces Network Audio with the bounded Operational Logs drawer, and
+`?` opens the mutually exclusive keyboard reference.
+
 At 120 columns or wider, panels switch to a two-column dashboard. An 80 by 24
 terminal is the recommended Raspberry Pi starting size. The deterministic suite
 also covers 64 by 20 compact and 90 by 28 Raspberry Pi-like terminals. The compact
@@ -317,6 +337,11 @@ footer in the initial viewport, and finalized a 20.68-second mono 8 kHz WAV plus
 metadata without a warning, error, disconnect, or reconnect. The Home Assistant
 App remained the only scanner owner throughout the remote pass and returned to
 its default-closed TCP configuration afterward.
+
+Milestone 33.2 retains those transport and audio behaviors while refining the
+physical layout described above. The earlier side-by-side Network Audio and log
+placement is historical acceptance evidence rather than the current 100-by-30
+panel arrangement.
 
 For an already qualified observe-only remote profile, the
 [managed Raspberry Pi display guide](managed-pi-display.md) adds physical-console

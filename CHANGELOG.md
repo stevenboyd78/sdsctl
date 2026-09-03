@@ -34,13 +34,19 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   and audio-control rows and shortcuts instead of spending screen space on
   unavailable features; Ethernet and daemon-backed audio sessions retain them.
 - Use a compact two-column layout on short terminals from 100 through 119
-  columns. The physical 100-by-30 Raspberry Pi geometry pairs scanner panels,
-  preserves their titles in tight theme-colored frames, keeps logs and keyboard
-  help full width, and lets USB Live PSI / Controls reclaim both columns when
-  Network Audio is absent.
-- Bound short-screen operational logs to the newest two single-line entries.
-  Long warnings are ellipsized inside a five-row framed panel instead of wrapping
-  until the Raspberry Pi application becomes vertically scrollable.
+  columns. The physical 100-by-30 Raspberry Pi geometry places Connection beside
+  Channel Details, gives System / Site / Channel a fixed full-width row, pairs
+  Scanner State with Live PSI / Controls, and gives Network Audio the full lower
+  row when that service is available. Long hierarchy values are ellipsized so
+  they cannot move the lower panels or footer.
+- Turn Operational Logs into a bounded `G` drawer on the physical Raspberry Pi
+  layout. It starts hidden, replaces Network Audio when opened, shows the newest
+  four single-line records across the full width, continues collecting while
+  hidden, and is mutually exclusive with the `?` keyboard reference. Larger and
+  narrower layouts retain their existing visible bounded log panel.
+- Show a named remote-daemon TUI's resolved private-LAN `host:port` as `Target`
+  in the Connection panel while leaving direct USB and standalone-host sessions
+  unchanged.
 - Extend the existing proactive 120-second PSI renewal to direct serial
   transports. Physical SDS100 USB timing showed complete 500 ms pushes expiring
   regularly after about three minutes; renewing before that boundary avoids the

@@ -51,6 +51,16 @@ Keep the native HTTPS browser kiosk separate for a later milestone because it
 uses a dashboard password, certificate trust, and browser session rather than
 the daemon-client credential.
 
+Refine the normal-scanning 100-by-30 display from physical feedback without
+changing the established responsive breakpoints. Pair Connection with compact
+Channel Details, place System / Site / Channel in one fixed-height full-width
+row, pair Scanner State with Live PSI / Controls, and give Network Audio the
+full lower row when present. Present Operational Logs as a hidden-by-default,
+full-width `G` drawer that replaces Network Audio, retains the newest four
+single-line records, and remains mutually exclusive with the `?` keyboard
+reference. Show the resolved `host:port` only for named remote-daemon sessions
+so an operator can identify a display's actual server target.
+
 Before merge, validate deterministic terminal inspection, the established TUI
 breakpoints including the physical 100-by-30 compact split, observe-only
 enforcement, redacted output, all stable exit classes, service hardening, and
