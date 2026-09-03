@@ -395,7 +395,10 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
             self.sanitizes_private_state = True
 
         def hello(self) -> dict[str, object]:
-            return {"operations": ["runtime.snapshot"]}
+            return {
+                "operations": ["runtime.snapshot"],
+                "control_operations": [],
+            }
 
         def runtime_snapshot(self) -> dict[str, object]:
             return {
@@ -447,7 +450,13 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     monkeypatch.setattr("sds200.tui.run_tui", fake_run_tui)
 
     assert cli.main(
-        ["tui", "--daemon-client", "--remote-profile", "pi-display"],
+        [
+            "tui",
+            "--daemon-client",
+            "--remote-profile",
+            "pi-display",
+            "--managed-display",
+        ],
         configuration_paths=paths,
         environ={},
     ) == 0

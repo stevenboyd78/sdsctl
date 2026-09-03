@@ -318,6 +318,11 @@ metadata without a warning, error, disconnect, or reconnect. The Home Assistant
 App remained the only scanner owner throughout the remote pass and returned to
 its default-closed TCP configuration afterward.
 
+For an already qualified observe-only remote profile, the
+[managed Raspberry Pi display guide](managed-pi-display.md) adds physical-console
+preflight, stable service-manager exit classes, and an opt-in systemd template.
+It does not change ordinary interactive TUI startup.
+
 ## Network audio playback, recording, and library
 
 Standalone TUI audio requires an explicit SDS200 network host. Daemon-backed TUI

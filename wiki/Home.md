@@ -22,6 +22,7 @@ safety-critical or emergency-dispatch system.
 | --- | --- |
 | Run inside Home Assistant OS | [Home Assistant](Home-Assistant) |
 | Use one Home Assistant App with multiple Pi or browser displays | [Advanced Home Assistant access](Advanced-Home-Assistant) |
+| Start an observe-only Raspberry Pi TUI automatically at boot | [Managed Raspberry Pi display](Raspberry-Pi-Display) |
 | Use a terminal UI on Linux or Raspberry Pi OS | [Python installation](Installation#install-from-pypi), then [Using sdsctl](Using-sdsctl#terminal-interface) |
 | Run a browser dashboard or MQTT service | [Server-oriented Python installation](Installation#choose-an-installation) |
 | Run all optional Python interfaces | `python -m pip install "sds200[all]"` |
@@ -57,6 +58,7 @@ for the exact evidence and limits.
 - [Play live SDS200 audio and make recordings](Audio-and-Recordings)
 - [Install and operate the Home Assistant App](Home-Assistant)
 - [Connect private-LAN Pi, TUI, or browser displays to the Home Assistant App](Advanced-Home-Assistant)
+- [Run an observe-only Raspberry Pi TUI as a managed physical-console display](Raspberry-Pi-Display)
 - [Edit Favorites and review assisted RadioReference changes](Favorites-and-RadioReference)
 - [Configure profiles, logging, health, capture, replay, and recovery](Operations-and-Diagnostics)
 - [Use the Python API](Python-API)

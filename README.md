@@ -152,6 +152,7 @@ Advanced, version-controlled references remain in the repository:
 - [Layered configuration](docs/configuration.md)
 - [Daemon deployment](docs/daemon-deployment.md)
 - [Authenticated remote daemon clients](docs/daemon-remote.md)
+- [Managed Raspberry Pi TUI display](docs/managed-pi-display.md)
 - [Remote daemon container deployment](docs/remote-container-deployment.md)
 - [Web dashboard](docs/web-dashboard.md)
 - [Network audio](docs/audio.md)

@@ -187,6 +187,11 @@ ID and secret. This makes one device independently revocable without interruptin
 the others. An observe-only display cannot issue scanner controls even if its
 local interface renders control affordances incorrectly.
 
+Once this interactive workflow passes for a Raspberry Pi, continue with the
+[managed Raspberry Pi display guide](managed-pi-display.md) for an opt-in,
+boot-resilient `/dev/tty1` service. Managed displays enforce observe-only
+authorization and do not enable this App's listener or Network mapping.
+
 ## Configure a native browser or kiosk
 
 Open this URL from a private-LAN browser, substituting the certificate identity

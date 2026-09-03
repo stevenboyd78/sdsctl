@@ -140,9 +140,22 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### Milestone 33.1 — Transport-aware compact TUI"
+    expected_heading = "### Milestone 33.2 — Managed Raspberry Pi remote TUI display"
     assert expected_heading in active_milestone
     for required in (
+        "interactively qualified Raspberry Pi remote TUI",
+        "`display-client-preflight` command",
+        "rejects an identity that advertises any control operation",
+        "`--managed-display` TUI mode",
+        "temporary exit 75",
+        "permanent configuration exit 78",
+        "`/dev/tty1` console",
+        "optional ALSA output",
+        "native HTTPS browser kiosk separate for a later milestone",
+        "#### Closed Milestone 33.1 — Transport-aware compact TUI",
+        "Milestone 33.1 closed through reviewed pull request 226",
+        "c9f9e6517d84ce30ee27b0cbe4a07ca270e474b3",
+        "Raspberry Pi candidate virtual environment was deliberately retained",
         "physically observed Raspberry Pi display geometry of 100 columns by 30 rows",
         "explicit `Scanner recording` label",
         "sdsctl-owned network-audio WAV capture under `Audio recording`",

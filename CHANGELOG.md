@@ -6,6 +6,23 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add an observe-only `display-client-preflight` command for managed Raspberry
+  Pi TUI deployments. It verifies an exact physical console, reports the
+  responsive layout selected by its measured geometry, authenticates to the
+  remote API, event, and audio services, checks the runtime contract, optionally
+  inspects local playback, and returns only redacted evidence.
+- Add `tui --managed-display` service-manager semantics and a hardened
+  `sdsctl-display@.service` Raspberry Pi console template. Temporary connection
+  failures use exit 75 and a delayed restart; permanent profile, TLS,
+  authentication, authorization, or service failures use exit 78 and stop.
+  Unexpected local failures and an intentional quit also remain stopped.
+- Add canonical and beginner wiki guidance for a dedicated service account,
+  isolated virtual environment, private client files, preflight, interactive
+  validation, boot startup, journald, recovery, credential changes, upgrade,
+  disablement, exact removal, and default-closed Home Assistant cleanup.
+
 ### Changed
 
 - Make the Textual TUI transport-aware on compact Raspberry Pi displays. Direct

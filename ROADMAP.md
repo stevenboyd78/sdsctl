@@ -11,7 +11,65 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 33.1 — Transport-aware compact TUI
+### Milestone 33.2 — Managed Raspberry Pi remote TUI display
+
+Turn the interactively qualified Raspberry Pi remote TUI into an opt-in,
+boot-resilient physical-console deployment. Reuse one explicit named remote
+profile and its independently revocable `observe` credential; do not add a
+second scanner owner, automatic daemon discovery, credential enrollment,
+scanner fallback, public exposure, or a browser-session shortcut.
+
+Add a `display-client-preflight` command that verifies an exact character
+terminal, reports its measured responsive-layout class, loads the existing
+strict profile and private credential, authenticates independently to the API,
+event, and audio services, negotiates the runtime-snapshot contract, and
+rejects an identity that advertises any control operation. Optional local
+playback preflight must inspect PortAudio without opening a stream. Successful
+and failed output must omit the private address, TLS hostname, client ID,
+certificate path, credential path, credential bytes, and scanner endpoint.
+
+Add an explicit `--managed-display` TUI mode for service managers. Keep normal
+interactive behavior unchanged. Classify only connection loss and an already
+connected daemon disconnect as temporary exit 75. Treat profile, TLS,
+authentication, authorization, and service-negotiation failure as permanent
+configuration exit 78, and retain exit 2 for unexpected local dependency or
+device failure. An operator's `Q` remains successful and must not restart.
+
+Ship one reviewed Raspberry Pi OS systemd template for the physical
+`/dev/tty1` console. Run an exact virtual-environment binary as a dedicated
+unprivileged account, conflict with only `getty@tty1`, wait for
+`network-online.target`, restrict device access to that console and optional
+ALSA output, keep configuration and recordings beneath private service-owned
+paths, retry exit 75 at a bounded interval, and explicitly prevent restart for
+exit 2 and exit 78. Never place credential bytes, a password, private endpoint,
+listener option, or scanner selector in the unit.
+
+Document a beginner-oriented install, file-placement, preflight, interactive
+test, service activation, journald, credential rotation/revocation, recovery,
+upgrade, disablement, exact removal, and Home Assistant rollback workflow.
+Keep the native HTTPS browser kiosk separate for a later milestone because it
+uses a dashboard password, certificate trust, and browser session rather than
+the daemon-client credential.
+
+Before merge, validate deterministic terminal inspection, the established TUI
+breakpoints including the physical 100-by-30 compact split, observe-only
+enforcement, redacted output, all stable exit classes, service hardening, and
+the complete repository gate. Then physically accept a cold Raspberry Pi boot,
+automatic display start, temporary network and Home Assistant App restart
+recovery, explicit credential revocation without an authentication retry
+storm, restored or rotated credential recovery after preflight, optional local
+audio, clean terminal shutdown, single scanner ownership, default-closed Home
+Assistant rollback, and exact cleanup.
+
+#### Closed Milestone 33.1 — Transport-aware compact TUI
+
+Milestone 33.1 closed through reviewed pull request 226 and merge commit
+`c9f9e6517d84ce30ee27b0cbe4a07ca270e474b3`. All branch and post-merge checks
+passed. The production Home Assistant App returned to its default-closed TCP
+configuration, its temporary observe identity was revoked, and the exact
+approved workstation and Raspberry Pi acceptance artifacts were removed. The
+Raspberry Pi candidate virtual environment was deliberately retained for the
+next managed-display milestone.
 
 Adapt the Textual TUI to the physically observed Raspberry Pi display geometry
 of 100 columns by 30 rows. Preserve the scanner's own recording state under the
