@@ -77,6 +77,7 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["model"] == "SDS100"
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
+    assert captured.get("connection_target") is None
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
@@ -324,6 +325,7 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert captured["model"] == "SDS200"
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
+    assert captured["connection_target"] is None
     assert isinstance(captured["radio"], DaemonTuiRadio)
 
     snapshot = captured["snapshot"]
@@ -467,6 +469,7 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
     terminal_failure_subscribe = captured["terminal_failure_subscribe"]
     assert callable(terminal_failure_subscribe)
     assert captured["endpoint"] == DAEMON_REMOTE_CLIENT_ENDPOINT
+    assert captured["connection_target"] == "192.168.20.41:50443"
     assert captured["snapshot"].channel == "Remote Dispatch"
 
     api_transport = radio.api_client.location

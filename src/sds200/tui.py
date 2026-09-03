@@ -186,6 +186,7 @@ class ScannerIdentity:
     endpoint: str
     model: str
     firmware: str
+    connection_target: str | None = None
 
 
 def _titled_panel(
@@ -1500,19 +1501,26 @@ class ScannerTuiApp(App[None]):
         connection = self.query_one_optional("#connection", Static)
         if connection is None:
             return
-        connection.update(
-            self._panel(
-                (
-                    "Connection",
-                    self._transition_display(
-                        "connection",
-                        _state_label(presentation.connection.value),
-                    ),
-                    roles.connection,
+        connection_rows = [
+            (
+                "Connection",
+                self._transition_display(
+                    "connection",
+                    _state_label(presentation.connection.value),
                 ),
-                ("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY),
+                roles.connection,
+            ),
+            ("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY),
+        ]
+        if self._identity.connection_target is not None:
+            connection_rows.append(
+                (
+                    "Target",
+                    self._identity.connection_target,
+                    ThemeRole.TEXT_PRIMARY,
+                )
             )
-        )
+        connection.update(self._panel(*connection_rows))
         self.query_one("#identity", Static).update(
             self._panel(
                 ("Model", self._identity.model, ThemeRole.TEXT_PRIMARY),
@@ -2164,6 +2172,7 @@ def run_tui(
     endpoint: str,
     model: str,
     firmware: str,
+    connection_target: str | None = None,
     snapshot: RadioStateSnapshot,
     radio: ScannerTuiRadio,
     audio_session: AudioRecordingSession | TuiAudioSession | None = None,
@@ -2182,7 +2191,12 @@ def run_tui(
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
 
     app = ScannerTuiApp(
-        ScannerIdentity(endpoint=endpoint, model=model, firmware=firmware),
+        ScannerIdentity(
+            endpoint=endpoint,
+            model=model,
+            firmware=firmware,
+            connection_target=connection_target,
+        ),
         snapshot,
         radio=radio,
         audio_session=audio_session,

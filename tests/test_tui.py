@@ -77,6 +77,36 @@ def test_tui_shell_renders_identity_and_semantic_snapshot() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_connection_panel_renders_optional_remote_target() -> None:
+    async def exercise() -> None:
+        direct_app = _app()
+        async with direct_app.run_test(size=(100, 30)):
+            direct_connection = _plain(
+                direct_app.query_one("#connection", Static)
+            )
+            assert "Endpoint: udp://192.168.0.251:50536" in direct_connection
+            assert "Target:" not in direct_connection
+
+        remote_app = ScannerTuiApp(
+            ScannerIdentity(
+                endpoint="sdsctl-remote-daemon",
+                model="SDS200",
+                firmware="Version 1.26.01",
+                connection_target="192.168.0.18:50443",
+            ),
+            snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+            palette=DEFAULT_DARK_THEME,
+        )
+        async with remote_app.run_test(size=(100, 30)):
+            remote_connection = _plain(
+                remote_app.query_one("#connection", Static)
+            )
+            assert "Endpoint: sdsctl-remote-daemon" in remote_connection
+            assert "Target: 192.168.0.18:50443" in remote_connection
+
+    asyncio.run(exercise())
+
+
 def test_tui_renders_mode_aware_quick_search_and_close_call_details() -> None:
     async def exercise() -> None:
         cases = (

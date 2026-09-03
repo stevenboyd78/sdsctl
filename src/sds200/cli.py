@@ -5490,6 +5490,16 @@ def _run_tui(
                 endpoint=initial.endpoint,
                 model=initial.model,
                 firmware=initial.firmware,
+                connection_target=(
+                    (
+                        f"[{remote_configuration.address}]"
+                        if ":" in remote_configuration.address
+                        else remote_configuration.address
+                    )
+                    + f":{remote_configuration.port}"
+                    if remote_configuration is not None
+                    else None
+                ),
                 snapshot=initial.snapshot,
                 radio=radio,
                 audio_session=daemon_audio_session,
