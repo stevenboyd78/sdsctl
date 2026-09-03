@@ -135,6 +135,38 @@ and restoration of the production App. Preserve redacted evidence and remove
 only the exact named temporary App, configuration, credentials, client profiles,
 firewall rules, and host staging paths after separate review.
 
+Physical acceptance passed on Home Assistant OS 18.2 with Home Assistant Core
+2026.8.3, Supervisor 2026.08.0, an SDS200 running firmware 1.26.01, a separate
+Raspberry Pi display host, and an independent workstation operator client. The
+staged App remained the sole scanner owner while its exact reviewed
+configuration published Supervisor host ports 50443/tcp and 8443/tcp plus the
+unchanged scanner-to-App 50000/udp input. No temporary firewall rule was added;
+the host-wide Supervisor publication constraint was observed from both private
+LAN clients. The Pi's observe-only profile and the workstation's control profile
+authenticated independently, received current status and events, shared live
+audio and four-frame-per-second Waterfall service, and coexisted with the live
+Ingress dashboard without creating another scanner session. The Pi TUI launched
+successfully, an observe-only control was denied, and a harmless operator volume
+write left the scanner at its original value.
+
+Native HTTPS required its dedicated password, accepted the exact configured
+origin and App-owned certificate, served the scanner dashboard, and omitted the
+Home Assistant-only tab. App restart recovery restored the already-open Ingress
+page and both remote clients without a manual browser reload. Disconnecting the
+Pi did not disturb Ingress or the operator Waterfall consumer. Revoking only the
+Pi credential rejected that identity while the operator remained authenticated;
+restoring it immediately recovered the Pi. Rotating only the operator credential
+rejected the prior secret, accepted the new secret, and did not interrupt the Pi.
+
+The reviewed disabled configuration then restored both optional mappings to
+`null`. Ports 50443/tcp and 8443/tcp were closed from both external hosts while
+ordinary Ingress automatically recovered and scanner RTP remained unchanged.
+The temporary App was stopped and production App `6fc0784f_sds200` version
+0.27.0 was restored as the sole scanner owner. The exact credential-bearing Home
+Assistant, Pi, and workstation cleanup set was separately reviewed, approved,
+and permanently removed. The production repository, SSH credential, unrelated
+Pi configuration, and production App were preserved.
+
 This milestone does not create a public or Internet-facing service, trusted
 reverse-proxy mode, automatic LAN discovery, third-party identity provider,
 browser-held daemon credential, GUI, remote Favorites editor, unrestricted raw
