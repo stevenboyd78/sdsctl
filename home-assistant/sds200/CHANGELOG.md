@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 0.29.0
+
+- Track the sdsctl v0.29.0 release while preserving the App name, slug, image
+  identity, MQTT identities, scanner ownership, persistent recordings, custom-
+  integration 0.1.5 artifact, and installed first-party custom elements.
+- Include the transport-aware compact TUI, proactive serial PSI renewal, and
+  managed Raspberry Pi display commands used by separately authenticated
+  private-LAN clients without changing the App's ordinary Ingress workflow.
+- Keep the authenticated daemon-client and native HTTPS dashboard options and
+  TCP mappings disabled by default. An ordinary upgrade continues to expose no
+  advanced TCP service and preserves scanner RTP UDP port 50000.
+
 ## 0.28.1
 
 - Allow an ordinary browser to submit the native HTTPS dashboard's own login

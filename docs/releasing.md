@@ -145,6 +145,17 @@ while quitting with `Q` during an active recording and confirm the WAV is finali
 without leaving PSI, control, or audio threads running. Remove the temporary file
 after validation.
 
+For a release that changes the managed Raspberry Pi display, repeat the
+documented [`display-client-preflight`](managed-pi-display.md) and
+`tui --managed-display` workflow with an independent observe-only identity.
+Validate the physical 100-column by 30-row `/dev/tty1` console, a cold boot,
+temporary network and daemon restart recovery, explicit credential revocation,
+restoration or rotation only after preflight, optional local playback, and an
+intentional `Q`. Confirm the service never retries permanent authentication or
+authorization failure, never gains scanner controls, never logs private
+connection or credential material, and returns the Pi to its normal console
+during exact cleanup.
+
 Exercise automatic stale-PSI recovery with persistent logging. Use accelerated
 thresholds for the test, temporarily block inbound UDP control replies from the
 scanner, and then restore them:

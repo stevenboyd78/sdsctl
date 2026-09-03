@@ -140,9 +140,18 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### Milestone 33.2 — Managed Raspberry Pi remote TUI display"
+    expected_heading = "### Milestone 33.3 — v0.29.0 release and publication closure"
     assert expected_heading in active_milestone
     for required in (
+        "Publish the completed Milestones 33.1 and 33.2",
+        "sdsctl v0.29.0",
+        "Home Assistant upgrade from 0.28.1 to 0.29.0",
+        "Only one genuine annotated `v0.29.0` tag",
+        "native HTTPS Raspberry Pi browser kiosk only after v0.29.0 is closed",
+        "#### Closed Milestone 33.2 — Managed Raspberry Pi remote TUI display",
+        "Milestone 33.2 closed through reviewed pull request 227",
+        "f4ee89fa35e46b0ab61ea1256405e3ddba4855eb",
+        "9d2e925211773bb8a84bc3408235b86f4f45e5d8",
         "interactively qualified Raspberry Pi remote TUI",
         "`display-client-preflight` command",
         "rejects an identity that advertises any control operation",
@@ -455,31 +464,32 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v0281_release_documentation_names_current_generic_image() -> None:
+def test_v029_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
     normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.28.1`" in readme
-    assert "authenticated" in readme
-    assert "private-LAN daemon clients" in readme
-    assert "one scanner-owning daemon" in readme
-    assert "theboyd78/sdsctl:0.28.1" in readme
+    assert "Version `0.29.0`" in readme
+    assert "transport-aware" in readme
+    assert "Raspberry Pi TUI" in readme
+    assert "observe-only preflight" in readme
+    assert "theboyd78/sdsctl:0.29.0" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment, containers):
-        assert "theboyd78/sdsctl:0.28.1" in document
+        assert "theboyd78/sdsctl:0.29.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.28.1" in installation
-    assert 'python -m pip install --upgrade "sds200==0.28.1"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.28.1"' in installation
-    assert "docker pull theboyd78/sdsctl:0.28.1" in installation
-    assert "one scanner-owning daemon" in normalized_installation
-    assert "independent `observe` or `control` identity" in normalized_installation
+    assert "## Upgrade to v0.29.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.29.0"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.29.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.29.0" in installation
+    assert "`display-client-preflight`" in installation
+    assert "observe-only" in installation
+    assert "`sdsctl-display@.service`" in installation
     assert "Upgrading does not expose an advanced Home Assistant service" in installation
     assert "authenticated daemon-client and native HTTPS dashboard mappings" in installation
     assert (
@@ -488,6 +498,28 @@ def test_v0281_release_documentation_names_current_generic_image() -> None:
     )
     assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation
     assert "Core integration remains independently versioned at 0.1.5" in installation
+
+
+def test_v029_home_assistant_release_gate_is_explicit() -> None:
+    guide = _read("docs/home-assistant-app.md")
+    start = guide.index("### v0.29.0 release acceptance gate")
+    end = guide.index("\n### v0.28.1 release acceptance gate", start)
+    release_gate = guide[start:end]
+    normalized = " ".join(release_gate.split())
+
+    for required in (
+        "genuine v0.29.0 tag",
+        "upgrade the repository-managed App from v0.28.1",
+        "both optional advanced options disabled",
+        "ports 50443 and 8443 closed",
+        "observe-only Pi identity",
+        "`display-client-preflight`",
+        "100-by-30 `/dev/tty1` layout",
+        "temporary network and App-restart recovery",
+        "authorization failure after exact revocation",
+        "native HTTPS browser kiosk remains outside v0.29.0",
+    ):
+        assert required in release_gate or required in normalized
 
 
 def test_v0281_native_browser_release_gate_is_explicit() -> None:

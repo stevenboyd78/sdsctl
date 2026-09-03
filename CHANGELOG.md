@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-09-03
+
 ### Added
 
 - Add an observe-only `display-client-preflight` command for managed Raspberry
@@ -1789,7 +1791,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.26.1...v0.27.0

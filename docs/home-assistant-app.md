@@ -841,6 +841,39 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.29.0 release acceptance gate
+
+After the genuine v0.29.0 tag publishes the matching Python and container
+artifacts, upgrade the repository-managed App from v0.28.1. Confirm the App
+reports 0.29.0 from its matching published multi-architecture image while its
+scanner host, MQTT identities, persistent recordings, aggregate and individual
+card resources, custom-integration 0.1.5 artifact, media-source behavior, and
+ordinary authenticated Ingress remain compatible.
+
+The ordinary upgrade must leave both optional advanced options disabled, both
+TCP mappings `null`, and ports 50443 and 8443 closed from the workstation and
+Raspberry Pi while preserving scanner RTP UDP port 50000. Recheck live scanner
+state, all meaningful hold and navigation controls, browser audio, recording
+finalization, saved playback and download, Waterfall, App restart recovery, and
+single scanner ownership before enabling any temporary acceptance listener.
+
+For the managed-display acceptance slice, enable only the reviewed private-LAN
+daemon-client mapping and create one independent observe-only Pi identity. The
+published `display-client-preflight` and installed service template must produce
+the same redacted preflight, 100-by-30 `/dev/tty1` layout, cold-boot startup,
+temporary network and App-restart recovery, authorization failure after exact
+revocation, recovery after restoration or rotation, optional local playback,
+and intentional-quit behavior accepted before release. The Pi service must not
+receive control scope or store a dashboard password, server private key, scanner
+selector, or secret in the unit or journal.
+
+Finish by disabling the temporary remote service and TCP mapping, restarting
+the App, revoking the exact acceptance client, confirming both advanced ports
+are closed, removing only the exact Pi and workstation release staging, and
+restoring the normal physical-console service. Ingress and the scanner must
+remain healthy throughout cleanup. The native HTTPS browser kiosk remains
+outside v0.29.0 and public or Internet exposure remains unsupported.
+
 ### v0.28.1 release acceptance gate
 
 After the genuine v0.28.1 tag publishes the matching Python and container
