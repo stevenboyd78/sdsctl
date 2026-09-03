@@ -292,18 +292,40 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
         physical_pi = _app()
         async with physical_pi.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
-            assert physical_pi.screen.has_class("-standard")
+            assert physical_pi.screen.has_class("-split")
             assert physical_pi.screen.has_class("-short")
+            assert physical_pi.screen.has_class("-no-audio")
             assert physical_pi.query_one_optional("#audio", Static) is None
             assert not physical_pi.check_action("toggle_audio_playback", ())
             assert not physical_pi.check_action("toggle_audio_recording", ())
             assert not physical_pi.check_action("toggle_recording_library", ())
 
             body = physical_pi.query_one("#body")
+            connection = physical_pi.query_one("#connection")
+            system = physical_pi.query_one("#system")
+            channel = physical_pi.query_one("#channel")
+            state = physical_pi.query_one("#state")
             status = physical_pi.query_one("#status")
             logs = physical_pi.query_one("#logs")
-            assert status.region.y == physical_pi.query_one("#state").region.bottom
+
+            assert connection.region.y == system.region.y == body.region.y
+            assert connection.region.right < system.region.x
+            assert channel.region.y == state.region.y
+            assert channel.region.y == max(connection.region.bottom, system.region.bottom)
+            assert channel.region.right < state.region.x
+            assert status.region.y == max(channel.region.bottom, state.region.bottom)
+            assert status.region.x == logs.region.x
+            assert status.region.width == logs.region.width
+            assert logs.region.y == status.region.bottom
             assert logs.region.bottom <= body.region.bottom
+
+            await pilot.press("question_mark")
+            await pilot.pause()
+            keys = physical_pi.query_one("#keys")
+            assert keys.region.x == logs.region.x
+            assert keys.region.width == logs.region.width
+            await pilot.press("question_mark")
+            await pilot.pause()
 
         standard = _app()
         async with standard.run_test(size=(90, 32)) as pilot:
@@ -318,6 +340,16 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             system = standard.query_one("#system")
 
             assert connection.region.y > body.region.y
+            assert system.region.y > connection.region.bottom
+
+        tall_at_pi_width = _app()
+        async with tall_at_pi_width.run_test(size=(100, 50)) as pilot:
+            await pilot.pause()
+            assert tall_at_pi_width.screen.has_class("-split")
+            assert tall_at_pi_width.screen.has_class("-tall")
+
+            connection = tall_at_pi_width.query_one("#connection")
+            system = tall_at_pi_width.query_one("#system")
             assert system.region.y > connection.region.bottom
 
         wide = _app()

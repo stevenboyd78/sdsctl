@@ -153,15 +153,41 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
             assert app.audio_controls_available
+            assert app.screen.has_class("-split")
+            assert app.screen.has_class("-short")
+            assert not app.screen.has_class("-no-audio")
             audio = app.query_one("#audio", Static)
             assert audio.border_title == "Network Audio"
-            assert "Saved / audio recording: STOPPED | IDLE" in _plain(audio)
+            audio_text = _plain(audio)
+            assert "Saved playback: STOPPED" in audio_text
+            assert "Audio recording: IDLE" in audio_text
+            assert "Saved / audio recording" not in audio_text
             assert app.check_action("toggle_audio_playback", ())
             assert app.check_action("toggle_audio_recording", ())
             assert app.check_action("toggle_recording_library", ())
             assert _plain(app.query_one("#compact-footer", Static)) == (
                 "Q Quit | A Audio | R Record | C Reconnect | G Logs | ? Keys"
             )
+
+            body = app.query_one("#body")
+            connection = app.query_one("#connection")
+            system = app.query_one("#system")
+            channel = app.query_one("#channel")
+            state = app.query_one("#state")
+            status = app.query_one("#status")
+            logs = app.query_one("#logs")
+
+            assert connection.region.y == system.region.y == body.region.y
+            assert connection.region.right < system.region.x
+            assert channel.region.y == state.region.y
+            assert channel.region.y == max(connection.region.bottom, system.region.bottom)
+            assert channel.region.right < state.region.x
+            assert audio.region.y == status.region.y
+            assert audio.region.y == max(channel.region.bottom, state.region.bottom)
+            assert audio.region.right < status.region.x
+            assert logs.region.y == max(audio.region.bottom, status.region.bottom)
+            assert logs.region.x == body.region.x
+            assert logs.region.bottom <= body.region.bottom
 
     asyncio.run(exercise())
 

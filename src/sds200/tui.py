@@ -302,6 +302,7 @@ _SHARED_TUI_STYLESHEET = """
         display: none;
     }
 
+    Screen.-split.-short #body,
     Screen.-wide #body {
         layout: grid;
         grid-size: 2;
@@ -310,11 +311,17 @@ _SHARED_TUI_STYLESHEET = """
         grid-gutter: 0 1;
     }
 
+    Screen.-split.-short #keys,
     Screen.-wide #keys {
         column-span: 2;
     }
 
+    Screen.-split.-short #logs,
     Screen.-wide #logs {
+        column-span: 2;
+    }
+
+    Screen.-split.-short.-no-audio #status {
         column-span: 2;
     }
     """
@@ -328,6 +335,7 @@ class ScannerTuiApp(App[None]):
     HORIZONTAL_BREAKPOINTS: list[tuple[int, str]] | None = [
         (0, "-compact"),
         (80, "-standard"),
+        (100, "-split"),
         (120, "-wide"),
     ]
     VERTICAL_BREAKPOINTS: list[tuple[int, str]] | None = [
@@ -601,6 +609,10 @@ class ScannerTuiApp(App[None]):
 
     def on_mount(self) -> None:
         self._shutdown_started.clear()
+        if self.audio_controls_available:
+            self.screen.remove_class("-no-audio")
+        else:
+            self.screen.add_class("-no-audio")
         self._refresh_view()
         self._poll_timers.append(self.set_interval(0.25, self._poll_log_buffer))
         if self._radio is not None:
@@ -1498,6 +1510,9 @@ class ScannerTuiApp(App[None]):
     def _uses_short_layout(self) -> bool:
         return self.screen.size.height < 32
 
+    def _uses_short_split_layout(self) -> bool:
+        return self._uses_short_layout() and self.screen.size.width >= 100
+
     def _status_panel(
         self,
         presentation: ScannerPresentation,
@@ -1914,6 +1929,34 @@ class ScannerTuiApp(App[None]):
         )
         if self._uses_short_layout() and not self._recording_library_visible:
             audio_detail = snapshot.error or self._audio_message
+            if self._uses_short_split_layout():
+                return self._panel(
+                    (
+                        "Live",
+                        f"{live_playback} | device {playback_device}",
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                    ("Saved playback", saved_playback, ThemeRole.TEXT_PRIMARY),
+                    ("Audio recording", recording_status, status_role),
+                    (
+                        "Session",
+                        (
+                            f"{snapshot.elapsed_seconds:.1f}s | "
+                            f"{snapshot.packets} packets | "
+                            f"{session.completed_recordings} completed"
+                        ),
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                    (
+                        "Audio",
+                        (
+                            f"{audio_detail} | loss/dup "
+                            f"{reliability.packets_lost}/"
+                            f"{reliability.duplicate_packets}"
+                        ),
+                        ThemeRole.TEXT_PRIMARY,
+                    ),
+                )
             return self._panel(
                 (
                     "Live",

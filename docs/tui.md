@@ -38,14 +38,26 @@ the full footer with essential controls. Network sessions keep concise audio and
 PSI health summaries visible; direct USB sessions omit audio-only rows and
 shortcuts that their transport cannot use.
 
+### Raspberry Pi network layout
+
+![Compact two-column sdsctl TUI at 100 by 30 cells with network-audio controls](assets/screenshots/tui-pi-network-compact.svg)
+
+On short terminals at 100 through 119 columns, the compact split layout pairs
+connection and scanner panels across two columns. An Ethernet or daemon-backed
+session places Network Audio beside Live PSI / Controls; keyboard help and
+operational logs retain the full width. Narrower or taller terminals retain
+their established layouts, and the ordinary wide layout remains available from
+120 columns.
+
 ### Direct USB compact layout
 
 ![Compact sdsctl TUI at 100 by 30 cells without network-audio controls on a direct USB transport](assets/screenshots/tui-usb-compact.svg)
 
 This deterministic SDS100 USB view uses the same 100-column by 30-row geometry
 reported by the physical Raspberry Pi display. Removing the incapable Network
-Audio panel returns those rows to scanner state, controls, and logs while the
-scanner's own recording indicator remains explicit.
+Audio panel lets Live PSI / Controls span both columns while scanner hierarchy,
+channel, and state use paired rows above full-width logs. The scanner's own
+recording indicator remains explicit.
 
 Install the optional interface from PyPI:
 

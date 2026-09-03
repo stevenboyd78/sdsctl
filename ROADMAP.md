@@ -26,6 +26,14 @@ sessions retain their complete audio workflow even when it is temporarily idle
 or unhealthy. Removing an incapable panel must reclaim its layout space rather
 than leave an empty placeholder.
 
+Use measured terminal geometry rather than a device-name special case for
+layout. On short terminals from 100 through 119 columns, pair Connection with
+System / Site and Channel with Scanner State. Pair Network Audio with Live PSI /
+Controls when audio exists; otherwise let Live PSI / Controls span both
+columns. Keyboard help and Operational Logs remain full width, narrower and
+taller terminals retain their established layouts, and the existing wide
+layout begins at 120 columns.
+
 Add deterministic 100-by-30 regression coverage and regenerated fictional
 screenshots and documentation. Validate the final branch with focused Textual
 tests and the complete repository gate, then physically accept both a direct

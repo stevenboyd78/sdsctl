@@ -303,8 +303,14 @@ async def capture(
                 "demo recording startup",
             )
 
-            for _ in range(300):
+            for expected_packets in range(1, 301):
                 transport.feed(AudioChunk(b"\xff" * 160))
+                await wait_until(
+                    lambda expected=expected_packets: (
+                        session.snapshot().packets == expected
+                    ),
+                    f"synthetic recording packet {expected_packets}",
+                )
 
             session_clock[0] = 106.0
             await pilot.pause()
@@ -339,6 +345,7 @@ async def generate() -> None:
         ("tui-overview.svg", (120, 40), False, True, True),
         ("tui-recordings.svg", (100, 50), True, False, True),
         ("tui-compact.svg", (79, 24), False, False, True),
+        ("tui-pi-network-compact.svg", (100, 30), False, False, True),
         ("tui-usb-compact.svg", (100, 30), False, False, False),
     )
 
