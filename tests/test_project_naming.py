@@ -141,11 +141,22 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     expected_heading = (
-        "### Milestone 32.4 — Advanced Home Assistant App remote access and "
-        "multi-display deployment"
+        "### Milestone 32.5 — v0.28.0 release and publication closure"
     )
     assert expected_heading in active_milestone
     for required in (
+        "Milestone 32.4 is closed through reviewed pull request 223",
+        "ea61515460d5f38d39bea0323e83f458e73e112d",
+        "076c76a6d97fba5744d72eb78a9b508b278a0306",
+        "publishes the complete Milestones 32.1 through 32.4 authenticated "
+        "remote-client boundary as sdsctl 0.28.0",
+        "Installing or upgrading must not expose the authenticated daemon client",
+        "Only one genuine annotated `v0.28.0` tag",
+        "clean base and `all` Python installations",
+        "production-class Home Assistant upgrade from 0.27.0 to 0.28.0",
+        "Milestone 33 planning begins only after this public release closure",
+        "#### Closed Milestone 32.4 — Advanced Home Assistant App remote access "
+        "and multi-display deployment",
         "Milestone 32.3 is closed through reviewed pull request 222",
         "bbe9054407344ccf4ac11f79119e24728eeb86ae",
         "authenticated remote-daemon and native-dashboard boundaries",
@@ -418,59 +429,67 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v0270_release_documentation_names_current_generic_image() -> None:
+def test_v0280_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
     normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.27.0`" in readme
-    assert "bounded elapsed-time" in readme
-    assert "display-only frequency pointer" in readme
-    assert "theboyd78/sdsctl:0.27.0" in readme
+    assert "Version `0.28.0`" in readme
+    assert "authenticated" in readme
+    assert "private-LAN daemon clients" in readme
+    assert "one scanner-owning daemon" in readme
+    assert "theboyd78/sdsctl:0.28.0" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment, containers):
-        assert "theboyd78/sdsctl:0.27.0" in document
+        assert "theboyd78/sdsctl:0.28.0" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.27.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.27.0"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.27.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.27.0" in installation
-    assert "15-, 30-, and 60-second Waterfall history modes" in normalized_installation
-    assert "compatible 60-, 120-, and 240-frame configurations" in normalized_installation
-    assert "does not tune, hold, search, change scanner span" in normalized_installation
+    assert "## Upgrade to v0.28.0" in installation
+    assert 'python -m pip install --upgrade "sds200==0.28.0"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.28.0"' in installation
+    assert "docker pull theboyd78/sdsctl:0.28.0" in installation
+    assert "one scanner-owning daemon" in normalized_installation
+    assert "independent `observe` or `control` identity" in normalized_installation
+    assert "Upgrading does not expose an advanced Home Assistant service" in installation
+    assert "authenticated daemon-client and native HTTPS dashboard mappings" in installation
     assert (
-        "Repository-root `compose.yaml` and `compose.usb.yaml` remain source-built" in installation
+        "ordinary repository-root `compose.yaml` and `compose.usb.yaml` paths remain "
+        "source-built" in normalized_installation
     )
     assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation
     assert "Core integration remains independently versioned at 0.1.5" in installation
 
 
-def test_v0270_home_assistant_release_gate_is_explicit() -> None:
+def test_v0280_home_assistant_release_gate_is_explicit() -> None:
     guide = _read("docs/home-assistant-app.md")
-    start = guide.index("### v0.27.0 release acceptance gate")
-    end = guide.index("\n### v0.26.1 release acceptance gate", start)
+    start = guide.index("### v0.28.0 release acceptance gate")
+    end = guide.index("\n### v0.27.0 release acceptance gate", start)
     release_gate = guide[start:end]
     normalized = " ".join(release_gate.split())
 
     for required in (
-        "genuine v0.27.0 tag",
+        "genuine v0.28.0 tag",
         "without a Local App, Local integration, retained share, private capture",
         "all twenty-four fixed MQTT Discovery components",
-        "aggregate plus individual card resources",
-        "60-, 120-, and 240-frame Waterfall cards",
-        "15-, 30-, and 60-second choices",
-        "one shared scanner-side Waterfall session",
-        "pointer works across spectrum and history",
-        "does not tune, hold, search, change span",
+        "aggregate and individual card resources",
+        "both optional advanced mappings remain disabled and `null`",
+        "TCP ports 50443 and 8443 remain closed",
+        "independently enrolled Raspberry Pi `observe` identity",
+        "workstation `control` identity",
+        "accepted-PCMU audio",
+        "shared four-frame-per-second Waterfall",
+        "omits the Home Assistant tab, bridge-key workflow",
+        "selective revocation or rotation",
+        "rollback restores both optional mappings to disabled `null` values",
         "independently versioned at 0.1.5",
-        "does not require installation, replacement, key rotation",
+        "does not require installation, replacement, bridge-key rotation",
         "only runtime owner of scanner control",
-        "Remove any deliberately named release-validation component",
+        "Remove any deliberately named release-validation App",
+        "Preserve unrelated operator data, production recordings, SSH credentials",
     ):
         assert required in release_gate or required in normalized
 

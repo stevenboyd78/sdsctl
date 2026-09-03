@@ -841,6 +841,60 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.28.0 release acceptance gate
+
+After the genuine v0.28.0 tag publishes the amd64, aarch64, and generic
+multi-architecture images, upgrade the repository-managed v0.27.0 App and
+record the exact platform, App image, scanner, Raspberry Pi, and workstation
+versions used. The release gate must confirm:
+
+- the App reports 0.28.0 and uses the matching published image without a Local
+  App, Local integration, retained share, private capture, development-source,
+  or unpublished-image ambiguity;
+- existing configuration, all twenty-four fixed MQTT Discovery components,
+  persistent recordings, Ingress, controls, browser audio, recording
+  finalization, saved playback, aggregate and individual card resources, and
+  bounded Waterfall behavior survive the upgrade;
+- both optional advanced mappings remain disabled and `null` after the ordinary
+  upgrade, TCP ports 50443 and 8443 remain closed from private-LAN clients, and
+  authenticated Ingress plus scanner-to-App RTP continue normally;
+- one separately reviewed configuration enables only exact Supervisor host
+  mappings and matching App options, reports the effective private container
+  address without secret material, and fails closed for incomplete,
+  contradictory, malformed, conflicting, reserved, wildcard, or public state;
+- an independently enrolled Raspberry Pi `observe` identity and workstation
+  `control` identity authenticate over TLS 1.3, enforce their different scopes,
+  and receive status, events, and accepted-PCMU audio plus a shared
+  four-frame-per-second Waterfall without another scanner session;
+- the password-authenticated native HTTPS dashboard accepts its exact origin,
+  supports the scanner dashboard, controls, browser audio, recordings, and
+  Waterfall, and omits the Home Assistant tab, bridge-key workflow, and Core-
+  integration routes;
+- native HTTPS, remote CLI/TUI clients, and authenticated Ingress coexist;
+  disconnecting or pausing one consumer does not interrupt another, bounded
+  queues recover authoritatively, and App restart recovery requires no manual
+  browser reload or second scanner owner;
+- selective revocation or rotation rejects only the intended prior client
+  identity while an unrelated identity remains authenticated, and no secret
+  value appears in App options, Supervisor responses, URLs, browser storage,
+  diagnostics, logs, examples, or public evidence;
+- rollback restores both optional mappings to disabled `null` values and closes
+  ports 50443 and 8443 from the Raspberry Pi and workstation while ordinary
+  Ingress, MQTT, recordings, and scanner RTP remain available;
+- the optional Core integration remains independently versioned at 0.1.5 and
+  does not require installation, replacement, bridge-key rotation,
+  reauthentication, Core restart, or Core reload for this release; and
+- the repository-managed App remains the only runtime owner of scanner control,
+  status polling, Waterfall polling, and RTSP/RTP audio.
+
+Remove any deliberately named release-validation App, integration, credential,
+client profile, container, network, volume, recording, resource rollback copy,
+or staging path afterward and restore the preferred production configuration.
+Retain no private capability, password, certificate private key, client secret,
+address, scanner-programming value, recording, or private-derived hash in public
+release evidence. Preserve unrelated operator data, production recordings, SSH
+credentials, and Home Assistant configuration.
+
 ### v0.27.0 release acceptance gate
 
 After the genuine v0.27.0 tag publishes the amd64, aarch64, and generic
