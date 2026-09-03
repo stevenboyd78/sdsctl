@@ -80,6 +80,7 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
+    assert captured["audio_session"] is None
     radio = captured["radio"]
     assert isinstance(radio, SDSScanner)
     assert radio.endpoint == f"replay://{FIXTURE.resolve()}"

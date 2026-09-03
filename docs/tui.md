@@ -33,9 +33,19 @@ supports selection, playback, pause, resume, and return to live audio.
 
 ![Compact sdsctl TUI rendered at a small terminal size](assets/screenshots/tui-compact.svg)
 
-The compact layout removes decorative borders and unused spacing, replaces the
-full footer with essential controls, and keeps concise audio and PSI health
-summaries visible on short terminals and Raspberry Pi displays.
+The compact layout removes decorative borders and unused spacing and replaces
+the full footer with essential controls. Network sessions keep concise audio and
+PSI health summaries visible; direct USB sessions omit audio-only rows and
+shortcuts that their transport cannot use.
+
+### Direct USB compact layout
+
+![Compact sdsctl TUI at 100 by 30 cells without network-audio controls on a direct USB transport](assets/screenshots/tui-usb-compact.svg)
+
+This deterministic SDS100 USB view uses the same 100-column by 30-row geometry
+reported by the physical Raspberry Pi display. Removing the incapable Network
+Audio panel returns those rows to scanner state, controls, and logs while the
+scanner's own recording indicator remains explicit.
 
 Install the optional interface from PyPI:
 
@@ -132,7 +142,7 @@ The interface shows:
 - mode-aware Tone Out panels showing the raw screen mode, `ToneOutChannel` state
   node, profile and channel number, monitored frequency, modulation, Tone A and
   Tone B values, hold state, signal, and RSSI
-- semantic activity, signal, hold, mute, and recording state
+- semantic activity, signal, hold, mute, and scanner recording state
 - live PSI, reconnect, diagnostic, and stale-data status
 - automatic PSI recovery attempt, success, and failure totals
 - a bounded newest-last operational log panel, visible by default
@@ -248,28 +258,34 @@ vertical gaps are removed, and the full Textual footer is replaced by a one-line
 essential-controls footer. The model remains in the title, while the endpoint and
 firmware remain in the header subtitle.
 
-Short layouts use four-line audio and PSI health summaries. They retain playback,
-recording, elapsed-session, packet-loss, availability, severity, stream-recovery,
-volume, squelch, and current-status information without forcing the status panel
-below the initial viewport. Opening the recording library still shows its detailed
-entries, and the main content remains vertically scrollable.
+Short layouts with a network-audio session use four-line audio and PSI health
+summaries. They retain playback, audio recording, elapsed-session, packet-loss,
+availability, severity, stream-recovery, volume, squelch, and current-status
+information without forcing the status panel below the initial viewport. A
+direct USB session has no scanner network-audio source, so its playback, saved
+playback, audio-recording, and audio-control rows are omitted entirely. The
+scanner's own memory-card state remains visible as `Scanner recording`.
+Opening the recording library still shows its detailed entries, and the main
+content remains vertically scrollable.
 
 At 120 columns or wider, panels switch to a two-column dashboard. An 80 by 24
 terminal is the recommended Raspberry Pi starting size. The deterministic suite
 also covers 64 by 20 compact and 90 by 28 Raspberry Pi-like terminals. The compact
-footer exposes `Q` quit, `A` audio, `R` record, `C` reconnect, `G` logs, and `?`
-keyboard help.
+footer exposes `Q` quit, `C` reconnect, `G` logs, and `?` keyboard help. When
+network audio is available, it also exposes `A` audio and `R` record.
 
 Headless Textual tests exercise compact, Raspberry Pi-like, standard, and wide
 terminal sizes, including a live resize from the short summary view back to the
 full detailed layout.
 
-Physical validation passed on a Raspberry Pi 4 driving an 800 by 480 display at
-100 by 30 terminal cells. The initial display rendered cleanly; the compact
-footer, operational summaries, and logs were visible; live playback and its
-mute toggle worked; logs and keyboard help opened and closed correctly; a WAV
-recording finalized successfully and appeared in the recording library; scrolling
-remained usable; and the TUI exited cleanly.
+Physical network-audio validation passed on a Raspberry Pi 4 driving an 800 by
+480 display at 100 by 30 terminal cells. The initial display rendered cleanly;
+the compact footer, operational summaries, and logs were visible; live playback
+and its mute toggle worked; logs and keyboard help opened and closed correctly;
+a WAV recording finalized successfully and appeared in the recording library;
+scrolling remained usable; and the TUI exited cleanly. Direct SDS100 USB
+validation of the transport-aware compact layout is the Milestone 33.1 physical
+acceptance target.
 
 ## Network audio playback, recording, and library
 

@@ -80,9 +80,26 @@ N / P    Next / previous channel
 """
 
 
+NO_AUDIO_KEY_HELP_TEXT = """Keyboard controls
+Q        Quit
+T        Toggle dark/light theme
+C        Reconnect scanner
+G        Show or hide operational logs
+H        Hold current channel
+S / D    Hold current system / department
+I        Hold current site
+N / P    Next / previous channel
++ / -    Raise / lower volume
+] / [    Raise / lower squelch
+^p       Command Palette
+?        Show or hide this help
+"""
+
+
 COMPACT_FOOTER_TEXT = (
     "Q Quit | A Audio | R Record | C Reconnect | G Logs | ? Keys"
 )
+NO_AUDIO_COMPACT_FOOTER_TEXT = "Q Quit | C Reconnect | G Logs | ? Keys"
 
 
 class ScannerTuiRadio(Protocol):
@@ -520,6 +537,12 @@ class ScannerTuiApp(App[None]):
         return self._audio_worker.alive
 
     @property
+    def audio_controls_available(self) -> bool:
+        """Return whether this TUI has a usable network-audio service."""
+
+        return self._audio_session is not None
+
+    @property
     def key_help_visible(self) -> bool:
         """Return whether the in-app keyboard reference is visible."""
 
@@ -537,22 +560,44 @@ class ScannerTuiApp(App[None]):
             yield _titled_panel(
                 "Keyboard Reference",
                 widget_id="keys",
-                content=KEY_HELP_TEXT,
+                content=(
+                    KEY_HELP_TEXT if self.audio_controls_available else NO_AUDIO_KEY_HELP_TEXT
+                ),
             )
             yield _titled_panel("Connection", widget_id="connection")
             yield _titled_panel("Scanner", widget_id="identity")
             yield _titled_panel("System / Site", widget_id="system")
             yield _titled_panel("Channel", widget_id="channel")
             yield _titled_panel("Scanner State", widget_id="state")
-            yield _titled_panel("Audio", widget_id="audio")
+            if self.audio_controls_available:
+                yield _titled_panel("Network Audio", widget_id="audio")
             yield _titled_panel("Live PSI / Controls", widget_id="status")
             yield _titled_panel("Operational Logs", widget_id="logs")
         yield Footer(id="footer")
         yield Static(
-            COMPACT_FOOTER_TEXT,
+            (
+                COMPACT_FOOTER_TEXT
+                if self.audio_controls_available
+                else NO_AUDIO_COMPACT_FOOTER_TEXT
+            ),
             id="compact-footer",
             markup=False,
         )
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Hide audio-only commands when this transport exposes no audio service."""
+
+        del parameters
+        return self.audio_controls_available or action not in {
+            "toggle_audio_recording",
+            "toggle_audio_playback",
+            "toggle_recording_library",
+            "recording_library_up",
+            "recording_library_down",
+            "play_selected_recording",
+            "toggle_saved_playback_pause",
+            "close_recording_library",
+        }
 
     def on_mount(self) -> None:
         self._shutdown_started.clear()
@@ -1445,7 +1490,9 @@ class ScannerTuiApp(App[None]):
             self._status_panel(presentation, roles, stream_mode)
         )
 
-        self.query_one("#audio", Static).update(self._audio_panel())
+        audio = self.query_one_optional("#audio", Static)
+        if audio is not None:
+            audio.update(self._audio_panel())
         self._refresh_log_panel()
 
     def _uses_short_layout(self) -> bool:
@@ -1741,7 +1788,7 @@ class ScannerTuiApp(App[None]):
             return self._panel(
                 ("Live playback", "UNAVAILABLE", ThemeRole.TEXT_PRIMARY),
                 ("Saved playback", "UNAVAILABLE", ThemeRole.TEXT_PRIMARY),
-                ("Recording", "UNAVAILABLE", ThemeRole.TEXT_PRIMARY),
+                ("Audio recording", "UNAVAILABLE", ThemeRole.TEXT_PRIMARY),
                 ("Audio control", self._audio_message, ThemeRole.TEXT_PRIMARY),
             )
         reliability = snapshot.reliability
@@ -1754,7 +1801,11 @@ class ScannerTuiApp(App[None]):
         detail = snapshot.error or self._audio_message
         if self._uses_short_layout():
             return self._panel(
-                ("Audio", _state_label(snapshot.status.value), status_role),
+                (
+                    "Audio recording",
+                    _state_label(snapshot.status.value),
+                    status_role,
+                ),
                 (
                     "Timing",
                     (
@@ -1777,7 +1828,7 @@ class ScannerTuiApp(App[None]):
             )
 
         return self._panel(
-            ("Audio", _state_label(snapshot.status.value), status_role),
+            ("Audio recording", _state_label(snapshot.status.value), status_role),
             (
                 "Elapsed",
                 f"{snapshot.elapsed_seconds:.1f} seconds",
@@ -1870,7 +1921,7 @@ class ScannerTuiApp(App[None]):
                     ThemeRole.TEXT_PRIMARY,
                 ),
                 (
-                    "Saved / recording",
+                    "Saved / audio recording",
                     f"{saved_playback} | {recording_status}",
                     status_role,
                 ),
@@ -1898,7 +1949,7 @@ class ScannerTuiApp(App[None]):
             ("Live playback", live_playback, ThemeRole.TEXT_PRIMARY),
             ("Playback device", playback_device, ThemeRole.TEXT_PRIMARY),
             ("Saved playback", saved_playback, ThemeRole.TEXT_PRIMARY),
-            ("Recording", recording_status, status_role),
+            ("Audio recording", recording_status, status_role),
             (
                 "Elapsed",
                 f"{snapshot.elapsed_seconds:.1f} seconds",
@@ -1991,7 +2042,7 @@ class ScannerTuiApp(App[None]):
             ("Hold", _hold_display(self._snapshot, presentation), roles.hold),
             ("Mute", _boolean_state(presentation.muted, "MUTED", "UNMUTED"), muted_role),
             (
-                "Recording",
+                "Scanner recording",
                 _boolean_state(presentation.recording, "RECORDING", "OFF"),
                 recording_role,
             ),

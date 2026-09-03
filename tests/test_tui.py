@@ -69,11 +69,10 @@ def test_tui_shell_renders_identity_and_semantic_snapshot() -> None:
             state = _plain(app.query_one("#state", Static))
             assert "RECEIVING" in state
             assert "STRONG (5)" in state
-            assert "RECORDING" in state
+            assert "Scanner recording: RECORDING" in state
             assert "UNMUTED" in state
-            audio = _plain(app.query_one("#audio", Static))
-            assert "Live playback: UNAVAILABLE" in audio
-            assert "Recording: UNAVAILABLE" in audio
+            assert not app.audio_controls_available
+            assert app.query_one_optional("#audio", Static) is None
 
     asyncio.run(exercise())
 
@@ -180,7 +179,6 @@ def test_tui_panels_have_descriptive_border_titles() -> None:
                 "#system": "System / Site",
                 "#channel": "Channel",
                 "#state": "Scanner State",
-                "#audio": "Audio",
                 "#status": "Live PSI / Controls",
                 "#logs": "Operational Logs",
             }
@@ -241,9 +239,7 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
 
             compact_footer = compact.query_one("#compact-footer", Static)
             assert compact_footer.display
-            assert _plain(compact_footer) == (
-                "Q Quit | A Audio | R Record | C Reconnect | G Logs | ? Keys"
-            )
+            assert _plain(compact_footer) == "Q Quit | C Reconnect | G Logs | ? Keys"
             assert compact_footer.region.bottom == compact.screen.region.bottom
 
             await pilot.press("question_mark")
@@ -258,6 +254,8 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             assert "Reconnect scanner" in keys
             assert "Show or hide operational logs" in keys
             assert "Command Palette" in keys
+            assert "live scanner playback" not in keys
+            assert "audio recording" not in keys
 
             await pilot.press("question_mark")
             await pilot.pause()
@@ -278,7 +276,6 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             system = pi_screen.query_one("#system")
             channel = pi_screen.query_one("#channel")
             state = pi_screen.query_one("#state")
-            audio = pi_screen.query_one("#audio")
             status = pi_screen.query_one("#status")
             logs = pi_screen.query_one("#logs")
 
@@ -286,10 +283,26 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             assert system.region.y == connection.region.bottom
             assert channel.region.y == system.region.bottom
             assert state.region.y == channel.region.bottom
-            assert audio.region.y == state.region.bottom
-            assert status.region.y == audio.region.bottom
+            assert pi_screen.query_one_optional("#audio", Static) is None
+            assert status.region.y == state.region.bottom
             assert status.region.bottom <= body.region.bottom
             assert logs.region.y == status.region.bottom
+            assert logs.region.bottom <= body.region.bottom
+
+        physical_pi = _app()
+        async with physical_pi.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            assert physical_pi.screen.has_class("-standard")
+            assert physical_pi.screen.has_class("-short")
+            assert physical_pi.query_one_optional("#audio", Static) is None
+            assert not physical_pi.check_action("toggle_audio_playback", ())
+            assert not physical_pi.check_action("toggle_audio_recording", ())
+            assert not physical_pi.check_action("toggle_recording_library", ())
+
+            body = physical_pi.query_one("#body")
+            status = physical_pi.query_one("#status")
+            logs = physical_pi.query_one("#logs")
+            assert status.region.y == physical_pi.query_one("#state").region.bottom
             assert logs.region.bottom <= body.region.bottom
 
         standard = _app()

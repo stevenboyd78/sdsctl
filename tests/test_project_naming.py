@@ -140,12 +140,22 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = (
-        "### Milestone 32.6 — v0.28.1 native-dashboard login correction "
-        "and publication closure"
-    )
+    expected_heading = "### Milestone 33.1 — Transport-aware compact TUI"
     assert expected_heading in active_milestone
     for required in (
+        "physically observed Raspberry Pi display geometry of 100 columns by 30 rows",
+        "explicit `Scanner recording` label",
+        "sdsctl-owned network-audio WAV capture under `Audio recording`",
+        "service actually supplied to the TUI, not a scanner-model-name guess",
+        "Direct USB sessions have no scanner network-audio source",
+        "Removing an incapable panel must reclaim its layout space",
+        "Ethernet SDS200 session",
+        "#### Closed Milestone 32.6 — v0.28.1 native-dashboard login correction "
+        "and publication closure",
+        "Milestone 32.6 closed through reviewed pull request 225",
+        "cfe7876196361f9bc241b76da7130aa008ff298e",
+        "reviewed GitHub Release was marked Latest",
+        "credential invalidation, and exact cleanup acceptance all passed",
         "Milestone 32.5 merged through reviewed pull request 224",
         "3ba9031fbe6cb17ec059c4c5ef97bf4c2a50bf9d",
         "no-referrer` policy can make an ordinary browser submit an opaque `Origin`",

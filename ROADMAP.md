@@ -11,7 +11,36 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
+### Milestone 33.1 — Transport-aware compact TUI
+
+Adapt the Textual TUI to the physically observed Raspberry Pi display geometry
+of 100 columns by 30 rows. Preserve the scanner's own recording state under the
+explicit `Scanner recording` label and distinguish it from the sdsctl-owned
+network-audio WAV capture under `Audio recording`.
+
+Derive audio presentation from the service actually supplied to the TUI, not a
+scanner-model-name guess. Direct USB sessions have no scanner network-audio
+source, so omit live playback, saved playback, audio recording, audio-control,
+and audio-only compact-help content entirely. Ethernet SDS200 and daemon-backed
+sessions retain their complete audio workflow even when it is temporarily idle
+or unhealthy. Removing an incapable panel must reclaim its layout space rather
+than leave an empty placeholder.
+
+Add deterministic 100-by-30 regression coverage and regenerated fictional
+screenshots and documentation. Validate the final branch with focused Textual
+tests and the complete repository gate, then physically accept both a direct
+SDS100 USB session on the Raspberry Pi display and an Ethernet SDS200 session
+that proves the audio controls remain available.
+
+#### Closed Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
+
+Milestone 32.6 closed through reviewed pull request 225 and merge commit
+`cfe7876196361f9bc241b76da7130aa008ff298e`. The genuine annotated v0.28.1 tag
+published the corrected Python and multi-architecture container artifacts, and
+the reviewed GitHub Release was marked Latest. Production Home Assistant,
+native-dashboard, Ingress, remote-client identity, audio, recording, controls,
+Waterfall, restart-recovery, disablement, credential invalidation, and exact
+cleanup acceptance all passed before Milestone 33.1 began.
 
 Milestone 32.5 merged through reviewed pull request 224 and merge commit
 `3ba9031fbe6cb17ec059c4c5ef97bf4c2a50bf9d`, published the immutable v0.28.0
