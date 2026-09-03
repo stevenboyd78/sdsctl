@@ -827,7 +827,11 @@ def _login_response(*, failed: bool = False, status_code: int = 200) -> HTMLResp
             "Content-Security-Policy": (
                 "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
             ),
-            "Referrer-Policy": "no-referrer",
+            # A basic same-origin form POST derives its Origin header from the
+            # referrer policy.  ``no-referrer`` can serialize that Origin as
+            # ``null``, which would make the exact-origin CSRF check reject the
+            # dashboard's own login form before password authentication.
+            "Referrer-Policy": "same-origin",
             "X-Content-Type-Options": "nosniff",
             "X-Frame-Options": "DENY",
         },

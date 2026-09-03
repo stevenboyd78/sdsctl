@@ -22,6 +22,7 @@ from sds200.web_auth import (
     WEB_DASHBOARD_GLOBAL_LOGIN_RECOVERY_SECONDS,
     WEB_DASHBOARD_LOGIN_FAILURE_LIMIT,
     WEB_DASHBOARD_LOGIN_FAILURE_WINDOW_SECONDS,
+    WEB_DASHBOARD_LOGIN_PATH,
     WEB_DASHBOARD_ORIGIN_REQUIRED_DETAIL,
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
@@ -317,6 +318,16 @@ def test_unauthenticated_requests_never_reach_daemon_or_stream_factories() -> No
         assert response.json() == {"detail": WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL}
         assert response.headers["cache-control"] == "no-store"
         assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_login_page_preserves_origin_for_its_same_origin_form_post() -> None:
+    with _client(_authentication()) as client:
+        response = client.get(WEB_DASHBOARD_LOGIN_PATH)
+
+    assert response.status_code == 200
+    assert response.headers["referrer-policy"] == "same-origin"
+    assert 'form method="post" action="/auth/login"' in response.text
+    assert "form-action 'self'" in response.headers["content-security-policy"]
 
 
 def test_login_failure_is_generic_secret_free_and_no_store() -> None:

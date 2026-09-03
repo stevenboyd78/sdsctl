@@ -141,20 +141,23 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_roadmap = " ".join(roadmap.split())
 
     expected_heading = (
-        "### Milestone 32.5 — v0.28.0 release and publication closure"
+        "### Milestone 32.6 — v0.28.1 native-dashboard login correction "
+        "and publication closure"
     )
     assert expected_heading in active_milestone
     for required in (
-        "Milestone 32.4 is closed through reviewed pull request 223",
-        "ea61515460d5f38d39bea0323e83f458e73e112d",
-        "076c76a6d97fba5744d72eb78a9b508b278a0306",
-        "publishes the complete Milestones 32.1 through 32.4 authenticated "
-        "remote-client boundary as sdsctl 0.28.0",
+        "Milestone 32.5 merged through reviewed pull request 224",
+        "3ba9031fbe6cb17ec059c4c5ef97bf4c2a50bf9d",
+        "no-referrer` policy can make an ordinary browser submit an opaque `Origin`",
+        "human-facing GitHub Release was withheld",
+        "republishes the complete Milestones 32.1 through 32.5 authenticated "
+        "remote-client boundary as sdsctl 0.28.1",
         "Installing or upgrading must not expose the authenticated daemon client",
-        "Only one genuine annotated `v0.28.0` tag",
+        "Only one genuine annotated `v0.28.1` tag",
         "clean base and `all` Python installations",
-        "production-class Home Assistant upgrade from 0.27.0 to 0.28.0",
-        "Milestone 33 planning begins only after this public release closure",
+        "production-class Home Assistant upgrade from 0.28.0 to 0.28.1",
+        "Milestone 33 planning begins only after this corrected public release closure",
+        "#### Closed Milestone 32.5 — v0.28.0 release candidate publication",
         "#### Closed Milestone 32.4 — Advanced Home Assistant App remote access "
         "and multi-display deployment",
         "Milestone 32.3 is closed through reviewed pull request 222",
@@ -429,29 +432,29 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v0280_release_documentation_names_current_generic_image() -> None:
+def test_v0281_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
     normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.28.0`" in readme
+    assert "Version `0.28.1`" in readme
     assert "authenticated" in readme
     assert "private-LAN daemon clients" in readme
     assert "one scanner-owning daemon" in readme
-    assert "theboyd78/sdsctl:0.28.0" in readme
+    assert "theboyd78/sdsctl:0.28.1" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment, containers):
-        assert "theboyd78/sdsctl:0.28.0" in document
+        assert "theboyd78/sdsctl:0.28.1" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.28.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.28.0"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.28.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.28.0" in installation
+    assert "## Upgrade to v0.28.1" in installation
+    assert 'python -m pip install --upgrade "sds200==0.28.1"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.28.1"' in installation
+    assert "docker pull theboyd78/sdsctl:0.28.1" in installation
     assert "one scanner-owning daemon" in normalized_installation
     assert "independent `observe` or `control` identity" in normalized_installation
     assert "Upgrading does not expose an advanced Home Assistant service" in installation
@@ -462,6 +465,28 @@ def test_v0280_release_documentation_names_current_generic_image() -> None:
     )
     assert "compatibility-sensitive `sds200` name, slug, GHCR image identity" in installation
     assert "Core integration remains independently versioned at 0.1.5" in installation
+
+
+def test_v0281_native_browser_release_gate_is_explicit() -> None:
+    guide = _read("docs/home-assistant-app.md")
+    start = guide.index("### v0.28.1 release acceptance gate")
+    end = guide.index("\n### v0.28.0 release acceptance gate", start)
+    release_gate = guide[start:end]
+    normalized = " ".join(release_gate.split())
+
+    for required in (
+        "genuine v0.28.1 tag",
+        "upgrade the repository-managed App from v0.28.0",
+        "real ordinary browser",
+        "submit its same-origin password form",
+        "without a Home Assistant tab",
+        "exact host and origin checks",
+        "denial of missing, opaque, wrong, or cross-origin requests",
+        "scope, shared-service, revocation, rotation",
+        "restart-recovery, rollback, and cleanup",
+        "remain default-closed",
+    ):
+        assert required in release_gate or required in normalized
 
 
 def test_v0280_home_assistant_release_gate_is_explicit() -> None:
