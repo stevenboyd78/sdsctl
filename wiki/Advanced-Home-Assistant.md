@@ -115,6 +115,11 @@ sdsctl tui --daemon-client --remote-profile CLIENT_ID --audio-playback
 Give each Pi or workstation its own ID. Revoking one identity then leaves the
 other displays working.
 
+After this interactive command passes with an **Observe** identity, the
+[managed Raspberry Pi display](Raspberry-Pi-Display) guide turns the same
+profile into an opt-in `/dev/tty1` systemd service. Complete interactive
+validation before enabling automatic startup.
+
 ## Browser or kiosk display
 
 Open:

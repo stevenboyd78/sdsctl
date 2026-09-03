@@ -589,6 +589,11 @@ not a credential-only reload.
 
 ## Browser kiosks and other deployment surfaces
 
+After an observe-only Raspberry Pi TUI passes the interactive setup above, the
+[managed Raspberry Pi display guide](managed-pi-display.md) provides the
+reviewed physical-console preflight and systemd deployment. It does not apply
+to control identities or browser sessions.
+
 A Raspberry Pi TUI uses the authenticated daemon-client profile and port. A
 browser kiosk does not: it opens the daemon host's separately configured
 authenticated native HTTPS dashboard. Never place daemon client credentials in

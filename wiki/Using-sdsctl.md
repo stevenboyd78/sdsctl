@@ -39,6 +39,11 @@ The [Textual TUI guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/tu
 covers layouts, controls, themes, logging, daemon-client mode, audio, and
 recordings.
 
+After an observe-only Raspberry Pi remote TUI works interactively, follow the
+[managed Pi display](Raspberry-Pi-Display) workflow to give `/dev/tty1` a
+boot-resilient, least-privilege systemd service. Do not use that service for a
+control-capable identity or browser kiosk.
+
 ## Web dashboard
 
 The web dashboard is a client of one foreground daemon. Start the daemon in one

@@ -15,7 +15,7 @@ from .daemon_remote_reconnect import (
     daemon_remote_error_is_reconnectable,
 )
 from .events import EventBus
-from .exceptions import DaemonProtocolError
+from .exceptions import DaemonDisconnectedError, DaemonProtocolError
 from .state import RadioStateSnapshot, ScannerScreenKind
 from .transport import TransportDiagnostic
 
@@ -162,6 +162,7 @@ class DaemonTuiRadio:
         self._stream_active = False
         self._stream_stop = Event()
         self._event_thread: Thread | None = None
+        self._terminal_stream_failure: BaseException | None = None
 
     @property
     def connected(self) -> bool:
@@ -173,6 +174,13 @@ class DaemonTuiRadio:
         with self._lock:
             thread = self._event_thread
         return thread is not None and thread.is_alive()
+
+    @property
+    def terminal_stream_failure(self) -> BaseException | None:
+        """Return the failure that permanently ended the current event stream."""
+
+        with self._lock:
+            return self._terminal_stream_failure
 
     def initialize(
         self,
@@ -283,6 +291,14 @@ class DaemonTuiRadio:
     ) -> Unsubscribe:
         return self._events.subscribe("diagnostic", callback)
 
+    def on_terminal_stream_failure(
+        self,
+        callback: Callable[[BaseException], None],
+    ) -> Unsubscribe:
+        """Subscribe to a terminal event-stream failure."""
+
+        return self._events.subscribe("terminal_stream_failure", callback)
+
     @contextmanager
     def radio_state_push(
         self,
@@ -313,9 +329,17 @@ class DaemonTuiRadio:
             self._stream_active = True
 
         self._stream_stop.clear()
+        with self._lock:
+            self._terminal_stream_failure = None
         try:
-            first_event = self.event_client.receive()
-            first = self._initial_snapshot(first_event)
+            try:
+                first_event = self.event_client.receive()
+                first = self._initial_snapshot(first_event)
+            except Exception as error:
+                if not self._stream_stop.is_set():
+                    self._set_connected(False)
+                    self._record_terminal_stream_failure(error)
+                raise
             thread = Thread(
                 target=self._run_event_stream,
                 name="sds200-tui-daemon-events",
@@ -414,6 +438,7 @@ class DaemonTuiRadio:
                         or reconnect_attempt >= policy.attempts
                         or not daemon_remote_error_is_reconnectable(error)
                     ):
+                        terminal_error: BaseException = error
                         if policy is not None and reconnect_attempt:
                             self._events.emit(
                                 "diagnostic",
@@ -425,6 +450,11 @@ class DaemonTuiRadio:
                                     ),
                                 ),
                             )
+                            terminal_error = DaemonDisconnectedError(
+                                "Authenticated remote daemon event reconnect "
+                                "attempts were exhausted."
+                            )
+                        self._record_terminal_stream_failure(terminal_error)
                         return
                     reconnect_attempt += 1
                     awaiting_snapshot = True
@@ -432,6 +462,13 @@ class DaemonTuiRadio:
                         return
         finally:
             self.event_client.close()
+
+    def _record_terminal_stream_failure(self, error: BaseException) -> None:
+        with self._lock:
+            if self._terminal_stream_failure is not None:
+                return
+            self._terminal_stream_failure = error
+        self._events.emit("terminal_stream_failure", error)
 
     def _apply_event(self, event: DaemonEvent) -> None:
         if event.kind == DaemonEventKind.SCANNER_CONNECTION:

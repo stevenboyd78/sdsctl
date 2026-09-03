@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -73,6 +74,41 @@ def test_tui_shell_renders_identity_and_semantic_snapshot() -> None:
             assert "UNMUTED" in state
             assert not app.audio_controls_available
             assert app.query_one_optional("#audio", Static) is None
+
+    asyncio.run(exercise())
+
+
+def test_tui_connection_panel_renders_optional_remote_target() -> None:
+    async def exercise() -> None:
+        direct_app = _app()
+        async with direct_app.run_test(size=(100, 30)):
+            direct_connection = _plain(
+                direct_app.query_one("#connection", Static)
+            )
+            assert "Endpoint: udp://192.168.0.251:50536" in direct_connection
+            assert "Target:" not in direct_connection
+
+        remote_app = ScannerTuiApp(
+            ScannerIdentity(
+                endpoint="sdsctl-remote-daemon",
+                model="SDS200",
+                firmware="Version 1.26.01",
+                connection_target="192.168.0.18:50443",
+            ),
+            snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+            palette=DEFAULT_DARK_THEME,
+        )
+        async with remote_app.run_test(size=(100, 30)) as pilot:
+            remote_connection = _plain(
+                remote_app.query_one("#connection", Static)
+            )
+            assert "Endpoint: sdsctl-remote-daemon" in remote_connection
+            assert "Target: 192.168.0.18:50443" in remote_connection
+            assert remote_app.screen.has_class("-connection-target")
+
+            await pilot.resize_terminal(120, 40)
+            await pilot.pause()
+            assert remote_app.query_one("#connection", Static).region.height >= 5
 
     asyncio.run(exercise())
 
@@ -286,6 +322,8 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             assert pi_screen.query_one_optional("#audio", Static) is None
             assert status.region.y == state.region.bottom
             assert status.region.bottom <= body.region.bottom
+            assert pi_screen.logs_visible
+            assert logs.display
             assert logs.region.y == status.region.bottom
             assert logs.region.bottom <= body.region.bottom
             assert connection.styles.border_top[0] == ""
@@ -309,21 +347,29 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             status = physical_pi.query_one("#status")
             logs = physical_pi.query_one("#logs")
 
-            assert connection.region.y == system.region.y == body.region.y
-            assert connection.region.right < system.region.x
-            assert channel.region.y == state.region.y
-            assert channel.region.y == max(connection.region.bottom, system.region.bottom)
-            assert channel.region.right < state.region.x
-            assert status.region.y == max(channel.region.bottom, state.region.bottom)
-            assert status.region.x == logs.region.x
-            assert status.region.width == logs.region.width
-            assert logs.region.y == status.region.bottom
-            assert logs.region.bottom <= body.region.bottom
+            assert physical_pi.screen.has_class("-pi-dashboard")
+            assert not physical_pi.logs_visible
+            assert not logs.display
+            assert connection.region.y == channel.region.y == body.region.y
+            assert connection.region.right < channel.region.x
+            assert system.region.y == max(connection.region.bottom, channel.region.bottom)
+            assert system.region.x == body.region.x
+            assert system.region.width == body.region.width
+            assert state.region.y == status.region.y == system.region.bottom
+            assert state.region.right < status.region.x
+            assert system.styles.text_wrap == "nowrap"
+            assert system.styles.text_overflow == "ellipsis"
+
+            hierarchy = _plain(system)
+            channel_details = _plain(channel)
+            assert "Channel: Patch 65132" in hierarchy
+            assert "Channel:" not in channel_details
+            assert "Frequency: 769.431250MHz" in channel_details
 
             for panel, title in (
                 (connection, "Connection"),
-                (system, "System / Site"),
-                (channel, "Channel"),
+                (system, "System / Site / Channel"),
+                (channel, "Channel Details"),
                 (state, "Scanner State"),
                 (status, "Live PSI / Controls"),
                 (logs, "Operational Logs"),
@@ -331,11 +377,40 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
                 assert panel.styles.border_top[0] == "round"
                 assert panel.border_title == title
 
+            system_height = system.region.height
+            lower_row_y = state.region.y
+            physical_pi.update_snapshot(
+                replace(
+                    physical_pi._snapshot,
+                    system=(
+                        "Church of Jesus Christ of Latter Day Saints "
+                        "with an intentionally extended display name"
+                    ),
+                ),
+                connected=True,
+            )
+            await pilot.pause()
+            assert system.region.height == system_height
+            assert state.region.y == lower_row_y
+            assert physical_pi.query_one("#body").max_scroll_y == 0
+
+            await pilot.press("g")
+            await pilot.pause()
+            assert physical_pi.logs_visible
+            assert logs.display
+            assert logs.region.y == max(state.region.bottom, status.region.bottom)
+            assert logs.region.x == body.region.x
+            assert logs.region.width == body.region.width
+            assert logs.region.bottom <= body.region.bottom
+
             await pilot.press("question_mark")
             await pilot.pause()
             keys = physical_pi.query_one("#keys")
+            assert physical_pi.key_help_visible
+            assert not physical_pi.logs_visible
+            assert not logs.display
             assert keys.region.x == logs.region.x
-            assert keys.region.width == logs.region.width
+            assert keys.region.width >= body.region.width - 2
             await pilot.press("question_mark")
             await pilot.pause()
 
@@ -375,6 +450,63 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
     asyncio.run(exercise())
 
 
+def test_tui_restores_standard_panel_order_after_pi_layout_resize() -> None:
+    async def exercise() -> None:
+        app = _app()
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            body = app.query_one("#body")
+            channel = app.query_one("#channel", Static)
+            system = app.query_one("#system", Static)
+
+            assert app.screen.has_class("-pi-dashboard")
+            assert [child.id for child in body.children] == [
+                "keys",
+                "connection",
+                "channel",
+                "system",
+                "state",
+                "status",
+                "logs",
+                "identity",
+            ]
+            assert channel.border_title == "Channel Details"
+            assert "Channel: Patch 65132" in _plain(system)
+            assert "Channel:" not in _plain(channel)
+
+            await pilot.resize_terminal(120, 40)
+            await pilot.pause()
+
+            assert not app.screen.has_class("-pi-dashboard")
+            assert app.logs_visible
+            assert [child.id for child in body.children] == [
+                "keys",
+                "connection",
+                "identity",
+                "system",
+                "channel",
+                "state",
+                "status",
+                "logs",
+            ]
+            assert system.border_title == "System / Site"
+            assert channel.border_title == "Channel"
+            assert "Channel: Patch 65132" not in _plain(system)
+            assert "Channel: Patch 65132" in _plain(channel)
+
+            await pilot.resize_terminal(100, 30)
+            await pilot.pause()
+
+            assert app.screen.has_class("-pi-dashboard")
+            assert not app.logs_visible
+            assert channel.border_title == "Channel Details"
+            assert "Channel: Patch 65132" in _plain(system)
+            assert "Channel:" not in _plain(channel)
+            assert body.max_scroll_y == 0
+
+    asyncio.run(exercise())
+
+
 def test_tui_log_panel_is_visible_by_default_and_retains_hidden_records() -> None:
     async def exercise() -> None:
         buffer = TuiLogBuffer(limit=3)
@@ -384,6 +516,7 @@ def test_tui_log_panel_is_visible_by_default_and_retains_hidden_records() -> Non
         async with app.run_test(size=(120, 40)) as pilot:
             logs = app.query_one("#logs", Static)
             assert app.logs_visible
+            assert not app.screen.has_class("hide-logs")
             assert "first warning" in _plain(logs)
 
             await pilot.press("g")
@@ -422,12 +555,19 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
             await pilot.pause()
             body = app.query_one("#body")
             logs = app.query_one("#logs", Static)
+            assert not app.logs_visible
+            assert not logs.display
+
+            await pilot.press("g")
+            await pilot.pause()
             rendered = _plain(logs)
 
-            assert "event 3" not in rendered
+            assert "event 1" not in rendered
+            assert "event 2" in rendered
+            assert "event 3" in rendered
             assert "event 4" in rendered
             assert "event 5" in rendered
-            assert logs.region.height == 5
+            assert logs.region.height == 7
             assert logs.styles.text_wrap == "nowrap"
             assert logs.styles.text_overflow == "ellipsis"
             assert body.max_scroll_y == 0
@@ -440,7 +580,9 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
             await pilot.pause()
 
             rendered = _plain(logs)
-            assert "event 4" not in rendered
+            assert "event 2" not in rendered
+            assert "event 3" in rendered
+            assert "event 4" in rendered
             assert "event 5" in rendered
             assert "event 6" in rendered
             assert body.max_scroll_y == 0

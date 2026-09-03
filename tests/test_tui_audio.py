@@ -186,24 +186,56 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
             state = app.query_one("#state")
             status = app.query_one("#status")
             logs = app.query_one("#logs")
-            log_text = _plain(logs)
 
-            assert connection.region.y == system.region.y == body.region.y
-            assert connection.region.right < system.region.x
-            assert channel.region.y == state.region.y
-            assert channel.region.y == max(connection.region.bottom, system.region.bottom)
-            assert channel.region.right < state.region.x
-            assert audio.region.y == status.region.y
-            assert audio.region.y == max(channel.region.bottom, state.region.bottom)
-            assert audio.region.right < status.region.x
-            assert logs.region.y == max(audio.region.bottom, status.region.bottom)
+            assert app.screen.has_class("-pi-dashboard")
+            assert not app.logs_visible
+            assert not logs.display
+            assert connection.region.y == channel.region.y == body.region.y
+            assert connection.region.right < channel.region.x
+            assert system.region.y == max(connection.region.bottom, channel.region.bottom)
+            assert system.region.x == body.region.x
+            assert system.region.width == body.region.width
+            assert state.region.y == status.region.y == system.region.bottom
+            assert state.region.right < status.region.x
+            assert audio.region.y == max(state.region.bottom, status.region.bottom)
+            assert audio.region.x == body.region.x
+            assert audio.region.width == body.region.width
+            assert audio.region.bottom <= body.region.bottom
+            assert "Channel: Example Dispatch" in _plain(system)
+            assert "Channel:" not in _plain(channel)
+
+            await pilot.press("g")
+            await pilot.pause()
+
+            log_text = _plain(logs)
+            assert app.logs_visible
+            assert logs.display
+            assert not audio.display
+            assert logs.region.y == max(state.region.bottom, status.region.bottom)
             assert logs.region.x == body.region.x
+            assert logs.region.width == body.region.width
             assert logs.region.bottom <= body.region.bottom
-            assert "event 3" not in log_text
+            assert "event 1" not in log_text
+            assert "event 2" in log_text
+            assert "event 3" in log_text
             assert "event 4" in log_text
             assert "event 5" in log_text
-            assert logs.region.height == 5
+            assert logs.region.height == 7
             assert body.max_scroll_y == 0
+
+            await pilot.press("question_mark")
+            await pilot.pause()
+            assert app.key_help_visible
+            assert not app.logs_visible
+            assert audio.display
+            assert not logs.display
+
+            await pilot.press("g")
+            await pilot.pause()
+            assert not app.key_help_visible
+            assert app.logs_visible
+            assert not app.query_one("#keys").display
+            assert not audio.display
 
             for panel in (
                 connection,

@@ -12,6 +12,7 @@
 - [Audio and recordings](Audio-and-Recordings)
 - [Home Assistant](Home-Assistant)
 - [Advanced Home Assistant access](Advanced-Home-Assistant)
+- [Managed Raspberry Pi display](Raspberry-Pi-Display)
 - [Favorites and RadioReference](Favorites-and-RadioReference)
 - [Operations and diagnostics](Operations-and-Diagnostics)
 - [Python API](Python-API)

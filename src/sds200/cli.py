@@ -183,6 +183,14 @@ from .home_assistant_theme_activation import (
     home_assistant_activation_inventory,
 )
 from .logging_config import LOG_LEVEL_NAMES, configure_logging
+from .managed_display import (
+    MANAGED_DISPLAY_CONFIGURATION_EXIT,
+    MANAGED_DISPLAY_TEMPORARY_EXIT,
+    inspect_managed_display_terminal,
+    managed_display_failure_status,
+    managed_display_service_template,
+    require_observe_only_display,
+)
 from .models import HealthSummary, RadioEvent, RadioHealth, StatusResponse
 from .monitor import TerminalMonitor
 from .network import DEFAULT_UDP_PORT
@@ -1264,6 +1272,49 @@ def build_parser(
         metavar="ADDRESS",
         help="Exact private or link-local Docker-host publication address",
     )
+
+    display_preflight = subparsers.add_parser(
+        "display-client-preflight",
+        help="Validate an observe-only managed remote TUI display",
+    )
+    display_preflight.add_argument(
+        "--remote-profile",
+        required=True,
+        metavar="PROFILE",
+        help="Exact observe-only authenticated remote profile",
+    )
+    display_preflight.add_argument(
+        "--terminal",
+        type=Path,
+        default=Path("/dev/tty1"),
+        metavar="PATH",
+        help="Exact physical console character device (default: /dev/tty1)",
+    )
+    display_preflight.add_argument(
+        "--timeout",
+        type=_positive_float,
+        default=DAEMON_API_CLIENT_DEFAULT_TIMEOUT,
+        metavar="SECONDS",
+        help=(
+            "Remote API, event, and audio service timeout "
+            f"(default: {DAEMON_API_CLIENT_DEFAULT_TIMEOUT})"
+        ),
+    )
+    display_preflight.add_argument(
+        "--audio-playback",
+        action="store_true",
+        help="Also require an available local PortAudio output device",
+    )
+    display_preflight.add_argument(
+        "--audio-device",
+        type=_audio_device,
+        metavar="DEVICE",
+        help="Require one exact PortAudio output device name or index",
+    )
+    subparsers.add_parser(
+        "display-client-service",
+        help="Print the packaged managed Raspberry Pi systemd unit",
+    )
     daemon_remote_preflight.add_argument(
         "--expected-port",
         type=_remote_port,
@@ -1844,6 +1895,14 @@ def build_parser(
         help=(
             "Use one explicitly named authenticated remote profile with "
             "--daemon-client instead of local Unix sockets"
+        ),
+    )
+    tui.add_argument(
+        "--managed-display",
+        action="store_true",
+        help=(
+            "Use observe-only service-manager exit semantics; requires an "
+            "authenticated remote profile"
         ),
     )
     tui.add_argument(
@@ -3617,6 +3676,149 @@ def _run_daemon_remote_preflight(args: argparse.Namespace) -> int:
     return 0
 
 
+def _probe_remote_display_service(
+    configuration: DaemonRemoteClientConfiguration,
+    service: DaemonRemoteService,
+    *,
+    timeout: float,
+) -> None:
+    connection = DaemonRemoteClientTransport(configuration, service).connect(
+        timeout=timeout
+    )
+    connection.close()
+
+
+def _run_display_client_preflight(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    try:
+        from . import tui as _tui_module
+
+        del _tui_module
+    except ModuleNotFoundError as exc:
+        missing = exc.name.split(".", 1)[0] if exc.name is not None else ""
+        if missing == "textual":
+            raise ValueError(
+                "Textual TUI support is not installed; install it with: "
+                'python -m pip install "sds200[tui]"'
+            ) from exc
+        raise
+
+    terminal = inspect_managed_display_terminal(args.terminal)
+    configuration = _selected_remote_client_configuration(
+        args.remote_profile,
+        configuration_paths=configuration_paths,
+        environ=environ,
+    )
+    assert configuration is not None
+
+    api_transport = DaemonRemoteClientTransport(
+        configuration,
+        DaemonRemoteService.API,
+    )
+    with DaemonApiClient(
+        api_transport,
+        timeout=args.timeout,
+        max_response_bytes=DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES,
+    ) as api_client:
+        hello = api_client.hello()
+        _require_daemon_client_operation(
+            hello,
+            DaemonApiOperation.RUNTIME_SNAPSHOT,
+        )
+        require_observe_only_display(hello)
+        api_client.runtime_snapshot()
+
+    _probe_remote_display_service(
+        configuration,
+        DaemonRemoteService.EVENTS,
+        timeout=args.timeout,
+    )
+    _probe_remote_display_service(
+        configuration,
+        DaemonRemoteService.AUDIO,
+        timeout=args.timeout,
+    )
+
+    playback = "not requested"
+    if args.audio_playback or args.audio_device is not None:
+        backend = inspect_audio_backend()
+        candidates = backend.output_devices
+        if args.audio_device is not None:
+            candidates = tuple(
+                device
+                for device in candidates
+                if (
+                    device.index == args.audio_device
+                    if isinstance(args.audio_device, int)
+                    else device.name == args.audio_device
+                )
+            )
+        if not candidates:
+            raise ValueError("Managed display audio has no output device.")
+        playback = "available"
+
+    print("Managed display preflight passed.")
+    print(f"Terminal geometry: {terminal.columns} columns x {terminal.rows} rows")
+    print(f"Responsive layout: {terminal.layout}")
+    print("Remote services: API, events, audio")
+    print("Authorization: observe only")
+    print(f"Audio playback: {playback}")
+    return 0
+
+
+def _run_display_client_preflight_with_status(
+    args: argparse.Namespace,
+    *,
+    configuration_paths: ConfigurationPaths | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> int:
+    try:
+        return _run_display_client_preflight(
+            args,
+            configuration_paths=configuration_paths,
+            environ=environ,
+        )
+    except Exception as exc:
+        status = managed_display_failure_status(exc)
+        category = (
+            "temporary"
+            if status == MANAGED_DISPLAY_TEMPORARY_EXIT
+            else "configuration"
+            if status == MANAGED_DISPLAY_CONFIGURATION_EXIT
+            else "local"
+        )
+        print(f"error: managed display {category} preflight failed.", file=sys.stderr)
+        return status
+
+
+def _managed_display_runtime_failure(error: BaseException) -> int:
+    """Render one fixed runtime failure class and return its stable status."""
+
+    exit_status = managed_display_failure_status(error)
+    category = (
+        "temporarily unavailable"
+        if exit_status == MANAGED_DISPLAY_TEMPORARY_EXIT
+        else "configuration failed"
+        if exit_status == MANAGED_DISPLAY_CONFIGURATION_EXIT
+        else "stopped unexpectedly"
+    )
+    logger.error(
+        "managed display stopped category=%s error=%s",
+        category.replace(" ", "_"),
+        error.__class__.__name__,
+    )
+    print(
+        f"Managed sdsctl display {category}. "
+        "Review the service journal for the sanitized failure class.",
+        flush=True,
+    )
+    return exit_status
+
+
 def _reject_daemon_client_scanner_options(args: argparse.Namespace) -> None:
     if any(
         value is not None
@@ -4714,6 +4916,10 @@ def _run_remote_audio(
 def _reject_standalone_tui_daemon_options(
     args: argparse.Namespace,
 ) -> None:
+    if args.managed_display:
+        raise ValueError(
+            "--managed-display requires --daemon-client and --remote-profile."
+        )
     if any(
         value is not None
         for value in (
@@ -5128,6 +5334,10 @@ def _run_tui(
     if args.daemon_client:
         _reject_daemon_tui_scanner_options(args)
         _reject_daemon_tui_rtsp_options(args)
+        if args.managed_display and args.remote_profile is None:
+            raise ValueError(
+                "--managed-display requires one explicit --remote-profile."
+            )
 
         timeout = (
             DAEMON_API_CLIENT_DEFAULT_TIMEOUT
@@ -5239,6 +5449,8 @@ def _run_tui(
                 hello,
                 DaemonApiOperation.RUNTIME_SNAPSHOT,
             )
+            if args.managed_display:
+                require_observe_only_display(hello)
             initial = radio.initialize(api_client.runtime_snapshot())
             daemon_audio_session = TuiAudioSession(
                 AudioStream(
@@ -5278,6 +5490,16 @@ def _run_tui(
                 endpoint=initial.endpoint,
                 model=initial.model,
                 firmware=initial.firmware,
+                connection_target=(
+                    (
+                        f"[{remote_configuration.address}]"
+                        if ":" in remote_configuration.address
+                        else remote_configuration.address
+                    )
+                    + f":{remote_configuration.port}"
+                    if remote_configuration is not None
+                    else None
+                ),
                 snapshot=initial.snapshot,
                 radio=radio,
                 audio_session=daemon_audio_session,
@@ -5290,8 +5512,17 @@ def _run_tui(
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,
+                terminal_failure_subscribe=(
+                    radio.on_terminal_stream_failure
+                    if args.managed_display
+                    else None
+                ),
                 log_buffer=log_buffer,
             )
+            if args.managed_display:
+                terminal_failure = radio.terminal_stream_failure
+                if terminal_failure is not None:
+                    raise terminal_failure
         return 0
 
     _reject_standalone_tui_daemon_options(args)
@@ -5984,8 +6215,14 @@ def main(
                 environ=environ,
             )
         except (SDS200Error, OSError, ValueError) as exc:
+            if args.managed_display:
+                return _managed_display_runtime_failure(exc)
             print(f"error: {exc}", file=sys.stderr)
             return 2
+        except Exception as exc:
+            if args.managed_display:
+                return _managed_display_runtime_failure(exc)
+            raise
 
     logger.info("sdsctl starting version=%s action=%s", __version__, args.action)
 
@@ -6005,6 +6242,17 @@ def main(
 
         if args.action == "daemon-remote-preflight":
             return _run_daemon_remote_preflight(args)
+
+        if args.action == "display-client-preflight":
+            return _run_display_client_preflight_with_status(
+                args,
+                configuration_paths=configuration_paths,
+                environ=environ,
+            )
+
+        if args.action == "display-client-service":
+            print(managed_display_service_template(), end="")
+            return 0
 
         if args.action == "daemon":
             return _run_daemon(

@@ -6,6 +6,27 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add an observe-only `display-client-preflight` command for managed Raspberry
+  Pi TUI deployments. It verifies an exact physical console, reports the
+  responsive layout selected by its measured geometry, authenticates to the
+  remote API, event, and audio services, checks the runtime contract, optionally
+  inspects local playback, and returns only redacted evidence.
+- Add `tui --managed-display` service-manager semantics and a hardened
+  `sdsctl-display@.service` Raspberry Pi console template. Temporary connection
+  failures use exit 75 and a delayed restart; permanent profile, TLS,
+  authentication, authorization, or service failures use exit 78 and stop.
+  Unexpected local failures and an intentional quit also remain stopped. Boot
+  ordering keeps late Plymouth and cloud-init status output from overwriting
+  the managed TUI without creating a `multi-user.target` ordering cycle, and
+  all three standard streams reach the console so Textual's standard-error
+  display frames remain visible.
+- Add canonical and beginner wiki guidance for a dedicated service account,
+  isolated virtual environment, private client files, preflight, interactive
+  validation, boot startup, journald, recovery, credential changes, upgrade,
+  disablement, exact removal, and default-closed Home Assistant cleanup.
+
 ### Changed
 
 - Make the Textual TUI transport-aware on compact Raspberry Pi displays. Direct
@@ -13,13 +34,23 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   and audio-control rows and shortcuts instead of spending screen space on
   unavailable features; Ethernet and daemon-backed audio sessions retain them.
 - Use a compact two-column layout on short terminals from 100 through 119
-  columns. The physical 100-by-30 Raspberry Pi geometry pairs scanner panels,
-  preserves their titles in tight theme-colored frames, keeps logs and keyboard
-  help full width, and lets USB Live PSI / Controls reclaim both columns when
-  Network Audio is absent.
-- Bound short-screen operational logs to the newest two single-line entries.
-  Long warnings are ellipsized inside a five-row framed panel instead of wrapping
-  until the Raspberry Pi application becomes vertically scrollable.
+  columns. The physical 100-by-30 Raspberry Pi geometry places Connection beside
+  Channel Details, gives System / Site / Channel a fixed full-width row, pairs
+  Scanner State with Live PSI / Controls, and gives Network Audio the full lower
+  row when that service is available. Long hierarchy values are ellipsized so
+  they cannot move the lower panels or footer.
+- Turn Operational Logs into a bounded `G` drawer on the physical Raspberry Pi
+  layout. It starts hidden, replaces Network Audio when opened, shows the newest
+  four single-line records across the full width, continues collecting while
+  hidden, and is mutually exclusive with the `?` keyboard reference. Larger and
+  narrower layouts retain their existing visible bounded log panel.
+- Physically validate the refined 100-by-30 dashboard, Operational Logs drawer,
+  and mutually exclusive `G`/`?` switching on the managed Raspberry Pi display.
+  The fixed dashboard and log drawer remain in the initial viewport; the complete
+  Keyboard Reference remains intentionally scrollable at this terminal height.
+- Show a named remote-daemon TUI's resolved private-LAN `host:port` as `Target`
+  in the Connection panel while leaving direct USB and standalone-host sessions
+  unchanged.
 - Extend the existing proactive 120-second PSI renewal to direct serial
   transports. Physical SDS100 USB timing showed complete 500 ms pushes expiring
   regularly after about three minutes; renewing before that boundary avoids the
