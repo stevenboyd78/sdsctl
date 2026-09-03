@@ -20,6 +20,7 @@ from sds200.recording_metadata import recording_metadata_path
 from sds200.state import RadioStateSnapshot, snapshot_from_scanner_info
 from sds200.tui import ScannerIdentity, ScannerTuiApp
 from sds200.tui_audio import RecordingPathPolicy, TuiAudioSession
+from sds200.tui_logging import TuiLogBuffer
 from sds200.xml_protocol import ScannerInfoParser
 
 from .fakes import BlockingStartAudioTransport, FakeAudioTransport
@@ -56,6 +57,8 @@ XML = (
 
 def _app(
     session: AudioRecordingSession | TuiAudioSession,
+    *,
+    log_buffer: TuiLogBuffer | None = None,
 ) -> ScannerTuiApp:
     return ScannerTuiApp(
         ScannerIdentity(
@@ -65,6 +68,7 @@ def _app(
         ),
         snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
         audio_session=session,
+        log_buffer=log_buffer,
     )
 
 
@@ -148,7 +152,13 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
             RecordingPathPolicy(output=tmp_path / "pi-network-audio.wav"),
             scanner="SDS200",
         )
-        app = _app(session)
+        log_buffer = TuiLogBuffer(limit=10)
+        for index in range(6):
+            log_buffer.append(
+                f"2026-09-03 WARNING sds200.test: event {index} "
+                + "long diagnostic context " * 8
+            )
+        app = _app(session, log_buffer=log_buffer)
 
         async with app.run_test(size=(100, 30)) as pilot:
             await pilot.pause()
@@ -176,6 +186,7 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
             state = app.query_one("#state")
             status = app.query_one("#status")
             logs = app.query_one("#logs")
+            log_text = _plain(logs)
 
             assert connection.region.y == system.region.y == body.region.y
             assert connection.region.right < system.region.x
@@ -188,6 +199,11 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
             assert logs.region.y == max(audio.region.bottom, status.region.bottom)
             assert logs.region.x == body.region.x
             assert logs.region.bottom <= body.region.bottom
+            assert "event 3" not in log_text
+            assert "event 4" in log_text
+            assert "event 5" in log_text
+            assert logs.region.height == 5
+            assert body.max_scroll_y == 0
 
             for panel in (
                 connection,

@@ -43,7 +43,11 @@ from .tui_controls import (
     HoldScope,
     channel_navigation,
 )
-from .tui_logging import TUI_LOG_VISIBLE_LINES, TuiLogBuffer
+from .tui_logging import (
+    TUI_LOG_VISIBLE_LINES,
+    TUI_SHORT_LOG_VISIBLE_LINES,
+    TuiLogBuffer,
+)
 from .tui_themes import built_in_tui_theme_stylesheets
 
 Unsubscribe = Callable[[], None]
@@ -301,6 +305,11 @@ _SHARED_TUI_STYLESHEET = """
 
     Screen.-short #logs {
         min-height: 1;
+        max-height: 5;
+        overflow-x: hidden;
+        overflow-y: hidden;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
     }
 
     Screen.-short #identity {
@@ -1181,7 +1190,12 @@ class ScannerTuiApp(App[None]):
         if not force and snapshot.version == self._log_version:
             return
         self._log_version = snapshot.version
-        visible = snapshot.lines[-TUI_LOG_VISIBLE_LINES:]
+        visible_limit = (
+            TUI_SHORT_LOG_VISIBLE_LINES
+            if self.screen.size.height < 32
+            else TUI_LOG_VISIBLE_LINES
+        )
+        visible = snapshot.lines[-visible_limit:]
         lines = [
             f"{len(snapshot.lines)} retained; newest last; G toggles",
         ]

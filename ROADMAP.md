@@ -36,10 +36,18 @@ layout begins at 120 columns.
 
 Add deterministic 100-by-30 regression coverage and regenerated fictional
 screenshots and documentation, including tight theme-colored panel frames that
-retain visual grouping without restoring wide-layout spacing. Validate the final
-branch with focused Textual tests and the complete repository gate, then
+retain visual grouping without restoring wide-layout spacing. Keep only the
+newest two operational records on non-wrapping rows so long warnings cannot make
+the physical short-screen application scroll. Validate the final branch with
+focused Textual tests and the complete repository gate, then
 physically accept both a direct SDS100 USB session on the Raspberry Pi display
 and an Ethernet SDS200 session that proves the audio controls remain available.
+
+Use private timing-only analysis during the USB acceptance run to distinguish
+transport loss from the scanner's finite PSI push lifetime. Extend the existing
+conservative 120-second renewal to serial transports when complete frames stop
+periodically without USB or command failures, and prove that renewal preserves
+an uninterrupted 500 ms stream without reopening scanner control.
 
 #### Closed Milestone 32.6 — v0.28.1 native-dashboard login correction and publication closure
 

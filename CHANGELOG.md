@@ -17,6 +17,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   preserves their titles in tight theme-colored frames, keeps logs and keyboard
   help full width, and lets USB Live PSI / Controls reclaim both columns when
   Network Audio is absent.
+- Bound short-screen operational logs to the newest two single-line entries.
+  Long warnings are ellipsized inside a five-row framed panel instead of wrapping
+  until the Raspberry Pi application becomes vertically scrollable.
+- Extend the existing proactive 120-second PSI renewal to direct serial
+  transports. Physical SDS100 USB timing showed complete 500 ms pushes expiring
+  regularly after about three minutes; renewing before that boundary avoids the
+  TUI's stale warning, ten-second outage, and full serial reconnect.
 - Distinguish the scanner's own `Rec` state as `Scanner recording` from the
   sdsctl-owned WAV workflow as `Audio recording` in every responsive layout.
 

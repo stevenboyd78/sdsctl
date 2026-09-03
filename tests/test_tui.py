@@ -408,6 +408,46 @@ def test_tui_log_panel_is_visible_by_default_and_retains_hidden_records() -> Non
     asyncio.run(exercise())
 
 
+def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> None:
+    async def exercise() -> None:
+        buffer = TuiLogBuffer(limit=10)
+        for index in range(6):
+            buffer.append(
+                f"2026-09-03 WARNING sds200.test: event {index} "
+                + "long diagnostic context " * 8
+            )
+        app = _app(buffer)
+
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            body = app.query_one("#body")
+            logs = app.query_one("#logs", Static)
+            rendered = _plain(logs)
+
+            assert "event 3" not in rendered
+            assert "event 4" in rendered
+            assert "event 5" in rendered
+            assert logs.region.height == 5
+            assert logs.styles.text_wrap == "nowrap"
+            assert logs.styles.text_overflow == "ellipsis"
+            assert body.max_scroll_y == 0
+
+            buffer.append(
+                "2026-09-03 WARNING sds200.test: event 6 "
+                + "newest diagnostic context " * 8
+            )
+            app._poll_log_buffer()
+            await pilot.pause()
+
+            rendered = _plain(logs)
+            assert "event 4" not in rendered
+            assert "event 5" in rendered
+            assert "event 6" in rendered
+            assert body.max_scroll_y == 0
+
+    asyncio.run(exercise())
+
+
 def test_tui_status_transitions_include_local_since_timestamps() -> None:
     async def exercise() -> None:
         now = [datetime(2026, 7, 28, 4, 18, 32)]

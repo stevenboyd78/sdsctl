@@ -47,8 +47,11 @@ connection and scanner panels across two columns. An Ethernet or daemon-backed
 session places Network Audio beside Live PSI / Controls; keyboard help and
 operational logs retain the full width. Tight theme-colored frames preserve the
 same panel titles and visual grouping as the larger dashboard without restoring
-its extra spacing. Narrower or taller terminals retain their established
-layouts, and the ordinary wide layout remains available from 120 columns.
+its extra spacing. The short-screen log panel keeps the newest two records on
+single ellipsized rows, preventing long diagnostics or accumulated warnings from
+growing the application beyond the physical display. Narrower or taller
+terminals retain their established layouts, and the ordinary wide layout remains
+available from 120 columns.
 
 ### Direct USB compact layout
 
@@ -123,10 +126,15 @@ adjusted independently:
 sdsctl --host 192.168.0.251 tui --interval 250 --stale-after 2
 ```
 
-When a UDP transport remains logically connected but stops delivering PSI frames,
-the TUI warns at the stale threshold and automatically queues the existing
-nonblocking reconnect operation after 10 seconds. Attempts are rate-limited to
-one per 60 seconds and do not stop an active SDS200 network-audio recording:
+Physical SDS200 network and SDS100 serial testing showed that the scanners can
+end an otherwise healthy PSI push after roughly three minutes. Active direct
+network and serial sessions therefore renew the configured push conservatively
+after 120 seconds, under the shared nonblocking command lock and without
+reopening scanner control. If a stream nevertheless remains logically connected
+but stops delivering PSI frames, the TUI warns at the stale threshold and
+automatically queues its recovery operation after 10 seconds. Attempts are
+rate-limited to one per 60 seconds and do not stop an active SDS200 network-audio
+recording:
 
 ```bash
 sdsctl --host 192.168.0.251 tui \

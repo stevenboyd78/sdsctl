@@ -923,6 +923,12 @@ restarted PSI with the configured interval rather than attempting bounded scanne
 reconnect. Recovery completed repeatedly while the scanner remained connected,
 and live SDS200 state continued afterward.
 
+Milestone 33.1 subsequently extended the shared proactive 120-second PSI renewal
+to directly owned serial transports after a private SDS100 USB timing run
+reproduced the same finite push lifetime with complete XML frames and no kernel
+USB events. The serial-specific stale `psi-refresh` path remains the bounded
+fallback if a proactive renewal cannot preserve updates.
+
 A separate `daemon-client` container with UID/GID `10001:10001`,
 `network_mode: none`, no devices, and only the runtime volume returned complete
 daemon status and snapshot data. A detached event probe received the initial
