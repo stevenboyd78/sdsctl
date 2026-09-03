@@ -45,9 +45,10 @@ shortcuts that their transport cannot use.
 On short terminals at 100 through 119 columns, the compact split layout pairs
 connection and scanner panels across two columns. An Ethernet or daemon-backed
 session places Network Audio beside Live PSI / Controls; keyboard help and
-operational logs retain the full width. Narrower or taller terminals retain
-their established layouts, and the ordinary wide layout remains available from
-120 columns.
+operational logs retain the full width. Tight theme-colored frames preserve the
+same panel titles and visual grouping as the larger dashboard without restoring
+its extra spacing. Narrower or taller terminals retain their established
+layouts, and the ordinary wide layout remains available from 120 columns.
 
 ### Direct USB compact layout
 
@@ -56,8 +57,8 @@ their established layouts, and the ordinary wide layout remains available from
 This deterministic SDS100 USB view uses the same 100-column by 30-row geometry
 reported by the physical Raspberry Pi display. Removing the incapable Network
 Audio panel lets Live PSI / Controls span both columns while scanner hierarchy,
-channel, and state use paired rows above full-width logs. The scanner's own
-recording indicator remains explicit.
+channel, and state use paired framed rows above full-width logs. The scanner's
+own recording indicator remains explicit.
 
 Install the optional interface from PyPI:
 
@@ -265,10 +266,12 @@ order. Quit and restart the replay to reset its command cursor after any deviati
 
 The interface adapts automatically to terminal dimensions; no compact-mode flag is
 required. Terminals narrower than 80 columns remove decorative borders and spacing.
-At fewer than 32 rows, the dedicated identity panel is hidden, panel borders and
-vertical gaps are removed, and the full Textual footer is replaced by a one-line
-essential-controls footer. The model remains in the title, while the endpoint and
-firmware remain in the header subtitle.
+At fewer than 32 rows, the dedicated identity panel is hidden, vertical gaps are
+removed, and the full Textual footer is replaced by a one-line essential-controls
+footer. Short layouts normally remove panel borders as well; the 100-through-119
+column split layout instead retains tight theme-colored frames so each paired panel
+keeps its visible title and boundary. The model remains in the title, while the
+endpoint and firmware remain in the header subtitle.
 
 Short layouts with a network-audio session use four-line audio and PSI health
 summaries. They retain playback, audio recording, elapsed-session, packet-loss,

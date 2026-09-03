@@ -189,6 +189,17 @@ def test_tui_preserves_network_audio_at_physical_pi_size(tmp_path: Path) -> None
             assert logs.region.x == body.region.x
             assert logs.region.bottom <= body.region.bottom
 
+            for panel in (
+                connection,
+                system,
+                channel,
+                state,
+                audio,
+                status,
+                logs,
+            ):
+                assert panel.styles.border_top[0] == "round"
+
     asyncio.run(exercise())
 
 

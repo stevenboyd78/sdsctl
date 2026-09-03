@@ -14,8 +14,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   unavailable features; Ethernet and daemon-backed audio sessions retain them.
 - Use a compact two-column layout on short terminals from 100 through 119
   columns. The physical 100-by-30 Raspberry Pi geometry pairs scanner panels,
-  keeps logs and keyboard help full width, and lets USB Live PSI / Controls
-  reclaim both columns when Network Audio is absent.
+  preserves their titles in tight theme-colored frames, keeps logs and keyboard
+  help full width, and lets USB Live PSI / Controls reclaim both columns when
+  Network Audio is absent.
 - Distinguish the scanner's own `Rec` state as `Scanner recording` from the
   sdsctl-owned WAV workflow as `Audio recording` in every responsive layout.
 

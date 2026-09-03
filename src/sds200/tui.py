@@ -283,6 +283,11 @@ _SHARED_TUI_STYLESHEET = """
         min-height: 1;
         margin-bottom: 0;
         padding: 0 1;
+    }
+
+    Screen.-compact.-short .panel,
+    Screen.-standard.-short .panel,
+    Screen.-wide.-short .panel {
         border: none;
     }
 

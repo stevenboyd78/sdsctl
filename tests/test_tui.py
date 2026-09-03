@@ -288,6 +288,7 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             assert status.region.bottom <= body.region.bottom
             assert logs.region.y == status.region.bottom
             assert logs.region.bottom <= body.region.bottom
+            assert connection.styles.border_top[0] == ""
 
         physical_pi = _app()
         async with physical_pi.run_test(size=(100, 30)) as pilot:
@@ -318,6 +319,17 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             assert status.region.width == logs.region.width
             assert logs.region.y == status.region.bottom
             assert logs.region.bottom <= body.region.bottom
+
+            for panel, title in (
+                (connection, "Connection"),
+                (system, "System / Site"),
+                (channel, "Channel"),
+                (state, "Scanner State"),
+                (status, "Live PSI / Controls"),
+                (logs, "Operational Logs"),
+            ):
+                assert panel.styles.border_top[0] == "round"
+                assert panel.border_title == title
 
             await pilot.press("question_mark")
             await pilot.pause()
