@@ -44,6 +44,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   four single-line records across the full width, continues collecting while
   hidden, and is mutually exclusive with the `?` keyboard reference. Larger and
   narrower layouts retain their existing visible bounded log panel.
+- Physically validate the refined 100-by-30 dashboard, Operational Logs drawer,
+  and mutually exclusive `G`/`?` switching on the managed Raspberry Pi display.
+  The fixed dashboard and log drawer remain in the initial viewport; the complete
+  Keyboard Reference remains intentionally scrollable at this terminal height.
 - Show a named remote-daemon TUI's resolved private-LAN `host:port` as `Target`
   in the Connection panel while leaving direct USB and standalone-host sessions
   unchanged.

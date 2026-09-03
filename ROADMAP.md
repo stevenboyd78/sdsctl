@@ -71,6 +71,14 @@ storm, restored or rotated credential recovery after preflight, optional local
 audio, clean terminal shutdown, single scanner ownership, default-closed Home
 Assistant rollback, and exact cleanup.
 
+Physical layout-refinement acceptance completed on September 3, 2026, against
+exact deployed code commit `df7a6b6a5fce7f80b52b1c6492af4d519b9919c7`.
+The fixed dashboard arrangement, full-width four-record Operational Logs drawer,
+and mutually exclusive `G`/`?` switching all passed on the 100-by-30 Raspberry
+Pi console without scrolling the normal dashboard or log drawer. The complete
+Keyboard Reference remains intentionally scrollable because its help content is
+taller than the physical viewport.
+
 #### Closed Milestone 33.1 — Transport-aware compact TUI
 
 Milestone 33.1 closed through reviewed pull request 226 and merge commit

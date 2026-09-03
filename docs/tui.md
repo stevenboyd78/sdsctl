@@ -343,6 +343,12 @@ physical layout described above. The earlier side-by-side Network Audio and log
 placement is historical acceptance evidence rather than the current 100-by-30
 panel arrangement.
 
+The refined arrangement was physically accepted on September 3, 2026, from
+exact deployed code commit `df7a6b6a5fce7f80b52b1c6492af4d519b9919c7`.
+The normal dashboard, four-record Operational Logs drawer, and mutually exclusive
+drawer switching passed without scrolling the fixed dashboard or log view. The
+complete Keyboard Reference remains scrollable by design at 30 rows.
+
 For an already qualified observe-only remote profile, the
 [managed Raspberry Pi display guide](managed-pi-display.md) adds physical-console
 preflight, stable service-manager exit classes, and an opt-in systemd template.
