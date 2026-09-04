@@ -76,6 +76,17 @@ full-width row. You can leave it open while viewing Keyboard Reference: `?`
 toggles only the reference and `G` toggles only Logs. The complete reference may
 require scrolling; the compact display's mutually exclusive drawers are unchanged.
 
+The top header identifies the installed `sdsctl` application version. Scanner
+model and firmware stay in the Scanner panel; on the 100-by-30 layout it is a
+compact full-width panel below Audio or Logs. Connection keeps the endpoint
+and resolved remote target.
+
+Set the console font before starting the TUI. To change it later, stop the
+display service first, change the font, and then start the service again.
+Changing the font while the TUI is open can leave an incorrectly rendered saved
+screen after `Q`; a successful quit should leave the service stopped, not cause
+a restart loop. See the canonical guide for the exact start and stop commands.
+
 ## Credential recovery
 
 Credential registry changes close all existing remote sessions, even for other
