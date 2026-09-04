@@ -329,11 +329,14 @@ topology. Milestone 33.1 physically qualifies a transport-aware 100-by-30 TUI
 and proactive direct-USB PSI renewal. Milestone 33.2 packages an observe-only,
 boot-resilient `/dev/tty1` Raspberry Pi remote display with preflight, bounded
 service-manager recovery, private per-device credentials, and exact removal.
-Milestone 33.3 publishes that completed work as v0.29.0. A managed native HTTPS
-browser kiosk remains a separate future milestone because its certificate
-trust, dashboard password, graphical session, and browser session are not the
-daemon-client credential lifecycle. This work does not make GUI support or
-public access available.
+Milestone 33.3 publishes that completed work as v0.29.0. The v0.29.1 and v0.29.2
+patches qualify the wide HDMI layout and separate the application header from
+scanner identity. Milestone 34.1 defines the next
+[native HTTPS browser-kiosk design](browser-kiosk-design.md), including an
+explicit display-only versus operator decision and bounded login recovery.
+The kiosk remains unimplemented: its certificate trust, browser permissions,
+graphical session, and browser session are not the daemon-client credential
+lifecycle. This work does not make GUI support or public access available.
 
 Milestone 26.7 adds a separate responsive SDS200 Display Lovelace presentation
 without changing the original compact card. Five explicit scanner-style layout

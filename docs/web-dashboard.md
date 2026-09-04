@@ -225,7 +225,11 @@ documentation, SSE, live audio, recordings, and downloads, is authenticated
 before a private daemon client is created. WebSocket requests fail closed.
 Sessions use an opaque 256-bit
 server-side token in the `__Host-sdsctl-session` cookie with `Secure`,
-`HttpOnly`, `SameSite=Strict`, and `Path=/`; only a token digest is retained.
+`HttpOnly`, `SameSite=Strict`, `Path=/`, and `Max-Age=28800`; only a token digest
+is retained on the server. Server session records are process-local and are
+lost when the web service restarts. The browser may save the cookie in its
+profile; do not assume memory-only browser storage or copy cookies to another
+device.
 Sessions have a 30-minute idle lifetime, an eight-hour absolute lifetime, a
 64-session process limit, and a 16-request per-session concurrency limit.
 Re-login rotates the current cookie, while logout, replacement, eviction, or

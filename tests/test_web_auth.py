@@ -357,6 +357,7 @@ def test_login_issues_secure_cookie_and_authorizes_dashboard() -> None:
     assert "HttpOnly" in cookie
     assert "Path=/" in cookie
     assert "SameSite=strict" in cookie
+    assert "Max-Age=28800" in cookie
     assert "Secure" in cookie
     assert "Domain=" not in cookie
     assert PASSWORD not in cookie

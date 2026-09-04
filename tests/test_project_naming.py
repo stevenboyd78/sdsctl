@@ -140,9 +140,16 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### v0.29.1 — Wide TUI production-display follow-up"
+    expected_heading = "### Milestone 34.1 — Native HTTPS browser-kiosk design"
     assert expected_heading in active_milestone
     for required in (
+        "#### Closed v0.29.2 — TUI application header and production acceptance",
+        "16d46890e64fafbbbd6de6dc9e85e36ed363280f",
+        "#### Closed v0.29.1 — Wide TUI production-display follow-up",
+        "12ba1b6aa6db68db4cd6a18f86f1e80ca7cce1b8",
+        "design and documentation only",
+        "server-side permissions",
+        "not a repeat of audio, scanner-control, revocation or cold-boot acceptance",
         "#### Closed Milestone 33.3 — v0.29.0 release and publication closure",
         "Publish the completed Milestones 33.1 and 33.2",
         "sdsctl v0.29.0",

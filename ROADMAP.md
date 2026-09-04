@@ -11,7 +11,55 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### v0.29.1 — Wide TUI production-display follow-up
+### Milestone 34.1 — Native HTTPS browser-kiosk design
+
+Define the next Raspberry Pi browser display separately from the accepted
+managed TUI. This milestone is design and documentation only; it does not ship
+a kiosk command, install a graphical session, replace a production display,
+change credentials, or enable a Home Assistant listener. See the
+[browser-kiosk design](docs/browser-kiosk-design.md) for the implementation
+boundary, outstanding decisions, and acceptance gates.
+
+Resolve display-only versus operator access before implementation. A full-screen
+browser is not an authorization boundary: the current native dashboard password
+does not grant the managed TUI's observe-only role. A display-only browser needs
+server-side permissions, including explicit denial of scanner controls and
+daemon recording mutations. Preserve exact-origin HTTPS, certificate validation,
+bounded authentication, one scanner owner, and the separate Ingress boundary.
+
+Define visible login-required behavior for session expiry and server restart,
+bounded recovery from temporary outages, private browser-profile handling,
+optional explicit audio, and deliberate shutdown. Automatic credential-based
+re-login and per-device browser enrollment require a separately reviewed design;
+do not extend session lifetimes or embed the operator password to make a kiosk
+appear unattended. Select a validation host and supported graphical stack before
+writing an installation runbook. Keep both accepted production TUI displays
+running until an exact transition is agreed.
+
+#### Closed v0.29.2 — TUI application header and production acceptance
+
+The header change merged through PR 230 and the release preparation through
+PR 231, at `16d46890e64fafbbbd6de6dc9e85e36ed363280f`. Published v0.29.2 on
+September 4, 2026 after Python 3.11 through 3.14, documentation, browser,
+distribution, and multi-architecture publication checks passed. The reviewed
+wiki source was synchronized before tagging, and clean public base and `all`
+installations and installed-package TUI renders passed.
+
+The production HDMI client upgraded from the verified public package with its
+font, 160-column by 45-row geometry, credentials, dependencies, recordings and
+service settings preserved. The operator accepted the application-only header
+and separate Scanner model/firmware panel. This was a presentation-only check,
+not a repeat of audio, scanner-control, revocation or cold-boot acceptance.
+Home Assistant and the smaller Pi were not upgraded or restarted.
+
+#### Closed v0.29.1 — Wide TUI production-display follow-up
+
+The wide-layout follow-up merged through PR 229 at
+`12ba1b6aa6db68db4cd6a18f86f1e80ca7cce1b8` and was published on September 4,
+2026. The production HDMI client used the public package; the operator accepted
+the readable wide layout and later confirmed a clean intentional quit after
+the console font had been configured before TUI startup. Boot enablement is
+not evidence of a physical cold-boot test. The original patch scope follows.
 
 Refine the wide TUI after the published v0.29.0 client was installed on a
 Raspberry Pi with a 1080p HDMI monitor. Keep Live PSI directly beneath Scanner

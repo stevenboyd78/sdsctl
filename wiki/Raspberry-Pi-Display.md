@@ -121,5 +121,13 @@ accepted private-LAN listener enabled. Do not perform the temporary-test cleanup
 above. Enable boot startup only after the interactive display test passes.
 
 Browser kiosks are different. They use the native HTTPS dashboard, dedicated
-dashboard password, browser-trusted certificate, and memory-only session
-cookie. The console service described here must not store those values.
+dashboard password, browser-trusted certificate, and browser cookie. Server
+session records are process-local, but the cookie has a `Max-Age`; do not assume
+memory-only browser storage. Treat its profile as sensitive and never copy its
+cookies to another device. The console service described here must not store
+those values.
+
+A managed browser kiosk is not released. The
+[Milestone 34.1 design](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk-design.md)
+separately addresses permissions, login recovery, graphical startup and testing.
+Full-screen browsing does not provide the TUI's observe-only authorization.

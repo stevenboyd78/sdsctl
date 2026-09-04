@@ -214,10 +214,17 @@ The native dashboard is intentionally an ordinary `sdsctl` dashboard. It must
 not expose Home Assistant-specific management even though the same App also
 serves an Ingress dashboard.
 
-For an unattended Pi display, configure the operating system's normal kiosk or
-service manager only after interactive access works. Keep the password outside
-command lines, desktop launchers, repository files, screenshots, and logs. The
-browser session cookie is memory-only and must not be copied between devices.
+For a Pi browser display, verify interactive access before planning startup
+automation. Keep the password outside command lines, desktop launchers,
+repository files, screenshots, and logs. The server keeps session records only
+in the running web process, but the browser cookie carries a `Max-Age` and may
+be saved in its profile. Treat that profile as sensitive and never copy its
+cookies between devices. Restarting the web service or reaching the session's
+absolute expiry requires a new login, even if the browser retains a cookie.
+
+Managed kiosk startup and unattended re-login are not packaged features. Review
+the [browser-kiosk design](browser-kiosk-design.md) before treating ordinary
+full-screen browsing as an unattended or display-only installation.
 
 ## Rotate, revoke, restore, or disable
 
