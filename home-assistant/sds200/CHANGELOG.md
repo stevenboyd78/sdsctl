@@ -4,6 +4,11 @@
 
 ## 0.29.0
 
+- Show connected remote-daemon clients in Ingress Diagnostics, with client IDs,
+  access scopes, service counts, and connection ages; exclude secrets and keep
+  the inventory inaccessible to remote clients and native-dashboard visitors.
+- Detect silent remote TCP failures using per-connection keepalive and supported
+  user timeouts without requiring activity from a healthy quiet scanner.
 - Track the sdsctl v0.29.0 release while preserving the App name, slug, image
   identity, MQTT identities, scanner ownership, persistent recordings, custom-
   integration 0.1.5 artifact, and installed first-party custom elements.

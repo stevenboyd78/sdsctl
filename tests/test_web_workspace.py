@@ -214,6 +214,77 @@ def test_dashboard_javascript_is_syntactically_valid() -> None:
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_connected_clients_render_refresh_privacy_and_failure_states() -> None:
+    script = _asset("dashboard.js")
+    implementation = "let connectedClientsRefreshInProgress = false;" + script.split(
+        "let connectedClientsRefreshInProgress = false;", 1,
+    )[1].split('document.addEventListener("visibilitychange"', 1)[0]
+    harness = r"""
+const assert = require("node:assert/strict");
+class Node {
+  constructor() { this.children = []; this.textContent = ""; }
+  append(...children) { this.children.push(...children); }
+  replaceChildren(...children) { this.children = children; }
+}
+const nodes = new Map([
+  ["connected-clients-status", new Node()], ["connected-clients-list", new Node()],
+]);
+const document = {
+  hidden: false,
+  getElementById: id => nodes.get(id),
+  createElement: () => new Node(),
+};
+const element = id => nodes.get(id);
+const webUrl = path => `https://example.test/ingress/${path}`;
+let calls = 0;
+let payload = {active: true, clients: [{
+  client_id: "<img src=x onerror=alert(1)>", scopes: ["observe"],
+  services: {api: 1, events: 1}, connections: 2, connected_seconds: 12,
+}]};
+let success = true;
+async function fetch(url, options) {
+  calls++;
+  assert.equal(url, "https://example.test/ingress/api/v1/home-assistant/connected-clients");
+  assert.equal(options.cache, "no-store");
+  assert.ok(options.signal);
+  return {ok: success, json: async () => payload};
+}
+"""
+    assertions = r"""
+(async () => {
+  await refreshConnectedClients();
+  assert.equal(calls, 1);
+  let row = element("connected-clients-list").children[0];
+  assert.equal(row.children[0].textContent, "<img src=x onerror=alert(1)>");
+  assert.equal(row.children[0].children.length, 0); // Never HTML insertion.
+  assert.match(row.children[1].textContent, /observe.*2 connection/);
+  assert.equal(row.children[2].textContent, "api: 1 · events: 1");
+  assert.match(row.children[3].textContent, /12s/);
+  document.hidden = true;
+  await refreshConnectedClients();
+  assert.equal(calls, 1);
+  document.hidden = false;
+  success = false;
+  await refreshConnectedClients();
+  assert.equal(element("connected-clients-list").children.length, 0);
+  assert.match(element("connected-clients-status").textContent, /unavailable/);
+  assert.equal(connectedClientsRefreshInProgress, false);
+  success = true;
+  payload = {active: true, clients: []};
+  await refreshConnectedClients();
+  assert.equal(element("connected-clients-status").textContent, "No remote clients connected.");
+  payload.active = false;
+  await refreshConnectedClients();
+  assert.match(element("connected-clients-status").textContent, /inactive/);
+  nodes.delete("connected-clients-status");
+  const before = calls;
+  await refreshConnectedClients();
+  assert.equal(calls, before); // No HA endpoint queries outside Ingress.
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+    _run_node(f"{harness}\n{implementation}\n{assertions}")
+
+
 def test_workspace_radio_and_recording_browser_behaviors() -> None:
     script = _asset("dashboard.js")
     boundary = 'document.addEventListener("visibilitychange"'

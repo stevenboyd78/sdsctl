@@ -42,6 +42,7 @@ from .daemon_remote_credentials import (
     DaemonRemoteCredentialSession,
     DaemonRemoteCredentialSessionExpired,
 )
+from .daemon_remote_liveness import configure_remote_tcp_liveness
 from .exceptions import ConfigurationError
 
 DAEMON_REMOTE_TLS_VERSION = "TLSv1.3"
@@ -298,6 +299,7 @@ class DaemonRemoteServerTlsAdmission:
         else:
             registry = self._registry
         try:
+            configure_remote_tcp_liveness(stream)
             secured = self.context.wrap_socket(
                 stream,
                 server_side=True,

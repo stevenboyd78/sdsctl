@@ -177,6 +177,11 @@ class DaemonApiClient:
             raise
         return result
 
+    def remote_clients(self) -> dict[str, object]:
+        """Return operator-only live connections through the local daemon API."""
+
+        return self.request(DaemonApiOperation.REMOTE_CLIENTS)
+
     def recording_status(self) -> dict[str, object]:
         """Return the daemon-owned recording workflow snapshot."""
 

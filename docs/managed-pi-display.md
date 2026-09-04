@@ -227,11 +227,17 @@ failure. The TUI first uses its bounded in-process reconnect sequence; if the
 process exits with status `75`, systemd waits 15 seconds and starts a fresh
 session. A fresh session begins from a new authoritative snapshot.
 
+Changing any client in the Home Assistant App reloads its credential registry
+and closes all existing remote-client sessions. An unchanged, still-authorized
+display can reconnect using its existing files through the normal temporary-loss
+recovery path. Its connection is not preserved uninterrupted through the reload.
+
 Revocation, a replaced certificate, or an invalid credential is permanent from
 the Pi's perspective. The display stops instead of repeatedly authenticating.
-After deliberately restoring or rotating the identity and replacing the exact
-client files, rerun the bounded preflight from section 3 with `getty@tty1`
-stopped, then restart the unit:
+Restoring an unrotated client makes its retained credential valid again; rotation
+requires replacing the affected client files. After deliberately restoring access
+or installing the replacement files, rerun the bounded preflight from section 3
+with `getty@tty1` stopped, then restart the unit:
 
 ```bash
 sudo systemctl restart sdsctl-display@CLIENT_ID.service

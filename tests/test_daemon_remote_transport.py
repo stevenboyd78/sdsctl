@@ -152,17 +152,26 @@ def _receive_line(stream: socket.socket) -> bytes:
     return bytes(frame)
 
 
+@pytest.mark.parametrize("tcp", (False, True))
 @pytest.mark.parametrize("service", tuple(DaemonRemoteService))
 def test_remote_client_validates_tls_authentication_and_selects_exact_service(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     service: DaemonRemoteService,
+    tcp: bool,
 ) -> None:
     server_configuration, client_configuration = _tls_configurations(tmp_path)
     admission = DaemonRemoteServerTlsAdmission.from_configuration(
         server_configuration
     )
-    client_raw, server_raw = socket.socketpair()
+    if tcp:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.bind(("127.0.0.1", 0))
+            listener.listen(1)
+            client_raw = socket.create_connection(listener.getsockname(), timeout=2.0)
+            server_raw, _ = listener.accept()
+    else:
+        client_raw, server_raw = socket.socketpair()
     outcome: Queue[object] = Queue()
 
     def serve() -> None:
@@ -196,6 +205,8 @@ def test_remote_client_validates_tls_authentication_and_selects_exact_service(
         assert "192.168.20.10" not in repr(transport)
         assert CLIENT_ID not in repr(transport)
         assert "private-client.secret" not in repr(client_configuration)
+        if tcp:
+            assert connected.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) == 1
     finally:
         connected.close()
 
@@ -205,6 +216,8 @@ def test_remote_client_validates_tls_authentication_and_selects_exact_service(
     assert isinstance(accepted, tuple)
     secured, peer, request = accepted
     assert request.service is service
+    if tcp:
+        assert secured.getsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE) == 1
     peer.close()
     secured.close()
 
@@ -607,6 +620,55 @@ def test_router_serves_sanitized_events_through_shared_event_client() -> None:
         client.close()
         _wait_for(lambda: router.snapshot().connected_clients == 0)
         router.stop()
+
+
+def test_connected_inventory_groups_services_and_removes_closed_clients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    listener = ScriptedListener()
+    router = DaemonRemoteServiceRouter(
+        listener, _empty_broker(event_stream=_event_source()), accept_poll_interval=0.01,
+    )
+    server = DaemonApiServer(router, AuthorizedPingApi(), accept_poll_interval=0.01)
+    server.start()
+    clients: list[socket.socket] = []
+    try:
+        for identifier, service in (
+            ("display-a", DaemonRemoteService.API),
+            ("display-a", DaemonRemoteService.EVENTS),
+            ("display-b", DaemonRemoteService.EVENTS),
+        ):
+            clients.append(_open_selected_client(listener, service, client_id=identifier))
+        inventory = router.connected_clients_snapshot()
+        assert inventory["active"] is True
+        rows = inventory["clients"]
+        assert isinstance(rows, list)
+        assert [row["client_id"] for row in rows] == ["display-a", "display-b"]
+        assert rows[0]["services"] == {"api": 1, "events": 1}
+        assert rows[0]["connections"] == 2
+        assert rows[0]["scopes"] == ["observe"]
+        assert rows[0]["connected_seconds"] >= 0
+        assert set(rows[0]) == {
+            "client_id", "services", "scopes", "connections", "connected_seconds",
+        }
+        assert "display-a" not in json.dumps(router.snapshot().as_dict())
+        with monkeypatch.context() as patch:
+            patch.setattr(
+                DaemonRemoteApiPeer, "daemon_api_connection_current",
+                lambda peer: peer.client_id != "display-a",
+            )
+            current = router.connected_clients_snapshot()["clients"]
+            assert isinstance(current, list)
+            assert [row["client_id"] for row in current] == ["display-b"]
+        for client in clients:
+            client.close()
+        _wait_for(lambda: router.snapshot().connected_clients == 0)
+        assert router.connected_clients_snapshot() == {"active": True, "clients": []}
+    finally:
+        for client in clients:
+            client.close()
+        server.stop()
+    assert router.connected_clients_snapshot() == {"active": False, "clients": []}
 
 
 class AuthorizedPingApi:

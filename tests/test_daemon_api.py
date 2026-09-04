@@ -50,6 +50,34 @@ class FakeRuntime:
         return FakeSnapshot(self.payload)
 
 
+def test_connected_clients_is_local_only_and_separate_from_runtime() -> None:
+    from sds200.daemon_remote_server import (
+        DAEMON_REMOTE_CONTROL_OPERATIONS,
+        DAEMON_REMOTE_OBSERVE_OPERATIONS,
+    )
+
+    runtime = FakeRuntime({"state": "running"})
+    api = DaemonReadOnlyApi(runtime)
+    request = request_payload("remote.clients")
+    assert api.handle_payload(request).result == {"active": False, "clients": []}
+    inventory = {"active": True, "clients": [{"client_id": "private-display"}]}
+    api.remote_clients_provider = lambda: inventory
+    assert api.handle_payload(request).result == inventory
+    assert runtime.snapshot_calls == 0
+    for allowed in (
+        DAEMON_REMOTE_OBSERVE_OPERATIONS,
+        DAEMON_REMOTE_OBSERVE_OPERATIONS + DAEMON_REMOTE_CONTROL_OPERATIONS,
+    ):
+        response = json.loads(api.handle_authorized_json_line(
+            json.dumps(request), allowed_operations=allowed,
+        ))
+        assert response["error"]["code"] == "authorization_denied"
+        assert "private-display" not in json.dumps(response)
+    assert api.handle_payload(request_payload("runtime.snapshot")).result == {
+        "state": "running",
+    }
+
+
 @pytest.fixture
 def snapshot_payload() -> dict[str, object]:
     return {

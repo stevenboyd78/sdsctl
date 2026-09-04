@@ -701,6 +701,17 @@ async function waitForDashboard(cdp, timeoutMs) {
   throw new Error(`dashboard did not settle: ${JSON.stringify(state)}`);
 }
 
+async function waitForConnectedClients(cdp, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await evaluate(cdp, 'document.querySelectorAll(".connected-client").length === 2')) {
+      return;
+    }
+    await delay(50);
+  }
+  throw new Error("Connected-client fixture did not render before the deadline");
+}
+
 async function navigate(
   cdp,
   url,
@@ -1530,12 +1541,27 @@ function browserAuditLibrary() {
     const scannerStyle = getComputedStyle(scanner);
     const layoutRect = layout.getBoundingClientRect();
     const scannerRect = scanner.getBoundingClientRect();
+    const clients = layout.querySelector("#connected-clients-panel");
+    const connectionList = scanner.querySelector(":scope > .status-list");
+    const connectionRow = connectionList?.firstElementChild;
+    const serviceRow = scanner.querySelector(".daemon-runtime-section .status-list > div");
+    if (!(connectionList instanceof HTMLElement) ||
+        getComputedStyle(connectionList).alignSelf !== "start" ||
+        getComputedStyle(connectionList).alignContent !== "start") {
+      failures.push("Connection status rows are not compact and top-aligned");
+    }
+    if (connectionRow && serviceRow &&
+        connectionRow.getBoundingClientRect().height >
+          serviceRow.getBoundingClientRect().height + tolerance * 2) {
+      failures.push("Connection status row is taller than the matching Services row");
+    }
     if (layoutStyle.display !== "grid") {
       failures.push(`Diagnostics layout display is ${layoutStyle.display}, expected grid`);
     }
-    if (tracks.length !== 1) {
+    const expectedColumns = window.innerWidth > 1100 ? 2 : 1;
+    if (tracks.length !== expectedColumns) {
       failures.push(
-        `Diagnostics layout exposes ${tracks.length} columns instead of one: ` +
+        `Diagnostics layout exposes ${tracks.length} columns instead of ${expectedColumns}: ` +
           layoutStyle.gridTemplateColumns,
       );
     }
@@ -1545,8 +1571,16 @@ function browserAuditLibrary() {
     if (scannerStyle.gridArea !== "auto") {
       failures.push(`scanner panel retains named grid placement ${scannerStyle.gridArea}`);
     }
-    if (scannerRect.width < layoutRect.width - tolerance * 2) {
+    if (expectedColumns === 1 && scannerRect.width < layoutRect.width - tolerance * 2) {
       failures.push("Scanner panel does not fill the Diagnostics workspace");
+    }
+    if (!(clients instanceof HTMLElement)) {
+      failures.push("Connected remote clients panel is unavailable");
+    } else if (clients.scrollWidth > clients.clientWidth + tolerance) {
+      failures.push("Connected client content overflows horizontally");
+    }
+    if (document.querySelectorAll(".connected-client").length !== 2) {
+      failures.push("The two fictional remote clients did not render");
     }
     return {failures, tracks};
   }
@@ -2492,6 +2526,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
       ),
     );
     for (const viewport of [
+      {width: 1366, height: 768, dpr: 1},
       {width: 800, height: 480, dpr: 1},
       {width: 390, height: 844, dpr: 2},
     ]) {
@@ -2507,6 +2542,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
       );
       ingressDiagnosticsCases += 1;
       await activatePane(cdp, "diagnostics");
+      await waitForConnectedClients(cdp, timeoutMs);
       collector.add(
         `${theme}/${viewport.width}x${viewport.height}@${viewport.dpr}/ingress-diagnostics`,
         await evaluate(
@@ -3297,12 +3333,12 @@ async function run(options) {
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);
     }
-    if (result.ingressDiagnosticsCases !== THEMES.length * 2) {
+    if (result.ingressDiagnosticsCases !== THEMES.length * 3) {
       throw new Error(
         `internal Ingress Diagnostics count mismatch: ${result.ingressDiagnosticsCases}`,
       );
     }
-    if (result.ingressHomeAssistantCases !== THEMES.length * 2) {
+    if (result.ingressHomeAssistantCases !== THEMES.length * 3) {
       throw new Error(
         `internal Ingress Home Assistant count mismatch: ${result.ingressHomeAssistantCases}`,
       );
@@ -3341,9 +3377,9 @@ async function run(options) {
       `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
-        "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 12 " +
+        "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 18 " +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
-        "responsive System-palette cases, all 12 read-only Ingress " +
+        "responsive System-palette cases, all 18 read-only Ingress " +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
         `${waterfallCard.viewportCases} responsive Home Assistant waterfall-card ` +
         "viewports with elapsed history, display-only pointer input, shared " +

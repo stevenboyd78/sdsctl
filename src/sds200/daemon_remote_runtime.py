@@ -282,6 +282,7 @@ def build_packaged_daemon_remote_service(
     assert observations is not None
     assert router is not None
     assert api_server is not None
+    api.remote_clients_provider = router.connected_clients_snapshot
     return PackagedDaemonRemoteService(
         configuration_path=configuration_path,
         preflight=preflight,

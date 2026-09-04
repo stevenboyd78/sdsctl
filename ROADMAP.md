@@ -46,6 +46,25 @@ temporary network and Home Assistant App restart recovery, credential
 revocation, restored or rotated credential recovery, optional local audio,
 intentional quit, normal-console restoration, and single scanner ownership.
 
+Candidate acceptance on September 4, 2026 passed ordinary Ingress audio,
+recordings, controls, Waterfall and App restart recovery; SDS100 USB TUI and PSI
+renewal; and the managed Pi's physical cold start, daemon restart recovery, and
+credential revocation/restoration. A silent network-loss test exposed stalled
+TCP streams and prompted a per-connection keepalive/user-timeout fix. The same
+guarded 60-second outage then recovered automatically about 10.5 seconds after
+connectivity returned, using the existing managed-service restart path.
+
+The acceptance follow-up also adds Ingress-only connected-client Diagnostics
+with compact scanner status rows. Client identities stay out of shared runtime
+snapshots and remote APIs. Credential testing confirmed the existing registry
+reload contract: all older sessions close, unchanged identities may reconnect,
+and revoked managed displays stop until access is restored and the service is
+explicitly restarted. This does not claim uninterrupted per-client sessions.
+Reviewed PR integration, remaining scoped cleanup and published-artifact
+acceptance are still release gates; the test display remains running until the
+operator agrees to its transition. Raw traces and private host details remain
+outside the repository.
+
 Only one genuine annotated `v0.29.0` tag matching the reviewed merge commit may
 trigger publication. Verify the public PyPI wheel and source distribution,
 clean base and `all` installations, amd64 and arm64 generic Docker images,
@@ -60,7 +79,11 @@ and remove only the exact reviewed Local App, integration, client identity,
 profiles, virtual environments, recordings, temporary wiki checkout, release
 artifacts, and staging paths. Preserve unrelated operator data, production
 recordings, SSH credentials, and Home Assistant configuration. Plan the native
-HTTPS Raspberry Pi browser kiosk only after v0.29.0 is closed.
+HTTPS Raspberry Pi browser kiosk only after v0.29.0 is closed. The next requested
+production installation is a separate remote TUI on a Raspberry Pi with a 1080p
+HDMI display, using published artifacts and the wiki runbook after publication.
+Measure its actual terminal geometry rather than assuming the small display's
+100-by-30 layout, and record any beginner-facing documentation gaps.
 
 #### Closed Milestone 33.2 — Managed Raspberry Pi remote TUI display
 

@@ -588,6 +588,18 @@ class DemoDaemonApiClient:
     def runtime_snapshot(self) -> dict[str, object]:
         return dict(DEMO_SNAPSHOT)
 
+    def remote_clients(self) -> dict[str, object]:
+        return {
+            "active": True,
+            "clients": [
+                {"client_id": "demo-pi-display", "scopes": ["observe"],
+                 "services": {"api": 1, "events": 1}, "connections": 2,
+                 "connected_seconds": 120},
+                {"client_id": "demo-operator", "scopes": ["observe", "control"],
+                 "services": {"api": 1}, "connections": 1, "connected_seconds": 30},
+            ],
+        }
+
     def recording_status(self) -> dict[str, object]:
         return dict(DEMO_RECORDING)
 

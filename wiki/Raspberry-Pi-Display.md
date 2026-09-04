@@ -57,8 +57,27 @@ The source repository also carries a byte-identical copy at
 
 At the physically qualified 100-column by 30-row geometry, successful
 preflight reports the `compact-split` layout introduced for the Raspberry Pi
-display. The TUI should keep its framed panels, newest two operational log
-rows, compact footer, and initial viewport without scrolling.
+display. The TUI should keep its framed panels, compact footer, and normal
+dashboard viewport without scrolling. Press `G` to open the bounded Operational
+Logs drawer with the newest four single-line records; `?` opens Keyboard
+Reference instead. The two drawers are mutually exclusive.
+
+A larger HDMI monitor does not need the small display's terminal settings.
+The TUI chooses its layout from terminal **rows and columns**, not pixel
+resolution. Run `stty size` in the terminal on the physical display (an SSH
+terminal may have a different size), then check the preflight's reported geometry.
+On a 1080p display, the console font or graphical terminal's font and window size
+determine the available text area. Keep a readable font and let the TUI select
+its responsive layout; do not force the earlier 100-by-30 configuration.
+
+## Credential recovery
+
+Credential registry changes close all existing remote sessions, even for other
+authorized clients. An unchanged display can reconnect using its existing
+credential. A revoked display instead stops on authentication failure. After
+restoring its access, rerun preflight and explicitly restart its service as
+described in the canonical guide. Restore reuses an unrotated credential;
+rotation requires installing the new client files first.
 
 ## Home Assistant installations
 
@@ -69,11 +88,15 @@ enabled mapping on all host interfaces, so restrict reachability with the
 surrounding private network or firewall and never create an Internet-facing
 router port-forward.
 
-After acceptance, stop the Pi service, revoke the temporary identity, disable
-the advanced App option and mapping, restart the App, and verify the ordinary
-Ingress dashboard and scanner services recover. Keep an intentionally
-production-managed display identity only when its private-LAN listener is an
-accepted permanent deployment.
+For a **temporary acceptance installation**, stop the Pi service after testing,
+revoke the temporary identity, and return the App to its previous configuration.
+If no production clients depend on advanced access, disable its option and
+mapping, restart the App, and verify the ordinary Ingress dashboard and scanner
+services recover. Do not disable a listener used by other production clients.
+
+For a **production installation**, keep its independent production identity and
+accepted private-LAN listener enabled. Do not perform the temporary-test cleanup
+above. Enable boot startup only after the interactive display test passes.
 
 Browser kiosks are different. They use the native HTTPS dashboard, dedicated
 dashboard password, browser-trusted certificate, and memory-only session

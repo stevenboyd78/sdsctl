@@ -186,6 +186,9 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
     element(`pane-tab-${pane}`).focus();
   }
   reconcileWaterfallDemand();
+  if (pane === "diagnostics") {
+    void refreshConnectedClients();
+  }
 }
 
 function initializeWorkspace() {
@@ -3854,6 +3857,56 @@ function initializeHomeAssistantAdvancedAccess() {
   void refreshHomeAssistantAdvancedStatus();
 }
 
+let connectedClientsRefreshInProgress = false;
+
+async function refreshConnectedClients() {
+  const status = document.getElementById("connected-clients-status");
+  if (!status || connectedClientsRefreshInProgress || document.hidden) {
+    return;
+  }
+  connectedClientsRefreshInProgress = true;
+  const list = element("connected-clients-list");
+  try {
+    const response = await fetch(webUrl("api/v1/home-assistant/connected-clients"), {
+      cache: "no-store",
+      headers: {Accept: "application/json"},
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) {
+      throw new Error("Connected-client status is unavailable.");
+    }
+    const payload = await response.json();
+    if (typeof payload.active !== "boolean" || !Array.isArray(payload.clients)) {
+      throw new Error("Invalid connected-client status.");
+    }
+    const rows = [];
+    for (const client of payload.clients) {
+      const row = document.createElement("section");
+      row.className = "connected-client";
+      const name = document.createElement("strong");
+      name.textContent = client.client_id;
+      const access = document.createElement("p");
+      access.textContent = `Access: ${client.scopes.join(", ")} · ${client.connections} connection(s)`;
+      const services = document.createElement("p");
+      services.textContent = Object.entries(client.services)
+        .map(([service, count]) => `${service}: ${count}`).join(" · ");
+      const age = document.createElement("p");
+      age.textContent = `Oldest current connection: ${client.connected_seconds}s`;
+      row.append(name, access, services, age);
+      rows.push(row);
+    }
+    list.replaceChildren(...rows);
+    status.textContent = !payload.active ? "Remote-daemon service is inactive."
+      : payload.clients.length === 0 ? "No remote clients connected."
+        : `${payload.clients.length} connected client(s) · refreshes every 5 seconds`;
+  } catch {
+    list.replaceChildren();
+    status.textContent = "Connected-client status is unavailable. Retrying automatically.";
+  } finally {
+    connectedClientsRefreshInProgress = false;
+  }
+}
+
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     clearHomeAssistantBridgeKey();
@@ -3951,6 +4004,13 @@ savedRecordingPlayer.addEventListener("error", () => {
   element("saved-playback-status").textContent =
     "Saved recording playback failed.";
 });
+
+
+window.setInterval(() => {
+  if (activeWorkspacePane === "diagnostics") {
+    void refreshConnectedClients();
+  }
+}, 5000);
 
 initializeWaterfallWorkspace();
 initializeWorkspace();

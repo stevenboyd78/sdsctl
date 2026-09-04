@@ -10,6 +10,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an Ingress-only connected remote-client inventory in App Diagnostics,
+  grouped by client ID with access scopes, service counts, and connection age.
+  Keep identities out of shared runtime snapshots and remote-client APIs.
 - Add an observe-only `display-client-preflight` command for managed Raspberry
   Pi TUI deployments. It verifies an exact physical console, reports the
   responsive layout selected by its measured geometry, authenticates to the
@@ -31,6 +34,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Keep the Diagnostics Connection rows compact and top-aligned like Services,
+  alongside the connected-client inventory on wider displays and stacked on
+  smaller screens.
+- Enable per-connection TCP keepalive and supported user timeouts on both ends
+  of remote TLS services so silently broken links enter existing recovery paths
+  without treating a healthy quiet scanner as disconnected.
 - Make the Textual TUI transport-aware on compact Raspberry Pi displays. Direct
   USB sessions now omit network-audio playback, WAV-recording, saved-playback,
   and audio-control rows and shortcuts instead of spending screen space on

@@ -77,6 +77,40 @@ Restart the App to activate the first listener. Verify that the selected host
 port is reachable from an intended private-LAN device and blocked from any
 unintended network.
 
+## See which remote clients are connected
+
+Open the App's **Web UI > Diagnostics > Connected remote clients**. Each row
+shows a client ID, its Observe/Control access, the services it is using, the
+number of open connections, and the age of its oldest current connection.
+For example, one Pi can use separate event and audio connections but appears as
+one client. Give each display its own credential to identify it separately.
+
+The list refreshes every five seconds while Diagnostics is visible. It lists
+live authenticated remote-daemon sessions, not every enrolled credential. Browser
+and Home Assistant Ingress sessions are not included. A lost network connection
+may remain listed until transport failure is detected; an unavailable inventory
+is shown as unavailable, not as an empty list.
+
+This inventory is available only through authenticated Home Assistant Ingress
+and the local daemon operator API. It is not available on the native dashboard
+or to remote Observe/Control clients. It contains no secrets, certificates,
+private paths, or peer addresses.
+
+## Silent network interruptions
+
+Remote TCP connections use keepalive on both ends. Where supported, probes start
+after 10 idle seconds, repeat every 5 seconds, and allow 3 unanswered probes.
+Linux also applies a 20-second TCP user timeout to unacknowledged data. These
+per-connection settings let the existing reconnect policy respond to a silently
+broken link; they do not require scanner activity or change global networking.
+Other operating systems retain defaults for tuning options they do not support.
+
+A healthy, quiet connection can remain open indefinitely. This is transport
+liveness, not a promise of fresh scanner data or an exact end-to-end recovery
+deadline. Detection, reconnect attempts, and the managed service's restart delay
+all contribute to recovery time. See the [Linux TCP documentation](https://man7.org/linux/man-pages/man7/tcp.7.html)
+for keepalive and user-timeout semantics.
+
 ## Raspberry Pi TUI display
 
 On Raspberry Pi OS:
@@ -139,11 +173,18 @@ only inside Home Assistant-authenticated Ingress.
 ## Routine lifecycle
 
 - Issuing, rotating, revoking, or restoring a client reloads a running remote
-  credential registry without releasing scanner ownership.
+  credential registry without releasing scanner ownership. Each reload closes
+  **all existing remote-client sessions**, including other clients' sessions.
 - The first client, server identity changes, dashboard password changes, App
   option changes, and Network mapping changes require an App restart.
 - Rotating one client requires replacing only that device's secret.
-- Revoking one client must not interrupt independently identified clients.
+- Revoking one client denies that identity. Other identities remain authorized
+  and can reconnect with their existing credentials, but their open connections
+  are interrupted by the reload. Plan for a brief remote-display interruption.
+- A revoked managed display stops after authentication fails. After restoring
+  its access, run its preflight and explicitly restart its service; it does not
+  retry permanent authentication failures indefinitely. Restoring an unrotated
+  client does not require replacing its existing secret.
 - To disable a service, turn off its option and disable its matching Network
   mapping, then save, restart, and verify the host port is closed.
 
