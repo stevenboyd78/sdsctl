@@ -140,9 +140,10 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### Milestone 33.3 — v0.29.0 release and publication closure"
+    expected_heading = "### v0.29.1 — Wide TUI production-display follow-up"
     assert expected_heading in active_milestone
     for required in (
+        "#### Closed Milestone 33.3 — v0.29.0 release and publication closure",
         "Publish the completed Milestones 33.1 and 33.2",
         "sdsctl v0.29.0",
         "Home Assistant upgrade from 0.28.1 to 0.29.0",
@@ -464,29 +465,31 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v029_release_documentation_names_current_generic_image() -> None:
+def test_v0291_release_documentation_names_current_generic_image() -> None:
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
     normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.29.0`" in readme
+    assert "Version `0.29.1`" in readme
     assert "transport-aware" in readme
-    assert "Raspberry Pi TUI" in readme
+    assert "Raspberry Pi TUI" in " ".join(readme.split())
     assert "observe-only preflight" in readme
-    assert "theboyd78/sdsctl:0.29.0" in readme
+    assert "theboyd78/sdsctl:0.29.1" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment, containers):
-        assert "theboyd78/sdsctl:0.29.0" in document
+        assert "theboyd78/sdsctl:0.29.1" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.29.0" in installation
-    assert 'python -m pip install --upgrade "sds200==0.29.0"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.29.0"' in installation
-    assert "docker pull theboyd78/sdsctl:0.29.0" in installation
+    assert "## Upgrade to v0.29.1" in installation
+    assert 'python -m pip install --upgrade "sds200==0.29.1"' in installation
+    assert 'python -m pip install --upgrade "sds200[all]==0.29.1"' in installation
+    assert "docker pull theboyd78/sdsctl:0.29.1" in installation
+    assert "Keyboard Reference can stay open alongside Logs" in normalized_installation
+    assert "0.29.0 daemon is compatible with the updated TUI" in normalized_installation
     assert "`display-client-preflight`" in installation
     assert "observe-only" in installation
     assert "`sdsctl-display@.service`" in installation

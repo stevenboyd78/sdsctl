@@ -175,13 +175,20 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
-## Upgrade to v0.29.0
+## Upgrade to v0.29.1
 
-v0.29.0 publishes Milestones 33.1 through 33.3. It adapts the Textual TUI to
-the physically qualified 100-column by 30-row Raspberry Pi console, keeps
-network-audio controls only when the selected transport supplies that service,
-and proactively renews finite direct-USB PSI pushes without reopening scanner
-control. Scanner-owned recording state is labeled `Scanner recording`; the
+v0.29.1 improves the wide Textual TUI: Live PSI sits directly beneath Scanner
+State, Logs occupies a full-width row, and Keyboard Reference can stay open
+alongside Logs. These refinements apply at 120 or more columns and at least 32
+rows; the compact display's space-saving drawers remain unchanged. An existing
+0.29.0 daemon is compatible with the updated TUI, so the layout fix requires only
+a client upgrade, not new credentials or a Home Assistant App upgrade.
+
+It builds on v0.29.0, which published Milestones 33.1 through 33.3. The TUI
+adapts to the physically qualified 100-column by 30-row Raspberry Pi console,
+keeps network-audio controls only when the selected transport supplies that
+service, and proactively renews finite direct-USB PSI pushes without reopening
+scanner control. Scanner-owned recording state is labeled `Scanner recording`; the
 separate daemon-owned WAV workflow remains `Audio recording`.
 
 The release also adds an opt-in managed Raspberry Pi TUI deployment. A
@@ -197,14 +204,14 @@ The compatibility-sensitive Python distribution and import package remain
 `sds200`, while the command remains `sdsctl`. Upgrade the base package with:
 
 ```bash
-python -m pip install --upgrade "sds200==0.29.0"
+python -m pip install --upgrade "sds200==0.29.1"
 sdsctl --version
 ```
 
 Install or upgrade every optional Python runtime interface with:
 
 ```bash
-python -m pip install --upgrade "sds200[all]==0.29.0"
+python -m pip install --upgrade "sds200[all]==0.29.1"
 python -m pip check
 sdsctl --version
 ```
@@ -216,7 +223,7 @@ package and verification procedure.
 For the generic container, prefer the exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.0
+docker pull theboyd78/sdsctl:0.29.1
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release,
@@ -226,7 +233,7 @@ source-built and local-only. The separate `compose.remote.yaml` topology is
 documented in [Containers](Containers) and requires deliberate private-LAN TLS,
 identity, address, port, and firewall configuration.
 
-The Home Assistant App version tracks 0.29.0 while preserving its
+The Home Assistant App version tracks 0.29.1 while preserving its
 compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
 identities, persistent recordings, aggregate and individual card resource
 paths, and independently versioned card modules. Upgrade the repository-managed

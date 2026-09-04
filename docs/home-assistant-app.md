@@ -841,6 +841,23 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.29.1 TUI-only patch acceptance
+
+This patch changes only TUI layout and help/log visibility, with matching
+release metadata and documentation. It does not change the remote protocol,
+daemon, audio transport, Ingress, credentials, cards, Core integration, or
+advanced-access defaults. Existing v0.29.0 App daemons remain compatible with
+v0.29.1 TUI clients; upgrading the App is not required for the display fix.
+
+Require the complete automated and publication checks, then verify a clean
+published client installation, observe-only preflight, live updates against
+the existing daemon, and the wide physical display's panel placement and
+independent `?`/`G` toggles. Record the operator's physical confirmation
+separately from automated geometry checks. Preserve the existing App settings
+and both production client identities. The broader v0.29.0 acceptance below
+is historical evidence, not a claim that its hardware matrix was repeated for
+this layout-only patch.
+
 ### v0.29.0 release acceptance gate
 
 After the genuine v0.29.0 tag publishes the matching Python and container
