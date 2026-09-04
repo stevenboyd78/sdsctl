@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.29.2
+
+- Track the sdsctl TUI header patch: the top header identifies the application
+  and its version, while Scanner retains model and firmware. Short terminals
+  retain a compact Scanner summary without scrolling the 100-by-30 dashboard.
+- Preserve daemon, Ingress, audio, credentials, MQTT identities, recordings,
+  independently versioned cards and Core integration, and advanced-access
+  defaults. Existing 0.29.0 App daemons remain compatible with 0.29.2 TUI
+  clients; upgrading the App is not required for this client-side improvement.
+
 ## 0.29.1
 
 - Track the sdsctl v0.29.1 TUI layout patch: wide remote displays place Live

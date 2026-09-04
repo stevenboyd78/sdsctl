@@ -87,6 +87,11 @@ Changing the font while the TUI is open can leave an incorrectly rendered saved
 screen after `Q`; a successful quit should leave the service stopped, not cause
 a restart loop. See the canonical guide for the exact start and stop commands.
 
+This console-font warning concerns the service's Linux text console. In a GUI
+terminal, use that terminal application's font preferences or zoom controls
+instead. The TUI adapts to the available rows and columns. Over SSH, the local
+terminal's font does not alter the remote Pi's physical-console font.
+
 ## Credential recovery
 
 Credential registry changes close all existing remote sessions, even for other

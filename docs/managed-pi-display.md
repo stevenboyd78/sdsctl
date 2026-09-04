@@ -195,6 +195,15 @@ is running can leave its saved screen using the old character/color encoding,
 which may appear as repeated symbols after quitting. Do not change the TUI's
 restart policy or erase permanent-failure messages to work around that artifact.
 
+That warning is specific to the Linux text console used by this service, such
+as `/dev/tty1`. A desktop terminal window uses its own font preferences or zoom
+controls; `setfont` and `/etc/default/console-setup` do not set its font. GUI
+terminal font changes normally do not require quitting the TUI. The application
+adapts to the resulting rows and columns, so a larger font or smaller window may
+select a more compact layout. With SSH, the local terminal controls the font;
+changing it does not change the remote Pi's HDMI-console font. Run `stty size`
+in the terminal being used to check its current dimensions.
+
 The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
 and packaged copies to remain identical.
@@ -270,12 +279,12 @@ authentication failures and an operator's intentional quit into a retry loop.
 
 Upgrade only after reviewing the target version. Stop the display before
 replacing its package, install the exact published release, check dependencies,
-then start it again. For v0.29.1:
+then start it again. For v0.29.2:
 
 ```bash
 sudo systemctl stop sdsctl-display@CLIENT_ID.service
 sudo /opt/sdsctl-display/bin/python -m pip install --upgrade \
-  "sds200[tui,playback]==0.29.1"
+  "sds200[tui,playback]==0.29.2"
 sudo /opt/sdsctl-display/bin/python -m pip check
 sudo systemctl start sdsctl-display@CLIENT_ID.service
 ```
@@ -283,7 +292,7 @@ sudo systemctl start sdsctl-display@CLIENT_ID.service
 If installation or the dependency check fails, keep the service stopped and
 restore the previously reviewed package version before starting it. The existing
 client profile, credential, certificate, recording directory, console font,
-and service enablement do not need to change for this layout-only update.
+and service enablement do not need to change for this presentation-only update.
 
 To return `/dev/tty1` to its ordinary login prompt:
 
