@@ -5,14 +5,19 @@ from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
+import pytest
 from rich.text import Text
 from textual.widgets import Static
 
+from sds200.audio import AudioStream
 from sds200.state import snapshot_from_scanner_info
 from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME
 from sds200.tui import ScannerIdentity, ScannerTuiApp
+from sds200.tui_audio import RecordingPathPolicy, TuiAudioSession
 from sds200.tui_logging import TuiLogBuffer
 from sds200.xml_protocol import ScannerInfoParser
+
+from .fakes import FakeAudioTransport
 
 FIXTURES = Path(__file__).parent / "fixtures" / "scanner_info"
 
@@ -27,7 +32,11 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 </ScannerInfo>"""
 
 
-def _app(log_buffer: TuiLogBuffer | None = None) -> ScannerTuiApp:
+def _app(
+    log_buffer: TuiLogBuffer | None = None,
+    *,
+    audio_session: TuiAudioSession | None = None,
+) -> ScannerTuiApp:
     return ScannerTuiApp(
         ScannerIdentity(
             endpoint="udp://192.168.0.251:50536",
@@ -36,6 +45,7 @@ def _app(log_buffer: TuiLogBuffer | None = None) -> ScannerTuiApp:
         ),
         snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
         log_buffer=log_buffer,
+        audio_session=audio_session,
         palette=DEFAULT_DARK_THEME,
     )
 
@@ -503,6 +513,113 @@ def test_tui_restores_standard_panel_order_after_pi_layout_resize() -> None:
             assert "Channel: Patch 65132" in _plain(system)
             assert "Channel:" not in _plain(channel)
             assert body.max_scroll_y == 0
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("size", [(120, 40), (160, 45), (240, 67)])
+@pytest.mark.parametrize("with_audio", [False, True])
+def test_wide_tui_packs_psi_beside_audio_and_logs_across_full_width(
+    tmp_path: Path, size: tuple[int, int], with_audio: bool
+) -> None:
+    async def exercise() -> None:
+        session = (
+            TuiAudioSession(
+                AudioStream(FakeAudioTransport()),
+                RecordingPathPolicy(directory=tmp_path),
+            )
+            if with_audio
+            else None
+        )
+        app = _app(audio_session=session)
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            body = app.query_one("#body")
+            state = app.query_one("#state")
+            status = app.query_one("#status")
+            logs = app.query_one("#logs")
+            assert logs.region.x == body.scrollable_content_region.x
+            assert logs.region.width == body.scrollable_content_region.width
+            assert logs.region.y == status.region.bottom + 1
+            assert logs.region.bottom <= body.content_region.bottom
+            assert body.max_scroll_y == 0
+            if with_audio:
+                audio = app.query_one("#audio")
+                assert audio.styles.row_span == 2
+                assert audio.region.y == state.region.y
+                assert status.region.x == state.region.x
+                assert status.region.y == state.region.bottom + 1
+                assert logs.region.y > audio.region.bottom
+            else:
+                assert status.region.y == state.region.y
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("with_audio", [False, True])
+def test_wide_tui_keyboard_reference_and_logs_toggle_independently(
+    tmp_path: Path, with_audio: bool
+) -> None:
+    async def exercise() -> None:
+        buffer = TuiLogBuffer(limit=3)
+        session = (
+            TuiAudioSession(
+                AudioStream(FakeAudioTransport()),
+                RecordingPathPolicy(directory=tmp_path),
+            )
+            if with_audio
+            else None
+        )
+        app = _app(buffer, audio_session=session)
+        async with app.run_test(size=(160, 45)) as pilot:
+            body = app.query_one("#body")
+            keys = app.query_one("#keys")
+            logs = app.query_one("#logs", Static)
+            await pilot.press("question_mark")
+            await pilot.pause()
+            assert app.key_help_visible and keys.display
+            assert app.logs_visible and logs.display
+            assert logs.region.x == body.scrollable_content_region.x
+            assert logs.region.width == body.scrollable_content_region.width
+            assert keys.region.width == logs.region.width
+            buffer.append("2026-09-04 WARNING sds200.test: both panels open")
+            app._poll_log_buffer()
+            assert "both panels open" in _plain(logs)
+
+            await pilot.press("question_mark")
+            assert not app.key_help_visible
+            assert app.logs_visible
+            await pilot.pause()
+            assert body.max_scroll_y == 0
+            await pilot.press("g", "question_mark")
+            assert app.key_help_visible
+            assert not app.logs_visible
+            await pilot.press("g")
+            assert app.key_help_visible
+            assert app.logs_visible
+            await pilot.press("g")
+            assert app.key_help_visible
+            assert not app.logs_visible
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("size", [(100, 30), (120, 30), (100, 40)])
+def test_wide_tui_resize_restores_small_screen_drawer_exclusivity(
+    size: tuple[int, int],
+) -> None:
+    async def exercise() -> None:
+        app = _app()
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.press("question_mark")
+            assert app.key_help_visible and app.logs_visible
+            await pilot.resize_terminal(*size)
+            await pilot.pause()
+            assert app.key_help_visible
+            assert not app.logs_visible
+            await pilot.press("g")
+            assert app.logs_visible
+            assert not app.key_help_visible
 
     asyncio.run(exercise())
 

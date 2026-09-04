@@ -11,7 +11,28 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 33.3 — v0.29.0 release and publication closure
+### v0.29.1 — Wide TUI production-display follow-up
+
+Refine the wide TUI after the published v0.29.0 client was installed on a
+Raspberry Pi with a 1080p HDMI monitor. Keep Live PSI directly beneath Scanner
+State, give Operational Logs its own full-width row, and allow Logs and Keyboard
+Reference to remain open independently on terminals at least 120 columns by
+32 rows. Retain the compact display's existing drawer behavior and all daemon,
+scanner-control, authentication, audio, and service-manager contracts.
+
+Review and validate the focused patch, publish matching Python and container
+artifacts as v0.29.1, then upgrade the HDMI client from the published package
+using the managed-display wiki workflow. Preserve the working production daemon,
+both devices' independent credentials, and the accepted console font. Record
+automated geometry validation separately from the operator's physical-display
+confirmation; the native HTTPS browser kiosk remains deferred.
+
+#### Closed Milestone 33.3 — v0.29.0 release and publication closure
+
+Milestone 33.3 closed through PR 228 and merge commit
+`4717eacefeaf3228fb13de49acafa7cb6098e8eb`. The v0.29.0 release was published
+on September 4, 2026 after matching PyPI and container publication and release
+acceptance. The original release scope and gates below are retained as history.
 
 Publish the completed Milestones 33.1 and 33.2 transport-aware compact TUI and
 managed Raspberry Pi display work as sdsctl v0.29.0. Freeze the feature boundary

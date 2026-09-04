@@ -343,7 +343,7 @@ async def generate() -> None:
     output_directory.mkdir(parents=True, exist_ok=True)
 
     captures = (
-        ("tui-overview.svg", (120, 40), False, True, True),
+        ("tui-overview.svg", (160, 45), False, True, True),
         ("tui-recordings.svg", (100, 50), True, False, True),
         ("tui-compact.svg", (79, 24), False, False, True),
         ("tui-pi-network-compact.svg", (100, 30), False, False, True),

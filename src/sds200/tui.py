@@ -345,6 +345,10 @@ _SHARED_TUI_STYLESHEET = """
         column-span: 2;
     }
 
+    Screen.-wide.-tall #audio {
+        row-span: 2;
+    }
+
     Screen.-pi-dashboard #system,
     Screen.-pi-dashboard #audio,
     Screen.-pi-dashboard #logs {
@@ -721,7 +725,8 @@ class ScannerTuiApp(App[None]):
 
         self._key_help_visible = not self._key_help_visible
         if self._key_help_visible:
-            self._set_logs_visible(False)
+            if not self._uses_wide_dashboard_layout():
+                self._set_logs_visible(False)
             self.screen.add_class("show-keys")
             self._control_message = "Keyboard help shown"
         else:
@@ -734,8 +739,9 @@ class ScannerTuiApp(App[None]):
 
         show_logs = not self._logs_visible
         if show_logs:
-            self._key_help_visible = False
-            self.screen.remove_class("show-keys")
+            if not self._uses_wide_dashboard_layout():
+                self._key_help_visible = False
+                self.screen.remove_class("show-keys")
             self._set_logs_visible(True)
             self._control_message = "Operational logs shown"
         else:
@@ -757,6 +763,9 @@ class ScannerTuiApp(App[None]):
         self._apply_responsive_panel_layout()
         self._refresh_view()
 
+    def _uses_wide_dashboard_layout(self) -> bool:
+        return self.screen.size.width >= 120 and not self._uses_short_layout()
+
     def _uses_pi_dashboard_layout(self) -> bool:
         return (
             self._uses_short_layout()
@@ -772,6 +781,10 @@ class ScannerTuiApp(App[None]):
 
     def _apply_responsive_panel_layout(self) -> None:
         use_pi_layout = self._uses_pi_dashboard_layout()
+        # Keep the small-screen drawer rule when resizing from a wide display
+        # where Keyboard Reference and Operational Logs may both be open.
+        if self._key_help_visible and not self._uses_wide_dashboard_layout():
+            self._set_logs_visible(False)
         if use_pi_layout:
             self.screen.add_class("-pi-dashboard")
         else:
@@ -814,7 +827,8 @@ class ScannerTuiApp(App[None]):
             body.move_child(panel, after=previous)
         self._pi_dashboard_layout = use_pi_layout
         self._set_logs_visible(
-            False if self._key_help_visible else not use_pi_layout
+            not use_pi_layout
+            and (not self._key_help_visible or self._uses_wide_dashboard_layout())
         )
 
     def action_reconnect(self) -> None:

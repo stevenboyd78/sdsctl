@@ -169,11 +169,18 @@ row, Scanner State sits beside Live PSI / Controls, and Network Audio spans the
 lower row when available. A named remote profile also shows its resolved
 `host:port` as `Target` in Connection.
 
-Press `G` to replace Network Audio with a bounded full-width Operational Logs
-drawer showing the newest four single-line records. Logs continue buffering while
-hidden. Press `G` again to return to the normal dashboard. `?` opens the Keyboard
+On that compact layout, press `G` to replace Network Audio with a bounded
+full-width Operational Logs drawer showing the newest four single-line records.
+Logs continue buffering while hidden. Press `G` again to return to the normal
+dashboard. `?` opens the Keyboard
 Reference instead; the two drawers are mutually exclusive so they cannot compete
 for the physical viewport.
+
+On a larger terminal with at least 120 columns and 32 rows, Live PSI / Controls
+sits directly below Scanner State, beside Network Audio. Operational Logs uses
+a separate full-width row below them. `?` and `G` toggle the reference and logs
+independently, so both may remain open. Opening the full reference may require
+scrolling even though the ordinary dashboard fits.
 
 The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
@@ -248,13 +255,22 @@ authentication failures and an operator's intentional quit into a retry loop.
 
 ## 7. Upgrade, disable, or remove
 
-Upgrade only after reviewing the target version, then restart the display:
+Upgrade only after reviewing the target version. Stop the display before
+replacing its package, install the exact published release, check dependencies,
+then start it again. For v0.29.1:
 
 ```bash
+sudo systemctl stop sdsctl-display@CLIENT_ID.service
 sudo /opt/sdsctl-display/bin/python -m pip install --upgrade \
-  "sds200[tui,playback]"
-sudo systemctl restart sdsctl-display@CLIENT_ID.service
+  "sds200[tui,playback]==0.29.1"
+sudo /opt/sdsctl-display/bin/python -m pip check
+sudo systemctl start sdsctl-display@CLIENT_ID.service
 ```
+
+If installation or the dependency check fails, keep the service stopped and
+restore the previously reviewed package version before starting it. The existing
+client profile, credential, certificate, recording directory, console font,
+and service enablement do not need to change for this layout-only update.
 
 To return `/dev/tty1` to its ordinary login prompt:
 
@@ -282,10 +298,14 @@ Those paths are deliberately exact. Do not recursively remove a parent such as
 
 - Reboot the Pi and confirm the TUI appears without a typed command.
 - Confirm the expected terminal geometry and responsive layout.
-- Confirm the footer remains visible and the application does not scroll.
-- Press `G` and confirm the full-width Operational Logs drawer opens without
-  scrolling; press `G` again and confirm the normal lower panel returns.
-- Press `?` and confirm the Keyboard Reference replaces any open log drawer.
+- Confirm the footer remains visible and the normal dashboard does not scroll.
+- On the compact 100-by-30 display, press `G` and confirm the full-width
+  Operational Logs drawer opens without scrolling; press `G` again and confirm
+  the normal lower panel returns.
+- On that compact display, press `?` and confirm the Keyboard Reference replaces
+  any open log drawer. The full reference may require scrolling.
+- On a wide, tall display, confirm Logs spans the full width and `?` and `G`
+  toggle their panels independently; both may remain open while scrolling.
 - For a named remote profile, confirm Connection shows the expected resolved
   private-LAN `Target` without exposing credential material.
 - Restart the daemon or Home Assistant App and confirm automatic recovery.

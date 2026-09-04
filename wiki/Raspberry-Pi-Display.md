@@ -70,6 +70,12 @@ On a 1080p display, the console font or graphical terminal's font and window siz
 determine the available text area. Keep a readable font and let the TUI select
 its responsive layout; do not force the earlier 100-by-30 configuration.
 
+At 120 or more columns and at least 32 rows, Live PSI / Controls sits directly
+below Scanner State, beside Network Audio. Operational Logs occupies a separate
+full-width row. You can leave it open while viewing Keyboard Reference: `?`
+toggles only the reference and `G` toggles only Logs. The complete reference may
+require scrolling; the compact display's mutually exclusive drawers are unchanged.
+
 ## Credential recovery
 
 Credential registry changes close all existing remote sessions, even for other

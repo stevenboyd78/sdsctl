@@ -6,6 +6,21 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-09-04
+
+### Fixed
+
+- Pack the wide TUI's Live PSI / Controls panel directly below Scanner State,
+  alongside a Network Audio panel spanning both rows. Operational Logs now
+  begins on its own full-width row even when network audio is available.
+
+### Changed
+
+- Let Keyboard Reference and Operational Logs remain open independently on
+  terminals at least 120 columns wide and 32 rows tall. `?` toggles only help
+  and `G` toggles only logs; opening the complete reference may require scrolling.
+  Smaller terminals retain their space-saving, mutually exclusive drawers.
+
 ## [0.29.0] - 2026-09-03
 
 ### Added
@@ -1800,7 +1815,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...HEAD
+[0.29.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...v0.28.1
 [0.28.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.27.0...v0.28.0

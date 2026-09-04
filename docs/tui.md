@@ -19,8 +19,15 @@ endpoints, agency information, or recordings from a real system.
 
 ![Wide sdsctl TUI showing scanner state, active recording, audio controls, and operational logs](assets/screenshots/tui-overview.svg)
 
-The wide layout places the main operational panels in two columns and keeps the
-bounded log panel visible across the full width.
+The wide layout places the main operational panels in two columns. At 120 or
+more columns and at least 32 rows, Live PSI / Controls sits directly below
+Scanner State, beside Network Audio when available. The bounded Operational Logs
+panel occupies its own full-width row below those panels.
+
+On this larger layout, `?` toggles Keyboard Reference without closing Logs, and
+`G` toggles Logs without closing the reference. Both can stay open together;
+the complete keyboard reference may require scrolling. Smaller terminals retain
+their space-saving, mutually exclusive drawers.
 
 ### Recording library
 

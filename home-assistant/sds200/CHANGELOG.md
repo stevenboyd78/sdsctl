@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.29.1
+
+- Track the sdsctl v0.29.1 TUI layout patch: wide remote displays place Live
+  PSI directly beneath Scanner State, show full-width Logs, and allow Keyboard
+  Reference and Logs to remain open independently.
+- Preserve the v0.29.0 daemon, Ingress, credentials, MQTT identities, recordings,
+  independently versioned cards and Core integration, and advanced-access
+  defaults. Existing 0.29.0 daemons remain compatible with 0.29.1 TUI clients;
+  an App upgrade is not required to obtain the client-side layout improvement.
+
 ## 0.29.0
 
 - Show connected remote-daemon clients in Ingress Diagnostics, with client IDs,
