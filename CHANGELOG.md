@@ -6,12 +6,16 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.29.2] - 2026-09-04
+
 ### Changed
 
 - Identify the TUI application as `sdsctl v<app version>` in the top header.
   Keep scanner model and firmware in the Scanner panel and endpoint/target in
   Connection. Short terminals retain a single-line Scanner summary; the
   100-by-30 dashboard gives it a compact full-width panel below Audio or Logs.
+- Document stopping a managed console display before changing its font, to
+  avoid restoring a saved screen with the previous character/color encoding.
 
 ## [0.29.1] - 2026-09-04
 
@@ -1822,7 +1826,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...HEAD
+[0.29.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...v0.29.0
 [0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.0...v0.28.1

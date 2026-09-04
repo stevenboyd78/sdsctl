@@ -841,6 +841,22 @@ directory were deleted, and the App catalog was reloaded. Post-cleanup audit
 found no installed Milestone 31.1 App or temporary source while the published
 v0.26.1 App remained started.
 
+### v0.29.2 TUI-only patch acceptance
+
+This patch identifies the TUI application in the top header and retains model
+and firmware in Scanner, including a compact summary on short terminals. It
+does not change the daemon, protocol, audio, Ingress, credentials, cards, Core
+integration, service template, or advanced-access defaults. Existing v0.29.0
+App daemons remain compatible; no App upgrade is needed for the new header.
+
+Require the complete automated and publication checks, a clean published client
+installation, observe-only preflight, and live updates against the existing
+daemon. Verify the new app header and separate Scanner values on the physical
+display, preserving the accepted console font, credentials and service settings.
+Test compact and wide geometry headlessly and record physical confirmation
+separately. This presentation-only gate does not claim the broader v0.29.0
+hardware, audio-soak, credential-revocation or cold-boot matrix was repeated.
+
 ### v0.29.1 TUI-only patch acceptance
 
 This patch changes only TUI layout and help/log visibility, with matching

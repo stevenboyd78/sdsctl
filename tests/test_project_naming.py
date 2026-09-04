@@ -465,29 +465,30 @@ def test_icon_uses_sdsctl_identity() -> None:
     assert "sds200-python neon icon" not in icon
 
 
-def test_v0291_release_documentation_names_current_generic_image() -> None:
+def test_current_release_documentation_names_current_generic_image() -> None:
+    version = tomllib.loads(_read("pyproject.toml"))["project"]["version"]
     readme = _read("README.md")
     deployment = _read("docs/container-deployment.md")
     containers = _read("wiki/Containers.md")
     installation = _read("wiki/Installation.md")
     normalized_installation = " ".join(installation.split())
 
-    assert "Version `0.29.1`" in readme
+    assert f"Version `{version}`" in readme
     assert "transport-aware" in readme
     assert "Raspberry Pi TUI" in " ".join(readme.split())
     assert "observe-only preflight" in readme
-    assert "theboyd78/sdsctl:0.29.1" in readme
+    assert f"theboyd78/sdsctl:{version}" in readme
     assert "theboyd78/sdsctl:latest" in readme
 
     for document in (deployment, containers):
-        assert "theboyd78/sdsctl:0.29.1" in document
+        assert f"theboyd78/sdsctl:{version}" in document
         assert "theboyd78/sdsctl:latest" in document
         assert "future matching release tags" not in document
 
-    assert "## Upgrade to v0.29.1" in installation
-    assert 'python -m pip install --upgrade "sds200==0.29.1"' in installation
-    assert 'python -m pip install --upgrade "sds200[all]==0.29.1"' in installation
-    assert "docker pull theboyd78/sdsctl:0.29.1" in installation
+    assert f"## Upgrade to v{version}" in installation
+    assert f'python -m pip install --upgrade "sds200=={version}"' in installation
+    assert f'python -m pip install --upgrade "sds200[all]=={version}"' in installation
+    assert f"docker pull theboyd78/sdsctl:{version}" in installation
     assert "Keyboard Reference can stay open alongside Logs" in normalized_installation
     assert "0.29.0 daemon is compatible with the updated TUI" in normalized_installation
     assert "`display-client-preflight`" in installation
