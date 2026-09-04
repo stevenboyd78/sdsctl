@@ -17,6 +17,7 @@ from textual.events import Resize
 from textual.timer import Timer
 from textual.widgets import Footer, Header, Static
 
+from . import __version__
 from .audio_session import (
     AudioRecordingSession,
     AudioSessionSnapshot,
@@ -323,7 +324,8 @@ _SHARED_TUI_STYLESHEET = """
     }
 
     Screen.-short #identity {
-        display: none;
+        text-wrap: nowrap;
+        text-overflow: ellipsis;
     }
 
     Screen.-split.-short #body,
@@ -351,7 +353,8 @@ _SHARED_TUI_STYLESHEET = """
 
     Screen.-pi-dashboard #system,
     Screen.-pi-dashboard #audio,
-    Screen.-pi-dashboard #logs {
+    Screen.-pi-dashboard #logs,
+    Screen.-pi-dashboard #identity {
         column-span: 2;
     }
 
@@ -378,7 +381,7 @@ _SHARED_TUI_STYLESHEET = """
 class ScannerTuiApp(App[None]):
     """Full-screen Textual interface for live SDS scanner state."""
 
-    TITLE = "SDS Scanner"
+    TITLE = f"sdsctl v{__version__}"
     CSS: ClassVar[str] = built_in_tui_theme_stylesheets() + _SHARED_TUI_STYLESHEET
     HORIZONTAL_BREAKPOINTS: list[tuple[int, str]] | None = [
         (0, "-compact"),
@@ -562,8 +565,6 @@ class ScannerTuiApp(App[None]):
             self._on_audio_completed,
             thread_name="sds200-tui-audio",
         )
-        self.title = f"{identity.model} Scanner"
-        self.sub_title = f"{identity.endpoint} | {identity.firmware}"
 
     @property
     def palette(self) -> ThemePalette:
@@ -1651,6 +1652,7 @@ class ScannerTuiApp(App[None]):
             self._panel(
                 ("Model", self._identity.model, ThemeRole.TEXT_PRIMARY),
                 ("Firmware", self._identity.firmware, ThemeRole.TEXT_PRIMARY),
+                separator=" | " if self._uses_short_layout() else "\n",
             )
         )
         system_widget = self.query_one("#system", Static)
@@ -2299,12 +2301,14 @@ class ScannerTuiApp(App[None]):
         since = self._transition_since[key]
         return f"{value} since {since:%H:%M:%S}"
 
-    def _panel(self, *rows: tuple[str, str, ThemeRole]) -> Text:
+    def _panel(
+        self, *rows: tuple[str, str, ThemeRole], separator: str = "\n"
+    ) -> Text:
         output = Text()
         label_style = rich_style(self._palette.resolve(ThemeRole.TEXT_MUTED))
         for index, (label, value, role) in enumerate(rows):
             if index:
-                output.append("\n")
+                output.append(separator)
             output.append(f"{label}: ", style=label_style)
             output.append(value, style=rich_style(self._palette.resolve(role)))
         return output

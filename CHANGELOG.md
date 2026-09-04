@@ -6,6 +6,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Changed
+
+- Identify the TUI application as `sdsctl v<app version>` in the top header.
+  Keep scanner model and firmware in the Scanner panel and endpoint/target in
+  Connection. Short terminals retain a single-line Scanner summary; the
+  100-by-30 dashboard gives it a compact full-width panel below Audio or Logs.
+
 ## [0.29.1] - 2026-09-04
 
 ### Fixed

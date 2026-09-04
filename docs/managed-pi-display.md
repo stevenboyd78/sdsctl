@@ -182,6 +182,19 @@ a separate full-width row below them. `?` and `G` toggle the reference and logs
 independently, so both may remain open. Opening the full reference may require
 scrolling even though the ordinary dashboard fits.
 
+The top header shows the `sdsctl` application version. Model and firmware are
+separate values in the Scanner panel, not the installed application version.
+On short terminals that panel uses a single content line; the 100-by-30
+dashboard gives it a compact full-width row below Audio or Logs.
+
+Choose a readable console font before starting the display. If you want to
+change it later, stop the exact display instance first, apply the font using
+your operating system's console settings, and then start the instance again.
+Changing between 256- and 512-character fonts while a full-screen application
+is running can leave its saved screen using the old character/color encoding,
+which may appear as repeated symbols after quitting. Do not change the TUI's
+restart policy or erase permanent-failure messages to work around that artifact.
+
 The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
 and packaged copies to remain identical.

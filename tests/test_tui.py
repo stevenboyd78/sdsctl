@@ -9,6 +9,7 @@ import pytest
 from rich.text import Text
 from textual.widgets import Static
 
+from sds200 import __version__
 from sds200.audio import AudioStream
 from sds200.state import snapshot_from_scanner_info
 from sds200.theme import DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME
@@ -84,6 +85,75 @@ def test_tui_shell_renders_identity_and_semantic_snapshot() -> None:
             assert "UNMUTED" in state
             assert not app.audio_controls_available
             assert app.query_one_optional("#audio", Static) is None
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("size", [(64, 24), (100, 30), (120, 30), (160, 45)])
+@pytest.mark.parametrize("model", ["SDS100", "SDS150", "SDS200"])
+def test_tui_header_identifies_app_and_scanner_panel_retains_hardware(
+    size: tuple[int, int], model: str
+) -> None:
+    async def exercise() -> None:
+        app = ScannerTuiApp(
+            ScannerIdentity(
+                endpoint="sdsctl-remote-daemon",
+                model=model,
+                firmware="Version 1.26.01",
+                connection_target="192.0.2.25:50443",
+            ),
+            snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+        )
+        async with app.run_test(size=size) as pilot:
+            await pilot.pause()
+            assert app.title == f"sdsctl v{__version__}"
+            assert app.sub_title == ""
+            identity = app.query_one("#identity", Static)
+            assert identity.display
+            assert identity.border_title == "Scanner"
+            assert f"Model: {model}" in _plain(identity)
+            assert "Firmware: Version 1.26.01" in _plain(identity)
+            assert "Target: 192.0.2.25:50443" in _plain(
+                app.query_one("#connection", Static)
+            )
+            assert ("\n" not in _plain(identity)) == (size[1] < 32)
+
+    asyncio.run(exercise())
+
+
+def test_pi_scanner_identity_fits_with_audio_and_logs(tmp_path: Path) -> None:
+    async def exercise() -> None:
+        app = _app(
+            audio_session=TuiAudioSession(
+                AudioStream(FakeAudioTransport()),
+                RecordingPathPolicy(directory=tmp_path),
+            )
+        )
+        async with app.run_test(size=(100, 30)) as pilot:
+            await pilot.pause()
+            body = app.query_one("#body")
+            identity = app.query_one("#identity", Static)
+            for show_logs in (False, True, False):
+                if app.logs_visible != show_logs:
+                    await pilot.press("g")
+                    await pilot.pause()
+                lower_panel = app.query_one("#logs" if show_logs else "#audio")
+                assert identity.display
+                assert identity.region.height == 3
+                assert identity.region.width == body.scrollable_content_region.width
+                assert identity.region.y == lower_panel.region.bottom
+                assert identity.region.bottom <= body.content_region.bottom
+                assert body.max_scroll_y == 0
+
+            await pilot.resize_terminal(160, 45)
+            await pilot.pause()
+            assert "\n" in _plain(identity)
+            assert identity.region.y == app.query_one("#connection").region.y
+            await pilot.resize_terminal(100, 30)
+            await pilot.pause()
+            assert "\n" not in _plain(identity)
+            assert identity.region.bottom <= body.content_region.bottom
+            assert body.max_scroll_y == 0
 
     asyncio.run(exercise())
 
@@ -326,7 +396,9 @@ def test_tui_responsive_breakpoints_and_key_help() -> None:
             logs = pi_screen.query_one("#logs")
 
             assert connection.region.y == body.region.y
-            assert system.region.y == connection.region.bottom
+            identity = pi_screen.query_one("#identity")
+            assert identity.region.y == connection.region.bottom
+            assert system.region.y == identity.region.bottom
             assert channel.region.y == system.region.bottom
             assert state.region.y == channel.region.bottom
             assert pi_screen.query_one_optional("#audio", Static) is None
