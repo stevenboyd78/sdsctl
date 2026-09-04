@@ -131,6 +131,10 @@ advanced service is reachable only from an intended private-LAN client.
 
 Creating, rotating, revoking, or restoring a client after the remote listener is
 running reloads the credential registry without releasing scanner ownership.
+Every reload closes **all existing remote-client sessions**, including sessions
+belonging to unchanged clients. Their credentials remain valid and they can
+reconnect; this is not an uninterrupted per-client connection change. Plan for
+a brief interruption on other remote displays when managing any client.
 The first client, a server identity rotation, a native-dashboard password
 rotation, and option or Network mapping changes require an App restart.
 
@@ -222,8 +226,8 @@ browser session cookie is memory-only and must not be copied between devices.
   profile and certificate together. The prior credential stops working after
   the live reload.
 - **Revoke one daemon client:** select **Revoke** for that ID. Other identities
-  remain connected or can reconnect independently. The App will not revoke the
-  last active identity while the remote daemon is enabled.
+  remain authorized but must reconnect after the registry reload. The App will
+  not revoke the last active identity while the remote daemon is enabled.
 - **Restore a client:** select **Restore**. Its retained credential becomes valid
   again after reload; rotate it instead when its secrecy is uncertain.
 - **Rotate the server identity:** confirm with the exact current certificate

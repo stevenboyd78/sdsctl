@@ -205,6 +205,9 @@ class DaemonRemoteServiceRouter:
         self._stop_event = threading.Event()
         self._accept_thread: threading.Thread | None = None
         self._clients: dict[socket_module.socket, DaemonRemoteService | None] = {}
+        self._client_peers: dict[
+            socket_module.socket, tuple[DaemonRemoteApiPeer, float]
+        ] = {}
         self._workers: dict[socket_module.socket, threading.Thread] = {}
         self._api_ready: Queue[_ReadyApiClient | object] = Queue(
             maxsize=self.max_clients
@@ -313,6 +316,46 @@ class DaemonRemoteServiceRouter:
                 last_error=self._last_error,
             )
 
+    def connected_clients_snapshot(self) -> dict[str, object]:
+        """Operator-only inventory, separate from redacted aggregate snapshots.
+
+        A client can own several service connections. Group by enrolled client
+        ID, not by socket, and exclude revoked/expired and unselected sessions.
+        No credential, certificate, filesystem path, or peer address is returned.
+        """
+
+        with self._state_lock:
+            active = self._active and not self._stopped
+            connections = [
+                (peer, since, self._clients.get(stream))
+                for stream, (peer, since) in self._client_peers.items()
+            ]
+        groups: dict[str, dict[str, int]] = {}
+        scopes: dict[str, set[str]] = {}
+        started: dict[str, float] = {}
+        now = monotonic()
+        for peer, since, service in connections:
+            if not active or service is None or not peer.daemon_api_connection_current():
+                continue
+            identifier = peer.client_id
+            services = groups.setdefault(identifier, {})
+            services[service.value] = services.get(service.value, 0) + 1
+            scopes.setdefault(identifier, set()).update(scope.value for scope in peer.scopes)
+            started[identifier] = min(started.get(identifier, since), since)
+        return {
+            "active": active,
+            "clients": [
+                {
+                    "client_id": identifier,
+                    "scopes": sorted(scopes[identifier]),
+                    "services": dict(sorted(services.items())),
+                    "connections": sum(services.values()),
+                    "connected_seconds": max(0, int(now - started[identifier])),
+                }
+                for identifier, services in sorted(groups.items())
+            ],
+        }
+
     def stop(self) -> None:
         with self._lifecycle_lock:
             if self._stopped:
@@ -420,11 +463,13 @@ class DaemonRemoteServiceRouter:
                     daemon=True,
                 )
                 self._clients[client] = None
+                self._client_peers[client] = (peer, monotonic())
                 self._workers[client] = worker
                 try:
                     worker.start()
                 except BaseException as error:
                     self._clients.pop(client, None)
+                    self._client_peers.pop(client, None)
                     self._workers.pop(client, None)
                     self._rejected_clients += 1
                     start_error = error
@@ -647,6 +692,7 @@ class DaemonRemoteServiceRouter:
     def _release(self, client: socket_module.socket) -> None:
         with self._state_lock:
             self._clients.pop(client, None)
+            self._client_peers.pop(client, None)
 
     def _record_rejection(self, reason: str) -> None:
         with self._state_lock:

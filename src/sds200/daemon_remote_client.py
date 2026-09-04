@@ -24,6 +24,7 @@ from .daemon_remote_auth import (
     build_daemon_remote_authentication_request,
     load_daemon_remote_credential,
 )
+from .daemon_remote_liveness import configure_remote_tcp_liveness
 from .daemon_remote_service import (
     DAEMON_REMOTE_SERVICE_MAX_FRAME_BYTES,
     DaemonRemoteService,
@@ -175,6 +176,7 @@ class DaemonRemoteClientTransport:
                     (self.configuration.address, self.configuration.port),
                     timeout=_remaining_seconds(deadline),
                 )
+                configure_remote_tcp_liveness(raw)
             except OSError as error:
                 raise DaemonRemoteClientError(
                     DaemonRemoteClientErrorReason.CONNECT_FAILED

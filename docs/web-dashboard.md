@@ -31,6 +31,25 @@ to the same renderer without changing scanner ownership.
 
 ## Architecture
 
+### Connected remote clients (Home Assistant Ingress)
+
+The Diagnostics pane includes a live, five-second-refresh inventory of remote
+daemon clients when the dashboard runs behind authenticated Home Assistant
+Ingress. Rows group authenticated service connections by client ID and show
+access scopes, service counts, and oldest-current-connection age. The local
+`remote.clients` daemon API operation supplies this inventory; remote Observe
+and Control clients cannot call it. Shared runtime snapshots and events remain
+unchanged and contain no client identities.
+
+The inventory does not include browser/native-dashboard or Ingress sessions,
+enrolled-but-offline credentials, secrets, certificates, private paths, or peer
+addresses. Unavailable data clears the previous rows and is labeled unavailable.
+Closed and invalidated sessions are removed; silent network losses remain visible
+until transport failure detection. See [advanced App access](../wiki/Advanced-Home-Assistant.md)
+for user-facing guidance and the supported TCP keepalive behavior.
+
+### One scanner owner
+
 The web service is a daemon client. It does not open USB serial hardware, create
 an SDS200 UDP control connection, or start a second RTSP/RTP audio session.
 

@@ -175,6 +175,83 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
+## Upgrade to v0.29.0
+
+v0.29.0 publishes Milestones 33.1 through 33.3. It adapts the Textual TUI to
+the physically qualified 100-column by 30-row Raspberry Pi console, keeps
+network-audio controls only when the selected transport supplies that service,
+and proactively renews finite direct-USB PSI pushes without reopening scanner
+control. Scanner-owned recording state is labeled `Scanner recording`; the
+separate daemon-owned WAV workflow remains `Audio recording`.
+
+The release also adds an opt-in managed Raspberry Pi TUI deployment. A
+`display-client-preflight` command verifies the exact console, observe-only
+authorization, remote services, runtime contract, and optional local playback
+without printing private connection or identity details. The packaged
+`sdsctl-display@.service` template starts the physical `/dev/tty1` display at
+boot under a dedicated unprivileged account, retries only temporary connection
+loss, and stops for revoked credentials, permanent configuration failures,
+unexpected local failures, or an intentional quit.
+
+The compatibility-sensitive Python distribution and import package remain
+`sds200`, while the command remains `sdsctl`. Upgrade the base package with:
+
+```bash
+python -m pip install --upgrade "sds200==0.29.0"
+sdsctl --version
+```
+
+Install or upgrade every optional Python runtime interface with:
+
+```bash
+python -m pip install --upgrade "sds200[all]==0.29.0"
+python -m pip check
+sdsctl --version
+```
+
+Linux local playback still needs a working PortAudio runtime. See
+[Audio and recordings](Audio-and-Recordings) for the required operating-system
+package and verification procedure.
+
+For the generic container, prefer the exact release image:
+
+```bash
+docker pull theboyd78/sdsctl:0.29.0
+```
+
+`theboyd78/sdsctl:latest` follows the newest successfully published release,
+but the exact version tag is recommended for controlled deployments. The
+ordinary repository-root `compose.yaml` and `compose.usb.yaml` paths remain
+source-built and local-only. The separate `compose.remote.yaml` topology is
+documented in [Containers](Containers) and requires deliberate private-LAN TLS,
+identity, address, port, and firewall configuration.
+
+The Home Assistant App version tracks 0.29.0 while preserving its
+compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
+identities, persistent recordings, aggregate and individual card resource
+paths, and independently versioned card modules. Upgrade the repository-managed
+App only after the matching release images have published.
+
+**Upgrading does not expose an advanced Home Assistant service.** The
+authenticated daemon-client and native HTTPS dashboard mappings remain
+disabled and `null` by default. Existing Ingress-only users do not need to
+create a server identity, dashboard password, client credential, firewall rule,
+or TCP mapping. The App continues to expose only authenticated Ingress and the
+existing scanner-to-App RTP input unless an operator deliberately completes the
+advanced configuration.
+
+After an observe-only remote TUI works interactively, follow
+[Managed Raspberry Pi display](Raspberry-Pi-Display) for the dedicated account,
+private file placement, preflight, service activation, recovery, credential
+rotation or revocation, upgrade, disablement, and exact removal workflow.
+Browser kiosks remain separate because they use the native HTTPS dashboard,
+browser certificate trust, a dashboard password, and a browser session instead
+of a daemon-client credential.
+
+The optional Home Assistant Core integration remains independently versioned
+at 0.1.5 and does not need replacement, bridge-key rotation, reauthentication,
+Core restart, or Core reload for this release.
+
 ## Upgrade to v0.28.1
 
 v0.28.1 publishes Milestones 32.1 through 32.6. It lets one scanner-owning

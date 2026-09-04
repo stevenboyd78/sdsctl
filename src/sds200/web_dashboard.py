@@ -257,6 +257,9 @@ class DaemonApiClientLike(Protocol):
     def runtime_snapshot(self) -> Mapping[str, object]:
         """Return one authoritative daemon runtime snapshot."""
 
+    def remote_clients(self) -> Mapping[str, object]:
+        """Return the local operator's remote-connection inventory."""
+
     def hold_state(
         self,
         scope: str,
@@ -797,6 +800,17 @@ def create_web_dashboard_app(
         }
 
     if home_assistant_ingress:
+
+        @app.get("/api/v1/home-assistant/connected-clients")
+        def home_assistant_connected_clients() -> JSONResponse:
+            def query(client: DaemonApiClientLike) -> Mapping[str, object]:
+                client.hello()
+                return client.remote_clients()
+
+            return JSONResponse(
+                _query_daemon(api_client_factory, query),
+                headers={"Cache-Control": "no-store"},
+            )
 
         @app.get("/api/v1/home-assistant/integration")
         def home_assistant_integration_status() -> JSONResponse:
@@ -1764,6 +1778,10 @@ def _dashboard_shell(
             1,
         )
         .replace("  <!-- SDSCTL_THEME_STYLES -->", stylesheet_links)
+        .replace(
+            "      <!-- SDSCTL_CONNECTED_CLIENTS_PANEL -->",
+            _connected_clients_panel() if home_assistant_ingress else "",
+        )
         .replace("          <!-- SDSCTL_THEME_OPTIONS -->", options)
         .replace(
             "          <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->",
@@ -1786,6 +1804,21 @@ def _dashboard_shell(
             ),
         )
     )
+
+
+def _connected_clients_panel() -> str:
+    return """<section class="panel connected-clients-panel"
+      id="connected-clients-panel" aria-labelledby="connected-clients-title">
+      <header class="panel-header">
+        <p class="panel-kicker">Advanced access</p>
+        <h2 id="connected-clients-title">Connected remote clients</h2>
+      </header>
+      <p class="muted">Live remote-daemon sessions, not enrolled credentials.
+        One client may use several service connections. Browser and Ingress
+        sessions are not included. Lost connections disappear after detection.</p>
+      <p id="connected-clients-status" role="status">Open Diagnostics to refresh.</p>
+      <div id="connected-clients-list"></div>
+    </section>"""
 
 
 @cache

@@ -30,6 +30,11 @@ def test_changelog_comparison_links_start_at_current_release() -> None:
         in changelog
     )
     assert (
+        "[0.29.0]: https://github.com/stevenboyd78/sdsctl/compare/"
+        "v0.28.1...v0.29.0"
+        in changelog
+    )
+    assert (
         "[0.28.1]: https://github.com/stevenboyd78/sdsctl/compare/"
         "v0.28.0...v0.28.1"
         in changelog
@@ -316,5 +321,34 @@ def test_current_patch_changelog_covers_native_browser_login() -> None:
         "exact HTTPS host and origin checks",
         "secure strict-same-site session cookie",
         "denial of cross-origin requests",
+    ):
+        assert required in release or required in normalized
+
+
+def test_current_release_changelog_covers_v029_managed_pi_display() -> None:
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    start = changelog.index("## [0.29.0] - ")
+    end = changelog.index("\n## [0.28.1]", start)
+    release = changelog[start:end]
+    normalized = " ".join(release.split())
+
+    for required in (
+        "observe-only `display-client-preflight`",
+        "`tui --managed-display`",
+        "`sdsctl-display@.service`",
+        "Temporary connection failures use exit 75",
+        "permanent profile, TLS, authentication, authorization",
+        "dedicated service account",
+        "Direct USB sessions now omit network-audio playback",
+        "100 through 119 columns",
+        "System / Site / Channel",
+        "Operational Logs",
+        "newest four single-line records",
+        "resolved private-LAN `host:port` as `Target`",
+        "proactive 120-second PSI renewal",
+        "`Scanner recording`",
+        "`Audio recording`",
+        "direct SDS100 USB session",
+        "observe-only, daemon-backed SDS200 session",
     ):
         assert required in release or required in normalized

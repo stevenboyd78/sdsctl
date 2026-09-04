@@ -11,7 +11,97 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 33.2 — Managed Raspberry Pi remote TUI display
+### Milestone 33.3 — v0.29.0 release and publication closure
+
+Publish the completed Milestones 33.1 and 33.2 transport-aware compact TUI and
+managed Raspberry Pi display work as sdsctl v0.29.0. Freeze the feature boundary
+and synchronize the Python distribution and import version, Home Assistant App
+version and changelog, concise README, beginner installation and upgrade
+guidance, container examples, version-selected image references, release
+comparison links, and every checked version contract. Preserve the independently
+versioned Home Assistant Core integration and first-party card artifacts unless
+a separately reviewed compatibility defect requires a change.
+
+Keep the authenticated daemon-client and native HTTPS Home Assistant mappings
+disabled with `null` TCP defaults. An ordinary upgrade must preserve Ingress,
+MQTT identities, scanner ownership, recordings, cards, media-source behavior,
+UDP 50000, and all existing configuration without exposing an advanced TCP
+service. Managed displays must continue to use one independent observe-only
+credential per device, and browser kiosks remain outside this release because
+they use a different password, certificate-trust, graphical-session, and
+browser-session lifecycle.
+
+Before tagging, run the complete Ruff, strict mypy, Python 3.11 through 3.14,
+coverage, documentation, browser, screenshot, distribution, clean-install,
+generic-container, Home Assistant App image, version-contract, secret-leakage,
+authentication, authorization, bounded-client, reconnect, rollback, and
+shutdown validation appropriate to the release surfaces. Review one release
+pull request and require all branch and post-merge checks to pass.
+
+Physically accept the release candidate with direct SDS100 USB and daemon-backed
+SDS200 operation. Recheck the 100-by-30 transport-aware TUI, proactive serial PSI
+renewal, scanner-versus-audio recording labels, bounded Operational Logs drawer,
+remote target display, observe-only preflight, managed `/dev/tty1` cold start,
+temporary network and Home Assistant App restart recovery, credential
+revocation, restored or rotated credential recovery, optional local audio,
+intentional quit, normal-console restoration, and single scanner ownership.
+
+Candidate acceptance on September 4, 2026 passed ordinary Ingress audio,
+recordings, controls, Waterfall and App restart recovery; SDS100 USB TUI and PSI
+renewal; and the managed Pi's physical cold start, daemon restart recovery, and
+credential revocation/restoration. A silent network-loss test exposed stalled
+TCP streams and prompted a per-connection keepalive/user-timeout fix. The same
+guarded 60-second outage then recovered automatically about 10.5 seconds after
+connectivity returned, using the existing managed-service restart path.
+
+The acceptance follow-up also adds Ingress-only connected-client Diagnostics
+with compact scanner status rows. Client identities stay out of shared runtime
+snapshots and remote APIs. Credential testing confirmed the existing registry
+reload contract: all older sessions close, unchanged identities may reconnect,
+and revoked managed displays stop until access is restored and the service is
+explicitly restarted. This does not claim uninterrupted per-client sessions.
+Reviewed PR integration, remaining scoped cleanup and published-artifact
+acceptance are still release gates; the test display remains running until the
+operator agrees to its transition. Raw traces and private host details remain
+outside the repository.
+
+Only one genuine annotated `v0.29.0` tag matching the reviewed merge commit may
+trigger publication. Verify the public PyPI wheel and source distribution,
+clean base and `all` installations, amd64 and arm64 generic Docker images,
+amd64 and aarch64 Home Assistant App images and manifests, and a production-class
+Home Assistant upgrade from 0.28.1 to 0.29.0. Publish the reviewed wiki source
+after the release branch merges and before tagging, then create the reviewed
+GitHub Release and mark it Latest only after every publication path and physical
+release-acceptance check passes.
+
+After acceptance, restore the preferred production Home Assistant configuration
+and remove only the exact reviewed Local App, integration, client identity,
+profiles, virtual environments, recordings, temporary wiki checkout, release
+artifacts, and staging paths. Preserve unrelated operator data, production
+recordings, SSH credentials, and Home Assistant configuration. Plan the native
+HTTPS Raspberry Pi browser kiosk only after v0.29.0 is closed. The next requested
+production installation is a separate remote TUI on a Raspberry Pi with a 1080p
+HDMI display, using published artifacts and the wiki runbook after publication.
+Measure its actual terminal geometry rather than assuming the small display's
+100-by-30 layout, and record any beginner-facing documentation gaps.
+
+#### Closed Milestone 33.2 — Managed Raspberry Pi remote TUI display
+
+Milestone 33.2 closed through reviewed pull request 227 and merge commit
+`f4ee89fa35e46b0ab61ea1256405e3ddba4855eb`. All branch and post-merge CI,
+CodeQL, generic-container, and Home Assistant App-image checks passed. Physical
+acceptance covered cold boot, automatic `/dev/tty1` startup, bounded recovery,
+observe-only enforcement, credential revocation and restoration, local audio,
+intentional shutdown, the refined 100-by-30 layout, and exclusive Operational
+Logs and Keyboard Reference drawers.
+
+Closure restored the production Home Assistant App to disabled advanced TCP
+options and `null` mappings while preserving UDP 50000, revoked the temporary
+Pi identity, verified ports 50443 and 8443 closed from both validation clients,
+removed the dedicated Pi account, service, virtual environment, private state,
+cache, candidate wheel, and exact workstation staging, and restored the enabled
+and running `getty@tty1`. The reviewed wiki source was published at wiki commit
+`9d2e925211773bb8a84bc3408235b86f4f45e5d8` before release preparation began.
 
 Turn the interactively qualified Raspberry Pi remote TUI into an opt-in,
 boot-resilient physical-console deployment. Reuse one explicit named remote

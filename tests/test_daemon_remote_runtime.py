@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -251,7 +252,7 @@ def test_packaged_remote_service_factory_reuses_exact_daemon_sources(
     configuration = _configuration(tmp_path)
     configuration_path = tmp_path / "private-remote.toml"
     preflight = _preflight()
-    daemon_api = object()
+    daemon_api = SimpleNamespace(remote_clients_provider=None)
     event_stream = object()
     waterfall_session = object()
     pcmu_stream = object()
@@ -268,6 +269,9 @@ def test_packaged_remote_service_factory_reuses_exact_daemon_sources(
             constructed["observation_options"] = kwargs
 
     class ConstructedRouter(FakeComponent):
+        def connected_clients_snapshot(self) -> dict[str, object]:
+            return {"active": True, "clients": []}
+
         def __init__(
             self,
             listener: object,
@@ -325,6 +329,7 @@ def test_packaged_remote_service_factory_reuses_exact_daemon_sources(
         max_observation_leases=5,
         max_observation_leases_per_client=2,
     )
+    assert daemon_api.remote_clients_provider() == {"active": True, "clients": []}
 
     assert service.configuration_path == configuration_path
     assert service.preflight is preflight

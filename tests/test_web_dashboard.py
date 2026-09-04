@@ -38,6 +38,10 @@ from sds200.web_dashboard import (
 
 
 class FakeDaemonApiClient:
+    def remote_clients(self) -> dict[str, object]:
+        assert self.hello_calls == 1
+        return {"active": True, "clients": [{"client_id": "private-display"}]}
+
     def __init__(
         self,
         *,
@@ -513,6 +517,27 @@ def test_web_dashboard_home_assistant_ingress_allows_supervisor_client() -> None
         ]
         assert "frame-ancestors 'self'" in content_security_policy
         assert "frame-ancestors 'none'" not in content_security_policy
+
+
+def test_connected_clients_only_available_through_trusted_ingress() -> None:
+    api = FakeDaemonApiClient()
+    app = create_web_dashboard_app(lambda: api, home_assistant_ingress=True)
+    path = "/api/v1/home-assistant/connected-clients"
+    with TestClient(app) as untrusted:
+        assert untrusted.get(path).status_code == 403
+    assert api.entered is False
+    with TestClient(app, client=(
+        web_dashboard.WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT, 50000,
+    )) as ingress:
+        response = ingress.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json()["clients"] == [{"client_id": "private-display"}]
+        assert 'id="connected-clients-panel"' in ingress.get("/").text
+    assert api.closed is True
+    with TestClient(create_web_dashboard_app(lambda: api)) as standalone:
+        assert standalone.get(path).status_code == 404
+        assert 'id="connected-clients-panel"' not in standalone.get("/").text
 
 
 def test_web_dashboard_shell_does_not_connect_to_daemon() -> None:

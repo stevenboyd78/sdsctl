@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from math import isfinite
@@ -42,6 +42,7 @@ class DaemonApiOperation(StrEnum):
     CAPABILITIES = "daemon.capabilities"
     PING = "ping"
     RUNTIME_SNAPSHOT = "runtime.snapshot"
+    REMOTE_CLIENTS = "remote.clients"
     SCANNER_STATE = "scanner.state"
     AUDIO_HEALTH = "audio.health"
     RECORDING_STATUS = "recording.status"
@@ -62,6 +63,7 @@ DAEMON_API_READ_ONLY_OPERATIONS = (
     DaemonApiOperation.CAPABILITIES,
     DaemonApiOperation.PING,
     DaemonApiOperation.RUNTIME_SNAPSHOT,
+    DaemonApiOperation.REMOTE_CLIENTS,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
     DaemonApiOperation.RECORDING_STATUS,
@@ -433,12 +435,14 @@ class DaemonReadOnlyApi:
         *,
         recording_manager: _RecordingManagerLike | None = None,
         reconnect_available: bool = True,
+        remote_clients_provider: Callable[[], Mapping[str, object]] | None = None,
     ) -> None:
         if type(reconnect_available) is not bool:
             raise TypeError("Daemon reconnect availability must be a boolean.")
         self.runtime = runtime
         self.recording_manager = recording_manager
         self.reconnect_available = reconnect_available
+        self.remote_clients_provider = remote_clients_provider
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
         return tuple(
@@ -653,6 +657,12 @@ class DaemonReadOnlyApi:
             return self._capabilities(allowed_operations=allowed_operations)
         if operation is DaemonApiOperation.PING:
             return {"pong": True}
+        if operation is DaemonApiOperation.REMOTE_CLIENTS:
+            # Deliberately absent from remote peers' observe/control allowlists.
+            # Never add identities to the shared runtime snapshot/event stream.
+            if self.remote_clients_provider is None:
+                return {"active": False, "clients": []}
+            return self.remote_clients_provider()
         if operation in DAEMON_API_RECORDING_OPERATIONS:
             return self._dispatch_recording(operation)
         if operation in DAEMON_API_CONTROL_OPERATIONS:
