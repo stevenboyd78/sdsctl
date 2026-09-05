@@ -6,6 +6,25 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add opt-in native display login with a separate password and a server-side
+  status/events/themes/Waterfall allowlist. Deny scanner controls, audio,
+  recording downloads, management and unknown routes before creating daemon
+  work. Add an Ingress-only display-password rotation workflow without enabling
+  network access or changing ordinary operator credentials.
+- Add `browser-kiosk` HTTPS preflight and foreground Chromium launch, with a
+  private exclusive profile and no password argument or certificate bypass. Add
+  `browser-kiosk-service` to print a bounded graphical-session user-service
+  template. Physical Pi/browser qualification remains pending.
+
+### Fixed
+
+- Stop native browser consumers and show login-required/stale-data guidance on
+  authentication expiry. Preserve manual re-login and existing session limits.
+- Correct cookie-storage guidance: server session records are process-local,
+  while the browser may persist its cookie in the private profile.
+
 ## [0.29.2] - 2026-09-04
 
 ### Changed

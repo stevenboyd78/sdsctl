@@ -140,7 +140,7 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### Milestone 34.1 — Native HTTPS browser-kiosk design"
+    expected_heading = "### Milestone 34.1 — Display-only native browser kiosk"
     assert expected_heading in active_milestone
     for required in (
         "#### Closed v0.29.2 — TUI application header and production acceptance",

@@ -334,7 +334,7 @@ patches qualify the wide HDMI layout and separate the application header from
 scanner identity. Milestone 34.1 defines the next
 [native HTTPS browser-kiosk design](browser-kiosk-design.md), including an
 explicit display-only versus operator decision and bounded login recovery.
-The kiosk remains unimplemented: its certificate trust, browser permissions,
+The display-only kiosk is an unreleased candidate: its certificate trust, browser permissions,
 graphical session, and browser session are not the daemon-client credential
 lifecycle. This work does not make GUI support or public access available.
 

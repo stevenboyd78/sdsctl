@@ -127,7 +127,9 @@ memory-only browser storage. Treat its profile as sensitive and never copy its
 cookies to another device. The console service described here must not store
 those values.
 
-A managed browser kiosk is not released. The
-[Milestone 34.1 design](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk-design.md)
-separately addresses permissions, login recovery, graphical startup and testing.
-Full-screen browsing does not provide the TUI's observe-only authorization.
+A display-only browser kiosk is an unreleased candidate. Follow its
+[candidate setup and test guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk.md)
+only with the reviewed candidate build, not v0.29.2. It uses a separate display
+password and server-enforced restrictions. It still needs manual login after
+session expiry or web-service restart. Do not replace a working TUI service or
+enable browser boot startup before that host's graphical workflow is tested.

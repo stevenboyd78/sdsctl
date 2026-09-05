@@ -225,6 +225,7 @@ def rotate_home_assistant_app_advanced_ingress_identity(
 def rotate_home_assistant_app_advanced_ingress_dashboard_password(
     confirmation: object,
     *,
+    display_only: bool = False,
     options_path: str | Path = HOME_ASSISTANT_APP_OPTIONS_PATH,
     paths: HomeAssistantAppAdvancedAccessPaths | None = None,
     options: HomeAssistantAppOptions | None = None,
@@ -232,9 +233,11 @@ def rotate_home_assistant_app_advanced_ingress_dashboard_password(
 ) -> dict[str, object]:
     """Rotate and return the native-dashboard password exactly once."""
 
+    if type(display_only) is not bool:
+        raise TypeError("Display-only flag must be boolean.")
     _require_confirmation(
         confirmation,
-        HOME_ASSISTANT_APP_ADVANCED_PASSWORD_CONFIRMATION,
+        "ROTATE DISPLAY" if display_only else HOME_ASSISTANT_APP_ADVANCED_PASSWORD_CONFIRMATION,
     )
     with _locked_advanced_access():
         selected_options, exposure, selected_paths = _context(
@@ -243,7 +246,10 @@ def rotate_home_assistant_app_advanced_ingress_dashboard_password(
             options=options,
             supervisor_info=supervisor_info,
         )
-        one_time = rotate_home_assistant_app_dashboard_password(selected_paths)
+        one_time = (
+            rotate_home_assistant_app_dashboard_password(selected_paths, display_only=True)
+            if display_only else rotate_home_assistant_app_dashboard_password(selected_paths)
+        )
         snapshot = inspect_home_assistant_app_advanced_access(selected_paths)
         return {
             "status": _status_document(selected_options, exposure, snapshot),

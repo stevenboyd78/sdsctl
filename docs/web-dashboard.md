@@ -236,6 +236,16 @@ Re-login rotates the current cookie, while logout, replacement, eviction, or
 absolute expiry terminates associated long-lived responses without affecting
 other sessions.
 
+The unreleased [display-only browser kiosk](browser-kiosk.md) optionally enables
+`/auth/display/login` using a distinct `--lan-display-password-file`. The role is
+stored on the server session, never trusted from request parameters. Display
+requests use an explicit allowlist; scanner controls, audio, recording files,
+management, API documentation and unknown routes are denied before a daemon
+client is created. Both login forms share the same bounded password worker and
+failure budget. Existing operator login remains unchanged when no display
+password is configured. `/auth/session` exposes only the authenticated session's
+role and remaining absolute lifetime, without daemon access or credentials.
+
 Failed-login accounting uses a one-minute window bounded per peer, across the
 process, and to at most 256 tracked peers. Limits and concurrent-derivation
 admission are checked before spending scrypt work, and malformed submissions

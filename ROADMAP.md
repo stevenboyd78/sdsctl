@@ -11,30 +11,28 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 34.1 — Native HTTPS browser-kiosk design
+### Milestone 34.1 — Display-only native browser kiosk
 
-Define the next Raspberry Pi browser display separately from the accepted
-managed TUI. This milestone is design and documentation only; it does not ship
-a kiosk command, install a graphical session, replace a production display,
-change credentials, or enable a Home Assistant listener. See the
-[browser-kiosk design](docs/browser-kiosk-design.md) for the implementation
-boundary, outstanding decisions, and acceptance gates.
+The operator approved building and testing the display-only direction after
+the initial design and documentation only review. The candidate adds a separate
+display password and server-side permissions for status, events, themes and
+Waterfall. Scanner controls, audio, recordings/downloads, management and unknown
+routes are denied before daemon work. Ordinary operator and Ingress access
+remain separate. See the [design](docs/browser-kiosk-design.md) and
+[candidate setup guide](docs/browser-kiosk.md).
 
-Resolve display-only versus operator access before implementation. A full-screen
-browser is not an authorization boundary: the current native dashboard password
-does not grant the managed TUI's observe-only role. A display-only browser needs
-server-side permissions, including explicit denial of scanner controls and
-daemon recording mutations. Preserve exact-origin HTTPS, certificate validation,
-bounded authentication, one scanner owner, and the separate Ingress boundary.
+Manual login, the existing session limits and exact-origin HTTPS remain intact.
+Expiry closes browser consumers and shows a login-required/stale-data notice.
+The launcher checks TLS and the display-login endpoint, uses a private locked
+Chromium profile, and does not store a password, install trust, or enable a
+service. A bounded user-service template is supplied for graphical sessions.
 
-Define visible login-required behavior for session expiry and server restart,
-bounded recovery from temporary outages, private browser-profile handling,
-optional explicit audio, and deliberate shutdown. Automatic credential-based
-re-login and per-device browser enrollment require a separately reviewed design;
-do not extend session lifetimes or embed the operator password to make a kiosk
-appear unattended. Select a validation host and supported graphical stack before
-writing an installation runbook. Keep both accepted production TUI displays
-running until an exact transition is agreed.
+Physical qualification of one selected host/graphical stack, startup, outage
+recovery, certificate handling and cleanup remains required before publication.
+No cold-boot or kiosk hardware acceptance is inherited from the TUI tests. Keep
+both accepted production TUI displays running until an exact transition is
+agreed. Fully unattended re-login, per-device browser enrollment, audio and
+recording access are outside this first implementation.
 
 #### Closed v0.29.2 — TUI application header and production acceptance
 

@@ -149,6 +149,10 @@ class HomeAssistantAppAdvancedAccessPaths:
     def credential(self, client_id: str) -> Path:
         return self.clients / f"{_client_id(client_id)}.secret"
 
+    @property
+    def display_password(self) -> Path:
+        return self.root / "display-password"
+
 
 def default_home_assistant_app_advanced_access_paths(
     *,
@@ -269,12 +273,14 @@ class HomeAssistantAppAdvancedAccessSnapshot:
     certificate_sha256: str | None
     dashboard_password_present: bool
     clients: tuple[HomeAssistantAppAdvancedClient, ...]
+    display_password_present: bool = False
 
     def as_dict(self) -> dict[str, object]:
         return {
             "identity_present": self.identity_present,
             "certificate_sha256": self.certificate_sha256,
             "dashboard_password_present": self.dashboard_password_present,
+            "display_password_present": self.display_password_present,
             "clients": [client.as_dict() for client in self.clients],
         }
 
@@ -589,6 +595,9 @@ def inspect_home_assistant_app_advanced_access(
     password_present = paths.dashboard_password.exists()
     if password_present:
         _validate_secret_file(paths.dashboard_password)
+    display_password_present = paths.display_password.exists()
+    if display_password_present:
+        _validate_secret_file(paths.display_password)
     for client in state.clients:
         _validate_secret_file(paths.credential(client.client_id))
     return HomeAssistantAppAdvancedAccessSnapshot(
@@ -596,6 +605,7 @@ def inspect_home_assistant_app_advanced_access(
         certificate_sha256=certificate_digest,
         dashboard_password_present=password_present,
         clients=state.clients,
+        display_password_present=display_password_present,
     )
 
 
@@ -799,13 +809,17 @@ def _retire_unselected_identity_directories(
 
 def rotate_home_assistant_app_dashboard_password(
     paths: HomeAssistantAppAdvancedAccessPaths,
+    *,
+    display_only: bool = False,
 ) -> HomeAssistantAppOneTimeDashboardPassword:
     """Replace the native-dashboard password and return it exactly once."""
 
+    if type(display_only) is not bool:
+        raise TypeError("Display-only flag must be boolean.")
     _prepare_private_directories(paths)
     password = secrets.token_urlsafe(32)
     _atomic_write(
-        paths.dashboard_password,
+        paths.display_password if display_only else paths.dashboard_password,
         (password + "\n").encode("ascii"),
         mode=DAEMON_REMOTE_PRIVATE_FILE_MODE,
     )

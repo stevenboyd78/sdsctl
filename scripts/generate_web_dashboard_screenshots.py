@@ -815,6 +815,12 @@ class _DemoClockMiddleware:
                 raise RuntimeError("demo shell body preceded its response headers")
 
             body = b"".join(body_parts)
+            # Presentation-only kiosk fixture. Auth/permission enforcement is
+            # tested against the actual middleware, never this demo's fake API.
+            if scope.get("query_string") == b"kiosk=display":
+                body = body.replace(
+                    b'<html lang="en"', b'<html data-access-mode="display" lang="en"', 1,
+                )
             marker = _THEME_BOOTSTRAP_SCRIPT_TAG.encode("utf-8")
             if body.count(marker) != 1:
                 raise RuntimeError(

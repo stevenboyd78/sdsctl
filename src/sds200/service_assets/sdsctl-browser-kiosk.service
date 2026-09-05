@@ -1,0 +1,23 @@
+[Unit]
+Description=sdsctl manual-login display-only browser kiosk
+Documentation=https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk.md
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=300
+StartLimitBurst=3
+
+[Service]
+Type=simple
+EnvironmentFile=%h/.config/sdsctl-kiosk.env
+ExecStart=/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk --origin ${SDSCTL_KIOSK_ORIGIN} --browser ${SDSCTL_KIOSK_BROWSER} --ca-file ${SDSCTL_KIOSK_CA_FILE} --profile-directory %h/.sdsctl-kiosk
+Restart=on-failure
+RestartPreventExitStatus=78
+RestartSec=15s
+TimeoutStopSec=20s
+KillMode=control-group
+UMask=0077
+# Chromium needs its normal sandbox and graphical-session device access.
+# Do not copy the console TUI's namespace/device restrictions into this unit.
+
+[Install]
+WantedBy=graphical-session.target

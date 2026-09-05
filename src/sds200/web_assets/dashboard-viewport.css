@@ -10,6 +10,21 @@
 @layer sdsctl-viewport-contract, sdsctl-shared, sdsctl-managed-theme;
 
 @layer sdsctl-viewport-contract {
+  html[data-access-mode="display"] :is(
+    #pane-tab-controls, #pane-tab-audio, #pane-tab-recordings,
+    #pane-controls, #pane-audio, #pane-recordings
+  ) {
+    display: none !important;
+  }
+
+  #native-session-status {
+    grid-column: 1 / -1 !important;
+  }
+
+  #native-session-status form {
+    display: inline !important;
+  }
+
   :root {
     --content-width: 96rem !important;
     --workspace-gap: clamp(0.35rem, 1.2vmin, 0.9rem) !important;

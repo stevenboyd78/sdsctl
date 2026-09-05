@@ -892,12 +892,12 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert script.status_code == 200
     assert script.headers["content-type"].startswith("application/javascript")
     assert script.headers["cache-control"] == "no-store"
-    assert 'fetch(webUrl("api/v1/status")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/status")' in script.text
     assert 'new EventSource(webUrl("api/v1/events"))' in script.text
     assert "FALLBACK_REFRESH_INTERVAL_MS" in script.text
     assert "RECONCILE_INTERVAL_MS" in script.text
-    assert 'fetch(webUrl("api/v1/audio")' in script.text
-    assert 'fetch(webUrl("api/v1/waterfall")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/audio")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/waterfall")' in script.text
     assert "WATERFALL_BIN_COUNT = 240" in script.text
     assert "WATERFALL_HISTORY_CAPACITY = 240" in script.text
     assert "Waterfall record sequence is not contiguous" in script.text
@@ -913,8 +913,8 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     assert "new AbortController" in script.text
     assert "getBigUint64" in script.text
     assert "PCMU stream gap does not match daemon queue-loss counters" in script.text
-    assert 'fetch(webUrl("api/v1/recording")' in script.text
-    assert 'fetch(webUrl("api/v1/recordings")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/recording")' in script.text
+    assert 'dashboardFetch(webUrl("api/v1/recordings")' in script.text
     assert 'performRecordingAction("start")' in script.text
     assert 'performRecordingAction("stop")' in script.text
     assert 'performScannerHoldState("channel")' in script.text

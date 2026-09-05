@@ -334,6 +334,10 @@ def build_home_assistant_native_web_command(
         str(exposure.native_dashboard_host_port),
         "--lan-password-file",
         os.fspath(advanced_paths.dashboard_password),
+        *(
+            ("--lan-display-password-file", os.fspath(advanced_paths.display_password))
+            if snapshot.display_password_present else ()
+        ),
         "--lan-tls-certfile",
         os.fspath(advanced_paths.certificate(state.identity_generation)),
         "--lan-tls-keyfile",

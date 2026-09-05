@@ -256,6 +256,17 @@ def test_home_assistant_native_web_command_is_separate_and_secret_free(
     assert command[command.index("--lan-password-file") + 1] == str(
         advanced_paths.dashboard_password
     )
+    assert "--lan-display-password-file" not in command
+    display_password = rotate_home_assistant_app_dashboard_password(
+        advanced_paths, display_only=True,
+    ).password
+    display_command = build_home_assistant_native_web_command(
+        options, exposure, default_home_assistant_app_runtime_paths(), advanced_paths,
+    )
+    assert display_command[display_command.index("--lan-display-password-file") + 1] == str(
+        advanced_paths.display_password
+    )
+    assert display_password not in display_command
 
 
 def test_home_assistant_native_web_command_requires_initialized_lifecycle(

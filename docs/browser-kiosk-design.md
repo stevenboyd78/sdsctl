@@ -1,9 +1,12 @@
 # Native HTTPS browser-kiosk design
 
-Status: **design only — no managed browser-kiosk feature is released**.
+Status: **approved display-only scope; implementation candidate, not released**.
 Milestone 34.1 follows the accepted v0.29.0 managed TUI and the v0.29.1/v0.29.2
-HDMI presentation patches. This document is a requirements review, not an
-installation guide. No proposed command or configuration below is available yet.
+HDMI presentation patches. The operator selected the display-only starting point
+and approved implementation followed by testing. See the
+[candidate setup guide](browser-kiosk.md) for the implemented commands and the
+remaining physical-acceptance boundary. The latest published v0.29.2 does not
+include these commands.
 
 ## What a browser kiosk would add
 
@@ -40,8 +43,12 @@ dashboard login nor the TUI's client secret is a new browser-display identity.
 
 ## Decision 1: display-only or operator access
 
-Recommended starting point: a **display-only screen with server-side
-permissions**. This remains a proposal until the operator selects the scope.
+Selected starting point: a **display-only screen with server-side permissions**.
+The candidate uses a separate manually entered display password. It permits
+status, events, themes and Waterfall; audio, recording inventory/downloads and
+all scanner or management mutations are denied. The password is shared by the
+display sessions using that server, not an independently revocable per-device
+identity. It must differ from the operator password.
 
 For that mode, define an explicit allowlist for scanner status, live events,
 selected diagnostics and visible Waterfall demand. Classify optional local
@@ -150,6 +157,6 @@ eight-hour limit merely to avoid the login screen.
    production listeners, identities, recordings and unrelated browser data.
    Publish only after the tested feature and installation documentation agree.
 
-The output of this design phase is an agreed implementation contract. It is not
-an authorization to change production hosts, browser trust, credentials, ports
-or startup configuration, and it does not promise a release date or version.
+This contract does not authorize unspecified production-host, browser-trust,
+credential, port or startup changes. Physical acceptance still needs a selected
+test host and an exact deployment scope; no release date or version is promised.

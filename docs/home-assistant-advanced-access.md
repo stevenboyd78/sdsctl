@@ -222,9 +222,13 @@ be saved in its profile. Treat that profile as sensitive and never copy its
 cookies between devices. Restarting the web service or reaching the session's
 absolute expiry requires a new login, even if the browser retains a cookie.
 
-Managed kiosk startup and unattended re-login are not packaged features. Review
-the [browser-kiosk design](browser-kiosk-design.md) before treating ordinary
-full-screen browsing as an unattended or display-only installation.
+The unreleased [display-only kiosk candidate](browser-kiosk.md) adds a separate
+display-password workflow in the Ingress Advanced access panel. Its display
+login is `/auth/display/login`; the operator login remains `/auth/login`.
+Creating or rotating either password requires saving its one-time value and
+restarting the App if native access is enabled. Rotation is not live until that
+restart, which invalidates existing browser sessions. Neither action enables a
+listener or Network mapping. Fully unattended re-login is not implemented.
 
 ## Rotate, revoke, restore, or disable
 

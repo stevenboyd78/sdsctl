@@ -2920,6 +2920,116 @@ async function auditHomeAssistantWaterfallCard(
   return {screenshotPaths, viewportCases: 3};
 }
 
+async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
+    (() => {
+      const originalFetch = window.fetch;
+      window.__kioskAudit = {requests: [], expired: false, offline: false, boundedReads: true};
+      window.fetch = async (url, options) => {
+        const path = new URL(url, location.href).pathname;
+        window.__kioskAudit.requests.push(path);
+        if (path === '/auth/session' || path === '/api/v1/status') {
+          window.__kioskAudit.boundedReads &&= options?.signal instanceof AbortSignal;
+        }
+        if (path === "/auth/session") {
+          const seconds = new URL(location.href).hash === '#short-session' ? 0.25 : 28800;
+          return new Response(JSON.stringify({display_only: true, remaining_seconds: seconds}),
+            {headers: {"Content-Type": "application/json"}});
+        }
+        if (window.__kioskAudit.expired) return new Response('{}', {status: 401});
+        if (window.__kioskAudit.offline) throw new TypeError('Fictional network outage');
+        return originalFetch(url, options);
+      };
+    })();
+  `});
+  try {
+    for (const viewport of VIEWPORTS) {
+      await setViewport(cdp, viewport);
+      await navigate(cdp, baseUrl + "/?kiosk=display", timeoutMs, {
+        installAuditLibrary: false, waitForDashboardReady: false,
+      });
+      const state = await evaluate(cdp, `(async () => {
+        const refreshWhenIdle = async () => {
+          for (let attempt = 0; refreshInProgress && attempt < 500; attempt += 1) {
+            await new Promise(resolve => setTimeout(resolve, 10));
+          }
+          if (refreshInProgress) throw new Error('Kiosk status did not settle');
+          await refreshStatus();
+        };
+        stopEventStream();
+        await refreshWhenIdle();
+        const visibleTabs = [...document.querySelectorAll('[data-workspace-tab]')]
+          .filter(tab => getComputedStyle(tab).display !== 'none').map(tab => tab.dataset.workspaceTab);
+        activateWorkspacePane('controls');
+        const rejectedPane = activeWorkspacePane;
+        await performScannerControl('reconnect', 'Reconnect');
+        await performRecordingAction('start');
+        await startAudioPlayback();
+        await refreshRecordings();
+        activateWorkspacePane('waterfall');
+        await new Promise(resolve => setTimeout(resolve, 150));
+        const liveCanvas = document.querySelector('#waterfall-spectrum').width > 0;
+        stopEventStream();
+        window.__kioskAudit.offline = true;
+        await refreshWhenIdle();
+        const outageMarkedStale = document.querySelector('#dashboard-message').textContent.includes('stale');
+        window.__kioskAudit.offline = false;
+        await refreshWhenIdle();
+        const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
+        startEventStream();
+        window.__kioskAudit.expired = true;
+        await refreshWhenIdle();
+        const requestsAtExpiry = window.__kioskAudit.requests.length;
+        await new Promise(resolve => setTimeout(resolve, 2200));
+        await refreshStatus();
+        await refreshRecordings();
+        startEventStream();
+        reconcileWaterfallDemand();
+        return {visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, recovered,
+          boundedReads: window.__kioskAudit.boundedReads,
+          message: document.querySelector('#native-session-status').textContent,
+          login: document.querySelector('#native-session-status a')?.getAttribute('href'),
+          expired: authenticationRequired, eventsClosed: eventSource === null,
+          waterfallClosed: waterfallAbortController === null,
+          requestsAtExpiry, requestsAfter: window.__kioskAudit.requests.length,
+          paths: window.__kioskAudit.requests,
+          horizontalOverflow: document.documentElement.scrollWidth > innerWidth};
+      })()`);
+      if (state.visibleTabs.join(',') !== 'scanner,waterfall,diagnostics' ||
+          state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
+          !state.outageMarkedStale || !state.recovered || !state.boundedReads ||
+          !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
+          !state.message.includes('stale') || !state.login?.endsWith('/auth/display/login') ||
+          state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {
+        throw new Error(`display kiosk ${viewport.name} failed: ${JSON.stringify(state)}`);
+      }
+    }
+    // A fragment-only navigation would reuse the last page and never fire a
+    // load event. Start a fresh document so the short-session fixture is read.
+    await navigate(cdp, "about:blank", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    await navigate(cdp, baseUrl + "/?kiosk=display#short-session", timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    const timedExpiry = await evaluate(cdp, `(async () => {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return {expired: authenticationRequired, eventsClosed: eventSource === null,
+        forced401: window.__kioskAudit.expired,
+        message: document.querySelector('#native-session-status').textContent};
+    })()`);
+    if (!timedExpiry.expired || !timedExpiry.eventsClosed || timedExpiry.forced401 ||
+        !timedExpiry.message.includes('stale')) {
+      throw new Error(`display kiosk absolute expiry timer failed: ${JSON.stringify(timedExpiry)}`);
+    }
+    if (pageFailures.length !== baseline) throw new Error("Display kiosk raised browser exceptions.");
+    console.log('PASS: display-only kiosk geometry, restricted UI, Waterfall, network recovery, expiry and stopped retries');
+  } finally {
+    await cdp.send("Page.removeScriptToEvaluateOnNewDocument", {identifier: installed.identifier});
+  }
+}
+
 async function openChrome(chrome, profileDirectory, remotePort) {
   const child = spawn(
     chrome,
@@ -3329,6 +3439,7 @@ async function run(options) {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
     }
+    await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {
       throw new Error(`internal matrix count mismatch: ${result.caseCount}`);

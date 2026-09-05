@@ -24,6 +24,8 @@ from .exceptions import ConfigurationError
 
 WEB_DASHBOARD_AUTH_COOKIE = "__Host-sdsctl-session"
 WEB_DASHBOARD_LOGIN_PATH = "/auth/login"
+WEB_DASHBOARD_DISPLAY_LOGIN_PATH = "/auth/display/login"
+WEB_DASHBOARD_SESSION_PATH = "/auth/session"
 WEB_DASHBOARD_LOGOUT_PATH = "/auth/logout"
 WEB_DASHBOARD_MINIMUM_PASSWORD_CHARACTERS = 16
 WEB_DASHBOARD_DEFAULT_SESSION_IDLE_SECONDS = 30 * 60
@@ -55,6 +57,13 @@ _TokenFactory = Callable[[], str]
 _SESSION_TOKEN_CHARACTERS = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 )
+_DISPLAY_READ_PATHS = frozenset({
+    "/", "/healthz", "/api/v1/status", "/api/v1/snapshot",
+    "/api/v1/events", "/api/v1/waterfall", WEB_DASHBOARD_SESSION_PATH,
+    "/assets/dashboard.css", "/assets/dashboard-viewport.css",
+    "/assets/system-palettes.css", "/assets/theme-bootstrap.js",
+    "/assets/dashboard.js", "/assets/favicon.svg",
+})
 
 
 @dataclass(frozen=True, slots=True)
@@ -67,6 +76,7 @@ class _SessionWatcher:
 class _Session:
     absolute_expires_at: float
     idle_expires_at: float
+    display_only: bool = False
     watchers: dict[int, _SessionWatcher] = field(default_factory=dict)
 
 
@@ -77,6 +87,7 @@ class _SessionLease:
     watcher_id: int
     revoked: asyncio.Event
     remaining_seconds: float
+    display_only: bool
     released: bool = False
 
     def release(self) -> None:
@@ -94,6 +105,7 @@ class WebDashboardAuthentication:
         password: str,
         origin: str,
         *,
+        display_password: str | None = None,
         idle_seconds: int = WEB_DASHBOARD_DEFAULT_SESSION_IDLE_SECONDS,
         absolute_seconds: int = WEB_DASHBOARD_DEFAULT_SESSION_ABSOLUTE_SECONDS,
         max_sessions: int = WEB_DASHBOARD_DEFAULT_MAX_SESSIONS,
@@ -130,6 +142,19 @@ class WebDashboardAuthentication:
         self._password_digest = _derive_password_key(
             password.encode("utf-8"),
             self._password_salt,
+        )
+        if display_password is not None:
+            if not isinstance(display_password, str) or len(display_password) < 16:
+                raise ValueError("Display password must contain at least 16 characters.")
+            if compare_digest(display_password.encode("utf-8"), password.encode("utf-8")):
+                raise ValueError("Display and operator passwords must be different.")
+        self._display_password_salt = (
+            _new_password_salt() if display_password is not None else self._password_salt
+        )
+        self._display_password_digest = (
+            None if display_password is None else _derive_password_key(
+                display_password.encode("utf-8"), self._display_password_salt,
+            )
         )
         self._idle_seconds = idle_seconds
         self._absolute_seconds = absolute_seconds
@@ -178,7 +203,19 @@ class WebDashboardAuthentication:
         )
         return compare_digest(self._password_digest, candidate_digest)
 
-    async def authenticate_password(self, candidate: str | None, peer: str) -> bool:
+    @property
+    def display_enabled(self) -> bool:
+        return self._display_password_digest is not None
+
+    def _display_password_matches(self, candidate: str) -> bool:
+        derived = _derive_password_key(candidate.encode("utf-8"), self._display_password_salt)
+        return self._display_password_digest is not None and compare_digest(
+            self._display_password_digest, derived,
+        )
+
+    async def authenticate_password(
+        self, candidate: str | None, peer: str, *, display_only: bool = False,
+    ) -> bool:
         """Apply one bounded password attempt without blocking the event loop."""
 
         if not isinstance(peer, str) or not peer:
@@ -189,7 +226,10 @@ class WebDashboardAuthentication:
             return False
 
         try:
-            submitted = self._submit_password_derivation(candidate)
+            submitted = (
+                self._submit_password_derivation(candidate, display_only=True)
+                if display_only else self._submit_password_derivation(candidate)
+            )
         except BaseException:
             self.close()
             self._release_password_derivation(peer)
@@ -236,14 +276,17 @@ class WebDashboardAuthentication:
             self._password_derivation_peer = peer
             return True
 
-    def _submit_password_derivation(self, candidate: str) -> Future[bool]:
+    def _submit_password_derivation(
+        self, candidate: str, *, display_only: bool = False,
+    ) -> Future[bool]:
         with self._lock:
             if self._password_executor is None:
                 self._password_executor = ThreadPoolExecutor(
                     max_workers=1,
                     thread_name_prefix="sdsctl-web-password",
                 )
-            return self._password_executor.submit(self.password_matches, candidate)
+            verifier = self._display_password_matches if display_only else self.password_matches
+            return self._password_executor.submit(verifier, candidate)
 
     def _complete_password_derivation(
         self,
@@ -319,9 +362,11 @@ class WebDashboardAuthentication:
             self._next_global_password_derivation_at = 0.0
         return failures
 
-    def issue_session(self) -> str:
+    def issue_session(self, *, display_only: bool = False) -> str:
         """Create one opaque session and retain only its SHA-256 digest."""
 
+        if type(display_only) is not bool or (display_only and not self.display_enabled):
+            raise ValueError("Display sessions require a configured display password.")
         token = self._token_factory()
         if (
             not isinstance(token, str)
@@ -335,6 +380,7 @@ class WebDashboardAuthentication:
         session = _Session(
             absolute_expires_at=now + self._absolute_seconds,
             idle_expires_at=now + self._idle_seconds,
+            display_only=display_only,
         )
         with self._lock:
             self._prune_locked(now)
@@ -389,12 +435,14 @@ class WebDashboardAuthentication:
             watcher_id = self._watcher_id
             session.watchers[watcher_id] = _SessionWatcher(loop, revoked)
             remaining_seconds = session.absolute_expires_at - now
+            display_only = session.display_only
         return _SessionLease(
             authentication=self,
             digest=digest,
             watcher_id=watcher_id,
             revoked=revoked,
             remaining_seconds=remaining_seconds,
+            display_only=display_only,
         )
 
     def revoke_session(self, token: str | None) -> None:
@@ -454,11 +502,13 @@ class WebDashboardAuthenticationMiddleware:
         app: ASGIApp,
         *,
         authentication: WebDashboardAuthentication,
+        display_theme_paths: frozenset[str] = frozenset(),
     ) -> None:
         if not isinstance(authentication, WebDashboardAuthentication):
             raise TypeError("Web dashboard authentication middleware requires a valid policy.")
         self._app = app
         self._authentication = authentication
+        self._display_paths = _DISPLAY_READ_PATHS | display_theme_paths
 
     async def __call__(
         self,
@@ -488,12 +538,18 @@ class WebDashboardAuthenticationMiddleware:
 
         method = scope["method"].upper()
         path = scope["path"]
-        if path == WEB_DASHBOARD_LOGIN_PATH:
+        display_login = path == WEB_DASHBOARD_DISPLAY_LOGIN_PATH
+        if display_login and not self._authentication.display_enabled:
+            await _json_error("Display login is not configured.", status_code=404)(
+                scope, receive, send,
+            )
+            return
+        if path == WEB_DASHBOARD_LOGIN_PATH or display_login:
             if method == "GET":
-                await _login_response()(scope, receive, send)
+                await _login_response(display_only=display_login)(scope, receive, send)
                 return
             if method == "POST":
-                await self._login(scope, receive, send, headers)
+                await self._login(scope, receive, send, headers, display_only=display_login)
                 return
 
         if not _fetch_site_allowed(headers):
@@ -514,15 +570,21 @@ class WebDashboardAuthenticationMiddleware:
 
         token = _cookie_value(headers, WEB_DASHBOARD_AUTH_COOKIE)
         if path == WEB_DASHBOARD_LOGOUT_PATH and method == "POST":
-            if self._authentication.authorize_session(token) is None:
+            logout_lease = self._authentication.acquire_session(token)
+            if logout_lease is None:
                 await _json_error(
                     WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL,
                     status_code=401,
                 )(scope, receive, send)
                 return
+            logout_path = (
+                WEB_DASHBOARD_DISPLAY_LOGIN_PATH if logout_lease.display_only
+                else WEB_DASHBOARD_LOGIN_PATH
+            )
+            logout_lease.release()
             self._authentication.revoke_session(token)
             logout_response = RedirectResponse(
-                WEB_DASHBOARD_LOGIN_PATH,
+                logout_path,
                 status_code=303,
             )
             logout_response.delete_cookie(
@@ -548,6 +610,27 @@ class WebDashboardAuthenticationMiddleware:
             )
             _secure_response(unauthorized_response)
             await unauthorized_response(scope, receive, send)
+            return
+
+        if lease.display_only and (method != "GET" or path not in self._display_paths):
+            lease.release()
+            await _json_error(
+                "Display-only access does not permit this operation.", status_code=403,
+            )(
+                scope, receive, send,
+            )
+            return
+        scope.setdefault("state", {})["sdsctl_display_only"] = lease.display_only
+        if path == WEB_DASHBOARD_SESSION_PATH and method == "GET":
+            response = JSONResponse({
+                "display_only": lease.display_only,
+                "remaining_seconds": lease.remaining_seconds,
+            })
+            _secure_response(response)
+            try:
+                await response(scope, receive, send)
+            finally:
+                lease.release()
             return
 
         response_started = False
@@ -608,6 +691,8 @@ class WebDashboardAuthenticationMiddleware:
         receive: Receive,
         send: Send,
         headers: Headers,
+        *,
+        display_only: bool = False,
     ) -> None:
         if not _origin_matches(headers, self._authentication.origin):
             await _json_error(
@@ -631,13 +716,17 @@ class WebDashboardAuthenticationMiddleware:
         candidate = _submitted_password(body)
         client = scope.get("client")
         peer = "unknown" if client is None else str(client[0])
-        if not await self._authentication.authenticate_password(candidate, peer):
-            await _login_response(failed=True, status_code=401)(scope, receive, send)
+        if not await self._authentication.authenticate_password(
+            candidate, peer, display_only=display_only,
+        ):
+            await _login_response(failed=True, status_code=401, display_only=display_only)(
+                scope, receive, send,
+            )
             return
 
         previous_token = _cookie_value(headers, WEB_DASHBOARD_AUTH_COOKIE)
         self._authentication.revoke_session(previous_token)
-        token = self._authentication.issue_session()
+        token = self._authentication.issue_session(display_only=display_only)
         response = RedirectResponse("/", status_code=303)
         response.set_cookie(
             WEB_DASHBOARD_AUTH_COOKIE,
@@ -806,17 +895,24 @@ def _default_token_factory() -> str:
     return secrets.token_urlsafe(32)
 
 
-def _login_response(*, failed: bool = False, status_code: int = 200) -> HTMLResponse:
+def _login_response(
+    *, failed: bool = False, status_code: int = 200, display_only: bool = False,
+) -> HTMLResponse:
     failure = (
         f'<p role="alert">{escape(WEB_DASHBOARD_AUTHENTICATION_FAILED_DETAIL)}</p>'
         if failed
         else ""
     )
+    login_path = WEB_DASHBOARD_DISPLAY_LOGIN_PATH if display_only else WEB_DASHBOARD_LOGIN_PATH
+    description = (
+        "Display-only sign in. Scanner controls, audio and recordings are not available."
+        if display_only else "Operator sign in."
+    )
     response = HTMLResponse(
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         "<title>Sign in | sdsctl</title></head><body><main><h1>sdsctl</h1>"
-        f'{failure}<form method="post" action="{WEB_DASHBOARD_LOGIN_PATH}">'
+        f'<p>{description}</p>{failure}<form method="post" action="{login_path}">'
         '<label for="password">Password</label>'
         '<input id="password" name="password" type="password" '
         'autocomplete="current-password" required autofocus>'
@@ -837,6 +933,8 @@ def _login_response(*, failed: bool = False, status_code: int = 200) -> HTMLResp
         },
     )
     _secure_response(response)
+    if display_only:
+        response.headers["X-SDSCTL-Display-Login"] = "1"
     return response
 
 
