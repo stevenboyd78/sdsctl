@@ -92,6 +92,42 @@ terminal, use that terminal application's font preferences or zoom controls
 instead. The TUI adapts to the available rows and columns. Over SSH, the local
 terminal's font does not alter the remote Pi's physical-console font.
 
+## Larger font on a 1080p HDMI display
+
+The font used for the improved HDMI readability was **Terminus, 12×24 pixels**
+(12 wide, 24 high), with the `Uni2` character set. The font file is
+`/usr/share/consolefonts/Uni2-Terminus24x12.psf.gz` — note the reversed dimensions
+in the filename. At 1920×1080 this gave **160 columns × 45 rows** and retained
+the wide TUI layout. `stty size` reports rows first, so the expected output was
+`45 160`, compared with the original `67 240`.
+
+The preview used `setfont` on the physical `/dev/tty1` console, not an sdsctl
+font option. The saved Debian/Raspberry Pi OS settings were:
+
+```ini
+# Font entries in /etc/default/console-setup
+CHARMAP="UTF-8"
+CODESET="Uni2"
+FONTFACE="Terminus"
+FONTSIZE="12x24"
+```
+
+**Follow the [step-by-step HDMI font guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/managed-pi-display.md#enlarge-the-hdmi-console-font-1080p-example)**
+for checking/installing the tools, stopping the exact display instance, saving
+the old font and Unicode map, previewing the larger font, regenerating the boot
+cache, adding service ordering, verifying after reboot, and restoring the old
+font. Do not change the font underneath a running TUI.
+
+Saved configuration is not proof of boot persistence: a later check found the
+test console back at `67 240` despite these settings. The guide explains how to
+check the actual console and investigate startup ordering without hiding a
+failed setup. Keep the small Pi's accepted font independent of the HDMI choice.
+
+This method is for a **Linux text console**. In a **GUI terminal**, use font
+preferences or zoom; over **SSH**, adjust your local terminal; in the **WebUI**,
+use browser zoom/display scaling. Those settings do not alter the remote Pi's
+physical text-console font.
+
 ## Credential recovery
 
 Credential registry changes close all existing remote sessions, even for other
