@@ -8,6 +8,14 @@ and approved implementation followed by testing. See the
 remaining physical-acceptance boundary. The latest published v0.29.2 does not
 include these commands.
 
+Interactive acceptance now covers two concurrent Pi displays and App-restart
+display-login recovery at candidate `82dd94d`. The
+[acceptance record](browser-kiosk.md#milestone-341-candidate-acceptance) separates
+physical results from automated checks. Production TUI restoration passed on
+both displays, and approved temporary-resource cleanup is complete.
+Cold-boot/service qualification remains open; the implementation order below is
+the design contract, not a claim that every gate is complete.
+
 ## What a browser kiosk would add
 
 A Pi would open the existing native HTTPS dashboard in a dedicated graphical
@@ -158,5 +166,5 @@ eight-hour limit merely to avoid the login screen.
    Publish only after the tested feature and installation documentation agree.
 
 This contract does not authorize unspecified production-host, browser-trust,
-credential, port or startup changes. Physical acceptance still needs a selected
-test host and an exact deployment scope; no release date or version is promised.
+credential, port or startup changes. Any remaining physical tests need their
+own exact deployment scope; no release date or version is promised.

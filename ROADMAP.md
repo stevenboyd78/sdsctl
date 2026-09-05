@@ -27,12 +27,17 @@ The launcher checks TLS and the display-login endpoint, uses a private locked
 Chromium profile, and does not store a password, install trust, or enable a
 service. A bounded user-service template is supplied for graphical sessions.
 
-Physical qualification of one selected host/graphical stack, startup, outage
-recovery, certificate handling and cleanup remains required before publication.
-No cold-boot or kiosk hardware acceptance is inherited from the TUI tests. Keep
-both accepted production TUI displays running until an exact transition is
-agreed. Fully unattended re-login, per-device browser enrollment, audio and
-recording access are outside this first implementation.
+Interactive candidate acceptance at `82dd94d` passed on concurrent 1920x1080
+HDMI and 800x480 Raspberry Pi displays, including manual login, compact layout,
+menu/Details, local Waterfall controls and reload-to-display-login recovery after
+an App restart. See the [evidence and limits](docs/browser-kiosk.md#milestone-341-candidate-acceptance).
+The earlier copy-shortcut exits remain unreproduced, not established as fixed.
+Production restoration passed on both physical TUI displays, and the approved
+temporary-resource cleanup is complete. Kiosk cold-boot and production
+graphical-service qualification are not claimed.
+No acceptance is inherited from the TUI tests. Fully unattended re-login,
+per-device browser enrollment, audio and recording access remain outside this
+first implementation. The candidate remains unreleased.
 
 #### Closed v0.29.2 — TUI application header and production acceptance
 

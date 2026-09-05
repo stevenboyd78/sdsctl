@@ -16,7 +16,8 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 - Add `browser-kiosk` HTTPS preflight and foreground Chromium launch, with a
   private exclusive profile and no password argument or certificate bypass. Add
   `browser-kiosk-service` to print a bounded graphical-session user-service
-  template. Physical Pi/browser qualification remains pending.
+  template. Interactive acceptance passed on two Pi displays; automatic
+  cold-boot startup and production graphical-service qualification remain open.
 
 ### Fixed
 

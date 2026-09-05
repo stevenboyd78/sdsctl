@@ -133,3 +133,6 @@ only with the reviewed candidate build, not v0.29.2. It uses a separate display
 password and server-enforced restrictions. It still needs manual login after
 session expiry or web-service restart. Do not replace a working TUI service or
 enable browser boot startup before that host's graphical workflow is tested.
+Interactive candidate testing passed on 1080p HDMI and 800×480 Pi displays,
+including manual re-login after an App restart. This does not qualify automatic
+kiosk cold boot or replace the production TUI installation described above.

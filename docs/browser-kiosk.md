@@ -1,8 +1,10 @@
 # Display-only browser kiosk — candidate setup and testing
 
 **Unreleased candidate. These commands are not in v0.29.2.** Use only a reviewed
-candidate checkout/build for now. No Pi graphical stack or cold boot has yet
-been physically accepted for this feature. This guide does not replace the
+candidate checkout/build for now. Interactive testing passed on two Pi displays;
+automatic kiosk cold-boot startup remains unqualified. See the
+[acceptance record](#milestone-341-candidate-acceptance) for the exact limits.
+This guide does not replace the
 [production TUI guide](managed-pi-display.md).
 
 ## What this screen can do
@@ -122,8 +124,9 @@ the operator password into this profile. Passwords start hidden; use **Show
 password** to check your typing, then **Hide password** before anyone else can
 see the screen. Submitting or leaving the page hides the password again. The
 visibility toggle does not save the password or change authentication.
-**Sign out** returns to display login;
-closing the browser or pressing Ctrl+C stops the foreground launcher. Successful
+**Sign out** returns to display login. Closing the browser or interrupting the
+foreground launcher from its launching terminal stops the kiosk. Do not use
+the browser's text-copy shortcut as a stop command. Successful
 close returns `0`, a browser crash or transient connectivity failure returns
 `75`, and configuration/preflight contract errors return `78`.
 
@@ -201,3 +204,34 @@ service if access must be invalidated; this affects all browsers using that
 display password. Remove only the named kiosk profile and any dedicated trust
 entry after reviewing them. Never clear a personal browser profile, unrelated
 certificate store, production TUI credentials or a listener needed by others.
+
+## Milestone 34.1 candidate acceptance
+
+The server/UI candidate at `82dd94d` was tested with one Home Assistant App and
+two concurrent Raspberry Pi browser displays. Both ran Debian 13.6 arm64 with
+labwc 0.9.8: a 1920×1080 HDMI display using Chromium 152.0.7977.75 and an
+800×480 DSI display using Chromium 151.0.7922.173. Dedicated temporary accounts,
+browser profiles and certificate stores kept production TUI credentials and
+personal browser data separate. Temporary graphical seat units were not enabled
+for boot. These results do not qualify the packaged graphical-session user
+service as an unattended installation.
+
+| Check | Evidence and result |
+| --- | --- |
+| Manual display login and readable layout | Operator confirmed both displays, including the compact menu and pane headings. |
+| Menu, Details and local Waterfall controls | Operator confirmed operation, including expanded details, pause/resume, clear, pointer/fullscreen and appearance controls. |
+| Concurrent live data and Waterfall bounds | Both displays updated from one daemon; bounds populated with the scanner in Waterfall mode. Photos showed 4.0 fps, not a sustained-rate benchmark. |
+| App-restart login recovery | On both displays, reload before using the sign-in link returned to **Display-only sign in**; the same password worked and live data resumed. |
+| Authorization, expiry and connection failures | Automated middleware, TLS and browser tests passed for denied routes/role changes, idle/absolute expiry, stale-data guidance, transient outages and consumer cleanup. This is not a claim that each failure was physically injected on both Pis. |
+| Regression checks | 5,191 Python tests, lint/type checks, documentation, distributions and the real-Chrome audit passed. GitHub reported 19 successful checks and three skipped publication jobs at this runtime commit. |
+
+Earlier reported kiosk exits around copy shortcuts were not reproduced in later
+tests on either display. No keyboard/signal-handling fix was made; do not describe
+those exits as resolved. Separately qualify intentional shutdown, cold boot and
+the chosen production graphical-service workflow before promising unattended
+startup. A manual power cycle during troubleshooting is not cold-boot acceptance.
+
+Production restoration passed: both physical TUI displays are updating again.
+Approved temporary-resource cleanup is complete. Release publication remains
+pending. The runtime version still identifies an unreleased candidate, not a
+new published Python package.
