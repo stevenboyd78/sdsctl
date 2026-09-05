@@ -2993,6 +2993,116 @@ async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
   console.log('PASS: native login Show/Hide, keyboard, masking lifecycle, failed login and no-JS form');
 }
 
+async function auditDisplayNavigation(cdp) {
+  await evaluate(cdp, `(async () => {
+    for (let attempt=0; attempt<500 && (refreshInProgress || document.querySelector('#status-badge').dataset.state !== 'online'); attempt++) {
+      await new Promise(resolve=>setTimeout(resolve,10));
+    }
+    stopEventStream();
+    if (refreshInProgress) throw new Error('Display navigation status did not settle');
+    await refreshStatus();
+  })()`);
+  await frames(cdp);
+  const assertState = async (expression, label) => {
+    if (!await evaluate(cdp, expression)) {
+      const focus = await evaluate(cdp, `({tag: document.activeElement.tagName, id: document.activeElement.id, open: document.querySelector('#native-menu').open, controls: [...document.querySelectorAll('#native-menu button, #native-menu select, #native-menu input')].map(e=>[e.tagName,e.id,e.type,e.getClientRects().length,e.tabIndex])})`);
+      throw new Error(`Display navigation: ${label} ${JSON.stringify(focus)}`);
+    }
+  };
+  const workspaceBefore = await evaluate(cdp, `JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON())`);
+  await clickElement(cdp, '#native-menu-toggle');
+  await assertState(`JSON.stringify(document.querySelector('.workspace-shell').getBoundingClientRect().toJSON()) === ${JSON.stringify(workspaceBefore)}`, 'overlay must not reflow workspace');
+  await assertState(`document.querySelector('#native-menu').open &&
+    document.querySelector('#native-menu-toggle').getAttribute('aria-expanded') === 'true' &&
+    document.querySelector('#native-menu').contains(document.activeElement)`, 'opening/focus');
+  for (let index = 0; index < 14; index++) {
+    await pressKey(cdp, 'Tab', 'Tab', 9);
+    await assertState(`document.querySelector('#native-menu').contains(document.activeElement)`, 'modal Tab containment');
+  }
+  for (let index = 0; index < 14; index++) {
+    await pressKey(cdp, 'Tab', 'Tab', 9, {modifiers: 8});
+    await assertState(`document.querySelector('#native-menu').contains(document.activeElement)`, 'modal Shift+Tab containment');
+  }
+  await pressKey(cdp, 'Escape', 'Escape', 27);
+  await assertState(`!document.querySelector('#native-menu').open &&
+    document.activeElement.id === 'native-menu-toggle'`, 'Escape/focus restoration');
+  await cdp.send('Input.dispatchKeyEvent', {type: 'keyDown', key: 'Enter', code: 'Enter',
+    windowsVirtualKeyCode: 13, text: '\r'});
+  await cdp.send('Input.dispatchKeyEvent', {type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13});
+  await frames(cdp);
+  await assertState(`document.querySelector('#native-menu').open`, 'keyboard opening');
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mousePressed', x: 780, y: 200, button: 'left', clickCount: 1});
+  await cdp.send('Input.dispatchMouseEvent', {type: 'mouseReleased', x: 780, y: 200, button: 'left', clickCount: 1});
+  await frames(cdp);
+  await assertState(`!document.querySelector('#native-menu').open`, 'outside dismissal');
+  const touch = await evaluate(cdp, `(() => {const r=document.querySelector('#native-menu-toggle').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()`);
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchStart', touchPoints: [touch]});
+  await cdp.send('Input.dispatchTouchEvent', {type: 'touchEnd', touchPoints: []});
+  await frames(cdp);
+  await assertState(`document.querySelector('#native-menu').open`, 'touch opening');
+  await clickElement(cdp, '.native-menu-header button');
+  for (const theme of THEMES) {
+    await clickElement(cdp, '#native-menu-toggle');
+    await evaluate(cdp, `(() => {
+      const picker = document.querySelector('#theme-select');
+      picker.value = ${JSON.stringify(theme)}; picker.dispatchEvent(new Event('change'));
+    })()`);
+    await frames(cdp);
+    await assertState(`document.querySelector('#native-menu').open &&
+      document.querySelector('#native-menu .theme-picker') !== null`, 'appearance retains menu');
+    await clickElement(cdp, '[data-kiosk-pane="waterfall"]');
+    await assertState(`!document.querySelector('#native-menu').open && activeWorkspacePane === 'waterfall' &&
+      document.querySelector('[data-kiosk-pane="waterfall"]').getAttribute('aria-current') === 'page' &&
+      document.activeElement.id === 'native-view-title'`, 'view switching and focus');
+    const geometry = await evaluate(cdp, `(() => {
+      const panel = document.querySelector('#waterfall-panel');
+      const selectors = ['.waterfall-header', '#waterfall-status', '.waterfall-visuals', '#native-waterfall-summary', '#native-waterfall-details'];
+      const rects = selectors.map(s => panel.querySelector(s).getBoundingClientRect());
+      const bounds = panel.getBoundingClientRect();
+      const plots = [...panel.querySelectorAll('canvas')].map(e => e.getBoundingClientRect());
+      return {rects: rects.map(r=>r.toJSON()), bounds: bounds.toJSON(), overlaps: rects.some((r,i) => i && r.top < rects[i-1].bottom - 1),
+        contained: rects.every(r => r.left >= bounds.left && r.right <= bounds.right + 1 && r.bottom <= bounds.bottom + 1),
+        plotWidths: plots.map(r => r.width), plotHeights: plots.map(r => r.height),
+        minimumControl: Math.min(...[...panel.querySelectorAll('.waterfall-controls button')].map(e => e.getBoundingClientRect().height))};
+    })()`);
+    if (geometry.overlaps || !geometry.contained || geometry.plotWidths.some(w => w < 700) ||
+        geometry.plotHeights.some(h => h < 40) || geometry.minimumControl < 44) {
+      throw new Error(`Display navigation ${theme} inner geometry: ${JSON.stringify(geometry)}`);
+    }
+    await clickElement(cdp, '#native-waterfall-details > summary');
+    await assertState(`document.querySelector('#native-waterfall-details').open &&
+      document.querySelector('#native-waterfall-details .waterfall-telemetry') !== null &&
+      document.querySelector('#native-waterfall-details .waterfall-raw') !== null &&
+      document.querySelector('#native-waterfall-details .waterfall-telemetry').getBoundingClientRect().width > 700 &&
+      document.querySelector('#native-waterfall-details .waterfall-telemetry').getBoundingClientRect().top <
+        document.querySelector('#native-waterfall-details .waterfall-disclaimer').getBoundingClientRect().top`, 'expandable full-width telemetry/raw data');
+    await clickElement(cdp, '#native-waterfall-details > summary');
+    await evaluate(cdp, `document.querySelector('#waterfall-panel').scrollTop = 0`);
+  }
+  await clickElement(cdp, '#native-menu-toggle');
+  await clickElement(cdp, '[data-kiosk-pane="scanner"]');
+  await clickElement(cdp, '#native-scanner-details > summary');
+  await assertState(`document.querySelector('#native-scanner-details').open &&
+    document.querySelector('#native-scanner-details .radio-field-groups') !== null`, 'scanner Details');
+  await clickElement(cdp, '#native-scanner-details > summary');
+  await evaluate(cdp, `document.querySelector('#radio-activity-panel').scrollTop = 0`);
+  await setViewport(cdp, {width: 1920, height: 1080, dpr: 1});
+  await assertState(`document.documentElement.dataset.kioskCompact === 'false' &&
+    document.querySelector('.site-header .theme-picker') !== null &&
+    document.querySelector('.overview #system-palette-picker') !== null &&
+    document.querySelector('#waterfall-panel > .waterfall-telemetry') !== null &&
+    document.querySelector('.workspace-tabs').getBoundingClientRect().height > 0`, 'desktop restoration');
+  await setViewport(cdp, {width: 400, height: 240, dpr: 1});
+  await clickElement(cdp, '#native-menu-toggle');
+  await evaluate(cdp, `document.querySelector('#native-menu form button').scrollIntoView({block: 'nearest'})`);
+  await assertState(`(() => {const r=document.querySelector('#native-menu form button').getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= innerHeight;})()`, 'zoomed menu Sign out reachability');
+  await pressKey(cdp, 'Escape', 'Escape', 27);
+  await setViewport(cdp, {width: 800, height: 480, dpr: 1});
+  await assertState(`document.querySelector('#native-menu .theme-picker') !== null &&
+    document.querySelectorAll('#theme-select').length === 1 && document.querySelectorAll('#system-palette-select').length === 1`, 'compact restoration without duplicate controls');
+}
+
 async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   const baseline = pageFailures.length;
   const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
@@ -3022,6 +3132,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
       await navigate(cdp, baseUrl + "/?kiosk=display", timeoutMs, {
         installAuditLibrary: false, waitForDashboardReady: false,
       });
+      if (viewport.width === 800) await auditDisplayNavigation(cdp);
       const state = await evaluate(cdp, `(async () => {
         const refreshWhenIdle = async () => {
           for (let attempt = 0; refreshInProgress && attempt < 500; attempt += 1) {
@@ -3041,12 +3152,14 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           const overview = document.querySelector('.overview').getBoundingClientRect();
           const banner = document.querySelector('#native-session-status').getBoundingClientRect();
           const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
+          const header = document.querySelector('.site-header').getBoundingClientRect();
           geometry.push({theme, overviewHeight: overview.height,
             gap: workspace.top - overview.bottom, bannerGap: overview.top - banner.bottom,
-            workspaceHeight: workspace.height});
+            compact: document.documentElement.dataset.kioskCompact === 'true',
+            headerGap: workspace.top - header.bottom, workspaceHeight: workspace.height});
         }
         const visibleTabs = [...document.querySelectorAll('[data-workspace-tab]')]
-          .filter(tab => getComputedStyle(tab).display !== 'none').map(tab => tab.dataset.workspaceTab);
+          .filter(tab => tab.getBoundingClientRect().height > 0).map(tab => tab.dataset.workspaceTab);
         activateWorkspacePane('controls');
         const rejectedPane = activeWorkspacePane;
         await performScannerControl('reconnect', 'Reconnect');
@@ -3060,10 +3173,12 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         window.__kioskAudit.offline = true;
         await refreshWhenIdle();
         const outageMarkedStale = document.querySelector('#dashboard-message').textContent.includes('stale');
+        const outageVisible = document.querySelector('#dashboard-message').getBoundingClientRect().height > 0;
         window.__kioskAudit.offline = false;
         await refreshWhenIdle();
         const recovered = !authenticationRequired && document.querySelector('#status-badge').dataset.state !== 'offline';
         startEventStream();
+        if (document.documentElement.dataset.kioskCompact === 'true') document.querySelector('#native-menu-toggle').click();
         window.__kioskAudit.expired = true;
         await refreshWhenIdle();
         const requestsAtExpiry = window.__kioskAudit.requests.length;
@@ -3072,7 +3187,9 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshRecordings();
         startEventStream();
         reconcileWaterfallDemand();
-        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, recovered,
+        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, outageVisible, recovered,
+          loginVisible: document.querySelector('#native-session-status').getBoundingClientRect().height > 0,
+          menuClosed: !document.querySelector('#native-menu').open,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
@@ -3082,11 +3199,14 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           paths: window.__kioskAudit.requests,
           horizontalOverflow: document.documentElement.scrollWidth > innerWidth};
       })()`);
-      if (state.visibleTabs.join(',') !== 'scanner,waterfall,diagnostics' ||
-          state.geometry.some(g => g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
-            g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150) ||
+      const compact = viewport.width <= 960 && viewport.height <= 640;
+      if (state.visibleTabs.join(',') !== (compact ? '' : 'scanner,waterfall,diagnostics') ||
+          state.geometry.some(g => g.compact !== compact || (compact
+            ? g.headerGap > 12 || g.headerGap < -1 || g.workspaceHeight < 330
+            : g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
+              g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150)) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
-          !state.outageMarkedStale || !state.recovered || !state.boundedReads ||
+          !state.outageMarkedStale || !state.outageVisible || !state.loginVisible || !state.menuClosed || !state.recovered || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
           !state.message.includes('stale') || !state.login?.endsWith('/auth/display/login') ||
           state.paths.some(path => /\/(scanner\/|recording|audio)/.test(path)) || state.horizontalOverflow) {

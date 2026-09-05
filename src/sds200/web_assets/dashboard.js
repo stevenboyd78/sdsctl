@@ -122,6 +122,7 @@ let nativeSessionTimer = null;
 function requireNativeLogin() {
   if (!nativeAccessMode || authenticationRequired) return;
   authenticationRequired = true;
+  document.getElementById("native-menu")?.close();
   if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
   stopEventStream();
   stopWaterfallStream({status: "Sign in to resume Waterfall. Last data is stale."});
@@ -170,6 +171,7 @@ async function initializeNativeSession() {
   logout.append(button);
   banner.append(logout);
   element("main-content").prepend(banner);
+  if (displayOnly) initializeDisplayNavigation(logout);
   try {
     const response = await dashboardFetch(webUrl("auth/session"), {
       credentials: "same-origin", cache: "no-store", redirect: "error",
@@ -182,6 +184,160 @@ async function initializeNativeSession() {
   } catch {
     // Status polling handles transient outages without attempting automatic login.
   }
+}
+
+function syncDisplayNavigation() {
+  const labels = {scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"};
+  const title = document.getElementById("native-view-title");
+  if (title) title.textContent = labels[activeWorkspacePane] ?? "Scanner";
+  for (const button of document.querySelectorAll("[data-kiosk-pane]")) {
+    if (button.dataset.kioskPane === activeWorkspacePane) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+}
+
+function initializeDisplayNavigation(logout) {
+  // Presentation only: reuse the authorized pane switcher and existing controls.
+  // No credential, request, or scanner-control capability is added here.
+  const make = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const header = document.querySelector(".site-header");
+  const heading = document.querySelector(".brand h1");
+  const headingRow = make("div", null, "native-menu-heading");
+  heading.before(headingRow);
+  const trigger = make("button", "☰");
+  trigger.id = "native-menu-toggle";
+  trigger.type = "button";
+  trigger.setAttribute("aria-label", "Open dashboard menu");
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-controls", "native-menu");
+  trigger.setAttribute("aria-expanded", "false");
+  headingRow.append(trigger, heading);
+  header.append(make("span", "Display-only", "native-access-label"));
+
+  const dialog = make("dialog", null, "native-menu");
+  dialog.id = "native-menu";
+  dialog.setAttribute("aria-labelledby", "native-menu-title");
+  const menuHeader = make("div", null, "native-menu-header");
+  const title = make("h2", "Dashboard menu");
+  title.id = "native-menu-title";
+  const close = make("button", "Close menu");
+  close.type = "button";
+  close.addEventListener("click", () => dialog.close());
+  menuHeader.append(title, close);
+  const views = make("nav", null, "native-menu-views");
+  views.setAttribute("aria-label", "Dashboard views");
+  for (const [pane, label] of Object.entries({scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"})) {
+    const button = make("button", label);
+    button.type = "button";
+    button.dataset.kioskPane = pane;
+    button.addEventListener("click", () => {
+      activateWorkspacePane(pane);
+      dialog.close();
+      element("native-view-title").focus();
+    });
+    views.append(button);
+  }
+  const appearance = make("section", null, "native-menu-appearance");
+  appearance.setAttribute("aria-label", "Appearance");
+  appearance.append(make("h3", "Appearance"));
+  const session = make("section", null, "native-menu-session");
+  session.append(make("h3", "Session"), make("p", "Display-only — scanner controls, audio and recordings are disabled."), logout);
+  dialog.append(menuHeader, views, appearance, session);
+  document.body.append(dialog);
+  trigger.addEventListener("click", () => {
+    if (dialog.open) dialog.close();
+    else { dialog.showModal(); trigger.setAttribute("aria-expanded", "true"); }
+  });
+  dialog.addEventListener("close", () => trigger.setAttribute("aria-expanded", "false"));
+  dialog.addEventListener("keydown", event => {
+    if (event.key !== "Tab") return;
+    const controls = [...dialog.querySelectorAll("button, select, a[href]")]
+      .filter(node => !node.disabled && node.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  });
+  dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+  });
+
+  const viewTitle = make("h2", "Scanner", "native-view-title");
+  viewTitle.id = "native-view-title";
+  viewTitle.tabIndex = -1;
+  document.querySelector(".workspace-tabs").after(viewTitle);
+
+  // Remember exact original positions: resizing restores desktop DOM order,
+  // IDs, listeners, theme selection, field inspection and current stream state.
+  const relocations = [];
+  const relocate = (node, destination) => {
+    const anchor = document.createComment("native compact control position");
+    node.before(anchor);
+    relocations.push({node, destination, anchor});
+  };
+  relocate(document.querySelector(".theme-picker"), appearance);
+  relocate(element("system-palette-picker"), appearance);
+  const details = (parent, id, selectors) => {
+    const disclosure = make("details", null, "native-details");
+    disclosure.id = id;
+    disclosure.append(make("summary", "Details"));
+    const content = make("div", null, "native-details-content");
+    disclosure.append(content);
+    for (const selector of selectors) relocate(parent.querySelector(selector), content);
+    parent.append(disclosure);
+    return disclosure;
+  };
+  const scanner = element("radio-activity-panel");
+  const scannerDetails = details(scanner, "native-scanner-details", [".radio-view-controls", ".radio-summary", ".radio-field-groups"]);
+  const waterfall = element("waterfall-panel");
+  const waterfallDetails = details(waterfall, "native-waterfall-details", [".waterfall-telemetry", ".waterfall-disclaimer", ".waterfall-raw"]);
+
+  // Mirror only already-rendered text, with no extra polling or duplicate IDs.
+  const summary = (id, fields) => {
+    const list = make("dl", null, "native-summary");
+    list.id = id;
+    const observer = new MutationObserver(() => {
+      for (const {source, value} of copies) value.textContent = source.textContent;
+    });
+    const copies = fields.map(([label, sourceId]) => {
+      const source = element(sourceId);
+      const value = make("dd", source.textContent);
+      const row = make("div");
+      row.append(make("dt", label), value);
+      list.append(row);
+      observer.observe(source, {childList: true, characterData: true, subtree: true});
+      return {source, value};
+    });
+    return list;
+  };
+  scannerDetails.before(summary("native-scanner-summary", [["Frequency", "radio-frequency"], ["Modulation", "radio-modulation"], ["Signal", "radio-signal"], ["RSSI", "radio-rssi"]]));
+  waterfallDetails.before(summary("native-waterfall-summary", [["Lower", "waterfall-frequency-lower"], ["Center", "waterfall-frequency-center"], ["Upper", "waterfall-frequency-upper"], ["Frame rate", "waterfall-frame-rate"]]));
+  const compact = window.matchMedia("(max-width: 60rem) and (max-height: 40rem)");
+  const update = () => {
+    const focused = document.activeElement;
+    dialog.close();
+    document.documentElement.dataset.kioskCompact = String(compact.matches);
+    views.hidden = !compact.matches;
+    appearance.hidden = !compact.matches;
+    for (const {node, destination, anchor} of relocations) {
+      if (compact.matches) destination.append(node);
+      else anchor.after(node);
+    }
+    if (focused instanceof HTMLElement && focused !== document.body && focused.getClientRects().length === 0) trigger.focus();
+    syncDisplayNavigation();
+  };
+  compact.addEventListener("change", update);
+  update();
 }
 
 function webUrl(path) {
@@ -249,6 +405,7 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   }
 
   document.documentElement.dataset.workspacePane = pane;
+  syncDisplayNavigation();
   if (persist) {
     writeStoredValue(WORKSPACE_PANE_STORAGE_KEY, pane);
   }
@@ -2063,6 +2220,7 @@ function setOverallStatus(state, label, message) {
     message = "Sign in again. Displayed data is stale.";
   }
   const badge = element("status-badge");
+  document.documentElement.dataset.connectionState = state;
   badge.dataset.state = state;
   badge.textContent = label;
   element("dashboard-message").textContent = message;

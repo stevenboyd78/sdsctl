@@ -120,6 +120,28 @@ closing the browser or pressing Ctrl+C stops the foreground launcher. Successful
 close returns `0`, a browser crash or transient connectivity failure returns
 `75`, and configuration/preflight contract errors return `78`.
 
+### Using a small display
+
+On short displays such as an 800×480 Pi screen, open the **menu button beside
+Scanner dashboard** to choose Scanner, Waterfall or Diagnostics. Theme and
+System palette are in the same menu; System palette appears when Theme is
+System. Scroll the menu to reach **Sign out** in the separate Session section.
+Changing a view closes the menu; changing appearance leaves it open. Use
+**Close menu**, Escape or a click outside the menu to dismiss it. Keyboard focus
+stays in the open menu. The menu overlays the display without resizing its plots.
+
+Connected/connection-error status and the Display-only label stay in the header.
+Sign-in-required and stale-data warnings remain visible without opening a menu.
+The Scanner and Waterfall views prioritize live values and full-width graphics.
+Open **Details** for presentation choices, scanner indexes, Waterfall telemetry,
+raw samples and the relative-data disclaimer. Expanded details can scroll within
+the panel. Waterfall values remain relative, not calibrated RF measurements.
+
+On a large display, view tabs and appearance controls remain visible; the header
+menu provides Sign out. Resizing restores the same controls and selections,
+without duplicating them or adding another data connection. Browser zoom can
+make scrolling necessary; it should never make controls unreachable.
+
 ## 4. Optional graphical-session service
 
 Only after interactive testing, inspect the packaged template:
@@ -154,7 +176,8 @@ startup merely because a unit passed syntax validation.
 
 ## Acceptance, upgrade and removal
 
-Record each actual result: readable geometry; theme switching; live status;
+Record each actual result: readable geometry; menu and Details operation;
+touch/keyboard navigation; theme switching; live status;
 visible/hidden Waterfall; denied controls and downloads; two concurrent clients;
 temporary network outage; expiry; sign-out; web/App restart; certificate failure;
 intentional close; and, separately, a physical cold start. Old data must be

@@ -20,6 +20,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Give short display-only browser kiosks a header menu for views, appearance
+  and sign-out; keep connection and authentication warnings visible. Use
+  full-width scanner/Waterfall content and expandable technical Details rather
+  than squeezing them beside the plots. Restore desktop controls on resize.
 - Add accessible Show/Hide password controls to native operator and display
   sign-in, hidden by default and re-masked on submit or leaving the page.
   Keep strict hash-based content security and normal same-origin form posting.
