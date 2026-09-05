@@ -258,7 +258,7 @@ the actual display. Do not use `stty rows`/`cols` to fake the expected size.
 This preview alone does **not** persist the font across boot. See Debian's
 [setfont manual](https://manpages.debian.org/trixie/kbd/setfont.8.en.html).
 
-#### Save the setting and order the display after font setup
+#### Save the setting and apply it before each TUI start
 
 After accepting the preview, edit the existing configuration:
 
@@ -291,34 +291,77 @@ Wants=console-setup.service
 After=console-setup.service
 ```
 
+The ordering above is useful, but was not sufficient by itself on the HDMI
+installation: a later boot returned to `67 240` despite the saved font and a
+successful `console-setup.service`. Add a separate, optional **HDMI-instance**
+drop-in to apply the font immediately before each TUI start:
+
 ```bash
-sudo systemctl daemon-reload
-systemctl status console-setup.service --no-pager
+sudoedit /etc/systemd/system/sdsctl-display@CLIENT_ID.service.d/console-font-prestart.conf
 ```
 
-These are the persistent settings used on the HDMI test installation. They
-order TUI startup after the OS font service; they do not force the font again
-after a later framebuffer/console-driver change. `--save-only` prepares cached
-files but does not apply the font immediately. See the Debian manuals for
+```ini
+[Service]
+ExecStartPre=+/usr/bin/setfont -C /dev/tty1 /usr/share/consolefonts/Uni2-Terminus24x12.psf.gz
+```
+
+Keep this file root-owned and readable, with no user-writable executable or
+font file. The `+` deliberately elevates **only this fixed preparatory command**;
+the TUI retains its unprivileged account, empty capability set and other
+restrictions. The service-wide device policy still applies and already allows
+`/dev/tty1`. Do not add `sudo`, a shell wrapper, a user-supplied font argument,
+or a `-` prefix that would ignore font-loading failure. Do not change the shared
+template or automatically apply the HDMI font to other displays. See
+[systemd's command-prefix documentation](https://manpages.debian.org/trixie/systemd/systemd.service.5.en.html#COMMAND_LINES).
+
+Check the instance configuration, then stop and start the display cleanly:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemd-analyze verify sdsctl-display@CLIENT_ID.service
+sudo systemctl stop sdsctl-display@CLIENT_ID.service
+sudo systemctl start sdsctl-display@CLIENT_ID.service
+systemctl show sdsctl-display@CLIENT_ID.service \
+  -p ActiveState -p ExecStartPre -p NRestarts
+sudo stty -F /dev/tty1 size
+```
+
+Expect a successful pre-start command (`status=0`), an active TUI, and `45 160`
+at the tested resolution. If the command fails, inspect the journal and correct
+the font path/access or roll back the added drop-in; do not bypass the error.
+The pre-start command runs at service startup, never as an in-place font reset
+underneath an existing TUI.
+
+`--save-only` prepares cached files but does not apply the font immediately.
+The pre-start command explicitly loads the selected font independently of that
+cache. See the Debian manuals for
 [console-setup configuration](https://manpages.debian.org/trixie/console-setup/console-setup.5.en.html)
 and [setupcon](https://manpages.debian.org/trixie/console-setup/setupcon.1.en.html).
 
 **Verify after the next planned reboot.** From SSH, run
 `sudo stty -F /dev/tty1 size` and inspect the physical display. An active/exited
 `console-setup.service` alone is not proof that the larger font is still loaded.
-A later check of the test installation found `67 240` despite its saved Terminus
-settings, so boot persistence is not guaranteed by this recipe alone. If the
-font reverts, inspect `journalctl -b -u console-setup.service` and the host's
-framebuffer/startup ordering. Do not add a blind delay or repeatedly reset a
-font underneath a running TUI. The safe manual recovery is to stop the display,
-apply the same `setfont -C /dev/tty1 ...` command, then start it again; preserve
-the original backup rather than overwriting it with another preview.
+The added pre-start command passed a controlled service start and one planned
+HDMI Pi reboot: `setfont` exited successfully, the enabled TUI reconnected at
+`45 160`, and its main process retained zero capabilities and
+`NoNewPrivileges`. This verifies those observed starts, not every graphical
+stack or display hot-plug scenario. A later console-driver replacement could
+still reset the font after startup. If it reverts, inspect the display service's
+`ExecStartPre` result, `journalctl -b -u console-setup.service`, and framebuffer
+startup ordering. Do not add a blind delay or repeatedly reset a font under a
+running TUI. Keep the original backup rather than overwriting it with another
+preview. The operator also confirmed the larger font remained readable and
+the physical HDMI TUI was updating after this reboot.
 
 #### Restore the previous font
 
 In the same shell, the saved `sdsctl_font_backup` variable identifies your
 backup. In a new session, set it to the exact directory printed earlier first.
-Stop the TUI before restoring:
+Stop the TUI before restoring. If you added `console-font-prestart.conf`, remove
+only that exact drop-in after reviewing it (or remove only your added line if
+it contains other customizations), then run `sudo systemctl daemon-reload`
+**before starting again**. Otherwise the pre-start hook would immediately
+reapply the larger font and undo your restoration.
 
 ```bash
 sudo systemctl stop sdsctl-display@CLIENT_ID.service

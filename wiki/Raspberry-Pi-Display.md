@@ -115,13 +115,25 @@ FONTSIZE="12x24"
 **Follow the [step-by-step HDMI font guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/managed-pi-display.md#enlarge-the-hdmi-console-font-1080p-example)**
 for checking/installing the tools, stopping the exact display instance, saving
 the old font and Unicode map, previewing the larger font, regenerating the boot
-cache, adding service ordering, verifying after reboot, and restoring the old
-font. Do not change the font underneath a running TUI.
+cache, adding a font-loading pre-start command, verifying after reboot, and
+restoring the old font. Do not change the font underneath a running TUI.
 
-Saved configuration is not proof of boot persistence: a later check found the
-test console back at `67 240` despite these settings. The guide explains how to
-check the actual console and investigate startup ordering without hiding a
-failed setup. Keep the small Pi's accepted font independent of the HDMI choice.
+Saved configuration and OS-service ordering alone did not ensure persistence:
+the test console returned to `67 240`. The follow-up uses this optional
+instance-specific drop-in to load the font immediately before the TUI starts:
+
+```ini
+[Service]
+ExecStartPre=+/usr/bin/setfont -C /dev/tty1 /usr/share/consolefonts/Uni2-Terminus24x12.psf.gz
+```
+
+The `+` elevates only the fixed font command, not the TUI. Use the full guide's
+permission, validation and rollback instructions; a font-loading error should
+stop startup rather than be ignored. A controlled start and planned HDMI reboot
+both recovered `45 160` and a connected, unprivileged TUI. The operator confirmed
+readability and live updates on the physical HDMI display after reboot. Keep
+the small Pi's font independent of the HDMI choice. Disable the pre-start
+override before restoring an old font.
 
 This method is for a **Linux text console**. In a **GUI terminal**, use font
 preferences or zoom; over **SSH**, adjust your local terminal; in the **WebUI**,
