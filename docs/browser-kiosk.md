@@ -111,7 +111,11 @@ isolates it from ordinary browsing, but it may still contain sensitive cookies
 and saved browser data. It is not guaranteed to be memory-only storage.
 
 At **Display-only sign in**, enter the display password manually. Never enter
-the operator password into this profile. **Sign out** returns to display login;
+the operator password into this profile. Passwords start hidden; use **Show
+password** to check your typing, then **Hide password** before anyone else can
+see the screen. Submitting or leaving the page hides the password again. The
+visibility toggle does not save the password or change authentication.
+**Sign out** returns to display login;
 closing the browser or pressing Ctrl+C stops the foreground launcher. Successful
 close returns `0`, a browser crash or transient connectivity failure returns
 `75`, and configuration/preflight contract errors return `78`.

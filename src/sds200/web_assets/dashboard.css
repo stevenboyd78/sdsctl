@@ -805,6 +805,28 @@ body {
   display: none !important;
 }
 
+#native-session-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  padding: 0.35rem 0.6rem;
+  font-size: clamp(0.7rem, 1.5vmin, 0.9rem);
+  line-height: 1.3;
+}
+
+#native-session-status button {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+}
+
 .site-header,
 .dashboard,
 .site-footer {

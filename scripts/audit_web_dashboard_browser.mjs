@@ -2920,6 +2920,79 @@ async function auditHomeAssistantWaterfallCard(
   return {screenshotPaths, viewportCases: 3};
 }
 
+async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
+  const baseline = pageFailures.length;
+  for (const viewport of VIEWPORTS) {
+    await setViewport(cdp, viewport);
+    for (const mode of ['operator', 'display']) {
+      await navigate(cdp, `${baseUrl}/__demo/login/${mode}`, timeoutMs, {
+        installAuditLibrary: false, waitForDashboardReady: false,
+      });
+      const initial = await evaluate(cdp, `(() => {
+        const input = document.querySelector('#password');
+        const button = document.querySelector('#password-visibility');
+        input.value = 'fictional long password for typing checks';
+        return {hidden: input.type === 'password', enabled: !button.hidden,
+          pressed: button.getAttribute('aria-pressed'),
+          fits: document.documentElement.scrollWidth <= innerWidth,
+          touchSize: button.getBoundingClientRect().height >= 44};
+      })()`);
+      await clickElement(cdp, '#password-visibility');
+      const shown = await evaluate(cdp, `document.querySelector('#password').type === 'text' &&
+        document.querySelector('#password-visibility').textContent === 'Hide password' &&
+        document.querySelector('#password-visibility').getAttribute('aria-pressed') === 'true'`);
+      await pressKey(cdp, ' ', 'Space', 32);
+      const hidden = await evaluate(cdp, `document.querySelector('#password').type === 'password' &&
+        document.querySelector('#password-visibility').textContent === 'Show password'`);
+      const lifecycle = await evaluate(cdp, `(() => {
+        const input = document.querySelector('#password');
+        const button = document.querySelector('#password-visibility');
+        button.click();
+        window.dispatchEvent(new PageTransitionEvent('pagehide'));
+        const hiddenAfterLeaving = input.type === 'password';
+        button.click();
+        let submittedHidden = false;
+        input.form.addEventListener('submit', event => {
+          event.preventDefault();
+          submittedHidden = input.type === 'password';
+        });
+        input.form.requestSubmit();
+        return {hiddenAfterLeaving, submittedHidden,
+          valuePreserved: input.value === 'fictional long password for typing checks'};
+      })()`);
+      if (!initial.hidden || !initial.enabled || initial.pressed !== 'false' ||
+          !initial.fits || !initial.touchSize || !shown || !hidden ||
+          !lifecycle.hiddenAfterLeaving || !lifecycle.submittedHidden || !lifecycle.valuePreserved) {
+        throw new Error(`native login ${mode}/${viewport.name} failed: ${JSON.stringify({initial, shown, hidden, lifecycle})}`);
+      }
+      await navigate(cdp, `${baseUrl}/__demo/login/${mode}?failed`, timeoutMs, {
+        installAuditLibrary: false, waitForDashboardReady: false,
+      });
+      if (!await evaluate(cdp, `document.querySelector('#password').type === 'password' &&
+          document.querySelector('#password').value === '' &&
+          document.querySelector('[role=alert]').textContent.includes('Authentication failed') &&
+          !document.querySelector('#password-visibility').hidden`)) {
+        throw new Error('Failed login must reset to an empty, masked field with a working toggle');
+      }
+    }
+  }
+  await cdp.send('Emulation.setScriptExecutionDisabled', {value: true});
+  try {
+    await navigate(cdp, `${baseUrl}/__demo/login/display`, timeoutMs, {
+      installAuditLibrary: false, waitForDashboardReady: false,
+    });
+    if (!await evaluate(cdp, `getComputedStyle(document.querySelector('#password-visibility')).display === 'none' &&
+        document.querySelector('form').method === 'post' &&
+        document.querySelector('button[type=submit]').textContent === 'Sign in'`)) {
+      throw new Error('Login must retain a usable native form with JavaScript disabled');
+    }
+  } finally {
+    await cdp.send('Emulation.setScriptExecutionDisabled', {value: false});
+  }
+  if (pageFailures.length !== baseline) throw new Error('Native login raised a browser exception');
+  console.log('PASS: native login Show/Hide, keyboard, masking lifecycle, failed login and no-JS form');
+}
+
 async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   const baseline = pageFailures.length;
   const installed = await cdp.send("Page.addScriptToEvaluateOnNewDocument", {source: `
@@ -2959,6 +3032,19 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         };
         stopEventStream();
         await refreshWhenIdle();
+        const geometry = [];
+        for (const theme of ${JSON.stringify(THEMES)}) {
+          const picker = document.querySelector('#theme-select');
+          picker.value = theme;
+          picker.dispatchEvent(new Event('change'));
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const overview = document.querySelector('.overview').getBoundingClientRect();
+          const banner = document.querySelector('#native-session-status').getBoundingClientRect();
+          const workspace = document.querySelector('.workspace-shell').getBoundingClientRect();
+          geometry.push({theme, overviewHeight: overview.height,
+            gap: workspace.top - overview.bottom, bannerGap: overview.top - banner.bottom,
+            workspaceHeight: workspace.height});
+        }
         const visibleTabs = [...document.querySelectorAll('[data-workspace-tab]')]
           .filter(tab => getComputedStyle(tab).display !== 'none').map(tab => tab.dataset.workspaceTab);
         activateWorkspacePane('controls');
@@ -2986,7 +3072,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
         await refreshRecordings();
         startEventStream();
         reconcileWaterfallDemand();
-        return {visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, recovered,
+        return {geometry, visibleTabs, rejectedPane, liveCanvas, outageMarkedStale, recovered,
           boundedReads: window.__kioskAudit.boundedReads,
           message: document.querySelector('#native-session-status').textContent,
           login: document.querySelector('#native-session-status a')?.getAttribute('href'),
@@ -2997,6 +3083,8 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
           horizontalOverflow: document.documentElement.scrollWidth > innerWidth};
       })()`);
       if (state.visibleTabs.join(',') !== 'scanner,waterfall,diagnostics' ||
+          state.geometry.some(g => g.overviewHeight > 120 || g.gap > 24 || g.bannerGap > 24 ||
+            g.gap < -1 || g.bannerGap < -1 || g.workspaceHeight < 150) ||
           state.rejectedPane !== 'scanner' || !state.liveCanvas || !state.expired ||
           !state.outageMarkedStale || !state.recovered || !state.boundedReads ||
           !state.eventsClosed || !state.waterfallClosed || state.requestsAtExpiry !== state.requestsAfter ||
@@ -3439,6 +3527,7 @@ async function run(options) {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
     }
+    await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);
     const result = await runMatrix(cdp, baseUrl, options.timeoutMs, pageFailures);
     if (result.caseCount !== THEMES.length * VIEWPORTS.length * PANES.length) {

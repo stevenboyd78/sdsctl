@@ -20,6 +20,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Add accessible Show/Hide password controls to native operator and display
+  sign-in, hidden by default and re-masked on submit or leaving the page.
+  Keep strict hash-based content security and normal same-origin form posting.
+- Size the native session banner separately from the overview and scanner
+  workspace so it cannot leave a large empty row above the live display.
+- Distinguish operator/display password setup status and reset each button's
+  confirmation label correctly in the Home Assistant advanced-access workspace.
 - Stop native browser consumers and show login-required/stale-data guidance on
   authentication expiry. Preserve manual re-login and existing session limits.
 - Correct cookie-storage guidance: server session records are process-local,

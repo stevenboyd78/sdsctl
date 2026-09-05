@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import ipaddress
 import secrets
@@ -895,6 +896,43 @@ def _default_token_factory() -> str:
     return secrets.token_urlsafe(32)
 
 
+_LOGIN_SCRIPT = """\
+(() => {
+  const password = document.getElementById('password');
+  const toggle = document.getElementById('password-visibility');
+  const hide = () => {
+    password.type = 'password';
+    toggle.textContent = 'Show password';
+    toggle.setAttribute('aria-pressed', 'false');
+  };
+  toggle.hidden = false;
+  toggle.addEventListener('click', () => {
+    if (password.type === 'password') {
+      password.type = 'text';
+      toggle.textContent = 'Hide password';
+      toggle.setAttribute('aria-pressed', 'true');
+    } else {
+      hide();
+    }
+  });
+  password.form.addEventListener('submit', hide);
+  window.addEventListener('pagehide', hide);
+})();
+"""
+_LOGIN_STYLE = """\
+:root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1rem; }
+main { max-width: 32rem; margin: 2rem auto; }
+form { display: grid; gap: .75rem; }
+input, button { font: inherit; min-height: 2.75rem; padding: .6rem .75rem; }
+input { width: 100%; min-width: 0; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 3px solid Highlight; outline-offset: 3px; }
+"""
+
+
 def _login_response(
     *, failed: bool = False, status_code: int = 200, display_only: bool = False,
 ) -> HTMLResponse:
@@ -911,17 +949,27 @@ def _login_response(
     response = HTMLResponse(
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        "<title>Sign in | sdsctl</title></head><body><main><h1>sdsctl</h1>"
+        f"<title>Sign in | sdsctl</title><style>{_LOGIN_STYLE}</style>"
+        "</head><body><main><h1>sdsctl</h1>"
         f'<p>{description}</p>{failure}<form method="post" action="{login_path}">'
         '<label for="password">Password</label>'
         '<input id="password" name="password" type="password" '
-        'autocomplete="current-password" required autofocus>'
-        '<button type="submit">Sign in</button></form></main></body></html>',
+        'autocomplete="current-password" autocapitalize="off" spellcheck="false" '
+        'required autofocus>'
+        '<button id="password-visibility" type="button" aria-controls="password" '
+        'aria-pressed="false" hidden>Show password</button>'
+        '<button type="submit">Sign in</button></form></main>'
+        f'<script>{_LOGIN_SCRIPT}</script></body></html>',
         status_code=status_code,
         headers={
             "Cache-Control": "no-store",
             "Content-Security-Policy": (
-                "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+                "default-src 'none'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'; "
+                "script-src 'sha256-"
+                + base64.b64encode(hashlib.sha256(_LOGIN_SCRIPT.encode()).digest()).decode()
+                + "'; style-src 'sha256-"
+                + base64.b64encode(hashlib.sha256(_LOGIN_STYLE.encode()).digest()).decode()
+                + "'"
             ),
             # A basic same-origin form POST derives its Origin header from the
             # referrer policy.  ``no-referrer`` can serialize that Origin as

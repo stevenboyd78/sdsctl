@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import re
 import threading
 from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -418,6 +420,41 @@ def test_login_page_preserves_origin_for_its_same_origin_form_post() -> None:
     assert response.headers["referrer-policy"] == "same-origin"
     assert 'form method="post" action="/auth/login"' in response.text
     assert "form-action 'self'" in response.headers["content-security-policy"]
+
+
+@pytest.mark.parametrize("display_only", [False, True])
+@pytest.mark.parametrize("failed", [False, True])
+def test_login_visibility_has_strict_csp_and_never_reflects_password(
+    display_only: bool, failed: bool,
+) -> None:
+    path = web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH if display_only else WEB_DASHBOARD_LOGIN_PATH
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        response = (
+            client.post(path, data={"password": "wrong private password"},
+                        headers={"Origin": ORIGIN})
+            if failed else client.get(path)
+        )
+    assert response.status_code == (401 if failed else 200)
+    assert 'name="password" type="password"' in response.text
+    assert 'type="button" aria-controls="password"' in response.text
+    assert 'aria-pressed="false" hidden>Show password</button>' in response.text
+    assert (
+        'autocomplete="current-password" autocapitalize="off" spellcheck="false"'
+        in response.text
+    )
+    assert 'value=' not in response.text
+    assert "wrong private password" not in response.text
+    csp = response.headers["content-security-policy"]
+    assert "default-src 'none'" in csp
+    assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
+    for tag, directive in (("script", "script-src"), ("style", "style-src")):
+        blocks = re.findall(f"<{tag}>(.*?)</{tag}>", response.text, re.DOTALL)
+        assert len(blocks) == 1
+        digest = base64.b64encode(hashlib.sha256(blocks[0].encode()).digest()).decode()
+        assert f"{directive} 'sha256-{digest}'" in csp
+    assert "password.form.addEventListener('submit', hide)" in response.text
+    assert "window.addEventListener('pagehide', hide)" in response.text
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_login_failure_is_generic_secret_free_and_no_store() -> None:

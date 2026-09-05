@@ -3405,7 +3405,8 @@ function clearHomeAssistantAdvancedConfirmation() {
   homeAssistantAdvancedArmedAction = null;
   for (const [buttonId, label] of [
     ["home-assistant-advanced-rotate-identity", "Rotate identity"],
-    ["home-assistant-advanced-rotate-password", "Create or rotate"],
+    ["home-assistant-advanced-rotate-password", "Create or rotate operator password"],
+    ["home-assistant-advanced-rotate-display-password", "Create or rotate display password"],
     ["home-assistant-advanced-rotate-client", "Rotate selected client"],
   ]) {
     const button = element(buttonId);
@@ -3613,6 +3614,10 @@ function renderHomeAssistantAdvancedStatus(payload) {
   setText(
     "home-assistant-advanced-password-state",
     lifecycle.dashboard_password_present === true ? "Configured" : "Not configured",
+  );
+  setText(
+    "home-assistant-advanced-display-password-state",
+    lifecycle.display_password_present === true ? "Configured" : "Not configured",
   );
   element("home-assistant-advanced-use-identity").disabled =
     homeAssistantAdvancedBusy || lifecycle.identity_present !== true;

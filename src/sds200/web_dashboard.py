@@ -1584,8 +1584,12 @@ def _home_assistant_advanced_access_panel() -> str:
             <dd id="home-assistant-advanced-client-count">0</dd>
           </div>
           <div>
-            <dt>Dashboard password</dt>
+            <dt>Operator password</dt>
             <dd id="home-assistant-advanced-password-state">Checking</dd>
+          </div>
+          <div>
+            <dt>Display password</dt>
+            <dd id="home-assistant-advanced-display-password-state">Checking</dd>
           </div>
         </dl>
 

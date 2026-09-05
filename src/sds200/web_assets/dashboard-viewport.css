@@ -192,6 +192,11 @@
     inset: clamp(3rem, 12vh, 7rem) var(--pane-padding) auto !important;
   }
 
+  html[data-access-mode] .dashboard {
+    /* The native session banner is an additional content-sized row. */
+    grid-template-rows: auto auto minmax(0, 1fr) !important;
+  }
+
   .overview {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
