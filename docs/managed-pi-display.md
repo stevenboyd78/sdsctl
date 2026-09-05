@@ -204,6 +204,142 @@ select a more compact layout. With SSH, the local terminal controls the font;
 changing it does not change the remote Pi's HDMI-console font. Run `stty size`
 in the terminal being used to check its current dimensions.
 
+### Enlarge the HDMI console font (1080p example)
+
+The readability improvement on the tested 1920×1080 HDMI display used
+**Terminus, 12 pixels wide × 24 pixels high**, with the `Uni2` character set.
+The installed font file was
+`/usr/share/consolefonts/Uni2-Terminus24x12.psf.gz`. Its filename uses **height
+then width** (`24x12`); the console configuration uses **width then height**
+(`12x24`). This is a pixel size, not a GUI terminal's point size.
+
+That font produced **160 columns × 45 rows**, keeping the wide TUI layout while
+making the text larger. `stty size` prints the reverse order: `45 160` (rows,
+then columns). The previous 8×16-sized console geometry was `67 240`.
+Resolution, framebuffer and font support can vary; verify your own result.
+Do not force this font on the smaller Pi display simply to match the example.
+
+#### Preview safely before making it persistent
+
+Use a separate SSH session to administer the Pi, leaving a recovery route open.
+Replace `CLIENT_ID` with the profile name of the **one display instance** you
+intend to change. For a manually launched TUI, quit it normally instead of
+using the service commands. These commands change the physical Linux text
+console `/dev/tty1`, not the SSH terminal. Do not use them on a console currently
+owned by a graphical desktop or browser kiosk.
+
+Confirm the tools and font are available before stopping the display:
+
+```bash
+command -v setfont
+command -v setupcon
+ls /usr/share/consolefonts/Uni2-Terminus24x12.psf.gz
+```
+
+On Debian/Raspberry Pi OS, install `console-setup` and `kbd` if these are
+missing. Font packages and paths may differ on other distributions; do not
+continue with a missing font file.
+
+```bash
+sudo systemctl stop sdsctl-display@CLIENT_ID.service
+sdsctl_font_backup=$(mktemp -d "$HOME/sdsctl-font-backup.XXXXXX")
+sudo cp /etc/default/console-setup "$sdsctl_font_backup/console-setup.before"
+sudo setfont -C /dev/tty1 -O "$sdsctl_font_backup/original-font.psf" \
+  /usr/share/consolefonts/Uni2-Terminus24x12.psf.gz
+sudo stty -F /dev/tty1 size
+printf 'Keep this font backup directory: %s\n' "$sdsctl_font_backup"
+sudo systemctl start sdsctl-display@CLIENT_ID.service
+```
+
+`setfont -O` saves the previous font **and its Unicode map** while loading the
+new font. Keep the printed backup path. If a command fails, stop and resolve it
+before continuing. At 1920×1080, check for `45 160` and confirm readability on
+the actual display. Do not use `stty rows`/`cols` to fake the expected size.
+This preview alone does **not** persist the font across boot. See Debian's
+[setfont manual](https://manpages.debian.org/trixie/kbd/setfont.8.en.html).
+
+#### Save the setting and order the display after font setup
+
+After accepting the preview, edit the existing configuration:
+
+```bash
+sudoedit /etc/default/console-setup
+```
+
+Set these existing font/encoding entries, preserving unrelated settings:
+
+```ini
+CHARMAP="UTF-8"
+CODESET="Uni2"
+FONTFACE="Terminus"
+FONTSIZE="12x24"
+```
+
+Regenerate the boot font cache without changing the live console:
+
+```bash
+sudo setupcon --font-only --save-only
+sudo install -d /etc/systemd/system/sdsctl-display@CLIENT_ID.service.d
+sudoedit /etc/systemd/system/sdsctl-display@CLIENT_ID.service.d/console-font.conf
+```
+
+Add this instance-specific ordering, preserving any existing drop-in content:
+
+```ini
+[Unit]
+Wants=console-setup.service
+After=console-setup.service
+```
+
+```bash
+sudo systemctl daemon-reload
+systemctl status console-setup.service --no-pager
+```
+
+These are the persistent settings used on the HDMI test installation. They
+order TUI startup after the OS font service; they do not force the font again
+after a later framebuffer/console-driver change. `--save-only` prepares cached
+files but does not apply the font immediately. See the Debian manuals for
+[console-setup configuration](https://manpages.debian.org/trixie/console-setup/console-setup.5.en.html)
+and [setupcon](https://manpages.debian.org/trixie/console-setup/setupcon.1.en.html).
+
+**Verify after the next planned reboot.** From SSH, run
+`sudo stty -F /dev/tty1 size` and inspect the physical display. An active/exited
+`console-setup.service` alone is not proof that the larger font is still loaded.
+A later check of the test installation found `67 240` despite its saved Terminus
+settings, so boot persistence is not guaranteed by this recipe alone. If the
+font reverts, inspect `journalctl -b -u console-setup.service` and the host's
+framebuffer/startup ordering. Do not add a blind delay or repeatedly reset a
+font underneath a running TUI. The safe manual recovery is to stop the display,
+apply the same `setfont -C /dev/tty1 ...` command, then start it again; preserve
+the original backup rather than overwriting it with another preview.
+
+#### Restore the previous font
+
+In the same shell, the saved `sdsctl_font_backup` variable identifies your
+backup. In a new session, set it to the exact directory printed earlier first.
+Stop the TUI before restoring:
+
+```bash
+sudo systemctl stop sdsctl-display@CLIENT_ID.service
+sudo setfont -C /dev/tty1 "$sdsctl_font_backup/original-font.psf"
+sudo systemctl start sdsctl-display@CLIENT_ID.service
+```
+
+If you also made persistent changes, restore the saved `console-setup.before`
+configuration and regenerate its cache with `sudo setupcon --font-only --save-only`.
+Undo only the ordering lines you added to the instance drop-in, preserving any
+pre-existing customization, then run `sudo systemctl daemon-reload`. Keep the
+backup until both the appearance and the next planned boot are verified.
+
+For **GUI terminals**, enlarge the terminal application's font or use its zoom
+controls instead; Terminus 12×24 is a console bitmap font, not a required GUI
+font or point size. For **SSH**, change the local terminal's font. For the
+**browser WebUI**, use browser zoom/display scaling. None of those changes sets
+the remote HDMI text-console font.
+
+### Managed service template details
+
 The source repository carries a byte-identical template at
 `contrib/systemd/sdsctl-display@.service`. Automated tests require the source
 and packaged copies to remain identical.
