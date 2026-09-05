@@ -20,6 +20,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Keep display-only login navigation after session expiry or an App restart
+  using a non-secret dashboard URL hint, without restoring authentication or
+  changing session permissions. Give compact pane headings theme-matched
+  foreground and background colors for readable contrast.
 - Give short display-only browser kiosks a header menu for views, appearance
   and sign-out; keep connection and authentication warnings visible. Use
   full-width scanner/Waterfall content and expandable technical Details rather

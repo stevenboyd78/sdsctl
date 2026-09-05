@@ -100,6 +100,10 @@ select:focus-visible,
 }
 .native-menu-session { border-top: 1px solid var(--border); padding-top: 0.75rem; }
 .native-access-label { color: var(--muted); }
+.native-view-title {
+  color: var(--text);
+  background: var(--surface);
+}
 .native-summary dt { color: var(--muted); }
 .native-details { border-top: 1px solid var(--border); }
 .native-details > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }

@@ -2051,6 +2051,7 @@ function browserAuditLibrary() {
     paginationState,
     prefixedUrls,
     radioFields,
+    readabilityFailures,
     reducedMotion,
     resetPagination,
     sequentialFocusState,
@@ -2994,6 +2995,7 @@ async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
 }
 
 async function auditDisplayNavigation(cdp) {
+  await evaluate(cdp, `window.__sdsctlBrowserAudit = (${browserAuditLibrary.toString()})();`);
   await evaluate(cdp, `(async () => {
     for (let attempt=0; attempt<500 && (refreshInProgress || document.querySelector('#status-badge').dataset.state !== 'online'); attempt++) {
       await new Promise(resolve=>setTimeout(resolve,10));
@@ -3054,6 +3056,20 @@ async function auditDisplayNavigation(cdp) {
     await assertState(`!document.querySelector('#native-menu').open && activeWorkspacePane === 'waterfall' &&
       document.querySelector('[data-kiosk-pane="waterfall"]').getAttribute('aria-current') === 'page' &&
       document.activeElement.id === 'native-view-title'`, 'view switching and focus');
+    for (const appearance of ['light', 'dark', 'forced']) {
+      await cdp.send('Emulation.setEmulatedMedia', {features: [
+        {name: 'prefers-color-scheme', value: appearance === 'dark' ? 'dark' : 'light'},
+        {name: 'forced-colors', value: appearance === 'forced' ? 'active' : 'none'},
+      ]});
+      await frames(cdp);
+      const failures = await evaluate(cdp, `window.__sdsctlBrowserAudit.readabilityFailures(
+        document.querySelector('#native-view-title'), 'Compact pane heading')`);
+      if (failures.length) throw new Error(`${theme}/${appearance}: ${failures.join('; ')}`);
+    }
+    await cdp.send('Emulation.setEmulatedMedia', {features: [
+      {name: 'prefers-color-scheme', value: 'light'}, {name: 'forced-colors', value: 'none'},
+    ]});
+    await frames(cdp);
     const geometry = await evaluate(cdp, `(() => {
       const panel = document.querySelector('#waterfall-panel');
       const selectors = ['.waterfall-header', '#waterfall-status', '.waterfall-visuals', '#native-waterfall-summary', '#native-waterfall-details'];

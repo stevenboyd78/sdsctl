@@ -26,6 +26,7 @@ from .exceptions import ConfigurationError
 WEB_DASHBOARD_AUTH_COOKIE = "__Host-sdsctl-session"
 WEB_DASHBOARD_LOGIN_PATH = "/auth/login"
 WEB_DASHBOARD_DISPLAY_LOGIN_PATH = "/auth/display/login"
+WEB_DASHBOARD_DISPLAY_HOME_PATH = "/?kiosk=display"
 WEB_DASHBOARD_SESSION_PATH = "/auth/session"
 WEB_DASHBOARD_LOGOUT_PATH = "/auth/logout"
 WEB_DASHBOARD_MINIMUM_PASSWORD_CHARACTERS = 16
@@ -601,8 +602,16 @@ class WebDashboardAuthenticationMiddleware:
 
         lease = self._authentication.acquire_session(token)
         if lease is None:
+            # Navigation only: an exact, non-secret bookmark hint survives session
+            # expiry and process restarts. It never chooses an authenticated role.
+            login_path = (
+                WEB_DASHBOARD_DISPLAY_LOGIN_PATH
+                if self._authentication.display_enabled
+                and scope.get("query_string") == b"kiosk=display"
+                else WEB_DASHBOARD_LOGIN_PATH
+            )
             unauthorized_response = (
-                RedirectResponse(WEB_DASHBOARD_LOGIN_PATH, status_code=302)
+                RedirectResponse(login_path, status_code=302)
                 if method == "GET" and path == "/"
                 else _json_error(
                     WEB_DASHBOARD_AUTHENTICATION_REQUIRED_DETAIL,
@@ -728,7 +737,9 @@ class WebDashboardAuthenticationMiddleware:
         previous_token = _cookie_value(headers, WEB_DASHBOARD_AUTH_COOKIE)
         self._authentication.revoke_session(previous_token)
         token = self._authentication.issue_session(display_only=display_only)
-        response = RedirectResponse("/", status_code=303)
+        response = RedirectResponse(
+            WEB_DASHBOARD_DISPLAY_HOME_PATH if display_only else "/", status_code=303,
+        )
         response.set_cookie(
             WEB_DASHBOARD_AUTH_COOKIE,
             token,

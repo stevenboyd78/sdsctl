@@ -22,6 +22,13 @@ consumers when authentication ends. Relaunching a browser is not automatic
 login. Each server has one shared display password, separate from its operator
 password; independently revocable browser devices are deferred.
 
+After display sign-in, the address ends in `/?kiosk=display`. Keep that address
+when bookmarking the dashboard: after expiry or an App restart, reloading it
+returns to **Display-only sign in**, not the operator login. This is only a
+navigation hint, not a credential or automatic login. Opening the plain server
+address still uses the operator sign-in page; the kiosk launcher opens the
+display sign-in page explicitly.
+
 ## 1. Choose a test machine
 
 Use a separate Linux desktop account and a dedicated test display. Keep SSH or

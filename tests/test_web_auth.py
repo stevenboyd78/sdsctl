@@ -218,6 +218,67 @@ def test_display_login_rejects_cross_origin_and_duplicate_passwords() -> None:
                            }).status_code == 401
 
 
+@pytest.mark.parametrize("expiry", ["idle", "absolute", "restart"])
+def test_display_home_retains_login_context_without_restoring_session(expiry: str) -> None:
+    clock = FakeClock()
+    authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)
+    with _client(authentication) as client:
+        login = client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                            data={"password": DISPLAY_PASSWORD},
+                            headers={"Origin": ORIGIN}, follow_redirects=False)
+        home = login.headers["location"]
+        assert home == web_auth.WEB_DASHBOARD_DISPLAY_HOME_PATH
+        assert client.get(home).status_code == 200
+        cookie = client.cookies.get(WEB_DASHBOARD_AUTH_COOKIE)
+        if expiry == "restart":
+            authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)
+        else:
+            clock.now += 1801 if expiry == "idle" else 28801
+
+    def no_daemon_work() -> FakeDaemonApiClient:
+        raise AssertionError("Unauthenticated navigation must not contact the daemon")
+
+    with _client(authentication, factory=no_daemon_work) as recovered:
+        recovered.cookies.set(WEB_DASHBOARD_AUTH_COOKIE, cookie)
+        response = recovered.get(home, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH
+        assert response.headers["cache-control"] == "no-store"
+        assert "Display-only sign in" in recovered.get(home).text
+        assert recovered.get("/auth/session?kiosk=display").status_code == 401
+        assert recovered.get("/api/v1/status?kiosk=display").status_code == 401
+        assert recovered.head(home, follow_redirects=False).status_code == 401
+        assert "Operator sign in" in recovered.get(WEB_DASHBOARD_LOGIN_PATH).text
+
+
+@pytest.mark.parametrize("query", [
+    "", "?kiosk=operator", "?kiosk=display&kiosk=operator", "?kiosk=display&kiosk=display",
+    "?kiosk=display&next=https://evil.example", "?kiosk=%64isplay", "?kiosk=" + "x" * 5000,
+])
+def test_only_exact_display_navigation_hint_changes_unauthenticated_root(query: str) -> None:
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        response = client.get("/" + query, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == WEB_DASHBOARD_LOGIN_PATH
+
+
+def test_display_navigation_hint_requires_configuration_and_never_selects_session_role() -> None:
+    home = web_auth.WEB_DASHBOARD_DISPLAY_HOME_PATH
+    with _client(_authentication()) as client:
+        response = client.get(home, follow_redirects=False)
+        assert response.headers["location"] == WEB_DASHBOARD_LOGIN_PATH
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        operator = client.post(WEB_DASHBOARD_LOGIN_PATH + "?kiosk=display",
+                               data={"password": PASSWORD}, headers={"Origin": ORIGIN},
+                               follow_redirects=False)
+        assert operator.headers["location"] == "/"
+        assert client.get("/auth/session?kiosk=display").json()["display_only"] is False
+        client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                    data={"password": DISPLAY_PASSWORD}, headers={"Origin": ORIGIN})
+        assert client.get("/auth/session?kiosk=operator").json()["display_only"] is True
+        assert client.get("/api/v1/openapi.json?kiosk=operator").status_code == 403
+
+
 def test_authentication_validates_secret_origin_and_session_limits() -> None:
     authentication = _authentication()
 
