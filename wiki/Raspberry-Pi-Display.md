@@ -121,5 +121,18 @@ accepted private-LAN listener enabled. Do not perform the temporary-test cleanup
 above. Enable boot startup only after the interactive display test passes.
 
 Browser kiosks are different. They use the native HTTPS dashboard, dedicated
-dashboard password, browser-trusted certificate, and memory-only session
-cookie. The console service described here must not store those values.
+dashboard password, browser-trusted certificate, and browser cookie. Server
+session records are process-local, but the cookie has a `Max-Age`; do not assume
+memory-only browser storage. Treat its profile as sensitive and never copy its
+cookies to another device. The console service described here must not store
+those values.
+
+A display-only browser kiosk is an unreleased candidate. Follow its
+[candidate setup and test guide](https://github.com/stevenboyd78/sdsctl/blob/main/docs/browser-kiosk.md)
+only with the reviewed candidate build, not v0.29.2. It uses a separate display
+password and server-enforced restrictions. It still needs manual login after
+session expiry or web-service restart. Do not replace a working TUI service or
+enable browser boot startup before that host's graphical workflow is tested.
+Interactive candidate testing passed on 1080p HDMI and 800×480 Pi displays,
+including manual re-login after an App restart. This does not qualify automatic
+kiosk cold boot or replace the production TUI installation described above.

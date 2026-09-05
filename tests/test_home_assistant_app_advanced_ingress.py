@@ -218,6 +218,33 @@ def test_advanced_ingress_dashboard_password_is_returned_once(
     assert status["lifecycle"]["dashboard_password_present"] is True  # type: ignore[index]
 
 
+def test_display_password_rotation_is_separate_and_requires_its_confirmation(
+    tmp_path: Path,
+) -> None:
+    paths = advanced_paths(tmp_path)
+    arguments = dict(paths=paths, options=options(native=True),
+                     supervisor_info=supervisor_info(native_port=15443))
+    operator = rotate_home_assistant_app_advanced_ingress_dashboard_password(
+        "ROTATE", **arguments,
+    )["password"]
+    with pytest.raises(SDS200Error, match="confirmation"):
+        rotate_home_assistant_app_advanced_ingress_dashboard_password(
+            "ROTATE", display_only=True, **arguments,
+        )
+    first = rotate_home_assistant_app_advanced_ingress_dashboard_password(
+        "ROTATE DISPLAY", display_only=True, **arguments,
+    )
+    second = rotate_home_assistant_app_advanced_ingress_dashboard_password(
+        "ROTATE DISPLAY", display_only=True, **arguments,
+    )
+    assert first["password"] != second["password"] != operator
+    assert paths.dashboard_password.read_text().strip() == operator
+    assert paths.display_password.read_text().strip() == second["password"]
+    assert paths.display_password.stat().st_mode & 0o777 == 0o600
+    assert second["restart_required"] is True
+    assert second["password"] not in repr(second["status"])
+
+
 def test_advanced_ingress_client_issue_and_rotation_reload_enabled_daemon(
     tmp_path: Path,
 ) -> None:

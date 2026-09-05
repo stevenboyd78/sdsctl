@@ -513,6 +513,9 @@ def create_web_dashboard_app(
         app.add_middleware(
             WebDashboardAuthenticationMiddleware,
             authentication=lan_authentication,
+            display_theme_paths=frozenset(
+                "/" + asset.manifest.stylesheet_url for asset in web_theme_runtime.assets
+            ),
         )
 
     @app.get(
@@ -520,12 +523,16 @@ def create_web_dashboard_app(
         include_in_schema=False,
         response_class=HTMLResponse,
     )
-    def index() -> HTMLResponse:
+    def index(request: Request) -> HTMLResponse:
+        shell = _dashboard_shell(web_theme_runtime, home_assistant_ingress)
+        if lan_authentication is not None:
+            display_only = request.scope.get("state", {}).get("sdsctl_display_only") is True
+            mode = "display" if display_only else "operator"
+            shell = shell.replace(
+                '<html lang="en"', f'<html data-access-mode="{mode}" lang="en"', 1,
+            )
         return HTMLResponse(
-            content=_dashboard_shell(
-                web_theme_runtime,
-                home_assistant_ingress,
-            ),
+            content=shell,
             headers=dict(_WEB_RESPONSE_HEADERS),
         )
 
@@ -875,6 +882,17 @@ def create_web_dashboard_app(
                     rotate_home_assistant_app_advanced_ingress_dashboard_password(
                         confirmation,
                     )
+                ),
+            )
+
+        @app.post("/api/v1/home-assistant/advanced-access/display-password/rotate")
+        def home_assistant_advanced_access_display_password_rotate(
+            payload: Annotated[object, Body()],
+        ) -> JSONResponse:
+            confirmation = _home_assistant_integration_confirmation(payload)
+            return _home_assistant_integration_response(
+                lambda: rotate_home_assistant_app_advanced_ingress_dashboard_password(
+                    confirmation, display_only=True,
                 ),
             )
 
@@ -1566,8 +1584,12 @@ def _home_assistant_advanced_access_panel() -> str:
             <dd id="home-assistant-advanced-client-count">0</dd>
           </div>
           <div>
-            <dt>Dashboard password</dt>
+            <dt>Operator password</dt>
             <dd id="home-assistant-advanced-password-state">Checking</dd>
+          </div>
+          <div>
+            <dt>Display password</dt>
+            <dd id="home-assistant-advanced-display-password-state">Checking</dd>
           </div>
         </dl>
 
@@ -1602,7 +1624,9 @@ def _home_assistant_advanced_access_panel() -> str:
           </section>
 
           <section class="advanced-access-group">
-            <h3>2. Native dashboard password</h3>
+            <h3>2. Native dashboard passwords</h3>
+            <p>Operator login permits controls. Display login permits status and Waterfall only.
+              Each password is separate; save the one-time value before restarting this App.</p>
             <input
               id="home-assistant-advanced-password"
               class="technical-value"
@@ -1613,7 +1637,10 @@ def _home_assistant_advanced_access_panel() -> str:
             >
             <div class="home-assistant-integration-actions">
               <button id="home-assistant-advanced-rotate-password" type="button">
-                Create or rotate
+                Create or rotate operator password
+              </button>
+              <button id="home-assistant-advanced-rotate-display-password" type="button">
+                Create or rotate display password
               </button>
               <button id="home-assistant-advanced-show-password" type="button" disabled>
                 Show

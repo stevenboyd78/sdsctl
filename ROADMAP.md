@@ -11,7 +11,58 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### v0.29.1 — Wide TUI production-display follow-up
+### Milestone 34.1 — Display-only native browser kiosk
+
+The operator approved building and testing the display-only direction after
+the initial design and documentation only review. The candidate adds a separate
+display password and server-side permissions for status, events, themes and
+Waterfall. Scanner controls, audio, recordings/downloads, management and unknown
+routes are denied before daemon work. Ordinary operator and Ingress access
+remain separate. See the [design](docs/browser-kiosk-design.md) and
+[candidate setup guide](docs/browser-kiosk.md).
+
+Manual login, the existing session limits and exact-origin HTTPS remain intact.
+Expiry closes browser consumers and shows a login-required/stale-data notice.
+The launcher checks TLS and the display-login endpoint, uses a private locked
+Chromium profile, and does not store a password, install trust, or enable a
+service. A bounded user-service template is supplied for graphical sessions.
+
+Interactive candidate acceptance at `82dd94d` passed on concurrent 1920x1080
+HDMI and 800x480 Raspberry Pi displays, including manual login, compact layout,
+menu/Details, local Waterfall controls and reload-to-display-login recovery after
+an App restart. See the [evidence and limits](docs/browser-kiosk.md#milestone-341-candidate-acceptance).
+The earlier copy-shortcut exits remain unreproduced, not established as fixed.
+Production restoration passed on both physical TUI displays, and the approved
+temporary-resource cleanup is complete. Kiosk cold-boot and production
+graphical-service qualification are not claimed.
+No acceptance is inherited from the TUI tests. Fully unattended re-login,
+per-device browser enrollment, audio and recording access remain outside this
+first implementation. The candidate remains unreleased.
+
+#### Closed v0.29.2 — TUI application header and production acceptance
+
+The header change merged through PR 230 and the release preparation through
+PR 231, at `16d46890e64fafbbbd6de6dc9e85e36ed363280f`. Published v0.29.2 on
+September 4, 2026 after Python 3.11 through 3.14, documentation, browser,
+distribution, and multi-architecture publication checks passed. The reviewed
+wiki source was synchronized before tagging, and clean public base and `all`
+installations and installed-package TUI renders passed.
+
+The production HDMI client upgraded from the verified public package with its
+font, 160-column by 45-row geometry, credentials, dependencies, recordings and
+service settings preserved. The operator accepted the application-only header
+and separate Scanner model/firmware panel. This was a presentation-only check,
+not a repeat of audio, scanner-control, revocation or cold-boot acceptance.
+Home Assistant and the smaller Pi were not upgraded or restarted.
+
+#### Closed v0.29.1 — Wide TUI production-display follow-up
+
+The wide-layout follow-up merged through PR 229 at
+`12ba1b6aa6db68db4cd6a18f86f1e80ca7cce1b8` and was published on September 4,
+2026. The production HDMI client used the public package; the operator accepted
+the readable wide layout and later confirmed a clean intentional quit after
+the console font had been configured before TUI startup. Boot enablement is
+not evidence of a physical cold-boot test. The original patch scope follows.
 
 Refine the wide TUI after the published v0.29.0 client was installed on a
 Raspberry Pi with a 1080p HDMI monitor. Keep Live PSI directly beneath Scanner

@@ -1273,6 +1273,20 @@ def build_parser(
         help="Exact private or link-local Docker-host publication address",
     )
 
+    kiosk = subparsers.add_parser(
+        "browser-kiosk", help="Preflight or launch a manual-login display-only Chromium kiosk",
+    )
+    subparsers.add_parser(
+        "browser-kiosk-service", help="Print the opt-in graphical-session user-service template",
+    )
+    kiosk.add_argument("--origin", required=True, metavar="HTTPS_ORIGIN")
+    kiosk.add_argument("--ca-file", type=Path, help="Absolute public CA file for preflight")
+    kiosk.add_argument("--browser", type=Path, help="Absolute installed Chromium executable")
+    kiosk.add_argument("--profile-directory", type=Path, help="Dedicated mode-0700 browser profile")
+    kiosk.add_argument(
+        "--preflight-only", action="store_true", help="Check HTTPS without launching",
+    )
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -1722,6 +1736,12 @@ def build_parser(
         type=Path,
         metavar="PATH",
         help="Absolute mode-0600 file containing the dashboard password",
+    )
+    web.add_argument(
+        "--lan-display-password-file",
+        type=Path,
+        metavar="PATH",
+        help="Optional separate mode-0600 password file enabling display-only browser login",
     )
     web.add_argument(
         "--lan-tls-certfile",
@@ -5022,6 +5042,7 @@ def _run_web(
         args.lan_public_port,
         args.lan_password_env,
         args.lan_password_file,
+        args.lan_display_password_file,
         args.lan_tls_certfile,
         args.lan_tls_keyfile,
     )
@@ -5111,6 +5132,10 @@ def _run_web(
         lan_authentication = WebDashboardAuthentication(
             password,
             args.lan_origin,
+            display_password=(
+                read_authenticated_lan_password_file(args.lan_display_password_file)
+                if args.lan_display_password_file is not None else None
+            ),
         )
         del password
         parsed_origin = urlsplit(lan_authentication.origin)
@@ -6253,6 +6278,35 @@ def main(
         if args.action == "display-client-service":
             print(managed_display_service_template(), end="")
             return 0
+
+        if args.action == "browser-kiosk-service":
+            from importlib.resources import files
+
+            print(files("sds200.service_assets").joinpath("sdsctl-browser-kiosk.service")
+                  .read_text(encoding="utf-8"), end="")
+            return 0
+
+        if args.action == "browser-kiosk":
+            from .browser_kiosk import kiosk_preflight, run_browser_kiosk
+            from .exceptions import ConfigurationError
+
+            try:
+                if args.preflight_only:
+                    kiosk_preflight(args.origin, args.ca_file)
+                    print("Display login/TLS preflight passed; verify browser trust separately.")
+                    return 0
+                if args.browser is None or args.profile_directory is None:
+                    raise ValueError("Kiosk launch requires --browser and --profile-directory.")
+                return run_browser_kiosk(
+                    args.origin, args.browser, args.profile_directory, args.ca_file,
+                )
+            except (ConfigurationError, ValueError):
+                print("Kiosk setup requires attention; check HTTPS trust, paths and desktop.",
+                      file=sys.stderr)
+                return 78
+            except (ConnectionError, OSError):
+                print("Kiosk unavailable; check connectivity and local files.", file=sys.stderr)
+                return 75
 
         if args.action == "daemon":
             return _run_daemon(

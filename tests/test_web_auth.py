@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
+import re
 import threading
 from collections.abc import Iterator, Mapping
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +33,7 @@ from sds200.web_dashboard import create_web_dashboard_app
 
 ORIGIN = "https://scanner.example:8443"
 PASSWORD = "correct horse battery staple"
+DISPLAY_PASSWORD = "separate display password for tests"
 
 _REAL_DERIVE_PASSWORD_KEY = web_auth._derive_password_key
 _REAL_COMPARE_DIGEST = web_auth.compare_digest
@@ -86,6 +89,7 @@ class FakeDaemonApiClient(AbstractContextManager["FakeDaemonApiClient"]):
 
 def _authentication(
     *,
+    display_password: str | None = None,
     clock: FakeClock | None = None,
     tokens: Iterator[str] | None = None,
     idle_seconds: int = 1800,
@@ -97,6 +101,7 @@ def _authentication(
     return WebDashboardAuthentication(
         PASSWORD,
         ORIGIN,
+        display_password=display_password,
         idle_seconds=idle_seconds,
         absolute_seconds=absolute_seconds,
         max_sessions=max_sessions,
@@ -124,6 +129,154 @@ def _login(client: TestClient, password: str = PASSWORD) -> object:
         headers={"Origin": ORIGIN},
         follow_redirects=False,
     )
+
+
+def test_display_password_is_opt_in_distinct_and_secret_free() -> None:
+    with _client(_authentication()) as client:
+        assert client.get(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH).status_code == 404
+    for password in (PASSWORD, "short", 123):
+        with pytest.raises(ValueError):
+            _authentication(display_password=password)  # type: ignore[arg-type]
+    authentication = _authentication(display_password=DISPLAY_PASSWORD)
+    assert DISPLAY_PASSWORD not in repr(authentication)
+    with _client(authentication) as client:
+        assert _login(client, DISPLAY_PASSWORD).status_code == 401  # type: ignore[attr-defined]
+        failed = client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                             data={"password": PASSWORD}, headers={"Origin": ORIGIN})
+        assert failed.status_code == 401
+        assert "Display-only sign in" in failed.text
+        assert DISPLAY_PASSWORD not in failed.text
+
+
+def test_display_allowlist_denies_every_other_route_before_daemon_work() -> None:
+    calls: list[str] = []
+
+    def factory() -> FakeDaemonApiClient:
+        calls.append("api")
+        return FakeDaemonApiClient()
+
+    authentication = _authentication(display_password=DISPLAY_PASSWORD)
+    app = create_web_dashboard_app(factory, lan_authentication=authentication)
+    with TestClient(app, base_url=ORIGIN) as client:
+        login = client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                            data={"password": DISPLAY_PASSWORD},
+                            headers={"Origin": ORIGIN}, follow_redirects=False)
+        assert login.status_code == 303
+        assert 'data-access-mode="display"' in client.get("/").text
+        assert client.get("/auth/session").json()["display_only"] is True
+        assert client.get("/assets/themes/system/theme.css").status_code == 200
+        assert client.get("/assets/dashboard.css?sdsctl_source=1").status_code == 200
+        for route in app.routes:
+            path = route.path  # type: ignore[attr-defined]
+            if path.startswith("/assets/themes/") or path in web_auth._DISPLAY_READ_PATHS:
+                continue
+            path = path.replace("{scope}", "system").replace("{identifier:path}", "demo.wav")
+            for method in route.methods:  # type: ignore[attr-defined]
+                assert client.request(method, path, headers={"Origin": ORIGIN}).status_code == 403
+        for path in (
+            "/api/v1/future", "/assets/future.js", "/api/v1/home-assistant/advanced-access",
+            "/api/v1/home-assistant/advanced-access/display-password/rotate",
+        ):
+            assert client.get(path).status_code == 403
+        for method in ("POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"):
+            assert client.request(method, "/api/v1/status",
+                                  headers={"Origin": ORIGIN}).status_code == 403
+        assert calls == []
+        assert client.get("/api/v1/status").status_code == 200
+        assert calls == ["api"]
+        logout = client.post("/auth/logout", headers={"Origin": ORIGIN}, follow_redirects=False)
+        assert logout.headers["location"] == web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH
+        assert client.get("/auth/session").status_code == 401
+
+
+def test_display_session_expires_and_cannot_select_operator_role() -> None:
+    clock = FakeClock()
+    authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)
+    with _client(authentication) as client:
+        response = client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH + "?role=operator",
+                               data={"password": DISPLAY_PASSWORD, "role": "operator"},
+                               headers={"Origin": ORIGIN}, follow_redirects=False)
+        assert response.status_code == 303
+        assert client.get("/auth/session").json() == {
+            "display_only": True, "remaining_seconds": 28800,
+        }
+        clock.now += 28800
+        assert client.get("/auth/session").status_code == 401
+        assert _login(client).status_code == 303  # type: ignore[attr-defined]
+        assert client.get("/auth/session").json()["display_only"] is False
+        assert client.get("/api/v1/openapi.json").status_code == 200
+
+
+def test_display_login_rejects_cross_origin_and_duplicate_passwords() -> None:
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        assert client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                           data={"password": DISPLAY_PASSWORD}).status_code == 403
+        assert client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                           content="password=a&password=b", headers={
+                               "Origin": ORIGIN,
+                               "Content-Type": "application/x-www-form-urlencoded",
+                           }).status_code == 401
+
+
+@pytest.mark.parametrize("expiry", ["idle", "absolute", "restart"])
+def test_display_home_retains_login_context_without_restoring_session(expiry: str) -> None:
+    clock = FakeClock()
+    authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)
+    with _client(authentication) as client:
+        login = client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                            data={"password": DISPLAY_PASSWORD},
+                            headers={"Origin": ORIGIN}, follow_redirects=False)
+        home = login.headers["location"]
+        assert home == web_auth.WEB_DASHBOARD_DISPLAY_HOME_PATH
+        assert client.get(home).status_code == 200
+        cookie = client.cookies.get(WEB_DASHBOARD_AUTH_COOKIE)
+        if expiry == "restart":
+            authentication = _authentication(clock=clock, display_password=DISPLAY_PASSWORD)
+        else:
+            clock.now += 1801 if expiry == "idle" else 28801
+
+    def no_daemon_work() -> FakeDaemonApiClient:
+        raise AssertionError("Unauthenticated navigation must not contact the daemon")
+
+    with _client(authentication, factory=no_daemon_work) as recovered:
+        recovered.cookies.set(WEB_DASHBOARD_AUTH_COOKIE, cookie)
+        response = recovered.get(home, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH
+        assert response.headers["cache-control"] == "no-store"
+        assert "Display-only sign in" in recovered.get(home).text
+        assert recovered.get("/auth/session?kiosk=display").status_code == 401
+        assert recovered.get("/api/v1/status?kiosk=display").status_code == 401
+        assert recovered.head(home, follow_redirects=False).status_code == 401
+        assert "Operator sign in" in recovered.get(WEB_DASHBOARD_LOGIN_PATH).text
+
+
+@pytest.mark.parametrize("query", [
+    "", "?kiosk=operator", "?kiosk=display&kiosk=operator", "?kiosk=display&kiosk=display",
+    "?kiosk=display&next=https://evil.example", "?kiosk=%64isplay", "?kiosk=" + "x" * 5000,
+])
+def test_only_exact_display_navigation_hint_changes_unauthenticated_root(query: str) -> None:
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        response = client.get("/" + query, follow_redirects=False)
+        assert response.status_code == 302
+        assert response.headers["location"] == WEB_DASHBOARD_LOGIN_PATH
+
+
+def test_display_navigation_hint_requires_configuration_and_never_selects_session_role() -> None:
+    home = web_auth.WEB_DASHBOARD_DISPLAY_HOME_PATH
+    with _client(_authentication()) as client:
+        response = client.get(home, follow_redirects=False)
+        assert response.headers["location"] == WEB_DASHBOARD_LOGIN_PATH
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        operator = client.post(WEB_DASHBOARD_LOGIN_PATH + "?kiosk=display",
+                               data={"password": PASSWORD}, headers={"Origin": ORIGIN},
+                               follow_redirects=False)
+        assert operator.headers["location"] == "/"
+        assert client.get("/auth/session?kiosk=display").json()["display_only"] is False
+        client.post(web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH,
+                    data={"password": DISPLAY_PASSWORD}, headers={"Origin": ORIGIN})
+        assert client.get("/auth/session?kiosk=operator").json()["display_only"] is True
+        assert client.get("/api/v1/openapi.json?kiosk=operator").status_code == 403
 
 
 def test_authentication_validates_secret_origin_and_session_limits() -> None:
@@ -330,6 +483,41 @@ def test_login_page_preserves_origin_for_its_same_origin_form_post() -> None:
     assert "form-action 'self'" in response.headers["content-security-policy"]
 
 
+@pytest.mark.parametrize("display_only", [False, True])
+@pytest.mark.parametrize("failed", [False, True])
+def test_login_visibility_has_strict_csp_and_never_reflects_password(
+    display_only: bool, failed: bool,
+) -> None:
+    path = web_auth.WEB_DASHBOARD_DISPLAY_LOGIN_PATH if display_only else WEB_DASHBOARD_LOGIN_PATH
+    with _client(_authentication(display_password=DISPLAY_PASSWORD)) as client:
+        response = (
+            client.post(path, data={"password": "wrong private password"},
+                        headers={"Origin": ORIGIN})
+            if failed else client.get(path)
+        )
+    assert response.status_code == (401 if failed else 200)
+    assert 'name="password" type="password"' in response.text
+    assert 'type="button" aria-controls="password"' in response.text
+    assert 'aria-pressed="false" hidden>Show password</button>' in response.text
+    assert (
+        'autocomplete="current-password" autocapitalize="off" spellcheck="false"'
+        in response.text
+    )
+    assert 'value=' not in response.text
+    assert "wrong private password" not in response.text
+    csp = response.headers["content-security-policy"]
+    assert "default-src 'none'" in csp
+    assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
+    for tag, directive in (("script", "script-src"), ("style", "style-src")):
+        blocks = re.findall(f"<{tag}>(.*?)</{tag}>", response.text, re.DOTALL)
+        assert len(blocks) == 1
+        digest = base64.b64encode(hashlib.sha256(blocks[0].encode()).digest()).decode()
+        assert f"{directive} 'sha256-{digest}'" in csp
+    assert "password.form.addEventListener('submit', hide)" in response.text
+    assert "window.addEventListener('pagehide', hide)" in response.text
+    assert response.headers["cache-control"] == "no-store"
+
+
 def test_login_failure_is_generic_secret_free_and_no_store() -> None:
     submitted = "this is the wrong private password"
     with _client(_authentication()) as client:
@@ -357,6 +545,7 @@ def test_login_issues_secure_cookie_and_authorizes_dashboard() -> None:
     assert "HttpOnly" in cookie
     assert "Path=/" in cookie
     assert "SameSite=strict" in cookie
+    assert "Max-Age=28800" in cookie
     assert "Secure" in cookie
     assert "Domain=" not in cookie
     assert PASSWORD not in cookie
@@ -907,11 +1096,14 @@ def test_expired_session_is_rejected_before_daemon_access() -> None:
     assert daemon.hello_calls == 1
 
 
-def test_revocation_closes_an_active_authorized_response() -> None:
+@pytest.mark.parametrize("display_only", [False, True])
+def test_revocation_closes_an_active_authorized_response(display_only: bool) -> None:
     async def exercise() -> None:
         token = "a" * 43
-        authentication = _authentication(tokens=iter((token,)))
-        assert authentication.issue_session() == token
+        authentication = _authentication(
+            tokens=iter((token,)), display_password=DISPLAY_PASSWORD if display_only else None,
+        )
+        assert authentication.issue_session(display_only=display_only) == token
         response_started = asyncio.Event()
         app_stopped = asyncio.Event()
         messages: list[Message] = []

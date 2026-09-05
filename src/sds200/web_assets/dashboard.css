@@ -74,6 +74,39 @@ select:focus-visible,
   gap: var(--space-1);
   text-align: right;
 }
+.native-menu {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: 0 0.75rem 2rem #0006;
+}
+.native-menu::backdrop { background: #0007; }
+.native-menu h2 { margin: 0; }
+.native-menu :is(nav, section) { margin-top: 0.8rem; }
+.native-menu h3 { margin: 0 0 0.5rem; }
+.native-menu :is(button, select), #native-menu-toggle {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
+}
+.native-menu [aria-current="page"] {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--surface));
+  font-weight: 800;
+}
+.native-menu-session { border-top: 1px solid var(--border); padding-top: 0.75rem; }
+.native-access-label { color: var(--muted); }
+.native-view-title {
+  color: var(--text);
+  background: var(--surface);
+}
+.native-summary dt { color: var(--muted); }
+.native-details { border-top: 1px solid var(--border); }
+.native-details > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .theme-picker label {
   color: var(--muted);
   font-size: 0.75rem;
@@ -803,6 +836,28 @@ body {
 
 [hidden] {
   display: none !important;
+}
+
+#native-session-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin: 0 0 0.4rem;
+  padding: 0.35rem 0.6rem;
+  font-size: clamp(0.7rem, 1.5vmin, 0.9rem);
+  line-height: 1.3;
+}
+
+#native-session-status button {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  cursor: pointer;
 }
 
 .site-header,

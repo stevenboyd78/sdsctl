@@ -38,6 +38,7 @@ from sds200.daemon_waterfall_protocol import (
     DaemonWaterfallRecordKind,
 )
 from sds200.exceptions import DaemonDisconnectedError
+from sds200.web_auth import _login_response
 from sds200.web_dashboard import (
     WEB_DASHBOARD_HOME_ASSISTANT_INGRESS_CLIENT,
     create_web_dashboard_app,
@@ -723,6 +724,16 @@ class _DemoUrlPrefixMiddleware:
         send: Send,
     ) -> None:
         path = scope.get("path", "")
+        # Local audit only: serve the real login HTML and CSP, never credentials
+        # or an authentication shortcut in the production dashboard.
+        if scope["type"] == "http" and scope.get("method") == "GET" and path in {
+            "/__demo/login/operator", "/__demo/login/display",
+        }:
+            await _login_response(
+                display_only=path.endswith("/display"),
+                failed=scope.get("query_string") == b"failed",
+            )(scope, receive, send)
+            return
         if scope["type"] in {"http", "websocket"} and (
             path == _DEMO_URL_PREFIX or path.startswith(f"{_DEMO_URL_PREFIX}/")
         ):
@@ -815,6 +826,12 @@ class _DemoClockMiddleware:
                 raise RuntimeError("demo shell body preceded its response headers")
 
             body = b"".join(body_parts)
+            # Presentation-only kiosk fixture. Auth/permission enforcement is
+            # tested against the actual middleware, never this demo's fake API.
+            if scope.get("query_string") == b"kiosk=display":
+                body = body.replace(
+                    b'<html lang="en"', b'<html data-access-mode="display" lang="en"', 1,
+                )
             marker = _THEME_BOOTSTRAP_SCRIPT_TAG.encode("utf-8")
             if body.count(marker) != 1:
                 raise RuntimeError(

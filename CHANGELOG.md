@@ -6,6 +6,41 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Add opt-in native display login with a separate password and a server-side
+  status/events/themes/Waterfall allowlist. Deny scanner controls, audio,
+  recording downloads, management and unknown routes before creating daemon
+  work. Add an Ingress-only display-password rotation workflow without enabling
+  network access or changing ordinary operator credentials.
+- Add `browser-kiosk` HTTPS preflight and foreground Chromium launch, with a
+  private exclusive profile and no password argument or certificate bypass. Add
+  `browser-kiosk-service` to print a bounded graphical-session user-service
+  template. Interactive acceptance passed on two Pi displays; automatic
+  cold-boot startup and production graphical-service qualification remain open.
+
+### Fixed
+
+- Keep display-only login navigation after session expiry or an App restart
+  using a non-secret dashboard URL hint, without restoring authentication or
+  changing session permissions. Give compact pane headings theme-matched
+  foreground and background colors for readable contrast.
+- Give short display-only browser kiosks a header menu for views, appearance
+  and sign-out; keep connection and authentication warnings visible. Use
+  full-width scanner/Waterfall content and expandable technical Details rather
+  than squeezing them beside the plots. Restore desktop controls on resize.
+- Add accessible Show/Hide password controls to native operator and display
+  sign-in, hidden by default and re-masked on submit or leaving the page.
+  Keep strict hash-based content security and normal same-origin form posting.
+- Size the native session banner separately from the overview and scanner
+  workspace so it cannot leave a large empty row above the live display.
+- Distinguish operator/display password setup status and reset each button's
+  confirmation label correctly in the Home Assistant advanced-access workspace.
+- Stop native browser consumers and show login-required/stale-data guidance on
+  authentication expiry. Preserve manual re-login and existing session limits.
+- Correct cookie-storage guidance: server session records are process-local,
+  while the browser may persist its cookie in the private profile.
+
 ## [0.29.2] - 2026-09-04
 
 ### Changed

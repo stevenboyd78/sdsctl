@@ -114,6 +114,231 @@ if (!dashboardScriptUrl) {
   throw new Error("Dashboard script URL is unavailable.");
 }
 const webRootUrl = new URL("../", dashboardScriptUrl);
+const nativeAccessMode = document.documentElement.dataset.accessMode;
+const displayOnly = nativeAccessMode === "display";
+let authenticationRequired = false;
+let nativeSessionTimer = null;
+
+function requireNativeLogin() {
+  if (!nativeAccessMode || authenticationRequired) return;
+  authenticationRequired = true;
+  document.getElementById("native-menu")?.close();
+  if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
+  stopEventStream();
+  stopWaterfallStream({status: "Sign in to resume Waterfall. Last data is stale."});
+  stopAudioPlayback();
+  element("saved-recording-player").pause();
+  currentDaemonHello = {};
+  setScannerControls();
+  document.documentElement.dataset.sessionState = "login-required";
+  const banner = element("native-session-status");
+  banner.textContent = "Login required — updates stopped; displayed data is stale. ";
+  const link = document.createElement("a");
+  link.href = webUrl(displayOnly ? "auth/display/login" : "auth/login");
+  link.textContent = "Sign in again";
+  banner.append(link);
+  banner.hidden = false;
+  setOverallStatus("offline", "Login required", "Sign in again. Displayed data is stale.");
+}
+
+async function dashboardFetch(url, options) {
+  if (authenticationRequired) throw new Error("Login required.");
+  if (nativeAccessMode && (options?.method ?? "GET") === "GET" && !options?.signal) {
+    // Finite native reads must not stall reconnection indefinitely. Streaming
+    // consumers supply their own lifecycle-bound AbortController instead.
+    options = {...options, signal: AbortSignal.timeout(5000)};
+  }
+  const response = await fetch(url, options);
+  if (nativeAccessMode && response.status === 401) requireNativeLogin();
+  return response;
+}
+
+async function initializeNativeSession() {
+  if (!nativeAccessMode) return;
+  const banner = document.createElement("div");
+  banner.id = "native-session-status";
+  banner.className = "notice";
+  banner.setAttribute("role", "status");
+  banner.textContent = displayOnly
+    ? "Display-only session — scanner controls, audio and recordings are disabled. "
+    : "Operator session. ";
+  const logout = document.createElement("form");
+  logout.method = "post";
+  logout.action = webUrl("auth/logout");
+  const button = document.createElement("button");
+  button.type = "submit";
+  button.textContent = "Sign out";
+  logout.append(button);
+  banner.append(logout);
+  element("main-content").prepend(banner);
+  if (displayOnly) initializeDisplayNavigation(logout);
+  try {
+    const response = await dashboardFetch(webUrl("auth/session"), {
+      credentials: "same-origin", cache: "no-store", redirect: "error",
+    });
+    if (!response.ok) return;
+    const session = await response.json();
+    if (Number.isFinite(session.remaining_seconds) && session.remaining_seconds > 0) {
+      nativeSessionTimer = window.setTimeout(requireNativeLogin, session.remaining_seconds * 1000);
+    }
+  } catch {
+    // Status polling handles transient outages without attempting automatic login.
+  }
+}
+
+function syncDisplayNavigation() {
+  const labels = {scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"};
+  const title = document.getElementById("native-view-title");
+  if (title) title.textContent = labels[activeWorkspacePane] ?? "Scanner";
+  for (const button of document.querySelectorAll("[data-kiosk-pane]")) {
+    if (button.dataset.kioskPane === activeWorkspacePane) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+}
+
+function initializeDisplayNavigation(logout) {
+  // Presentation only: reuse the authorized pane switcher and existing controls.
+  // No credential, request, or scanner-control capability is added here.
+  const make = (tag, text, className) => {
+    const node = document.createElement(tag);
+    if (text) node.textContent = text;
+    if (className) node.className = className;
+    return node;
+  };
+  const header = document.querySelector(".site-header");
+  const heading = document.querySelector(".brand h1");
+  const headingRow = make("div", null, "native-menu-heading");
+  heading.before(headingRow);
+  const trigger = make("button", "☰");
+  trigger.id = "native-menu-toggle";
+  trigger.type = "button";
+  trigger.setAttribute("aria-label", "Open dashboard menu");
+  trigger.setAttribute("aria-haspopup", "dialog");
+  trigger.setAttribute("aria-controls", "native-menu");
+  trigger.setAttribute("aria-expanded", "false");
+  headingRow.append(trigger, heading);
+  header.append(make("span", "Display-only", "native-access-label"));
+
+  const dialog = make("dialog", null, "native-menu");
+  dialog.id = "native-menu";
+  dialog.setAttribute("aria-labelledby", "native-menu-title");
+  const menuHeader = make("div", null, "native-menu-header");
+  const title = make("h2", "Dashboard menu");
+  title.id = "native-menu-title";
+  const close = make("button", "Close menu");
+  close.type = "button";
+  close.addEventListener("click", () => dialog.close());
+  menuHeader.append(title, close);
+  const views = make("nav", null, "native-menu-views");
+  views.setAttribute("aria-label", "Dashboard views");
+  for (const [pane, label] of Object.entries({scanner: "Scanner", waterfall: "Waterfall", diagnostics: "Diagnostics"})) {
+    const button = make("button", label);
+    button.type = "button";
+    button.dataset.kioskPane = pane;
+    button.addEventListener("click", () => {
+      activateWorkspacePane(pane);
+      dialog.close();
+      element("native-view-title").focus();
+    });
+    views.append(button);
+  }
+  const appearance = make("section", null, "native-menu-appearance");
+  appearance.setAttribute("aria-label", "Appearance");
+  appearance.append(make("h3", "Appearance"));
+  const session = make("section", null, "native-menu-session");
+  session.append(make("h3", "Session"), make("p", "Display-only — scanner controls, audio and recordings are disabled."), logout);
+  dialog.append(menuHeader, views, appearance, session);
+  document.body.append(dialog);
+  trigger.addEventListener("click", () => {
+    if (dialog.open) dialog.close();
+    else { dialog.showModal(); trigger.setAttribute("aria-expanded", "true"); }
+  });
+  dialog.addEventListener("close", () => trigger.setAttribute("aria-expanded", "false"));
+  dialog.addEventListener("keydown", event => {
+    if (event.key !== "Tab") return;
+    const controls = [...dialog.querySelectorAll("button, select, a[href]")]
+      .filter(node => !node.disabled && node.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first.focus();
+    }
+  });
+  dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+    const rect = dialog.getBoundingClientRect();
+    if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close();
+  });
+
+  const viewTitle = make("h2", "Scanner", "native-view-title");
+  viewTitle.id = "native-view-title";
+  viewTitle.tabIndex = -1;
+  document.querySelector(".workspace-tabs").after(viewTitle);
+
+  // Remember exact original positions: resizing restores desktop DOM order,
+  // IDs, listeners, theme selection, field inspection and current stream state.
+  const relocations = [];
+  const relocate = (node, destination) => {
+    const anchor = document.createComment("native compact control position");
+    node.before(anchor);
+    relocations.push({node, destination, anchor});
+  };
+  relocate(document.querySelector(".theme-picker"), appearance);
+  relocate(element("system-palette-picker"), appearance);
+  const details = (parent, id, selectors) => {
+    const disclosure = make("details", null, "native-details");
+    disclosure.id = id;
+    disclosure.append(make("summary", "Details"));
+    const content = make("div", null, "native-details-content");
+    disclosure.append(content);
+    for (const selector of selectors) relocate(parent.querySelector(selector), content);
+    parent.append(disclosure);
+    return disclosure;
+  };
+  const scanner = element("radio-activity-panel");
+  const scannerDetails = details(scanner, "native-scanner-details", [".radio-view-controls", ".radio-summary", ".radio-field-groups"]);
+  const waterfall = element("waterfall-panel");
+  const waterfallDetails = details(waterfall, "native-waterfall-details", [".waterfall-telemetry", ".waterfall-disclaimer", ".waterfall-raw"]);
+
+  // Mirror only already-rendered text, with no extra polling or duplicate IDs.
+  const summary = (id, fields) => {
+    const list = make("dl", null, "native-summary");
+    list.id = id;
+    const observer = new MutationObserver(() => {
+      for (const {source, value} of copies) value.textContent = source.textContent;
+    });
+    const copies = fields.map(([label, sourceId]) => {
+      const source = element(sourceId);
+      const value = make("dd", source.textContent);
+      const row = make("div");
+      row.append(make("dt", label), value);
+      list.append(row);
+      observer.observe(source, {childList: true, characterData: true, subtree: true});
+      return {source, value};
+    });
+    return list;
+  };
+  scannerDetails.before(summary("native-scanner-summary", [["Frequency", "radio-frequency"], ["Modulation", "radio-modulation"], ["Signal", "radio-signal"], ["RSSI", "radio-rssi"]]));
+  waterfallDetails.before(summary("native-waterfall-summary", [["Lower", "waterfall-frequency-lower"], ["Center", "waterfall-frequency-center"], ["Upper", "waterfall-frequency-upper"], ["Frame rate", "waterfall-frame-rate"]]));
+  const compact = window.matchMedia("(max-width: 60rem) and (max-height: 40rem)");
+  const update = () => {
+    const focused = document.activeElement;
+    dialog.close();
+    document.documentElement.dataset.kioskCompact = String(compact.matches);
+    views.hidden = !compact.matches;
+    appearance.hidden = !compact.matches;
+    for (const {node, destination, anchor} of relocations) {
+      if (compact.matches) destination.append(node);
+      else anchor.after(node);
+    }
+    if (focused instanceof HTMLElement && focused !== document.body && focused.getClientRects().length === 0) trigger.focus();
+    syncDisplayNavigation();
+  };
+  compact.addEventListener("change", update);
+  update();
+}
 
 function webUrl(path) {
   return new URL(path, webRootUrl).toString();
@@ -157,6 +382,7 @@ function writeStoredValue(key, value) {
 
 function normalizedWorkspacePane(value) {
   return typeof value === "string" &&
+    (!displayOnly || ["scanner", "waterfall", "diagnostics"].includes(value)) &&
     WORKSPACE_PANES.includes(value) &&
     document.getElementById(`pane-tab-${value}`) !== null
     ? value
@@ -179,6 +405,7 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   }
 
   document.documentElement.dataset.workspacePane = pane;
+  syncDisplayNavigation();
   if (persist) {
     writeStoredValue(WORKSPACE_PANE_STORAGE_KEY, pane);
   }
@@ -194,7 +421,8 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
 function initializeWorkspace() {
   const tabs = Array.from(
     document.querySelectorAll("[data-workspace-tab]"),
-  );
+  ).filter((tab) => !displayOnly ||
+    ["scanner", "waterfall", "diagnostics"].includes(tab.dataset.workspaceTab));
   activateWorkspacePane(readStoredValue(WORKSPACE_PANE_STORAGE_KEY), {
     persist: false,
   });
@@ -776,6 +1004,7 @@ async function consumeWaterfallBody(reader, generation, mediaType) {
 }
 
 async function startWaterfallStream() {
+  if (authenticationRequired) return;
   if (!waterfallDemanded()) {
     return;
   }
@@ -784,7 +1013,7 @@ async function startWaterfallStream() {
   const controller = new AbortController();
   waterfallAbortController = controller;
   try {
-    const response = await fetch(webUrl("api/v1/waterfall"), {
+    const response = await dashboardFetch(webUrl("api/v1/waterfall"), {
       headers: {Accept: WATERFALL_SSE_MEDIA_TYPE},
       cache: "no-store",
       credentials: "same-origin",
@@ -831,6 +1060,7 @@ async function startWaterfallStream() {
 }
 
 function reconcileWaterfallDemand() {
+  if (authenticationRequired) return;
   if (typeof document === "undefined" || document.getElementById("waterfall-status") === null) {
     return;
   }
@@ -1622,13 +1852,14 @@ function renderRecordings(inventory) {
 }
 
 async function refreshRecordingStatus() {
+  if (displayOnly || authenticationRequired) return;
   if (recordingRefreshInProgress || document.hidden) {
     return;
   }
 
   recordingRefreshInProgress = true;
   try {
-    const response = await fetch(webUrl("api/v1/recording"), {
+    const response = await dashboardFetch(webUrl("api/v1/recording"), {
       method: "GET",
       headers: {Accept: "application/json"},
       cache: "no-store",
@@ -1659,6 +1890,7 @@ async function refreshRecordingStatus() {
 }
 
 async function refreshRecordings() {
+  if (displayOnly || authenticationRequired) return;
   if (recordingsRefreshInProgress || document.hidden) {
     return;
   }
@@ -1666,7 +1898,7 @@ async function refreshRecordings() {
   recordingsRefreshInProgress = true;
   setRecordingControls(currentRecording);
   try {
-    const response = await fetch(webUrl("api/v1/recordings"), {
+    const response = await dashboardFetch(webUrl("api/v1/recordings"), {
       method: "GET",
       headers: {Accept: "application/json"},
       cache: "no-store",
@@ -1696,6 +1928,7 @@ async function refreshRecordings() {
 }
 
 async function performRecordingAction(action) {
+  if (displayOnly || authenticationRequired) return;
   if (recordingMutationInProgress) {
     return;
   }
@@ -1706,7 +1939,7 @@ async function performRecordingAction(action) {
     action === "start" ? "Starting…" : "Stopping…";
 
   try {
-    const response = await fetch(webUrl(`api/v1/recording/${action}`), {
+    const response = await dashboardFetch(webUrl(`api/v1/recording/${action}`), {
       method: "POST",
       headers: {Accept: "application/json"},
       cache: "no-store",
@@ -1745,6 +1978,7 @@ async function performRecordingAction(action) {
 }
 
 function daemonControlSupported(operation) {
+  if (displayOnly || authenticationRequired) return false;
   const operations = Array.isArray(currentDaemonHello.control_operations)
     ? currentDaemonHello.control_operations
     : [];
@@ -1901,6 +2135,7 @@ function scannerControlAvailabilityMessage() {
 }
 
 async function performScannerControl(path, label, body = null) {
+  if (displayOnly || authenticationRequired) return;
   if (scannerControlMutationInProgress) {
     return;
   }
@@ -1922,7 +2157,7 @@ async function performScannerControl(path, label, body = null) {
       headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
     }
-    const response = await fetch(webUrl(`api/v1/scanner/${path}`), options);
+    const response = await dashboardFetch(webUrl(`api/v1/scanner/${path}`), options);
 
     let payload = {};
     try {
@@ -1979,13 +2214,20 @@ function psiLabel(snapshot) {
 }
 
 function setOverallStatus(state, label, message) {
+  if (authenticationRequired) {
+    state = "offline";
+    label = "Login required";
+    message = "Sign in again. Displayed data is stale.";
+  }
   const badge = element("status-badge");
+  document.documentElement.dataset.connectionState = state;
   badge.dataset.state = state;
   badge.textContent = label;
   element("dashboard-message").textContent = message;
 }
 
 function renderSnapshot(snapshot, message = null) {
+  if (authenticationRequired) return;
   const radio = record(snapshot.radio_state);
   const audio = record(snapshot.audio);
   const router = record(snapshot.router);
@@ -2134,7 +2376,7 @@ function errorMessage(payload, response) {
 }
 
 async function fetchStatusPayload() {
-  const response = await fetch(webUrl("api/v1/status"), {
+  const response = await dashboardFetch(webUrl("api/v1/status"), {
     method: "GET",
     headers: {Accept: "application/json"},
     cache: "no-store",
@@ -2177,6 +2419,7 @@ async function reconcileStatusAfterControl() {
 }
 
 async function refreshStatus() {
+  if (authenticationRequired) return;
   if (refreshInProgress || document.hidden) {
     return;
   }
@@ -2191,7 +2434,8 @@ async function refreshStatus() {
         ? error.message
         : "The scanner daemon is unavailable.";
 
-    setOverallStatus("offline", "Unavailable", message);
+    setOverallStatus("offline", "Unavailable", nativeAccessMode
+      ? `${message} Displayed data may be stale; retrying automatically.` : message);
     setText("scanner-connected", "Unavailable");
     setText("daemon-state", "Unavailable");
     setText("psi-state", "Unavailable");
@@ -2226,6 +2470,7 @@ function scheduleEventStreamRestart(source) {
   source.close();
 
   if (
+    authenticationRequired ||
     document.hidden ||
     typeof EventSource === "undefined" ||
     eventStreamRestartTimer !== null
@@ -2254,7 +2499,7 @@ function stopEventStream() {
 function startEventStream() {
   stopEventStream();
 
-  if (document.hidden || typeof EventSource === "undefined") {
+  if (authenticationRequired || document.hidden || typeof EventSource === "undefined") {
     return;
   }
 
@@ -2292,6 +2537,7 @@ function startEventStream() {
     element("dashboard-message").textContent =
       "Live events are reconnecting; status polling remains active.";
     scheduleEventStreamRestart(source);
+    if (nativeAccessMode) void refreshStatus();
   };
 }
 
@@ -2755,6 +3001,7 @@ function stopAudioPlayback() {
 }
 
 async function startAudioPlayback() {
+  if (displayOnly || authenticationRequired) return;
   if (audioPlaybackActive) {
     return;
   }
@@ -2813,7 +3060,7 @@ async function startAudioPlayback() {
     const controller = new AbortController();
     audioAbortController = controller;
 
-    const response = await fetch(webUrl("api/v1/audio"), {
+    const response = await dashboardFetch(webUrl("api/v1/audio"), {
       method: "GET",
       headers: {Accept: "application/octet-stream"},
       cache: "no-store",
@@ -3034,7 +3281,7 @@ function renderHomeAssistantIntegrationStatus(payload) {
 }
 
 async function homeAssistantIntegrationRequest(path, options = {}) {
-  const response = await fetch(webUrl(path), {
+  const response = await dashboardFetch(webUrl(path), {
     cache: "no-store",
     credentials: "same-origin",
     ...options,
@@ -3316,7 +3563,8 @@ function clearHomeAssistantAdvancedConfirmation() {
   homeAssistantAdvancedArmedAction = null;
   for (const [buttonId, label] of [
     ["home-assistant-advanced-rotate-identity", "Rotate identity"],
-    ["home-assistant-advanced-rotate-password", "Create or rotate"],
+    ["home-assistant-advanced-rotate-password", "Create or rotate operator password"],
+    ["home-assistant-advanced-rotate-display-password", "Create or rotate display password"],
     ["home-assistant-advanced-rotate-client", "Rotate selected client"],
   ]) {
     const button = element(buttonId);
@@ -3428,6 +3676,7 @@ function setHomeAssistantAdvancedBusy(busy) {
   for (const id of [
     "home-assistant-advanced-rotate-identity",
     "home-assistant-advanced-rotate-password",
+    "home-assistant-advanced-rotate-display-password",
     "home-assistant-advanced-issue-client",
     "home-assistant-advanced-rotate-client",
   ]) {
@@ -3524,6 +3773,10 @@ function renderHomeAssistantAdvancedStatus(payload) {
     "home-assistant-advanced-password-state",
     lifecycle.dashboard_password_present === true ? "Configured" : "Not configured",
   );
+  setText(
+    "home-assistant-advanced-display-password-state",
+    lifecycle.display_password_present === true ? "Configured" : "Not configured",
+  );
   element("home-assistant-advanced-use-identity").disabled =
     homeAssistantAdvancedBusy || lifecycle.identity_present !== true;
   element("home-assistant-advanced-download-certificate").hidden =
@@ -3609,12 +3862,13 @@ async function rotateHomeAssistantAdvancedIdentity() {
   }
 }
 
-async function rotateHomeAssistantAdvancedPassword() {
+async function rotateHomeAssistantAdvancedPassword(display = false) {
   const configuration = record(homeAssistantAdvancedStatus.configuration);
   if (homeAssistantAdvancedBusy || !confirmHomeAssistantAdvancedAction(
-    "password",
-    "home-assistant-advanced-rotate-password",
-    "Replace the native-dashboard password?" +
+    display ? "display-password" : "password",
+    display ? "home-assistant-advanced-rotate-display-password" :
+      "home-assistant-advanced-rotate-password",
+    (display ? "Replace the display-only password?" : "Replace the operator password?") +
       (configuration.native_dashboard_enabled === true
         ? " Save its one-time value, then restart this App."
         : ""),
@@ -3625,11 +3879,12 @@ async function rotateHomeAssistantAdvancedPassword() {
   clearHomeAssistantAdvancedSecrets();
   try {
     const payload = await homeAssistantIntegrationRequest(
-      "api/v1/home-assistant/advanced-access/password/rotate",
+      display ? "api/v1/home-assistant/advanced-access/display-password/rotate" :
+        "api/v1/home-assistant/advanced-access/password/rotate",
       {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({confirm: "ROTATE"}),
+        body: JSON.stringify({confirm: display ? "ROTATE DISPLAY" : "ROTATE"}),
       },
     );
     if (typeof payload.password !== "string") {
@@ -3638,7 +3893,8 @@ async function rotateHomeAssistantAdvancedPassword() {
     retainHomeAssistantAdvancedPassword(payload.password);
     renderHomeAssistantAdvancedStatus(record(payload.status));
     setHomeAssistantAdvancedMessage(
-      "Password is concealed below and clears in 60 seconds. Restart this App " +
+      (display ? "Display password" : "Operator password") +
+        " is concealed below and clears in 60 seconds. Restart this App " +
         "if the native dashboard is enabled.",
     );
   } catch (error) {
@@ -3805,6 +4061,9 @@ function initializeHomeAssistantAdvancedAccess() {
     "click",
     () => void rotateHomeAssistantAdvancedPassword(),
   );
+  element("home-assistant-advanced-rotate-display-password").addEventListener(
+    "click", () => void rotateHomeAssistantAdvancedPassword(true),
+  );
   element("home-assistant-advanced-issue-client").addEventListener(
     "click",
     () => void issueHomeAssistantAdvancedClient(false),
@@ -3867,7 +4126,7 @@ async function refreshConnectedClients() {
   connectedClientsRefreshInProgress = true;
   const list = element("connected-clients-list");
   try {
-    const response = await fetch(webUrl("api/v1/home-assistant/connected-clients"), {
+    const response = await dashboardFetch(webUrl("api/v1/home-assistant/connected-clients"), {
       cache: "no-store",
       headers: {Accept: "application/json"},
       signal: AbortSignal.timeout(5000),
@@ -4012,6 +4271,7 @@ window.setInterval(() => {
   }
 }, 5000);
 
+void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();
 initializeThemeControl();

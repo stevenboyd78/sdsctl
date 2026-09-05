@@ -225,12 +225,26 @@ documentation, SSE, live audio, recordings, and downloads, is authenticated
 before a private daemon client is created. WebSocket requests fail closed.
 Sessions use an opaque 256-bit
 server-side token in the `__Host-sdsctl-session` cookie with `Secure`,
-`HttpOnly`, `SameSite=Strict`, and `Path=/`; only a token digest is retained.
+`HttpOnly`, `SameSite=Strict`, `Path=/`, and `Max-Age=28800`; only a token digest
+is retained on the server. Server session records are process-local and are
+lost when the web service restarts. The browser may save the cookie in its
+profile; do not assume memory-only browser storage or copy cookies to another
+device.
 Sessions have a 30-minute idle lifetime, an eight-hour absolute lifetime, a
 64-session process limit, and a 16-request per-session concurrency limit.
 Re-login rotates the current cookie, while logout, replacement, eviction, or
 absolute expiry terminates associated long-lived responses without affecting
 other sessions.
+
+The unreleased [display-only browser kiosk](browser-kiosk.md) optionally enables
+`/auth/display/login` using a distinct `--lan-display-password-file`. The role is
+stored on the server session, never trusted from request parameters. Display
+requests use an explicit allowlist; scanner controls, audio, recording files,
+management, API documentation and unknown routes are denied before a daemon
+client is created. Both login forms share the same bounded password worker and
+failure budget. Existing operator login remains unchanged when no display
+password is configured. `/auth/session` exposes only the authenticated session's
+role and remaining absolute lifetime, without daemon access or credentials.
 
 Failed-login accounting uses a one-minute window bounded per peer, across the
 process, and to at most 256 tracked peers. Limits and concurrent-derivation

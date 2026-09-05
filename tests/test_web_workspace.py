@@ -242,7 +242,7 @@ let payload = {active: true, clients: [{
   services: {api: 1, events: 1}, connections: 2, connected_seconds: 12,
 }]};
 let success = true;
-async function fetch(url, options) {
+async function dashboardFetch(url, options) {
   calls++;
   assert.equal(url, "https://example.test/ingress/api/v1/home-assistant/connected-clients");
   assert.equal(options.cache, "no-store");

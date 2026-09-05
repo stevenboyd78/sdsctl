@@ -1,0 +1,237 @@
+# Display-only browser kiosk — candidate setup and testing
+
+**Unreleased candidate. These commands are not in v0.29.2.** Use only a reviewed
+candidate checkout/build for now. Interactive testing passed on two Pi displays;
+automatic kiosk cold-boot startup remains unqualified. See the
+[acceptance record](#milestone-341-candidate-acceptance) for the exact limits.
+This guide does not replace the
+[production TUI guide](managed-pi-display.md).
+
+## What this screen can do
+
+The browser shows the scanner, Waterfall and read-only diagnostics from one
+existing daemon. It cannot hold or navigate the scanner, reconnect it, play
+audio, record, browse/download recordings, manage Home Assistant, or change
+credentials. The server enforces this even if someone changes the page's HTML.
+Theme selection and Waterfall pause/history/pointer controls affect only the
+local display. Visible Waterfall still acquires shared scanner demand through
+the daemon; it is not a separate scanner owner.
+
+This first version uses **manual sign-in**. A session lasts at most eight hours;
+inactive sessions can expire after thirty minutes. Restarting the web service
+also requires a fresh login. The screen marks old data stale and stops its
+consumers when authentication ends. Relaunching a browser is not automatic
+login. Each server has one shared display password, separate from its operator
+password; independently revocable browser devices are deferred.
+
+After display sign-in, the address ends in `/?kiosk=display`. Keep that address
+when bookmarking the dashboard: after expiry or an App restart, reloading it
+returns to **Display-only sign in**, not the operator login. This is only a
+navigation hint, not a credential or automatic login. Opening the plain server
+address still uses the operator sign-in page; the kiosk launcher opens the
+display sign-in page explicitly.
+
+## 1. Choose a test machine
+
+Use a separate Linux desktop account and a dedicated test display. Keep SSH or
+another recovery path available. Record the OS, browser version, compositor,
+resolution and input devices before installation. A Pi with console auto-login
+does not necessarily have a graphical desktop running.
+
+Raspberry Pi's [official kiosk tutorial](https://www.raspberrypi.com/tutorials/how-to-use-a-raspberry-pi-in-kiosk-mode/)
+uses Chromium in a graphical session and a labwc autostart file. Do not overwrite
+that file or assume the same setup on a different OS. This candidate's launcher
+works inside an existing graphical session; it does not install a desktop,
+change auto-login, claim a console, alter its font, or stop a TUI.
+
+The client needs the base Python package and an installed Chromium-family
+browser, not a scanner USB connection or the Python `tui`/`playback` extras.
+Install the candidate into an isolated environment, keeping its path separate
+from `/opt/sdsctl-display`. The example service expects `/opt/sdsctl-kiosk`;
+adjust it to the reviewed installation path before testing.
+
+## 2. Prepare the server and certificate
+
+For a Home Assistant candidate App, open **Home Assistant → Advanced access** in
+the sdsctl Ingress dashboard. Under native dashboard passwords, select **Create
+or rotate display password**, review the confirmation, and save its one-time
+value privately. It clears from that page after sixty seconds. Do not use or
+rotate the operator password for the display. Restart the App to load the new
+display password. The old password remains active until that restart.
+
+Use the existing [native HTTPS setup](home-assistant-advanced-access.md), not the
+remote-daemon port or an exposed Ingress listener. Native access is off by
+default. Creating a display password does not enable it. Review any required
+host-wide port mapping and coordinate an App restart with existing clients.
+
+For a standalone candidate server, add this to its existing authenticated-LAN
+`sdsctl web` command:
+
+```text
+--lan-display-password-file /absolute/private/display-password
+```
+
+The file must meet the same private-file checks as the operator password file,
+contain a different password of at least sixteen characters, and never be
+committed. Restart the web process after changing it. To disable display login,
+remove this optional argument and restart. For an App, remove only its exact
+`/data/advanced-access/display-password` file through the approved private App
+maintenance workflow, then restart; do not delete other access material.
+
+Verify the server certificate identity and fingerprint through a trusted route.
+Configure trust in the dedicated browser account and test the exact HTTPS URL
+interactively. The preflight CA file and the browser's trust store are separate;
+preflight success alone does not prove Chromium trusts the certificate. Never
+copy the server private key or bypass a certificate warning.
+
+## 3. Preflight, then launch interactively
+
+Replace the fictional hostname and example paths below with the reviewed values.
+The public certificate file contains no server private key.
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
+  --origin https://scanner.example:8443 \
+  --ca-file /home/display/server.crt \
+  --preflight-only
+```
+
+This checks issuer/name trust and the enabled display-login endpoint without
+submitting a password. It rejects redirects and uses a five-second network
+timeout without inheriting an environment proxy.
+
+Run the next command **from the dedicated account's graphical terminal**:
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk \
+  --origin https://scanner.example:8443 \
+  --ca-file /home/display/server.crt \
+  --browser /usr/bin/chromium \
+  --profile-directory /home/display/.sdsctl-kiosk
+```
+
+Confirm the actual browser executable first. The launcher refuses root and
+requires `DISPLAY` or `WAYLAND_DISPLAY`. It creates only the exact profile
+directory, requires private ownership/mode `0700`, locks it against a second
+launcher, and refuses an existing non-kiosk profile. Parents must already exist.
+The browser remains sandboxed. No password, cookie or TLS exception is supplied
+in its command line. A dedicated [Chromium data directory](https://www.chromium.org/developers/creating-and-using-profiles/)
+isolates it from ordinary browsing, but it may still contain sensitive cookies
+and saved browser data. It is not guaranteed to be memory-only storage.
+
+At **Display-only sign in**, enter the display password manually. Never enter
+the operator password into this profile. Passwords start hidden; use **Show
+password** to check your typing, then **Hide password** before anyone else can
+see the screen. Submitting or leaving the page hides the password again. The
+visibility toggle does not save the password or change authentication.
+**Sign out** returns to display login. Closing the browser or interrupting the
+foreground launcher from its launching terminal stops the kiosk. Do not use
+the browser's text-copy shortcut as a stop command. Successful
+close returns `0`, a browser crash or transient connectivity failure returns
+`75`, and configuration/preflight contract errors return `78`.
+
+### Using a small display
+
+On short displays such as an 800×480 Pi screen, open the **menu button beside
+Scanner dashboard** to choose Scanner, Waterfall or Diagnostics. Theme and
+System palette are in the same menu; System palette appears when Theme is
+System. Scroll the menu to reach **Sign out** in the separate Session section.
+Changing a view closes the menu; changing appearance leaves it open. Use
+**Close menu**, Escape or a click outside the menu to dismiss it. Keyboard focus
+stays in the open menu. The menu overlays the display without resizing its plots.
+
+Connected/connection-error status and the Display-only label stay in the header.
+Sign-in-required and stale-data warnings remain visible without opening a menu.
+The Scanner and Waterfall views prioritize live values and full-width graphics.
+Open **Details** for presentation choices, scanner indexes, Waterfall telemetry,
+raw samples and the relative-data disclaimer. Expanded details can scroll within
+the panel. Waterfall values remain relative, not calibrated RF measurements.
+
+On a large display, view tabs and appearance controls remain visible; the header
+menu provides Sign out. Resizing restores the same controls and selections,
+without duplicating them or adding another data connection. Browser zoom can
+make scrolling necessary; it should never make controls unreachable.
+
+## 4. Optional graphical-session service
+
+Only after interactive testing, inspect the packaged template:
+
+```bash
+/opt/sdsctl-kiosk/bin/sdsctl browser-kiosk-service
+```
+
+It is a **user service**, not the TUI's system console service. It reads
+`%h/.config/sdsctl-kiosk.env` with these non-secret settings:
+
+```ini
+SDSCTL_KIOSK_ORIGIN=https://scanner.example:8443
+SDSCTL_KIOSK_BROWSER=/usr/bin/chromium
+SDSCTL_KIOSK_CA_FILE=/home/display/server.crt
+```
+
+Keep passwords out of this file. Review the template's executable path and
+profile directory, then install it under the dedicated account's user-service
+directory. Confirm the desktop actually starts `graphical-session.target` and
+exports its display environment to the user manager before enabling the unit.
+[systemd's desktop integration guidance](https://github.com/systemd/systemd/blob/main/docs/DESKTOP_ENVIRONMENTS.md)
+describes that boundary; a compositor may need its own integration. An SSH
+session or `loginctl enable-linger` alone does not create a graphical session.
+
+The template retries failures after fifteen seconds, allows three starts per
+five-minute window, stops on exit `78`, and does not restart a clean browser
+close. Session expiry keeps the browser open at login-required instead of
+restarting it. After the exact host is qualified, use its user manager to
+start/stop the installed unit and inspect its journal. Do not enable boot
+startup merely because a unit passed syntax validation.
+
+## Acceptance, upgrade and removal
+
+Record each actual result: readable geometry; menu and Details operation;
+touch/keyboard navigation; theme switching; live status;
+visible/hidden Waterfall; denied controls and downloads; two concurrent clients;
+temporary network outage; expiry; sign-out; web/App restart; certificate failure;
+intentional close; and, separately, a physical cold start. Old data must be
+labeled stale. Neither console TUI may be disrupted by the new display.
+
+For upgrades, stop only this kiosk's service, preserve its private profile and
+public trust material, update the isolated package, rerun preflight and the
+interactive check, and restart only that service. Keep a verified rollback
+package. Browser profile compatibility is separate from Python package rollback.
+
+For removal, stop/disable only the installed kiosk unit and remove its exact
+unit/environment file. Rotate the shared display password and restart the web
+service if access must be invalidated; this affects all browsers using that
+display password. Remove only the named kiosk profile and any dedicated trust
+entry after reviewing them. Never clear a personal browser profile, unrelated
+certificate store, production TUI credentials or a listener needed by others.
+
+## Milestone 34.1 candidate acceptance
+
+The server/UI candidate at `82dd94d` was tested with one Home Assistant App and
+two concurrent Raspberry Pi browser displays. Both ran Debian 13.6 arm64 with
+labwc 0.9.8: a 1920×1080 HDMI display using Chromium 152.0.7977.75 and an
+800×480 DSI display using Chromium 151.0.7922.173. Dedicated temporary accounts,
+browser profiles and certificate stores kept production TUI credentials and
+personal browser data separate. Temporary graphical seat units were not enabled
+for boot. These results do not qualify the packaged graphical-session user
+service as an unattended installation.
+
+| Check | Evidence and result |
+| --- | --- |
+| Manual display login and readable layout | Operator confirmed both displays, including the compact menu and pane headings. |
+| Menu, Details and local Waterfall controls | Operator confirmed operation, including expanded details, pause/resume, clear, pointer/fullscreen and appearance controls. |
+| Concurrent live data and Waterfall bounds | Both displays updated from one daemon; bounds populated with the scanner in Waterfall mode. Photos showed 4.0 fps, not a sustained-rate benchmark. |
+| App-restart login recovery | On both displays, reload before using the sign-in link returned to **Display-only sign in**; the same password worked and live data resumed. |
+| Authorization, expiry and connection failures | Automated middleware, TLS and browser tests passed for denied routes/role changes, idle/absolute expiry, stale-data guidance, transient outages and consumer cleanup. This is not a claim that each failure was physically injected on both Pis. |
+| Regression checks | 5,191 Python tests, lint/type checks, documentation, distributions and the real-Chrome audit passed. GitHub reported 19 successful checks and three skipped publication jobs at this runtime commit. |
+
+Earlier reported kiosk exits around copy shortcuts were not reproduced in later
+tests on either display. No keyboard/signal-handling fix was made; do not describe
+those exits as resolved. Separately qualify intentional shutdown, cold boot and
+the chosen production graphical-service workflow before promising unattended
+startup. A manual power cycle during troubleshooting is not cold-boot acceptance.
+
+Production restoration passed: both physical TUI displays are updating again.
+Approved temporary-resource cleanup is complete. Release publication remains
+pending. The runtime version still identifies an unreleased candidate, not a
+new published Python package.

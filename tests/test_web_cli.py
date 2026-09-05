@@ -845,6 +845,9 @@ def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
     certificate = tmp_path / "dashboard.crt"
     private_key = tmp_path / "dashboard.key"
     password_file = tmp_path / "dashboard-password.secret"
+    display_file = tmp_path / "display-password.secret"
+    display_file.write_text("a separate private display password\n", encoding="utf-8")
+    display_file.chmod(0o600)
     certificate.write_text("certificate", encoding="utf-8")
     private_key.write_text("private key", encoding="utf-8")
     private_key.chmod(0o600)
@@ -863,6 +866,8 @@ def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
             "10443",
             "--lan-password-file",
             str(password_file),
+            "--lan-display-password-file",
+            str(display_file),
             "--lan-tls-certfile",
             str(certificate),
             "--lan-tls-keyfile",
@@ -876,6 +881,7 @@ def test_web_cli_authenticated_lan_reads_private_file_and_public_port(
     assert result == 0
     assert len(authentications) == 1
     assert authentications[0].origin == "https://scanner.local:10443"
+    assert authentications[0].display_enabled is True
     assert authentications[0].password_matches("correct horse battery staple")
     assert server_calls == [("172.30.33.7", 8443)]
 
