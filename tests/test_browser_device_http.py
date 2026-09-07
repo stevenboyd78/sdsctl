@@ -354,6 +354,72 @@ def test_browser_device_feature_is_disabled_by_default() -> None:
         assert client.get("/auth/login").status_code == 200
 
 
+@pytest.mark.parametrize("change", ["none", "revoke", "pause", "close"])
+def test_dashboard_asset_burst_waits_for_session_admission(setup, monkeypatch, change) -> None:
+    """A cold dashboard fetches many protected assets while both readers are busy."""
+    client, store, device, sessions, _, wrapper = setup
+    token = exchange(client, device.credential).json()["token"]
+    wrapper._app = create_web_dashboard_app(lambda: None)
+    wrapper._paths |= {"/assets/themes/matrix/theme.css"}
+    acquire = sessions.acquire_for_loop
+    entered = [threading.Event(), threading.Event()]
+    finish = threading.Event()
+    counter = 0
+    lock = threading.Lock()
+
+    def held_acquire(token, loop):
+        nonlocal counter
+        with lock:
+            index = counter
+            counter += 1
+        if index < 2:
+            entered[index].set()
+            assert finish.wait(timeout=3)
+        return acquire(token, loop)
+
+    monkeypatch.setattr(sessions, "acquire_for_loop", held_acquire)
+
+    async def request(path):
+        messages = []
+
+        async def receive():
+            await asyncio.Event().wait()
+
+        async def send(message):
+            messages.append(message)
+
+        await wrapper({"type": "http", "scheme": "https", "method": "GET",
+                       "path": path, "query_string": b"",
+                       "headers": [(b"host", b"192.168.0.18:8443"),
+                                   (b"cookie", f"{BROWSER_DEVICE_COOKIE}={token}".encode())]},
+                      receive, send)
+        return messages[0]["status"]
+
+    async def check():
+        paths = ["/assets/dashboard.css", "/assets/themes/matrix/theme.css"] * 4
+        jobs = [asyncio.create_task(request(path)) for path in paths]
+        try:
+            for event in entered:
+                assert await asyncio.to_thread(event.wait, 1)
+            if change in {"revoke", "pause"}:
+                state = (BrowserDeviceState.REVOKED if change == "revoke"
+                         else BrowserDeviceState.PAUSED)
+                record = store.transition("display", state)
+                # Owner acknowledgements must run even while both readers wait.
+                receipt = await asyncio.to_thread(request_browser_owner_ack, store.path, record)
+                assert receipt is not None and receipt.completed
+            elif change == "close":
+                sessions.close()
+            finish.set()
+            assert await asyncio.gather(*jobs) == [200 if change == "none" else 401] * len(paths)
+            assert not sessions._outstanding
+        finally:
+            finish.set()
+            await asyncio.gather(*jobs, return_exceptions=True)
+
+    asyncio.run(check())
+
+
 def test_duplicate_host_and_authorization_and_cross_site_read(setup) -> None:
     client, _, device, _, _, _ = setup
     token = exchange(client, device.credential).json()["token"]
@@ -441,8 +507,9 @@ def test_stalled_body_releases_admission_slot(setup, monkeypatch) -> None:
     asyncio.run(check())
 
 
-def test_abandoned_worker_cleanup_survives_request_loop_shutdown() -> None:
-    workers = _Workers()
+@pytest.mark.parametrize("read_only", [False, True])
+def test_abandoned_worker_cleanup_survives_request_loop_shutdown(read_only) -> None:
+    workers = _Workers(read_only=read_only)
     entered, finish, cleaned = threading.Event(), threading.Event(), threading.Event()
 
     def job():
@@ -464,6 +531,68 @@ def test_abandoned_worker_cleanup_survives_request_loop_shutdown() -> None:
     finally:
         finish.set()
         workers.close()
+
+
+def test_timed_out_read_releases_late_lease_after_request_loop_closes(setup, monkeypatch) -> None:
+    _, _, device, sessions, _, wrapper = setup
+    issued = sessions.issue("display", device.credential)
+    assert issued is not None
+    monkeypatch.setattr(device_http, "_READ_WAIT_SECONDS", 0.1)
+    finish, cleaned = threading.Event(), threading.Event()
+
+    async def check():
+        loop = asyncio.get_running_loop()
+
+        def acquire():
+            lease = sessions.acquire_for_loop(issued.token, loop)
+            assert lease is not None
+            assert finish.wait(3)
+            return lease
+
+        def release(lease):
+            lease.release()
+            cleaned.set()
+
+        with pytest.raises(_Busy):
+            await wrapper._read_workers.run(acquire, release)
+        assert len(sessions._outstanding) == 1
+
+    try:
+        asyncio.run(check())
+        finish.set()
+        assert cleaned.wait(1)
+        assert not sessions._outstanding
+    finally:
+        finish.set()
+
+
+def test_full_read_queue_returns_retryable_error_without_blocking_exchange_or_policy(setup) -> None:
+    client, _, device, _, _, wrapper = setup
+    token = exchange(client, device.credential).json()["token"]
+    cookie = {"Cookie": f"{BROWSER_DEVICE_COOKIE}={token}"}
+    finish = threading.Event()
+
+    async def check():
+        tasks = [asyncio.create_task(wrapper._read_workers.run(lambda: finish.wait(3)))
+                 for _ in range(device_http._READ_OUTSTANDING_LIMIT)]
+        try:
+            await asyncio.sleep(0)  # Submit every item before exercising HTTP admission.
+            response = client.get("/assets/dashboard.css", headers=cookie)
+            assert response.status_code == 503
+            assert response.headers["retry-after"] == "5"
+            assert "no-store" in response.headers["cache-control"]
+            assert "set-cookie" not in response.headers
+            assert exchange(client, device.credential).status_code == 200
+            assert client.post("/api/v1/control", headers=cookie).status_code == 403
+            assert client.get("/api/v1/recordings", headers=cookie).status_code == 403
+            assert client.get("/assets/dashboard.css", headers={
+                **cookie, "Sec-Fetch-Site": "cross-site",
+            }).status_code == 403
+        finally:
+            finish.set()
+            await asyncio.gather(*tasks)
+
+    asyncio.run(check())
 
 
 def test_device_logout_persists_pause_and_does_not_resume_on_manual_login(setup) -> None:
@@ -596,3 +725,4 @@ def test_device_http_refuses_to_serve_without_owner_lifespan(setup) -> None:
     finally:
         client.close()
         second._workers.close()
+        second._read_workers.close()

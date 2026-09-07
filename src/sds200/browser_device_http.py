@@ -47,6 +47,8 @@ BROWSER_DEVICE_COOKIE = "__Host-sdsctl-device-session"
 BROWSER_DEVICE_EXCHANGE_PATH = "/auth/device/session"
 BROWSER_DEVICE_DISPLAY_PATH = "/device-display"
 _BODY_TIMEOUT_SECONDS = 3
+_READ_OUTSTANDING_LIMIT = 32  # Two running readers plus at most 30 queued acquisitions.
+_READ_WAIT_SECONDS = 2
 _Result = TypeVar("_Result")
 
 
@@ -55,10 +57,17 @@ class _Busy(Exception):
 
 
 class _Workers:
-    """Two running jobs, no waiting queue. Cancellation never frees a live job slot."""
+    """Two running jobs; only read admission permits bounded, expiring queued work.
 
-    def __init__(self) -> None:
-        self._slots = threading.BoundedSemaphore(2)
+    Slots cover physical executor work items until dequeued/completed, including
+    cancelled or timed-out requests. Never cancel a queued Future to free capacity:
+    the executor would retain its work item and repeated cancellation could grow
+    its internal queue without bound.
+    """
+
+    def __init__(self, *, read_only: bool = False) -> None:
+        self._read_only = read_only
+        self._slots = threading.BoundedSemaphore(_READ_OUTSTANDING_LIMIT if read_only else 2)
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="browser-device")
         self._closed = False
 
@@ -68,22 +77,39 @@ class _Workers:
     ) -> _Result:
         if self._closed or not self._slots.acquire(blocking=False):
             raise _Busy()
+        deadline = time.monotonic() + _READ_WAIT_SECONDS if self._read_only else None
+        discarded = threading.Event()
+
+        def execute() -> _Result:
+            if deadline is not None and (
+                self._closed or discarded.is_set() or time.monotonic() >= deadline
+            ):
+                raise _Busy()
+            return operation()
+
         try:
-            future = self._pool.submit(operation)
+            future = self._pool.submit(execute)
         except RuntimeError:
             self._slots.release()
             raise _Busy() from None
         future.add_done_callback(lambda _: self._slots.release())
         wrapped = asyncio.wrap_future(future)
+        timeout = asyncio.timeout(None if deadline is None else max(0, deadline - time.monotonic()))
         try:
-            return await asyncio.shield(wrapped)
-        except asyncio.CancelledError:
+            async with timeout:
+                return await asyncio.shield(wrapped)
+        except (asyncio.CancelledError, TimeoutError) as error:
+            if isinstance(error, TimeoutError) and not timeout.expired():
+                raise
+            discarded.set()
             # A cancelled request must not leave an acquired lease or issued token.
             def finish(done: Future[_Result]) -> None:
                 if not done.cancelled() and done.exception() is None and abandoned is not None:
                     abandoned(done.result())
             future.add_done_callback(finish)
             wrapped.add_done_callback(lambda done: None if done.cancelled() else done.exception())
+            if isinstance(error, TimeoutError):
+                raise _Busy() from None
             raise
 
     def close(self) -> None:
@@ -177,6 +203,9 @@ class BrowserDeviceHTTP:
         self._devices = devices
         self._paths = _DISPLAY_READ_PATHS | display_theme_paths
         self._workers = _Workers()
+        # Cold dashboards fetch many protected assets concurrently. Do not make
+        # their brief lease checks compete with exchange/logout/revocation work.
+        self._read_workers = _Workers(read_only=True)
         self._admission = _Admission(clock)
         self._body_slots = threading.BoundedSemaphore(2)
         self._owner = BrowserDeviceOwner(BrowserDeviceStore(devices.authority_path))
@@ -236,6 +265,7 @@ class BrowserDeviceHTTP:
                 await self._manual(scope, receive, lifespan_send)
             finally:
                 self._ready = False
+                self._read_workers.close()
                 self._devices.close()
                 for monitor in monitors:
                     monitor.cancel()
@@ -310,7 +340,8 @@ class BrowserDeviceHTTP:
             return
         loop = asyncio.get_running_loop()
         try:
-            lease = await self._workers.run(
+            workers = self._workers if logout else self._read_workers
+            lease = await workers.run(
                 lambda: self._devices.acquire_for_loop(token, loop),
                 lambda value: value.release() if value is not None else None,
             )
