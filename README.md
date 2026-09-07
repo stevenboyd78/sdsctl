@@ -66,7 +66,7 @@ PortAudio runtime; Debian and Raspberry Pi OS users normally install
 Published container users can pull the current exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.2
+docker pull theboyd78/sdsctl:0.29.3
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -204,13 +204,14 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.29.2` gives the Raspberry Pi TUI an application-only header showing
-its version, with scanner model and firmware kept separately in Scanner. It retains
-the wide layout's closer Live PSI placement, full-width Logs, and independently
-toggleable Logs and Keyboard Reference, plus the transport-aware compact
-display's framed panels. The managed `/dev/tty1` service keeps observe-only preflight,
-bounded recovery, private credentials, and exact removal. Existing 0.29.0 daemons remain
-compatible; this presentation-only patch requires only a client upgrade.
+Version `0.29.3` adds a transport-aware managed-display security and usability
+slice for
+public-terminal and browser deployments: an opt-in native display login with
+separate operator/display credentials, a hardened browser kiosk HTTPS launch flow,
+and tighter split-screen layout behavior on constrained displays. The `/dev/tty1`
+managed TUI flow keeps observe-only preflight, bounded recovery, private
+credentials, and exact cleanup while preserving compatibility with existing
+daemon versions.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

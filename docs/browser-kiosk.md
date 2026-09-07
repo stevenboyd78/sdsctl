@@ -2,7 +2,8 @@
 
 **Unreleased candidate. These commands are not in v0.29.2.** Use only a reviewed
 candidate checkout/build for now. Interactive testing passed on two Pi displays;
-automatic kiosk cold-boot startup remains unqualified. See the
+manual-login boot startup also passed on one specific HDMI Pi setup described
+below. This does not provide unattended authentication recovery. See the
 [acceptance record](#milestone-341-candidate-acceptance) for the exact limits.
 This guide does not replace the
 [production TUI guide](managed-pi-display.md).
@@ -235,3 +236,34 @@ Production restoration passed: both physical TUI displays are updating again.
 Approved temporary-resource cleanup is complete. Release publication remains
 pending. The runtime version still identifies an unreleased candidate, not a
 new published Python package.
+
+## Milestone 34.2 HDMI startup qualification
+
+The reviewed source at `2fb6e43` was subsequently tested on the HDMI Pi using
+the packaged kiosk **user service**, with only its isolated executable path
+adjusted. A dedicated non-root labwc seat used a PAM login session and the
+account's systemd user manager. An account-specific session target and labwc
+autostart/shutdown hooks started and stopped `graphical-session.target`.
+The installed labwc0.9.8 package did not include the session target described
+in newer upstream documentation, so the integration was explicit and tested.
+
+The operator confirmed first login/live updates, graphical-session restart,
+automatic startup after a controlled reboot, and automatic startup after a
+clean shutdown followed by physical power removal/restoration. Service checks
+confirmed the user-service browser, fresh boot IDs, automatic physical VT
+selection, no startup retries and full dedicated-account process cleanup after
+the session stop. No post-boot SSH service-start command was needed.
+
+These are results for that isolated HDMI deployment, not a general graphical
+installer or small-Pi cold-start qualification. Authentication remained manual;
+the server stayed running during the Pi power cycle. Combined server/display
+outages, unattended session renewal and remaining physical failure injections
+are not established by this test. See the planned
+[device enrollment and recovery design](managed-display-enrollment-design.md).
+
+The production App and both production TUI services have been restored, with
+their original boot enablement and accepted font settings, and both physical
+displays were confirmed updating. The temporary App, private
+test credentials, dedicated HDMI browser account/profile and test service were
+removed. Non-secret startup configuration, acceptance evidence and retired local
+source/build staging were retained. No new release was published.

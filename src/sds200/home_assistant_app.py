@@ -135,13 +135,14 @@ def _require_advanced_access_server_name(value: object) -> str:
             raise ValueError(
                 "Home Assistant App advanced-access server name is invalid."
             ) from None
-        if len(labels) > 1 and not (
-            name.endswith(".local") or name.endswith(".home.arpa")
-        ):
+        if labels[-1].isdecimal():
             raise ValueError(
-                "Home Assistant App advanced-access server name must be a "
-                "single-label, .local, or .home.arpa private hostname."
+                "Home Assistant App advanced-access server name must not be an "
+                "ambiguous numeric hostname."
             ) from None
+        # This is a TLS identity, not a listener bind or a daemon destination.
+        # A DNS suffix cannot establish LAN reachability: user-owned domains can
+        # use split DNS. Private literal address/exposure checks remain separate.
         return name
 
     allowed = (

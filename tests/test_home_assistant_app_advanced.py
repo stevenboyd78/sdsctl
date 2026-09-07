@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import shutil
+import subprocess
 from collections.abc import Mapping
 
 import pytest
@@ -16,6 +18,7 @@ from sds200.home_assistant_app import (
     parse_home_assistant_app_supervisor_info_response,
     reconcile_home_assistant_app_advanced_exposure,
 )
+from sds200.home_assistant_app_advanced import generate_home_assistant_app_server_identity
 
 
 def supervisor_info_payload(
@@ -189,14 +192,19 @@ def test_reconcile_home_assistant_app_advanced_exposure_rejects_mismatch(
     "server_name",
     [
         "https://sdsctl.local",
-        "sdsctl.example.com",
+        "*.example.com",
+        "sdsctl..example.com",
+        "sdsctl.example.com:8443",
+        "user@sdsctl.example.com",
+        "999.999.999.999",
+        "127.1",
         "203.0.113.7",
         "127.0.0.1",
         " sdsctl.local",
         "sdsctl.local/path",
     ],
 )
-def test_home_assistant_app_options_reject_public_or_invalid_server_names(
+def test_home_assistant_app_options_reject_public_ips_or_invalid_server_names(
     server_name: str,
 ) -> None:
     with pytest.raises(ValueError):
@@ -204,6 +212,48 @@ def test_home_assistant_app_options_reject_public_or_invalid_server_names(
             scanner_host="scanner.local",
             advanced_access_server_name=server_name,
         )
+
+
+@pytest.mark.parametrize("name", [
+    "display.example.com", "Display.Example.COM", "sdsctl.local",
+    "192.168.20.15", "fd12:3456::15",
+])
+def test_dns_or_ip_identity_keeps_private_destination_and_disabled_exposure(name: str) -> None:
+    options = HomeAssistantAppOptions(
+        scanner_host="scanner.local",
+        advanced_access_server_name=name,
+        advanced_access_host_address="192.168.20.15",
+    )
+    assert options.advanced_access_server_name == name.lower()
+    assert options.advanced_access_host_address == "192.168.20.15"
+    exposure = reconcile_home_assistant_app_advanced_exposure(
+        options, parse_home_assistant_app_supervisor_info_response(supervisor_info_payload()),
+    )
+    assert exposure.remote_daemon_host_port is None
+    assert exposure.native_dashboard_host_port is None
+    with pytest.raises(ValueError):
+        HomeAssistantAppOptions(
+            scanner_host="scanner.local", advanced_access_server_name=name,
+            advanced_access_host_address="203.0.113.7",
+        )
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL required for TLS fixture")
+@pytest.mark.parametrize("identity, flag, other", [
+    ("display.example.com", "-checkhost", "other.example.com"),
+    ("192.168.20.15", "-checkip", "192.168.20.16"),
+    ("fd12:3456::15", "-checkip", "fd12:3456::16"),
+])
+def test_dns_or_ip_certificate_matches_only_the_selected_identity(
+    identity: str, flag: str, other: str,
+) -> None:
+    certificate, _private_key = generate_home_assistant_app_server_identity(identity)
+    for hostname, expected in [(identity, 0), (other, 1)]:
+        checked = subprocess.run(
+            ["openssl", "x509", "-noout", flag, hostname],
+            input=certificate, capture_output=True, timeout=10, check=False,
+        )
+        assert checked.returncode == expected
 
 
 def test_home_assistant_app_options_requires_server_name_when_enabled() -> None:

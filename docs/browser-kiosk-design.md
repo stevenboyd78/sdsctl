@@ -13,8 +13,12 @@ display-login recovery at candidate `82dd94d`. The
 [acceptance record](browser-kiosk.md#milestone-341-candidate-acceptance) separates
 physical results from automated checks. Production TUI restoration passed on
 both displays, and approved temporary-resource cleanup is complete.
-Cold-boot/service qualification remains open; the implementation order below is
-the design contract, not a claim that every gate is complete.
+Later [HDMI startup qualification](browser-kiosk.md#milestone-342-hdmi-startup-qualification)
+passed manual-login user-service launch, session restart, reboot and physical
+cold startup on that specific deployment. Other hosts, unattended authentication
+and the remaining failure cases are not qualified by those results. The
+implementation order below is the design contract, not a claim that every gate
+is complete.
 
 ## What a browser kiosk would add
 
@@ -77,6 +81,11 @@ display-only fallback. Preserve ordinary operator and Ingress behavior while
 adding any new permission model.
 
 ## Decision 2: login and unattended recovery
+
+The next approved direction is [managed-display enrollment and unattended
+recovery](managed-display-enrollment-design.md). It is a design follow-up, not
+functionality in the current manual-login candidate. The contracts below remain
+the baseline until that feature is implemented and accepted.
 
 The first implementation must distinguish these states visibly:
 

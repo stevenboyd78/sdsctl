@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+### Changed
+
+### Fixed
+
+## [0.29.3] - 2026-09-06
+
+### Added
+
 - Add opt-in native display login with a separate password and a server-side
   status/events/themes/Waterfall allowlist. Deny scanner controls, audio,
   recording downloads, management and unknown routes before creating daemon
@@ -1861,7 +1869,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...HEAD
+[0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...v0.29.1
 [0.29.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.28.1...v0.29.0
