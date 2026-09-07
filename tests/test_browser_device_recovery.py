@@ -49,6 +49,50 @@ def session():
     return ExchangeSession(TOKEN, 300)
 
 
+def test_browser_claim_is_one_time_serialized_and_never_exchanges(ledger):
+    state, clock = ledger
+    request = parse_browser_device_request(b'{"version":1,"action":"claim-browser"}')
+
+    def claim(_):
+        try:
+            return reopen(state, clock).handle(request, lambda: pytest.fail("No exchange"))
+        except BrowserRecoveryError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(claim, range(20)))
+    accepted = [result for result in results if result is not None]
+    assert len(accepted) == 1
+    assert accepted[0].status.revision == 2
+    assert accepted[0].status.mode is RecoveryMode.ACTIVE
+    assert accepted[0].status.retry_after == 0
+    assert accepted[0].session is None and accepted[0].renew_after == 0
+    before = state.path.read_bytes()
+    assert claim(None) is None  # Lost acknowledgement cannot replay the claim.
+    assert state.path.read_bytes() == before
+
+
+@pytest.mark.parametrize("used", ["pause", "resumed", "success", "retry", "terminal", "rollback"])
+def test_browser_claim_never_resets_used_or_rolled_back_state(ledger, used):
+    state, clock = ledger
+    if used == "pause":
+        state.suspend()
+    elif used == "resumed":
+        state.resume(state.suspend().revision)
+    elif used == "success":
+        state.authenticate(session)
+    elif used == "retry":
+        state.authenticate(fail())
+    elif used == "terminal":
+        state.authenticate(fail(RecoveryMode.REJECTED))
+    else:
+        clock[0] -= 60
+    before = state.path.read_bytes()
+    with pytest.raises(BrowserRecoveryError):
+        reopen(state, clock).claim_browser()
+    assert state.path.read_bytes() == before
+
+
 def fail(mode=RecoveryMode.ACTIVE, retry_after=0):
     def exchange():
         raise ExchangeFailure(mode, retry_after=retry_after)

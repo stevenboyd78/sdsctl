@@ -24,6 +24,7 @@ class BrowserDeviceAction(StrEnum):
     STATUS = "status"
     AUTHENTICATE = "authenticate"
     SUSPEND = "suspend"
+    CLAIM_BROWSER = "claim-browser"
 
 
 @dataclass(frozen=True, slots=True)

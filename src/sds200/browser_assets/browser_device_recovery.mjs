@@ -62,6 +62,7 @@ export function createBrowserRecovery(ports, settings) {
   let operations = Promise.resolve(), writes = Promise.resolve();
   let failure = false, inFlight = null, pauseSaved = false;
   let holdForLogout = false, logoutStart = null;
+  let missing = false, setupAttempted = false;
   const now = () => {
     const value = ports.now();
     if (!finite(value, Number.MAX_SAFE_INTEGER)) throw new Error("clock");
@@ -80,8 +81,9 @@ export function createBrowserRecovery(ports, settings) {
     if (!force && holding()) return; // Preserve authentication until server logout is submitted.
     await ports.clearCookie(); // Adapter must verify absence, not just request removal.
   };
-  const ready = (async () => {
+  let ready = (async () => {
     state = await ports.load();
+    missing = state === undefined; // Only a successful read of ABSENT state is eligible.
     if (!exact(state, ["version", "identity", "paused", "phase", "nextAt"]) ||
         state.version !== 1 || state.identity !== config.identity ||
         typeof state.paused !== "boolean" || !["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) ||
@@ -250,6 +252,49 @@ export function createBrowserRecovery(ports, settings) {
   }
 
   return Object.freeze({
+    initialize: () => {
+      // Same worker queue as recovery. Refusal must not cancel a valid display's
+      // alarms/cookies or change its saved state. No automatic caller uses this.
+      const attempt = operations.then(async () => {
+        await ready.catch(() => {});
+        if (!missing || setupAttempted || stopRequested || holdForLogout) return {mode: "setup_refused"};
+        setupAttempted = true;
+        try {
+          if (await ports.load() !== undefined) return {mode: "setup_refused"};
+          state = {...initialBrowserRecoveryState(config), paused: true, phase: "setup_pending"};
+          await save(); // Crash marker BEFORE the one-time native claim; never auto-repair.
+          // A concurrent suspend can now persist its intent while the claim is outstanding.
+          ready = Promise.resolve();
+          await clear(true);
+          await ports.cancel();
+          if (stopRequested) {
+            missing = false; failure = false;
+            return await pausedCleanup();
+          }
+          const claimed = await native("claim-browser");
+          if (claimed.mode !== "active" || claimed.revision !== 2 || claimed.retry_after !== 0 ||
+              claimed.renew_after !== 0 || claimed.session) throw new Error("claim");
+          // Do not overwrite a pause queued while the native process was running.
+          state = {...initialBrowserRecoveryState(config), paused: stopRequested};
+          await save();
+          missing = false;
+          failure = false;
+          if (stopRequested) return await pausedCleanup();
+          view = "ready";
+          // Setup itself never authenticates. A deliberate start or a later worker
+          // incarnation can now use the normal, native-state-checked recovery path.
+          return {mode: "ready"};
+        } catch {
+          failure = true;
+          view = "setup_error";
+          try { await clear(true); } catch { /* Do not claim cleanup succeeded. */ }
+          try { await ports.cancel(); } catch { /* No setup retry or state reset. */ }
+          return {mode: "setup_error"};
+        }
+      });
+      operations = attempt.then(() => {});
+      return attempt;
+    },
     tick: () => {
       if (!inFlight) {
         inFlight = queue(tick);
@@ -340,6 +385,15 @@ export function connectChromeRecovery(chrome, settings) {
     if (alarm.name === RECOVERY_ALARM) void controller.tick();
   });
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL("setup.html") &&
+        sender.frameId === 0 && sender.documentLifecycle === "active" &&
+        typeof sender.documentId === "string" && sender.documentId.length > 0 &&
+        sender.tab && Number.isInteger(sender.tab.id) && sender.tab.id >= 0 &&
+        !sender.tab.incognito && exact(message, ["action"]) &&
+        message.action === "initialize") {
+      void controller.initialize().then(respond);
+      return true;
+    }
     if (sender.id !== chrome.runtime.id ||
         !["startup.html", "control.html"].some(page => sender.url === chrome.runtime.getURL(page)) ||
         !exact(message, ["action"]) || !["start", "status", "suspend"].includes(message.action)) return false;

@@ -148,6 +148,8 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
         "merged but unreleased",
         "public-key-derived extension ID and identity-pinned native wrapper",
         "Preparation does not register an extension/native host, initialize browser storage",
+        "Registration accepts only a new dedicated Chromium directory",
+        "one-time pristine-native-profile claim",
         "neither internal DNS nor a proxy is a product requirement",
         "physical multi-display/outage acceptance remain gates",
         "#### Closed Milestone 34.1 — Display-only native browser kiosk",

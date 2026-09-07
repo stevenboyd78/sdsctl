@@ -283,6 +283,16 @@ def test_status_and_offline_suspend_need_no_secret_or_ca(root):
     assert invoke(root)["mode"] == "paused"
 
 
+def test_native_browser_claim_needs_no_secret_or_trust_and_is_not_replayable(root):
+    initialize(root)
+    (root / "device.secret").rename(root / "not-loaded.secret")
+    result = invoke(root, "claim-browser")
+    assert result == {"version": 1, "ok": True, "mode": "active", "revision": 2,
+                      "retry_after": 0, "renew_after": 0}
+    assert invoke(root, "claim-browser") == {"version": 1, "ok": False, "mode": "setup_error"}
+    assert invoke(root, "status")["revision"] == 2
+
+
 @pytest.mark.parametrize("args", [[], ["chrome-extension://" + "b" * 32 + "/"],
                                  [EXTENSION, "--origin=https://evil.invalid"]])
 def test_unexpected_caller_refused(root, args):

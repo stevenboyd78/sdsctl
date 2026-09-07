@@ -1334,6 +1334,14 @@ def build_parser(
     bundle_create.add_argument("--profile", type=Path, required=True,
                                help="Absolute protected experimental native profile")
 
+    browser_register = subparsers.add_parser(
+        "browser-device-register", help="Register an experimental host in new Chromium data",
+    )
+    browser_register.add_argument("--experimental", action="store_true", required=True,
+                                  help="Acknowledge new-directory registration; no browser launch")
+    for option in ("directory", "bundle", "profile", "public-key"):
+        browser_register.add_argument("--" + option, type=Path, required=True)
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -6378,6 +6386,26 @@ def main(
                       "This is not a production installer or proof of trusted distribution.")
                 return 0
             except BrowserBundleError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 78
+
+        if args.action == "browser-device-register":
+            from .browser_device_registration import (
+                BrowserRegistrationError,
+                register_browser_directory,
+            )
+
+            try:
+                registered = register_browser_directory(
+                    args.directory, bundle=args.bundle, profile=args.profile,
+                    public_key=args.public_key,
+                )
+                print("Experimental host registered only in the new dedicated browser directory.")
+                print(f"First-run extension page: {registered.setup_url}")
+                print("No extension was loaded, browser state initialized, login attempted, "
+                      "or browser/service started. Do not use a personal browser profile.")
+                return 0
+            except BrowserRegistrationError as error:
                 print(f"error: {error}", file=sys.stderr)
                 return 78
 

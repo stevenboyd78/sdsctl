@@ -226,11 +226,12 @@ native request protocol; they need a separate reviewed interaction.
 ### Local foundation status
 
 `browser_device_protocol.py` currently provides only bounded native-order request
-framing and strict validation for version1 actions `status`, `authenticate` and
-`suspend`. Unknown fields/actions, duplicate keys, malformed JSON, oversized frames
+framing and strict validation for version1 actions `status`, `authenticate`,
+`suspend` and the explicit one-time `claim-browser` setup action. Unknown
+fields/actions, duplicate keys, malformed JSON, oversized frames
 and partial reads are rejected with fixed redacted errors. The parser does not
 register a native host, read a credential, create a listener or authenticate.
-Read deadlines remain a responsibility of the future helper process.
+Read deadlines are enforced by the protected native runner described below.
 
 ### Persistent authority foundation
 
@@ -562,8 +563,8 @@ delivery, UI polish, helper recovery and browser/Pi acceptance remain pending.
 ## Native-helper recovery engine (experimental, not registered)
 
 `browser_device_recovery.py` now implements a private persistent recovery ledger
-and dispatch for the existing fixed `status`, `authenticate` and `suspend` native
-actions. It is not a registered native host, a transport, or a running extension
+and dispatch for the fixed `status`, `authenticate`, `suspend` and first-run
+`claim-browser` native actions. It is not itself a registered native host, a transport, or a running extension
 scheduler. The earlier `scripts/experimental` browser fixture is unchanged and
 does not yet use this engine.
 
@@ -660,9 +661,18 @@ files. Its read-only check does not authenticate, correct the clock, repair a
 ledger or clear a saved pause/error. This closes the hand-built native-file setup
 gap only. An opt-in [review bundle](browser-device-bundle.md) now stages canonical
 extension modules, a key-derived identity, and a fixed native wrapper/manifest.
-It does not register a native host or initialize browser storage. Accepted
-distribution, registration, browser state and production launcher/server wiring
-remain separate gates.
+The bundle creation command does not register a native host or initialize browser
+storage. A separate [controlled registration and explicit first-run candidate](browser-device-first-run.md)
+now accepts only a new dedicated Chromium directory and the canonical installed
+bundle. Its trusted setup page requires confirmation, absent browser state and a
+persisted `setup_pending` marker before the one-time native `claim-browser`
+transaction. Only pristine active revision 1 can advance to revision 2; the claim
+does not read credentials, authenticate, or clear a saved pause/error. Deleting
+browser state cannot replay it. An interrupted pending setup remains blocked;
+after final valid state is committed, later normal recovery may run even if the
+page loses its acknowledgement. Concurrent pause/sign-out still wins. Accepted
+distribution/update/removal, replacement/resume and production launcher/server
+wiring remain separate gates. No native/page resume action is added.
 
 Authentication makes one direct POST to `/auth/device/session`, using TLS 1.2 or
 newer with issuer and hostname verification against the explicit trust bundle.

@@ -244,7 +244,26 @@ class BrowserDeviceRecovery:
             return RecoveryResult(self.suspend())
         if request.action is BrowserDeviceAction.AUTHENTICATE:
             return self.authenticate(exchange)
+        if request.action is BrowserDeviceAction.CLAIM_BROWSER:
+            return RecoveryResult(self.claim_browser())
         raise BrowserRecoveryError()
+
+    def claim_browser(self) -> RecoveryStatus:
+        """Consume first-run eligibility once, without credentials or network I/O.
+
+        Only a pristine active revision-1 ledger qualifies. Never reset a used,
+        paused, terminal, clock-corrected or previously claimed installation.
+        Lost acknowledgement requires review, not automatic reinitialization.
+        """
+        now = self._now()
+        with self._connection() as db:
+            state = self._load(db, now, correct_clock=False)
+            if (state.revision != 1 or state.mode is not RecoveryMode.ACTIVE
+                    or state.failures != 0 or state.next_at != 0 or now < state.observed_at):
+                raise BrowserRecoveryError()
+            claimed = _State(2, RecoveryMode.ACTIVE, 0, 0, now)
+            self._save(db, claimed)
+            return self._status(claimed, now)
 
     def status(self) -> RecoveryStatus:
         now = self._now()

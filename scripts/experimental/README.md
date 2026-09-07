@@ -131,12 +131,22 @@ candidate wheel**, fictional native-profile inputs and a new isolated Chromium
 user-data directory. Pass an existing private stage, Playwright module path,
 Chromium executable and installed Python interpreter as four absolute paths;
 `--help` describes the prerequisites without creating anything. It requires a
-working Chromium sandbox. It registers the generated native manifest only inside
-its unique test profile, checks the key-derived extension ID, verifies empty
+working Chromium sandbox. It invokes the controlled registration command only for
+its new unique test profile, checks the key-derived extension ID, verifies empty
 browser state stays rejected, and sends a native `status` request. It never
 authenticates or visits a dashboard and retains the fixture/result. This is a
 packaging smoke, not TLS, sign-out, renewal or physical-outage acceptance. The
 other harnesses below cover distinct runtime boundaries with fictional servers.
+
+Append an identity selector (`ip`, `dns` or `ipv6`) and `first-run` to additionally
+exercise the real password-free setup form and explicit confirmation. This mode
+checks native revision 1-to-2 claiming without authentication, refuses a second
+initialization, pauses before browser restart, and checks the pause survives.
+It then deletes only the fictional fixture's recovery storage key as fault
+injection, restarts, and confirms initialization remains blocked. This deletion
+is not a recovery instruction. Desktop/small-page screenshots and all fixture
+outputs are retained; no system/browser trust or production service is changed.
+See [the registration and first-run guide](../../docs/browser-device-first-run.md).
 
 `src/sds200/browser_assets/browser_device_recovery.mjs` is the coordinator for the actual
 native-helper protocol, not a replacement silently installed into the earlier
@@ -151,6 +161,7 @@ Run the dependency-free deterministic JavaScript contract tests with:
 ```sh
 node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
+node --test scripts/experimental/test_browser_device_setup.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests

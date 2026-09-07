@@ -20,6 +20,7 @@ def test_browser_recovery_coordinator_contract() -> None:
     result = subprocess.run(
         [node, "--test", "scripts/experimental/test_browser_device_recovery.mjs",
          "scripts/experimental/test_browser_device_logout.mjs",
+         "scripts/experimental/test_browser_device_setup.mjs",
          "scripts/experimental/test_browser_cookie_interruption.mjs"],
         capture_output=True, text=True, timeout=30,
     )
@@ -51,7 +52,8 @@ def test_generated_bundle_harness_help_is_non_mutating() -> None:
         capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0 and result.stderr == ""
-    assert "no login or production access" in result.stdout
+    assert "no dashboard login or production access" in result.stdout
+    assert "[review|first-run]" in result.stdout
     assert "sandbox required" in result.stdout
 
 

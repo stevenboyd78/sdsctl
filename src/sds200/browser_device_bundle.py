@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import html
 import json
 import os
 import re
@@ -28,7 +29,7 @@ from .browser_device_store import BrowserDeviceStore
 from .exceptions import ConfigurationError
 
 NATIVE_HOST = "org.sdsctl.browser_device"
-MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs")
+MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs")
 
 
 class BrowserBundleError(ConfigurationError):
@@ -117,7 +118,7 @@ def _artifacts(
                 f"fetcher: fetch.bind(globalThis)}}, {origin});\n}})();\n")
     result.update({
         "extension/manifest.json": _json({
-            "manifest_version": 3, "version": "0.0.1",
+            "manifest_version": 3, "version": "0.0.2",
             "name": "SDSCTL experimental device recovery review",
             "key": key.manifest_key,
             "permissions": ["nativeMessaging", "storage", "cookies", "alarms"],
@@ -144,6 +145,36 @@ def _artifacts(
             "<h1>Experimental review bundle</h1><p>Preparation does not enable login. "
             "Trusted browser-state provisioning and deployment acceptance are still required."
             "</p><p>No password or credential should be entered here.</p>\n"
+        ).encode("ascii"),
+        "extension/setup.mjs": (
+            "import {connectBrowserSetupPage} from './browser_device_setup.mjs';\n"
+            "connectBrowserSetupPage({document, window, runtime: chrome.runtime});\n"
+        ).encode("ascii"),
+        "extension/setup.html": (
+            "<!doctype html><html lang='en'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>SDSCTL experimental first-run setup</title>"
+            "<link rel='stylesheet' href='setup.css'><main><h1>Initialize this display</h1>"
+            "<p>Experimental setup only. This is not a password sign-in page.</p><dl>"
+            f"<dt>Server</dt><dd>{html.escape(config.origin)}</dd>"
+            f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd>"
+            f"<dt>Extension</dt><dd>{key.extension_id}</dd></dl>"
+            "<p>Only an empty browser state and a fresh native profile can initialize. "
+            "Existing pauses, errors and previous setup attempts will not be reset.</p>"
+            "<form id='setup-form'><label><input type='checkbox' id='confirm' required>"
+            " I have verified this server and device. I want automatic sign-in on future "
+            "browser or extension starts.</label><p><button id='initialize' type='submit'>"
+            "Initialize automatic sign-in</button></p></form>"
+            "<p id='notice' role='status'>This page does not read a password or credential. "
+            "Initialization saves local state; it does not contact the dashboard.</p></main>"
+            "<script type='module' src='setup.mjs'></script></html>\n"
+        ).encode("ascii"),
+        "extension/setup.css": (
+            ":root{color-scheme:light dark;font:18px/1.5 system-ui}"
+            "body{margin:0;padding:1.5rem}main{max-width:42rem;margin:auto}"
+            "h1{line-height:1.2}dt{font-weight:600}dd{margin:0 0 .8rem;overflow-wrap:anywhere}"
+            "label{display:block}button{font:inherit;padding:.6rem 1rem}"
+            "#notice{border:1px solid;padding:1rem}input{width:1.1rem;height:1.1rem}\n"
         ).encode("ascii"),
         "native-host": (
             "#!/bin/sh\nexec " + shlex.quote(str(python)) + " -I "
