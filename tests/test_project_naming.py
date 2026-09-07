@@ -140,9 +140,20 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     normalized_active_milestone = " ".join(active_milestone.split())
     normalized_roadmap = " ".join(roadmap.split())
 
-    expected_heading = "### Milestone 34.1 — Display-only native browser kiosk"
+    expected_heading = "### Managed-display enrollment and unattended recovery"
     assert expected_heading in active_milestone
     for required in (
+        "first-time private native-profile import and read-only offline check",
+        "rotation handoffs without clearing a saved pause or terminal error",
+        "This candidate is unreleased and does not install an extension/native host",
+        "neither internal DNS nor a proxy is a product requirement",
+        "physical multi-display/outage acceptance remain gates",
+        "#### Closed Milestone 34.1 — Display-only native browser kiosk",
+        "The manual-login implementation shipped in v0.29.3",
+        "whose PyPI publication failed",
+        "fully published v0.29.4 recovery release",
+        "it did not enable unattended production login",
+        "It did not qualify the small Pi's browser cold start or a combined server/display outage",
         "#### Closed v0.29.2 — TUI application header and production acceptance",
         "16d46890e64fafbbbd6de6dc9e85e36ed363280f",
         "#### Closed v0.29.1 — Wide TUI production-display follow-up",
