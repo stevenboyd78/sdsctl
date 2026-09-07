@@ -28,9 +28,10 @@ configuration:
   advanced_access_server_name:
     name: Advanced access server name
     description: >-
-      Private IP address, single-label name, .local name, or .home.arpa name
-      used by advanced clients and the native HTTPS certificate. Leave empty
-      while both advanced listeners are disabled.
+      Private IP address or exact DNS name used for the advanced TLS identity.
+      A user-owned split-DNS name is allowed; it must resolve to the private
+      Home Assistant host from every client. This does not enable public access
+      or change port mappings. Leave empty while both listeners are disabled.
   advanced_access_host_address:
     name: Advanced access host address
     description: >-

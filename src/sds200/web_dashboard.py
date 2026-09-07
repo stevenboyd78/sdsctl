@@ -19,6 +19,13 @@ from starlette.datastructures import MutableHeaders
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import __version__
+from .browser_device_http import BrowserDeviceHTTP
+from .browser_device_ingress import (
+    BROWSER_ADMIN_PATH,
+    BrowserDeviceIngress,
+    BrowserDeviceIngressMiddleware,
+)
+from .browser_device_sessions import BrowserDeviceSessions
 from .daemon_api import DaemonApiOperation
 from .daemon_events import DaemonEvent
 from .daemon_recording_file_client import (
@@ -453,6 +460,8 @@ def create_web_dashboard_app(
     *,
     home_assistant_ingress: bool = False,
     lan_authentication: WebDashboardAuthentication | None = None,
+    browser_device_sessions: BrowserDeviceSessions | None = None,
+    browser_device_admin_ingress: BrowserDeviceIngress | None = None,
     managed_theme_root: Path | None = None,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
@@ -499,6 +508,16 @@ def create_web_dashboard_app(
         raise ValueError(
             "Home Assistant Ingress and LAN authentication are mutually exclusive."
         )
+    if browser_device_sessions is not None and (
+        lan_authentication is None or home_assistant_ingress
+    ):
+        raise ValueError("Experimental browser devices require native HTTPS authentication.")
+    if browser_device_admin_ingress is not None and (
+        not home_assistant_ingress
+        or not isinstance(browser_device_admin_ingress, BrowserDeviceIngress)
+    ):
+        raise ValueError(
+            "Experimental browser administration requires explicit Ingress configuration.")
 
     app = FastAPI(
         title="sdsctl web dashboard",
@@ -508,15 +527,22 @@ def create_web_dashboard_app(
         openapi_url="/api/v1/openapi.json",
     )
     if home_assistant_ingress:
+        if browser_device_admin_ingress is not None:
+            app.add_middleware(BrowserDeviceIngressMiddleware,
+                               configuration=browser_device_admin_ingress)
         app.add_middleware(_HomeAssistantIngressMiddleware)
     if lan_authentication is not None:
-        app.add_middleware(
-            WebDashboardAuthenticationMiddleware,
-            authentication=lan_authentication,
-            display_theme_paths=frozenset(
-                "/" + asset.manifest.stylesheet_url for asset in web_theme_runtime.assets
-            ),
+        display_theme_paths = frozenset(
+            "/" + asset.manifest.stylesheet_url for asset in web_theme_runtime.assets
         )
+        if browser_device_sessions is not None:
+            app.add_middleware(BrowserDeviceHTTP, devices=browser_device_sessions,
+                               authentication=lan_authentication,
+                               display_theme_paths=display_theme_paths)
+        else:
+            app.add_middleware(WebDashboardAuthenticationMiddleware,
+                               authentication=lan_authentication,
+                               display_theme_paths=display_theme_paths)
 
     @app.get(
         "/",
@@ -794,6 +820,8 @@ def create_web_dashboard_app(
             links["home_assistant_advanced_access"] = (
                 "/api/v1/home-assistant/advanced-access"
             )
+            if browser_device_admin_ingress is not None:
+                links["home_assistant_browser_devices"] = BROWSER_ADMIN_PATH
         return {
             "service": _service_metadata(),
             "links": links,

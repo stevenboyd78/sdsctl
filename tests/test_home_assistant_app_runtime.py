@@ -204,8 +204,11 @@ def test_home_assistant_web_command_enables_ingress_and_private_clients() -> Non
     )
 
 
+@pytest.mark.parametrize("server_name", [
+    "sdsctl.local", "display.example.com", "192.168.20.15", "fd12:3456::15",
+])
 def test_home_assistant_native_web_command_is_separate_and_secret_free(
-    tmp_path: Path,
+    tmp_path: Path, server_name: str,
 ) -> None:
     advanced_paths = default_home_assistant_app_advanced_access_paths(
         root=tmp_path / "data" / "advanced-access",
@@ -213,7 +216,7 @@ def test_home_assistant_native_web_command_is_separate_and_secret_free(
     )
     rotate_home_assistant_app_server_identity(
         advanced_paths,
-        "sdsctl.local",
+        server_name,
         generator=lambda server_name: (
             b"-----BEGIN CERTIFICATE-----\npublic\n-----END CERTIFICATE-----\n",
             b"-----BEGIN PRIVATE KEY-----\nprivate\n-----END PRIVATE KEY-----\n",
@@ -223,7 +226,7 @@ def test_home_assistant_native_web_command_is_separate_and_secret_free(
     options = HomeAssistantAppOptions(
         scanner_host="scanner.local",
         native_dashboard_enabled=True,
-        advanced_access_server_name="sdsctl.local",
+        advanced_access_server_name=server_name,
     )
     exposure = HomeAssistantAppAdvancedExposure(
         container_address="172.30.33.7",
@@ -249,9 +252,8 @@ def test_home_assistant_native_web_command_is_separate_and_secret_free(
         HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT
     )
     assert command[command.index("--lan-public-port") + 1] == "10443"
-    assert command[command.index("--lan-origin") + 1] == (
-        "https://sdsctl.local:10443"
-    )
+    authority = f"[{server_name}]" if ":" in server_name else server_name
+    assert command[command.index("--lan-origin") + 1] == f"https://{authority}:10443"
     assert password not in command
     assert command[command.index("--lan-password-file") + 1] == str(
         advanced_paths.dashboard_password

@@ -178,6 +178,9 @@ async function initializeNativeSession() {
     });
     if (!response.ok) return;
     const session = await response.json();
+    if (session.device_enrolled === true) {
+      button.textContent = "Sign out and pause automatic login";
+    }
     if (Number.isFinite(session.remaining_seconds) && session.remaining_seconds > 0) {
       nativeSessionTimer = window.setTimeout(requireNativeLogin, session.remaining_seconds * 1000);
     }

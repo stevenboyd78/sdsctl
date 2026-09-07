@@ -51,6 +51,10 @@ advanced credential routes.
 
 ## Choose the private addresses
 
+**You do not need internal DNS, a domain name or a reverse proxy.** Direct private
+IP access is a supported setup for both the native dashboard and remote TUI.
+DNS is an optional convenience, not a prerequisite for managed displays.
+
 Two values have deliberately different jobs:
 
 - **Advanced access host address** is the literal private or link-local IP
@@ -59,12 +63,55 @@ Two values have deliberately different jobs:
   `0.0.0.0`.
 - **Advanced access server name** is the private identity encoded in the TLS
   certificate. Use the same private IP address, a single-label local name, a
-  `.local` name, or a `.home.arpa` name. A name must resolve to the Home Assistant
-  host on every client.
+  `.local` name, a `.home.arpa` name, or an exact user-owned split-DNS name such
+  as `display.example.com`. A DNS name must resolve to the private Home Assistant
+  host on every client. Wildcard identities, URLs and names containing ports are
+  not accepted. Split-DNS support described here is unreleased development work;
+  released versions that restrict hostname suffixes need an update first.
+
+A user-owned DNS suffix does not make this a public service. Private destination
+and listener checks still apply; a DNS name does not open ports, configure a
+proxy or obtain a publicly trusted certificate. Verify the certificate actually
+served by the selected port. The certificate used by Home Assistant's HTTPS
+proxy is not automatically used by the App's native dashboard.
+
+The App currently shares its advanced TLS identity between the remote daemon
+and native dashboard. Do not rotate a production identity just to change the
+browser name without planning certificate-trust and server-name updates for
+existing TUI clients. Test a candidate identity separately first.
+
+When sharing a hostname with Home Assistant, treat its proxy and other HTTPS
+services on that hostname as trusted: cookies are not isolated by TCP port.
+Use a dedicated kiosk profile and separate scanner authentication. A separate
+hostname offers stronger cookie separation; changing only the port does not.
 
 For the simplest initial test, use the same literal private Home Assistant IP in
 both fields. A stable private DNS name is more convenient when correctly
 configured on the whole LAN.
+
+### Without DNS or a proxy
+
+For a fictional Home Assistant host at `192.168.20.15`:
+
+1. Enter `192.168.20.15` as **Advanced access host address** for remote TUI clients.
+2. Enter `192.168.20.15` as **Advanced access server name** too. Despite the label,
+   this field accepts a private IP address; it does not require a DNS name.
+3. Follow the identity and port setup below. With the standard native port, the
+   browser address is `https://192.168.20.15:8443`; remote TUI profiles use TCP
+   `50443` instead.
+4. Install the App's public certificate trust using the relevant client guide.
+   The generated certificate must identify the address as an **IP** subject
+   alternative name. A DNS-name certificate is not a substitute for an IP
+   certificate. Keep certificate verification enabled.
+
+Use a stable address (for example, a DHCP reservation) so reboot recovery does
+not depend on finding a changed server IP. Changing that IP later requires
+reviewing the certificate identity and client configuration as well.
+Private IPv6 addresses are also accepted; URLs use brackets, for example
+`https://[fd12:3456::15]:8443`.
+
+The same shared-host cookie caveat applies to direct IPs: different HTTPS ports
+on one IP are not separate cookie boundaries. No proxy is needed or implied.
 
 Never put a real private address, certificate, key, client secret, or password
 in an issue, screenshot, log excerpt, or source-controlled file.
