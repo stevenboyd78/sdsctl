@@ -205,8 +205,9 @@ workflow. Hardware-independent tests must not require a physical scanner.
 ## Project status
 
 Version `0.29.4` repairs certificate-verification tests across OpenSSL versions
-after the partial v0.29.3 release. It retains the managed-display security and
-usability features for public-terminal and browser deployments: an opt-in native display login with
+after the partial v0.29.3 release. It retains the transport-aware managed-display
+security and usability features for public-terminal and browser deployments:
+an opt-in native display login with
 separate operator/display credentials, a hardened browser kiosk HTTPS launch flow,
 and tighter split-screen layout behavior on constrained displays. The `/dev/tty1`
 managed TUI flow keeps observe-only preflight, bounded recovery, private
