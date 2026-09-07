@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 
@@ -240,20 +241,32 @@ def test_dns_or_ip_identity_keeps_private_destination_and_disabled_exposure(name
 
 @pytest.mark.skipif(shutil.which("openssl") is None, reason="OpenSSL required for TLS fixture")
 @pytest.mark.parametrize("identity, flag, other", [
-    ("display.example.com", "-checkhost", "other.example.com"),
-    ("192.168.20.15", "-checkip", "192.168.20.16"),
-    ("fd12:3456::15", "-checkip", "fd12:3456::16"),
+    ("display.example.com", "-verify_hostname", "other.example.com"),
+    ("192.168.20.15", "-verify_ip", "192.168.20.16"),
+    ("fd12:3456::15", "-verify_ip", "fd12:3456::16"),
 ])
 def test_dns_or_ip_certificate_matches_only_the_selected_identity(
-    identity: str, flag: str, other: str,
+    tmp_path: Path, identity: str, flag: str, other: str,
 ) -> None:
     certificate, _private_key = generate_home_assistant_app_server_identity(identity)
-    for hostname, expected in [(identity, 0), (other, 1)]:
+    certificate_path = tmp_path / "server.crt"
+    certificate_path.write_bytes(certificate)
+    # x509 -checkhost/-checkip can report a mismatch with exit status 0 on
+    # older OpenSSL versions. Use verification to test acceptance/rejection.
+    for hostname, matches in [(identity, True), (other, False)]:
         checked = subprocess.run(
-            ["openssl", "x509", "-noout", flag, hostname],
-            input=certificate, capture_output=True, timeout=10, check=False,
+            [
+                "openssl", "verify", "-CAfile", str(certificate_path),
+                flag, hostname, str(certificate_path),
+            ],
+            capture_output=True, text=True, timeout=10, check=False,
         )
-        assert checked.returncode == expected
+        if matches:
+            assert checked.returncode == 0, checked.stderr
+        else:
+            assert checked.returncode != 0, checked.stdout
+            mismatch = "hostname mismatch" if flag == "-verify_hostname" else "IP address mismatch"
+            assert mismatch in checked.stderr
 
 
 def test_home_assistant_app_options_requires_server_name_when_enabled() -> None:

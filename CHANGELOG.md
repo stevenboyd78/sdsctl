@@ -12,6 +12,19 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+## [0.29.4] - 2026-09-06
+
+### Fixed
+
+- Use certificate verification for the DNS, IPv4, and IPv6 identity tests.
+  Some OpenSSL versions report identity mismatches from `x509 -checkhost`
+  and `-checkip` with exit status zero, which blocked v0.29.3 CI and PyPI
+  publication. Require the configured identity to verify successfully and
+  unrelated identities to fail with the specific identity-mismatch error.
+- Prepare a new patch version for complete publication following the partial
+  v0.29.3 release. Application behavior is unchanged apart from the reported
+  version; existing v0.29.3 credentials and configuration remain compatible.
+
 ## [0.29.3] - 2026-09-06
 
 ### Added
@@ -1869,7 +1882,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...HEAD
+[0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...v0.29.1

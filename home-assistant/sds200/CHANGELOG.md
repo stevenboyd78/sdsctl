@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.29.4
+
+- Track the sdsctl patch that repairs DNS, IPv4, and IPv6 certificate tests
+  across OpenSSL versions after the partial v0.29.3 publication.
+- Keep v0.29.3 application behavior, credentials, configuration, recordings,
+  and advanced-access defaults unchanged. The App reports version 0.29.4.
+
 ## 0.29.2
 
 - Track the sdsctl TUI header patch: the top header identifies the application
