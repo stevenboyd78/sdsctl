@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add explicit experimental `browser-device-profile --experimental create/check`
+  commands for first-time private enrollment-file import and read-only local
+  inspection. Validate configuration, file protections and certificate-bundle
+  parsing; refuse existing profiles and rotation handoffs without clearing saved
+  recovery state. No extension, native host, browser policy, production server
+  enrollment, automatic login or service is installed or enabled.
+
 ### Changed
 
 ### Fixed
