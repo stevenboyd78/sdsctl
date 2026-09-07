@@ -126,7 +126,11 @@ def run_browser_startup(
 
             def stop_child() -> None:
                 if child is not None:
-                    child.terminate()
+                    # Linux Chromium treats SIGTERM as fast session ending,
+                    # which can retain Singleton markers even after exit 0.
+                    # SIGINT requests normal browser/profile cleanup instead.
+                    # Signal only our own child; never delete Chromium's locks.
+                    child.send_signal(signal.SIGINT)
                     try:
                         child.wait(timeout=10)
                     except subprocess.TimeoutExpired:

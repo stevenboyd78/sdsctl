@@ -58,6 +58,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Request normal Chromium closure with `SIGINT` when stopping the experimental
+  managed-browser launcher. Let the launcher finish that bounded shutdown before
+  systemd cleans up remaining service processes with `KillMode=mixed`; directly
+  sending `SIGTERM` to Chromium can leave profile locks behind after a normal
+  service stop. Keep crash/stale-lock refusal and never delete browser locks.
 - Bound experimental browser-device read admission to two workers and 32 total
   outstanding acquisitions, with a two-second wait, so a cold dashboard's asset
   burst does not immediately fail when both readers are occupied. Keep exchange,

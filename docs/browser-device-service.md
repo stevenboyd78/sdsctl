@@ -131,6 +131,17 @@ reviewed integration; do not start a fake target to bypass that requirement.
 
 The policy uses systemd's [service restart controls](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)
 and [unit start limits](https://www.freedesktop.org/software/systemd/man/latest/systemd.unit.html).
+On service stop, `KillMode=mixed` first signals the launcher. The launcher requests
+Chromium's normal close with `SIGINT`, waits up to ten seconds, and kills its own
+child only if that wait expires. Systemd still removes remaining service processes;
+the unit's stop timeout is twenty seconds. This avoids sending `SIGTERM` directly
+to all Chromium processes: Linux Chromium treats that signal as fast session
+ending, which can leave profile locks behind even when it exits with status zero.
+Neither path deletes or bypasses a Chromium lock. A forced shutdown can still
+leave markers requiring review before the next launch.
+See Chromium's [Linux signal handling](https://github.com/chromium/chromium/blob/152.0.7977.75/chrome/browser/chrome_browser_main_posix.cc)
+and systemd's [mixed shutdown policy](https://www.freedesktop.org/software/systemd/man/latest/systemd.kill.html).
+
 Starting a service is not proof that a display has a verified session or live
 scanner data. A new graphical session may start an enabled unit again; that does
 not clear a persisted device sign-out.

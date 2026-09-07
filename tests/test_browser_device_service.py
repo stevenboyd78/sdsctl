@@ -69,7 +69,7 @@ def test_service_policy_quoting_and_real_systemd_parser(tmp_path, inputs):
     assert 'ExecStart=:' in unit and ' -I ' in unit
     assert '%%n' in unit and '${DO_NOT_EXPAND}' in unit and '\\"quoted\\"' in unit
     for setting in ("Restart=on-failure", "RestartPreventExitStatus=2 78", "RestartSec=15s",
-                    "StartLimitIntervalSec=300", "StartLimitBurst=3", "KillMode=control-group",
+                    "StartLimitIntervalSec=300", "StartLimitBurst=3", "KillMode=mixed",
                     "Requisite=graphical-session.target", "PartOf=graphical-session.target"):
         assert setting in unit
     assert "--setup" not in unit and "--no-sandbox" not in unit
