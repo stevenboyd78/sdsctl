@@ -1375,6 +1375,35 @@ def build_parser(
     browser_start_mode.add_argument("--setup", action="store_true",
                                     help="Open explicit first-run setup instead of managed startup")
 
+    browser_service = subparsers.add_parser(
+        "browser-device-service", help="Prepare/check inert experimental user-service files",
+    )
+    browser_service.add_argument("--experimental", action="store_true", required=True)
+    service_actions = browser_service.add_subparsers(dest="browser_service_action", required=True)
+    service_create = service_actions.add_parser("create", help="New private review directory only")
+    service_check = service_actions.add_parser("check", help="Offline canonical service-file check")
+    for command in (service_create, service_check):
+        command.add_argument("--directory", type=Path, required=True,
+                             help="Absolute private service review directory")
+    for option in ("browser-directory", "bundle", "profile", "public-key", "browser"):
+        service_create.add_argument("--" + option, type=Path, required=True)
+
+    browser_maintenance = subparsers.add_parser(
+        "browser-device-maintenance", help="Experimental stopped-browser update or retirement",
+    )
+    browser_maintenance.add_argument("--experimental", action="store_true", required=True)
+    maintenance_actions = browser_maintenance.add_subparsers(
+        dest="browser_maintenance_action", required=True,
+    )
+    maintenance_update = maintenance_actions.add_parser("update", help="Switch canonical bundle")
+    maintenance_retire = maintenance_actions.add_parser("retire", help="Unregister; preserve files")
+    for command in (maintenance_update, maintenance_retire):
+        for option in ("directory", "bundle", "profile", "public-key", "previous-python", "backup"):
+            command.add_argument("--" + option, type=Path, required=True)
+        command.add_argument("--confirm-stopped-maintenance", action="store_true", required=True,
+                             help="Confirm browser/service is stopped and backup scope reviewed")
+    maintenance_update.add_argument("--replacement-bundle", type=Path, required=True)
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -6359,6 +6388,41 @@ def _run_browser_device_server_setup(args: argparse.Namespace) -> int:
         return 78
 
 
+def _run_browser_device_lifecycle(args: argparse.Namespace) -> int:
+    from .browser_device_maintenance import maintain_browser_registration
+    from .browser_device_service import create_browser_service, inspect_browser_service
+    from .exceptions import ConfigurationError
+
+    try:
+        if args.action == "browser-device-service":
+            if args.browser_service_action == "create":
+                create_browser_service(
+                    args.directory, directory=args.browser_directory, bundle=args.bundle,
+                    profile=args.profile, public_key=args.public_key, browser=args.browser,
+                )
+                print("Experimental service files prepared in the new private review directory.")
+            else:
+                inspect_browser_service(args.directory)
+                print("Experimental service files are valid offline; not proof of login/readiness.")
+            print("No service was installed, enabled or started; no browser state was changed.")
+        else:
+            maintain_browser_registration(
+                args.directory, bundle=args.bundle, profile=args.profile,
+                public_key=args.public_key,
+                previous_python=args.previous_python, backup=args.backup,
+                replacement_bundle=getattr(args, "replacement_bundle", None),
+            )
+            print("Experimental registration " + (
+                "updated." if args.browser_maintenance_action == "update" else "retired locally."
+            ))
+            print("Private review backup retained. Browser state, credentials and trust preserved. "
+                  "No service started, state resumed or server credential revoked.")
+        return 0
+    except ConfigurationError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 78
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -6374,6 +6438,8 @@ def main(
     # configured log file, especially during a read-only authority check.
     if args.action == "browser-device-server":
         return _run_browser_device_server_setup(args)
+    if args.action in {"browser-device-service", "browser-device-maintenance"}:
+        return _run_browser_device_lifecycle(args)
 
     try:
         _apply_cli_configuration(

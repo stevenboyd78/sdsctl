@@ -8,6 +8,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add experimental `browser-device-service --experimental create/check` to
+  prepare and validate inert, canonical graphical-session user-service files.
+  Recheck registration on launch and preserve intentional close, bounded crash
+  retries and terminal failures. Add explicit stopped-browser
+  `browser-device-maintenance --experimental update/retire` with trusted old-runtime
+  validation, canonical same-identity replacement and private review backups.
+  Preserve browser state, native credentials, trust and paused/error ledgers;
+  never install/enable a service, stop a browser, revoke credentials or reset state.
+  Installed-browser/service and physical outage acceptance remain required.
 - Add experimental `browser-device-server --experimental create/check` for
   explicit offline preparation of an empty private enrollment authority and
   read-only inspection of existing server configuration. Require a new target

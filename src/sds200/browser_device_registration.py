@@ -19,6 +19,8 @@ from .browser_device_recovery import RecoveryMode
 from .browser_device_store import BrowserDeviceStore
 from .exceptions import ConfigurationError
 
+MAINTENANCE_MARKER = ".sdsctl-browser-maintenance.json"
+
 
 class BrowserRegistrationError(ConfigurationError):
     """Only fixed diagnostics, never input paths, bundle contents or credentials."""
@@ -96,6 +98,8 @@ def inspect_browser_registration(
     """
     try:
         _platform()
+        if (root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink():
+            raise ValueError()
         result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
         _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
         hosts = root / "NativeMessagingHosts"

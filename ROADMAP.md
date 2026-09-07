@@ -71,6 +71,13 @@ Linux/aarch64, including the repeated recovery matrix, 18 rendering checks and
 156 observed successful asset responses. This resolves the isolated rendering
 gate, not production deployment, physical-display or outage acceptance.
 
+[Service lifecycle preparation](docs/browser-device-service.md) is a development
+candidate: canonical private user-service files, launch-time checks, bounded
+restart policy, explicit stopped-browser same-identity bundle updates and local
+retirement with private review backups. It never installs/enables a service,
+stops a browser, changes credentials or clears saved recovery state. Installed
+old/new-runtime, Chromium state-retention and service acceptance are still needed.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
