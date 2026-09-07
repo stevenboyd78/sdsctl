@@ -15,6 +15,8 @@ from pathlib import Path
 
 import uvicorn
 
+from sds200.browser_device_admin import BrowserDeviceAdmin
+from sds200.browser_device_ingress import _attachment
 from sds200.browser_device_native import load_browser_native_configuration
 from sds200.browser_device_recovery import BrowserDeviceRecovery
 from sds200.browser_device_sessions import BrowserDeviceSessions
@@ -23,17 +25,26 @@ from sds200.web_auth import WebDashboardAuthentication
 from sds200.web_dashboard import create_web_dashboard_app
 
 
-async def main(root: Path, origin: str) -> None:
+async def main(root: Path, origin: str, *, generated: bool = False) -> None:
     authority = root / "authority"
     authority.mkdir(mode=0o700)
     store = BrowserDeviceStore.initialize(authority / "devices.sqlite")
-    device = store.enroll("fixture")
-    secret = root / "device.secret"
+    device = BrowserDeviceAdmin(store).enroll("fixture")
+    secret = root / ("enrollment.json" if generated else "device.secret")
     fd = os.open(secret, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    with os.fdopen(fd, "w") as stream:
-        stream.write(device.credential)
-    configuration = load_browser_native_configuration(root)
-    BrowserDeviceRecovery.initialize(root / "recovery.sqlite", configuration.identity)
+    with os.fdopen(fd, "wb") as stream:
+        if generated:
+            stream.write(bytes(_attachment(device.record, device.credential,
+                                           {"status": "issued", "completed": False}).body))
+        else:
+            stream.write(device.credential.encode("ascii"))
+        stream.flush()
+        os.fsync(stream.fileno())
+    identity = None
+    if not generated:
+        configuration = load_browser_native_configuration(root)
+        identity = configuration.identity
+        BrowserDeviceRecovery.initialize(root / "recovery.sqlite", identity)
     fault = "healthy"
     exchanges = 0
 
@@ -97,7 +108,7 @@ async def main(root: Path, origin: str) -> None:
         raise RuntimeError("Fixture startup deadline")
 
     server, task, port = await start(0)
-    print(json.dumps({"ready": True, "port": port, "identity": configuration.identity}), flush=True)
+    print(json.dumps({"ready": True, "port": port, "identity": identity}), flush=True)
     try:
         while line := await asyncio.to_thread(sys.stdin.readline):
             command = json.loads(line)["action"]
@@ -121,4 +132,6 @@ async def main(root: Path, origin: str) -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main(Path(sys.argv[1]), sys.argv[2]))
+    if len(sys.argv) not in {3, 4} or (len(sys.argv) == 4 and sys.argv[3] != "generated"):
+        raise SystemExit("Invalid fictional fixture arguments")
+    asyncio.run(main(Path(sys.argv[1]), sys.argv[2], generated=len(sys.argv) == 4))

@@ -116,16 +116,43 @@ workflows remain separate work; there is no page/native `resume` message.
 
 ## Acceptance and remaining limits
 
-The isolated harness in [the experimental test guide](../scripts/experimental/README.md)
-uses an installed candidate wheel, fictional credentials, a unique Chromium
-directory and normal sandboxing. Its `first-run` mode checks the real setup page,
-native registration/claim, pause across browser restart and refusal after deleted
-browser state. It does not authenticate to a real dashboard or test physical
-power loss. Deterministic tests additionally cover interruptions, concurrent
-claims, sender checks, fixed UI errors, and native/browser pause races.
+Two separate harnesses in [the experimental test guide](../scripts/experimental/README.md)
+use an installed candidate wheel, fictional credentials, unique Chromium
+directories and normal sandboxing:
+
+- The bundle harness's `first-run` mode checks the real setup page, native
+  registration/claim, pause across browser restart and refusal after deleted
+  browser state. This is a no-login setup test.
+- `audit_browser_generated_recovery.mjs` connects the installed profile import,
+  bundle creation and registration commands to that same setup form, followed by
+  actual ASGI/native/Chromium authentication. It does not seed recovery storage,
+  inject cookies or substitute fixture-only extension code. Setup must complete
+  with zero authentication exchanges; a later browser restart obtains a verified
+  display-only session. The server is a fictional loopback authority with no
+  scanner, not a production Home Assistant administrator session.
+
+The integrated matrix covers healthy recovery, native deadlines, truncated
+responses, interrupted TLS handshakes, server restart, real scheduled renewal
+after worker stop, revocation, and issuer/name rejection. Ordinary success cases
+also require actual page sign-out, server pause, cookie removal and no login after
+browser restart. Terminal rejection must likewise survive restart. A retryable
+native `active` result means recovery is allowed, not that a session exists;
+interruption checks inspect the failure ledger, missing cookie and scheduled
+retry instead. No status request is sent to wake a stopped worker during renewal.
+
+On September 7, 2026, all **19 generated-path cases passed** with an installed
+candidate wheel on Linux/aarch64 and Chromium 152.0.7977.75: all nine scenarios
+above for both IPv4 and DNS, plus healthy IPv6 login/sign-out. The normal browser
+sandbox and certificate verification remained enabled. Fictional certificate
+trust was confined to a temporary browser mount namespace; real trust stores,
+production credentials and display services were not changed.
+
+Deterministic tests additionally cover setup interruptions, concurrent claims,
+sender checks, fixed UI errors, and native/browser pause races. Neither harness
+proves live scanner data, physical screen behavior or combined power-loss recovery.
 
 Production distribution/update/removal, trusted browser launch and server wiring,
-end-to-end enrollment/renewal/sign-out acceptance, replacement/resume and physical
+real administrator enrollment/delivery, replacement/resume and physical
 multi-display/server outage tests remain required. No Home Assistant or display
 service is changed by these preparation commands. No release, wiki production
 instructions or unattended-production-login claim follows from this step.

@@ -34,6 +34,13 @@ reviewed bundle. Browser initialization requires explicit confirmation, a pendin
 marker and a one-time pristine-native-profile claim. Neither step authenticates,
 clears saved pauses/errors, enables production enrollment or starts a service.
 
+The installed CLI/generated bundle/real setup path passed 19 isolated
+authentication and recovery cases on Linux/aarch64: nine scenarios each for
+verified IPv4 and DNS, plus healthy IPv6 login/sign-out. This includes real-clock
+retry and worker renewal, server restart, terminal revocation/TLS rejection and
+sign-out persistence, without seeded recovery state or injected cookies. See the
+[acceptance boundaries](docs/browser-device-first-run.md#acceptance-and-remaining-limits).
+
 Accepted extension distribution/updates/removal, launcher/service and server wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
