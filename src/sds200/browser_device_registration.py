@@ -46,14 +46,14 @@ def _matches(path: Path, expected: bytes, mode: int = 0o600) -> None:
 
 
 def _validated_bundle(
-    bundle: Path, profile: Path, public_key: Path,
+    bundle: Path, profile: Path, public_key: Path, *, fresh: bool = True,
 ) -> tuple[BrowserRegistration, bytes]:
     key = browser_extension_identity(public_key)
     inspected = inspect_browser_profile(profile)
     config = load_browser_native_configuration(profile)
     if (inspected.identity != config.identity
             or config.extension_origin != f"chrome-extension://{key.extension_id}/"
-            or inspected.mode is not RecoveryMode.ACTIVE or inspected.revision != 1):
+            or (fresh and (inspected.mode is not RecoveryMode.ACTIVE or inspected.revision != 1))):
         raise ValueError()
     artifacts = _artifacts(bundle, config, key)
     receipt = _json({
@@ -78,6 +78,38 @@ def _validated_bundle(
     return BrowserRegistration(key.extension_id, config.identity), artifacts[NATIVE_HOST + ".json"]
 
 
+def _receipt(result: BrowserRegistration, bundle: Path, profile: Path) -> bytes:
+    return _json({
+        "version": 1, "experimental": True, "bundle": str(bundle),
+        "native_profile": str(profile), "extension_id": result.extension_id,
+        "identity": result.identity, "setup_url": result.setup_url,
+    })
+
+
+def inspect_browser_registration(
+    root: Path, *, bundle: Path, profile: Path, public_key: Path,
+) -> BrowserRegistration:
+    """Offline, read-only validation of fresh OR used/paused dedicated registration.
+
+    Chromium owns its internal files. Never parse/reset browser storage or call
+    native status (which can persist clock correction) during this inspection.
+    """
+    try:
+        _platform()
+        result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
+        _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
+        hosts = root / "NativeMessagingHosts"
+        _matches(hosts / (NATIVE_HOST + ".json"), manifest)
+        if {entry.name for entry in hosts.iterdir()} != {NATIVE_HOST + ".json"}:
+            raise ValueError()
+        return result
+    except Exception:
+        raise BrowserRegistrationError(
+            "Browser registration is invalid or unsafe; nothing was changed. "
+            "Review its original runtime, canonical bundle, private profile and registration."
+        ) from None
+
+
 def register_browser_directory(
     root: Path, *, bundle: Path, profile: Path, public_key: Path,
 ) -> BrowserRegistration:
@@ -93,11 +125,7 @@ def register_browser_directory(
         if root.exists() or root.is_symlink():
             raise FileExistsError()
         result, manifest = _validated_bundle(bundle, profile, public_key)
-        receipt = _json({
-            "version": 1, "experimental": True, "bundle": str(bundle),
-            "native_profile": str(profile), "extension_id": result.extension_id,
-            "identity": result.identity, "setup_url": result.setup_url,
-        })
+        receipt = _receipt(result, bundle, profile)
     except FileExistsError:
         raise BrowserRegistrationError(
             "Browser data directory already exists; refusing to overwrite or reuse it."

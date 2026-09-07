@@ -74,6 +74,10 @@ Keep the normal sandbox and certificate verification enabled. This command does
 not supply a generic production browser launcher or an extension distribution
 policy.
 
+The separate [experimental startup candidate](browser-device-startup.md) adds an
+offline check and foreground Chromium launch with an explicit `--setup` choice.
+It remains an isolated lab path, not service or production server installation.
+
 In that isolated browser, open the setup URL printed by registration. The page
 shows the fixed server, device and extension identity, with no password field.
 Verify those values, select the confirmation checkbox and choose **Initialize

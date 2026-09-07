@@ -45,6 +45,7 @@ from .web_auth import (
 
 BROWSER_DEVICE_COOKIE = "__Host-sdsctl-device-session"
 BROWSER_DEVICE_EXCHANGE_PATH = "/auth/device/session"
+BROWSER_DEVICE_DISPLAY_PATH = "/device-display"
 _BODY_TIMEOUT_SECONDS = 3
 _Result = TypeVar("_Result")
 
@@ -191,6 +192,22 @@ class BrowserDeviceHTTP:
             self._devices.close()
 
     async def _error(self, code: int, scope: Scope, receive: Receive, send: Send) -> None:
+        if (scope["path"] == BROWSER_DEVICE_DISPLAY_PATH and scope["method"] == "GET"
+                and not scope.get("query_string") and code in {401, 503}):
+            # This dedicated entry never selects manual/operator login, even if
+            # a cookie expires between extension readiness and navigation.
+            waiting = HTMLResponse(
+                "<!doctype html><html lang='en'><meta charset='utf-8'>"
+                "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+                "<meta http-equiv='refresh' content='5'>"
+                "<title>SDSCTL managed display waiting</title><h1>Waiting for a device session</h1>"
+                "<p>This entry requires a valid enrolled display session. It will retry. "
+                "If automatic sign-in is paused or blocked, ask your administrator to review "
+                "the managed startup screen.</p></html>", status_code=code,
+            )
+            _secure_response(waiting)
+            await waiting(scope, receive, send)
+            return
         response = JSONResponse({"detail": "Browser-device request denied."}, status_code=code)
         if code in {429, 503}:
             response.headers["Retry-After"] = "60" if code == 429 else "5"
@@ -262,14 +279,33 @@ class BrowserDeviceHTTP:
         if scope["path"] == BROWSER_DEVICE_EXCHANGE_PATH:
             await self._exchange(scope, receive, send, headers)
             return
+        managed = scope["path"] == BROWSER_DEVICE_DISPLAY_PATH
+        if managed and (scope["method"] != "GET" or scope.get("query_string")
+                        or headers.getlist("authorization")):
+            await self._error(403, scope, receive, send)
+            return
+        if managed and not _fetch_site_allowed(headers):
+            # An extension-origin navigation is cross-site. Never serve private
+            # data on that request, even if it carries a valid device cookie.
+            # Only a top-level navigation may load this public waiting shell;
+            # its same-origin refresh must pass all normal authorization checks.
+            navigation = (headers.getlist("sec-fetch-site") == ["cross-site"]
+                          and headers.getlist("sec-fetch-mode") == ["navigate"]
+                          and headers.getlist("sec-fetch-dest") == ["document"])
+            await self._error(401 if navigation else 403, scope, receive, send)
+            return
         if token is None:
+            if managed:
+                await self._error(401, scope, receive, send)
+                return
             await self._manual(scope, receive, send)
             return
         logout = scope["path"] == WEB_DASHBOARD_LOGOUT_PATH and scope["method"] == "POST"
         if (not _fetch_site_allowed(headers) or headers.getlist("authorization")
                 or (logout and (not _origin_matches(headers, self._origin)
                                 or scope.get("query_string")))
-                or (not logout and (scope["method"] != "GET" or scope["path"] not in self._paths))):
+                or (not logout and (scope["method"] != "GET"
+                                    or (scope["path"] not in self._paths and not managed)))):
             await self._error(403, scope, receive, send)
             return
         loop = asyncio.get_running_loop()
@@ -289,6 +325,8 @@ class BrowserDeviceHTTP:
             lease.release()
             await self._logout(lease, scope, receive, send)
             return
+        # Serve the root shell under a top-level device-only URL (relative assets
+        # still resolve at /assets). Do not redirect through a manual login route.
         await self._serve(lease, scope, receive, send)
 
     async def _logout(
@@ -399,7 +437,9 @@ class BrowserDeviceHTTP:
                     scope, receive, tracked_send,
                 )
             else:
-                await self._app(scope, receive, tracked_send)
+                app_scope = ({**scope, "path": "/", "raw_path": b"/"}
+                             if scope["path"] == BROWSER_DEVICE_DISPLAY_PATH else scope)
+                await self._app(app_scope, receive, tracked_send)
         try:
             await run_browser_session_request(lease, request, release=False)
         except BrowserSessionEnded:

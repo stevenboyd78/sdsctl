@@ -116,6 +116,8 @@ if (!dashboardScriptUrl) {
 const webRootUrl = new URL("../", dashboardScriptUrl);
 const nativeAccessMode = document.documentElement.dataset.accessMode;
 const displayOnly = nativeAccessMode === "display";
+const managedDeviceEntry = displayOnly &&
+  window.location.href === new URL("device-display", webRootUrl).href;
 let authenticationRequired = false;
 let nativeSessionTimer = null;
 
@@ -131,6 +133,12 @@ function requireNativeLogin() {
   currentDaemonHello = {};
   setScannerControls();
   document.documentElement.dataset.sessionState = "login-required";
+  if (managedDeviceEntry) {
+    // The fixed server entry rechecks device authority and otherwise waits.
+    // Never choose a manual/operator password page for a managed device.
+    window.location.replace(webUrl("device-display"));
+    return;
+  }
   const banner = element("native-session-status");
   banner.textContent = "Login required — updates stopped; displayed data is stale. ";
   const link = document.createElement("a");
@@ -151,6 +159,28 @@ async function dashboardFetch(url, options) {
   const response = await fetch(url, options);
   if (nativeAccessMode && response.status === 401) requireNativeLogin();
   return response;
+}
+
+async function refreshManagedNativeSession() {
+  if (!managedDeviceEntry || authenticationRequired) return;
+  let delay = 5000;
+  try {
+    const response = await dashboardFetch(webUrl("auth/session"), {
+      credentials: "same-origin", cache: "no-store", redirect: "error",
+    });
+    if (response.ok) {
+      const session = await response.json();
+      if (session.device_enrolled !== true || session.display_only !== true ||
+          !Number.isFinite(session.remaining_seconds) || session.remaining_seconds <= 0) {
+        requireNativeLogin();
+        return;
+      }
+      delay = Math.max(1000, Math.min(225000, session.remaining_seconds * 750));
+    }
+  } catch { /* A finite transient read retries; it does not perform authentication. */ }
+  if (!authenticationRequired) {
+    nativeSessionTimer = window.setTimeout(refreshManagedNativeSession, delay);
+  }
 }
 
 async function initializeNativeSession() {
@@ -182,7 +212,11 @@ async function initializeNativeSession() {
       button.textContent = "Sign out and pause automatic login";
     }
     if (Number.isFinite(session.remaining_seconds) && session.remaining_seconds > 0) {
-      nativeSessionTimer = window.setTimeout(requireNativeLogin, session.remaining_seconds * 1000);
+      const managed = managedDeviceEntry && session.device_enrolled === true;
+      nativeSessionTimer = window.setTimeout(
+        managed ? refreshManagedNativeSession : requireNativeLogin,
+        session.remaining_seconds * (managed ? 750 : 1000),
+      );
     }
   } catch {
     // Status polling handles transient outages without attempting automatic login.

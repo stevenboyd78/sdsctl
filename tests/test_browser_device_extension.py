@@ -23,6 +23,7 @@ def test_browser_recovery_coordinator_contract() -> None:
         [node, "--test", "scripts/experimental/test_browser_device_recovery.mjs",
          "scripts/experimental/test_browser_device_logout.mjs",
          "scripts/experimental/test_browser_device_setup.mjs",
+         "scripts/experimental/test_browser_device_startup.mjs",
          "scripts/experimental/test_browser_cookie_interruption.mjs"],
         capture_output=True, text=True, timeout=30,
     )

@@ -98,13 +98,18 @@ The native child rejects a changed origin/device/extension identity before ledge
 or credential access. A matching identity does not bypass native caller checks,
 private-file checks, certificate verification or existing recovery state.
 
-The manifest requests only `nativeMessaging`, `storage`, `cookies` and `alarms`,
+The manifest requests `nativeMessaging`, `storage`, `cookies`, `alarms` and `tabs`,
 plus the configured HTTPS host and explicit port. DNS, IPv4 and bracketed IPv6
 origins generate matching scopes; neither DNS nor a proxy is required. Chrome
 [match patterns](https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns)
 and the content script's runtime exact-URL guard are separate checks. No wildcard
 hosts, HTTP fallback, external-message entrypoint, web-accessible modules,
 incognito support or browser-wide certificate exception is added.
+
+The `tabs` permission is used only to recognize and retry the two exact
+launcher-entry URLs after Chromium's unpacked-extension startup race. It can
+technically read broader tab metadata; use only the dedicated lab profile. See
+the [startup candidate's scope and limits](browser-device-startup.md).
 
 **Cookies are host-scoped, not port-isolated.** A narrow extension permission
 does not stop a cookie being sent to another HTTPS port on the same host. Use a

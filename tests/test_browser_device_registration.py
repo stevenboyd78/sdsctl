@@ -189,3 +189,54 @@ def test_cli_requires_opt_in_and_only_prints_public_result(
     assert CREDENTIAL not in output.out + output.err
     assert "/setup.html" in output.out
     assert cli.main([*args, "--experimental"]) == 78
+
+
+@pytest.mark.parametrize("used", ["fresh", "claimed", "paused", "resumed"])
+def test_inspection_accepts_existing_state_without_mutation(
+    tmp_path, source, profile, public_key, used,
+):
+    result = register(tmp_path, source, profile, public_key)
+    config = load_browser_native_configuration(profile)
+    state = BrowserDeviceRecovery(profile / "recovery.sqlite", config.identity)
+    if used == "claimed":
+        state.claim_browser()
+    elif used == "paused":
+        state.suspend()
+    elif used == "resumed":
+        state.resume(state.suspend().revision)
+    root = tmp_path / "dedicated browser"
+    # Internal Chromium files are deliberately not parsed or reset.
+    private(root / "Local State", b"opaque private browser state")
+    before = snapshot(profile), snapshot(source), snapshot(root)
+    assert registration.inspect_browser_registration(
+        root, bundle=source, profile=profile, public_key=public_key,
+    ) == result
+    assert (snapshot(profile), snapshot(source), snapshot(root)) == before
+
+
+@pytest.mark.parametrize("change", ["receipt", "manifest", "extra", "missing", "mode", "link"])
+def test_inspection_rejects_changed_registration_without_repair(
+    tmp_path, source, profile, public_key, change,
+):
+    register(tmp_path, source, profile, public_key)
+    root = tmp_path / "dedicated browser"
+    receipt = root / ".sdsctl-browser-registration.json"
+    manifest = root / "NativeMessagingHosts" / (NATIVE_HOST + ".json")
+    if change in {"receipt", "manifest"}:
+        private(receipt if change == "receipt" else manifest, b"private-do-not-echo")
+    elif change == "extra":
+        private(manifest.parent / "other.json", b"private-do-not-echo")
+    elif change == "missing":
+        receipt.unlink()
+    elif change == "mode":
+        root.chmod(0o755)
+    else:
+        receipt.rename(root / "original")
+        receipt.symlink_to(root / "original")
+    before = snapshot(profile), snapshot(root)
+    with pytest.raises(registration.BrowserRegistrationError) as error:
+        registration.inspect_browser_registration(
+            root, bundle=source, profile=profile, public_key=public_key,
+        )
+    assert "private-do-not-echo" not in str(error.value)
+    assert (snapshot(profile), snapshot(root)) == before

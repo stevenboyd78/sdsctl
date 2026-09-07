@@ -433,6 +433,64 @@ function adapterFixture(f, changeCookie = value => value) {
   };
 }
 
+test("readiness distinguishes recovery permission from installed session and expires locally",async()=>{
+  const f=fixture(),c=f.make();assert.equal(c.readiness().sessionReady,false);
+  await c.tick();assert.deepEqual(c.readiness(),{mode:"active",sessionReady:true});
+  assert(!JSON.stringify(c.readiness()).includes(token));
+  const restarted=f.make();await restarted.tick();
+  assert.deepEqual(restarted.readiness(),{mode:"waiting",sessionReady:false});
+  f.time+=300001;assert.equal(c.readiness().sessionReady,false);
+  await c.suspend();assert.deepEqual(c.readiness(),{mode:"paused",sessionReady:false});
+  const retry=fixture();retry.ports.native=async()=>({...retry.status(),retry_after:60});
+  const allowed=retry.make();await allowed.tick();assert.equal(allowed.readiness().sessionReady,false);
+});
+
+test("missing first-run state is distinguished from corrupt setup without claiming",async()=>{
+  const f=freshFixture(),c=f.make();await c.tick();
+  assert.deepEqual(c.readiness(),{mode:"setup_required",sessionReady:false});
+  assert.deepEqual(f.calls,[]);
+  const corrupt=fixture(null).make();await corrupt.tick();
+  assert.deepEqual(corrupt.readiness(),{mode:"setup_error",sessionReady:false});
+});
+
+test("startup status is exact-document-only, redacted and never triggers native polling",async()=>{
+  const f=fixture();f.time=Date.now();const chrome=adapterFixture(f);let listener;
+  chrome.runtime.onMessage={addListener:fn=>{listener=fn;}};
+  const c=connectChromeRecovery(chrome,config);await c.tick();
+  // The mock set result and real cookie get share Chromium's verified shape.
+  f.cookie={...f.cookie,hostOnly:true,session:false};
+  const sender={id:chrome.runtime.id,url:chrome.runtime.getURL("startup.html"),frameId:0,
+    documentId:"active-startup",documentLifecycle:"active",tab:{id:7,incognito:false}};
+  const denied=()=>assert.fail("Untrusted startup message responded");
+  for(const change of [{id:"other"},{url:sender.url+"?x"},{url:config.origin+"/"},
+    {url:chrome.runtime.getURL("control.html")},{frameId:1},{documentId:""},
+    {documentLifecycle:"cached"},{tab:undefined},{tab:{id:7,incognito:true}}]) {
+    assert.equal(listener({action:"startup-status"},{...sender,...change},denied),false);
+  }
+  for(const message of [{action:"start"},{action:"suspend"},{action:"initialize"},
+    {action:"startup-status",token}]) assert.equal(listener(message,sender,denied),false);
+  const actions=[...f.calls];
+  const status=()=>new Promise(resolve=>assert.equal(listener({action:"startup-status"},sender,resolve),true));
+  assert.deepEqual(await status(),{mode:"active",sessionReady:true});
+  f.cookie=null;assert.deepEqual(await status(),{mode:"active",sessionReady:false});
+  chrome.cookies.get=async()=>{throw new Error(token);};
+  assert.deepEqual(await status(),{mode:"setup_error",sessionReady:false});
+  assert.deepEqual(f.calls,actions);
+});
+
+test("pause racing readiness cookie read never acknowledges a ready session",async()=>{
+  const f=fixture();f.time=Date.now();const chrome=adapterFixture(f);let listener;
+  chrome.runtime.onMessage={addListener:fn=>{listener=fn;}};
+  const c=connectChromeRecovery(chrome,config);await c.tick();
+  const pending=deferred(),cookie={...f.cookie,hostOnly:true,session:false};
+  chrome.cookies.get=()=>pending.promise;
+  const answer=new Promise(resolve=>listener({action:"startup-status"},
+    {id:chrome.runtime.id,url:chrome.runtime.getURL("startup.html"),frameId:0,
+      documentId:"active",documentLifecycle:"active",tab:{id:1,incognito:false}},resolve));
+  const stop=c.suspend();pending.resolve(cookie);
+  assert.equal((await answer).sessionReady,false);await stop;
+});
+
 test("first-run messages require the exact active top-level setup document", async () => {
   const f = freshFixture(), chrome = adapterFixture(f);
   let listener;

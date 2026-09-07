@@ -42,6 +42,7 @@ def setup(tmp_path: Path):
                                         display_password="fictional display password")
     raw = FastAPI()
 
+    @raw.get("/")
     @raw.get("/api/v1/status")
     async def status(request: Request):
         return {"display_only": request.state.sdsctl_display_only}
@@ -55,6 +56,81 @@ def exchange(client, credential, **kwargs):
     return client.post(BROWSER_DEVICE_EXCHANGE_PATH,
                        headers={"Authorization": "Bearer " + credential, **kwargs},
                        json={"device_id": "display"})
+
+
+@pytest.mark.parametrize("kind", ["missing", "invalid", "operator", "manual-display", "revoked"])
+def test_managed_entry_never_falls_back_to_password_login(setup, kind):
+    client, store, device, _, manual, _ = setup
+    if kind in {"operator", "manual-display"}:
+        client.cookies.set(WEB_DASHBOARD_AUTH_COOKIE,
+                           manual.issue_session(display_only=kind == "manual-display"))
+    elif kind == "invalid":
+        client.cookies.set(BROWSER_DEVICE_COOKIE, "fictional-invalid")
+    elif kind == "revoked":
+        token = exchange(client, device.credential).json()["token"]
+        client.cookies.set(BROWSER_DEVICE_COOKIE, token)
+        store.transition("display", BrowserDeviceState.REVOKED)
+    response = client.get("/device-display")
+    assert response.status_code == 401
+    assert "Waiting for a device session" in response.text
+    assert 'content=\'5\'' in response.text
+    assert "no-store" in response.headers["cache-control"]
+    assert "set-cookie" not in response.headers
+    assert "location" not in response.headers
+    assert not any(word in response.text for word in ("auth/login", "auth/display/login", "<form"))
+
+
+def test_managed_entry_rechecks_authority_and_serves_display_only_root(setup):
+    client, _, device, *_ = setup
+    token = exchange(client, device.credential).json()["token"]
+    client.cookies.set(BROWSER_DEVICE_COOKIE, token)
+    response = client.get("/device-display")
+    assert response.status_code == 200 and response.json() == {"display_only": True}
+    assert "location" not in response.headers
+    assert str(response.url).endswith("/device-display")
+
+
+@pytest.mark.parametrize("cookie", [False, True])
+def test_cross_site_top_level_entry_is_public_waiting_not_private_data(setup, cookie):
+    client, _, device, *_ = setup
+    if cookie:
+        token = exchange(client, device.credential).json()["token"]
+        client.cookies.set(BROWSER_DEVICE_COOKIE, token)
+    headers = {"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate",
+               "Sec-Fetch-Dest": "document"}
+    response = client.get("/device-display", headers=headers)
+    assert response.status_code == 401
+    assert "Waiting for a device session" in response.text
+    assert "display_only" not in response.text
+    assert "set-cookie" not in response.headers
+    assert client.get("/device-display", headers={**headers,
+                      "Sec-Fetch-Dest": "iframe"}).status_code == 403
+    response = client.get("/device-display", headers={"Sec-Fetch-Site": "same-origin"})
+    assert response.status_code == (200 if cookie else 401)
+
+
+@pytest.mark.parametrize("method,path,headers,code", [
+    ("post", "/device-display", {}, 403),
+    ("get", "/device-display?ignored=1", {}, 403),
+    ("get", "/device-display", {"Sec-Fetch-Site": "cross-site"}, 403),
+    ("get", "/device-display", {"Authorization": "Bearer fictional"}, 403),
+    ("get", "/device-display", {"Host": "wrong.example"}, 400),
+    ("get", "/device-display", {"Cookie": f"{BROWSER_DEVICE_COOKIE}=x; "
+                                      f"{WEB_DASHBOARD_AUTH_COOKIE}=y"}, 400),
+])
+def test_managed_entry_rejects_ambiguous_or_unauthorized_requests(
+    setup, method, path, headers, code,
+):
+    client, *_ = setup
+    assert client.request(method, path, headers=headers).status_code == code
+
+
+def test_managed_entry_waits_when_owner_unavailable(setup):
+    client, _, _, _, _, wrapper = setup
+    wrapper._ready = False
+    response = client.get("/device-display")
+    assert response.status_code == 503
+    assert "Waiting for a device session" in response.text
 
 
 def test_exchange_and_read_are_display_only_and_no_store(setup) -> None:

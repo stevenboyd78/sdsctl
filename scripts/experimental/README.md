@@ -184,6 +184,17 @@ is not a recovery instruction. Desktop/small-page screenshots and all fixture
 outputs are retained; no system/browser trust or production service is changed.
 See [the registration and first-run guide](../../docs/browser-device-first-run.md).
 
+The generated recovery harness also accepts a final `startup` argument after
+the scenario and identity (`ip`, `dns` or `ipv6`). This runs the installed
+`browser-device-start --experimental` CLI through a fixture-only headless/CDP
+executable, verifies the setup-required page and explicit `--setup` launch, and
+waits for automatic navigation to the guarded device-only entry. It then checks
+sign-out or terminal rejection across another managed launch. The default
+`review` mode retains the earlier direct Playwright launch. Both modes use
+fictional loopback authority, normal sandboxing and isolated verified TLS;
+neither changes a production display service or proves a physical power outage.
+See [the experimental startup guide](../../docs/browser-device-startup.md).
+
 `src/sds200/browser_assets/browser_device_recovery.mjs` is the coordinator for the actual
 native-helper protocol, not a replacement silently installed into the earlier
 fixture. The modules now ship as canonical Python package assets; the entries

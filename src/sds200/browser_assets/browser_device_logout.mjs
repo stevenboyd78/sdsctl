@@ -7,7 +7,8 @@ const OUTCOMES = new Set(["drained", "pending", "unconfirmed"]);
 export function connectLogoutWorker(chrome, controller, origin, clock = Date.now) {
   if (new URL(origin).origin !== origin || !origin.startsWith("https://")) throw new Error("setup");
   let pending = null;
-  const eligible = sender => sender.id === chrome.runtime.id && sender.url === origin + "/" &&
+  const eligible = sender => sender.id === chrome.runtime.id &&
+    ["/", "/device-display"].some(p => sender.url === origin + p) &&
     sender.origin === origin && sender.frameId === 0 && sender.documentLifecycle === "active" &&
     typeof sender.documentId === "string" && /^[a-zA-Z0-9-]{1,128}$/.test(sender.documentId) &&
     Number.isSafeInteger(sender.tab?.id) && sender.tab.id >= 0 && sender.tab.incognito === false;
@@ -78,7 +79,7 @@ export async function submitDeviceLogout(fetcher, origin) {
 }
 
 export function connectLogoutContent({document, window, runtime, fetcher}, origin) {
-  if (window !== window.top || window.location.href !== origin + "/" ||
+  if (window !== window.top || !["/", "/device-display"].some(p => window.location.href === origin + p) ||
       new URL(origin).origin !== origin || !origin.startsWith("https://")) throw new Error("setup");
   let busy = false;
   document.addEventListener("submit", event => {
