@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createBrowserRecovery, initialBrowserRecoveryState, connectChromeRecovery,
-  DEVICE_COOKIE, RECOVERY_ALARM} from "./browser_device_recovery.mjs";
+  BrowserNativeDisconnected, sendChromeNative, DEVICE_COOKIE, RECOVERY_ALARM} from "./browser_device_recovery.mjs";
 
 const config = {origin: "https://192.0.2.18:8443", identity: "a".repeat(64),
   nativeHost: "org.sdsctl.browser_device"};
@@ -330,4 +330,75 @@ test("Chrome storage access restriction failure never launches native authentica
   const c = connectChromeRecovery(chrome, config);
   assert.deepEqual(await c.tick(), {mode: "setup_error"});
   assert.deepEqual(f.calls, []);
+});
+
+test("native disconnect clears cookie and persists a retry across worker recreation", async () => {
+  const f = fixture(), native = f.ports.native;
+  f.cookie = {value: token};
+  f.ports.native = async request => {
+    if (request.action === "authenticate") throw new BrowserNativeDisconnected();
+    return native(request);
+  };
+  const c = f.make();
+  assert.deepEqual(await c.tick(), {mode: "waiting"});
+  assert.equal(f.cookie, null);
+  assert.equal(f.saved.phase, "native_retry");
+  assert.equal(f.alarm, f.time + 60000);
+  const calls = f.calls.length;
+  for (let i = 0; i < 5; i++) await f.make().tick();
+  assert.equal(f.calls.length, calls); // Early/manual starts cannot bypass the retry budget.
+  f.ports.native = native;
+  f.time += 60000;
+  assert.deepEqual(await f.make().tick(), {mode: "active"});
+  assert.equal(f.cookie.value, token);
+  assert.equal(f.saved.phase, "clean");
+});
+
+test("native retry rollback is bounded and saved, not extended on every wake", async () => {
+  const f = fixture();
+  f.saved.phase = "native_retry"; f.saved.nextAt = f.time + 9000000;
+  assert.deepEqual(await f.make().tick(), {mode: "waiting"});
+  assert.equal(f.saved.nextAt, f.time + 60000);
+  assert.equal(f.calls.length, 0);
+  f.time += 60000;
+  assert.deepEqual(await f.make().tick(), {mode: "active"});
+});
+
+for (const action of ["suspend", "beginLogout"]) {
+  test(`${action} wins over an outstanding native disconnect`, async () => {
+    const f = fixture(), blocked = deferred(), native = f.ports.native;
+    f.ports.native = request => request.action === "authenticate" ? blocked.promise : native(request);
+    const c = f.make(), run = c.tick(); await settle();
+    const stop = c[action](); await settle();
+    blocked.reject(new BrowserNativeDisconnected());
+    await run; await stop;
+    assert.equal(f.saved.paused, true);
+    assert.notEqual(f.saved.phase, "native_retry");
+    f.time += 60001;
+    assert.equal((await f.make().tick()).mode, "paused");
+    assert.equal(f.cookie, null);
+    assert.equal(f.nativeMode, "paused");
+  });
+}
+
+test("native retry never conceals unsafe persistence or failed cookie removal", async () => {
+  for (const broken of ["save", "clearCookie"]) {
+    const f = fixture();
+    f.ports.native = async () => { throw new BrowserNativeDisconnected(); };
+    f.ports[broken] = async () => { throw new Error(token); };
+    const c = f.make();
+    assert.deepEqual(await c.tick(), {mode: "setup_error"});
+    assert.equal(f.alarm, null);
+  }
+});
+
+test("Chrome adapter distinguishes broken pipes from permanent native setup/protocol errors", async () => {
+  for (const message of ["Native host has exited.", "Specified native messaging host not found.",
+    "Access to the specified native messaging host is forbidden.",
+    "Error when communicating with the native messaging host.", token]) {
+    const chrome = {runtime: {sendNativeMessage: async () => { throw new Error(message); }}};
+    await assert.rejects(sendChromeNative(chrome, config.nativeHost, {version: 1, action: "status"}),
+      error => (error instanceof BrowserNativeDisconnected) === (message === "Native host has exited.") &&
+        !error.message.includes(token));
+  }
 });

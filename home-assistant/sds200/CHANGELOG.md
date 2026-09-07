@@ -6,8 +6,21 @@
 
 - Track the sdsctl patch that repairs DNS, IPv4, and IPv6 certificate tests
   across OpenSSL versions after the partial v0.29.3 publication.
-- Keep v0.29.3 application behavior, credentials, configuration, recordings,
-  and advanced-access defaults unchanged. The App reports version 0.29.4.
+- Repair interruption recovery in the experimental browser-enrollment code and
+  require an explicit TLS minimum in its test fixture. Production launchers do
+  not enable that experimental path; existing credentials, configuration,
+  recordings and advanced-access defaults remain compatible.
+
+## 0.29.3
+
+- Add a separate native display-only password and read-only kiosk workflow;
+  sign-in remains manual after session expiry or a web-service restart.
+- Support exact split-DNS names as advanced TLS identities without enabling
+  listeners, changing port mappings or replacing private destination checks.
+- Include experimental browser-enrollment foundations, not an installable
+  unattended-login feature. Existing production TUI profiles are unchanged.
+- Publication was partial: App/container images were published, but the Python
+  package publication failed. Prefer the fully published recovery version.
 
 ## 0.29.2
 

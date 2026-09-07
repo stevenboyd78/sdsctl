@@ -8,11 +8,13 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import sds200.browser_device_recovery as recovery_module
 from sds200.browser_device_http import BrowserDeviceHTTP
 from sds200.browser_device_protocol import parse_browser_device_request
 from sds200.browser_device_recovery import (
@@ -69,6 +71,29 @@ def test_success_supplies_renewal_hint_without_persisting_token(ledger):
     assert TOKEN.encode() not in state.path.read_bytes()
     assert reopen(state, clock).status() == result.status
     assert state.path.stat().st_mode & 0o777 == 0o600
+
+
+def test_callback_returning_after_deadline_discards_token_but_can_retry(ledger, monkeypatch):
+    state, clock = ledger
+    times = iter([0, 10.01, 11, 11.01])
+    monkeypatch.setattr(recovery_module, "time", SimpleNamespace(monotonic=lambda: next(times)))
+    result = state.authenticate(session)
+    assert result.session is None and result.status.mode is RecoveryMode.ACTIVE
+    assert result.status.retry_after > 0
+    clock[0] += 61
+    assert reopen(state, clock).authenticate(session).session is not None
+
+
+@pytest.mark.parametrize("mode", [RecoveryMode.TLS_ERROR, RecoveryMode.REJECTED,
+                                 RecoveryMode.PROTOCOL_ERROR, RecoveryMode.SETUP_ERROR])
+def test_late_terminal_failure_is_never_converted_to_retry(ledger, monkeypatch, mode):
+    state, clock = ledger
+    times = iter([0, 10.01])
+    monkeypatch.setattr(recovery_module, "time", SimpleNamespace(monotonic=lambda: next(times)))
+    result = state.authenticate(fail(mode))
+    assert result.session is None and result.status.mode is mode
+    clock[0] += 301
+    assert reopen(state, clock).authenticate(session).status.mode is mode
 
 
 def test_outage_backoff_survives_helper_restarts_and_recovers(ledger):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import socket
 import ssl
 import struct
 import subprocess
@@ -126,6 +127,8 @@ def server(root, certificates, request):
             pass
 
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
     selected = certificates[getattr(request, "param", 0)]
     context.load_cert_chain(*selected)
     httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -387,3 +390,107 @@ def test_temporary_failure_without_content_type_remains_retryable(server):
     result = invoke(configuration.root)
     assert result["mode"] == "active" and result["retry_after"] > 0
     assert "session" not in result
+
+
+@pytest.mark.parametrize("interruption", ["tls_eof", "content_length", "chunked"])
+def test_interrupted_exchange_recovers_with_real_verified_https(root, certificates, interruption):
+    cert, key = certificates[0]
+    state = {"interrupted": True, "requests": 0}
+    body = json.dumps({"token": TOKEN, "expires_in": 300}).encode()
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            self.rfile.read(int(self.headers["Content-Length"]))
+            state["requests"] += 1
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            if state["interrupted"] and interruption == "chunked":
+                self.send_header("Transfer-Encoding", "chunked")
+                payload = b"200\r\n" + body[:10]
+            else:
+                self.send_header("Content-Length", str(len(body)))
+                payload = body[:10] if state["interrupted"] else body
+            self.end_headers()
+            self.wfile.write(payload)
+            self.wfile.flush()
+            self.close_connection = True
+
+        def log_message(self, *args):
+            pass
+
+    def healthy_server(port):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(cert, key)
+        httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+        httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        return httpd, thread
+
+    httpd = None
+    if interruption == "tls_eof":
+        listener = socket.socket()
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.bind(("127.0.0.1", 0))
+        listener.listen(1)
+        port = listener.getsockname()[1]
+
+        def interrupt():
+            with listener:
+                connection, _ = listener.accept()
+                with connection:
+                    connection.settimeout(3)
+                    connection.recv(4096)
+                    connection.shutdown(socket.SHUT_RDWR)
+
+        thread = threading.Thread(target=interrupt, daemon=True)
+        thread.start()
+    else:
+        httpd, thread = healthy_server(0)
+        port = httpd.server_port
+    configure(root, f"https://localhost:{port}")
+    private(root / "ca.pem", cert.read_bytes())
+    configuration = initialize(root)
+    clock = [time.time() + 1]
+    recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity,
+                                     clock=lambda: clock[0])
+    try:
+        first = recovery.authenticate(lambda: exchange_browser_device(configuration))
+        assert first.status.mode is RecoveryMode.ACTIVE and first.session is None
+        assert 0 < first.status.retry_after <= 60
+        state["interrupted"] = False
+        if interruption == "tls_eof":
+            thread.join(3)
+            assert not thread.is_alive()
+            httpd, thread = healthy_server(port)
+        requests = state["requests"]
+        # Recreate the ledger as a new native process would. No administrator reset.
+        recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity,
+                                         clock=lambda: clock[0])
+        assert recovery.authenticate(lambda: exchange_browser_device(configuration)).session is None
+        assert state["requests"] == requests
+        clock[0] += 301
+        recovered = recovery.authenticate(lambda: exchange_browser_device(configuration))
+        assert recovered.session is not None and recovered.session.token == TOKEN
+        assert state["requests"] == requests + 1
+    finally:
+        if httpd is not None:
+            httpd.shutdown()
+            httpd.server_close()
+        thread.join(3)
+
+
+@pytest.mark.parametrize("body,headers", [
+    (b'{"token":', []),  # Complete response containing malformed JSON is NOT a transport outage.
+    (b"x" * 4097, []),
+    (b"{}", [("Content-Length", "2")]),
+    (b"{}", [("Transfer-Encoding", "chunked")]),
+])
+def test_invalid_complete_or_ambiguous_response_remains_terminal(server, body, headers):
+    configuration, response, observed = server
+    response.update(body=body, headers=headers)
+    first = invoke(configuration.root)
+    assert first["mode"] == "protocol_error" and "session" not in first
+    assert invoke(configuration.root)["mode"] == "protocol_error"
+    assert len(observed) == 1

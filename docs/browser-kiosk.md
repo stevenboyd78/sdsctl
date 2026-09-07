@@ -1,7 +1,9 @@
-# Display-only browser kiosk — candidate setup and testing
+# Display-only browser kiosk — manual-login setup and testing
 
-**Unreleased candidate. These commands are not in v0.29.2.** Use only a reviewed
-candidate checkout/build for now. Interactive testing passed on two Pi displays;
+**Manual-login functionality is included in v0.29.3 and later.** The v0.29.3
+publication was partial (container images published, Python publication failed);
+use a fully published recovery version for a new installation. These commands
+are not in v0.29.2. Interactive testing passed on two Pi displays;
 manual-login boot startup also passed on one specific HDMI Pi setup described
 below. This does not provide unattended authentication recovery. See the
 [acceptance record](#milestone-341-candidate-acceptance) for the exact limits.
@@ -233,9 +235,11 @@ the chosen production graphical-service workflow before promising unattended
 startup. A manual power cycle during troubleshooting is not cold-boot acceptance.
 
 Production restoration passed: both physical TUI displays are updating again.
-Approved temporary-resource cleanup is complete. Release publication remains
-pending. The runtime version still identifies an unreleased candidate, not a
-new published Python package.
+Approved temporary-resource cleanup is complete. At that acceptance checkpoint,
+release publication was still pending. The manual-login runtime was subsequently
+included in v0.29.3; see the publication caveat at the top of this guide. The
+experimental device-enrollment helpers do not enable automatic login in a
+supported production installation.
 
 ## Milestone 34.2 HDMI startup qualification
 

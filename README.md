@@ -213,6 +213,9 @@ and tighter split-screen layout behavior on constrained displays. The `/dev/tty1
 managed TUI flow keeps observe-only preflight, bounded recovery, private
 credentials, and exact cleanup while preserving compatibility with existing
 daemon versions.
+Unattended browser-device enrollment remains experimental: the packaged
+production launchers do not enable it. Browser kiosks still require manual
+sign-in after session expiry or a server restart.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

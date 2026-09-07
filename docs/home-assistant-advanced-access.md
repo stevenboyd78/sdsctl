@@ -66,8 +66,10 @@ Two values have deliberately different jobs:
   `.local` name, a `.home.arpa` name, or an exact user-owned split-DNS name such
   as `display.example.com`. A DNS name must resolve to the private Home Assistant
   host on every client. Wildcard identities, URLs and names containing ports are
-  not accepted. Split-DNS support described here is unreleased development work;
-  released versions that restrict hostname suffixes need an update first.
+  not accepted. Exact split-DNS identities are supported in v0.29.3 and later;
+  older versions that restrict hostname suffixes need an update first. Because
+  v0.29.3 Python publication failed, choose a fully published recovery version
+  for a new Python installation.
 
 A user-owned DNS suffix does not make this a public service. Private destination
 and listener checks still apply; a DNS name does not open ports, configure a
@@ -269,7 +271,8 @@ be saved in its profile. Treat that profile as sensitive and never copy its
 cookies between devices. Restarting the web service or reaching the session's
 absolute expiry requires a new login, even if the browser retains a cookie.
 
-The unreleased [display-only kiosk candidate](browser-kiosk.md) adds a separate
+The [manual-login display-only kiosk](browser-kiosk.md), included in v0.29.3 and
+later, adds a separate
 display-password workflow in the Ingress Advanced access panel. Its display
 login is `/auth/display/login`; the operator login remains `/auth/login`.
 Creating or rotating either password requires saving its one-time value and
