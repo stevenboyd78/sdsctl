@@ -246,8 +246,12 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await page.waitForLoadState("domcontentloaded");
       await page.bringToFront();
     } else {page = await context.newPage(); await page.goto(origin);}
-    const sessionStatus = () => page.evaluate(async () => (await fetch("/auth/session")).status);
-    assert.equal(await sessionStatus(), 200); assert.equal(await page.evaluate(() => document.cookie), "");
+    const sessionStatus = async () => {
+      try {return await page.evaluate(async () => (await fetch("/auth/session")).status);}
+      catch {return 0;} // A managed entry may navigate during a read; never count it as a pass.
+    };
+    await until(async()=>await sessionStatus()===200);
+    assert.equal(await page.evaluate(() => document.cookie), "");
     if(flow === "startup") {
       await page.getByRole("button",{name:"Open dashboard menu",exact:true}).waitFor();
       await page.screenshot({path:path.join(root,"managed-display.png")});
@@ -259,7 +263,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     assert(denied.every(status => status === 403), "Display-only privilege boundary failed");
     step("authenticated-display-only");
     if (scenario === "server-restart") {
-      await command("restart"); assert.equal(await sessionStatus(), 401);
+      await command("restart"); await until(async()=>await sessionStatus()===401);
       step("await-server-restart-recovery");
       await until(async () => await sessionStatus() === 200, 100000);
     }
@@ -278,7 +282,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await until(async () => await sessionStatus() === 200); await cdp.detach();
     }
     if (scenario === "revoke") {
-      await command("revoke"); assert.equal(await sessionStatus(), 401);
+      await command("revoke"); await until(async()=>await sessionStatus()===401);
       await until(async () => await mode() === "credential_rejected", 100000);
       await until(async () => !await hasCookie()); step("revocation-rejected");
     } else {
@@ -287,7 +291,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await page.getByRole("button", {name: "Sign out and pause automatic login", exact: true}).click();
       await until(async () => (await command("status")).state === "paused");
       await until(async () => !await hasCookie());
-      assert.equal(await sessionStatus(), 401);
+      await until(async()=>await sessionStatus()===401);
     }
   }
   const beforeRestart = (await command("status")).exchanges;

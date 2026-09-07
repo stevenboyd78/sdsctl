@@ -146,6 +146,17 @@ by its private test executable, never by the product command. Normal Chromium
 sandboxing and verified loopback TLS remain enabled. No recovery state or cookie
 is injected, and no production credential or service is used.
 
+The startup qualification matrix runs normal startup plus slow/truncated
+responses, an interrupted TLS handshake, server restart, worker restart,
+revocation and native-helper CA/name rejection separately for IPv4 and DNS;
+healthy IPv6 is a separate case. Successful recovery cases also require real
+dashboard sign-out and a fresh launch that remains paused. TLS/revocation cases
+must retain their terminal state without another authentication exchange.
+An interrupted page-status read during managed navigation is not a pass: the
+harness retries within a deadline until it observes the exact expected HTTP
+status. Native-helper CA/name rejection does not substitute for an independent
+browser-only trust-failure test.
+
 Deterministic tests also cover offline inspection, unsafe/competing locks,
 close/crash/signal handling, startup sender validation, pending authentication,
 pause races, expired sessions, and managed renewal versus manual-login behavior.

@@ -209,6 +209,7 @@ Run the dependency-free deterministic JavaScript contract tests with:
 node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
+node --test scripts/experimental/test_browser_device_startup.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests
@@ -219,8 +220,9 @@ generation races, unsafe state and the Chrome adapter's message/cookie checks.
 
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
-bridge and document-bound completion tickets; it is not registered or deployed.
-The existing dashboard sign-out form is not connected in any installed build.
+bridge and document-bound completion tickets. The registered experimental bundle
+connects the display-only dashboard sign-out form in the isolated installed-wheel
+fixtures above; released manual kiosks and production services are unchanged.
 Real-browser interruption evidence is recorded below. Local pause and cookie
 removal are not proof of server-side stream revocation. No resume message exists.
 
