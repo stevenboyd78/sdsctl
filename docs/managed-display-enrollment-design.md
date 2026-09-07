@@ -652,6 +652,15 @@ device ID and exact permitted Chromium extension origin. Replacing a credential
 or trust file does not implicitly clear a paused or terminal recovery state.
 The downloaded enrollment attachment is still not a complete installation profile.
 
+An unreleased, explicit [profile import and offline check](browser-device-profile.md)
+now assembles these four files from a fresh issuance plus reviewed origin,
+certificate trust and extension identity. It accepts only initial enrollment,
+refuses all existing destinations and rotation handoffs, and preserves source
+files. Its read-only check does not authenticate, correct the clock, repair a
+ledger or clear a saved pause/error. This closes the hand-built native-file setup
+gap only; native-host registration, extension packaging/browser storage and
+production launcher/server wiring remain separate gates.
+
 Authentication makes one direct POST to `/auth/device/session`, using TLS 1.2 or
 newer with issuer and hostname verification against the explicit trust bundle.
 It ignores proxy and certificate environment settings, does not follow redirects,

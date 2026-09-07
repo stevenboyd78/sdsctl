@@ -11,7 +11,28 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 34.1 — Display-only native browser kiosk
+### Managed-display enrollment and unattended recovery
+
+The released manual-login kiosk and isolated recovery foundations are followed
+by explicit, per-device unattended-browser setup. Preserve the existing TUI
+credential protocol, USB behavior, operator/manual login and disabled advanced
+network defaults. Support verified private-IP HTTPS as well as optional DNS;
+neither internal DNS nor a proxy is a product requirement.
+
+The next bounded candidate adds a first-time private native-profile import and
+read-only offline check. It must reject unsafe inputs, existing profiles and
+rotation handoffs without clearing a saved pause or terminal error. See the
+[experimental setup guide](docs/browser-device-profile.md). This candidate is
+unreleased and does not install an extension/native host, enable production
+enrollment or start an unattended display.
+
+Reviewed extension identity/packaging, native-host registration, browser storage
+initialization, launcher/service and server wiring, explicit replacement/resume
+and physical multi-display/outage acceptance remain gates. Keep production
+changes separate from isolated synthetic-credential tests. See the
+[enrollment and recovery design](docs/managed-display-enrollment-design.md).
+
+#### Closed Milestone 34.1 — Display-only native browser kiosk
 
 The operator approved building and testing the display-only direction after
 the initial design and documentation only review. The candidate adds a separate
@@ -33,11 +54,19 @@ menu/Details, local Waterfall controls and reload-to-display-login recovery afte
 an App restart. See the [evidence and limits](docs/browser-kiosk.md#milestone-341-candidate-acceptance).
 The earlier copy-shortcut exits remain unreproduced, not established as fixed.
 Production restoration passed on both physical TUI displays, and the approved
-temporary-resource cleanup is complete. Kiosk cold-boot and production
-graphical-service qualification are not claimed.
-No acceptance is inherited from the TUI tests. Fully unattended re-login,
-per-device browser enrollment, audio and recording access remain outside this
-first implementation. The candidate remains unreleased.
+temporary-resource cleanup is complete. At that checkpoint, kiosk cold-boot and
+production graphical-service qualification were not claimed. The subsequent
+[Milestone 34.2 HDMI qualification](docs/browser-kiosk.md#milestone-342-hdmi-startup-qualification)
+passed session restart, reboot and a clean shutdown/power-removal startup on the
+specific isolated HDMI deployment, still with manual authentication. It did not
+qualify the small Pi's browser cold start or a combined server/display outage.
+
+The manual-login implementation shipped in v0.29.3, whose PyPI publication
+failed. The fully published v0.29.4 recovery release corrected validation and
+experimental reconnect faults; it did not enable unattended production login.
+No browser acceptance is inherited from TUI tests. Fully unattended re-login,
+per-device production browser enrollment, audio and recording access remain
+outside this first implementation.
 
 #### Closed v0.29.2 — TUI application header and production acceptance
 

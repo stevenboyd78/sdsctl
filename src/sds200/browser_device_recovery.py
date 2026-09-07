@@ -16,7 +16,7 @@ import secrets
 import sqlite3
 import time
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -198,7 +198,9 @@ class BrowserDeviceRecovery:
             if db is not None:
                 db.close()
 
-    def _load(self, db: sqlite3.Connection, now: float) -> _State:
+    def _load(
+        self, db: sqlite3.Connection, now: float, *, correct_clock: bool = True,
+    ) -> _State:
         rows = db.execute("SELECT id, identity, revision, mode, failures, next_at, observed_at "
                           "FROM recovery LIMIT 2").fetchall()
         if len(rows) != 1:
@@ -213,7 +215,7 @@ class BrowserDeviceRecovery:
         if next_at > observed_at + 300:
             raise BrowserRecoveryError()
         state = _State(revision, RecoveryMode(mode), failures, next_at, observed_at)
-        if now < observed_at:
+        if now < observed_at and correct_clock:
             # Pi clocks may step during startup. Bound retry waits, but never clear a pause/error.
             state = _State(revision + 1, state.mode, failures, now + 10, now)
             self._save(db, state)
@@ -248,6 +250,35 @@ class BrowserDeviceRecovery:
         now = self._now()
         with self._connection() as db:
             return self._status(self._load(db, now), now)
+
+    def inspect(self) -> RecoveryStatus:
+        """Read-only offline inspection; do not clear modes or persist clock correction.
+
+        A rolled-back clock uses the last observed time for this delay snapshot.
+        The next runtime status call still performs its normal durable correction.
+        """
+        try:
+            BrowserDeviceStore(self.path)._check()
+            # This ledger uses rollback journals. A read-only WAL connection can
+            # still create/update -wal/-shm files, so reject that format before
+            # SQLite opens it. Do not switch modes or run recovery here.
+            fd = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(fd, "rb", buffering=0) as stream:
+                header = stream.read(20)
+            if len(header) != 20 or header[:16] != b"SQLite format 3\0" or header[18:] != b"\1\1":
+                raise BrowserRecoveryError()
+            with closing(sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True,
+                                         timeout=2)) as db:
+                db.execute("PRAGMA trusted_schema=OFF")
+                db.execute("PRAGMA query_only=ON")
+                db.execute("BEGIN")
+                if db.execute("PRAGMA user_version").fetchone()[0] != 1:
+                    raise BrowserRecoveryError()
+                now = self._now()
+                state = self._load(db, now, correct_clock=False)
+                return self._status(state, max(now, state.observed_at))
+        except (OSError, ValueError, sqlite3.Error, BrowserDeviceStoreError):
+            raise BrowserRecoveryError() from None
 
     def suspend(self) -> RecoveryStatus:
         """Persist offline intent before attempting server logout or clearing cookies.

@@ -77,8 +77,17 @@ class BrowserNativeConfiguration:
 def load_browser_native_configuration(root: Path) -> BrowserNativeConfiguration:
     """Load only fixed filenames from an explicitly provisioned private installation."""
     try:
-        value = json.loads(_private_read(root, "client.json", 4096).decode("utf-8"),
-                           object_pairs_hook=_object)
+        return parse_browser_native_configuration(root, _private_read(root, "client.json", 4096))
+    except Exception:
+        raise ExchangeFailure(RecoveryMode.SETUP_ERROR) from None
+
+
+def parse_browser_native_configuration(root: Path, body: bytes) -> BrowserNativeConfiguration:
+    """Validate the same bounded configuration before a new profile is written."""
+    try:
+        if type(body) is not bytes or not 0 < len(body) <= 4096:
+            raise ValueError()
+        value = json.loads(body.decode("utf-8"), object_pairs_hook=_object)
         if (type(value) is not dict
                 or set(value) != {"version", "origin", "device_id", "extension_origin"}
                 or type(value["version"]) is not int or value["version"] != 1

@@ -1287,6 +1287,36 @@ def build_parser(
         "--preflight-only", action="store_true", help="Check HTTPS without launching",
     )
 
+    browser_profile = subparsers.add_parser(
+        "browser-device-profile", help="Experimental offline browser-device profile setup",
+    )
+    browser_profile.add_argument(
+        "--experimental", action="store_true", required=True,
+        help="Acknowledge this does not install or enable unattended browser login",
+    )
+    browser_profile_actions = browser_profile.add_subparsers(
+        dest="browser_profile_action", required=True,
+    )
+    browser_profile_create = browser_profile_actions.add_parser(
+        "create", help="Import a fresh private issuance into a new profile; never overwrite",
+    )
+    browser_profile_check = browser_profile_actions.add_parser(
+        "check", help="Read-only local checks; no network, authentication or state reset",
+    )
+    for command in (browser_profile_create, browser_profile_check):
+        command.add_argument(
+            "--directory", type=Path, required=True,
+            help="Absolute private native profile directory, not a browser profile",
+        )
+    browser_profile_create.add_argument("--enrollment-file", type=Path, required=True)
+    browser_profile_create.add_argument("--ca-file", type=Path, required=True)
+    browser_profile_create.add_argument("--origin", required=True, metavar="HTTPS_ORIGIN")
+    browser_profile_create.add_argument("--device-id", required=True)
+    browser_profile_create.add_argument(
+        "--extension-id", required=True,
+        help="Explicit reviewed 32-letter Chromium extension identity",
+    )
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -6285,6 +6315,31 @@ def main(
             print(files("sds200.service_assets").joinpath("sdsctl-browser-kiosk.service")
                   .read_text(encoding="utf-8"), end="")
             return 0
+
+        if args.action == "browser-device-profile":
+            from .browser_device_profile import (
+                BrowserProfileError,
+                create_browser_profile,
+                inspect_browser_profile,
+            )
+
+            try:
+                if args.browser_profile_action == "create":
+                    result = create_browser_profile(
+                        args.directory, enrollment_file=args.enrollment_file, ca_file=args.ca_file,
+                        origin=args.origin, device_id=args.device_id,
+                        extension_id=args.extension_id,
+                    )
+                    print("Experimental native profile created; source files were preserved.")
+                else:
+                    result = inspect_browser_profile(args.directory)
+                print(f"Offline profile checks passed. Local recovery mode: {result.mode.value}.")
+                print("This does not prove server authentication or browser readiness. "
+                      "No extension, trust store or service was installed or started.")
+                return 0
+            except BrowserProfileError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 78
 
         if args.action == "browser-kiosk":
             from .browser_kiosk import kiosk_preflight, run_browser_kiosk
