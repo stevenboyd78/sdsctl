@@ -120,6 +120,8 @@ def test_web_parser_uses_loopback_defaults() -> None:
     assert args.home_assistant_ingress is False
     assert args.container_exposure is False
     assert args.authenticated_lan is False
+    assert args.experimental_browser_devices is False
+    assert args.browser_device_config is None
     assert args.lan_listen_address is None
     assert args.lan_origin is None
     assert args.lan_public_port is None

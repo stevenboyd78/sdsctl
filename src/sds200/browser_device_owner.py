@@ -2,7 +2,7 @@
 
 The socket only confirms a committed record; it cannot mutate authority or issue
 credentials. Same-UID/root processes are trusted. Do not replace the authority
-directory/lock file while a service owns it. No production launcher enables this.
+directory/lock file while a service owns it. Server wiring requires experimental opt-in.
 """
 
 from __future__ import annotations

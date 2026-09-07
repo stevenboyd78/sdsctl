@@ -243,6 +243,7 @@ def build_home_assistant_web_command(
     *,
     executable: str = HOME_ASSISTANT_APP_EXECUTABLE,
     ingress_port: int = HOME_ASSISTANT_APP_INGRESS_PORT,
+    browser_device_config: Path | None = None,
 ) -> tuple[str, ...]:
     """Build the Ingress web child command against the private daemon sockets."""
 
@@ -265,6 +266,11 @@ def build_home_assistant_web_command(
         program,
         "web",
         "--home-assistant-ingress",
+        *(
+            ("--experimental-browser-devices", "--browser-device-config", os.fspath(
+                _require_absolute_path(browser_device_config, label="Browser-device configuration")
+            )) if browser_device_config is not None else ()
+        ),
         "--daemon-socket-path",
         os.fspath(paths.daemon_socket),
         "--daemon-event-socket-path",
@@ -278,6 +284,17 @@ def build_home_assistant_web_command(
         "--listen-port",
         str(ingress_port),
     )
+
+
+def home_assistant_native_dashboard_origin(
+    options: HomeAssistantAppOptions, exposure: HomeAssistantAppAdvancedExposure,
+) -> str:
+    if exposure.native_dashboard_host_port is None:
+        raise ValueError("Home Assistant App native dashboard is not published.")
+    host = options.advanced_access_server_name
+    if ":" in host:
+        host = f"[{host}]"
+    return f"https://{host}:{exposure.native_dashboard_host_port}"
 
 
 def build_home_assistant_native_web_command(
@@ -319,17 +336,19 @@ def build_home_assistant_native_web_command(
 
     program = _require_executable(executable)
     assert paths.waterfall_socket is not None
-    origin_host = options.advanced_access_server_name
-    if ":" in origin_host:
-        origin_host = f"[{origin_host}]"
     return (
         program,
         "web",
         "--authenticated-lan",
+        *(
+            ("--experimental-browser-devices", "--browser-device-config",
+             options.browser_device_server_config)
+            if options.experimental_browser_devices_enabled else ()
+        ),
         "--lan-listen-address",
         exposure.container_address,
         "--lan-origin",
-        f"https://{origin_host}:{exposure.native_dashboard_host_port}",
+        home_assistant_native_dashboard_origin(options, exposure),
         "--lan-public-port",
         str(exposure.native_dashboard_host_port),
         "--lan-password-file",
@@ -404,4 +423,5 @@ __all__ = [
     "build_home_assistant_native_web_command",
     "build_home_assistant_web_command",
     "default_home_assistant_app_runtime_paths",
+    "home_assistant_native_dashboard_origin",
 ]

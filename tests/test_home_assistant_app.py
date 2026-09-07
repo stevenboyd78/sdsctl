@@ -43,6 +43,29 @@ def mqtt_service_payload(
     }
 
 
+@pytest.mark.parametrize("values", [
+    {"experimental_browser_devices_enabled": True},
+    {"browser_device_server_config": "/data/browser/server.json"},
+    {"experimental_browser_devices_enabled": "true"},
+    {"browser_device_server_config": 123},
+    {"browser_device_server_config": "relative.json"},
+    {"browser_device_server_config": "/data/../server.json"},
+    {"browser_device_server_config": " /data/server.json"},
+    {"browser_device_server_config": "/data/server\x00.json"},
+    {"experimental_browser_devices_enabled": True,
+     "browser_device_server_config": "/data/browser/server.json",
+     "native_dashboard_enabled": False},
+])
+def test_incomplete_browser_options_are_refused_before_file_access(tmp_path, values):
+    path = tmp_path / "options.json"
+    path.write_text(json.dumps({
+        "scanner_host": "192.0.2.25", "native_dashboard_enabled": True,
+        "advanced_access_server_name": "192.168.20.15", **values,
+    }))
+    with pytest.raises(ConfigurationError):
+        load_home_assistant_app_options(path)
+
+
 def test_load_home_assistant_app_options_uses_strict_defaults(
     tmp_path: Path,
 ) -> None:
@@ -53,6 +76,8 @@ def test_load_home_assistant_app_options_uses_strict_defaults(
     )
 
     options = load_home_assistant_app_options(path)
+    assert options.experimental_browser_devices_enabled is False
+    assert options.browser_device_server_config == ""
 
     assert options == HomeAssistantAppOptions(
         scanner_host="192.0.2.25",

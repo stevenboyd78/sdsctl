@@ -51,6 +51,11 @@ class FakeServerFactory:
         return self.server
 
 
+def test_failed_lifespan_returns_nonzero_exit_status() -> None:
+    server = SimpleNamespace(started=False, run=lambda: None)
+    assert run_web_dashboard_server(object(), server_factory=lambda *a, **kw: server) == 1
+
+
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
@@ -635,6 +640,7 @@ def test_default_server_factory_bounds_graceful_shutdown(
     assert captured["ssl_certfile"] == "/run/secrets/dashboard.crt"
     assert captured["ssl_keyfile"] == "/run/secrets/dashboard.key"
     assert captured["proxy_headers"] is False
+    assert captured["lifespan"] == "on"
     assert captured["server_header"] is False
 
 

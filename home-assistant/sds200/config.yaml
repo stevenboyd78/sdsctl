@@ -40,6 +40,8 @@ options:
   native_dashboard_enabled: false
   advanced_access_server_name: ""
   advanced_access_host_address: ""
+  experimental_browser_devices_enabled: false
+  browser_device_server_config: ""
 schema:
   scanner_host: "str(1,)"
   mqtt_topic_prefix: "str(1,)"
@@ -48,3 +50,5 @@ schema:
   native_dashboard_enabled: bool
   advanced_access_server_name: "str?"
   advanced_access_host_address: "str?"
+  experimental_browser_devices_enabled: bool
+  browser_device_server_config: "str?"

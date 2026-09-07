@@ -1,4 +1,4 @@
-"""Experimental browser enrollment authority, not enabled by production launchers.
+"""Experimental browser enrollment authority, disabled in server/App defaults.
 
 Every operation opens the existing private SQLite database. Missing/corrupt
 authority never creates a replacement or falls back to cached credentials.
@@ -195,6 +195,57 @@ class BrowserDeviceStore:
                                (device_id, _verifier(device_id, credential)))
         return IssuedBrowserDevice(BrowserDeviceRecord(device_id, 1, BrowserDeviceState.ACTIVE),
                                    credential)
+
+    def validate_existing(self) -> None:
+        """Read-only startup preflight, including schema and credential verifiers.
+
+        Never create a missing file, migrate a schema, or recover a database by
+        replacing it. Runtime operations still recheck authority on every use.
+        """
+        connection = None
+        try:
+            self._check()
+            # A read-only SQLite WAL open can still create -shm/-wal sidecars.
+            # Reject that file format before handing the file to SQLite.
+            descriptor = os.open(self.path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            try:
+                header = os.read(descriptor, 20)
+                if header[:16] != b"SQLite format 3\x00" or header[18:20] != b"\x01\x01":
+                    raise BrowserDeviceStoreError()
+            finally:
+                os.close(descriptor)
+            connection = sqlite3.connect(self.path.as_uri() + "?mode=ro", uri=True, timeout=2)
+            connection.execute("PRAGMA trusted_schema=OFF")
+            connection.execute("PRAGMA query_only=ON")
+            connection.execute("BEGIN")
+            if (connection.execute("PRAGMA user_version").fetchone() != (_VERSION,)
+                    or connection.execute("PRAGMA journal_mode").fetchone() != ("delete",)
+                    or connection.execute("PRAGMA quick_check").fetchall() != [("ok",)]
+                    or connection.execute(
+                        "SELECT type, name FROM sqlite_schema ORDER BY name"
+                    ).fetchall() != [("table", "devices"), ("index", "sqlite_autoindex_devices_1")]
+                    or connection.execute("PRAGMA table_info(devices)").fetchall() != [
+                        (0, "device_id", "TEXT", 0, None, 1),
+                        (1, "generation", "INTEGER", 1, None, 0),
+                        (2, "state", "TEXT", 1, None, 0),
+                        (3, "verifier", "TEXT", 1, None, 0),
+                    ]):
+                raise BrowserDeviceStoreError()
+            rows = connection.execute(
+                "SELECT device_id, generation, state, verifier FROM devices LIMIT ?",
+                (_LIMIT + 1,),
+            ).fetchall()
+            if len(rows) > _LIMIT:
+                raise BrowserDeviceStoreError()
+            for device_id, generation, state, verifier in rows:
+                _record((device_id, generation, state))
+                if type(verifier) is not str or re.fullmatch(r"[a-f0-9]{64}", verifier) is None:
+                    raise BrowserDeviceStoreError()
+        except (BrowserDeviceStoreError, OSError, TypeError, ValueError, sqlite3.Error):
+            raise BrowserDeviceStoreError() from None
+        finally:
+            if connection is not None:
+                connection.close()
 
     def inventory(self) -> tuple[BrowserDeviceRecord, ...]:
         with self._connection() as connection:

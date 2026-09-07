@@ -310,7 +310,8 @@ An experimental request guard consumes those lease signals and deadlines. It
 cancels an attached cooperative operation, waits for its cleanup and releases the
 lease on completion, failure or cancellation. Delaying request dispatch cannot
 extend the hard deadline. The opt-in HTTP adapter below uses this guard, but no
-production launcher enables it. It cannot forcibly terminate code that refuses
+released launcher enables it. The [experimental server wiring](browser-device-server.md)
+is separately opt-in. It cannot forcibly terminate code that refuses
 cooperative cancellation.
 
 The session tests include per-device isolation, independent-process pause,
@@ -394,8 +395,9 @@ Authority/worker unavailability returns a retryable failure instead.
 The private owner channel below connects that barrier across a process boundary.
 Helper-side persistent pause for offline sign-out, renewal and lost-response
 recovery, cookie installation/conflict recovery UI, production administrator wiring
-and secure live acceptance still remain. No production launcher enables this
-candidate, and these tests do not constitute browser/Pi outage acceptance.
+and secure live acceptance still remain. The separately opt-in
+[server wiring candidate](browser-device-server.md) does not change released
+defaults, and these tests do not constitute browser/Pi outage acceptance.
 
 ### Private Linux web-owner channel
 

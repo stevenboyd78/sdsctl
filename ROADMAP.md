@@ -42,13 +42,20 @@ retry and worker renewal, server restart, terminal revocation/TLS rejection and
 sign-out persistence, without seeded recovery state or injected cookies. See the
 [acceptance boundaries](docs/browser-device-first-run.md#acceptance-and-remaining-limits).
 
-The next bounded candidate adds [managed browser startup](docs/browser-device-startup.md):
+[Managed browser startup](docs/browser-device-startup.md) is merged but unreleased:
 read-only registration inspection, explicit setup versus startup, a guarded
 foreground Chromium child and a server-checked device-only display entry. Saved
 pauses/errors remain intact and recovery permission is not treated as session
 readiness. No service, browser trust or production server configuration is changed.
 
-Accepted extension distribution/updates/removal, service and server configuration wiring, explicit replacement/resume
+The next bounded candidate adds explicit opt-in
+[server and Home Assistant App configuration](docs/browser-device-server.md).
+It selects one precreated private authority, separates native HTTPS from Ingress
+administrator origins, validates before launch, and retains disabled defaults.
+It does not provision credentials, repair authority, publish ports or deploy to
+production displays.
+
+Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
 [enrollment and recovery design](docs/managed-display-enrollment-design.md).

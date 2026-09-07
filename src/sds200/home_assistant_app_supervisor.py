@@ -52,6 +52,7 @@ from .home_assistant_app_runtime import (
     build_home_assistant_native_web_command,
     build_home_assistant_web_command,
     default_home_assistant_app_runtime_paths,
+    home_assistant_native_dashboard_origin,
 )
 from .home_assistant_lovelace import (
     install_home_assistant_lovelace_cards,
@@ -561,6 +562,23 @@ def prepare_home_assistant_app_launch_plan(
             "Home Assistant App advanced runtime files must be directly inside "
             "the App runtime directory."
         )
+    browser_device_config: Path | None = None
+    if options.experimental_browser_devices_enabled:
+        from .browser_device_server import load_browser_device_server_configuration
+
+        browser_device_config = Path(options.browser_device_server_config)
+        browser_configuration = load_browser_device_server_configuration(browser_device_config)
+        browser_configuration.require_native_origin(
+            home_assistant_native_dashboard_origin(options, exposure)
+        )
+        browser_configuration.require_ingress_admin()
+        browser_snapshot = inspect_home_assistant_app_advanced_access(selected_advanced_paths)
+        if not browser_snapshot.identity_present or not browser_snapshot.dashboard_password_present:
+            raise SDS200Error(
+                "Experimental browser devices require an already prepared native HTTPS "
+                "identity and dashboard password; no services were started."
+            )
+
     write_home_assistant_app_advanced_access_context(
         selected_advanced_paths,
         selected_info,
@@ -640,7 +658,9 @@ def prepare_home_assistant_app_launch_plan(
             selected_paths,
             remote_configuration=remote_configuration,
         ),
-        web_command=build_home_assistant_web_command(selected_paths),
+        web_command=build_home_assistant_web_command(
+            selected_paths, browser_device_config=browser_device_config,
+        ),
         daemon_environment=daemon_environment,
         web_environment=web_environment,
         media_command=build_home_assistant_media_command(selected_paths),

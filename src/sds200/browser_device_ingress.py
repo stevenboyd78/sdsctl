@@ -1,4 +1,4 @@
-"""Experimental, explicit-opt-in Ingress administration; no launcher enables it.
+"""Experimental Ingress administration; enabled only by private server opt-in.
 
 Supervisor authenticates the user. A private server-configured ID allowlist grants
 enrollment administration; neither dashboard operator cookies nor forwarded

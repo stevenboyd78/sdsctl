@@ -1,4 +1,4 @@
-"""Experimental administrator workflow; no production launcher or CLI enables it.
+"""Experimental administrator workflow; server wiring is explicit opt-in only.
 
 Call only from an authenticated administrator boundary, in a bounded worker.
 This module is not authentication. Mutations commit before contacting the sole

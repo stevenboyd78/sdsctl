@@ -1772,6 +1772,17 @@ def build_parser(
         ),
     )
     web.add_argument(
+        "--experimental-browser-devices",
+        action="store_true",
+        help="Opt in to experimental managed browser sessions or Ingress administration",
+    )
+    web.add_argument(
+        "--browser-device-config",
+        type=Path,
+        metavar="PATH",
+        help="Existing private server JSON; requires --experimental-browser-devices",
+    )
+    web.add_argument(
         "--lan-listen-address",
         type=_authenticated_lan_listen_address,
         metavar="ADDRESS",
@@ -5103,6 +5114,17 @@ def _run_web(
     _reject_daemon_client_scanner_options(args)
     paths = configuration_paths or resolve_configuration_paths(environ=environ)
 
+    if args.experimental_browser_devices != (args.browser_device_config is not None):
+        raise ValueError(
+            "--experimental-browser-devices and --browser-device-config are required together."
+        )
+    if args.experimental_browser_devices and (
+        not (args.authenticated_lan or args.home_assistant_ingress) or args.container_exposure
+    ):
+        raise ValueError(
+            "Experimental browser devices require native HTTPS or Home Assistant Ingress."
+        )
+
     lan_values = (
         args.lan_listen_address,
         args.lan_origin,
@@ -5331,6 +5353,28 @@ def _run_web(
             max_record_bytes=max_waterfall_record_bytes,
         )
 
+    browser_options: dict[str, Any] = {}
+    if args.experimental_browser_devices:
+        from .browser_device_admin import BrowserDeviceAdmin
+        from .browser_device_ingress import BrowserDeviceIngress
+        from .browser_device_server import load_browser_device_server_configuration
+        from .browser_device_sessions import BrowserDeviceSessions
+        from .browser_device_store import BrowserDeviceStore
+
+        browser_configuration = load_browser_device_server_configuration(args.browser_device_config)
+        browser_store = BrowserDeviceStore(browser_configuration.authority_path)
+        if args.authenticated_lan:
+            assert lan_authentication is not None
+            browser_configuration.require_native_origin(lan_authentication.origin)
+            browser_options["browser_device_sessions"] = BrowserDeviceSessions(browser_store)
+        else:
+            browser_configuration.require_ingress_admin()
+            assert browser_configuration.ingress_origin is not None
+            browser_options["browser_device_admin_ingress"] = BrowserDeviceIngress(
+                BrowserDeviceAdmin(browser_store), browser_configuration.ingress_origin,
+                browser_configuration.admin_user_ids,
+            )
+
     app = create_web_dashboard_app(
         api_client_factory,
         event_client_factory,
@@ -5340,6 +5384,7 @@ def _run_web(
         home_assistant_ingress=args.home_assistant_ingress,
         lan_authentication=lan_authentication,
         managed_theme_root=paths.theme_dir,
+        **browser_options,
     )
     server_host = (
         args.lan_listen_address

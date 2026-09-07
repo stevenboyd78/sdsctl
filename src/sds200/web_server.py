@@ -289,6 +289,10 @@ def run_web_dashboard_server(
         ssl_keyfile=normalized_keyfile,
     )
     server.run()
+    if getattr(server, "started", True) is False:
+        # Uvicorn returns normally after a failed lifespan (including refusal of
+        # a duplicate browser-device owner). Do not report successful startup.
+        return 1
     return 0
 
 
@@ -316,6 +320,9 @@ def _default_server_factory(
         port=port,
         access_log=access_log,
         log_config=None,
+        # All dashboard apps support lifespan. Auto mode can mistake an owner
+        # acquisition error for unsupported lifespan and serve a failed app.
+        lifespan="on",
         proxy_headers=False,
         server_header=False,
         ssl_certfile=ssl_certfile,

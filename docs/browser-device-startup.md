@@ -140,8 +140,9 @@ still needs a separately reviewed abrupt-power-loss recovery policy.
 
 No service is installed or enabled. The command does not restart itself after a
 clean close, change ports/firewalls, enroll/rotate a device, install trust or
-modify Home Assistant. Server CLI/App configuration wiring, distribution and
-updates, explicit replacement/resume, service restart policy and physical
+modify Home Assistant. A separate [server configuration candidate](browser-device-server.md)
+wires the existing authority to the CLI/App behind an explicit experimental opt-in.
+Distribution and updates, explicit replacement/resume, service restart policy and physical
 multi-display/server outage tests remain separate gates.
 
 ## Acceptance boundaries
