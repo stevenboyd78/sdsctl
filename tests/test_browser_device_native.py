@@ -370,7 +370,7 @@ raise SystemExit""")
 def test_total_deadline_bounds_blocked_native_output(root):
     script = RUNNER.replace("raise SystemExit", """
 native._TOTAL_SECONDS = 0.3
-def blocked(*args):
+def blocked(*args, **kwargs):
     while True:
         os.write(1, b'x' * 65536)
 native._native_request = blocked

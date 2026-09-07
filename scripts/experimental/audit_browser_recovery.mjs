@@ -95,7 +95,7 @@ try {
   const config = {origin, identity: ready.identity, nativeHost: "org.sdsctl.browser_device"};
   if (["deadline", "truncated"].includes(scenario)) await command(scenario);
   for (const name of ["browser_device_recovery.mjs", "browser_device_logout.mjs"])
-    await copyFile(path.join(source, name), path.join(root, "extension", name));
+    await copyFile(path.join(repo, "src/sds200/browser_assets", name), path.join(root, "extension", name));
   await put("extension/manifest.json", JSON.stringify({manifest_version: 3, version: "0.0.1",
     name: "SDSCTL FICTIONAL INTEGRATED RECOVERY", key: key.toString("base64"),
     permissions: ["nativeMessaging", "storage", "cookies", "alarms"], host_permissions: [`https://${hostname}/*`],
@@ -105,7 +105,7 @@ try {
 import {connectLogoutWorker} from './browser_device_logout.mjs';
 globalThis.fixtureController=connectChromeRecovery(chrome, ${JSON.stringify(config)});
 connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
-  await put("extension/content.js", (await readFile(path.join(source, "browser_device_logout.mjs"), "utf8"))
+  await put("extension/content.js", (await readFile(path.join(repo, "src/sds200/browser_assets/browser_device_logout.mjs"), "utf8"))
     .replaceAll("export ", "") + `\nif(location.href===${JSON.stringify(origin + "/")})connectLogoutContent({document,window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n`);
   await put("extension/control.html", "<!doctype html><title>Fictional recovery control</title>");
   await put("native-host", `#!${python}\nimport os,sys\nfrom pathlib import Path\nsys.path.insert(0,${JSON.stringify(path.join(repo, "src"))})\nfrom sds200.browser_device_native import run_browser_native\nraise SystemExit(run_browser_native(Path(${JSON.stringify(root)}),sys.argv[1:],os.fdopen(os.dup(0),'rb',buffering=0),os.fdopen(os.dup(1),'wb',buffering=0)))\n`, 0o700);
@@ -193,7 +193,7 @@ connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
     browser: context.browser().version(), exchanges: beforeRestart};
   result.sourceHashes = Object.fromEntries(await Promise.all([
     "src/sds200/browser_device_native.py", "src/sds200/browser_device_recovery.py",
-    "scripts/experimental/browser_device_recovery.mjs", "scripts/experimental/browser_device_logout.mjs",
+    "src/sds200/browser_assets/browser_device_recovery.mjs", "src/sds200/browser_assets/browser_device_logout.mjs",
     "scripts/experimental/browser_recovery_server.py", "scripts/experimental/audit_browser_recovery.mjs",
   ].map(async name => [name, createHash("sha256").update(await readFile(path.join(repo, name))).digest("hex")])));
   await put("result.json", JSON.stringify(result, null, 2) + "\n"); console.log(JSON.stringify(result));

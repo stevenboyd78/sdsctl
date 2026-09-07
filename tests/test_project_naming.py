@@ -145,7 +145,9 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     for required in (
         "first-time private native-profile import and read-only offline check",
         "rotation handoffs without clearing a saved pause or terminal error",
-        "This candidate is unreleased and does not install an extension/native host",
+        "merged but unreleased",
+        "public-key-derived extension ID and identity-pinned native wrapper",
+        "Preparation does not register an extension/native host, initialize browser storage",
         "neither internal DNS nor a proxy is a product requirement",
         "physical multi-display/outage acceptance remain gates",
         "#### Closed Milestone 34.1 — Display-only native browser kiosk",

@@ -39,6 +39,9 @@ following must already have been reviewed and supplied through private channels:
 - The reviewed Chromium extension's exact 32-letter ID, using letters `a` to
   `p`. There is no production extension ID to discover or invent in this step.
   The test fixture's ID must not be substituted for a reviewed deployment ID.
+  The experimental [review-bundle tool](browser-device-bundle.md) can derive an
+  ID from a supplied reviewed public key before profile creation; it does not
+  assign a product-wide production identity or install anything.
 
 Paths must be absolute and free of symlinks. Input files must be regular,
 single-link files owned by this account, with mode `0600`. Their immediate
@@ -133,7 +136,9 @@ writes and unchanged ledger contents during offline checks. All credentials and
 certificates in those tests are fictional. They are not physical Pi, cold-boot,
 production Home Assistant, browser-extension or combined-outage acceptance.
 
-Next steps remain reviewed extension packaging/identity, native-host registration,
+An opt-in [review bundle](browser-device-bundle.md) now stages extension assets
+and an identity-pinned native launcher without registering or starting them.
+Next steps remain accepted extension distribution/updates, native-host registration,
 browser coordinator storage initialization, launcher/service wiring, explicit
 replacement/resume, server configuration and the full outage matrix. Follow the
 [enrollment and recovery design](managed-display-enrollment-design.md) for those

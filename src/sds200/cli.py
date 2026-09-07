@@ -1317,6 +1317,23 @@ def build_parser(
         help="Explicit reviewed 32-letter Chromium extension identity",
     )
 
+    browser_bundle = subparsers.add_parser(
+        "browser-device-bundle", help="Prepare an inert experimental browser review bundle",
+    )
+    browser_bundle.add_argument(
+        "--experimental", action="store_true", required=True,
+        help="Acknowledge this does not register an extension or enable unattended login",
+    )
+    bundle_actions = browser_bundle.add_subparsers(dest="browser_bundle_action", required=True)
+    bundle_identity = bundle_actions.add_parser("identity", help="Inspect a public extension key")
+    bundle_create = bundle_actions.add_parser("create", help="Prepare a new private review bundle")
+    for command in (bundle_identity, bundle_create):
+        command.add_argument("--public-key", type=Path, required=True,
+                             help="Absolute protected public SPKI PEM file; never a private key")
+    bundle_create.add_argument("--directory", type=Path, required=True)
+    bundle_create.add_argument("--profile", type=Path, required=True,
+                               help="Absolute protected experimental native profile")
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -6338,6 +6355,29 @@ def main(
                       "No extension, trust store or service was installed or started.")
                 return 0
             except BrowserProfileError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 78
+
+        if args.action == "browser-device-bundle":
+            from .browser_device_bundle import (
+                BrowserBundleError,
+                browser_extension_identity,
+                create_browser_bundle,
+            )
+
+            try:
+                if args.browser_bundle_action == "create":
+                    key = create_browser_bundle(args.directory, profile=args.profile,
+                                                public_key=args.public_key)
+                    print("Experimental review bundle created; selected profile was not changed.")
+                else:
+                    key = browser_extension_identity(args.public_key)
+                print(f"Extension ID: {key.extension_id}")
+                print(f"Public key SHA-256: {key.public_key_sha256}")
+                print("No browser registration, saved-state initialization or login occurred. "
+                      "This is not a production installer or proof of trusted distribution.")
+                return 0
+            except BrowserBundleError as error:
                 print(f"error: {error}", file=sys.stderr)
                 return 78
 

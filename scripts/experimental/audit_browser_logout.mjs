@@ -115,7 +115,7 @@ try {
   assert(/^[a-f0-9]{64}$/.test(identity));
   const config = {origin, identity, nativeHost: "org.sdsctl.browser_device"};
   for (const name of ["browser_device_recovery.mjs", "browser_device_logout.mjs"])
-    await copyFile(path.join(source, name), path.join(extension, name));
+    await copyFile(path.join(repo, "src/sds200/browser_assets", name), path.join(extension, name));
   await put("extension/manifest.json", JSON.stringify({manifest_version: 3,
     name: "SDSCTL FICTIONAL LOGOUT ACCEPTANCE", version: "0.0.1", key: publicKey.toString("base64"),
     permissions: ["nativeMessaging", "cookies", "storage", "alarms"], host_permissions: ["https://127.0.0.1/*"],
@@ -128,7 +128,7 @@ ${cookieOperation ? cookieProbeWorkerSource(cookieOperation) : "const recoveryCh
 globalThis.fixtureController = connectChromeRecovery(recoveryChrome, config);
 connectLogoutWorker(chrome, fixtureController, config.origin);
 `);
-  await put("extension/content.js", (await readFile(path.join(source, "browser_device_logout.mjs"), "utf8"))
+  await put("extension/content.js", (await readFile(path.join(repo, "src/sds200/browser_assets/browser_device_logout.mjs"), "utf8"))
     .replaceAll("export ", "") + `\nif (location.href === ${JSON.stringify(origin + "/")})
 connectLogoutContent({document,window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)}, ${JSON.stringify(origin)});\n`);
   await put("extension/control.html", "<!doctype html><title>Fixture control</title>");

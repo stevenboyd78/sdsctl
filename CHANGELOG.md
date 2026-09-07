@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add opt-in experimental `browser-device-bundle --experimental identity/create`
+  commands to validate a public extension key and prepare a new private MV3/native
+  host review bundle. Package canonical browser modules and pin the native wrapper
+  to the selected profile identity. Never register, initialize browser state,
+  copy private credentials, clear recovery state, or enable production login.
 - Add explicit experimental `browser-device-profile --experimental create/check`
   commands for first-time private enrollment-file import and read-only local
   inspection. Validate configuration, file protections and certificate-bundle
