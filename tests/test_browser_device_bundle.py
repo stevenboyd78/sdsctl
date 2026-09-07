@@ -166,10 +166,11 @@ def test_manifest_assets_receipt_and_no_secret_copy(tmp_path, public_key, profil
     manifest = json.loads((extension / "manifest.json").read_bytes())
     config = native.load_browser_native_configuration(profile)
     assert manifest["manifest_version"] == 3
-    assert manifest["permissions"] == ["nativeMessaging", "storage", "cookies", "alarms"]
+    assert manifest["permissions"] == ["nativeMessaging", "storage", "cookies", "alarms", "tabs"]
     assert manifest["host_permissions"] == ["https://127.0.0.1:8443/*"]
     assert manifest["content_scripts"] == [{
-        "matches": ["https://127.0.0.1:8443/"], "js": ["content.js"],
+        "matches": ["https://127.0.0.1:8443/", "https://127.0.0.1:8443/device-display"],
+        "js": ["content.js"],
         "run_at": "document_start", "all_frames": False, "world": "ISOLATED",
     }]
     assert manifest["incognito"] == "not_allowed"
@@ -193,7 +194,9 @@ def test_manifest_assets_receipt_and_no_secret_copy(tmp_path, public_key, profil
         canonical = bundle.files("sds200.browser_assets").joinpath(name).read_bytes()
         assert actual["extension/" + name] == canonical
     assert "initialBrowserRecoveryState" not in (extension / "worker.mjs").read_text()
-    assert "window === window.top && location.href ===" in (extension / "content.js").read_text()
+    assert "window === window.top && ['/', '/device-display']" in (
+        extension / "content.js"
+    ).read_text()
 
 
 @pytest.mark.parametrize("origin,pattern", [
@@ -209,7 +212,7 @@ def test_generated_scope_supports_dns_and_ip(public_key, tmp_path, origin, patte
     }).encode())
     manifest = json.loads(bundle._artifacts(tmp_path, config, key)["extension/manifest.json"])
     assert manifest["host_permissions"] == [pattern + "*"]
-    assert manifest["content_scripts"][0]["matches"] == [pattern]
+    assert manifest["content_scripts"][0]["matches"] == [pattern, pattern + "device-display"]
 
 
 def test_generated_worker_and_content_execute_with_empty_state_and_exact_scope(
@@ -231,11 +234,13 @@ const handlers = [];
 const forbidden = () => assert.fail('Unprovisioned worker attempted native I/O or state writes');
 globalThis.chrome = {
   runtime: {id, getURL: name => `chrome-extension://${id}/${name}`,
+    onStartup: {addListener: () => {}}, onInstalled: {addListener: () => {}},
     onMessage: {addListener: fn => handlers.push(fn)}, sendNativeMessage: forbidden},
   storage: {local: {setAccessLevel: async level =>
     assert.deepEqual(level,{accessLevel:'TRUSTED_CONTEXTS'}),
     get: async () => ({}), set: forbidden}},
   cookies: {remove: async () => null, get: async () => null, set: forbidden},
+  tabs: {onUpdated: {addListener: () => {}}, query: async () => [], reload: forbidden},
   alarms: {onAlarm: {addListener: () => {}}, create: forbidden, clear: async () => true},
 };
 await import(pathToFileURL(extension + '/worker.mjs'));
@@ -246,6 +251,7 @@ for (const handler of handlers) handler({action:'status'},
 assert.equal(response.mode, 'setup_error');
 const content = readFileSync(extension + '/content.js', 'utf8');
 for (const [href, child, count] of [[origin+'/',false,1], [origin+'/',true,0],
+  [origin+'/device-display',false,1], [origin+'/device-display?extra',false,0],
   [origin+'/?query',false,0], [origin+'/other',false,0], ['https://127.0.0.1:9443/',false,0],
   ['https://another.example/',false,0]]) {
   let listeners=0;

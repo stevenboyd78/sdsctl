@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add experimental `browser-device-start --experimental` with read-only checks
+  of an existing canonical registration, an explicit `--setup` choice and a
+  guarded foreground Chromium launcher. Show managed startup/waiting/paused/error
+  states and distinguish verified session installation from recovery permission.
+  Add an opt-in device-only server entry and renewable dashboard session checks;
+  never fall back to a password login, reset state, install trust or enable services.
 - Add opt-in experimental `browser-device-register --experimental` for canonical
   native-host registration into a new dedicated Chromium data directory, plus an
   explicit password-free first-run page. Persist setup intent before a one-time

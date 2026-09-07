@@ -184,6 +184,17 @@ is not a recovery instruction. Desktop/small-page screenshots and all fixture
 outputs are retained; no system/browser trust or production service is changed.
 See [the registration and first-run guide](../../docs/browser-device-first-run.md).
 
+The generated recovery harness also accepts a final `startup` argument after
+the scenario and identity (`ip`, `dns` or `ipv6`). This runs the installed
+`browser-device-start --experimental` CLI through a fixture-only headless/CDP
+executable, verifies the setup-required page and explicit `--setup` launch, and
+waits for automatic navigation to the guarded device-only entry. It then checks
+sign-out or terminal rejection across another managed launch. The default
+`review` mode retains the earlier direct Playwright launch. Both modes use
+fictional loopback authority, normal sandboxing and isolated verified TLS;
+neither changes a production display service or proves a physical power outage.
+See [the experimental startup guide](../../docs/browser-device-startup.md).
+
 `src/sds200/browser_assets/browser_device_recovery.mjs` is the coordinator for the actual
 native-helper protocol, not a replacement silently installed into the earlier
 fixture. The modules now ship as canonical Python package assets; the entries
@@ -198,6 +209,7 @@ Run the dependency-free deterministic JavaScript contract tests with:
 node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
+node --test scripts/experimental/test_browser_device_startup.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests
@@ -208,8 +220,9 @@ generation races, unsafe state and the Chrome adapter's message/cookie checks.
 
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
-bridge and document-bound completion tickets; it is not registered or deployed.
-The existing dashboard sign-out form is not connected in any installed build.
+bridge and document-bound completion tickets. The registered experimental bundle
+connects the display-only dashboard sign-out form in the isolated installed-wheel
+fixtures above; released manual kiosks and production services are unchanged.
 Real-browser interruption evidence is recorded below. Local pause and cookie
 removal are not proof of server-side stream revocation. No resume message exists.
 

@@ -63,6 +63,7 @@ export function createBrowserRecovery(ports, settings) {
   let failure = false, inFlight = null, pauseSaved = false;
   let holdForLogout = false, logoutStart = null;
   let missing = false, setupAttempted = false;
+  let readyUntil = 0; // Process-local proof of a completed verified installation, never persisted.
   const now = () => {
     const value = ports.now();
     if (!finite(value, Number.MAX_SAFE_INTEGER)) throw new Error("clock");
@@ -78,6 +79,7 @@ export function createBrowserRecovery(ports, settings) {
   const arm = async seconds => ports.schedule(now() + Math.max(30, seconds) * 1000);
   const holding = () => holdForLogout || (state?.phase === "logout_pending" && state.nextAt > now());
   const clear = async (force = false) => {
+    readyUntil = 0;
     if (!force && holding()) return; // Preserve authentication until server logout is submitted.
     await ports.clearCookie(); // Adapter must verify absence, not just request removal.
   };
@@ -205,6 +207,7 @@ export function createBrowserRecovery(ports, settings) {
     await arm(30);
     if (!current()) return {mode: "paused"};
     const started = now();
+    readyUntil = 0;
     const result = await native("authenticate");
     if (!current()) return {mode: "paused"};
     if (!result.session) {
@@ -248,10 +251,16 @@ export function createBrowserRecovery(ports, settings) {
     await save();
     if (!current()) { await clear(); return {mode: "paused"}; }
     await arm(Math.max(0, (state.nextAt - now()) / 1000));
+    if (current()) readyUntil = expiry;
     return {mode: "active"};
   }
 
   return Object.freeze({
+    readiness: () => ({
+      mode: missing && !setupAttempted ? "setup_required" : failure ? "setup_error" :
+        stopRequested || state?.paused ? "paused" : view,
+      sessionReady: !missing && !failure && !stopRequested && !state?.paused && readyUntil > now(),
+    }),
     initialize: () => {
       // Same worker queue as recovery. Refusal must not cancel a valid display's
       // alarms/cookies or change its saved state. No automatic caller uses this.
@@ -385,6 +394,22 @@ export function connectChromeRecovery(chrome, settings) {
     if (alarm.name === RECOVERY_ALARM) void controller.tick();
   });
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL("startup.html") &&
+        sender.frameId === 0 && sender.documentLifecycle === "active" &&
+        typeof sender.documentId === "string" && sender.documentId.length > 0 &&
+        Number.isSafeInteger(sender.tab?.id) && sender.tab.id >= 0 && sender.tab.incognito === false &&
+        exact(message, ["action"]) && message.action === "startup-status") {
+      // No start/claim/resume and no native polling. Worker initialization and
+      // real alarms own recovery. The server rechecks authority at the display entry.
+      const result = controller.readiness();
+      void chrome.cookies.get(cookieKey).then(cookie => respond({...result,
+        sessionReady: result.sessionReady && controller.readiness().sessionReady &&
+          cookie?.secure === true && cookie.httpOnly === true && cookie.hostOnly === true &&
+          cookie.path === "/" && cookie.sameSite === "strict" &&
+          cookie.expirationDate > Date.now() / 1000,
+      })).catch(() => respond({mode: "setup_error", sessionReady: false}));
+      return true;
+    }
     if (sender.id === chrome.runtime.id && sender.url === chrome.runtime.getURL("setup.html") &&
         sender.frameId === 0 && sender.documentLifecycle === "active" &&
         typeof sender.documentId === "string" && sender.documentId.length > 0 &&
@@ -395,7 +420,7 @@ export function connectChromeRecovery(chrome, settings) {
       return true;
     }
     if (sender.id !== chrome.runtime.id ||
-        !["startup.html", "control.html"].some(page => sender.url === chrome.runtime.getURL(page)) ||
+        sender.url !== chrome.runtime.getURL("control.html") ||
         !exact(message, ["action"]) || !["start", "status", "suspend"].includes(message.action)) return false;
     if (message.action === "status") { respond(controller.status()); return false; }
     void (message.action === "suspend" ? controller.suspend() : controller.tick()).then(respond);

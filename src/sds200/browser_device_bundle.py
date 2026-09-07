@@ -29,7 +29,8 @@ from .browser_device_store import BrowserDeviceStore
 from .exceptions import ConfigurationError
 
 NATIVE_HOST = "org.sdsctl.browser_device"
-MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs")
+MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs",
+           "browser_device_startup.mjs")
 
 
 class BrowserBundleError(ConfigurationError):
@@ -113,18 +114,20 @@ def _artifacts(
     # entrypoint without exposing its symbols in the page or requiring WAR access.
     content = "(() => {\n" + re.sub(r"^export (?=(?:async )?function )", "", logout,
                                     flags=re.MULTILINE)
-    content += (f"\nif (window === window.top && location.href === {origin} + '/') "
+    content += ("\nif (window === window.top && ['/', '/device-display'].some(p => "
+                f"location.href === {origin} + p)) "
                 "connectLogoutContent({document, window, runtime: chrome.runtime, "
                 f"fetcher: fetch.bind(globalThis)}}, {origin});\n}})();\n")
     result.update({
         "extension/manifest.json": _json({
-            "manifest_version": 3, "version": "0.0.2",
+            "manifest_version": 3, "version": "0.0.3",
             "name": "SDSCTL experimental device recovery review",
             "key": key.manifest_key,
-            "permissions": ["nativeMessaging", "storage", "cookies", "alarms"],
+            "permissions": ["nativeMessaging", "storage", "cookies", "alarms", "tabs"],
             "host_permissions": [pattern + "*"],
             "background": {"service_worker": "worker.mjs", "type": "module"},
-            "content_scripts": [{"matches": [pattern], "js": ["content.js"],
+            "content_scripts": [{"matches": [pattern, pattern + "device-display"],
+                                 "js": ["content.js"],
                                  "run_at": "document_start", "all_frames": False,
                                  "world": "ISOLATED"}],
             "incognito": "not_allowed",
@@ -135,9 +138,11 @@ def _artifacts(
         "extension/worker.mjs": (
             "import {connectChromeRecovery} from './browser_device_recovery.mjs';\n"
             "import {connectLogoutWorker} from './browser_device_logout.mjs';\n"
+            "import {connectBrowserEntry} from './browser_device_startup.mjs';\n"
             f"const config = {settings};\n"
             "const controller = connectChromeRecovery(chrome, config);\n"
             "connectLogoutWorker(chrome, controller, config.origin);\n"
+            "connectBrowserEntry(chrome);\n"
         ).encode("ascii"),
         "extension/content.js": content.encode("utf-8"),
         "extension/control.html": (
@@ -150,6 +155,21 @@ def _artifacts(
             "import {connectBrowserSetupPage} from './browser_device_setup.mjs';\n"
             "connectBrowserSetupPage({document, window, runtime: chrome.runtime});\n"
         ).encode("ascii"),
+        "extension/startup.mjs": (
+            "import {connectBrowserStartupPage} from './browser_device_startup.mjs';\n"
+            f"connectBrowserStartupPage({{document, window, runtime: chrome.runtime}}, {origin});\n"
+        ).encode("ascii"),
+        "extension/startup.html": (
+            "<!doctype html><html lang='en'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>SDSCTL managed display startup</title><link rel='stylesheet' href='setup.css'>"
+            "<main><h1>SDSCTL managed display</h1><p>Experimental startup</p><dl>"
+            f"<dt>Server</dt><dd>{html.escape(config.origin)}</dd>"
+            f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd></dl>"
+            "<p id='notice' role='status'>Starting managed display…</p>"
+            "<p>This page never initializes, repairs or resumes a profile automatically.</p>"
+            "</main><script type='module' src='startup.mjs'></script></html>\n"
+        ).encode(),
         "extension/setup.html": (
             "<!doctype html><html lang='en'><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"

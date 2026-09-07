@@ -1342,6 +1342,18 @@ def build_parser(
     for option in ("directory", "bundle", "profile", "public-key"):
         browser_register.add_argument("--" + option, type=Path, required=True)
 
+    browser_start = subparsers.add_parser(
+        "browser-device-start", help="Check or launch an experimental managed Chromium display",
+    )
+    browser_start.add_argument("--experimental", action="store_true", required=True)
+    for option in ("directory", "bundle", "profile", "public-key", "browser"):
+        browser_start.add_argument("--" + option, type=Path, required=True)
+    browser_start_mode = browser_start.add_mutually_exclusive_group()
+    browser_start_mode.add_argument("--check", action="store_true",
+                                    help="Offline read-only check; no browser or native request")
+    browser_start_mode.add_argument("--setup", action="store_true",
+                                    help="Open explicit first-run setup instead of managed startup")
+
     display_preflight = subparsers.add_parser(
         "display-client-preflight",
         help="Validate an observe-only managed remote TUI display",
@@ -6406,6 +6418,28 @@ def main(
                       "or browser/service started. Do not use a personal browser profile.")
                 return 0
             except BrowserRegistrationError as error:
+                print(f"error: {error}", file=sys.stderr)
+                return 78
+
+        if args.action == "browser-device-start":
+            from .browser_device_startup import (
+                BrowserStartupError,
+                check_browser_startup,
+                run_browser_startup,
+            )
+
+            try:
+                if args.check:
+                    check_browser_startup(args.directory, browser=args.browser, bundle=args.bundle,
+                                          profile=args.profile, public_key=args.public_key)
+                    print("Experimental registration is valid offline. No browser was started "
+                          "or state reset. Server login and browser trust are not confirmed.")
+                    return 0
+                return run_browser_startup(
+                    args.directory, browser=args.browser, bundle=args.bundle,
+                    profile=args.profile, public_key=args.public_key, setup=args.setup,
+                )
+            except BrowserStartupError as error:
                 print(f"error: {error}", file=sys.stderr)
                 return 78
 

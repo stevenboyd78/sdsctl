@@ -28,7 +28,8 @@ unreleased, with a public-key-derived extension ID and identity-pinned native wr
 Preparation does not register an extension/native host, initialize browser storage, enable
 production enrollment or start an unattended display.
 
-The next bounded candidate adds [controlled registration and explicit first-run](docs/browser-device-first-run.md).
+[Controlled registration and explicit first-run](docs/browser-device-first-run.md)
+are merged but unreleased.
 Registration accepts only a new dedicated Chromium directory and the canonical
 reviewed bundle. Browser initialization requires explicit confirmation, a pending
 marker and a one-time pristine-native-profile claim. Neither step authenticates,
@@ -41,7 +42,13 @@ retry and worker renewal, server restart, terminal revocation/TLS rejection and
 sign-out persistence, without seeded recovery state or injected cookies. See the
 [acceptance boundaries](docs/browser-device-first-run.md#acceptance-and-remaining-limits).
 
-Accepted extension distribution/updates/removal, launcher/service and server wiring, explicit replacement/resume
+The next bounded candidate adds [managed browser startup](docs/browser-device-startup.md):
+read-only registration inspection, explicit setup versus startup, a guarded
+foreground Chromium child and a server-checked device-only display entry. Saved
+pauses/errors remain intact and recovery permission is not treated as session
+readiness. No service, browser trust or production server configuration is changed.
+
+Accepted extension distribution/updates/removal, service and server configuration wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
 [enrollment and recovery design](docs/managed-display-enrollment-design.md).

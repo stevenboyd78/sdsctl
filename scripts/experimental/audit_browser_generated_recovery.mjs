@@ -14,24 +14,27 @@ import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 if (process.argv[2] === "--help") {
-  console.log("Usage: node audit_browser_generated_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL INSTALLED_PYTHON [SCENARIO] [ip|dns|ipv6]");
+  console.log("Usage: node audit_browser_generated_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL INSTALLED_PYTHON [SCENARIO] [ip|dns|ipv6] [review|startup]");
   console.log("Scenarios: healthy, deadline, truncated, tls-eof, server-restart, worker-restart, revoke, bad-ca, bad-name.");
   console.log("Non-root Linux, five absolute paths, private existing stage, installed candidate wheel with web dependencies.");
   console.log("Actual CLI/generated bundle/setup form; no recovery-state seeding, cookie injection or production access.");
   console.log("Sandbox and verified TLS required; bwrap isolates temporary certificate trust. Retains fictional fixtures.");
+  console.log("startup runs the installed foreground CLI with fixture-only headless/CDP flags, not a physical display.");
   process.exit(0);
 }
-const [stage, playwright, executable, certutil, python, scenario = "healthy", identityKind = "ip"] = process.argv.slice(2);
+const [stage, playwright, executable, certutil, python, scenario = "healthy", identityKind = "ip",
+  flow = "review"] = process.argv.slice(2);
 assert(process.platform === "linux" && process.getuid() !== 0);
 assert([stage, playwright, executable, certutil, python].every(p => p && path.isAbsolute(p)));
 assert(["healthy", "deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "bad-ca", "bad-name"].includes(scenario));
 assert(["ip", "dns", "ipv6"].includes(identityKind));
+assert(["review", "startup"].includes(flow));
 const info = await lstat(stage);
 assert(info.isDirectory() && !info.isSymbolicLink() && info.uid === process.getuid() &&
   (info.mode & 0o777) === 0o700 && await realpath(stage) === stage, "Unsafe stage");
 const source = path.dirname(fileURLToPath(import.meta.url));
 const root = await mkdtemp(path.join(stage, "generated-"));
-const step = name => console.log(JSON.stringify({step: name, scenario, identityKind, fixture: root}));
+const step = name => console.log(JSON.stringify({step: name, scenario, identityKind, flow, fixture: root}));
 step("prepare");
 for (const name of ["nssdb", "data/pki/nssdb", "config", "cache", "t"])
   await mkdir(path.join(root, name), {recursive: true, mode: 0o700});
@@ -110,7 +113,12 @@ const until = async (check, timeout = 15000) => {
   while (Date.now() < deadline) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 200)); }
   throw new Error("Acceptance condition timed out");
 };
-let context;
+// Installed foreground Chromium can take ~23 seconds to initialize its cookie
+// store in this isolated cold-start fixture. Terminal reporting waits for verified
+// cleanup, so use a bounded startup deadline rather than weakening the assertion
+// or selecting a different password-store/security mode for the test browser.
+const terminalStartupTimeout = 60000;
+let context, launcher;
 try {
   const ready = await receive(); assert(ready.ready); backendPort = ready.port;
   cli(["browser-device-profile", "--experimental", "create", "--directory", path.join(root, "native"),
@@ -123,15 +131,49 @@ try {
     "--public-key", path.join(root, "extension.pub.pem")]);
   const receipt = JSON.parse(await readFile(path.join(root, "bundle/bundle.json")));
   const legacy = path.join(os.homedir(), ".pki/nssdb"), mount = existsSync(legacy) ? legacy : path.join(root, "data/pki/nssdb");
-  await put("browser", `#!/usr/bin/python3\nimport os,sys\nos.execvp('bwrap',['bwrap','--ro-bind','/','/','--bind',${JSON.stringify(root)},${JSON.stringify(root)},'--bind',${JSON.stringify(nss)},${JSON.stringify(mount)},'--dev-bind','/dev','/dev','--proc','/proc','--',${JSON.stringify(executable)},*sys.argv[1:]])\n`, 0o700);
+  const fixtureFlags = flow === "startup" ? ["--headless", "--remote-debugging-port=0"] : [];
+  await put("browser", `#!/usr/bin/python3\nimport os,sys\nextra=[] if sys.argv[1:]==['--version'] else ${JSON.stringify(fixtureFlags)}\nos.execvp('bwrap',['bwrap','--ro-bind','/','/','--bind',${JSON.stringify(root)},${JSON.stringify(root)},'--bind',${JSON.stringify(nss)},${JSON.stringify(mount)},'--dev-bind','/dev','/dev','--proc','/proc','--',${JSON.stringify(executable)},*extra,*sys.argv[1:]])\n`, 0o700);
   const {chromium} = await import(pathToFileURL(playwright));
   const extension = path.join(root, "bundle/extension");
-  const launch = () => chromium.launchPersistentContext(path.join(root, "browser-data"), {
+  const environment = {...process.env, XDG_CONFIG_HOME: path.join(root, "config"),
+    XDG_CACHE_HOME: path.join(root, "cache"), XDG_DATA_HOME: path.join(root, "data"),
+    TMPDIR: path.join(root, "t")};
+  const launchArguments = ["browser-device-start", "--experimental", "--directory", path.join(root,"browser-data"),
+    "--bundle",path.join(root,"bundle"),"--profile",path.join(root,"native"),
+    "--public-key",path.join(root,"extension.pub.pem"),"--browser",path.join(root,"browser")];
+  const reviewLaunch = () => chromium.launchPersistentContext(path.join(root, "browser-data"), {
     executablePath: path.join(root, "browser"), chromiumSandbox: true, headless: true, timeout: 20000,
-    env: {...process.env, XDG_CONFIG_HOME: path.join(root, "config"), XDG_CACHE_HOME: path.join(root, "cache"),
-      XDG_DATA_HOME: path.join(root, "data"), TMPDIR: path.join(root, "t")},
+    env: environment,
     ignoreDefaultArgs: ["--disable-extensions"],
     args: [`--load-extension=${extension}`, `--disable-extensions-except=${extension}`]});
+  const launch = async (setup = false) => {
+    if(flow === "review") return reviewLaunch();
+    assert(cli([...launchArguments,"--check"]).includes("valid offline"));
+    const activePort=path.join(root,"browser-data/DevToolsActivePort");
+    const previous=await lstat(activePort).then(s=>s.mtimeMs).catch(()=>null);
+    const child=spawn(python,["-I","-c","from sds200.cli import main; raise SystemExit(main())",
+      ...launchArguments,...(setup?["--setup"]:[])],
+    {cwd:root,env:{...environment,DISPLAY:environment.DISPLAY||":fixture"},stdio:["ignore","pipe","pipe"]});
+    launcher=child;child.stdout.resume();child.stderr.resume();
+    let ended=false,code;const ending=new Promise(resolve=>child.once("exit",value=>{ended=true;code=value;resolve();}));
+    let port;
+    await until(async()=>{
+      assert(!ended,"Managed launcher exited before CDP readiness");
+      const info=await lstat(activePort).catch(()=>null);
+      if(!info||info.mtimeMs===previous)return false;
+      port=Number((await readFile(activePort,"utf8")).split("\n")[0]);
+      return Number.isSafeInteger(port)&&port>0&&port<65536;
+    },25000);
+    const browser=await chromium.connectOverCDP(`http://127.0.0.1:${port}`);
+    const result=browser.contexts()[0];assert(result);
+    result.close=async()=>{
+      if(!ended){const session=await browser.newBrowserCDPSession();
+        await session.send("Browser.close").catch(()=>{});}
+      await until(()=>ended,15000);await ending;await browser.close();
+      assert.equal(code,0,"Managed launcher did not observe a clean close");launcher=null;
+    };
+    return result;
+  };
   let control;
   const openControl = async () => {
     control = await context.newPage(); await control.goto(`chrome-extension://${id}/control.html`);
@@ -153,7 +195,19 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   await until(async () => await mode() === "setup_error");
   assert.equal((await command("status")).exchanges, 0);
   assert.equal(Object.keys(await stored()).length, 0); assert(!await hasCookie());
-  const setup = await context.newPage(); await setup.goto(`chrome-extension://${id}/setup.html`);
+  if(flow === "startup") {
+    await until(()=>context.pages().some(p=>p.url()===`chrome-extension://${id}/startup.html`));
+    const startup=context.pages().find(p=>p.url()===`chrome-extension://${id}/startup.html`);
+    assert(startup,"Launcher did not open its fixed startup page");
+    await startup.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("First-run setup"));
+    await startup.screenshot({path:path.join(root,"startup-required.png")});
+    await context.close();context=await launch(true);await openControl();
+    await until(()=>context.pages().some(p=>p.url()===`chrome-extension://${id}/setup.html`));
+  }
+  const setup = flow === "startup" ? context.pages().find(p=>p.url()===`chrome-extension://${id}/setup.html`)
+    : await context.newPage();
+  assert(setup,"Explicit setup launch did not open its fixed page");
+  if(flow === "review") await setup.goto(`chrome-extension://${id}/setup.html`);
   assert.equal(await setup.locator("dd").nth(0).textContent(), origin);
   assert.equal(await setup.locator("dd").nth(1).textContent(), "fixture");
   assert.equal(await setup.locator("dd").nth(2).textContent(), id);
@@ -167,7 +221,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   await context.close(); context = await launch(); await openControl();
   const trustFailure = ["bad-ca", "bad-name"].includes(scenario);
   if (trustFailure) {
-    await until(async () => await mode() === "tls_error");
+    await until(async () => await mode() === "tls_error", terminalStartupTimeout);
     assert.equal((await command("status")).exchanges, 0); assert(!await hasCookie());
     step("untrusted-peer-rejected-before-credential");
   } else {
@@ -190,9 +244,23 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     await until(async () => await mode() === "active" && await hasCookie(), 100000);
     const cookies = await context.cookies(origin);
     assert(cookies.some(c => c.name === "__Host-sdsctl-device-session" && c.httpOnly && c.secure && c.sameSite === "Strict"));
-    const page = await context.newPage(); await page.goto(origin);
-    const sessionStatus = () => page.evaluate(async () => (await fetch("/auth/session")).status);
-    assert.equal(await sessionStatus(), 200); assert.equal(await page.evaluate(() => document.cookie), "");
+    let page;
+    if(flow === "startup") {
+      await until(()=>context.pages().some(p=>p.url()===origin+"/device-display"));
+      page=context.pages().find(p=>p.url()===origin+"/device-display");
+      await page.waitForLoadState("domcontentloaded");
+      await page.bringToFront();
+    } else {page = await context.newPage(); await page.goto(origin);}
+    const sessionStatus = async () => {
+      try {return await page.evaluate(async () => (await fetch("/auth/session")).status);}
+      catch {return 0;} // A managed entry may navigate during a read; never count it as a pass.
+    };
+    await until(async()=>await sessionStatus()===200);
+    assert.equal(await page.evaluate(() => document.cookie), "");
+    if(flow === "startup") {
+      await page.getByRole("button",{name:"Open dashboard menu",exact:true}).waitFor();
+      await page.screenshot({path:path.join(root,"managed-display.png")});
+    }
     const denied = await page.evaluate(async () => Promise.all([
       ["/api/v1/control", "POST"], ["/api/v1/audio", "GET"], ["/api/v1/recordings", "GET"],
       ["/api/v1/recordings/file/fixture", "GET"], ["/api/v1/admin", "POST"],
@@ -200,7 +268,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     assert(denied.every(status => status === 403), "Display-only privilege boundary failed");
     step("authenticated-display-only");
     if (scenario === "server-restart") {
-      await command("restart"); assert.equal(await sessionStatus(), 401);
+      await command("restart"); await until(async()=>await sessionStatus()===401);
       step("await-server-restart-recovery");
       await until(async () => await sessionStatus() === 200, 100000);
     }
@@ -219,7 +287,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await until(async () => await sessionStatus() === 200); await cdp.detach();
     }
     if (scenario === "revoke") {
-      await command("revoke"); assert.equal(await sessionStatus(), 401);
+      await command("revoke"); await until(async()=>await sessionStatus()===401);
       await until(async () => await mode() === "credential_rejected", 100000);
       await until(async () => !await hasCookie()); step("revocation-rejected");
     } else {
@@ -228,18 +296,28 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await page.getByRole("button", {name: "Sign out and pause automatic login", exact: true}).click();
       await until(async () => (await command("status")).state === "paused");
       await until(async () => !await hasCookie());
-      assert.equal(await sessionStatus(), 401);
+      await until(async()=>await sessionStatus()===401);
     }
   }
   const beforeRestart = (await command("status")).exchanges;
   await context.close(); context = await launch(); await openControl();
   const expected = trustFailure ? "tls_error" : scenario === "revoke" ? "credential_rejected" : "paused";
-  await until(async () => await mode() === expected);
+  await until(async () => await mode() === expected, terminalStartupTimeout);
   assert.equal((await command("status")).exchanges, beforeRestart); assert(!await hasCookie());
+  if(flow === "startup") {
+    const startup=context.pages().find(p=>p.url()===`chrome-extension://${id}/startup.html`);assert(startup);
+    const expectedNotice = trustFailure ? "Certificate verification failed." : scenario === "revoke"
+      ? "This display credential was rejected or revoked." : "Automatic sign-in is paused.";
+    await startup.waitForFunction(prefix=>document.getElementById("notice").textContent.startsWith(prefix),
+      expectedNotice, {timeout:terminalStartupTimeout});
+    await startup.screenshot({path:path.join(root,"startup-terminal.png")});
+    assert(context.pages().every(p=>!p.url().includes("/auth/login")&&!p.url().includes("/auth/display/login")));
+  }
   const browserState = JSON.stringify(await stored());
   const secret = (await readFile(path.join(root, "native/device.secret"), "utf8")).trim();
   assert(!browserState.includes(secret) && !browserState.includes("sdsctl-browser-session-v1."), "Secret persisted in browser storage");
-  const result = {passed: true, scenario, identityKind, browser: context.browser().version(),
+  const result = {passed: true, scenario, identityKind, flow, managedLauncher:flow==="startup",
+    physicalDisplay:false,browser: context.browser().version(),
     installedRuntime: true, generatedBundle: true, realSetupForm: true, realASGI: true,
     realNative: true, sandbox: true, verifiedTLS: true, stateSeeding: false, cookieInjection: false,
     firstRunExchanges: 0, exchanges: beforeRestart, restartMode: expected, realAlarms: true,
@@ -251,6 +329,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   step("passed"); console.log(JSON.stringify(result));
 } finally {
   try { await context?.close(); } finally {
+    if(launcher&&launcher.exitCode===null) launcher.kill("SIGTERM");
     if (!exited) {
       service.stdin.end(JSON.stringify({action: "stop"}) + "\n");
       await new Promise(resolve => {

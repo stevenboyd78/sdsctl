@@ -152,6 +152,15 @@ test("document-bound single-use completion cannot be replayed to upgrade outcome
   assert.equal(first.serverRevocation, "unconfirmed"); assert.deepEqual(replay, first);
 });
 
+test("device-only entry keeps the same exact-document sign-out protocol",async()=>{
+  const f=fixture(),c=f.make(),w=worker(c);
+  const sender={...w.sender,url:origin+"/device-display"};
+  const prepared=await w.send({action:"logout-begin"},sender);
+  assert.equal(prepared.submit,true);
+  const done=await w.send({action:"logout-finish",ticket:prepared.ticket,outcome:"unconfirmed"},sender);
+  assert.equal(done.mode,"paused");assert.equal(f.cookie,null);
+});
+
 for (const change of [{frameId: 1}, {origin: "https://evil.example"}, {url: origin + "/other"},
   {id: "other"}, {documentLifecycle: "prerender"}, {documentId: undefined},
   {tab: {id: 7, incognito: true}}]) {
