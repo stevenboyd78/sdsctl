@@ -15,6 +15,7 @@ from sds200.browser_device_ingress import BROWSER_ADMIN_PATH
 from sds200.browser_device_server import (
     BrowserDeviceServerError,
     load_browser_device_server_configuration,
+    parse_browser_device_server_configuration,
 )
 from sds200.browser_device_store import BrowserDeviceState, BrowserDeviceStore
 
@@ -90,6 +91,8 @@ def test_invalid_configuration_is_redacted_and_nonmutating(server_files, field, 
     document[field] = value
     path.write_text(json.dumps(document))
     before = snapshot(path.parent)
+    with pytest.raises(BrowserDeviceServerError):
+        parse_browser_device_server_configuration(path.read_bytes())
     with pytest.raises(BrowserDeviceServerError) as caught:
         load_browser_device_server_configuration(path)
     assert "fictional-secret" not in str(caught.value)
@@ -102,6 +105,8 @@ def test_invalid_configuration_is_redacted_and_nonmutating(server_files, field, 
 def test_malformed_config_refused(server_files, body):
     path, *_ = server_files
     path.write_bytes(body)
+    with pytest.raises(BrowserDeviceServerError):
+        parse_browser_device_server_configuration(body)
     with pytest.raises(BrowserDeviceServerError):
         load_browser_device_server_configuration(path)
 

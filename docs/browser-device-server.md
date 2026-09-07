@@ -15,9 +15,10 @@ Home Assistant accounts and remote-TUI credentials.
 
 A reviewer must prepare an isolated Linux server account, a **precreated** browser
 authority and a working native HTTPS dashboard. Authority creation is a separate,
-explicit lab provisioning step; this command has no initialize, repair, import,
-reset or migration option. A missing database is an error, never an invitation to
-start over. Keep every existing authority and its owner lock for review.
+explicit lab preparation step using the candidate command below; web/App startup
+has no initialize, repair, import, reset or migration option. A missing database
+is an error, never an invitation to start over. Keep every existing authority
+and its owner lock for review.
 
 The native dashboard still requires its existing operator-password file and TLS
 certificate/key. Managed devices do not use that password. A separate manual
@@ -28,6 +29,83 @@ Both server processes must run as the same Linux account and see the same
 authority path. The Home Assistant App already provides that shared filesystem
 and account. This boundary trusts that account and root; it is not protection
 against a compromised server account.
+
+## Prepare a new lab server without starting it
+
+The unreleased `browser-device-server --experimental create` command prepares
+only an **empty** authority and its private configuration. It does not enroll a
+display, generate a password/certificate, contact Home Assistant, publish a port,
+start a web process or install a service. Both origins below are configuration
+choices, not proof that HTTPS is working at those addresses.
+
+Run as the Linux account that will run the server. Files belong to that account;
+the command does not change owners. Unlike the browser client, a server running
+as root inside an App container may prepare its files as root there. Do not use
+`sudo` on an ordinary server if its web processes run as another account.
+
+First select a **new** lab parent directory and create it with private permissions.
+For the example account `scanner`:
+
+```sh
+mkdir -m 700 /home/scanner/browser-server-lab
+```
+
+If that directory already exists, stop and inspect it or select a different new
+lab location. Do not delete an existing setup or loosen file permissions.
+
+For an isolated Ingress-capable server, substitute your reviewed origins and
+administrator ID in this example. The repeated `0123...` value is a placeholder,
+not an account to authorize:
+
+```sh
+sdsctl browser-device-server --experimental create \
+  --directory /home/scanner/browser-server-lab/prepared \
+  --native-origin https://192.168.1.10:8443 \
+  --ingress-origin https://ha.example.test \
+  --admin-user-id 0123456789abcdef0123456789abcdef
+```
+
+Repeat `--admin-user-id` for each explicitly authorized Home Assistant user
+(1–32 unique IDs). For a standalone native-only lab, replace `--ingress-origin`
+and **all** `--admin-user-id` options with `--native-only`. One of those two
+administration choices is required; neither is inferred. Native-only preparation
+does not supply a standalone enrollment workflow and cannot enable the App's
+Ingress administration. No shared password or TUI credential belongs in these
+arguments.
+
+The command creates a new mode-`0700` `prepared` directory with just two
+mode-`0600` files: `authority.sqlite` and `server.json`. Every existing destination
+is refused, including an empty directory or this command's own previous output.
+It validates input before writing, creates files exclusively and publishes
+`server.json` last. There is no overwrite, repair, resume or cleanup option.
+
+An interrupted or failed preparation retains any created files and reports that
+completion could not be confirmed. Do not rerun creation over that directory or
+delete it to suppress an error. A final write/sync failure can leave readable
+files despite an unconfirmed result; retain them for review. A read-only check
+does not establish that an interrupted filesystem write survived a power loss.
+
+## Check an existing server offline
+
+```sh
+sdsctl browser-device-server --experimental check \
+  --server-config /home/scanner/browser-server-lab/prepared/server.json
+```
+
+This reads the same private JSON/database as web startup. It accepts both an
+empty authority and a used authority containing active, paused or revoked
+devices. No records, credential generations, owner locks or saved state are
+changed; unsafe/missing/corrupt files are refused, not repaired. It can also
+check a previously prepared configuration at another absolute private path.
+
+Success means **offline configuration validity**, not a running server, a
+reachable origin, trusted browser/helper TLS or a successfully enrolled display.
+These commands deliberately do not load the ordinary scanner configuration or
+configure log files, even if global configuration/logging options were supplied.
+No scanner, browser or network operation is performed. Output is redacted and
+does not list administrator IDs, device records or private configuration values.
+Exit status is `0` for success, `78` for a preparation/check failure and `2` for
+invalid or incomplete command syntax.
 
 ## The private configuration file
 
@@ -173,6 +251,13 @@ processes, a confirmed cross-process revoke, native restart/session invalidation
 and duplicate-owner refusal. It exposed an automatic-lifespan fallback; the
 candidate now requires ASGI lifespan and returns a nonzero startup-failure exit.
 See the [repeatable audit](../scripts/experimental/README.md#installed-server-command-wiring).
+
+The preparation candidate extends that audit to create the empty authority
+through the installed CLI instead of an internal Python call, check it before
+enrollment and after revocation without modification, and refuse repeated
+creation without replacing its contents. Unit tests additionally cover competing
+creators, interrupted preparation, unsafe targets, shared parser rejection and
+read-only preservation of all three device states.
 
 These tests use synthetic authority and no live scanner. They are not physical
 Pi, power-outage, browser-only missing-trust or production App acceptance.

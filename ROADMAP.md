@@ -48,12 +48,19 @@ foreground Chromium child and a server-checked device-only display entry. Saved
 pauses/errors remain intact and recovery permission is not treated as session
 readiness. No service, browser trust or production server configuration is changed.
 
-The next bounded candidate adds explicit opt-in
-[server and Home Assistant App configuration](docs/browser-device-server.md).
+Explicit opt-in
+[server and Home Assistant App configuration](docs/browser-device-server.md)
+is merged but unreleased.
 It selects one precreated private authority, separates native HTTPS from Ingress
 administrator origins, validates before launch, and retains disabled defaults.
 It does not provision credentials, repair authority, publish ports or deploy to
 production displays.
+
+The next bounded candidate adds offline `browser-device-server --experimental
+create/check`: explicit new-directory preparation of an empty authority and
+private JSON, and read-only checking of existing configuration. It shares the
+server parser, preserves existing/partial outputs and device state, and never
+enrolls a display or enables a service. IP, DNS and IPv6 remain first-class.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
