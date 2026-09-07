@@ -44,17 +44,12 @@ class BrowserDeviceServerConfiguration:
             )
 
 
-def load_browser_device_server_configuration(path: Path) -> BrowserDeviceServerConfiguration:
-    """Bounded private-file read and read-only existing-authority preflight.
-
-    This is not a readiness claim: the HTTPS lifespan must still acquire its
-    sole-owner lock and acknowledgement socket before it can serve requests.
-    Configuration edits require a coordinated restart of both web processes.
-    """
+def parse_browser_device_server_configuration(body: bytes) -> BrowserDeviceServerConfiguration:
+    """Pure bounded schema validation; does not open or create the authority."""
     try:
-        if sys.platform != "linux" or not isinstance(path, Path) or not path.is_absolute():
+        if type(body) is not bytes or not 0 < len(body) <= 16384:
             raise ValueError()
-        value = json.loads(_private_read(path.parent, path.name, 16384), object_pairs_hook=_object)
+        value = json.loads(body, object_pairs_hook=_object)
         if (type(value) is not dict
                 or set(value) != {"version", "authority_path", "native_origin", "ingress_admin"}
                 or type(value["version"]) is not int or value["version"] != 1
@@ -77,8 +72,30 @@ def load_browser_device_server_configuration(path: Path) -> BrowserDeviceServerC
                 raise ValueError()
             origin = ingress["origin"]
         authority = Path(value["authority_path"])
-        BrowserDeviceStore(authority).validate_existing()
+        if not authority.is_absolute():
+            raise ValueError()
         return BrowserDeviceServerConfiguration(authority, value["native_origin"], origin, users)
+    except Exception:
+        raise BrowserDeviceServerError(
+            "Browser-device server configuration fields are invalid."
+        ) from None
+
+
+def load_browser_device_server_configuration(path: Path) -> BrowserDeviceServerConfiguration:
+    """Bounded private-file read and read-only existing-authority preflight.
+
+    This is not a readiness claim: the HTTPS lifespan must still acquire its
+    sole-owner lock and acknowledgement socket before it can serve requests.
+    Configuration edits require a coordinated restart of both web processes.
+    """
+    try:
+        if sys.platform != "linux" or not isinstance(path, Path) or not path.is_absolute():
+            raise ValueError()
+        config = parse_browser_device_server_configuration(
+            _private_read(path.parent, path.name, 16384),
+        )
+        BrowserDeviceStore(config.authority_path).validate_existing()
+        return config
     except Exception:
         raise BrowserDeviceServerError(
             "Browser-device server configuration or existing authority is invalid or unsafe. "

@@ -22,7 +22,6 @@ from urllib.parse import urlencode
 import sds200
 from sds200.browser_device_http import BROWSER_DEVICE_COOKIE, BROWSER_DEVICE_EXCHANGE_PATH
 from sds200.browser_device_ingress import BROWSER_ADMIN_PATH
-from sds200.browser_device_store import BrowserDeviceStore
 
 ADMIN_ORIGIN = "https://ha.example.test"
 UID = "a" * 32
@@ -59,12 +58,31 @@ def scenario(root: Path, executable: Path, mode: str) -> dict[str, object]:
         "-keyout", str(root / "tls.key"), "-out", str(root / "tls.pem"),
     ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
     (root / "tls.key").chmod(0o600)
-    store = BrowserDeviceStore.initialize(root / "authority.sqlite")
-    config = root / "server.json"
-    private_write(config, json.dumps({
-        "version": 1, "authority_path": str(store.path), "native_origin": origin,
-        "ingress_admin": {"origin": ADMIN_ORIGIN, "user_ids": [UID]},
-    }).encode())
+    prepared = root / "prepared"
+    config = prepared / "server.json"
+    authority = prepared / "authority.sqlite"
+    prepare_command = [str(executable), "browser-device-server", "--experimental", "create",
+                       "--directory", str(prepared), "--native-origin", origin,
+                       "--ingress-origin", ADMIN_ORIGIN, "--admin-user-id", UID]
+
+    def offline(command, label, expected=0):
+        completed = subprocess.run(command, capture_output=True, timeout=15)
+        private_write(root / (label + ".log"), completed.stdout + completed.stderr)
+        assert completed.returncode == expected, "Offline preparation/check returned wrong outcome"
+        return completed
+
+    def check_unchanged(label):
+        before = {p.name: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                  for p in prepared.iterdir()}
+        checked = offline([str(executable), "browser-device-server", "--experimental", "check",
+                           "--server-config", str(config)], label)
+        assert b"Offline server checks passed" in checked.stdout
+        assert before == {p.name: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                          for p in prepared.iterdir()}
+        return before
+
+    offline(prepare_command, "preparation")
+    check_unchanged("check-empty")
     private_write(root / "operator.secret", b"fictional operator fixture password")
     common = [str(executable), "web", "--experimental-browser-devices",
               "--browser-device-config", str(config), "--no-access-log",
@@ -185,16 +203,22 @@ def scenario(root: Path, executable: Path, mode: str) -> dict[str, object]:
         assert b"Outcome: confirmed" in body, "Cross-process revoke was not acknowledged"
         assert native("/device-display", headers=current_cookie)[0] == 401
         assert exchange(credential)[0] == 401
-        assert credential.encode() not in store.path.read_bytes()
+        assert credential.encode() not in authority.read_bytes()
         stop(replacement)
         stop(ingress)
         assert replacement.returncode in (0, -signal.SIGTERM)
         assert ingress.returncode in (0, -signal.SIGTERM)
+        before = check_unchanged("check-revoked")
+        offline(prepare_command, "existing-refused", expected=78)
+        assert before == {p.name: (p.read_bytes(), p.stat().st_mode, p.stat().st_mtime_ns)
+                          for p in prepared.iterdir()}
         for log in root.glob("*.log"):
             assert credential.encode() not in log.read_bytes(), "Credential appeared in server log"
             if log.name != "duplicate-owner.log":
                 assert b"Exception" not in log.read_bytes(), "Unexpected server exception"
         return {"mode": mode, "passed": True, "tls_verified": True,
+                "installed_preparation": True, "read_only_empty_and_revoked_checks": True,
+                "existing_preparation_refused": True,
                 "native_restart": True, "old_session_denied": True,
                 "duplicate_owner_nonzero_exit": True, "cross_process_revoke_confirmed": True}
     finally:

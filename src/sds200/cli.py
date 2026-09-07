@@ -1287,6 +1287,27 @@ def build_parser(
         "--preflight-only", action="store_true", help="Check HTTPS without launching",
     )
 
+    browser_server = subparsers.add_parser(
+        "browser-device-server", help="Prepare/check an experimental server offline",
+    )
+    browser_server.add_argument("--experimental", action="store_true", required=True,
+                                help="Acknowledge offline preparation, not production enablement")
+    server_actions = browser_server.add_subparsers(dest="browser_server_action", required=True)
+    server_create = server_actions.add_parser("create", help="Prepare a new empty authority")
+    server_create.add_argument("--directory", type=Path, required=True,
+                               help="New absolute directory inside an owned mode-0700 parent")
+    server_create.add_argument("--native-origin", required=True, metavar="HTTPS_ORIGIN")
+    server_admin = server_create.add_mutually_exclusive_group(required=True)
+    server_admin.add_argument("--native-only", action="store_true",
+                              help="Explicitly omit Ingress administration; not an App setup")
+    server_admin.add_argument("--ingress-origin", metavar="HTTPS_ORIGIN",
+                              help="Exact administrator-facing Home Assistant HTTPS origin")
+    server_create.add_argument("--admin-user-id", action="append", default=[],
+                               help="Explicit allowed Home Assistant user ID; repeat for each ID")
+    server_check = server_actions.add_parser("check", help="Read-only config/authority check")
+    server_check.add_argument("--server-config", type=Path, required=True,
+                              help="Absolute existing private server JSON; no network checks")
+
     browser_profile = subparsers.add_parser(
         "browser-device-profile", help="Experimental offline browser-device profile setup",
     )
@@ -6313,6 +6334,31 @@ def _run_discovery(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_browser_device_server_setup(args: argparse.Namespace) -> int:
+    from .browser_device_server import (
+        BrowserDeviceServerError,
+        load_browser_device_server_configuration,
+    )
+    from .browser_device_server_setup import prepare_browser_device_server
+
+    try:
+        if args.browser_server_action == "create":
+            prepare_browser_device_server(
+                args.directory, native_origin=args.native_origin, native_only=args.native_only,
+                ingress_origin=args.ingress_origin, admin_user_ids=tuple(args.admin_user_id),
+            )
+            print("Experimental empty authority and server configuration created.")
+        else:
+            load_browser_device_server_configuration(args.server_config)
+        print("Offline server checks passed; no devices were enrolled or state reset.")
+        print("Server readiness and TLS trust are not confirmed. "
+              "No service, listener, password or trust store was created or changed.")
+        return 0
+    except BrowserDeviceServerError as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 78
+
+
 def main(
     argv: list[str] | None = None,
     *,
@@ -6323,6 +6369,11 @@ def main(
     parser = build_parser(suppress_configuration_defaults=True)
     enable_tab_completion(parser)
     args = parser.parse_args(arguments)
+
+    # This explicit offline tool must not load scanner defaults or open a
+    # configured log file, especially during a read-only authority check.
+    if args.action == "browser-device-server":
+        return _run_browser_device_server_setup(args)
 
     try:
         _apply_cli_configuration(

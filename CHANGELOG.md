@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add experimental `browser-device-server --experimental create/check` for
+  explicit offline preparation of an empty private enrollment authority and
+  read-only inspection of existing server configuration. Require a new target
+  directory and explicit native-only or Ingress-administrator settings; preserve
+  existing/partial outputs and reject unsafe inputs without repair. Do not load
+  scanner/logging defaults, enroll devices, change trust/ports or start services.
 - Add explicit experimental server and Home Assistant App configuration for
   managed browser sessions and Ingress administration. Require a precreated
   private authority, separate canonical HTTPS origins and an administrator-ID

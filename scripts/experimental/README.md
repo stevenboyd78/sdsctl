@@ -54,6 +54,14 @@ loopback interface**. No host interface, route, firewall, DNS or service changes
 are made. If namespace creation fails, stop; do not run the fixture on the host
 network instead.
 
+The candidate's installed `browser-device-server --experimental create` command
+prepares each case's empty authority and server JSON; the harness no longer
+initializes those through an internal Python call. Its installed `check` command
+must preserve bytes, modes, modification times and directory entries both before
+enrollment and after revocation. A repeated `create` must fail without replacing
+anything. The namespace maps the invoking account to root, also exercising the
+server's support for same-account container-root preparation.
+
 The test starts separate real Ingress/native processes, validates certificates
 and hostnames normally, exercises one-time enrollment and disjoint origins,
 rejects forwarded-peer impersonation, checks device-only permissions, confirms
