@@ -104,6 +104,13 @@ worker restart it waits for a new successful renewal, possibly until the saved
 deadline; it does not treat an old cookie or persisted `active` mode as proof.
 Status checks do not drive authentication or bypass backoff.
 
+Cold startup can also wait for Chromium's cookie store before cleanup and status
+reporting finish. The isolated Chromium qualification fixture measured an initial
+cookie read of about 23 seconds; its terminal-startup checks allow at most 60
+seconds and still require the exact saved state, absent cookie and visible
+terminal message. This is not a universal browser startup-time guarantee. Do not
+reset a profile or weaken browser security settings to shorten that wait.
+
 The opt-in server factory checks device authority again at `/device-display`.
 An extension-to-website navigation is cross-site: this exact top-level entry
 serves only the public waiting shell on that first request, even with a cookie.

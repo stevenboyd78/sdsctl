@@ -113,6 +113,11 @@ const until = async (check, timeout = 15000) => {
   while (Date.now() < deadline) { if (await check()) return; await new Promise(resolve => setTimeout(resolve, 200)); }
   throw new Error("Acceptance condition timed out");
 };
+// Installed foreground Chromium can take ~23 seconds to initialize its cookie
+// store in this isolated cold-start fixture. Terminal reporting waits for verified
+// cleanup, so use a bounded startup deadline rather than weakening the assertion
+// or selecting a different password-store/security mode for the test browser.
+const terminalStartupTimeout = 60000;
 let context, launcher;
 try {
   const ready = await receive(); assert(ready.ready); backendPort = ready.port;
@@ -216,7 +221,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   await context.close(); context = await launch(); await openControl();
   const trustFailure = ["bad-ca", "bad-name"].includes(scenario);
   if (trustFailure) {
-    await until(async () => await mode() === "tls_error");
+    await until(async () => await mode() === "tls_error", terminalStartupTimeout);
     assert.equal((await command("status")).exchanges, 0); assert(!await hasCookie());
     step("untrusted-peer-rejected-before-credential");
   } else {
@@ -297,11 +302,14 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   const beforeRestart = (await command("status")).exchanges;
   await context.close(); context = await launch(); await openControl();
   const expected = trustFailure ? "tls_error" : scenario === "revoke" ? "credential_rejected" : "paused";
-  await until(async () => await mode() === expected);
+  await until(async () => await mode() === expected, terminalStartupTimeout);
   assert.equal((await command("status")).exchanges, beforeRestart); assert(!await hasCookie());
   if(flow === "startup") {
     const startup=context.pages().find(p=>p.url()===`chrome-extension://${id}/startup.html`);assert(startup);
-    await startup.waitForFunction(()=>!document.getElementById("notice").textContent.startsWith("Starting"));
+    const expectedNotice = trustFailure ? "Certificate verification failed." : scenario === "revoke"
+      ? "This display credential was rejected or revoked." : "Automatic sign-in is paused.";
+    await startup.waitForFunction(prefix=>document.getElementById("notice").textContent.startsWith(prefix),
+      expectedNotice, {timeout:terminalStartupTimeout});
     await startup.screenshot({path:path.join(root,"startup-terminal.png")});
     assert(context.pages().every(p=>!p.url().includes("/auth/login")&&!p.url().includes("/auth/display/login")));
   }
