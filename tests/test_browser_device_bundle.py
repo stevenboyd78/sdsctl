@@ -294,7 +294,7 @@ def test_launcher_isolated_quoting_and_exact_caller(tmp_path, public_key, profil
     assert invoke(root, config.extension_origin)["mode"] == "paused"
 
 
-@pytest.mark.parametrize("action", ["status", "authenticate", "suspend"])
+@pytest.mark.parametrize("action", ["status", "authenticate", "suspend", "claim-browser"])
 def test_pinned_identity_rejects_before_ledger_or_secret_access(profile, monkeypatch, action):
     config = native.load_browser_native_configuration(profile)
     def forbidden(*args, **kwargs):

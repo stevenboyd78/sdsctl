@@ -11,6 +11,136 @@ const deferred = () => { let resolve, reject; const promise = new Promise((a, b)
 }); return {promise, resolve, reject}; };
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
+function freshFixture() {
+  const f = fixture(); f.saved = undefined; f.revision = 1;
+  const native = f.ports.native;
+  f.ports.native = async request => {
+    if (request.action !== "claim-browser") return native(request);
+    f.calls.push(request.action);
+    assert.equal(f.saved.phase, "setup_pending");
+    assert.equal(f.saved.paused, true);
+    if (f.revision !== 1 || f.nativeMode !== "active") return {version:1,ok:false,mode:"setup_error"};
+    f.revision = 2;
+    return f.status();
+  };
+  return f;
+}
+
+test("first-run is explicit, records pending before claim, and does not authenticate", async () => {
+  const f = freshFixture(), c = f.make();
+  assert.equal((await c.tick()).mode, "setup_error");
+  assert.equal(f.saved, undefined); assert.deepEqual(f.calls, []);
+  assert.deepEqual(await c.initialize(), {mode:"ready"});
+  assert.deepEqual(f.calls, ["claim-browser"]);
+  assert.deepEqual(f.saved, initialBrowserRecoveryState(config));
+  assert.equal(f.cookie,null); assert.equal(f.alarm,null);
+  assert.equal((await c.tick()).mode,"active");
+  const snapshot = structuredClone([f.saved,f.cookie,f.alarm]);
+  assert.equal((await c.initialize()).mode,"setup_refused");
+  assert.deepEqual([f.saved,f.cookie,f.alarm],snapshot);
+});
+
+test("simultaneous setup requests consume one native claim", async () => {
+  const f = freshFixture(), c = f.make();
+  const results = await Promise.all(Array.from({length:20},()=>c.initialize()));
+  assert.equal(results.filter(x=>x.mode === "ready").length,1);
+  assert.equal(results.filter(x=>x.mode === "setup_refused").length,19);
+  assert.deepEqual(f.calls,["claim-browser"]);
+});
+
+for (const saved of [null, {}, {...initialBrowserRecoveryState(config), paused:true},
+  {...initialBrowserRecoveryState(config), identity:"d".repeat(64)},
+  {...initialBrowserRecoveryState(config), phase:"setup_pending", paused:true},
+  initialBrowserRecoveryState(config)]) {
+  test(`setup refuses existing state without modifying it: ${JSON.stringify(saved)}`, async () => {
+    const f=freshFixture(); f.saved=structuredClone(saved);
+    const before=structuredClone(f.saved);
+    assert.equal((await f.make().initialize()).mode,"setup_refused");
+    assert.deepEqual(f.saved,before); assert.deepEqual(f.calls,[]);
+  });
+}
+
+for (const stage of ["read", "pending-save", "clear", "cancel", "claim", "final-save"]) {
+  test(`interrupted first-run stays blocked: ${stage}`, async () => {
+    const f=freshFixture();
+    if (stage === "read") f.ports.load=async()=>{throw new Error("private");};
+    if (stage === "clear") f.ports.clearCookie=async()=>{throw new Error("private");};
+    if (stage === "cancel") f.ports.cancel=async()=>{throw new Error("private");};
+    if (stage === "claim") f.ports.native=async()=>{throw new BrowserNativeDisconnected();};
+    const save=f.ports.save;
+    if (stage.endsWith("save")) f.ports.save=async state=> {
+      if ((stage === "pending-save") === (state.phase === "setup_pending")) throw new Error("private");
+      return save(state);
+    };
+    const c=f.make();
+    const result=await c.initialize();
+    assert(["setup_refused","setup_error"].includes(result.mode));
+    assert(!JSON.stringify(result).includes("private"));
+    assert.equal((await c.initialize()).mode,"setup_refused");
+    assert(!f.calls.includes("authenticate"));
+    if (["clear","cancel","claim","final-save"].includes(stage)) {
+      assert.equal(f.saved.phase,"setup_pending");
+      assert.equal((await f.make().initialize()).mode,"setup_refused");
+    }
+  });
+}
+
+test("worker loss after native claim cannot turn a pending marker into recovery", async () => {
+  const f=freshFixture(), native=f.ports.native;
+  f.ports.native=async request=>{await native(request);throw new BrowserNativeDisconnected();};
+  assert.equal((await f.make().initialize()).mode,"setup_error");
+  assert.equal(f.revision,2); assert.equal(f.saved.phase,"setup_pending");
+  assert.equal((await f.make().tick()).mode,"setup_error");
+  assert.equal((await f.make().initialize()).mode,"setup_refused");
+});
+
+test("deleted browser state cannot reuse an already consumed native claim", async () => {
+  const f=freshFixture();
+  assert.equal((await f.make().initialize()).mode,"ready");
+  f.saved=undefined;
+  assert.equal((await f.make().initialize()).mode,"setup_error");
+  assert.equal(f.saved.phase,"setup_pending");
+  assert(!f.calls.includes("authenticate"));
+});
+
+for (const stop of ["suspend","beginLogout"]) {
+  test(`${stop} wins during a first-run native claim`, async () => {
+    const f=freshFixture(), gate=deferred(), native=f.ports.native;
+    f.ports.native=async request=>{
+      const value=await native(request);
+      if(request.action === "claim-browser") await gate.promise;
+      return value;
+    };
+    const c=f.make(), initialized=c.initialize();
+    await settle();
+    const stopped=c[stop](); await settle();
+    assert.equal(f.saved.paused,true);
+    gate.resolve(); await initialized; await stopped;
+    assert.equal(f.saved.paused,true); assert.equal(f.nativeMode,"paused");
+    assert(!f.calls.includes("authenticate"));
+    assert.equal((await f.make().tick()).mode,"paused");
+  });
+}
+
+test("native pause after claiming is not cleared by browser initialization", async () => {
+  const f=freshFixture(), native=f.ports.native;
+  f.ports.native=async request=>{
+    const value=await native(request);
+    if(request.action === "claim-browser") f.nativeMode="paused";
+    return value;
+  };
+  const c=f.make(); assert.equal((await c.initialize()).mode,"ready");
+  assert.equal((await c.tick()).mode,"paused");
+  assert(!f.calls.includes("authenticate"));
+});
+
+test("committed first-run state survives worker loss without claiming twice", async () => {
+  const f=freshFixture();
+  assert.equal((await f.make().initialize()).mode,"ready");
+  assert.equal((await f.make().tick()).mode,"active");
+  assert.equal(f.calls.filter(x=>x === "claim-browser").length,1);
+});
+
 function fixture(saved = initialBrowserRecoveryState(config)) {
   const f = {saved, cookie: null, alarm: null, time: 1000000, calls: [], writes: [],
     revision: 2, nativeMode: "active"};
@@ -302,6 +432,28 @@ function adapterFixture(f, changeCookie = value => value) {
         return changeCookie({...details, hostOnly: true, session: false}); }},
   };
 }
+
+test("first-run messages require the exact active top-level setup document", async () => {
+  const f = freshFixture(), chrome = adapterFixture(f);
+  let listener;
+  chrome.runtime.onMessage = {addListener: callback => { listener = callback; }};
+  connectChromeRecovery(chrome, config); await settle();
+  const sender = {id: chrome.runtime.id, url: chrome.runtime.getURL("setup.html"),
+    frameId: 0, documentId: "current-document", documentLifecycle: "active", tab: {id: 1, incognito: false}};
+  const deny = () => assert.fail("Unauthorized setup responded");
+  for (const change of [{id: "other"}, {url: config.origin + "/"},
+    {url: sender.url + "?extra"}, {url: chrome.runtime.getURL("control.html")},
+    {frameId: 1}, {documentId: ""}, {documentLifecycle: "cached"}, {tab: undefined},
+    {tab: {id: -1}}, {tab: {id: "1"}}, {tab: {id: 1, incognito: true}}]) {
+    assert.equal(listener({action: "initialize"}, {...sender, ...change}, deny), false);
+  }
+  assert.equal(listener({action: "initialize", origin: config.origin}, sender, deny), false);
+  assert.deepEqual(f.calls, []); assert.equal(f.saved, undefined);
+  const response = deferred();
+  assert.equal(listener({action: "initialize"}, sender, response.resolve), true);
+  assert.deepEqual(await response.promise, {mode: "ready"});
+  assert.deepEqual(f.calls, ["claim-browser"]);
+});
 
 for (const change of [() => null, x => ({...x, name: "operator"}),
   x => ({...x, httpOnly: false}), x => ({...x, secure: false}),

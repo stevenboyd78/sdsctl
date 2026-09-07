@@ -22,14 +22,26 @@ neither internal DNS nor a proxy is a product requirement.
 The first-time private native-profile import and read-only offline check are
 merged but unreleased. They reject unsafe inputs, existing profiles and rotation
 handoffs without clearing a saved pause or terminal error. See the
-[experimental setup guide](docs/browser-device-profile.md). The next bounded
-candidate prepares a [private review bundle](docs/browser-device-bundle.md) with a
-public-key-derived extension ID and identity-pinned native wrapper. Preparation
-does not register an extension/native host, initialize browser storage, enable
+[experimental setup guide](docs/browser-device-profile.md). The
+[private review bundle](docs/browser-device-bundle.md) is also merged but
+unreleased, with a public-key-derived extension ID and identity-pinned native wrapper.
+Preparation does not register an extension/native host, initialize browser storage, enable
 production enrollment or start an unattended display.
 
-Accepted extension distribution/updates, native-host registration, browser storage
-initialization, launcher/service and server wiring, explicit replacement/resume
+The next bounded candidate adds [controlled registration and explicit first-run](docs/browser-device-first-run.md).
+Registration accepts only a new dedicated Chromium directory and the canonical
+reviewed bundle. Browser initialization requires explicit confirmation, a pending
+marker and a one-time pristine-native-profile claim. Neither step authenticates,
+clears saved pauses/errors, enables production enrollment or starts a service.
+
+The installed CLI/generated bundle/real setup path passed 19 isolated
+authentication and recovery cases on Linux/aarch64: nine scenarios each for
+verified IPv4 and DNS, plus healthy IPv6 login/sign-out. This includes real-clock
+retry and worker renewal, server restart, terminal revocation/TLS rejection and
+sign-out persistence, without seeded recovery state or injected cookies. See the
+[acceptance boundaries](docs/browser-device-first-run.md#acceptance-and-remaining-limits).
+
+Accepted extension distribution/updates/removal, launcher/service and server wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
 [enrollment and recovery design](docs/managed-display-enrollment-design.md).

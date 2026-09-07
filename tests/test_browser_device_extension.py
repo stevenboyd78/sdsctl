@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -11,6 +12,7 @@ import pytest
 
 from sds200.browser_device_native import load_browser_native_configuration
 from sds200.browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
+from tests.test_browser_device_native import certificates as certificates
 
 
 def test_browser_recovery_coordinator_contract() -> None:
@@ -20,6 +22,7 @@ def test_browser_recovery_coordinator_contract() -> None:
     result = subprocess.run(
         [node, "--test", "scripts/experimental/test_browser_device_recovery.mjs",
          "scripts/experimental/test_browser_device_logout.mjs",
+         "scripts/experimental/test_browser_device_setup.mjs",
          "scripts/experimental/test_browser_cookie_interruption.mjs"],
         capture_output=True, text=True, timeout=30,
     )
@@ -51,7 +54,8 @@ def test_generated_bundle_harness_help_is_non_mutating() -> None:
         capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0 and result.stderr == ""
-    assert "no login or production access" in result.stdout
+    assert "no dashboard login or production access" in result.stdout
+    assert "[review|first-run]" in result.stdout
     assert "sandbox required" in result.stdout
 
 
@@ -66,6 +70,81 @@ def test_integrated_recovery_harness_help_is_non_mutating() -> None:
     assert result.returncode == 0 and result.stderr == ""
     assert "Actual ASGI/native/Chromium on loopback only" in result.stdout
     assert "No cookie injection; real clocks and retry alarms" in result.stdout
+
+
+def test_generated_recovery_harness_help_is_non_mutating() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "scripts/experimental/audit_browser_generated_recovery.mjs", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    assert "Actual CLI/generated bundle/setup form" in result.stdout
+    assert "no recovery-state seeding, cookie injection or production access" in result.stdout
+    assert "Sandbox and verified TLS required" in result.stdout
+    assert "bad-ca, bad-name" in result.stdout
+
+
+@pytest.mark.skipif(not sys.platform.startswith("linux") or os.geteuid() == 0,
+                    reason="Non-root Linux fixture/native profile")
+@pytest.mark.parametrize("generated", [False, True])
+def test_recovery_fixture_delivery_modes_keep_native_state_ownership(
+    tmp_path, certificates, generated,
+):
+    from sds200.browser_device_profile import create_browser_profile
+    from sds200.browser_device_store import BrowserDeviceStore
+
+    root = tmp_path / "generated"
+    root.mkdir(mode=0o700)
+    for name, source in [("server.pem", certificates[0][0]), ("server.key", certificates[0][1]),
+                         ("ca.pem", certificates[0][0])]:
+        target = root / name
+        target.write_bytes(source.read_bytes())
+        target.chmod(0o600)
+    if not generated:
+        target = root / "client.json"
+        target.write_text(json.dumps({"version": 1, "origin": "https://localhost",
+                                      "device_id": "fixture",
+                                      "extension_origin": "chrome-extension://" + "a" * 32 + "/"}))
+        target.chmod(0o600)
+    result = subprocess.run(
+        [sys.executable, "-I", "scripts/experimental/browser_recovery_server.py",
+         str(root), "https://localhost", *(["generated"] if generated else [])],
+        input='{"action":"status"}\n{"action":"stop"}\n', capture_output=True, text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, "Fictional generated server failed"
+    replies = [json.loads(line) for line in result.stdout.splitlines()]
+    assert replies[0]["ready"]
+    assert replies[1] == {"action": "status", "exchanges": 0, "state": "active"}
+    store = BrowserDeviceStore(root / "authority/devices.sqlite")
+    if not generated:
+        config = load_browser_native_configuration(root)
+        assert replies[0]["identity"] == config.identity
+        ledger = BrowserDeviceRecovery(root / "recovery.sqlite", config.identity)
+        assert ledger.inspect().revision == 1
+        secret = (root / "device.secret").read_text()
+        assert store.authenticate("fixture", secret) is not None
+        assert secret not in result.stdout + result.stderr
+        assert not (root / "enrollment.json").exists()
+        return
+    assert replies[0]["identity"] is None
+    assert not (root / "device.secret").exists()
+    assert not (root / "recovery.sqlite").exists()
+    assert not (root / "client.json").exists()
+    attachment = root / "enrollment.json"
+    assert attachment.stat().st_mode & 0o777 == 0o600
+    issued = json.loads(attachment.read_bytes())
+    assert issued["credential"] not in result.stdout + result.stderr
+    assert issued["outcome"] == {"status": "issued", "completed": False}
+    state = create_browser_profile(
+        root / "native", enrollment_file=attachment, ca_file=root / "ca.pem",
+        origin="https://localhost", device_id="fixture", extension_id="a" * 32,
+    )
+    assert state.revision == 1 and state.mode is RecoveryMode.ACTIVE
+    assert store.authenticate("fixture", issued["credential"]) is not None
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux native supervisor")

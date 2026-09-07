@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add opt-in experimental `browser-device-register --experimental` for canonical
+  native-host registration into a new dedicated Chromium data directory, plus an
+  explicit password-free first-run page. Persist setup intent before a one-time
+  pristine-native-ledger claim; refuse existing, interrupted or reused state
+  without clearing pauses or errors. Do not launch, authenticate, install trust,
+  change services or enable unattended production login.
 - Add opt-in experimental `browser-device-bundle --experimental identity/create`
   commands to validate a public extension key and prepare a new private MV3/native
   host review bundle. Package canonical browser modules and pin the native wrapper

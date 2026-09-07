@@ -138,8 +138,10 @@ production Home Assistant, browser-extension or combined-outage acceptance.
 
 An opt-in [review bundle](browser-device-bundle.md) now stages extension assets
 and an identity-pinned native launcher without registering or starting them.
-Next steps remain accepted extension distribution/updates, native-host registration,
-browser coordinator storage initialization, launcher/service wiring, explicit
+A separate [registration and explicit first-run candidate](browser-device-first-run.md)
+adds new-directory-only registration and a one-time pristine-native-profile claim
+for browser-state initialization. It does not launch or authenticate a display.
+Next steps remain accepted extension distribution/updates/removal, launcher/service wiring, explicit
 replacement/resume, server configuration and the full outage matrix. Follow the
 [enrollment and recovery design](managed-display-enrollment-design.md) for those
 gates. The concise production installation wiki remains unchanged until that

@@ -78,6 +78,7 @@ redacted validation/write errors, and `2` for argument errors or missing opt-in.
 | `extension/worker.mjs` | Fixed identity configuration and top-level lifecycle listeners; no fixture globals |
 | `extension/content.js` | Isolated, top-frame sign-out bridge guarded by the exact root-page URL |
 | `extension/control.html` | Static review notice, not an enrollment/password UI |
+| `extension/setup.html`, `setup.mjs` and `setup.css` | Explicit first-run confirmation page; no password field or automatic initialization |
 | `native-host` and `native_host.py` | Fixed interpreter, profile path and expected configuration identity |
 | `org.sdsctl.browser_device.json` | Staged stdio native-host registration, restricted to one exact extension origin |
 | `bundle.json` | Completion receipt with public identity/trust fingerprints and artifact hashes |
@@ -112,21 +113,22 @@ the intended trust boundary. Browser trust still requires separate verification.
 
 ## Stop here: deployment is a separate gate
 
-The command deliberately does **not** write to any browser `NativeMessagingHosts`
-directory. Chrome variants and profiles have different registration locations;
-follow the reviewed browser's
-[native-messaging rules](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
-in a separate acceptance step, not by copying a guessed path from another host.
+The bundle command deliberately does **not** write to any browser
+`NativeMessagingHosts` directory. A separate opt-in
+[registration and first-run step](browser-device-first-run.md) can register the
+canonical bundle into a newly created dedicated Chromium data directory. It
+never reuses an existing browser directory or writes system-wide policy.
 
 Do not load this bundle into a production browser yet. A fresh browser has no
-trusted recovery state and therefore fails closed with `setup_error`; the worker
-does not initialize or reset it. Loading into a previously provisioned test
+trusted recovery state and therefore fails closed with `setup_error`; automatic
+startup does not initialize or reset it. The separate setup page requires
+explicit confirmation and a one-time pristine-native-profile claim. Loading into a previously provisioned test
 profile is **not inert**: the worker reconciles its saved state and may contact
 the native helper. Preparation alone never launches that worker. Existing pause
 and terminal-error behavior remains part of the recovery contract.
 
-Trusted browser-state initialization, controlled registration/update/removal,
-launch/service and server wiring, explicit replacement/resume, browser-specific
+Registration and explicit first-run remain isolated acceptance tools. Accepted
+distribution/update/removal, launch/service and server wiring, explicit replacement/resume, browser-specific
 DNS/IP and permission acceptance, and physical multi-display power-outage tests
 remain required. A generated manifest and a passing native status call do not
 establish successful login, renewal, sign-out, cold boot or production readiness.
