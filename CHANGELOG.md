@@ -49,6 +49,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Bound experimental browser-device read admission to two workers and 32 total
+  outstanding acquisitions, with a two-second wait, so a cold dashboard's asset
+  burst does not immediately fail when both readers are occupied. Keep exchange,
+  sign-out and revocation acknowledgement on their separate no-queue workers;
+  cancelled/expired reads retain capacity until physically drained, and all
+  assets still require current display-only authorization.
 - Require the web server's ASGI lifespan instead of automatic detection, so an
   experimental browser-owner lock failure cannot be treated as unsupported
   lifespan and leave a failed application listening. Return a nonzero exit code

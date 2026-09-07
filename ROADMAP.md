@@ -56,11 +56,20 @@ administrator origins, validates before launch, and retains disabled defaults.
 It does not provision credentials, repair authority, publish ports or deploy to
 production displays.
 
-The next bounded candidate adds offline `browser-device-server --experimental
-create/check`: explicit new-directory preparation of an empty authority and
+Offline `browser-device-server --experimental create/check` is merged but
+unreleased: explicit new-directory preparation of an empty authority and
 private JSON, and read-only checking of existing configuration. It shares the
 server parser, preserves existing/partial outputs and device state, and never
 enrolls a display or enables a service. IP, DNS and IPv6 remain first-class.
+
+Combined installed-server/managed-browser acceptance passed six isolated
+authorization/recovery cases, but fresh browser rendering exposed protected-asset
+503 responses under concurrent session admission. The focused read-admission
+candidate adds bounded, expiring waiting separate from mutations and revocation
+acknowledgement. Its rebuilt wheel passed seven isolated real-Chromium cases on
+Linux/aarch64, including the repeated recovery matrix, 18 rendering checks and
+156 observed successful asset responses. This resolves the isolated rendering
+gate, not production deployment, physical-display or outage acceptance.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

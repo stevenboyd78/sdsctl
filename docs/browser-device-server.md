@@ -239,6 +239,24 @@ separate work. Do not reimport a fresh profile to erase a saved pause/error.
 
 ## Validation and remaining gates
 
+### Concurrent dashboard reads
+
+The focused read-admission candidate keeps protected dashboard assets behind
+the same current-session and display-only checks. It permits two session-check
+workers and at most 32 outstanding checks (two running plus 30 queued). A read
+waits at most two seconds before receiving a retryable 503; this is not an
+unlimited backlog or permission to serve an expired/revoked session. Queued
+checks revalidate authority when they execute. Cancelled, expired and shutdown
+work is discarded when dequeued, and a late acquired lease is released.
+
+Credential exchange, sign-out and owner revocation acknowledgement keep their
+separate two-worker, no-waiting-queue limit. Serving a long-lived event stream
+does not occupy a session-check worker; the existing per-session request limits
+and revocation cleanup still apply. These limits improve normal cold-page asset
+bursts, not availability under arbitrary overload.
+
+### Test scope
+
 Tests cover disabled defaults, paired options, safe file handling, schema and
 verifier corruption, read-only preflight, native/Ingress origin separation,
 raw-peer enforcement, one-time issuance, device-only routes, revocation and
@@ -259,8 +277,18 @@ creation without replacing its contents. Unit tests additionally cover competing
 creators, interrupted preparation, unsafe targets, shared parser rejection and
 read-only preservation of all three device states.
 
+The separate combined installed-server/managed-startup audit exposed protected
+asset 503s during cold dashboard loads. The bounded read-admission fix reproduced
+that failure in a regression, then passed seven isolated headless Chromium cases
+on Linux/aarch64 with the rebuilt installed wheel. These cover two independent
+devices, server restart, real-clock worker renewal, delayed startup, persistent
+pause/revocation, browser-only missing trust, and verified IPv4/DNS/IPv6 identity.
+All 18 rendering checks passed; all 156 observed asset responses were HTTP 200.
+Sandbox/TLS checks and normal session timers remained enabled. No production TUI,
+host network/trust configuration or Home Assistant instance was changed.
+
 These tests use synthetic authority and no live scanner. They are not physical
-Pi, power-outage, browser-only missing-trust or production App acceptance.
+display, power-outage or production App acceptance.
 Distribution/update/removal, explicit replacement/resume, managed browser service
 policy, conservative crash-lock handling and combined server/display cold-start
 acceptance remain gates in the
