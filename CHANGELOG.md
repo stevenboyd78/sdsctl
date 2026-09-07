@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add explicit experimental server and Home Assistant App configuration for
+  managed browser sessions and Ingress administration. Require a precreated
+  private authority, separate canonical HTTPS origins and an administrator-ID
+  allowlist; reject incomplete or unsafe inputs before launch. Preserve disabled
+  defaults, manual login, remote-TUI credentials and existing port mappings.
+  No authority creation, repair, trust installation or production deployment
+  is performed by startup.
 - Add experimental `browser-device-start --experimental` with read-only checks
   of an existing canonical registration, an explicit `--setup` choice and a
   guarded foreground Chromium launcher. Show managed startup/waiting/paused/error
@@ -36,6 +43,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Require the web server's ASGI lifespan instead of automatic detection, so an
+  experimental browser-owner lock failure cannot be treated as unsupported
+  lifespan and leave a failed application listening. Return a nonzero exit code
+  when server startup fails.
 ## [0.29.4] - 2026-09-06
 
 ### Fixed

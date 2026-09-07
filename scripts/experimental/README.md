@@ -23,6 +23,50 @@ implementation.
 - `SDSCTL_PROBE_CHROMIUM=/absolute/path/to/chromium` selects an already installed
   Chromium (used for the ARM64 Pi test), without installing another package.
 
+## Installed server-command wiring
+
+`audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,
+not a replacement ASGI fixture. It requires Linux user/network namespaces,
+`ip`, OpenSSL, and an installed candidate wheel with the web dependencies.
+It deliberately has **no browser and no scanner daemon**; do not count it as
+browser/Pi or scanner-data acceptance.
+
+Build the wheel from the source distribution into a fresh private staging
+directory. Install it into a separate target with `pip install --no-deps --target
+/absolute/private/stage/installed /absolute/private/stage/dist/CANDIDATE.whl`,
+using the development Python that already has the dependencies. Record the
+outer network namespace inode with `stat -Lc '%i' /proc/self/ns/net`, then use
+that number as the last argument below:
+
+```sh
+PYTHONPATH=/absolute/private/stage/installed \
+  unshare --user --map-root-user --net /absolute/path/to/development/python \
+  scripts/experimental/audit_browser_server_wiring.py \
+  /absolute/private/fresh-audit-directory \
+  /absolute/private/stage/installed OUTER_NETWORK_NAMESPACE_INODE
+```
+
+The audit directory must exist, have mode `0700`, and contain no prior `ip`,
+`dns` or `ipv6` case directories. The script refuses the outer namespace or one
+with configured/up interfaces before changing anything. It assigns fictional
+private IPv4, Supervisor-peer and IPv6 addresses **only to its new namespace's
+loopback interface**. No host interface, route, firewall, DNS or service changes
+are made. If namespace creation fails, stop; do not run the fixture on the host
+network instead.
+
+The test starts separate real Ingress/native processes, validates certificates
+and hostnames normally, exercises one-time enrollment and disjoint origins,
+rejects forwarded-peer impersonation, checks device-only permissions, confirms
+duplicate-owner startup exits nonzero, restarts the native process, rejects its
+old cookie, renews with the existing device credential, and confirms revocation
+across the private owner socket. DNS routing is fixture-local while the TLS SNI,
+hostname validation and Host header use the actual fictional DNS name.
+
+Each case retains fictional private authority/TLS files and redacted child logs;
+the success report contains no credentials. It stops only its own child processes
+on success or failure. Rerun in a new audit directory, never overwrite a prior
+authority. No global trust store or production Home Assistant/Pi is accessed.
+
 ## Integrated recovery acceptance
 
 `audit_browser_recovery.mjs` uses the actual `create_web_dashboard_app`, device

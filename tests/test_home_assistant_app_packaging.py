@@ -136,10 +136,14 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert 'recording_directory: "str(1,)"\n' in manifest
     assert "  remote_daemon_enabled: false\n" in manifest
     assert "  native_dashboard_enabled: false\n" in manifest
+    assert "  experimental_browser_devices_enabled: false\n" in manifest
+    assert '  browser_device_server_config: ""\n' in manifest
     assert '  advanced_access_server_name: ""\n' in manifest
     assert '  advanced_access_host_address: ""\n' in manifest
     assert "  remote_daemon_enabled: bool\n" in manifest
     assert "  native_dashboard_enabled: bool\n" in manifest
+    assert "  experimental_browser_devices_enabled: bool\n" in manifest
+    assert '  browser_device_server_config: "str?"\n' in manifest
     assert '  advanced_access_server_name: "str?"\n' in manifest
     assert '  advanced_access_host_address: "str?"\n' in manifest
     assert "hassio_api: true\n" not in manifest

@@ -485,9 +485,11 @@ def test_prepare_launch_plan_rejects_advanced_files_outside_runtime_directory(
         )
 
 
+@pytest.mark.parametrize("browser_devices", [False, True])
 def test_prepare_launch_plan_enables_reconciled_advanced_children(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    browser_devices: bool,
 ) -> None:
     options_path = tmp_path / "options.json"
     options_path.write_text(
@@ -502,6 +504,24 @@ def test_prepare_launch_plan_enables_reconciled_advanced_children(
         ),
         encoding="utf-8",
     )
+    browser_options: dict[str, object] = {}
+    if browser_devices:
+        from sds200.browser_device_store import BrowserDeviceStore
+
+        browser_root = tmp_path / "browser"
+        browser_root.mkdir(mode=0o700)
+        BrowserDeviceStore.initialize(browser_root / "authority.sqlite")
+        browser_config = browser_root / "server.json"
+        browser_config.write_text(json.dumps({
+            "version": 1, "authority_path": str(browser_root / "authority.sqlite"),
+            "native_origin": "https://sdsctl.local:15443",
+            "ingress_admin": {"origin": "https://ha.example.test", "user_ids": ["a" * 32]},
+        }))
+        browser_config.chmod(0o600)
+        browser_options = {"experimental_browser_devices_enabled": True,
+                           "browser_device_server_config": str(browser_config)}
+        original_options = json.loads(options_path.read_text())
+        options_path.write_text(json.dumps({**original_options, **browser_options}))
     app_paths = runtime_paths(tmp_path)
     lifecycle_paths = advanced_paths(tmp_path)
     rotate_home_assistant_app_server_identity(
@@ -551,6 +571,7 @@ def test_prepare_launch_plan_enables_reconciled_advanced_children(
                 "native_dashboard_enabled": True,
                 "advanced_access_server_name": "sdsctl.local",
                 "advanced_access_host_address": "192.168.20.15",
+                **browser_options,
             },
         ),
         environ={
@@ -574,12 +595,66 @@ def test_prepare_launch_plan_enables_reconciled_advanced_children(
     assert dashboard_password not in repr(plan)
     assert enrollment.credential not in repr(plan)
     context = load_home_assistant_app_advanced_access_context(lifecycle_paths)
+    for command in (plan.web_command, plan.native_web_command):
+        assert ("--experimental-browser-devices" in command) is browser_devices
+        if browser_devices:
+            assert command[command.index("--browser-device-config") + 1] == str(browser_config)
+    for key, value in browser_options.items():
+        assert context.options[key] == value
     assert context.container_address == "172.30.33.7"
     assert context.network[HOME_ASSISTANT_APP_REMOTE_DAEMON_PORT_KEY] == 15044
     assert HOME_ASSISTANT_SUPERVISOR_TOKEN_VARIABLE not in (
         lifecycle_paths.runtime_remote_configuration.parent
         / "home-assistant-advanced-context.json"
     ).read_text(encoding="ascii")
+
+
+@pytest.mark.parametrize("problem", ["missing-config", "missing-authority", "wrong-origin",
+                                     "no-admin", "unprepared-native", "public-config"])
+def test_browser_preflight_precedes_runtime_writes_and_service_discovery(
+    tmp_path, monkeypatch, problem,
+):
+    from sds200.browser_device_store import BrowserDeviceStore
+
+    root = tmp_path / "browser"
+    root.mkdir(mode=0o700)
+    database = root / "authority.sqlite"
+    if problem != "missing-authority":
+        BrowserDeviceStore.initialize(database)
+    config = root / "server.json"
+    document = {
+        "version": 1, "authority_path": str(database),
+        "native_origin": "https://wrong.example.test" if problem == "wrong-origin"
+        else "https://192.168.20.15:8443",
+        "ingress_admin": None if problem == "no-admin" else {
+            "origin": "https://ha.example.test", "user_ids": ["a" * 32],
+        },
+    }
+    if problem != "missing-config":
+        config.write_text(json.dumps(document))
+        config.chmod(0o644 if problem == "public-config" else 0o600)
+    options = tmp_path / "options.json"
+    options.write_text(json.dumps({
+        "scanner_host": "192.0.2.25", "native_dashboard_enabled": True,
+        "advanced_access_server_name": "192.168.20.15",
+        "experimental_browser_devices_enabled": True, "browser_device_server_config": str(config),
+    }))
+    for name in (
+        "fetch_home_assistant_mqtt_service", "write_home_assistant_app_advanced_access_context",
+        "_prepare_runtime_directories",
+    ):
+        monkeypatch.setattr("sds200.home_assistant_app_supervisor." + name,
+                            lambda *a, **kw: pytest.fail("Preflight must precede runtime setup"))
+    with pytest.raises(SDS200Error):
+        prepare_home_assistant_app_launch_plan(
+            options_path=options, paths=runtime_paths(tmp_path),
+            advanced_paths=advanced_paths(tmp_path),
+            supervisor_info=HomeAssistantAppSupervisorInfo(
+                container_address="172.30.33.7", network={"8443/tcp": 8443},
+            ), environ={},
+        )
+    if problem == "missing-authority":
+        assert not database.exists()
 
 
 def test_prepare_launch_plan_removes_stale_disabled_remote_configuration(

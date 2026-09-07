@@ -462,6 +462,8 @@ def write_home_assistant_app_advanced_access_context(
         "native_dashboard_enabled",
         "advanced_access_server_name",
         "advanced_access_host_address",
+        "experimental_browser_devices_enabled",
+        "browser_device_server_config",
     )
     document = {
         "version": HOME_ASSISTANT_APP_ADVANCED_ACCESS_VERSION,
@@ -550,12 +552,15 @@ def load_home_assistant_app_advanced_access_context(
                 "native_dashboard_enabled",
                 "advanced_access_server_name",
                 "advanced_access_host_address",
+                "experimental_browser_devices_enabled",
+                "browser_device_server_config",
             }
         )
         or any(
             type(value) is not bool
             for name, value in options.items()
-            if name in {"remote_daemon_enabled", "native_dashboard_enabled"}
+            if name in {"remote_daemon_enabled", "native_dashboard_enabled",
+                        "experimental_browser_devices_enabled"}
         )
         or any(
             type(value) is not str
@@ -563,6 +568,7 @@ def load_home_assistant_app_advanced_access_context(
             if name in {
                 "advanced_access_server_name",
                 "advanced_access_host_address",
+                "browser_device_server_config",
             }
         )
     ):

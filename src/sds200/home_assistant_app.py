@@ -220,6 +220,8 @@ class HomeAssistantAppOptions:
     native_dashboard_enabled: bool = False
     advanced_access_server_name: str = ""
     advanced_access_host_address: str = ""
+    experimental_browser_devices_enabled: bool = False
+    browser_device_server_config: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -278,6 +280,22 @@ class HomeAssistantAppOptions:
                 "Enabled Home Assistant App remote access requires an "
                 "advanced-access host address."
             )
+        _require_bool(
+            self.experimental_browser_devices_enabled,
+            label="Home Assistant App experimental browser-devices enabled setting",
+        )
+        config = self.browser_device_server_config
+        if (type(config) is not str or config.strip() != config or "\x00" in config
+                or (config and (not Path(config).is_absolute() or ".." in Path(config).parts))):
+            raise ValueError(
+                "Browser-device server configuration must be an absolute path or empty."
+            )
+        if self.experimental_browser_devices_enabled != bool(config):
+            raise ValueError(
+                "Experimental browser devices and their server configuration are required together."
+            )
+        if self.experimental_browser_devices_enabled and not self.native_dashboard_enabled:
+            raise ValueError("Experimental browser devices require the native HTTPS dashboard.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -444,6 +462,8 @@ def load_home_assistant_app_options(
         "native_dashboard_enabled",
         "advanced_access_server_name",
         "advanced_access_host_address",
+        "experimental_browser_devices_enabled",
+        "browser_device_server_config",
     }
     unexpected = sorted(str(key) for key in payload if key not in allowed)
     if unexpected:
@@ -478,6 +498,10 @@ def load_home_assistant_app_options(
                 "advanced_access_host_address",
                 "",
             ),
+            experimental_browser_devices_enabled=payload.get(
+                "experimental_browser_devices_enabled", False,
+            ),
+            browser_device_server_config=payload.get("browser_device_server_config", ""),
         )
     except (TypeError, ValueError) as error:
         raise ConfigurationError(
@@ -670,6 +694,8 @@ def reconcile_home_assistant_app_advanced_exposure(
         "native_dashboard_enabled",
         "advanced_access_server_name",
         "advanced_access_host_address",
+        "experimental_browser_devices_enabled",
+        "browser_device_server_config",
     ):
         if info.options.get(field_name, getattr(options, field_name)) != getattr(
             options,

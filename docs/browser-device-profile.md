@@ -10,8 +10,9 @@ It imports a **fresh browser-device enrollment attachment**, the chosen HTTPS
 origin, and explicit certificate trust into a new directory. It does not enroll
 a device on the server, install an extension or native host, initialize browser
 storage, change browser policy or system trust, launch a browser, or enable a
-service. Production Home Assistant and standalone launchers still do not enable
-the experimental enrollment authority.
+service. Released launchers do not enable the experimental enrollment authority;
+the separate [server wiring candidate](browser-device-server.md) is explicit
+opt-in, with a precreated authority and no production qualification.
 
 The profile is for a browser display only. Do not supply a dashboard password,
 Home Assistant token, remote-TUI credential, or browser cookie. Existing managed
