@@ -19,14 +19,16 @@ credential protocol, USB behavior, operator/manual login and disabled advanced
 network defaults. Support verified private-IP HTTPS as well as optional DNS;
 neither internal DNS nor a proxy is a product requirement.
 
-The next bounded candidate adds a first-time private native-profile import and
-read-only offline check. It must reject unsafe inputs, existing profiles and
-rotation handoffs without clearing a saved pause or terminal error. See the
-[experimental setup guide](docs/browser-device-profile.md). This candidate is
-unreleased and does not install an extension/native host, enable production
-enrollment or start an unattended display.
+The first-time private native-profile import and read-only offline check are
+merged but unreleased. They reject unsafe inputs, existing profiles and rotation
+handoffs without clearing a saved pause or terminal error. See the
+[experimental setup guide](docs/browser-device-profile.md). The next bounded
+candidate prepares a [private review bundle](docs/browser-device-bundle.md) with a
+public-key-derived extension ID and identity-pinned native wrapper. Preparation
+does not register an extension/native host, initialize browser storage, enable
+production enrollment or start an unattended display.
 
-Reviewed extension identity/packaging, native-host registration, browser storage
+Accepted extension distribution/updates, native-host registration, browser storage
 initialization, launcher/service and server wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

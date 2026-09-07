@@ -126,10 +126,25 @@ second loopback HTTPS service and reported `cookie_port_isolation: false`.
 
 ## Persistent recovery coordinator (separate, not enabled)
 
-`browser_device_recovery.mjs` is the next coordinator prototype for the actual
+`audit_browser_bundle.mjs` checks the generated review bundle using an **installed
+candidate wheel**, fictional native-profile inputs and a new isolated Chromium
+user-data directory. Pass an existing private stage, Playwright module path,
+Chromium executable and installed Python interpreter as four absolute paths;
+`--help` describes the prerequisites without creating anything. It requires a
+working Chromium sandbox. It registers the generated native manifest only inside
+its unique test profile, checks the key-derived extension ID, verifies empty
+browser state stays rejected, and sends a native `status` request. It never
+authenticates or visits a dashboard and retains the fixture/result. This is a
+packaging smoke, not TLS, sign-out, renewal or physical-outage acceptance. The
+other harnesses below cover distinct runtime boundaries with fictional servers.
+
+`src/sds200/browser_assets/browser_device_recovery.mjs` is the coordinator for the actual
 native-helper protocol, not a replacement silently installed into the earlier
-fixture. Its Chrome adapter is opt-in and has no generated manifest or native
-host registration. Do not install it on production displays yet.
+fixture. The modules now ship as canonical Python package assets; the entries
+here re-export them for Node tests. Browser fixtures copy the canonical assets.
+The opt-in [review bundle](../../docs/browser-device-bundle.md) stages a manifest
+and native wrapper but does not register or start them. Do not install it on
+production displays yet.
 
 Run the dependency-free deterministic JavaScript contract tests with:
 

@@ -193,11 +193,14 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
 
 def _native_request(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
+    *, expected_identity: str | None = None,
 ) -> int:
     try:
         try:
             configuration = load_browser_native_configuration(root)
-            if caller_arguments != [configuration.extension_origin]:
+            if (caller_arguments != [configuration.extension_origin]
+                    or (expected_identity is not None
+                        and configuration.identity != expected_identity)):
                 raise ValueError()
             request = read_browser_device_request(source)
             if request is None:
@@ -231,13 +234,14 @@ def _native_request(
 
 def run_browser_native(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
+    *, expected_identity: str | None = None,
 ) -> int:
     """Dedicated Linux native process: supervise one child and reap it on timeout.
 
     Requires single-threaded main process and unbuffered FileIO native pipes.
-    Root is fixed by a future trusted wrapper, never a native caller parameter.
+    Root and optional identity are fixed by a trusted wrapper, never caller parameters.
     Exit 2 means ten-second total deadline (partial/no response must be discarded).
-    Parent never loads secrets. No command-line entrypoint or registration exists.
+    Parent never loads secrets. Bundle preparation does not register or launch it.
     """
     if (not sys.platform.startswith("linux") or threading.active_count() != 1
             or threading.current_thread() is not threading.main_thread()
@@ -259,7 +263,8 @@ def run_browser_native(
                                    ctypes.c_ulong, ctypes.c_ulong]
             libc.prctl.restype = ctypes.c_int
             if libc.prctl(1, signal.SIGKILL, 0, 0, 0) == 0 and os.getppid() == parent:
-                code = _native_request(root, caller_arguments, source, destination)
+                code = _native_request(root, caller_arguments, source, destination,
+                                       expected_identity=expected_identity)
         except BaseException:
             pass  # Dedicated child exits without exception/secret output or buffered flushing.
         os._exit(code)

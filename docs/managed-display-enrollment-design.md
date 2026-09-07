@@ -658,8 +658,11 @@ certificate trust and extension identity. It accepts only initial enrollment,
 refuses all existing destinations and rotation handoffs, and preserves source
 files. Its read-only check does not authenticate, correct the clock, repair a
 ledger or clear a saved pause/error. This closes the hand-built native-file setup
-gap only; native-host registration, extension packaging/browser storage and
-production launcher/server wiring remain separate gates.
+gap only. An opt-in [review bundle](browser-device-bundle.md) now stages canonical
+extension modules, a key-derived identity, and a fixed native wrapper/manifest.
+It does not register a native host or initialize browser storage. Accepted
+distribution, registration, browser state and production launcher/server wiring
+remain separate gates.
 
 Authentication makes one direct POST to `/auth/device/session`, using TLS 1.2 or
 newer with issuer and hostname verification against the explicit trust bundle.
@@ -686,11 +689,12 @@ or unattended production login is enabled by this module.
 
 ## Browser renewal coordinator prototype (not registered)
 
-`scripts/experimental/browser_device_recovery.mjs` implements an opt-in MV3
+`src/sds200/browser_assets/browser_device_recovery.mjs` implements an opt-in MV3
 coordinator and a Chrome API adapter for the new native-helper response contract.
-It is separate from the earlier loopback probe extension. No manifest, host
-registration, dashboard content script, launcher or production enrollment enables
-it. Configuration is fixed by the trusted installation, not by page messages.
+It is separate from the earlier loopback probe extension. The review-bundle tool
+can stage a manifest and entrypoints, but does not register or launch them or
+enable production enrollment. Configuration is fixed by the trusted installation,
+not by page messages. Node tests retain re-export entries in `scripts/experimental`.
 The browser installation fingerprint must match the native installation identity.
 
 The coordinator serializes cookie operations, coalesces simultaneous wake requests,
@@ -752,7 +756,7 @@ browser/version/scenario scope.
 
 ## Dashboard sign-out bridge prototype (not registered)
 
-`scripts/experimental/browser_device_logout.mjs` adds opt-in worker and isolated
+`src/sds200/browser_assets/browser_device_logout.mjs` adds opt-in worker and isolated
 content-script adapters for a dedicated enrolled-device browser profile. It does
 not edit the installed dashboard JavaScript, generate a manifest or register any
 content script. Do not inject it into ordinary mixed-use browser profiles.

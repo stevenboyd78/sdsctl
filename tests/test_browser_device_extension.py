@@ -42,6 +42,19 @@ def test_real_browser_logout_harness_help_is_non_mutating() -> None:
     assert "cookie-set-stop, cookie-remove-stop" in result.stdout
 
 
+def test_generated_bundle_harness_help_is_non_mutating() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "scripts/experimental/audit_browser_bundle.mjs", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    assert "no login or production access" in result.stdout
+    assert "sandbox required" in result.stdout
+
+
 def test_integrated_recovery_harness_help_is_non_mutating() -> None:
     node = shutil.which("node")
     if node is None:
