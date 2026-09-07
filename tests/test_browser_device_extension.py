@@ -42,6 +42,19 @@ def test_real_browser_logout_harness_help_is_non_mutating() -> None:
     assert "cookie-set-stop, cookie-remove-stop" in result.stdout
 
 
+def test_integrated_recovery_harness_help_is_non_mutating() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "scripts/experimental/audit_browser_recovery.mjs", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    assert "Actual ASGI/native/Chromium on loopback only" in result.stdout
+    assert "No cookie injection; real clocks and retry alarms" in result.stdout
+
+
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="Linux native supervisor")
 def test_javascript_pause_uses_real_native_framing_and_persistent_ledger(tmp_path: Path) -> None:
     node = shutil.which("node")

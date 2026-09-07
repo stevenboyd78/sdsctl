@@ -149,13 +149,28 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
                 or len(retries) > 1 or response.headers.get_all("Set-Cookie")
                 or response.headers.get_all("Content-Encoding")):
             raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
-        body = response.read(4097) if response.status == 200 else b""
+        body = b""
+        if response.status == 200:
+            lengths = response.headers.get_all("Content-Length", [])
+            encodings = response.headers.get_all("Transfer-Encoding", [])
+            if (len(lengths) > 1 or len(encodings) > 1 or (lengths and encodings)
+                    or (encodings and encodings[0].lower() != "chunked")
+                    or (lengths and (re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None
+                                     or int(lengths[0]) > 4096))):
+                raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
+            body = response.read(4097)
+            # read(amt) may silently return a short Content-Length body at EOF.
+            # Do not persist a protocol error for a server interrupted mid-response.
+            if lengths and len(body) < int(lengths[0]):
+                raise ExchangeFailure()
         return parse_exchange_response(
             response.status, body, content_type=types[0] if types else "",
             retry_after=retries[0] if retries else None,
         )
     except ExchangeFailure:
         raise
+    except (ssl.SSLEOFError, ssl.SSLZeroReturnError, http.client.IncompleteRead):
+        raise ExchangeFailure() from None
     except ssl.SSLError:
         raise ExchangeFailure(RecoveryMode.TLS_ERROR) from None
     except (OSError, TimeoutError):

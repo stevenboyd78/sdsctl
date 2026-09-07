@@ -829,6 +829,25 @@ logout. See the experimental harness README for signal guards and exact limits.
 
 ## Recovery contract
 
+The v0.29.4 recovery patch distinguishes abrupt TLS EOF and incomplete declared
+HTTP bodies from genuine certificate or complete-protocol failures. Transient
+interruptions use the persisted retry budget; trust/identity failures, rejected
+credentials and malformed complete responses remain terminal. A late exchange
+result crossing the supervisor deadline is discarded without persisting an
+irrecoverable setup error.
+
+The browser coordinator persists `native_retry` and a one-minute deadline for
+Chrome's documented broken-native-pipe error. Repeated starts and worker
+recreation cannot bypass that wait. Failed persistence/cookie cleanup still
+fails closed, and a concurrent sign-out keeps its durable pause and logout
+ordering. Missing/forbidden native hosts and malformed native frames are not
+automatically retried. These changes do not register or enable the prototype.
+
+The [integrated recovery harness](../scripts/experimental/README.md#integrated-recovery-acceptance)
+tests the actual ASGI/native/browser path on loopback with real retry alarms.
+Its results must be recorded separately from physical display/power-cycle
+acceptance and do not make production provisioning complete.
+
 | Condition | Required behavior |
 | --- | --- |
 | No enrollment configured | Browser shows display-only login; managed remote TUI reports missing setup without falling back to direct scanner access |

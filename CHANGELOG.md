@@ -12,7 +12,33 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+## [0.29.4] - 2026-09-06
+
+### Fixed
+
+- Use certificate verification for the DNS, IPv4, and IPv6 identity tests.
+  Some OpenSSL versions report identity mismatches from `x509 -checkhost`
+  and `-checkip` with exit status zero, which blocked v0.29.3 CI and PyPI
+  publication. Require the configured identity to verify successfully and
+  unrelated identities to fail with the specific identity-mismatch error.
+- Keep temporary TLS EOF and truncated HTTP responses retryable in the
+  experimental browser-device native helper. Retain terminal failures for
+  invalid certificates, credentials and complete malformed responses.
+- Persist a bounded retry after a native-helper disconnect/deadline without
+  allowing automatic retries to override sign-out or unsafe configuration.
+- Explicitly require TLS 1.2 or newer in the native-helper HTTPS test fixture
+  to address CodeQL's insecure-protocol alert.
+- Align installation and release guidance with shipped manual-login kiosk and
+  split-DNS support; unattended enrollment remains experimental and unwired.
+- Prepare a new patch version for complete publication following the partial
+  v0.29.3 release. Existing v0.29.3 credentials and configuration remain compatible;
+  production launchers do not enable the experimental enrollment path.
+
 ## [0.29.3] - 2026-09-06
+
+Publication note: container images and a GitHub release were published before
+validation finished. Python publication failed; this version is absent from
+PyPI. Use a fully published recovery version for new Python installations.
 
 ### Added
 
@@ -25,7 +51,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   private exclusive profile and no password argument or certificate bypass. Add
   `browser-kiosk-service` to print a bounded graphical-session user-service
   template. Interactive acceptance passed on two Pi displays; automatic
-  cold-boot startup and production graphical-service qualification remain open.
+  manual-login cold-boot startup also passed on the specific HDMI deployment
+  recorded in the kiosk guide, not on every graphical installation.
+- Add experimental browser-device enrollment/session/native-helper foundations
+  and isolated test harnesses. No production launcher, native-host installer or
+  packaged extension enables unattended browser login.
+- Allow an exact split-DNS name as the Home Assistant advanced TLS identity,
+  while retaining private destination and explicit port-exposure requirements.
 
 ### Fixed
 
@@ -1869,7 +1901,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...HEAD
+[0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...v0.29.2
 [0.29.1]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.0...v0.29.1

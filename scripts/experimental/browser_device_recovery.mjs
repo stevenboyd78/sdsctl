@@ -5,6 +5,21 @@ const MODES = new Set(["active", "paused", "credential_rejected", "tls_error",
 export const DEVICE_COOKIE = "__Host-sdsctl-device-session";
 export const RECOVERY_ALARM = "sdsctl-device-recovery";
 const STATE_KEY = "sdsctlDeviceRecovery";
+
+// Only a broken native pipe is retryable. Missing/forbidden hosts, malformed
+// framing and invalid native results remain setup errors; never expose messages.
+export class BrowserNativeDisconnected extends Error {
+  constructor() { super("Native connection interrupted"); }
+}
+
+export async function sendChromeNative(chrome, host, request) {
+  try { return await chrome.runtime.sendNativeMessage(host, request); }
+  catch (error) {
+    // Documented Chromium native-messaging error (not a server-supplied string).
+    if (error?.message === "Native host has exited.") throw new BrowserNativeDisconnected();
+    throw new Error("Native setup or protocol failure");
+  }
+}
 const finite = (n, max) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= max;
 const exact = (value, keys) => value !== null && typeof value === "object" &&
   !Array.isArray(value) && Object.keys(value).sort().join(",") === [...keys].sort().join(",");
@@ -69,7 +84,7 @@ export function createBrowserRecovery(ports, settings) {
     state = await ports.load();
     if (!exact(state, ["version", "identity", "paused", "phase", "nextAt"]) ||
         state.version !== 1 || state.identity !== config.identity ||
-        typeof state.paused !== "boolean" || !["clean", "installing", "logout_pending"].includes(state.phase) ||
+        typeof state.paused !== "boolean" || !["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) ||
         (state.phase === "logout_pending" && !state.paused) ||
         !finite(state.nextAt, Number.MAX_SAFE_INTEGER)) throw new Error("state");
     state = {...state};
@@ -79,7 +94,21 @@ export function createBrowserRecovery(ports, settings) {
   // Keep API failures fixed and secret-free. Never log exception/native payloads.
   ready.catch(() => {});
   const queue = work => {
-    const result = operations.then(work).catch(async () => {
+    const result = operations.then(work).catch(async error => {
+      if (error instanceof BrowserNativeDisconnected && state && !failure) {
+        try {
+          if (stopRequested || state.paused) return await pausedCleanup();
+          // Persist before cleanup so worker loss cannot cause a rapid retry loop.
+          state.phase = "native_retry";
+          state.nextAt = now() + 60000;
+          await save();
+          if (stopRequested || state.paused) return await pausedCleanup();
+          await clear();
+          if (stopRequested || state.paused) return await pausedCleanup();
+          await arm(60);
+          return {mode: "waiting"};
+        } catch { /* Unsafe persistence/cookie cleanup still fails closed below. */ }
+      }
       failure = true;
       holdForLogout = false;
       try { await clear(true); } catch { /* Report failure, not a false cleanup success. */ }
@@ -125,6 +154,25 @@ export function createBrowserRecovery(ports, settings) {
     if (stopRequested || state.paused) return pausedCleanup();
     const generation = epoch;
     const current = () => epoch === generation && !stopRequested && !state.paused;
+    if (state.phase === "native_retry") {
+      // Bound rollback and suppress native I/O even if repeated start events or
+      // a new worker arrive before the saved retry deadline.
+      if (state.nextAt > now() + 60000) {
+        state.nextAt = now() + 60000;
+        await save();
+      }
+      if (!current()) return {mode: "paused"};
+      await clear();
+      if (!current()) return {mode: "paused"};
+      if (state.nextAt > now()) {
+        await arm((state.nextAt - now()) / 1000);
+        return {mode: "waiting"};
+      }
+      state.phase = "clean";
+      state.nextAt = 0;
+      await save();
+      if (!current()) return {mode: "paused"};
+    }
     if (state.phase === "installing") {
       await clear(); // A previous worker may have died during cookie installation.
       if (!current()) return {mode: "paused"};
@@ -271,7 +319,7 @@ export function connectChromeRecovery(chrome, settings) {
     now: Date.now,
     load: async () => { await privateStorage; return (await chrome.storage.local.get(STATE_KEY))[STATE_KEY]; },
     save: async state => { await privateStorage; await chrome.storage.local.set({[STATE_KEY]: state}); },
-    native: request => chrome.runtime.sendNativeMessage(config.nativeHost, request),
+    native: request => sendChromeNative(chrome, config.nativeHost, request),
     schedule: when => chrome.alarms.create(RECOVERY_ALARM, {when}),
     cancel: () => chrome.alarms.clear(RECOVERY_ALARM),
     clearCookie: async () => {

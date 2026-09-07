@@ -66,7 +66,7 @@ PortAudio runtime; Debian and Raspberry Pi OS users normally install
 Published container users can pull the current exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.3
+docker pull theboyd78/sdsctl:0.29.4
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -204,14 +204,18 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.29.3` adds a transport-aware managed-display security and usability
-slice for
-public-terminal and browser deployments: an opt-in native display login with
+Version `0.29.4` repairs certificate-verification tests across OpenSSL versions
+after the partial v0.29.3 release. It retains the transport-aware managed-display
+security and usability features for public-terminal and browser deployments:
+an opt-in native display login with
 separate operator/display credentials, a hardened browser kiosk HTTPS launch flow,
 and tighter split-screen layout behavior on constrained displays. The `/dev/tty1`
 managed TUI flow keeps observe-only preflight, bounded recovery, private
 credentials, and exact cleanup while preserving compatibility with existing
 daemon versions.
+Unattended browser-device enrollment remains experimental: the packaged
+production launchers do not enable it. Browser kiosks still require manual
+sign-in after session expiry or a server restart.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

@@ -307,7 +307,11 @@ class BrowserDeviceRecovery:
         elapsed = max(0, time.monotonic() - started)
         if elapsed > 10:
             session = None
-            failure = ExchangeFailure(RecoveryMode.SETUP_ERROR)
+            # A callback can return just before the supervisor notices its deadline.
+            # Discard its late session, but do not turn a slow network into a saved
+            # setup error that survives every later helper invocation.
+            if failure is None:
+                failure = ExchangeFailure()
         now = self._now()
         with self._connection() as db:
             current = self._load(db, now)

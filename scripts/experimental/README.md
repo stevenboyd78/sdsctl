@@ -23,6 +23,43 @@ implementation.
 - `SDSCTL_PROBE_CHROMIUM=/absolute/path/to/chromium` selects an already installed
   Chromium (used for the ARM64 Pi test), without installing another package.
 
+## Integrated recovery acceptance
+
+`audit_browser_recovery.mjs` uses the actual `create_web_dashboard_app`, device
+authority/session middleware and native helper with a sandboxed Chromium
+extension. Its Python driver has no scanner daemon and generates only fictional
+credentials. It uses real clocks and alarms; the driver never installs cookies
+or supplies authentication to the page. This is still a test harness, not a
+production enrollment installer or an on-screen Pi acceptance result.
+
+```sh
+node scripts/experimental/audit_browser_recovery.mjs \
+  /absolute/private/staging \
+  /absolute/path/to/playwright/index.mjs \
+  /absolute/path/to/chromium \
+  /absolute/path/to/certutil \
+  /absolute/path/to/python \
+  deadline ip
+```
+
+The Python runtime needs the project's web dependencies. The five paths must
+be absolute and the existing staging directory must be owned by the current
+user with mode 0700. Choose `deadline`, `truncated`, `tls-eof`, `server-restart`,
+`worker-restart` or `revoke`, followed by `ip` or `dns` (loopback `localhost`).
+Each run retains a uniquely named fixture and a redacted `result.json` on success.
+It closes its own browser/server; it does not alter an installed TUI or service.
+Allow several minutes for actual renewal/retry alarms. A sandbox launch failure
+is a blocked test, not acceptance: do not disable sandboxing or TLS verification.
+
+The documented Chrome error `Native host has exited.` denotes an interrupted
+native pipe. Only that error is mapped to a saved, one-minute retry. Missing or
+forbidden hosts, protocol errors and invalid responses still fail closed. See
+[Chrome native-messaging errors](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging#debug-native-messaging).
+Native retry state survives worker recreation and clock rollback; explicit
+suspend/sign-out always takes precedence.
+
+## Earlier native-message proof
+
 ```sh
 PLAYWRIGHT_BROWSERS_PATH=/absolute/private/browser-cache \
   node scripts/experimental/audit_browser_device.mjs \

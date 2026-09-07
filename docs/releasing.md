@@ -275,6 +275,14 @@ release. Do not create a synthetic release tag for workflow testing: pull
 requests, `main` pushes, and manual dispatches already exercise the generic
 multi-platform build without authentication or publication.
 
+Before merging or tagging, also review the repository's open code-scanning
+alerts. A successful CodeQL workflow means analysis completed, not that no
+security findings exist. Resolve relevant findings in code and confirm the new
+analysis marks the branch instance fixed; do not dismiss an alert merely to
+make the release appear clean. Check the main-branch alert state again after
+merge. If any publication path fails, report partial publication explicitly
+and hold the GitHub release/Latest promotion until recovery is verified.
+
 ## 6. Verify published container images
 
 Before creating the GitHub release, perform read-only public verification of the

@@ -175,9 +175,14 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
-## Upgrade to v0.29.3
+## Upgrade to v0.29.4
 
-v0.29.3 shows `sdsctl` and the application version in the TUI's top header.
+v0.29.4 repairs the certificate tests that blocked v0.29.3's Python package
+publication. It keeps the same application behavior and needs no new credentials
+or configuration for an existing v0.29.3 installation. Use v0.29.4 for Python
+installs; v0.29.3 was published as containers but did not reach PyPI.
+
+The TUI shows `sdsctl` and the application version in its top header.
 Scanner model and firmware remain in Scanner, and Connection retains the
 endpoint and remote target. Short terminals keep a single-line Scanner summary;
 the 100-by-30 display gives it a compact full-width panel without scrolling the
@@ -210,14 +215,14 @@ The compatibility-sensitive Python distribution and import package remain
 `sds200`, while the command remains `sdsctl`. Upgrade the base package with:
 
 ```bash
-python -m pip install --upgrade "sds200==0.29.3"
+python -m pip install --upgrade "sds200==0.29.4"
 sdsctl --version
 ```
 
 Install or upgrade every optional Python runtime interface with:
 
 ```bash
-python -m pip install --upgrade "sds200[all]==0.29.3"
+python -m pip install --upgrade "sds200[all]==0.29.4"
 python -m pip check
 sdsctl --version
 ```
@@ -229,7 +234,7 @@ package and verification procedure.
 For the generic container, prefer the exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.3
+docker pull theboyd78/sdsctl:0.29.4
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release,
@@ -239,7 +244,7 @@ source-built and local-only. The separate `compose.remote.yaml` topology is
 documented in [Containers](Containers) and requires deliberate private-LAN TLS,
 identity, address, port, and firewall configuration.
 
-The Home Assistant App version tracks 0.29.3 while preserving its
+The Home Assistant App version tracks 0.29.4 while preserving its
 compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
 identities, persistent recordings, aggregate and individual card resource
 paths, and independently versioned card modules. Upgrade the repository-managed
