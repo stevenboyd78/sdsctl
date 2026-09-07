@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
@@ -230,6 +231,31 @@ def test_malformed_trust_is_rejected(incoming, bad):
     with pytest.raises(profile.BrowserProfileError):
         create(incoming)
     assert not (incoming / "native").exists()
+
+
+@pytest.mark.parametrize("fill", [b" ", b"A"])
+def test_maximum_malformed_pem_does_not_backtrack(fill):
+    prefix = b"-----BEGIN CERTIFICATE-----"
+    body = prefix + fill * (128 * 1024 - len(prefix))
+    # Bound the regression test in a separate process: malformed local input
+    # must not wedge setup even when it meets the maximum input size.
+    script = """
+import sys
+from sds200.browser_device_profile import _trust
+try:
+    _trust(sys.stdin.buffer.read())
+except ValueError:
+    raise SystemExit(0)
+raise SystemExit(1)
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        input=body,
+        capture_output=True,
+        timeout=5,
+    )
+    assert result.returncode == 0
+    assert result.stdout == result.stderr == b""
 
 
 def test_trust_bundle_rejects_private_keys_and_trailing_content(incoming, certificates):

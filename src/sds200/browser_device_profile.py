@@ -54,7 +54,9 @@ def _credential(body: bytes) -> str:
 def _trust(body: bytes) -> str:
     # Reject mixed certificate/private-key files and ignored trailing material.
     text = body.decode("ascii")
-    pattern = r"-----BEGIN CERTIFICATE-----\s+[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----"
+    # Keep a single body repetition: overlapping whitespace repetitions can
+    # backtrack quadratically on a bounded but malformed whitespace-only input.
+    pattern = r"-----BEGIN CERTIFICATE-----[A-Za-z0-9+/=\s]+-----END CERTIFICATE-----"
     if not re.search(pattern, text) or re.sub(pattern, "", text).strip():
         raise ValueError()
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
