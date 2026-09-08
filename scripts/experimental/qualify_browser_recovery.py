@@ -18,6 +18,7 @@ import sys
 import tempfile
 import time
 import traceback
+from contextlib import ExitStack
 from pathlib import Path
 
 from sds200.browser_device_bundle import browser_extension_identity, create_browser_bundle
@@ -60,6 +61,7 @@ def wait(check, timeout=45):
 
 def main():
     os.umask(0o077)
+    initial_owner = ExitStack()
     stage, browser, bwrap = map(Path, sys.argv[1:4])
     scenario = sys.argv[4] if len(sys.argv) == 5 else "confirm"
     assert scenario in {"confirm", "no-consent", "release", "release-seed-first"}
@@ -257,6 +259,7 @@ def main():
             f"chrome-extension://{key.extension_id}/seed.html",
         )
         if scenario == "release":
+            initial_owner.enter_context(_launch_lock(directory))
             phase = "prior-normal-setup"
             # Establish the actual prior normal installation in Chromium, not
             # just filesystem registration. The seed below is still deliberately
@@ -283,6 +286,7 @@ def main():
             assert scope.child.wait(timeout=3) == 0
             scope.close()
             scope = None
+            initial_owner.close()
             assert ledger.inspect().revision == 2
             ledger.suspend()  # Fictional pre-maintenance pause, never after release.
             no_connections()
@@ -636,6 +640,7 @@ def main():
                 pass
         if scope is not None:
             scope.close()
+        initial_owner.close()
         if keyring is not None and keyring.poll() is None:
             keyring.terminate()
             try:

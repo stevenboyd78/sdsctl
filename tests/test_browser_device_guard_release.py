@@ -419,3 +419,35 @@ def test_unsupervised_receipts_are_never_release_authority(lab, completed):
         attempt(completed, lambda _: pytest.fail("Must reject before consent"))
     assert state(lab, completed) == before
     blocked(lab)
+
+
+@pytest.mark.parametrize("change", ["none", "no-release", "changed-guard", "later-revision",
+                                    "unlocked"])
+def test_worker_context_requires_exact_release_even_with_running_browser(
+        lab, completed, monkeypatch, change):
+    from sds200 import browser_device_worker as worker
+    if change != "no-release":
+        attempt(completed)
+    root = lab.args["directory"]
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
+    if change == "changed-guard":
+        private(root / MAINTENANCE_MARKER, b"changed")
+    elif change == "later-revision":
+        lab.ledger.resume(lab.ledger.inspect().revision)
+        lab.ledger.suspend()
+    with _launch_lock(root, create=False):
+        # Opaque Chromium-owned marker is present during a real worker start.
+        private(root / "SingletonLock", b"fictional running browser")
+        before = state(lab, completed)
+        if change in {"none", "unlocked"}:
+            result = worker.worker_context(lab.configuration, selected, None)
+            assert result["role"] == "normal" and result["acknowledge"] is False
+        else:
+            with pytest.raises((ValueError, release.BrowserGuardReleaseError,
+                                BrowserHandoffError, BrowserProfileAccessError, OSError)):
+                worker.worker_context(lab.configuration, selected, None)
+        assert state(lab, completed) == before
+    if change == "unlocked":
+        with pytest.raises(ValueError):
+            worker.worker_context(lab.configuration, selected, None)

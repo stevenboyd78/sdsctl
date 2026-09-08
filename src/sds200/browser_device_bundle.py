@@ -19,18 +19,17 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass
-from importlib.resources import files
 from pathlib import Path
 
 from .browser_device_native import BrowserNativeConfiguration, _private_read
 from .browser_device_native import load_browser_native_configuration as load_configuration
 from .browser_device_profile import _platform, _write, inspect_browser_profile
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import MODULES as MODULES
+from .browser_device_worker import worker_graph
 from .exceptions import ConfigurationError
 
 NATIVE_HOST = "org.sdsctl.browser_device"
-MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs",
-           "browser_device_startup.mjs", "browser_device_resume.mjs")
 
 
 class BrowserBundleError(ConfigurationError):
@@ -96,19 +95,16 @@ def _json(value: object) -> bytes:
 
 
 def _artifacts(
-    root: Path, config: BrowserNativeConfiguration, key: BrowserExtensionIdentity,
+    root: Path, config: BrowserNativeConfiguration, key: BrowserExtensionIdentity, public_key: Path,
 ) -> dict[str, bytes]:
     python = Path(sys.executable)
     if not python.is_absolute() or not python.is_file() or not os.access(python, os.X_OK):
         raise ValueError()
     # Keep the venv interpreter path; resolving its symlink would lose that venv.
-    settings = json.dumps({"origin": config.origin, "identity": config.identity,
-                           "nativeHost": NATIVE_HOST}, ensure_ascii=True)
     origin = json.dumps(config.origin)
     host = f"[{config.hostname}]" if ":" in config.hostname else config.hostname
     pattern = f"https://{host}:{config.port}/"
-    assets = files("sds200.browser_assets")
-    result = {f"extension/{name}": assets.joinpath(name).read_bytes() for name in MODULES}
+    _, result = worker_graph()
     logout = result["extension/browser_device_logout.mjs"].decode("utf-8")
     # The packaged logout module has no imports; build a classic isolated-world
     # entrypoint without exposing its symbols in the page or requiring WAR access.
@@ -140,19 +136,6 @@ def _artifacts(
                 "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'",
             },
         }),
-        "extension/worker.mjs": (
-            "import {connectChromeRecovery} from './browser_device_recovery.mjs';\n"
-            "import {connectLogoutWorker} from './browser_device_logout.mjs';\n"
-            "import {connectBrowserEntry} from './browser_device_startup.mjs';\n"
-            "import {createChromeResumePorts,connectResumeWorker} "
-            "from './browser_device_resume.mjs';\n"
-            f"const config = {settings};\n"
-            "const controller = connectChromeRecovery(chrome, config, "
-            "createChromeResumePorts(chrome,config));\n"
-            "const logout=connectLogoutWorker(chrome, controller, config.origin);\n"
-            "connectResumeWorker(chrome,controller,Date.now,logout.retireAfterResume);\n"
-            "connectBrowserEntry(chrome);\n"
-        ).encode("ascii"),
         "extension/content.js": content.encode("utf-8"),
         "extension/control.html": (
             "<!doctype html><meta charset='utf-8'><title>SDSCTL review bundle</title>"
@@ -238,11 +221,14 @@ def _artifacts(
         "native_host.py": (
             "import os, sys\nfrom pathlib import Path\n"
             "from sds200.browser_device_native import run_browser_native\n"
+            "from sds200.browser_device_worker import BrowserWorkerSelection\n"
             "raise SystemExit(run_browser_native(\n"
             f"    Path({str(config.root)!r}), sys.argv[1:],\n"
             "    os.fdopen(os.dup(0), 'rb', buffering=0),\n"
             "    os.fdopen(os.dup(1), 'wb', buffering=0),\n"
-            f"    expected_identity={config.identity!r},\n))\n"
+            f"    expected_identity={config.identity!r},\n"
+            f"    worker=BrowserWorkerSelection(Path({str(root)!r}), "
+            f"Path({str(public_key)!r})),\n))\n"
         ).encode(),
         NATIVE_HOST + ".json": _json({
             "name": NATIVE_HOST, "description": "SDSCTL experimental device recovery",
@@ -268,7 +254,7 @@ def create_browser_bundle(
         if (config.extension_origin != f"chrome-extension://{key.extension_id}/"
                 or inspected.identity != config.identity):
             raise ValueError()
-        artifacts = _artifacts(root, config, key)
+        artifacts = _artifacts(root, config, key, public_key)
         receipt = _json({
             "version": 1, "experimental": True, "extension_id": key.extension_id,
             "identity": config.identity, "public_key_sha256": key.public_key_sha256,

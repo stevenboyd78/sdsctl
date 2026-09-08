@@ -19,6 +19,7 @@ from sds200.browser_device_registration import MAINTENANCE_MARKER, BrowserRegist
 from sds200.browser_device_resume_boundary import BrowserResumeBoundary
 from sds200.browser_device_resume_workflow import BrowserResumeWorkflowError
 from sds200.browser_device_startup import BrowserStartupError, _launch_lock, check_browser_startup
+from sds200.browser_device_worker import worker_graph
 from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
 from tests.test_browser_device_native import certificates as certificates
@@ -48,9 +49,12 @@ def committed(lab, kind="reconcile"):
 
 
 def invoke(root, config, body=None, caller=None):
+    body = body or {"version": 1, "action": "confirm-retirement",
+                    "identity": config.identity, "intent": INTENT}
+    envelope = {"version": 1, "action": "worker-request", "build": worker_graph()[0],
+                "request": body}
     result = subprocess.run([str(root / "native-host"), caller or config.extension_origin],
-        input=frame(body or {"version": 1, "action": "confirm-retirement",
-                            "identity": config.identity, "intent": INTENT}),
+        input=frame(envelope),
         capture_output=True, timeout=13)
     assert result.returncode == 0 and result.stderr == b""
     assert len(result.stdout) >= 4
@@ -94,6 +98,8 @@ def test_same_identity_recovery_bundle_and_actual_native_wrapper(lab, tmp_path, 
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest
         assert path.stat().st_mode & 0o777 == (0o700 if name == "native-host" else 0o600)
         assert CREDENTIAL.encode() not in path.read_bytes()
+    for name, body in worker_graph()[1].items():
+        assert (root / name).read_bytes() == body == (lab.args["bundle"] / name).read_bytes()
     page = (root / "extension/recovery.html").read_text()
     assert args["operation_id"] not in page and INTENT not in page
     assert "automatic sign-in paused" in page
@@ -299,6 +305,16 @@ globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
     if(!listeners[0](message,sender,resolve))reject(Error('unregistered'));
   }),
   sendNativeMessage:async(host,request)=>{
+    const envelope=request;
+    if(request.action==='worker-context') {
+      const body=Buffer.from(JSON.stringify(request)), header=Buffer.alloc(4);
+      header.writeUInt32LE(body.length);
+      const bytes=execFileSync(root+'/native-host',[extensionOrigin],{
+        input:Buffer.concat([header,body]),timeout:13000,maxBuffer:8192});
+      const response=JSON.parse(bytes.subarray(4));assert.equal(response.ok,true);
+      return response;
+    }
+    assert.equal(request.action,'worker-request');request=request.request;
     calls.push(request.action);assert.equal(host,'org.sdsctl.browser_device');
     if(request.action==='confirm-retirement')
       assert.deepEqual(request,{version:1,action:'confirm-retirement',identity,intent});
@@ -308,7 +324,7 @@ globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
         ['version','action','identity','intent','retirement','mode','revision'].sort());
       assert.equal(request.identity,identity);assert.equal(request.intent,intent);
     }
-    const body=Buffer.from(JSON.stringify(request)),header=Buffer.alloc(4);
+    const body=Buffer.from(JSON.stringify(envelope)),header=Buffer.alloc(4);
     // Native messaging uses host byte order; fixture runs on this Linux host.
     if(new Uint8Array(new Uint32Array([1]).buffer)[0]===1)header.writeUInt32LE(body.length);
     else header.writeUInt32BE(body.length);

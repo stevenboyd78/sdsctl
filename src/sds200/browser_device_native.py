@@ -34,6 +34,8 @@ from .browser_device_protocol import (
     BrowserResumeRequest,
     BrowserRetirementAcknowledgement,
     BrowserRetirementRequest,
+    BrowserWorkerContextRequest,
+    BrowserWorkerRequest,
     read_browser_device_request,
 )
 from .browser_device_recovery import (
@@ -46,6 +48,7 @@ from .browser_device_recovery import (
     parse_exchange_response,
 )
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import BrowserWorkerSelection, worker_context, worker_graph
 
 _TOTAL_SECONDS = 10
 
@@ -266,6 +269,7 @@ def _native_request(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
     retirement: BrowserRetirementSelection | None = None,
+    worker: BrowserWorkerSelection | None = None,
 ) -> int:
     try:
         try:
@@ -280,7 +284,19 @@ def _native_request(
                 request = read_browser_device_request(source)
                 if request is None:
                     raise ValueError()
-                if retirement is not None or isinstance(
+                if worker is not None:
+                    if (expected_identity is None or not isinstance(request,
+                            (BrowserWorkerContextRequest, BrowserWorkerRequest))
+                            or request.build != worker_graph()[0]):
+                        raise ValueError()
+                    if isinstance(request, BrowserWorkerRequest):
+                        request = request.request
+                elif isinstance(request, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
+                    raise ValueError()
+                if isinstance(request, BrowserWorkerContextRequest):
+                    assert worker is not None
+                    document = worker_context(configuration, worker, retirement)
+                elif retirement is not None or isinstance(
                         request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement,
                                   BrowserRecoveryLaunchRequest)):
                     # Separate recovery endpoint. It can confirm evidence and,
@@ -338,6 +354,7 @@ def run_browser_native(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
     retirement: BrowserRetirementSelection | None = None,
+    worker: BrowserWorkerSelection | None = None,
 ) -> int:
     """Dedicated Linux native process: supervise one child and reap it on timeout.
 
@@ -368,7 +385,7 @@ def run_browser_native(
             libc.prctl.restype = ctypes.c_int
             if libc.prctl(1, signal.SIGKILL, 0, 0, 0) == 0 and os.getppid() == parent:
                 code = _native_request(root, caller_arguments, source, destination,
-                                       expected_identity=expected_identity, retirement=retirement)
+                    expected_identity=expected_identity, retirement=retirement, worker=worker)
         except BaseException:
             pass  # Dedicated child exits without exception/secret output or buffered flushing.
         os._exit(code)

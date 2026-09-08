@@ -511,8 +511,9 @@ delete it manually to advance the workflow.
 
 `browser_device_retirement_bundle.py` can now prepare a **new, inert** recovery
 bundle for one already-completed stopped-browser maintenance operation. This is
-not an installation command or a runnable recovery procedure. Normal bundle
-generation, registration, startup and service behavior remain unchanged.
+not an installation command or a runnable recovery procedure. The shared-worker
+candidate described below changes generated worker/native wrappers; it does not
+install or change production services.
 
 The trusted local caller supplies the exact original browser directory, profile,
 normal bundle, public extension key, private archive root, operation ID and
@@ -871,7 +872,7 @@ by a read-only browser-storage/cookie/alarm observer. The recovery-produced paus
 is not rewritten between handoff and ordinary startup. A fixture-owned loopback
 listener rejects any authentication-endpoint connection.
 
-**Combined Chromium acceptance is currently blocked.** On the small Pi's
+**Historical failure, before the shared-worker candidate:** on the small Pi's
 Chromium 151.0.7922.173 and HDMI Pi's 152.0.7977.75, the original seed-first
 experiment completed supervised ACK, exact host restoration and local guard
 release, but ordinary startup did not display the normal paused page. The visible
@@ -887,8 +888,8 @@ count tab navigation, manual reload, a copied browser profile or a new wrapper a
 acceptance. A tested recovery-manifest version change did not resolve the problem
 and was removed. At that checkpoint the specific cause was unresolved; the
 follow-up investigation below narrows it. No permissions were broadened, policy bypass added or Chromium
-database edited. The next gate is a reviewed, reliable normal/recovery bundle
-transition followed by both full Pi sequences. Do not deploy this local API yet.
+database edited. The shared-worker candidate below now passes those two private
+Pi sequences. This still does not qualify production deployment of the local API.
 
 This fixture still deliberately seeds its initial pending browser state through
 a separate extension. It does not qualify how that pending state originally
@@ -933,36 +934,68 @@ six starts per Pi. Both changed-code controls reproduced the stale A worker on
 the two B starts. The script records `production_acceptance: false`; reproducing
 the expected negative control is not a successful production transition.
 
-#### Stable worker dispatch: next design boundary
+#### Stable worker dispatch: implemented internal candidate
 
 The supported primitives above provide a promising implementation direction,
 not a qualified replacement for the real handoff. Do **not** copy the prototype's
 manifest-name selector into production. A display label cannot grant normal
 mode, recovery authority, resume consent or guard release.
 
-The next candidate should keep the worker entry and its complete imported code
-graph identical across normal/recovery roles within one build. Before composing
-either controller, obtain an exact, bounded, read-only context from the selected
-native host. The native side must validate canonical registration, the current
-owned profile, code/build identity and the applicable maintenance/handoff evidence.
-Browser/page messages must not select paths, operation IDs or the authority mode.
-Missing, stale, ambiguous, unknown or inconsistent context must fail closed.
+The candidate keeps the worker entry and its complete static imported code graph
+byte-identical across normal/recovery roles within one build. Before composing
+either controller, it obtains an exact, bounded, read-only `worker-context` from
+the fixed native host. The native side validates canonical registration, the
+current owned profile, build identity and applicable maintenance/handoff evidence.
+Browser/page messages cannot select paths, operation IDs or the authority mode.
+Missing, stale, ambiguous, unknown or inconsistent context fails closed.
 
-Recovery mode must construct only the existing confirmation-only composition:
+The build digest covers the worker entry template, shared browser modules and
+packaged `browser_device*.py` native implementation. Every subsequent action is
+carried in a strict `worker-request` envelope with that executing build identity.
+Generated hosts reject legacy/unwrapped actions and stale builds before dispatch.
+This detects an older cached entry, not malicious same-account code, a signing
+identity or proof of safe cross-release cache migration. The complete graph is
+identical within this build; mixed graph/application upgrades remain a separate
+qualification gate.
+
+Normal context is bound to a live owned Chromium ancestor, its exact managed
+command tail, canonical private registration and busy launcher lock. Chromium
+can flatten its process title; this path matches the known bundle and exact
+setup/startup suffix rather than guessing quoted arguments or splitting a path
+on spaces. Literal spaces remain supported. Switch-like ambiguous names, extra
+nonempty root/extension overrides, another bundle/page, unsafe paths and missing
+ownership are refused. No browser request or environment variable selects a path.
+
+After guard release, the worker verifies the same completed release and exact
+paused native revision while the new browser is running. Only current Singleton
+presence differs from offline inspection. The original guard, canonical files,
+ACK, restored host, inode bindings and old recovery supervisor's stopped proof
+are still required. No new guard-removal or resume operation is exposed.
+
+Recovery mode constructs only the existing confirmation-only composition:
 no ordinary startup tick, authentication, cookie installation, resume, alarm
-scheduling or normal control listeners. Normal mode must still respect setup
-consent and browser/native pause. A stale worker/build must be refused explicitly,
-not allowed to fall back to ordinary operation. Existing launch ownership,
-supervisor readiness, acknowledgement, restoration and guard-release checks must
-remain intact. Shared source availability is not permission to execute both modes.
+scheduling or normal control listeners. Normal mode preserves setup consent and
+browser/native pause. There is no fallback from refused context to ordinary mode.
+The selected recovery host supplies the bound readiness options only after live
+handoff/supervisor validation; obtaining context itself writes neither readiness
+nor acknowledgement. Shared source availability is not permission to execute
+both compositions. Recovery manifests still have no dashboard content script or
+normal setup/resume page, and their permissions have not been broadened.
 
-Required follow-up includes strict context/schema and stale-build tests, proof
-that recovery cannot initialize normal capabilities, lost/invalid context with
-zero authentication, and both complete Pi handoff/release sequences with two
-ordinary paused starts and read-only final browser-state inspection. The current
-runtime still uses the earlier separate worker compositions and combined
-acceptance remains blocked. Worker changes across application releases, actual
-power loss and deployment remain separate lifecycle gates.
+Strict context/schema, stale-build, missing-owner and guarded-live-context tests
+cover these boundaries. On Chromium 151.0.7922.173 and 152.0.7977.75, private
+installed-wheel qualification passed both `release` (real normal setup first)
+and `release-seed-first`. Each completed supervised confirmation, host restoration,
+guard release and two ordinary paused starts without a manual reload. Read-only
+browser API inspection confirmed clean paused storage, no session cookie and no
+recovery alarm. Both separate `no-consent` runs preserved the guard and produced
+no browser acknowledgement. All six runs observed zero authentication-endpoint
+connections and unchanged native inputs. Production TUI services were not changed.
+
+These are same-build private Chromium results with synthetic pending state, not
+real-server sign-in or physical-display acceptance. Worker changes across
+application releases, genuinely interrupted user resume, actual power loss,
+Firefox/WPE and production deployment remain separate lifecycle gates.
 
 ## Verified server evidence and exact-generation sessions
 

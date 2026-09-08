@@ -22,7 +22,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .browser_device_bundle import NATIVE_HOST, _json
-from .browser_device_native import BrowserRetirementSelection, _private_read
+from .browser_device_native import (
+    BrowserNativeConfiguration,
+    BrowserRetirementSelection,
+    _private_read,
+)
 from .browser_device_proc import HOST_PROC, check_host_proc
 from .browser_device_profile import _platform, _write
 from .browser_device_profile_access import browser_profile_access
@@ -39,6 +43,7 @@ from .browser_device_resume_workflow import BrowserResumeWorkflow
 from .browser_device_retirement_bundle import _canonical, _validate
 from .browser_device_startup import _launch_lock
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import BrowserWorkerSelection, context_document
 
 _FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
 _HOST = NATIVE_HOST + ".json"
@@ -196,7 +201,10 @@ class BrowserRecoveryHandoff:
                 or type(process) is not list or len(process) != 2
                 or any(type(n) is not int or n <= 0 for n in process)):
             raise ValueError()
-        if not stopped and not live:
+        # Restored evidence may also be inspected by the new normal worker under
+        # its independently checked current launch owner. It never revives the
+        # old handoff owner or skips the old supervisor's stopped proof.
+        if not stopped and not live and not restored:
             raise ValueError()
         if live:
             if _process_identity(process[0], proc=self._proc) != process:
@@ -485,3 +493,38 @@ def handoff_native_request(
             raise ValueError()
         handoff._ack(record, proof)
         return {"version": 1, "ok": True, "mode": "retired_paused", "acknowledged": True}
+
+
+def handoff_worker_context(
+    configuration: BrowserNativeConfiguration, worker: BrowserWorkerSelection,
+    selection: BrowserRetirementSelection,
+) -> dict[str, object]:
+    """Read-only role selection before readiness; never writes readiness or ACK."""
+    if (selection.handoff is None or worker.directory is None
+            or worker.normal_bundle is None or worker.intent is None):
+        raise ValueError()
+    raw = _private_read(selection.handoff, "operation.json", 32768)
+    data = json.loads(raw, object_pairs_hook=_object)
+    # Construct from fixed wrapper paths, not targets supplied by the browser or
+    # unvalidated operation record. _checked reconstructs every canonical byte.
+    handoff = BrowserRecoveryHandoff(selection.handoff, directory=worker.directory,
+        profile=configuration.root, bundle=worker.normal_bundle, public_key=worker.public_key,
+        archives=selection.archives, recovery_bundle=worker.bundle,
+        operation_id=selection.operation_id, browser_intent=worker.intent,
+        supervised=data["supervised"])
+    if handoff._supervised:
+        handoff._proc = worker.bundle / HOST_PROC
+        check_host_proc(handoff._proc, mounted=True)
+    with browser_profile_access(selection.handoff, exclusive=True):
+        record, _, proof = handoff._checked(stopped=False, live=True)
+        if record != raw or proof.identity != configuration.identity:
+            raise ValueError()
+        launch = None
+        if handoff._supervised:
+            body = json.loads(handoff._launch_body(record, live=True))
+            launch = {"identity": configuration.identity, "intent": worker.intent,
+                      "binding": body["binding"], "nativeHost": NATIVE_HOST}
+        checked, _, current = handoff._checked(stopped=False, live=True)
+        if checked != record or current != proof:
+            raise ValueError()
+        return context_document(configuration, role="recovery", acknowledge=True, launch=launch)

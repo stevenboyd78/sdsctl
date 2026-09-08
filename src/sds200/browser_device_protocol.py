@@ -74,6 +74,18 @@ class BrowserRecoveryLaunchRequest:
     binding: str = field(repr=False)
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserWorkerContextRequest:
+    build: str
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserWorkerRequest:
+    build: str
+    request: (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
+              | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest)
+
+
 def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
     action = value["action"]
     fields = {"review-resume": set(), "prepare-resume": {"intent", "revision", "generation"},
@@ -109,7 +121,8 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 def parse_browser_device_request(
     payload: bytes,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
-      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest):
+      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
+      | BrowserWorkerContextRequest | BrowserWorkerRequest):
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -123,6 +136,23 @@ def parse_browser_device_request(
             or type(value["action"]) is not str
         ):
             raise _invalid()
+        if value["action"] in {"worker-context", "worker-request"}:
+            context = value["action"] == "worker-context"
+            if (set(value) != {"version", "action", "build"} | (set() if context else {"request"})
+                    or type(value["build"]) is not str
+                    or re.fullmatch(r"[a-f0-9]{64}", value["build"]) is None):
+                raise _invalid()
+            if context:
+                return BrowserWorkerContextRequest(value["build"])
+            inner = value["request"]
+            if (type(inner) is not dict or type(inner.get("action")) is not str
+                    or inner["action"] in {
+                    "worker-context", "worker-request"}):
+                raise _invalid()
+            parsed = parse_browser_device_request(json.dumps(inner).encode("utf-8"))
+            if isinstance(parsed, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
+                raise _invalid()
+            return BrowserWorkerRequest(value["build"], parsed)
         if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
             return _resume(value)
         if value["action"] == "recovery-launch-ready":
@@ -180,7 +210,8 @@ def _read_exact(stream: BinaryIO, count: int, *, allow_eof: bool = False) -> byt
 def read_browser_device_request(
     stream: BinaryIO,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
-      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest | None):
+      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
+      | BrowserWorkerContextRequest | BrowserWorkerRequest | None):
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.

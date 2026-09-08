@@ -57,7 +57,7 @@ def _validated_bundle(
             or config.extension_origin != f"chrome-extension://{key.extension_id}/"
             or (fresh and (inspected.mode is not RecoveryMode.ACTIVE or inspected.revision != 1))):
         raise ValueError()
-    artifacts = _artifacts(bundle, config, key)
+    artifacts = _artifacts(bundle, config, key, public_key)
     receipt = _json({
         "version": 1, "experimental": True, "extension_id": key.extension_id,
         "identity": config.identity, "public_key_sha256": key.public_key_sha256,

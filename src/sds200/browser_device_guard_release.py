@@ -87,10 +87,11 @@ def _inode(path: Path) -> list[int]:
     return [info.st_dev, info.st_ino]
 
 
-def _snapshot(handoff: BrowserRecoveryHandoff) -> dict[str, object]:
+def _snapshot(handoff: BrowserRecoveryHandoff, *, browser_running: bool = False,
+              ) -> dict[str, object]:
     if not handoff._supervised:
         raise ValueError()
-    record, _, proof = handoff._checked(stopped=True, restored=True)
+    record, _, proof = handoff._checked(stopped=not browser_running, restored=True)
     ack = handoff._ack(record, proof, stopped=True)
     restored = handoff._restoration(record, ack)
     for name in ("restoration-started.json", "restored.json"):
@@ -191,7 +192,8 @@ def _read(path: Path) -> bytes:
     return body
 
 
-def _confirmed(handoff: BrowserRecoveryHandoff, *, release_id: str) -> BrowserGuardReleaseEvidence:
+def _confirmed(handoff: BrowserRecoveryHandoff, *, release_id: str,
+               browser_running: bool = False) -> BrowserGuardReleaseEvidence:
     path = handoff._session._root / RELEASE_JOURNAL
     raw = _read(path)
     value = json.loads(raw, object_pairs_hook=_object)
@@ -207,7 +209,8 @@ def _confirmed(handoff: BrowserRecoveryHandoff, *, release_id: str) -> BrowserGu
                    or value[key] < 0 for key in ("reviewed_at", "approved_at", "expires_at"))
             or not value["reviewed_at"] <= value["approved_at"] < value["expires_at"]
             or value["expires_at"] != value["reviewed_at"] + _SECONDS
-            or value["evidence"] != _snapshot(handoff) or raw != _json(value)):
+            or value["evidence"] != _snapshot(handoff, browser_running=browser_running)
+            or raw != _json(value)):
         raise ValueError()
     if _read(path) != raw or value["journal_binding"] != _inode(path):
         raise ValueError()
@@ -310,6 +313,25 @@ def check_paused_guard_release(
     The launcher rechecks this under its launch lock. Offline inspection is also
     read-only and conservatively requires the released browser to be stopped.
     """
+    _check_release(root, bundle=bundle, profile=profile, public_key=public_key,
+                   browser_running=False)
+
+
+def _check_worker_guard_release(
+    root: Path, *, bundle: Path, profile: Path, public_key: Path,
+) -> None:
+    """Internal worker check, after verifying its live Chromium ancestor/launch owner.
+
+    Only current Singleton presence differs from the offline check. Completed
+    release, exact paused revision, restored host and old supervisor exit remain
+    mandatory. There is no message/CLI option that enables this path.
+    """
+    _check_release(root, bundle=bundle, profile=profile, public_key=public_key,
+                   browser_running=True)
+
+
+def _check_release(root: Path, *, bundle: Path, profile: Path, public_key: Path,
+                   browser_running: bool) -> None:
     path = root / RELEASE_JOURNAL
     raw = _read(path)
     value = json.loads(raw, object_pairs_hook=_object)
@@ -327,6 +349,7 @@ def check_paused_guard_release(
         operation_id=evidence["operation_id"], browser_intent=evidence["browser_intent"],
         supervised=True)
     with browser_profile_access(profile, exclusive=False):
-        result = _confirmed(handoff, release_id=value["release_id"])
+        result = _confirmed(handoff, release_id=value["release_id"],
+                            browser_running=browser_running)
     if result.receipt_sha256 != hashlib.sha256(raw).hexdigest():
         raise ValueError()

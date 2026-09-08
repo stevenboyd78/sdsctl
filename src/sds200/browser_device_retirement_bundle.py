@@ -15,7 +15,6 @@ import os
 import shlex
 import sys
 from dataclasses import asdict
-from importlib.resources import files
 from pathlib import Path
 
 from .browser_device_bundle import (
@@ -33,9 +32,9 @@ from .browser_device_resume_maintenance import BrowserResumeRetirementEvidence
 from .browser_device_resume_workflow import BrowserResumeWorkflow
 from .browser_device_startup import _launch_lock
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import MODULES, worker_graph
 
-_MODULES = ("browser_device_recovery.mjs", "browser_device_retirement_ui.mjs",
-            "browser_device_retirement_startup.mjs")
+_MODULES = MODULES
 
 
 class BrowserRetirementBundleError(RuntimeError):
@@ -64,11 +63,8 @@ def _canonical(
             or config.extension_origin != f"chrome-extension://{key.extension_id}/"
             or not python.is_absolute() or not python.is_file() or not os.access(python, os.X_OK)):
         raise ValueError()
-    settings = json.dumps({"origin": config.origin, "identity": config.identity,
-                           "nativeHost": NATIVE_HOST}, ensure_ascii=True)
     host = f"[{config.hostname}]" if ":" in config.hostname else config.hostname
-    assets = files("sds200.browser_assets")
-    artifacts = {f"extension/{name}": assets.joinpath(name).read_bytes() for name in _MODULES}
+    _, artifacts = worker_graph()
     artifacts.update({
         "extension/manifest.json": _json({
             "manifest_version": 3, "version": "0.0.4",
@@ -82,12 +78,6 @@ def _canonical(
                 "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'",
             },
         }),
-        "extension/worker.mjs": (
-            "import {connectChromeRetirementRecovery} "
-            "from './browser_device_retirement_startup.mjs';\n"
-            f"connectChromeRetirementRecovery(chrome, {settings}"
-            + (", true" if handoff is not None else "") + ");\n"
-        ).encode("ascii"),
         "extension/recovery.mjs": (
             "import {connectRetirementPage} from './browser_device_retirement_ui.mjs';\n"
             "connectRetirementPage({document,window,runtime:chrome.runtime});\n"
@@ -131,11 +121,16 @@ def _canonical(
             "import os, sys\nfrom pathlib import Path\n"
             "from sds200.browser_device_native import (\n"
             "    run_browser_native, BrowserRetirementSelection)\n"
+            "from sds200.browser_device_worker import BrowserWorkerSelection\n"
             "raise SystemExit(run_browser_native(\n"
             f"    Path({str(config.root)!r}), sys.argv[1:],\n"
             "    os.fdopen(os.dup(0), 'rb', buffering=0),\n"
             "    os.fdopen(os.dup(1), 'wb', buffering=0),\n"
             f"    expected_identity={config.identity!r},\n"
+            f"    worker=BrowserWorkerSelection(Path({str(root)!r}),"
+            f"Path({str(session._registration['public_key'])!r}),"
+            f"Path({str(session._root)!r}),Path({str(session._registration['bundle'])!r}),"
+            f"{browser_intent!r}),\n"
             f"    retirement=BrowserRetirementSelection(Path({str(session._archives)!r}),"
             f"{operation_id!r}"
             + (f", Path({str(handoff)!r})" if handoff is not None else "") + "),\n))\n"
@@ -151,7 +146,6 @@ def _canonical(
     launch = {}
     if supervised:
         name = "browser_device_launch.mjs"
-        artifacts["extension/" + name] = assets.joinpath(name).read_bytes()
         # Hash the entire canonical pre-injection bundle, not a caller-edited
         # receipt. No recursive hash: the resulting binding is injected last.
         binding = hashlib.sha256(_json({"version": 1, "handoff": str(handoff),
@@ -162,11 +156,6 @@ def _canonical(
         launch = {"launch_binding": binding}
         options = json.dumps({"identity": config.identity, "intent": browser_intent,
                               "binding": binding, "nativeHost": NATIVE_HOST}, ensure_ascii=True)
-        artifacts["extension/worker.mjs"] += (
-            f"import {{connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation}} "
-            f"from './{name}';\n"
-            f"connectRecoveryLaunchWorker(chrome, {options});\n"
-            f"connectRecoveryLaunchNavigation(chrome, {options});\n").encode("ascii")
         artifacts["extension/recovery.mjs"] += (
             f"import {{connectRecoveryLaunchPage}} from './{name}';\n"
             f"connectRecoveryLaunchPage({{document,window,runtime:chrome.runtime}}, {options});\n"
@@ -188,7 +177,7 @@ def _canonical(
 
 def _validate(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
     _matches(root / "bundle.json", receipt)
-    supervised = "extension/browser_device_launch.mjs" in artifacts
+    supervised = "launch_binding" in json.loads(receipt)
     extra = {HOST_PROC} if supervised else set()
     names = {"bundle.json", "extension", "native-host", "native_host.py", NATIVE_HOST + ".json"}
     if ({p.name for p in root.iterdir()} != names | extra

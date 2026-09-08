@@ -486,7 +486,9 @@ def callback():
         cfg=load_browser_native_configuration(values['profile'])
         proof=BrowserResumeBoundary(values['profile'],archives=values['archives']).confirm(
             operation_id=values['operation_id'],browser_intent=values['browser_intent'])
-        body=json.dumps({'version':1,'action':'acknowledge-retirement',**asdict(proof)}).encode()
+        from sds200.browser_device_worker import worker_graph
+        body=json.dumps({'version':1,'action':'worker-request','build':worker_graph()[0],
+            'request':{'version':1,'action':'acknowledge-retirement',**asdict(proof)}}).encode()
         result=subprocess.run([str(values['recovery_bundle']/'native-host'),cfg.extension_origin],
             input=struct.pack('=I',len(body))+body,capture_output=True,timeout=13)
         assert json.loads(result.stdout[4:])['acknowledged'] is True

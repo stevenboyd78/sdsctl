@@ -290,7 +290,10 @@ def test_page_worker_coordinator_adapter_and_real_native_evidence(lab, archives,
     assert snapshot(lab) == before and lab.ledger.inspect().mode is RecoveryMode.PAUSED
 
 
-def test_generated_bundle_does_not_install_confirmation_controls():
+def test_shared_graph_contains_inert_confirmation_code():
     from sds200.browser_device_bundle import MODULES
 
-    assert "browser_device_retirement_ui.mjs" not in MODULES
+    assert "browser_device_retirement_ui.mjs" in MODULES
+    # Availability is not initialization: dispatch is selected by native context.
+    from sds200.browser_device_worker import worker_graph
+    assert b"startBrowserWorker" in worker_graph()[1]["extension/worker.mjs"]

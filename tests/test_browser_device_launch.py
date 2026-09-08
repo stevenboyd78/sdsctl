@@ -57,7 +57,9 @@ assert sys.argv[-1]=='about:blank'
 if kind=='ignore-stop':signal.signal(signal.SIGINT,signal.SIG_IGN)
 else:signal.signal(signal.SIGINT,lambda *_:sys.exit(0))
 def native(body):
-    data=json.dumps(body).encode()
+    from sds200.browser_device_worker import worker_graph
+    data=json.dumps({'version':1,'action':'worker-request','build':worker_graph()[0],
+                     'request':body}).encode()
     p=subprocess.run([str(bundle/'native-host'),'chrome-extension://'+receipt['extension_id']+'/'],
         input=struct.pack('=I',len(data))+data,capture_output=True,timeout=13)
     assert p.stderr==b''
