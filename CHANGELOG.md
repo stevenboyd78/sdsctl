@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal browser acknowledgement coordinator for the exact retired
+  resume intent, backed by read-only native history confirmation. Require a
+  separate one-use review/confirmation, fresh matching evidence and unchanged
+  persisted state; resolve pending state only to clean-but-paused, never signed
+  in. Cover sign-out races, stale replies, clock changes and lost storage replies
+  with Node tests and joined native-ledger fixtures. No installed page, native
+  message, production adapter or automatic recovery caller is enabled.
 - Add an internal experimental native resume-history retirement candidate:
   read-only profile-bound review, a private durable archive before mutation,
   stale-review refusal, revision fencing of old approvals, preservation of all

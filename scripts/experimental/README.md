@@ -279,6 +279,7 @@ node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
 node --test scripts/experimental/test_browser_device_startup.mjs
+node --test scripts/experimental/test_browser_device_retirement.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests
@@ -286,6 +287,14 @@ and a real Node-to-Python native-pipe/persistent-pause integration test. No real
 browser, device credential or Home Assistant connection is used. The coordinator
 tests cover alarms, ordered cookie installation/removal, persisted sign-out intent,
 generation races, unsafe state and the Chrome adapter's message/cookie checks.
+
+The optional internal retired-intent coordinator has no installed Chrome/native
+adapter or page binding. Its deterministic tests cover one-use explicit review,
+fresh matching native evidence, unchanged pending state, newer sign-out and
+clean-but-paused persistence. `tests/test_browser_device_retirement.py` also joins
+real native history/archive confirmation through a test-only Python subprocess
+adapter. DNS/IPv4/IPv6 are identity inputs there, not network/TLS acceptance.
+Neither suite can establish physical-display or production recovery readiness.
 
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out

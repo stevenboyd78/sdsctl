@@ -58,6 +58,21 @@ class BrowserResumeMaintenanceResult:
     cancelled: int
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserResumeRetirementEvidence:
+    """Trusted worker handoff, not server authorization or a signed receipt.
+
+    Kept off ordinary page messages and logs. The trusted adapter selects the
+    native review/archive out of band; browser messages cannot select file paths.
+    """
+
+    identity: str = field(repr=False)
+    intent: str = field(repr=False)
+    retirement: str = field(repr=False)
+    mode: RecoveryMode
+    revision: int
+
+
 def _encoded(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
             + "\n").encode("ascii")
@@ -206,14 +221,9 @@ class BrowserResumeMaintenance:
         except Exception:
             raise BrowserResumeMaintenanceError() from None
 
-    def confirm(
+    def _confirmed_archive(
         self, review: BrowserResumeMaintenanceReview, *, archive: Path,
-    ) -> BrowserResumeMaintenanceResult:
-        """Read-only confirmation of exact archived after-state, even after lost ACK.
-
-        Archive existence alone is NOT completion. A changed ledger fails closed;
-        this does not restore files, rerun retirement or prove browser/server state.
-        """
+    ) -> tuple[BrowserResumeMaintenanceResult, dict[str, object]]:
         try:
             self._validate_review(review)
             if archive.is_relative_to(self._configuration.root):
@@ -250,6 +260,39 @@ class BrowserResumeMaintenance:
                     raise BrowserResumeMaintenanceError()
             return BrowserResumeMaintenanceResult(
                 state.revision + 1, RecoveryMode(state.mode), review.approvals - 1, review.pending,
+            ), anchor
+        except Exception:
+            raise BrowserResumeMaintenanceError() from None
+
+    def confirm(
+        self, review: BrowserResumeMaintenanceReview, *, archive: Path,
+    ) -> BrowserResumeMaintenanceResult:
+        """Read-only confirmation of exact archived after-state, even after lost ACK.
+
+        Archive existence alone is NOT completion. A changed ledger fails closed;
+        this does not restore files, rerun retirement or prove browser/server state.
+        """
+        result, _ = self._confirmed_archive(review, archive=archive)
+        return result
+
+    def confirm_browser_intent(
+        self, review: BrowserResumeMaintenanceReview, *, archive: Path, browser_intent: str,
+    ) -> BrowserResumeRetirementEvidence:
+        """Read-only handoff for the EXACT latest retired browser operation.
+
+        Does not authorize a different/newer pending intent, clear browser state,
+        or retry retirement. Missing native history for a failed preparation is
+        deliberately not sufficient evidence. Not exposed by native messages.
+        """
+        try:
+            if not _hex(browser_intent):
+                raise BrowserResumeMaintenanceError()
+            result, anchor = self._confirmed_archive(review, archive=archive)
+            if anchor["intent"] != browser_intent:
+                raise BrowserResumeMaintenanceError()
+            return BrowserResumeRetirementEvidence(
+                self._configuration.identity, browser_intent, review.fingerprint,
+                result.mode, result.revision,
             )
         except Exception:
             raise BrowserResumeMaintenanceError() from None

@@ -219,12 +219,68 @@ cleanup operation. Local history retirement does not revoke server credentials,
 drain server requests or establish authenticated browser access.
 
 Native retirement also **does not clear `resume_pending` or intentional pause in
-the browser**. A future trusted workflow must coordinate browser shutdown or its
-single-worker operation queue, preserve/cancel current browser intent, serialize
-credential/configuration writers and bind a separately reviewed follow-up action
-to the confirmed native result. The native candidate cannot certify that a
-browser is stopped, so it must not be wired directly to a generic page button.
-No production recovery procedure or physical/outage acceptance is implied.
+the browser**. The separate internal browser coordinator below can explicitly
+acknowledge the exact retired intent while keeping sign-in paused. A supported
+workflow must still coordinate the launcher, serialize credential/configuration
+writers and supply trusted UI and native transport bindings. The native candidate
+cannot certify that a browser is stopped, so it must not be wired directly to a
+generic page button. No production recovery procedure or physical/outage
+acceptance is implied.
+
+## Browser acknowledgement of retired intent: internal candidate only
+
+Resolving an interrupted attempt and consenting to automatic sign-in are separate
+operations. The coordinator now has optional internal `reviewPendingRetirement`
+and `retirePending` methods. **No installed Chrome adapter, page message, native
+action or CLI exposes them.** Without an explicitly supplied trusted retirement
+adapter these methods are absent, and ordinary startup still retains pending
+state. Do not manually edit Chromium storage or use a second controller to invoke
+them beside the running worker.
+
+The native `confirm_browser_intent` handoff is read-only. A trusted adapter must
+select the already-reviewed native archive out of band and revalidate its exact
+after-state. The newest retained approval must match the browser's exact pending
+intent and installation. An older matching row elsewhere in the archive, an
+uncommitted archive, a changed native revision or an unrelated pending intent is
+not enough. The worker handoff contains identity, intent, retirement fingerprint,
+native revision and stopped mode; it is not a signed receipt or server permission.
+Private paths and fingerprints must not be supplied by or returned to an ordinary
+dashboard page.
+
+The browser operation has these boundaries:
+
+- One read-only review per worker, valid for one minute, returns only native
+  revision/mode. The pending record, cookie and alarms are unchanged by review.
+- A separate explicit confirmation consumes that review on the same operation
+  queue as normal recovery. Clear the reserved device cookie, cancel recovery
+  alarms, obtain fresh matching native evidence, and recheck the persisted
+  pending browser record before the final write. No session exchange occurs.
+- Successful acknowledgement replaces only the exact version-2 `resume_pending`
+  record with a version-1 clean record that **still has `paused: true`**. It reports
+  `retired_paused`, never session readiness. The native archive is retained.
+- Newer suspend/sign-out intent invalidates the old operation. Changed evidence,
+  wrong identity/intent, unsafe storage, cleanup failure and expiry never report
+  successful retirement. A queued wake cannot intervene halfway through the
+  explicit operation. A lost reply does not authorize another attempt.
+- Final storage acknowledgement is not atomic with native confirmation. If a
+  write fails before persistence, pending state survives restart. If it persists
+  but its reply is lost, clean-but-paused state may survive. **Neither outcome
+  permits automatic sign-in.** The failed worker does not report completion.
+- Successful retirement does not reuse the earlier resume approval or enable
+  same-worker resume. A later worker remains paused and needs a separate fresh
+  server review and explicit resume consent.
+
+The current handoff deliberately refuses a pending intent whose preparation
+never produced a matching native history record. That case needs a separately
+reviewed no-record reconciliation path, not evidence borrowed from an older
+operation. Fixed installation/transport selection, trusted user-facing consent,
+private-file writer ownership and real-browser/physical acceptance remain gates.
+
+Deterministic browser tests cover state, cookie and message boundaries. A joined
+Node/Python fixture also calls the actual native archive/ledger implementation
+over test-only subprocess I/O for DNS, IPv4 and IPv6 identities. It performs no
+network authentication and uses controlled browser storage/cookies; this is not
+real Chromium, a supported native-message bridge or deployed-Pi acceptance.
 
 ## Verified server evidence and exact-generation sessions
 
@@ -289,7 +345,9 @@ establish a working end-to-end browser flow.
 Worker loss before the final browser consent commit leaves pending consent paused.
 The next worker clears the cookie and reasserts native suspend, cancelling any
 outstanding native approval. It retains the pending record rather than replaying
-or repairing it; a reviewed recovery/retirement path is still required. Older
+or repairing it. The optional internal retirement coordinator above is a separate
+explicit operation, not an automatic recovery path. Its production binding is
+still required. Older
 browser code rejects this version-2 pending record instead of interpreting it as
 ordinary recovery. Corrupt/missing state remains refused.
 
@@ -416,6 +474,13 @@ disabled to obtain these results.
   commits. Fault cases include partial archive writes, failed synchronization,
   SQL rollback, process death and lost post-commit acknowledgement. These are
   synthetic native-ledger tests, not coordinated browser or physical acceptance.
+- `scripts/experimental/test_browser_device_retirement.mjs` tests exact retired
+  intent, one-use review/confirmation, stale evidence/storage, queued wakes,
+  newer sign-out, clock changes and both sides of lost storage acknowledgement.
+  `tests/test_browser_device_retirement.py` joins that coordinator to actual
+  native retirement evidence, including refusal for changed native state and an
+  archive that was written without committing retirement. Browser APIs and the
+  subprocess adapter are controlled test boundaries, not deployed Chromium.
 - `tests/test_browser_device_resume_boundaries.py` joins the real SQLite authority,
   owner acknowledgement, session middleware and native recovery ledger. It covers
   server-only and native-only resume, all five stopped native modes, paused

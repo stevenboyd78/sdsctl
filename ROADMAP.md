@@ -116,6 +116,15 @@ anchor and archived evidence; it never clears browser pause or grants permission
 There is no CLI/native-message/UI caller. Coordinated pending-browser recovery,
 private-file writer serialization and production acceptance remain separate work.
 
+The [internal browser retirement acknowledgement](docs/browser-device-resume.md#browser-acknowledgement-of-retired-intent-internal-candidate-only)
+now binds a separate browser review/confirmation to native evidence for the exact
+latest retired intent. It clears only the matched pending marker, preserves
+intentional pause, refuses stale replies and requires a new worker plus fresh
+server review for later resume. Node/Python tests join real native history with
+controlled browser storage, including lost replies and changed native state.
+There is no installed transport or page binding; no-record reconciliation,
+trusted UI, private-file writer ownership and actual-browser acceptance remain.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

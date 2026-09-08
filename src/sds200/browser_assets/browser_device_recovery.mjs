@@ -65,6 +65,7 @@ export function createBrowserRecovery(ports, settings) {
   let missing = false, setupAttempted = false;
   let resumeAttempted = false;
   let reviewedResume = null;
+  let retirementAttempted = false, retirementReviewAttempted = false, reviewedRetirement = null;
   let readyUntil = 0; // Process-local proof of a completed verified installation, never persisted.
   const now = () => {
     const value = ports.now();
@@ -78,6 +79,15 @@ export function createBrowserRecovery(ports, settings) {
     return result;
   };
   const native = async action => nativeResult(await ports.native({version: 1, action}));
+  const retirementEvidence = (value, intent) => {
+    if (!exact(value,["identity","intent","retirement","mode","revision"]) ||
+        value.identity !== config.identity || value.intent !== intent ||
+        typeof value.retirement !== "string" || !/^[a-f0-9]{64}$/.test(value.retirement) ||
+        value.mode === "active" || !MODES.has(value.mode) ||
+        !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+        value.revision >= Number.MAX_SAFE_INTEGER) throw new Error("retirement");
+    return {...value}; // Snapshot the trusted response before another await.
+  };
   const arm = async seconds => ports.schedule(now() + Math.max(30, seconds) * 1000);
   const holding = () => holdForLogout || (state?.phase === "logout_pending" && state.nextAt > now());
   const clear = async (force = false) => {
@@ -262,13 +272,80 @@ export function createBrowserRecovery(ports, settings) {
   }
 
   return Object.freeze({
+    ...(ports.retirement ? {
+    reviewPendingRetirement: () => {
+      // Trusted internal caller only. The fixed native adapter can CONFIRM an
+      // already reviewed retirement, never choose/modify files from page input.
+      if (retirementReviewAttempted || retirementAttempted) return Promise.resolve({mode:"retirement_refused"});
+      retirementReviewAttempted = true;
+      const generation = epoch;
+      const operation = operations.then(async()=>{
+        await ready;
+        if (failure || holdForLogout || epoch !== generation || state.version !== 2 ||
+            state.phase !== "resume_pending" || !state.paused ||
+            typeof ports.retirement.confirm !== "function") throw new Error("retirement");
+        const intent = state.intent;
+        const started = now();
+        const proof = retirementEvidence(await ports.retirement.confirm({identity:config.identity,intent}),intent);
+        if (epoch !== generation || failure || holdForLogout || state.intent !== intent ||
+            state.phase !== "resume_pending" || !state.paused ||
+            now() < started || now() >= started+60000) throw new Error("retirement");
+        reviewedRetirement = {proof,epoch:generation,started,deadline:started+60000};
+        return {mode:"retirement_reviewed",nativeRevision:proof.revision,nativeMode:proof.mode};
+      }).catch(()=>({mode:"retirement_refused"}));
+      operations = operation.then(()=>{});
+      return operation;
+    },
+    retirePending: review => {
+      // Consuming this review only resolves interrupted intent; it is NEVER
+      // consent to authenticate or to replay the retired resume approval.
+      const reviewed = reviewedRetirement;
+      if (retirementAttempted || !reviewed ||
+          !exact(review,["nativeRevision","nativeMode"]) ||
+          review.nativeRevision !== reviewed.proof.revision || review.nativeMode !== reviewed.proof.mode) {
+        return Promise.resolve({mode:"retirement_refused"});
+      }
+      retirementAttempted = true;
+      reviewedRetirement = null;
+      reviewedResume = null;
+      resumeAttempted = true; // Any later resume requires a new worker and fresh review.
+      return queue(async()=>{
+        await ready;
+        const intent = reviewed.proof.intent;
+        const current = () => !failure && !holdForLogout && epoch === reviewed.epoch &&
+          state.version === 2 && state.phase === "resume_pending" && state.paused && state.intent === intent &&
+          now() >= reviewed.started && now() < reviewed.deadline;
+        if (!current()) return {mode:"retirement_refused"};
+        const check = () => {if (!current()) throw new Error("retirement");};
+        const pending = {...state};
+        await clear(true); check();
+        await ports.cancel(); check();
+        // Fresh proof follows cleanup; cached review alone cannot clear intent.
+        const proof = retirementEvidence(await ports.retirement.confirm({identity:config.identity,intent}),intent);
+        check();
+        if (Object.keys(proof).some(key=>proof[key] !== reviewed.proof[key])) throw new Error("retirement");
+        const stored = await ports.load(); check();
+        if (!exact(stored,Object.keys(pending)) ||
+            Object.keys(pending).some(key=>stored[key] !== pending[key])) throw new Error("storage");
+        state = {...initialBrowserRecoveryState(config),paused:true};
+        try {await save();} // Pending BEFORE this write, clean-but-paused AFTER it.
+        catch (error) {state=pending;throw error;} // Keep in-memory uncertainty too.
+        if (epoch !== reviewed.epoch || holdForLogout || failure ||
+            now() < reviewed.started || now() >= reviewed.deadline) return {mode:"retirement_refused"};
+        pauseSaved = true;
+        stopRequested = true;
+        readyUntil = 0;
+        return {mode:"retired_paused",localPauseSaved:true,sessionReady:false};
+      });
+    },
+    } : {}),
     ...(ports.resume ? {
     reviewResume: () => {
       reviewedResume = null;
       const generation = epoch;
       const result = operations.then(async () => {
         await ready;
-        if (failure || holdForLogout || state.version !== 1 || state.phase !== "clean" ||
+        if (failure || retirementAttempted || holdForLogout || state.version !== 1 || state.phase !== "clean" ||
             epoch !== generation || typeof ports.resume.review !== "function") throw new Error("review");
         const value = await ports.resume.review();
         if (epoch !== generation || !exact(value, ["version","ok","mode","revision","generation"]) ||
