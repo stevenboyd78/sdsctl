@@ -98,8 +98,13 @@ def inspect_browser_registration(
     """
     try:
         _platform()
-        if (root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink():
-            raise ValueError()
+        # Lazy import avoids the internal handoff/startup dependency cycle. There
+        # is no public ignore-guard flag: every proof is revalidated read-only.
+        from .browser_device_guard_release import check_paused_guard_release, has_guard_release
+
+        if ((root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink()
+                or has_guard_release(root)):
+            check_paused_guard_release(root, bundle=bundle, profile=profile, public_key=public_key)
         return _inspect_registration_files(root, bundle=bundle, profile=profile,
                                             public_key=public_key)
     except Exception:

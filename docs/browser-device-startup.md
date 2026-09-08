@@ -141,6 +141,14 @@ including stale ones after a crash. **No lock is deleted, another browser killed
 or profile repaired automatically.** This deliberately conservative behavior
 still needs a separately reviewed abrupt-power-loss recovery policy.
 
+A retained maintenance guard normally blocks registration/startup. The internal
+[paused-only guard release](browser-device-resume.md#paused-only-guard-release)
+candidate permits an ordinary **paused** start only when its separate committed
+journal and all original supervised maintenance evidence validate. Neither the
+guard nor its evidence is removed. Missing, changed, prepared or inconsistent
+completion remains blocked; there is no ignore-guard flag and release does not
+resume sign-in. This is not yet a public maintenance/deployment command.
+
 No service is installed or enabled. The command does not restart itself after a
 clean close, change ports/firewalls, enroll/rotate a device, install trust or
 modify Home Assistant. A separate [server configuration candidate](browser-device-server.md)

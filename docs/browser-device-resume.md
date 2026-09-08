@@ -476,7 +476,8 @@ The marker remains on **every post-write outcome, including success**. Native
 execution uses the exact one-use in-memory boundary selection, retaining its
 existing archive-before-commit rules. Browser registration, native-host files,
 credentials and opaque Chromium storage are not replaced or reset. Normal
-inspection/startup continues to reject the retained marker. The candidate does
+inspection/startup continues to reject the retained marker without the separate
+[paused guard release](#paused-only-guard-release) completion. This workflow does
 not remove it, publish a completion receipt that enables launch, acknowledge
 browser pending state or resume automatic sign-in.
 
@@ -503,7 +504,7 @@ or reused consent, competing owners, changed files, slow/failed guard writes and
 real process loss during review, after the guard and after native commit. No real
 Chromium, Home Assistant, Pi display or production profile is used. A separately
 reviewed handoff that can safely launch the confirmation-only browser controls
-and eventually release this guard is still required before deployment; never
+and explicitly release this guard is still required before deployment; never
 delete it manually to advance the workflow.
 
 ## Recovery-only bundle preparation: internal candidate
@@ -783,49 +784,116 @@ That seed is **not evidence for the normal setup/resume path**. Success requires
 real page/worker/native readiness, explicit confirmation, clean shutdown, exact
 host restoration and retained guard. Physical display, live scanner, normal
 authentication/TLS, cold boot/outage and Firefox/WPE acceptance remain separate.
-A reviewed guard-release boundary and deployment/service wiring are still absent.
+A separate paused-only guard-release candidate follows. Deployment/service wiring
+and a production maintenance policy remain absent.
 
-### Guard-release review: next boundary, not implemented
+### Paused-only guard release
 
 The separate [headed first-start qualification](browser-device-startup.md#exact-headed-first-start-qualification)
 shows that normal startup respects missing setup, explicit consent and a paused
 native profile on both tested Pi Chromium versions. It does **not** authorize
 removing a maintenance guard or prove a resumed server session.
 
-The current `confirm(restored=True)` checks still require the retained guard.
-Normal registration/startup refuses any such marker. Do not bypass that contract
-with a manual unlink or a public “ignore guard” option. A future release operation
-needs its own reviewed state transition with these conditions:
+The internal `BrowserPausedGuardRelease` candidate implements the reviewed narrow
+transition. It has **no CLI, browser/native-message action or service wiring**.
+Its trusted local caller selects an exact supervised handoff out of band. There
+is no automatic invocation after restoration and no public “ignore guard” option.
+The original `confirm(restored=True)` still requires the unchanged retained guard.
 
-- Fresh explicit local consent must name the exact installation and completed
+- Fresh explicit local consent names the exact installation and completed
   maintenance/handoff. An old approval, page readiness, browser exit code or
   restoration receipt alone must not grant release.
-- Acquire the existing launch/profile ownership in a consistent order; require
-  a stopped browser, no Singleton markers, canonical normal registration and
+- Acquire the existing launch lock, then shared native-profile ownership and an
+  unchanged native-ledger `BEGIN IMMEDIATE` transaction. The directory lock blocks
+  private-input maintenance; the transaction fences native revision writers.
+  Require a stopped browser, no Singleton markers, canonical normal registration and
   exact completed maintenance, acknowledgement and restoration evidence. Recheck
   these immediately before the transition, rather than trusting an earlier view.
-- Start with the narrow **paused-only** path. Releasing launch inhibition must
+- Only the **paused-only** path is eligible. Releasing launch inhibition does
   not clear browser/native pause, reinitialize state, authenticate, enroll,
   rotate credentials, repair errors, start a service or start a browser. Other
   native terminal modes need their own review before becoming eligible.
-- Design interruption-safe durable completion together with normal startup's
-  checks. Merely deleting the marker and then writing a completion receipt has
-  an unsafe crash window: marker absence alone could permit an unconfirmed start.
-  An unfinished or inconsistent release must remain startup-blocking, including
-  after process loss or a failed directory sync.
 - Preserve the original guard and all maintenance/handoff evidence. Lost-result
   handling must be exact read-only confirmation, not an automatic replay of the
   mutation. The original historical confirmation must remain interpretable after
   a successful release, without introducing a general guard bypass.
 
-Required tests include cancellation/expiry, competing ownership, changed paths,
-identities, revisions and receipts, partial writes, process loss around each
-durability boundary, missing/changed completion evidence, and a normal startup
-that remains paused with no authentication connection after a confirmed release.
-Real Chromium checks on both Pis must cover the complete guarded handoff-to-release
-sequence; the two separately passing fixtures are not evidence that this new
-combined transition already works. No guard-release API or marker semantics are
-changed by this review.
+The callback receives a fresh, volatile confirmation phrase for one release ID.
+It must respond in the same process within 120 seconds, checked using wall and
+monotonic time. Cancellation creates nothing. The phrase is not saved; the local
+journal contains only its fingerprint, selected public identity/paths, exact
+evidence fingerprints, inode bindings and consent times. It contains no password,
+credential, cookie or session token. Old consent cannot be replayed.
+
+#### Durable completion and normal startup
+
+The original guard is **never unlinked or renamed**. A new private, exclusively
+created `.sdsctl-browser-guard-release.sqlite` first records `prepared`. The
+directory sync must succeed before completion is attempted. After rechecking the
+same evidence, inode and consent deadline, SQLite commits `complete` atomically
+using `journal_mode=DELETE` and `synchronous=EXTRA`. SQLite documents the extra
+rollback-journal directory sync in its [synchronous settings](https://www.sqlite.org/pragma.html#pragma_synchronous)
+and the commit/recovery assumptions in [atomic commit](https://www.sqlite.org/atomiccommit.html).
+
+Normal registration/startup checks the fixed journal whenever either the guard,
+release database or one of its SQLite sidecars exists. It requires a completed,
+strict-schema, private rollback-format database, no leftover journal/WAL sidecars,
+the original guard, exact supervised ACK/restoration evidence, canonical normal
+assets and the same paused native revision. Checks are repeated under the normal
+launcher's lock. Removing just the guard or just the release database still
+blocks startup. Replacing the completion database or guard with an identical
+copy also fails its inode binding. No hot journal is recovered by inspection.
+
+An empty, prepared, partial or inconsistent journal remains blocked and cannot
+be overwritten by another attempt. An interruption before commit does not become
+permission to launch. A commit error or lost reply can be **uncertain**: it may
+have happened before or after durable completion. Only exact read-only
+`confirm(release_id=...)` can establish a surviving completed result; no mutation
+is automatically retried. Hardware power-loss durability still depends on
+SQLite's filesystem/storage assumptions, not merely passing process-exit tests.
+
+This is not an archive-cleanup or general resume mechanism. The fixed guard,
+completion database and original evidence must stay at their original paths.
+Offline inspection conservatively requires the released browser to be stopped.
+Changed native revision, another terminal mode, a second maintenance cycle,
+moving/updating bundles and later explicit resume need separate lifecycle review.
+Same-account/root edits are trusted and advisory locks cannot prevent manual
+removal of every record.
+
+The regression matrix includes cancellation/expiry, competing locks and native
+writers, changed inputs/receipts/inodes/revisions, preparation sync failure,
+late rechecks, partial writes, and actual process exit before and after the SQLite
+commit. Completed evidence is re-confirmed without altering historical records.
+The separate headed `release` qualification scenario in
+`scripts/experimental/qualify_browser_recovery.py` attempts the full supervised
+handoff, local release, ordinary paused start and second paused start, followed
+by a read-only browser-storage/cookie/alarm observer. The recovery-produced pause
+is not rewritten between handoff and ordinary startup. A fixture-owned loopback
+listener rejects any authentication-endpoint connection.
+
+**Combined Chromium acceptance is currently blocked.** On the small Pi's
+Chromium 151.0.7922.173 and HDMI Pi's 152.0.7977.75, the original seed-first
+experiment completed supervised ACK, exact host restoration and local guard
+release, but ordinary startup did not display the normal paused page. The visible
+tabs instead showed unavailable `recovery.html` and `startup.html` extension URLs.
+A stronger HDMI fixture first completed real canonical normal setup; its later
+recovery launch failed readiness. These failures are not passes, and the earlier
+separate startup/recovery results do not establish this combined transition.
+
+The script's `release` scenario now includes the prior real normal setup;
+`release-seed-first` preserves the narrower diagnostic sequence. Both still seed
+their interrupted state synthetically. Failed runs retain their files and never
+count tab navigation, manual reload, a copied browser profile or a new wrapper as
+acceptance. A tested recovery-manifest version change did not resolve the problem
+and was removed. The specific browser loading/registration cause remains under
+investigation; no permissions were broadened, policy bypass added or Chromium
+database edited. The next gate is a reviewed, reliable normal/recovery bundle
+transition followed by both full Pi sequences. Do not deploy this local API yet.
+
+This fixture still deliberately seeds its initial pending browser state through
+a separate extension. It does not qualify how that pending state originally
+arose, real-server authentication, browser TLS trust, Firefox/WPE, a physical
+display, cold boot, actual power loss or production service deployment.
 
 ## Verified server evidence and exact-generation sessions
 
