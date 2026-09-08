@@ -71,6 +71,18 @@ Linux/aarch64, including the repeated recovery matrix, 18 rendering checks and
 156 observed successful asset responses. This resolves the isolated rendering
 gate, not production deployment, physical-display or outage acceptance.
 
+[Service lifecycle preparation](docs/browser-device-service.md) is a development
+candidate: canonical private user-service files, launch-time checks, bounded
+restart policy, explicit stopped-browser same-identity bundle updates and local
+retirement with private review backups. It never installs/enables a service,
+stops a browser, changes credentials or clears saved recovery state. Isolated
+installed old/new-runtime, real-Chromium state-retention and service tests passed.
+A separate HDMI normal-session test qualified automatic login, persistent sign-out
+and production TUI restoration after correcting browser-before-compositor stop
+ordering. The [seat integration guide](docs/browser-device-seat.md) records that
+limited result and a shell-tested example, not a production-installed seat. The
+lab's blank-password keyring does not qualify secure unattended keyring handling.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

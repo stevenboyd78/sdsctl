@@ -115,8 +115,10 @@ whole browser; do not treat an open setup page as a durable authentication pause
 
 Do not delete browser state or the native ledger to fix a refusal. Do not copy a
 used ledger or manually seed browser storage. Keep the files for administrator
-review. Explicit replacement/resume, credential rotation and update/removal
-workflows remain separate work; there is no page/native `resume` message.
+review. Explicit replacement/resume and credential rotation remain separate work;
+there is no page/native `resume` message. The
+[service lifecycle candidate](browser-device-service.md) adds stopped-browser
+code-only registration updates and local retirement, not state reset or migration.
 
 ## Acceptance and remaining limits
 

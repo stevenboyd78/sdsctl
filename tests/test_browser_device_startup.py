@@ -127,7 +127,9 @@ def test_unsafe_launcher_lock_fails_without_replacing_it(inputs, tmp_path, kind)
     assert path.lstat().st_ino == inode
 
 
-@pytest.mark.parametrize("ending", ["close", "crash", "interrupt", "kill", "sigterm", "exception"])
+@pytest.mark.parametrize("ending", [
+    "close", "crash", "interrupt", "kill", "sigterm", "sigterm-kill", "exception",
+])
 @pytest.mark.parametrize("setup", [False, True])
 def test_foreground_child_lifecycle(inputs, monkeypatch, ending, setup):
     registered = startup.check_browser_startup(**inputs)
@@ -136,6 +138,7 @@ def test_foreground_child_lifecycle(inputs, monkeypatch, ending, setup):
     monkeypatch.setattr(startup.subprocess, "run", lambda *a, **kw:
                         subprocess.CompletedProcess(a, 0, b"Chromium 152.0.1", b""))
     previous = signal.getsignal(signal.SIGTERM)
+    sent_signals = []
 
     class Process:
         def __init__(self, command, **kwargs):
@@ -151,18 +154,22 @@ def test_foreground_child_lifecycle(inputs, monkeypatch, ending, setup):
             pass
 
         def wait(self, timeout=None):
+            if self.stopped and not self.killed:
+                assert timeout == 10
             if ending == "exception" and not self.stopped:
                 raise OSError(CREDENTIAL)
-            if ending == "sigterm" and not self.stopped:
+            if ending in {"sigterm", "sigterm-kill"} and not self.stopped:
                 signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
             if ending in {"interrupt", "kill"} and not self.stopped:
                 raise KeyboardInterrupt
-            if ending == "kill" and not self.killed:
+            if ending in {"kill", "sigterm-kill"} and not self.killed:
                 assert timeout == 10
                 raise subprocess.TimeoutExpired("fictional", 10)
             return 1 if ending == "crash" else 0
 
-        def terminate(self):
+        def send_signal(self, signum):
+            assert signum == signal.SIGINT
+            sent_signals.append(signum)
             self.stopped = True
 
         def kill(self):
@@ -178,6 +185,7 @@ def test_foreground_child_lifecycle(inputs, monkeypatch, ending, setup):
         expected = 75 if ending == "crash" else 0
         assert startup.run_browser_startup(**inputs, setup=setup) == expected
     assert signal.getsignal(signal.SIGTERM) == previous
+    assert sent_signals == ([] if ending in {"close", "crash"} else [signal.SIGINT])
     with startup._launch_lock(inputs["root"]):
         pass
 

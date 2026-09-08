@@ -8,6 +8,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add experimental `browser-device-service --experimental create/check` to
+  prepare and validate inert, canonical graphical-session user-service files.
+  Recheck registration on launch and preserve intentional close, bounded crash
+  retries and terminal failures. Add explicit stopped-browser
+  `browser-device-maintenance --experimental update/retire` with trusted old-runtime
+  validation, canonical same-identity replacement and private review backups.
+  Preserve browser state, native credentials, trust and paused/error ledgers;
+  never install/enable a service, stop a browser, revoke credentials or reset state.
+  Production deployment and physical outage acceptance remain required.
 - Add experimental `browser-device-server --experimental create/check` for
   explicit offline preparation of an empty private enrollment authority and
   read-only inspection of existing server configuration. Require a new target
@@ -47,8 +56,18 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Clarify experimental managed-browser shutdown ordering: a separate compositor
+  service must wait for browser close before ending the graphical session. Add a
+  reviewed synchronous-stop example, failure checks and narrowly scoped physical
+  acceptance notes; do not install it or change production TUI/kiosk services.
+
 ### Fixed
 
+- Request normal Chromium closure with `SIGINT` when stopping the experimental
+  managed-browser launcher. Let the launcher finish that bounded shutdown before
+  systemd cleans up remaining service processes with `KillMode=mixed`; directly
+  sending `SIGTERM` to Chromium can leave profile locks behind after a normal
+  service stop. Keep crash/stale-lock refusal and never delete browser locks.
 - Bound experimental browser-device read admission to two workers and 32 total
   outstanding acquisitions, with a two-second wait, so a cold dashboard's asset
   burst does not immediately fail when both readers are occupied. Keep exchange,

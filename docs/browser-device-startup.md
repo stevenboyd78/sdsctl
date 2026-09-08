@@ -75,7 +75,10 @@ setup succeeded. The extension owns that decision. A changed runtime/bundle or
 receipt is refused, not repaired. Retain the original files for review; do not
 edit receipt hashes, copy browser state or delete the recovery ledger to bypass
 a refusal. Bundle version `0.0.3` includes the startup page and must match this
-runtime. Updating an older experimental registration in place is not supported.
+runtime. Do not edit a bundle in place. The
+[stopped-browser lifecycle candidate](browser-device-service.md) stages a new
+bundle and switches its registration without copying or resetting browser state;
+real-Chromium update acceptance is still required.
 
 ## 2. Choose setup or normal startup explicitly
 
@@ -142,8 +145,10 @@ No service is installed or enabled. The command does not restart itself after a
 clean close, change ports/firewalls, enroll/rotate a device, install trust or
 modify Home Assistant. A separate [server configuration candidate](browser-device-server.md)
 wires the existing authority to the CLI/App behind an explicit experimental opt-in.
-Distribution and updates, explicit replacement/resume, service restart policy and physical
-multi-display/server outage tests remain separate gates.
+The [service lifecycle candidate](browser-device-service.md) adds inert user-unit
+preparation, a bounded restart policy and explicit stopped-browser maintenance.
+Accepted distribution/updates, explicit replacement/resume, live service behavior
+and physical multi-display/server outage tests remain separate gates.
 
 ## Acceptance boundaries
 
