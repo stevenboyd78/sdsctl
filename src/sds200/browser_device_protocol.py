@@ -7,10 +7,12 @@ to this module. It is the bounded parser foundation, not an enabled login path.
 from __future__ import annotations
 
 import json
+import math
+import re
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 BROWSER_DEVICE_REQUEST_MAX_BYTES = 4096
 _LENGTH = struct.Struct("=I")
@@ -32,6 +34,37 @@ class BrowserDeviceRequest:
     action: BrowserDeviceAction
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserResumeRequest:
+    """Separate strict resume envelope; ticket/intent never appear in repr."""
+
+    action: str
+    intent: str | None = field(default=None, repr=False)
+    revision: int | None = None
+    generation: int | None = None
+    ticket: str | None = field(default=None, repr=False)
+    expires_at: float | None = None
+
+
+def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
+    action = value["action"]
+    fields = {"review-resume": set(), "prepare-resume": {"intent", "revision", "generation"},
+              "commit-resume": {"intent", "ticket", "revision", "expires_at"}}[action]
+    if set(value) != {"version", "action"} | fields:
+        raise _invalid()
+    for key in fields:
+        item = value[key]
+        if key in {"intent", "ticket"}:
+            valid = type(item) is str and re.fullmatch(r"[a-f0-9]{64}", item) is not None
+        elif key == "expires_at":
+            valid = type(item) in (int, float) and 0 <= item < 2**53 and math.isfinite(item)
+        else:
+            valid = type(item) is int and 1 <= item < 2**53 - 1
+        if not valid:
+            raise _invalid()
+    return BrowserResumeRequest(action, **{key: value[key] for key in fields})
+
+
 def _invalid() -> BrowserDeviceProtocolError:
     return BrowserDeviceProtocolError("Invalid browser-device request.")
 
@@ -45,7 +78,7 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def parse_browser_device_request(payload: bytes) -> BrowserDeviceRequest:
+def parse_browser_device_request(payload: bytes) -> BrowserDeviceRequest | BrowserResumeRequest:
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -53,11 +86,15 @@ def parse_browser_device_request(payload: bytes) -> BrowserDeviceRequest:
         value = json.loads(payload.decode("utf-8"), object_pairs_hook=_object)
         if (
             type(value) is not dict
-            or set(value) != {"version", "action"}
+            or not {"version", "action"} <= set(value)
             or type(value["version"]) is not int
             or value["version"] != 1
             or type(value["action"]) is not str
         ):
+            raise _invalid()
+        if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
+            return _resume(value)
+        if set(value) != {"version", "action"}:
             raise _invalid()
         action = BrowserDeviceAction(value["action"])
     except (ValueError, UnicodeError, RecursionError):
@@ -82,7 +119,9 @@ def _read_exact(stream: BinaryIO, count: int, *, allow_eof: bool = False) -> byt
     return bytes(chunks)
 
 
-def read_browser_device_request(stream: BinaryIO) -> BrowserDeviceRequest | None:
+def read_browser_device_request(
+    stream: BinaryIO,
+) -> BrowserDeviceRequest | BrowserResumeRequest | None:
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.

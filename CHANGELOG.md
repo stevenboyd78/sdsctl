@@ -8,20 +8,27 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
-- Add an unwired experimental native resume-approval engine with exact revision,
+- Add an experimental native resume-approval engine with exact revision,
   installation, browser-intent and private-input bindings; short-lived one-use
   tickets; fresh server-evidence checks; durable claim before proof; and atomic
   native permission. Cancel outstanding approvals on newer pause or clock
   correction and retain failed/uncertain operations. Only explicit internal
-  preparation upgrades a ledger to schema 2; no CLI/native resume action or
-  production migration is enabled.
+  preparation upgrades a ledger to schema 2; no resume CLI or production
+  migration is enabled.
 - Add experimental credential-authenticated, non-mutating device verification
   with confirmed old-request drainage, and exact-generation session exchange
   over the existing verified HTTPS transport. Add internal browser pending
   consent and native verification/session coordination with interruption and
-  sign-out-race tests. Generated extensions still have no resume action: trusted
-  consent-page/native-protocol wiring, independently supervised calls and real
-  Chromium session verification remain acceptance gates.
+  sign-out-race tests.
+- Wire an experimental two-step trusted extension resume page to identity-bound
+  review/prepare/commit native messages under the ten-second process supervisor.
+  Bind a one-use review to its exact page document, native revision and server
+  generation; keep approval tickets out of page messages and persistent browser
+  storage. Verify protected access through an isolated same-origin probe before
+  final browser consent. Add strict UI/bridge and timeout regression tests.
+  End-to-end real-browser acceptance remains blocked at local sandbox startup;
+  credential replacement, retained-operation maintenance and production
+  deployment remain separate gates.
 - Add experimental `browser-device-service --experimental create/check` to
   prepare and validate inert, canonical graphical-session user-service files.
   Recheck registration on launch and preserve intentional close, bounded crash

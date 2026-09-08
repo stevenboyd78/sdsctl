@@ -191,8 +191,17 @@ the five absolute paths: a private existing stage, Playwright module, Chromium,
 `certutil`, and the matching installed candidate Python (with `web` dependencies).
 The server script must remain beside the harness. Optional scenario and identity
 arguments select `healthy`, `deadline`, `truncated`, `tls-eof`, `server-restart`,
-`worker-restart`, `revoke`, `bad-ca` or `bad-name`, and `ip`, `dns` or `ipv6`.
+`worker-restart`, `revoke`, `bad-ca`, `bad-name`, `resume` or `resume-stale`,
+and `ip`, `dns` or `ipv6`.
 All network listeners bind only to loopback, including the IPv6 identity case.
+
+The new resume scenarios use the actual generated two-step review page after
+sign-out and confirmed administrator server resume. The happy case must verify a
+fresh protected display-only session, retire the probe tab, and sign out again;
+the stale case pauses server authority after review and must retain pending local
+pause without a cookie or automatic retry. These cases still need end-to-end
+acceptance: local attempts stopped before extension loading at Chromium sandbox
+initialization. Controlled Node/native tests are not substitutes for that gate.
 
 The Linux browser sandbox and TLS verification stay enabled. `bwrap` mounts the
 fictional NSS trust database only inside the browser's isolated mount namespace;
@@ -276,7 +285,11 @@ bridge and document-bound completion tickets. The registered experimental bundle
 connects the display-only dashboard sign-out form in the isolated installed-wheel
 fixtures above; released manual kiosks and production services are unchanged.
 Real-browser interruption evidence is recorded below. Local pause and cookie
-removal are not proof of server-side stream revocation. No resume message exists.
+removal are not proof of server-side stream revocation. Ordinary control messages
+cannot resume sign-in. The separately gated
+[trusted resume candidate](../../docs/browser-device-resume.md) now adds exact
+document-bound review/confirmation and supervised native actions; it is not a
+production-accepted workflow.
 
 ## Real-browser logout harness (isolated fixture)
 

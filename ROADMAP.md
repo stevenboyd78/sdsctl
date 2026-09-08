@@ -87,20 +87,23 @@ The [replacement/resume boundary tests](docs/browser-device-resume.md) join serv
 authority/acknowledgement, native recovery and browser sign-out checks in isolated
 fixtures. Server resume, credential-file replacement and native-only reset do not
 silently grant the other layers' consent; stale reviews and old sessions remain
-invalid. These are prerequisites, not an implemented coordinated resume workflow
-or accepted credential installer.
+invalid. These are prerequisites, not an accepted production resume workflow or
+credential installer.
 
 The [native approval engine](docs/browser-device-resume.md#native-approval-engine-internal-candidate-only)
-is an unwired internal candidate: short-lived one-use reviews, durable claim before
+is an internal candidate: short-lived one-use reviews, durable claim before
 server proof, atomic native permission, cancellation on newer pause, and retained
 uncertain outcomes. Only explicit preparation migrates its selected ledger to a
-version that older helpers refuse. The next internal candidate adds persisted
+version that older helpers refuse. The connected candidate adds persisted
 browser pending consent, credential-authenticated verified HTTPS evidence and
 exact-generation fresh sessions. Isolated tests join TLS, the actual ASGI/owner,
 authority and native core; browser storage/cookie tests remain controlled doubles.
-Trusted consent-page/native-protocol wiring, independent process supervision,
-real Chromium session verification, history maintenance and full coordinated
-acceptance remain gates. No public resume action or production migration is enabled.
+The generated experimental bundle now wires a two-step, document-bound trusted
+resume page to identity-bound native messages under the ten-second supervisor.
+Its isolated same-origin session probe is implemented, but real Chromium
+end-to-end acceptance remains blocked at local sandbox initialization. History
+maintenance, failed-pending recovery, private-file writer coordination and full
+coordinated acceptance remain gates. No resume CLI or production migration is enabled.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

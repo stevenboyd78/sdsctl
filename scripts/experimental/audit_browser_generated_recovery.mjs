@@ -15,7 +15,7 @@ import {fileURLToPath, pathToFileURL} from "node:url";
 
 if (process.argv[2] === "--help") {
   console.log("Usage: node audit_browser_generated_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL INSTALLED_PYTHON [SCENARIO] [ip|dns|ipv6] [review|startup]");
-  console.log("Scenarios: healthy, deadline, truncated, tls-eof, server-restart, worker-restart, revoke, bad-ca, bad-name.");
+  console.log("Scenarios: healthy, deadline, truncated, tls-eof, server-restart, worker-restart, revoke, bad-ca, bad-name, resume, resume-stale.");
   console.log("Non-root Linux, five absolute paths, private existing stage, installed candidate wheel with web dependencies.");
   console.log("Actual CLI/generated bundle/setup form; no recovery-state seeding, cookie injection or production access.");
   console.log("Sandbox and verified TLS required; bwrap isolates temporary certificate trust. Retains fictional fixtures.");
@@ -26,7 +26,7 @@ const [stage, playwright, executable, certutil, python, scenario = "healthy", id
   flow = "review"] = process.argv.slice(2);
 assert(process.platform === "linux" && process.getuid() !== 0);
 assert([stage, playwright, executable, certutil, python].every(p => p && path.isAbsolute(p)));
-assert(["healthy", "deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "bad-ca", "bad-name"].includes(scenario));
+assert(["healthy", "deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "bad-ca", "bad-name", "resume", "resume-stale"].includes(scenario));
 assert(["ip", "dns", "ipv6"].includes(identityKind));
 assert(["review", "startup"].includes(flow));
 const info = await lstat(stage);
@@ -297,6 +297,46 @@ print(json.dumps({'mode': mode, 'failures': failures}))
       await until(async () => (await command("status")).state === "paused");
       await until(async () => !await hasCookie());
       await until(async()=>await sessionStatus()===401);
+      if (scenario.startsWith("resume")) {
+        step("administrator-allows-device-without-local-resume");
+        await command("resume");
+        assert(!await hasCookie());
+        const resuming=await context.newPage();
+        await resuming.goto(`chrome-extension://${id}/resume.html`);
+        assert.equal(await resuming.locator("dd").nth(0).textContent(),origin);
+        assert.equal(await resuming.locator("dd").nth(1).textContent(),"fixture");
+        assert.equal(await resuming.locator('input[type="password"]').count(),0);
+        assert(await resuming.locator("#resume").isDisabled());
+        await resuming.locator("#review").click();
+        await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Server permission verified."));
+        assert(!await hasCookie());
+        await resuming.screenshot({path:path.join(root,"resume-reviewed.png")});
+        if (scenario === "resume-stale") await command("pause");
+        await resuming.locator("#confirm").check(); await resuming.locator("#resume").click();
+        if (scenario === "resume-stale") {
+          await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Resume could not be confirmed."));
+          assert(!await hasCookie());
+          const saved=(await stored()).sdsctlDeviceRecovery;
+          assert(saved.paused && saved.phase === "resume_pending");
+          step("stale-review-stayed-paused");
+        } else {
+          await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Automatic sign-in resumed."),null,{timeout:40000});
+          assert(await hasCookie());
+          await resuming.screenshot({path:path.join(root,"resume-complete.png")});
+          const saved=(await stored()).sdsctlDeviceRecovery;
+          assert(!saved.paused && saved.phase === "clean");
+          const temporary=context.pages().filter(p=>p.url()===origin+"/device-display");
+          assert.equal(temporary.length,0,"Resume verification tab was not retired");
+          await page.goto(origin); await until(async()=>await sessionStatus()===200);
+          assert.equal(await page.evaluate(()=>document.cookie),"");
+          const actual=await page.evaluate(async()=>await (await fetch("/auth/session")).json());
+          assert(actual.display_only && actual.device_enrolled);
+          step("real-resume-form-and-protected-session-passed");
+          await page.getByRole("button",{name:"Open dashboard menu",exact:true}).click();
+          await page.getByRole("button",{name:"Sign out and pause automatic login",exact:true}).click();
+          await until(async()=>(await command("status")).state === "paused" && !await hasCookie());
+        }
+      }
     }
   }
   const beforeRestart = (await command("status")).exchanges;
@@ -320,6 +360,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     physicalDisplay:false,browser: context.browser().version(),
     installedRuntime: true, generatedBundle: true, realSetupForm: true, realASGI: true,
     realNative: true, sandbox: true, verifiedTLS: true, stateSeeding: false, cookieInjection: false,
+    realResumeForm: scenario.startsWith("resume"),
     firstRunExchanges: 0, exchanges: beforeRestart, restartMode: expected, realAlarms: true,
     identity: receipt.identity, bundleHashes: receipt.files};
   result.harnessHashes = Object.fromEntries(await Promise.all([

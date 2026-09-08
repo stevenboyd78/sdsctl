@@ -28,12 +28,13 @@ from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import urlsplit
 
-from .browser_device_protocol import read_browser_device_request
+from .browser_device_protocol import BrowserResumeRequest, read_browser_device_request
 from .browser_device_recovery import (
     BrowserDeviceRecovery,
     ExchangeFailure,
     ExchangeSession,
     RecoveryMode,
+    RecoveryResult,
     _object,
     parse_exchange_response,
 )
@@ -196,6 +197,51 @@ def _post_browser_device(
             connection.close()
 
 
+def _result_document(result: RecoveryResult) -> dict[str, object]:
+    document: dict[str, object] = {
+        "version": 1, "ok": True, "mode": result.status.mode.value,
+        "revision": result.status.revision, "retry_after": result.status.retry_after,
+        "renew_after": result.renew_after,
+    }
+    if result.session is not None:
+        document["session"] = {"token": result.session.token,
+                               "expires_in": result.session.expires_in}
+    return document
+
+
+def _resume_request(
+    root: Path, request: BrowserResumeRequest, configuration: BrowserNativeConfiguration,
+    recovery: BrowserDeviceRecovery,
+) -> dict[str, object]:
+    # Lazy import: resume's verified transport shares this native module.
+    from .browser_device_resume import BrowserDeviceResume, BrowserResumeApproval
+    from .browser_device_verification import verify_browser_device
+
+    if request.action == "review-resume":
+        before = recovery.inspect()
+        if before.mode is RecoveryMode.ACTIVE:
+            raise ValueError()
+        proof = verify_browser_device(configuration)
+        after = recovery.inspect()
+        if (before.revision, before.mode) != (after.revision, after.mode):
+            raise ValueError()
+        return {"version": 1, "ok": True, "mode": after.mode.value,
+                "revision": after.revision, "generation": proof.record.generation}
+    engine = BrowserDeviceResume(root)
+    assert request.intent is not None and request.revision is not None
+    if request.action == "prepare-resume":
+        assert request.generation is not None
+        approval = engine.prepare_verified(expected_revision=request.revision,
+            browser_intent=request.intent, expected_generation=request.generation)
+        return {"version": 1, "ok": True, "approval": {"ticket": approval.ticket,
+            "revision": approval.revision, "expires_at": approval.expires_at}}
+    assert request.action == "commit-resume"
+    assert request.ticket is not None and request.expires_at is not None
+    return _result_document(engine.commit_session(
+        BrowserResumeApproval(request.ticket, request.revision, request.expires_at),
+        browser_intent=request.intent))
+
+
 def _native_request(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
@@ -211,15 +257,14 @@ def _native_request(
             if request is None:
                 raise ValueError()
             recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
-            result = recovery.handle(request, lambda: exchange_browser_device(configuration))
-            document: dict[str, object] = {
-                "version": 1, "ok": True, "mode": result.status.mode.value,
-                "revision": result.status.revision, "retry_after": result.status.retry_after,
-                "renew_after": result.renew_after,
-            }
-            if result.session is not None:
-                document["session"] = {"token": result.session.token,
-                                       "expires_in": result.session.expires_in}
+            if isinstance(request, BrowserResumeRequest):
+                if expected_identity is None:
+                    # Only a fixed identity-bound installed wrapper enables resume.
+                    raise ValueError()
+                document = _resume_request(root, request, configuration, recovery)
+            else:
+                result = recovery.handle(request, lambda: exchange_browser_device(configuration))
+                document = _result_document(result)
         except Exception:
             document = {"version": 1, "ok": False, "mode": "setup_error"}
         body = json.dumps(document, allow_nan=False, separators=(",", ":")).encode("ascii")

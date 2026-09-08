@@ -64,6 +64,7 @@ export function createBrowserRecovery(ports, settings) {
   let holdForLogout = false, logoutStart = null;
   let missing = false, setupAttempted = false;
   let resumeAttempted = false;
+  let reviewedResume = null;
   let readyUntil = 0; // Process-local proof of a completed verified installation, never persisted.
   const now = () => {
     const value = ports.now();
@@ -262,8 +263,29 @@ export function createBrowserRecovery(ports, settings) {
 
   return Object.freeze({
     ...(ports.resume ? {
+    reviewResume: () => {
+      reviewedResume = null;
+      const generation = epoch;
+      const result = operations.then(async () => {
+        await ready;
+        if (failure || holdForLogout || state.version !== 1 || state.phase !== "clean" ||
+            epoch !== generation || typeof ports.resume.review !== "function") throw new Error("review");
+        const value = await ports.resume.review();
+        if (epoch !== generation || !exact(value, ["version","ok","mode","revision","generation"]) ||
+            value.version !== 1 || value.ok !== true || value.mode === "active" || !MODES.has(value.mode) ||
+            ![value.revision,value.generation].every(n=>Number.isSafeInteger(n)&&n>0&&n<Number.MAX_SAFE_INTEGER)) {
+          throw new Error("review");
+        }
+        reviewedResume = {nativeRevision:value.revision,serverGeneration:value.generation,
+          epoch:generation,deadline:now()+60000};
+        return {mode:"reviewed",nativeRevision:value.revision,serverGeneration:value.generation};
+      }).catch(()=>({mode:"resume_refused"}));
+      operations = result.then(()=>{});
+      return result;
+    },
     resume: review => {
-      // Internal trusted adapter only: no runtime message, page or startup caller.
+      // Only the document-bound trusted resume adapter supplies this review.
+      // Ordinary dashboard messages, control actions and startup cannot call it.
       // This same-worker queue must own recovery AND consent; a second controller
       // or a direct browser-storage write cannot safely coordinate this operation.
       if (resumeAttempted || !ports.resume || typeof ports.resume.prepare !== "function" ||
@@ -272,6 +294,13 @@ export function createBrowserRecovery(ports, settings) {
           ![review.nativeRevision, review.serverGeneration].every(n => Number.isSafeInteger(n) && n > 0 && n < Number.MAX_SAFE_INTEGER)) {
         return Promise.resolve({mode: "resume_refused"});
       }
+      if (ports.resume.review && (!reviewedResume || reviewedResume.epoch !== epoch ||
+          reviewedResume.deadline <= now() || reviewedResume.deadline > now()+60000 ||
+          reviewedResume.nativeRevision !== review.nativeRevision ||
+          reviewedResume.serverGeneration !== review.serverGeneration)) {
+        return Promise.resolve({mode:"resume_refused"});
+      }
+      reviewedResume = null;
       resumeAttempted = true; // Repeated clicks never replay, even after a lost response.
       const {nativeRevision, serverGeneration} = review; // Snapshot the reviewed values before awaits.
       const consentEpoch = epoch;
@@ -444,11 +473,13 @@ export function createBrowserRecovery(ports, settings) {
 
 // Adapter is opt-in. Do not register until the dashboard sign-out bridge, trusted
 // configuration provisioning and real MV3 lifecycle tests have passed review.
-export function connectChromeRecovery(chrome, settings) {
+export function connectChromeRecovery(chrome, settings, resumePorts = null) {
   const config = configuration(settings);
   const cookieKey = {url: config.origin + "/", name: DEVICE_COOKIE};
   const privateStorage = chrome.storage.local.setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"});
   const controller = createBrowserRecovery({
+    ...(resumePorts ? {resume:resumePorts, intent:()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),
+      n=>n.toString(16).padStart(2,"0")).join("")} : {}),
     now: Date.now,
     load: async () => { await privateStorage; return (await chrome.storage.local.get(STATE_KEY))[STATE_KEY]; },
     save: async state => { await privateStorage; await chrome.storage.local.set({[STATE_KEY]: state}); },

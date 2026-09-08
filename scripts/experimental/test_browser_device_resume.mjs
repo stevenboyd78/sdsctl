@@ -60,6 +60,52 @@ function fixture() {
   return f;
 }
 
+test("native-backed review is non-mutating and required before explicit consent",async()=>{
+  const f=fixture();
+  f.ports.resume.review=async()=>({version:1,ok:true,mode:"paused",revision:3,generation:4});
+  const c=f.make();
+  assert.deepEqual(await c.resume(review),{mode:"resume_refused"});
+  assert.deepEqual(await c.reviewResume(),{mode:"reviewed",...review});
+  assert.deepEqual(f.calls,[]);assert.deepEqual(f.saves,[]);assert.equal(f.cookie,null);
+  assert.deepEqual(await c.resume(review),{mode:"active"});
+});
+for(const change of ["suspend","beginLogout","expired","rollback","revision","generation"]) {
+  test("review cache rejects newer "+change+" before pending write",async()=>{
+    const f=fixture();
+    f.ports.resume.review=async()=>({version:1,ok:true,mode:"paused",revision:3,generation:4});
+    const c=f.make();await c.reviewResume();
+    const changed={...review};
+    if(change==="suspend"||change==="beginLogout")await c[change]();
+    if(change==="expired")f.time+=60000;
+    if(change==="rollback")f.time--;
+    if(change==="revision")changed.nativeRevision++;
+    if(change==="generation")changed.serverGeneration++;
+    assert.deepEqual(await c.resume(changed),{mode:"resume_refused"});
+    assert(!f.calls.includes("prepare"));assert(!f.saves.some(v=>v.phase==="resume_pending"));
+  });
+}
+for(const value of [
+  null,{version:1,ok:true,mode:"active",revision:3,generation:4},
+  {version:1,ok:true,mode:"paused",revision:true,generation:4},
+  {version:1,ok:true,mode:"paused",revision:3,generation:4,extra:"private"},
+]) test("malformed native review never enables consent "+JSON.stringify(value),async()=>{
+  const f=fixture();f.ports.resume.review=async()=>value;const c=f.make();
+  assert.deepEqual(await c.reviewResume(),{mode:"resume_refused"});
+  assert.deepEqual(await c.resume(review),{mode:"resume_refused"});
+  assert.deepEqual(f.saves,[]);assert.deepEqual(f.calls,[]);
+});
+test("pause while review proof is in flight invalidates its eventual response",async()=>{
+  const f=fixture(), started=deferred(), finished=deferred();
+  f.ports.resume.review=async()=>{
+    started.resolve();await finished.promise;
+    return {version:1,ok:true,mode:"paused",revision:3,generation:4};
+  };
+  const c=f.make(), reviewing=c.reviewResume();await started.promise;
+  const pausing=c.suspend();finished.resolve();
+  assert.deepEqual(await reviewing,{mode:"resume_refused"});await pausing;
+  assert.deepEqual(await c.resume(review),{mode:"resume_refused"});assert(!f.calls.includes("prepare"));
+});
+
 test("explicit consent stays pending until fresh cookie and protected access verified", async()=>{
   const f=fixture(), c=f.make();
   assert.deepEqual(await c.resume(review),{mode:"active"});

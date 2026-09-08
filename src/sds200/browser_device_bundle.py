@@ -30,7 +30,7 @@ from .exceptions import ConfigurationError
 
 NATIVE_HOST = "org.sdsctl.browser_device"
 MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs",
-           "browser_device_startup.mjs")
+           "browser_device_startup.mjs", "browser_device_resume.mjs")
 
 
 class BrowserBundleError(ConfigurationError):
@@ -118,9 +118,14 @@ def _artifacts(
                 f"location.href === {origin} + p)) "
                 "connectLogoutContent({document, window, runtime: chrome.runtime, "
                 f"fetcher: fetch.bind(globalThis)}}, {origin});\n}})();\n")
+    resume_content = result["extension/browser_device_resume.mjs"].decode("utf-8")
+    content += "\n(() => {\n" + re.sub(r"^export (?=(?:async )?function )", "", resume_content,
+                                        flags=re.MULTILINE)
+    content += ("\nconnectResumeContent({window,runtime:chrome.runtime,"
+                f"fetcher:fetch.bind(globalThis)}}, {origin});\n}})();\n")
     result.update({
         "extension/manifest.json": _json({
-            "manifest_version": 3, "version": "0.0.3",
+            "manifest_version": 3, "version": "0.0.4",
             "name": "SDSCTL experimental device recovery review",
             "key": key.manifest_key,
             "permissions": ["nativeMessaging", "storage", "cookies", "alarms", "tabs"],
@@ -139,8 +144,12 @@ def _artifacts(
             "import {connectChromeRecovery} from './browser_device_recovery.mjs';\n"
             "import {connectLogoutWorker} from './browser_device_logout.mjs';\n"
             "import {connectBrowserEntry} from './browser_device_startup.mjs';\n"
+            "import {createChromeResumePorts,connectResumeWorker} "
+            "from './browser_device_resume.mjs';\n"
             f"const config = {settings};\n"
-            "const controller = connectChromeRecovery(chrome, config);\n"
+            "const controller = connectChromeRecovery(chrome, config, "
+            "createChromeResumePorts(chrome,config));\n"
+            "connectResumeWorker(chrome,controller);\n"
             "connectLogoutWorker(chrome, controller, config.origin);\n"
             "connectBrowserEntry(chrome);\n"
         ).encode("ascii"),
@@ -168,8 +177,34 @@ def _artifacts(
             f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd></dl>"
             "<p id='notice' role='status'>Starting managed display…</p>"
             "<p>This page never initializes, repairs or resumes a profile automatically.</p>"
+            "<p><a href='resume.html'>Review automatic sign-in resume</a></p>"
             "</main><script type='module' src='startup.mjs'></script></html>\n"
         ).encode(),
+        "extension/resume.mjs": (
+            "import {connectResumePage} from './browser_device_resume.mjs';\n"
+            "connectResumePage({document,window,runtime:chrome.runtime});\n"
+        ).encode("ascii"),
+        "extension/resume.html": (
+            "<!doctype html><html lang='en'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>SDSCTL resume automatic sign-in</title><link rel='stylesheet' href='setup.css'>"
+            "<main><h1>Resume automatic sign-in</h1><p>Experimental managed display</p><dl>"
+            f"<dt>Server</dt><dd>{html.escape(config.origin)}</dd>"
+            f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd>"
+            f"<dt>Extension</dt><dd>{key.extension_id}</dd></dl>"
+            "<p>An administrator must already allow this device on the server. This page "
+            "cannot undo server-side pause or revocation, replace credentials, or repair "
+            "an interrupted approval. No password or credential should be entered here.</p>"
+            "<button id='review' type='button'>Review this display</button>"
+            "<p id='reviewed'></p><form id='resume-form'><label>"
+            "<input type='checkbox' id='confirm' required disabled>"
+            " I have checked this server and device. Resume automatic sign-in on this display, "
+            "including future browser starts.</label><p><button id='resume' type='submit' disabled>"
+            "Resume automatic sign-in</button></p></form><p id='notice' role='status'>"
+            "Opening this page does not resume automatic sign-in.</p>"
+            "<p><a href='startup.html'>Return to startup</a></p></main>"
+            "<script type='module' src='resume.mjs'></script></html>\n"
+        ).encode("ascii"),
         "extension/setup.html": (
             "<!doctype html><html lang='en'><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"

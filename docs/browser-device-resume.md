@@ -1,16 +1,17 @@
 # Experimental device replacement and resume boundaries
 
-Status: **internal consent/verified-transport candidate, not a resume installer**.
-There is currently no supported command or browser message that coordinates all
-the steps needed to resume an intentionally signed-out managed browser. Do not
-call internal Python methods, edit browser storage, delete a ledger, or rerun
-first-time setup to work around that boundary. The published manual-login kiosk
-and remote TUI are unchanged.
+Status: **experimental trusted-page/native-bridge candidate, not production accepted**.
+Generated experimental bundles now include a two-step resume page and an
+identity-bound native bridge. Real-browser end-to-end acceptance is still
+required; this is not a supported production resume or credential-replacement
+installer. Do not call internal Python methods, edit browser storage, delete a
+ledger, or rerun first-time setup to work around a refused or uncertain operation.
+The published manual-login kiosk and remote TUI are unchanged.
 
 This guide builds on [first-run setup](browser-device-first-run.md),
 [service lifecycle](browser-device-service.md) and the
 [enrollment/recovery design](managed-display-enrollment-design.md). It describes
-what existing components guarantee and what a future explicit workflow must add.
+what the candidate components guarantee and what a supported workflow must add.
 It does not enable production enrollment, accept rotation downloads, change
 credentials, start services or deploy to either display.
 
@@ -43,8 +44,8 @@ are invalid. A paused device stays paused. The first-time profile importer still
 refuses rotation handoffs: a checked, private replacement installer is separate
 work. Merely writing a new secret must not reset either local recovery layer.
 
-**Resume after intentional sign-out or a repaired terminal error:** a future
-workflow needs explicit consent and agreement across all three states. A server
+**Resume after intentional sign-out or a repaired terminal error:** the candidate
+requires explicit consent and agreement across all three states. A server
 resume by itself is insufficient. If an attempt was made while the server was
 still paused, the resulting native credential-rejection state must remain stopped
 even after the administrator subsequently resumes the server.
@@ -70,7 +71,7 @@ subsequent administrator change, or authorize clearing local state. Retain
 uncertain outputs for review; do not mark the whole display resumed when only
 one step succeeded.
 
-## Requirements before implementing a coordinated workflow
+## Requirements before accepting a coordinated workflow
 
 The following remain development requirements, not runnable instructions:
 
@@ -100,18 +101,20 @@ The following remain development requirements, not runnable instructions:
    secure unattended keyring handling, boot and combined power loss remain
    separate acceptance gates.
 
-The native transaction, verified transport and internal browser coordination
-components are implemented as candidates below. A trusted consent page, native
-protocol bridge, independent process deadlines and real browser verification are
-still required before exposing a usable resume workflow.
+The native transaction, verified transport, browser coordination, trusted consent
+page and supervised native protocol bridge are implemented as candidates below.
+The real-browser proof adapter is implemented but not yet accepted end to end.
+Credential replacement, retained-operation maintenance and physical deployment
+remain separate requirements.
 
 ## Native approval engine: internal candidate only
 
 `browser_device_resume.py` provides a trusted internal `prepare`/`commit` engine.
-There is no CLI entry, native-message action, browser form or automatic caller.
-The existing first-run, ordinary recovery, service and credential import paths
-never prepare or commit an approval. Do not invoke internal methods on a real
-installation to bypass the missing coordinated workflow.
+There is no resume CLI or automatic caller. The generated experimental trusted
+page reaches it through the identity-bound native bridge described below.
+Existing first-run, ordinary recovery, service and credential import paths never
+prepare or commit an approval. Do not invoke internal methods on a real
+installation to bypass the pending coordinated acceptance.
 
 Preparation requires an exact stopped native revision, a browser-intent
 fingerprint and context-bound evidence of an already-active server record with
@@ -150,8 +153,9 @@ validity, then saves native permission and `complete` atomically. A new pause ca
 cancel an approval while proof is blocked, including when the native mode was
 already paused. Failures retain their evidence rather than replaying or deleting
 it. The engine rejects proof callbacks that return after ten seconds, but cannot
-interrupt a callback that never returns; the future native supervisor still needs
-an independent process deadline.
+interrupt a callback that never returns. Each bridge action therefore runs under
+the existing independent native process supervisor: it kills and reaps a stuck
+child at ten seconds, without serializing private exception details.
 
 If the process dies after claiming, `claimed` remains consumed. If commit succeeds
 but its acknowledgement is lost, the native ledger may already be active and the
@@ -169,8 +173,8 @@ bounded at 128 approvals and retained, not silently pruned. A reviewed history
 maintenance/retirement path is still required before production use.
 
 These native guarantees are necessary but insufficient for a working display
-resume. The internal components below must still be connected through trusted
-UI/native boundaries and qualified in real Chromium before physical deployment.
+resume. The connected UI/native components below still require qualification in
+real Chromium before physical deployment.
 
 ## Verified server evidence and exact-generation sessions
 
@@ -207,14 +211,15 @@ generation, obtains this verified proof and prepares the one-use approval.
 a session for its bound generation under an exact native-revision check. It never
 modifies browser storage/cookies. Both calls **require an independent process
 deadline**; socket timeouts alone do not bound DNS or a slowly dripping peer.
-They are not yet exposed by native messaging, a CLI or a generated launcher.
+The bridge supplies that deadline; no direct resume CLI is added.
 
-## Durable browser consent: internal controller only
+## Durable browser consent: trusted controller
 
-Only a controller explicitly constructed with the trusted resume test adapter
-offers an internal `resume` method. The normal Chrome adapter and generated
-extension still offer no resume method/message/page. Do not call internal APIs
-or construct an adapter to bypass that missing installation/consent boundary.
+Only a controller explicitly constructed with the trusted resume adapter offers
+internal review/resume methods. The generated experimental worker supplies that
+adapter; the two-argument Chrome adapter remains unchanged. Dashboard messages,
+the old control page, startup and alarms cannot submit resume approval. Do not
+construct another controller or write browser storage to bypass this boundary.
 
 One explicit reviewed attempt snapshots the native revision and server generation.
 It saves a version-2, paused `resume_pending` record with a fresh intent fingerprint
@@ -227,9 +232,9 @@ the old attempt and saves pause intent without waiting for outstanding I/O.
 Only after a fresh generation-bound session, matching native revision, cookie
 installation and a trusted adapter's protected-session verification may the
 controller persist final browser consent and schedule ordinary recovery. A native
-`active` response is insufficient. Real cookie/document/session verification by
-the eventual Chrome adapter remains unimplemented: the isolated tests supply
-controlled ports, not browser proof.
+`active` response is insufficient. The Chrome adapter below implements
+cookie/document/session verification; controlled-port tests alone do not
+establish a working end-to-end browser flow.
 
 Worker loss before the final browser consent commit leaves pending consent paused.
 The next worker clears the cookie and reasserts native suspend, cancelling any
@@ -245,6 +250,57 @@ does not report readiness or replay the approval. This is not an atomic transact
 across Chromium storage, native SQLite, the cookie service and server authority.
 The browser adapters and maintenance tooling must preserve that distinction.
 
+## Trusted review page and supervised native bridge
+
+The generated bundle's startup page links to `resume.html`. Opening that page
+does nothing to server permission, local consent or sessions. It displays the
+fixed canonical server, device and extension identity; it never requests a
+password or accepts a replacement credential.
+
+1. **Review:** a trusted click requests a non-mutating server verification using
+   the installation's saved credential and CA. Native mode must already be
+   stopped and the server must already allow the device. The native revision
+   must remain unchanged across verification. Only the revision and confirmed
+   server generation return to the page.
+2. **Confirm:** the user checks the consent box and submits within one minute.
+   A volatile, one-use page review is bound to that exact top-frame extension
+   document and tab. Caller-supplied revisions, URLs and native tickets are
+   refused. A newer pause or changed/expired review cannot prepare approval.
+3. **Verify completion:** durable pending consent precedes native prepare and
+   commit. The worker installs the fresh Secure, HttpOnly, host-only, Strict
+   cookie, checks actual protected access, rechecks native revision and only then
+   saves final consent and reports a verified fresh display-only session.
+
+The exact native actions are `review-resume`, `prepare-resume` and `commit-resume`.
+Only a caller from the configured extension with the launcher-bound installation
+identity can use them. Unknown fields, malformed fingerprints, unsafe numbers
+and caller destinations are refused. Private approval tickets remain in the
+worker/native exchange, not the page, persistent browser storage or diagnostics.
+All three actions use the ten-second process supervisor. The raw `resume`
+action remains invalid.
+
+For protected-access verification, the worker opens one inactive tab at the fixed
+`/device-display` route. An isolated, top-frame extension script makes a same-origin
+`GET /auth/session`, allowing the server to check the actual HttpOnly cookie.
+It requires an exact, bounded display-only/enrolled response with sufficient
+remaining lifetime and returns only a request-bound Boolean verdict. The worker
+rechecks the cookie and tab before accepting it, and closes only the temporary
+tab it created. It uses a twenty-second overall deadline and bounded navigation
+retries. No dashboard script receives the credential, cookie or response body.
+
+There is one review attempt per worker lifetime, including a refused or lost
+review. Reloading the page does not mint another approval. A lost confirmation
+does not authorize retry or deletion: retain the pending browser/native records
+for administrator review. A reviewed recovery/retirement path for these records
+is still a prerequisite for production use.
+
+The local end-to-end harness now has `resume` and `resume-stale` cases, using
+generated wheel artifacts, actual form clicks, loopback HTTPS and the real native
+process. On this workstation both available browser attempts stopped at sandbox
+initialization before the extension loaded. **Those cases are not recorded as
+passes.** Do not disable sandboxing, certificate checks or change the password
+store to turn that environment failure into acceptance.
+
 ## What the isolated tests establish
 
 - `tests/test_browser_device_verification.py` covers authenticated non-mutating
@@ -258,6 +314,14 @@ The browser adapters and maintenance tooling must preserve that distinction.
   consent, single-use attempts, exact review snapshots, sign-out races, worker
   restart, malformed approvals, cookie/proof failure and lost final storage ACK.
   Storage, cookie and native ports are controlled doubles, not real Chromium.
+- `scripts/experimental/test_browser_device_resume_ui.mjs` covers trusted-page
+  gestures, document-bound one-use reviews, expiry, strict native wrappers,
+  isolated protected-session verdicts, cookie changes and exact probe-tab cleanup.
+  Browser APIs are controlled doubles; this does not qualify actual UI rendering.
+- `tests/test_browser_device_resume_bridge.py` sends real native frames through
+  identity-bound subprocesses, joins the verified loopback TLS/ASGI fixture,
+  checks single-use prepare/commit and wrong-caller refusal, and demonstrates
+  each action's independent ten-second kill-and-reap deadline.
 - `tests/test_browser_device_resume.py` covers one-use approvals, exact input and
   intent matching, schema integrity, cancellation, expiry/clock rollback,
   concurrent commits, retained uncertain outcomes and atomic write failure.
