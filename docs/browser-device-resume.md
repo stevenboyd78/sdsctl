@@ -1,6 +1,6 @@
 # Experimental device replacement and resume boundaries
 
-Status: **requirements and isolated regression coverage, not a resume installer**.
+Status: **internal native approval candidate, not a resume installer**.
 There is currently no supported command or browser message that coordinates all
 the steps needed to resume an intentionally signed-out managed browser. Do not
 call internal Python methods, edit browser storage, delete a ledger, or rerun
@@ -100,12 +100,91 @@ The following remain development requirements, not runnable instructions:
    secure unattended keyring handling, boot and combined power loss remain
    separate acceptance gates.
 
-The choice of the durable approval/commit protocol is not implemented here. In
-particular, directly composing the existing internal reset with a browser-state
-write would not satisfy these requirements.
+The native transaction portion is implemented as an unwired candidate below.
+Browser coordination and the authenticated network evidence adapter are not
+implemented. Directly connecting the existing reset to a browser-state write
+would not satisfy these requirements.
+
+## Native approval engine: internal candidate only
+
+`browser_device_resume.py` provides a trusted internal `prepare`/`commit` engine.
+There is no CLI entry, native-message action, browser form or automatic caller.
+The existing first-run, ordinary recovery, service and credential import paths
+never prepare or commit an approval. Do not invoke internal methods on a real
+installation to bypass the missing coordinated workflow.
+
+Preparation requires an exact stopped native revision, a browser-intent
+fingerprint and context-bound evidence of an already-active server record with
+confirmed old-request drainage. The installation fingerprint binds origin, device
+and extension identity. Preparation also fingerprints the validated private
+credential and certificate bundle. It retains the native stopped mode, advances
+its revision and returns one private, two-minute approval ticket. Only the ticket
+digest is stored; the returned ticket must not be logged or generically serialized.
+The browser-intent fingerprint is supplied by a trusted caller: this module does
+not read browser storage or verify an actual user gesture.
+
+Private-file checks are snapshots, not a transaction across external file writers,
+server authority and browser storage. A future installer must serialize credential
+and configuration changes with approval handling. Losing the prepare response
+leaves an outstanding approval; neither its ticket nor a replacement approval is
+silently recreated.
+
+| Durable approval phase | Meaning |
+| --- | --- |
+| `prepared` | One exact review is outstanding; native recovery remains stopped |
+| `claimed` | Approval was consumed before requesting fresh server evidence; another commit or automatic replay is refused |
+| `complete` | Fresh evidence and unchanged inputs allowed an atomic native reset; this is not browser/session readiness |
+| `cancelled` | A newer native pause, trusted reset or clock correction invalidated the approval |
+| `failed` | Claimed verification failed, or a correctly identified approval was refused for expiry/clock rollback; a later retry cannot revive it |
+
+Commit consumes the ticket before calling the proof adapter, without holding the
+native SQLite transaction across external work. The adapter must authenticate its
+own transport and confirm the exact reviewed active server generation and drain
+result. A display credential must never grant authority to resume a server-side
+administrator pause. The Python evidence object is not a signed receipt or a
+network authentication mechanism. Returning a fabricated object is not verified
+server authorization; same-account/root code and supplied adapters are trusted.
+
+After proof, commit rechecks input fingerprints, native revision/mode and ticket
+validity, then saves native permission and `complete` atomically. A new pause can
+cancel an approval while proof is blocked, including when the native mode was
+already paused. Failures retain their evidence rather than replaying or deleting
+it. The engine rejects proof callbacks that return after ten seconds, but cannot
+interrupt a callback that never returns; the future native supervisor still needs
+an independent process deadline.
+
+If the process dies after claiming, `claimed` remains consumed. If commit succeeds
+but its acknowledgement is lost, the native ledger may already be active and the
+approval `complete`; the caller receives no assurance of success and cannot replay
+the reset. **The future browser adapter must retain its own durable pending pause
+on that uncertainty.** Current browser pause recovery reasserts native pause; it
+does not finish a resume automatically.
+
+Explicit preparation atomically upgrades only the selected native ledger to
+schema version 2, including its approval history. Ordinary operations do not
+migrate version-1 ledgers. Version-2 state is validated on each open, including
+read-only inspection. Older helpers that accept only version 1 refuse an upgraded
+ledger; do not downgrade or strip the new table as a rollback method. History is
+bounded at 128 approvals and retained, not silently pruned. A reviewed history
+maintenance/retirement path is still required before production use.
+
+These native guarantees are necessary but insufficient for a working display
+resume. Before exposing the engine, implement a durable browser pending/consent
+protocol, a verified network evidence adapter, and a generation-bound fresh
+session exchange. Server authorization can change after proof; the browser must
+not treat this point-in-time native result as permission to accept a session for
+an unreviewed generation. Qualify restart, sign-out races, lost responses, schema
+upgrade/rollback refusal and real Chromium together before any physical deployment.
 
 ## What the isolated tests establish
 
+- `tests/test_browser_device_resume.py` covers one-use approvals, exact input and
+  intent matching, schema integrity, cancellation, expiry/clock rollback,
+  concurrent commits, retained uncertain outcomes and atomic write failure.
+  Tests join the actual local server-owner acknowledgement for DNS/IPv4/IPv6
+  contexts and run a native subprocess that exits immediately after claiming.
+  The server-proof callbacks are local trusted test adapters, not verified HTTPS
+  evidence delivery or browser consent. No display session is created by the core.
 - `tests/test_browser_device_resume_boundaries.py` joins the real SQLite authority,
   owner acknowledgement, session middleware and native recovery ledger. It covers
   server-only and native-only resume, all five stopped native modes, paused

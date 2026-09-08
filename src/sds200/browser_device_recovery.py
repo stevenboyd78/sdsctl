@@ -188,8 +188,8 @@ class BrowserDeviceRecovery:
             db.execute("PRAGMA trusted_schema=OFF")
             db.execute("PRAGMA synchronous=FULL")
             db.execute("BEGIN IMMEDIATE")
-            if not initializing and db.execute("PRAGMA user_version").fetchone()[0] != 1:
-                raise BrowserRecoveryError()
+            if not initializing:
+                self._check_version(db)
             yield db
             db.commit()
         except (OSError, ValueError, sqlite3.Error, BrowserDeviceStoreError):
@@ -197,6 +197,26 @@ class BrowserDeviceRecovery:
         finally:
             if db is not None:
                 db.close()
+
+    @staticmethod
+    def _check_version(db: sqlite3.Connection) -> None:
+        version = db.execute("PRAGMA user_version").fetchone()[0]
+        if version == 2:
+            from .browser_device_resume import validate_resume_state
+
+            validate_resume_state(db)
+        elif version != 1 or db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='browser_resume'"
+        ).fetchone() is not None:
+            raise BrowserRecoveryError()
+
+    @staticmethod
+    def _cancel_resume(db: sqlite3.Connection) -> bool:
+        if db.execute("PRAGMA user_version").fetchone()[0] != 2:
+            return False
+        from .browser_device_resume import cancel_resume_approvals
+
+        return cancel_resume_approvals(db)
 
     def _load(
         self, db: sqlite3.Connection, now: float, *, correct_clock: bool = True,
@@ -217,6 +237,7 @@ class BrowserDeviceRecovery:
         state = _State(revision, RecoveryMode(mode), failures, next_at, observed_at)
         if now < observed_at and correct_clock:
             # Pi clocks may step during startup. Bound retry waits, but never clear a pause/error.
+            self._cancel_resume(db)
             state = _State(revision + 1, state.mode, failures, now + 10, now)
             self._save(db, state)
         return state
@@ -291,8 +312,7 @@ class BrowserDeviceRecovery:
                 db.execute("PRAGMA trusted_schema=OFF")
                 db.execute("PRAGMA query_only=ON")
                 db.execute("BEGIN")
-                if db.execute("PRAGMA user_version").fetchone()[0] != 1:
-                    raise BrowserRecoveryError()
+                self._check_version(db)
                 now = self._now()
                 state = self._load(db, now, correct_clock=False)
                 return self._status(state, max(now, state.observed_at))
@@ -308,7 +328,8 @@ class BrowserDeviceRecovery:
         now = self._now()
         with self._connection() as db:
             state = self._load(db, now)
-            if state.mode is not RecoveryMode.PAUSED:
+            cancelled = self._cancel_resume(db)
+            if state.mode is not RecoveryMode.PAUSED or cancelled:
                 state = _State(state.revision + 1, RecoveryMode.PAUSED, 0, 0, now)
                 self._save(db, state)
             return self._status(state, now)
@@ -324,6 +345,7 @@ class BrowserDeviceRecovery:
             state = self._load(db, now)
             if type(expected_revision) is not int or state.revision != expected_revision:
                 raise BrowserRecoveryError()
+            self._cancel_resume(db)
             state = _State(state.revision + 1, RecoveryMode.ACTIVE, 0, 0, now)
             self._save(db, state)
             return self._status(state, now)

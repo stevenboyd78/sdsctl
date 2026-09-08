@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an unwired experimental native resume-approval engine with exact revision,
+  installation, browser-intent and private-input bindings; short-lived one-use
+  tickets; fresh server-evidence checks; durable claim before proof; and atomic
+  native permission. Cancel outstanding approvals on newer pause or clock
+  correction and retain failed/uncertain operations. Only explicit internal
+  preparation upgrades a ledger to schema 2; no CLI/native action, browser consent
+  flow, network proof adapter, session readiness or production migration is enabled.
 - Add experimental `browser-device-service --experimental create/check` to
   prepare and validate inert, canonical graphical-session user-service files.
   Recheck registration on launch and preserve intentional close, bounded crash

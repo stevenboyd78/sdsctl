@@ -88,7 +88,16 @@ authority/acknowledgement, native recovery and browser sign-out checks in isolat
 fixtures. Server resume, credential-file replacement and native-only reset do not
 silently grant the other layers' consent; stale reviews and old sessions remain
 invalid. These are prerequisites, not an implemented coordinated resume workflow
-or accepted credential installer. The durable approval/commit protocol remains work.
+or accepted credential installer.
+
+The [native approval engine](docs/browser-device-resume.md#native-approval-engine-internal-candidate-only)
+is an unwired internal candidate: short-lived one-use reviews, durable claim before
+server proof, atomic native permission, cancellation on newer pause, and retained
+uncertain outcomes. Only explicit preparation migrates its selected ledger to a
+version that older helpers refuse. Browser consent, verified network evidence,
+generation-bound session exchange, history maintenance and full coordinated
+acceptance remain unimplemented. No public resume action or production migration
+is enabled.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
