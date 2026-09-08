@@ -166,7 +166,7 @@ def test_javascript_pause_uses_real_native_framing_and_persistent_ledger(tmp_pat
     # No credential or CA exists: suspend/status must work offline without either.
     script = r'''
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {endianness} from 'node:os';
 import {createBrowserRecovery, initialBrowserRecoveryState} from
   './scripts/experimental/browser_device_recovery.mjs';
@@ -208,10 +208,22 @@ const stopped = await createBrowserRecovery(ports, config).suspend();
 assert.equal(stopped.nativePaused, true);
 assert.equal(stopped.serverRevocation, 'unconfirmed');
 assert.equal((await createBrowserRecovery(ports, config).tick()).mode, 'paused');
+// A trusted native-only administrator reset must not grant browser consent.
+const reset = spawnSync(process.argv[1], ['-c', `import sys
+from pathlib import Path
+from sds200.browser_device_recovery import BrowserDeviceRecovery
+ledger = BrowserDeviceRecovery(Path(sys.argv[1]) / 'recovery.sqlite', sys.argv[2])
+ledger.resume(ledger.inspect().revision)`, process.argv[2], config.identity], {timeout:10000});
+assert.equal(reset.status, 0); assert.equal(reset.stdout.length, 0);
+assert.equal(reset.stderr.length, 0);
+const restarted = createBrowserRecovery(ports, config);
+assert.equal((await restarted.tick()).mode, 'paused');
+assert.equal((await restarted.initialize()).mode, 'setup_refused');
+assert.equal(restarted.readiness().sessionReady, false);
 // Native pause still wins over browser-state replacement.
 saved = initialBrowserRecoveryState(config);
 assert.equal((await createBrowserRecovery(ports, config).tick()).mode, 'paused');
-assert.deepEqual(actions, ['suspend', 'suspend', 'status']);
+assert.deepEqual(actions, ['suspend', 'suspend', 'suspend', 'status']);
 '''
     result = subprocess.run(
         [node, "--input-type=module", "-e", script, sys.executable, str(root), identity],

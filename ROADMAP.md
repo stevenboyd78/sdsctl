@@ -83,6 +83,13 @@ ordering. The [seat integration guide](docs/browser-device-seat.md) records that
 limited result and a shell-tested example, not a production-installed seat. The
 lab's blank-password keyring does not qualify secure unattended keyring handling.
 
+The [replacement/resume boundary tests](docs/browser-device-resume.md) join server
+authority/acknowledgement, native recovery and browser sign-out checks in isolated
+fixtures. Server resume, credential-file replacement and native-only reset do not
+silently grant the other layers' consent; stale reviews and old sessions remain
+invalid. These are prerequisites, not an implemented coordinated resume workflow
+or accepted credential installer. The durable approval/commit protocol remains work.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

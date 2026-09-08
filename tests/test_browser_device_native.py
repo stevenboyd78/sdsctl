@@ -275,6 +275,41 @@ def test_exchange_failure_persists_recovery_state(server, status, mode):
     assert len(observed) == 1
 
 
+@pytest.mark.parametrize("mode", [
+    RecoveryMode.PAUSED, RecoveryMode.REJECTED, RecoveryMode.TLS_ERROR,
+    RecoveryMode.SETUP_ERROR, RecoveryMode.PROTOCOL_ERROR,
+])
+def test_valid_credential_file_replacement_does_not_resume_native_helper(server, mode):
+    configuration, _, observed = server
+    ledger = BrowserDeviceRecovery(configuration.root / "recovery.sqlite", configuration.identity)
+    if mode is RecoveryMode.PAUSED:
+        stopped = ledger.suspend()
+    else:
+        def failure():
+            raise ExchangeFailure(mode)
+
+        stopped = ledger.authenticate(failure).status
+    before = ledger.path.read_bytes()
+    # Controlled fixture write only, NOT an implemented credential installer.
+    replacement = "sdsctl-browser-v1." + "d" * 64
+    private(configuration.root / "device.secret", replacement)
+    assert load_browser_native_configuration(configuration.root).identity == configuration.identity
+    for _ in range(2):
+        result = invoke(configuration.root)
+        assert result["mode"] == mode.value and "session" not in result
+        assert replacement not in json.dumps(result)
+    assert observed == []
+    assert ledger.path.read_bytes() == before
+
+    # A separate trusted reset allows verified loopback HTTPS. The synthetic
+    # server records the new credential but is not the real authority adapter.
+    ledger.resume(stopped.revision)
+    result = invoke(configuration.root)
+    assert result["mode"] == "active" and result["session"]["token"] == TOKEN
+    assert len(observed) == 1
+    assert observed[0][1]["Authorization"] == "Bearer " + replacement
+
+
 def test_status_and_offline_suspend_need_no_secret_or_ca(root):
     initialize(root)
     (root / "device.secret").rename(root / "not-loaded.secret")
