@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import urlsplit
 
+from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import BrowserResumeRequest, read_browser_device_request
 from .browser_device_recovery import (
     BrowserDeviceRecovery,
@@ -248,23 +249,27 @@ def _native_request(
 ) -> int:
     try:
         try:
-            configuration = load_browser_native_configuration(root)
-            if (caller_arguments != [configuration.extension_origin]
-                    or (expected_identity is not None
-                        and configuration.identity != expected_identity)):
-                raise ValueError()
-            request = read_browser_device_request(source)
-            if request is None:
-                raise ValueError()
-            recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
-            if isinstance(request, BrowserResumeRequest):
-                if expected_identity is None:
-                    # Only a fixed identity-bound installed wrapper enables resume.
+            # Held across input parsing, private reads and dispatch/network work.
+            # A busy maintenance/input-writer owner fails closed without waiting.
+            with browser_profile_access(root, exclusive=False):
+                configuration = load_browser_native_configuration(root)
+                if (caller_arguments != [configuration.extension_origin]
+                        or (expected_identity is not None
+                            and configuration.identity != expected_identity)):
                     raise ValueError()
-                document = _resume_request(root, request, configuration, recovery)
-            else:
-                result = recovery.handle(request, lambda: exchange_browser_device(configuration))
-                document = _result_document(result)
+                request = read_browser_device_request(source)
+                if request is None:
+                    raise ValueError()
+                recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
+                if isinstance(request, BrowserResumeRequest):
+                    if expected_identity is None:
+                        # Only a fixed identity-bound installed wrapper enables resume.
+                        raise ValueError()
+                    document = _resume_request(root, request, configuration, recovery)
+                else:
+                    result = recovery.handle(
+                        request, lambda: exchange_browser_device(configuration))
+                    document = _result_document(result)
         except Exception:
             document = {"version": 1, "ok": False, "mode": "setup_error"}
         body = json.dumps(document, allow_nan=False, separators=(",", ":")).encode("ascii")

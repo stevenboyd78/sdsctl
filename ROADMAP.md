@@ -157,6 +157,15 @@ Absence is not proof that an attempt never existed. Joined Node/Python fixtures
 resolve only to clean-but-paused without authentication, including lost replies.
 No CLI/native action, installed adapter or automatic recovery path is enabled.
 
+The [internal maintenance selection/ownership boundary](docs/browser-device-resume.md#trusted-maintenance-selection-and-profile-ownership-internal-candidate)
+fixes the profile/archive roots out of band, binds reviews to unchanged private
+inputs and directory identities, and retains fixed-name operation evidence for
+read-only restart confirmation. The supervised native runner now shares a
+nonblocking profile lock; boundary mutations take exclusive ownership. This
+coordinates participating callers, not old helpers or arbitrary manual edits.
+Private-input replacement still needs its own durable writer/fencing workflow;
+no maintenance UI, native action, CLI or automatic login is enabled.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

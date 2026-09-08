@@ -304,6 +304,14 @@ errors, unsafe/stale state, delayed prepares, competing reconciliations and real
 process death before/after commit. All remain local synthetic tests; there is no
 installed native action, browser adapter or automatic reconciliation caller.
 
+`tests/test_browser_device_resume_boundary.py` adds fixed local profile/archive
+selection, private-input change detection, native-process lock contention and
+process-death ownership release. Its joined browser fixtures select only opaque
+operation IDs through a test-owned adapter; browser requests never choose file
+paths. Both maintenance paths remain paused and preserve evidence across lost
+replies. Advisory locks coordinate only participating runtimes/writers; this is
+not a supported credential replacement or installed browser maintenance flow.
+
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
 bridge and document-bound completion tickets. The registered experimental bundle

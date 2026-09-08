@@ -328,8 +328,59 @@ physical-display acceptance.
 There is still **no installed transport, CLI, native action, page binding or
 automatic caller** for either maintenance path. Do not call these internal
 methods or edit browser storage on a real display to bypass a pending operation.
-Fixed archive selection, trusted consent and private-file writer coordination
-must be reviewed before exposing a supported workflow.
+The internal selection/ownership boundary below is the next layer, not an
+installed workflow. Trusted consent, replacement-writer integration and actual
+browser acceptance still need qualification before exposing it.
+
+## Trusted maintenance selection and profile ownership: internal candidate
+
+`browser_device_resume_boundary.py` fixes the native profile and a separate,
+existing private archive directory when a trusted local caller constructs the
+boundary. Neither directory can be selected through a browser message. The
+boundary supports explicit history retirement and no-matching-record
+reconciliation; it does not choose or authorize a resume on the user's behalf.
+
+A read-only review binds the exact native review and browser intent to both
+directory identities and the current private inputs. Configuration, credential
+and CA files are fingerprinted privately, including their presence and filesystem
+metadata. Missing credentials/trust remain missing; unsafe files are refused,
+not repaired. A replacement or rewrite invalidates the old selection even if
+the same bytes are subsequently restored. No credential bytes enter the review
+document, return value, exception message or logs.
+
+Execution consumes the exact in-memory review once. It exclusively creates a
+directory named by its opaque operation fingerprint under the configured archive
+root, then synchronizes `review.json` before the native core creates
+`native-history.json` and commits its stopped revision fence. These filenames
+are fixed. Existing or partial outputs are retained, never overwritten, deleted
+or automatically retried. Read-only confirmation after restart takes only the
+opaque operation ID and exact browser intent, reconstructs the recorded review,
+and checks unchanged inputs and the core's exact committed after-state.
+
+`browser_device_profile_access.py` supplies a nonblocking Linux advisory lock on
+the existing private profile directory; it creates no lock file. The updated
+supervised native runner takes shared ownership across request parsing, private
+reads and dispatch, including network work. Boundary mutations take exclusive
+ownership before opening SQLite. Shared reviews/confirmations may coexist with
+native requests; any conflicting owner causes refusal instead of waiting or
+silently retrying. A killed process releases its OS lock, but not its retained
+operation evidence or intentional pause.
+
+This is a **cooperating-writer contract, not a credential-replacement installer**.
+Future configuration/credential writers must acquire exclusive profile ownership,
+fence affected native approvals and implement durable partial-write handling.
+They must not rename or replace the profile directory while holding its lock.
+Direct low-level core calls, older helper versions and arbitrary same-account/root
+file edits do not automatically participate. An advisory lock does not stop such
+edits; input fingerprint checks are not a substitute for a coordinated writer.
+Do not deploy a mixed-runtime maintenance workflow or claim that holding a lock
+alone makes credential rotation safe.
+
+Native-process lock tests and joined Node/Python fixtures exercise this boundary
+with private synthetic inputs. Browser storage/cookies remain controlled in those
+fixtures. No maintenance native action, CLI, installed Chrome adapter or trusted
+page is enabled yet. Profile ownership does not itself prove browser shutdown,
+server permission, user consent, session readiness or physical outage recovery.
 
 ## Verified server evidence and exact-generation sessions
 

@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal trusted resume-maintenance boundary with fixed profile/archive
+  selection, private input and directory-identity bindings, one-use execution,
+  fixed-name retained evidence and read-only lost-reply confirmation. Coordinate
+  the supervised native runner's shared profile ownership with exclusive
+  maintenance ownership using nonblocking Linux advisory locks. No credential
+  replacement installer, maintenance native action, CLI, browser UI or automatic
+  login is enabled; arbitrary manual writes and old helpers are not coordinated.
 - Add internal no-matching-record reconciliation for interrupted browser resume:
   an exact private absence review, durable archive before native revision fencing,
   unchanged schema/history/error state and read-only completion confirmation.
