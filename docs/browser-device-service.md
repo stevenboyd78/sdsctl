@@ -116,6 +116,13 @@ reboots and service takeover are separate acceptance steps, not actions performe
 by this command. A desktop that does not manage this target requires its own
 reviewed integration; do not start a fake target to bypass that requirement.
 
+**The browser must finish closing before its display server stops.** The generated
+user unit does not order a separate system service that owns the compositor (the
+program drawing the graphical desktop). Review the
+[browser-first session shutdown guide](browser-device-seat.md) before a session
+stop/relaunch test. A desktop shutdown hook that merely starts cleanup in the
+background is insufficient.
+
 ### Restart behavior
 
 | Event | Behavior |
@@ -125,7 +132,7 @@ reviewed integration; do not start a fake target to bypass that requirement.
 | Unsafe configuration, unavailable graphical session or stale Chromium lock | Returns `78`; no automatic retry |
 | CLI usage error | Returns `2`; no automatic retry |
 | Repeated crashes | At most three starts within a 300-second window |
-| Graphical session ends | Unit stops with that target; systemd owns the service's process group |
+| Graphical session ends | Unit stops with that target; the desktop integration must wait for browser close before compositor teardown |
 | Server is late or unavailable | Browser remains open; the existing bounded recovery logic handles it |
 | Saved sign-out, rejected credential or TLS error | Existing pause/error stays intact; no automatic resume |
 
@@ -145,6 +152,10 @@ and systemd's [mixed shutdown policy](https://www.freedesktop.org/software/syste
 Starting a service is not proof that a display has a verified session or live
 scanner data. A new graphical session may start an enabled unit again; that does
 not clear a persisted device sign-out.
+
+An asynchronous compositor shutdown can still leave Chromium markers even when
+the browser service reports exit status zero. Check completion, owned processes
+and all three markers; a successful `systemctl stop` alone is not acceptance.
 
 **Abrupt power-loss recovery is still a gate.** Chromium singleton markers,
 including stale markers, are deliberately not removed. A physical cold-start
@@ -233,10 +244,14 @@ is provided here.
 ## Acceptance still required
 
 Deterministic file/CLI tests and systemd syntax verification are not physical or
-production acceptance. Before release, qualify installed old/new runtimes,
-real Chromium state retention across bundle-path updates, service close/crash
-behavior, terminal failures, local retirement, interrupted maintenance, both Pi
-geometries, and combined display/server outage recovery. Explicit device
+production acceptance. Isolated installed old/new-runtime and real-Chromium tests
+passed state retention across bundle-path updates, close/crash policy, terminal
+failures and local retirement. A separate
+[HDMI normal-session test](browser-device-seat.md#what-the-physical-test-established)
+passed with the stated compositor-ordering and keyring limitations. These do not
+qualify arbitrary desktop wiring or unattended production startup. Before release,
+complete the remaining physical/production checks, including both Pi geometries,
+secure keyring handling and combined display/server outage recovery. Explicit device
 replacement/resume, trusted production extension distribution and abrupt-crash
 profile ownership remain separate security gates. Keep both production TUIs
 unchanged until a separately approved deployment and restoration plan exists.

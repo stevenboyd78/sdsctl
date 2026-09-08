@@ -75,8 +75,13 @@ gate, not production deployment, physical-display or outage acceptance.
 candidate: canonical private user-service files, launch-time checks, bounded
 restart policy, explicit stopped-browser same-identity bundle updates and local
 retirement with private review backups. It never installs/enables a service,
-stops a browser, changes credentials or clears saved recovery state. Installed
-old/new-runtime, Chromium state-retention and service acceptance are still needed.
+stops a browser, changes credentials or clears saved recovery state. Isolated
+installed old/new-runtime, real-Chromium state-retention and service tests passed.
+A separate HDMI normal-session test qualified automatic login, persistent sign-out
+and production TUI restoration after correcting browser-before-compositor stop
+ordering. The [seat integration guide](docs/browser-device-seat.md) records that
+limited result and a shell-tested example, not a production-installed seat. The
+lab's blank-password keyring does not qualify secure unattended keyring handling.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
