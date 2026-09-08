@@ -291,12 +291,9 @@ class BrowserDeviceRecovery:
         with self._connection() as db:
             return self._status(self._load(db, now), now)
 
-    def inspect(self) -> RecoveryStatus:
-        """Read-only offline inspection; do not clear modes or persist clock correction.
-
-        A rolled-back clock uses the last observed time for this delay snapshot.
-        The next runtime status call still performs its normal durable correction.
-        """
+    @contextmanager
+    def _inspection(self) -> Iterator[sqlite3.Connection]:
+        """Validated read-only snapshot, shared with explicit history inspection."""
         try:
             BrowserDeviceStore(self.path)._check()
             # This ledger uses rollback journals. A read-only WAL connection can
@@ -313,11 +310,20 @@ class BrowserDeviceRecovery:
                 db.execute("PRAGMA query_only=ON")
                 db.execute("BEGIN")
                 self._check_version(db)
-                now = self._now()
-                state = self._load(db, now, correct_clock=False)
-                return self._status(state, max(now, state.observed_at))
+                yield db
         except (OSError, ValueError, sqlite3.Error, BrowserDeviceStoreError):
             raise BrowserRecoveryError() from None
+
+    def inspect(self) -> RecoveryStatus:
+        """Read-only offline inspection; do not clear modes or persist clock correction.
+
+        A rolled-back clock uses the last observed time for this delay snapshot.
+        The next runtime status call still performs its normal durable correction.
+        """
+        with self._inspection() as db:
+            now = self._now()
+            state = self._load(db, now, correct_clock=False)
+            return self._status(state, max(now, state.observed_at))
 
     def suspend(self) -> RecoveryStatus:
         """Persist offline intent before attempting server logout or clearing cookies.

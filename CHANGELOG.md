@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal experimental native resume-history retirement candidate:
+  read-only profile-bound review, a private durable archive before mutation,
+  stale-review refusal, revision fencing of old approvals, preservation of all
+  stopped/error modes and read-only confirmation after a lost reply. Retain one
+  terminal history anchor and all archived evidence. Test full history, process
+  interruption and concurrent operations; no CLI, native action, browser-pause
+  reset, automatic login or production recovery workflow is enabled.
 - Add an experimental native resume-approval engine with exact revision,
   installation, browser-intent and private-input bindings; short-lived one-use
   tickets; fresh server-evidence checks; durable claim before proof; and atomic

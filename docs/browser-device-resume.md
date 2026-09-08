@@ -170,11 +170,61 @@ migrate version-1 ledgers. Version-2 state is validated on each open, including
 read-only inspection. Older helpers that accept only version 1 refuse an upgraded
 ledger; do not downgrade or strip the new table as a rollback method. History is
 bounded at 128 approvals and retained, not silently pruned. A reviewed history
-maintenance/retirement path is still required before production use.
+maintenance/retirement path is still required before production use; the native
+candidate below supplies only its stopped-ledger step.
 
 These native guarantees are necessary but insufficient for a working display
 resume. The connected UI/native components below have isolated real-Chromium
 evidence; physical deployment and retained-operation maintenance remain gates.
+
+## Retained-history retirement: internal candidate only
+
+An interrupted approval is evidence, not permission to replay it. The internal
+`browser_device_resume_maintenance.py` candidate can now review and retire native
+approval history without granting permission to sign in. **It has no CLI, native
+message, browser page or automatic caller.** Do not call internal methods on a
+real display to bypass a pending operation. This is not yet the coordinated
+browser recovery workflow.
+
+The candidate keeps review, mutation and confirmation separate:
+
+1. **Review without changing state.** Read one validated version-2 ledger
+   snapshot, bound to the exact profile path and installation identity. Return
+   only a private fingerprint, native revision/mode, approval counts and a
+   two-minute review window. Reject active, old-schema, corrupt, unsafe or
+   clock-rolled-back state; never migrate, repair or reset it during inspection.
+2. **Archive before retirement.** Under the native ledger's write lock, compare
+   the complete reviewed snapshot again. Exclusively create a new mode-0600
+   archive in a separate existing mode-0700 directory. Write, synchronize and
+   read back the archive before changing the ledger. An existing file, unsafe
+   path, changed review or expired window is not overwritten or silently retried.
+3. **Fence old approvals while staying stopped.** Advance the native revision,
+   preserve its exact stopped/error mode and failure state, and retain the newest
+   approval as a terminal anchor. Pending approvals become unusable; older rows
+   move out of the live bounded history only after their evidence is archived.
+   Schema 2 remains in place and the history is never empty. A returning older
+   commit cannot authorize a session with its cancelled/missing claim or stale
+   revision. Any future resume requires separate fresh server proof and consent.
+4. **Confirm without replay.** If the mutation reply is lost, read-only
+   confirmation compares the exact archive plan and live after-state. Archive
+   existence alone is not success: a crash after writing it may leave the ledger
+   unchanged. A superseded ledger is refused, not restored to match the archive.
+
+The private archive includes the complete prior native approval rows and intended
+after-state, including identity, intent and private-input fingerprints. It has no
+raw credential, approval ticket, browser cookie or browser-storage contents, but
+is still private evidence, not a public diagnostic or a signed authorization.
+Keep all files after an uncertain result; there is no archive-restore or automatic
+cleanup operation. Local history retirement does not revoke server credentials,
+drain server requests or establish authenticated browser access.
+
+Native retirement also **does not clear `resume_pending` or intentional pause in
+the browser**. A future trusted workflow must coordinate browser shutdown or its
+single-worker operation queue, preserve/cancel current browser intent, serialize
+credential/configuration writers and bind a separately reviewed follow-up action
+to the confirmed native result. The native candidate cannot certify that a
+browser is stopped, so it must not be wired directly to a generic page button.
+No production recovery procedure or physical/outage acceptance is implied.
 
 ## Verified server evidence and exact-generation sessions
 
@@ -360,6 +410,12 @@ disabled to obtain these results.
   The server-proof callbacks are local trusted test adapters, not verified HTTPS
   evidence delivery or browser consent. These low-level approval tests do not
   create a display session.
+- `tests/test_browser_device_resume_maintenance.py` covers exact read-only
+  reviews, private archive ordering, the full 128-approval history, preservation
+  of every stopped mode, stale/unsafe inputs, competing retirements and in-flight
+  commits. Fault cases include partial archive writes, failed synchronization,
+  SQL rollback, process death and lost post-commit acknowledgement. These are
+  synthetic native-ledger tests, not coordinated browser or physical acceptance.
 - `tests/test_browser_device_resume_boundaries.py` joins the real SQLite authority,
   owner acknowledgement, session middleware and native recovery ledger. It covers
   server-only and native-only resume, all five stopped native modes, paused

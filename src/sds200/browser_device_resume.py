@@ -1,9 +1,9 @@
-"""Unwired experimental native resume approvals; not a CLI or native action.
+"""Experimental native resume approvals; no production resume CLI.
 
 Trusted callers supply exact browser intent and reviewed state. Low-level prepare/
 commit accepts trusted evidence; verified wrappers obtain private TLS proof and a
-generation-bound session. No browser storage or server authority is mutated. A
-future bridge must bound process lifetime and establish trusted browser consent.
+generation-bound session. No browser storage or server authority is mutated. The
+experimental trusted-page bridge bounds process lifetime and supplies consent.
 """
 
 from __future__ import annotations
@@ -328,7 +328,7 @@ class BrowserDeviceResume:
     ) -> BrowserResumeApproval:
         """Trusted consent adapter: verify EXACT reviewed generation using private TLS.
 
-        Requires an independent process deadline. No protocol/CLI/page exposes it.
+        Requires the trusted bridge's independent process deadline and consent.
         Do not infer consent from browser starts, a credential or a successful GET.
         """
         try:
@@ -396,8 +396,8 @@ class BrowserDeviceResume:
 
         A lost response cannot replay the operation. Proof must authenticate its
         transport and return an exact current, drained server record. This method
-        checks a ten-second elapsed bound but cannot kill a blocked callback: a
-        future native supervisor must enforce its independent process deadline.
+        checks a ten-second elapsed bound but cannot kill a blocked callback: the
+        native bridge supervisor must enforce its independent process deadline.
         Success means native permission only, never browser/session readiness.
         """
         digest = None

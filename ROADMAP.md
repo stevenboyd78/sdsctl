@@ -108,6 +108,14 @@ distinct from these eight sandboxed, verified-TLS headless passes. History
 maintenance, failed-pending recovery, private-file writer coordination and physical
 coordinated acceptance remain gates. No resume CLI or production migration is enabled.
 
+The [native history-retirement candidate](docs/browser-device-resume.md#retained-history-retirement-internal-candidate-only)
+adds read-only exact review, a durable private archive before mutation, atomic
+revision fencing while preserving stopped/error modes, and read-only confirmation
+after lost acknowledgement. It frees bounded native history while retaining an
+anchor and archived evidence; it never clears browser pause or grants permission.
+There is no CLI/native-message/UI caller. Coordinated pending-browser recovery,
+private-file writer serialization and production acceptance remain separate work.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the
