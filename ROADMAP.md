@@ -164,7 +164,16 @@ read-only restart confirmation. The supervised native runner now shares a
 nonblocking profile lock; boundary mutations take exclusive ownership. This
 coordinates participating callers, not old helpers or arbitrary manual edits.
 Private-input replacement still needs its own durable writer/fencing workflow;
-no maintenance UI, native action, CLI or automatic login is enabled.
+no installed maintenance UI, mutation action, CLI or automatic login is enabled.
+
+The [internal confirmation-only recovery controls](docs/browser-device-resume.md#confirmation-only-recovery-controls-internal-candidate)
+join explicit document-bound browser acknowledgement to a separately selected,
+read-only native endpoint. The trusted wrapper fixes the archive and operation;
+browser messages cannot supply either or execute native maintenance. Require a
+fresh matching proof and keep automatic sign-in paused after resolving intent.
+Local tests include actual native framing, supervision and SQLite with controlled
+page/storage fixtures. No generated extension, registered host, production
+display, Firefox/WPE support or physical acceptance claim changes at this stage.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

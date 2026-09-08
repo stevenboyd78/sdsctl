@@ -231,8 +231,9 @@ acceptance is implied.
 
 Resolving an interrupted attempt and consenting to automatic sign-in are separate
 operations. The coordinator now has optional internal `reviewPendingRetirement`
-and `retirePending` methods. **No installed Chrome adapter, page message, native
-action or CLI exposes them.** Without an explicitly supplied trusted retirement
+and `retirePending` methods. **No installed Chrome adapter, page or CLI exposes
+them.** The confirmation-only controls described below are internal candidates,
+not generated extension wiring. Without an explicitly supplied trusted retirement
 adapter these methods are absent, and ordinary startup still retains pending
 state. Do not manually edit Chromium storage or use a second controller to invoke
 them beside the running worker.
@@ -325,8 +326,8 @@ commit, competing preparations/reconciliations, preserved terminal errors and a
 full 128-row history. These are local implementation tests, not browser/TLS or
 physical-display acceptance.
 
-There is still **no installed transport, CLI, native action, page binding or
-automatic caller** for either maintenance path. Do not call these internal
+There is still **no installed transport, CLI, native mutation action, page binding
+or automatic caller** for either maintenance path. Do not call these internal
 methods or edit browser storage on a real display to bypass a pending operation.
 The internal selection/ownership boundary below is the next layer, not an
 installed workflow. Trusted consent, replacement-writer integration and actual
@@ -378,9 +379,61 @@ alone makes credential rotation safe.
 
 Native-process lock tests and joined Node/Python fixtures exercise this boundary
 with private synthetic inputs. Browser storage/cookies remain controlled in those
-fixtures. No maintenance native action, CLI, installed Chrome adapter or trusted
-page is enabled yet. Profile ownership does not itself prove browser shutdown,
+fixtures. No native maintenance mutation, CLI, installed Chrome adapter or trusted
+page is enabled yet. The confirmation-only candidate below does not execute
+maintenance. Profile ownership does not itself prove browser shutdown,
 server permission, user consent, session readiness or physical outage recovery.
+
+## Confirmation-only recovery controls: internal candidate
+
+An optional `BrowserRetirementSelection` passed by trusted local wrapper code
+fixes the existing archive root and a single opaque operation ID. It switches the
+supervised native runner into **confirmation-only** mode: the only accepted
+request is `confirm-retirement` with the exact installation identity and browser
+intent. The default generated wrapper has no such selection and refuses this
+request. The confirmation-only endpoint refuses normal status, suspend,
+authentication, claim and resume requests; it cannot execute maintenance or
+reconstruct a review to replay a mutation after process loss.
+
+The selected operation must already have committed through the maintenance
+boundary. Each call reads and verifies its fixed evidence files, current native
+after-state and private input binding. Missing, incomplete, edited, superseded
+or unrelated evidence fails closed. No request can supply an archive/profile
+path, operation ID, credential, URL or serialized native review. The existing
+ten-second process supervisor also bounds confirmation and releases process
+ownership on timeout. Replies contain bounded proof or a fixed redacted error,
+never credential bytes, archive contents or a session cookie.
+
+`browser_device_retirement_ui.mjs` provides candidate Chromium page, worker and
+native-port adapters. They are **not included in generated extension bundles**:
+there is no installed `recovery.html`, registered confirmation host or launcher
+change yet. A future explicitly provisioned integration must bind these controls
+to the same canonical recovery controller and separately selected native host.
+Do not register a wrapper with browser-supplied selection values.
+
+The page controller is inert on opening. A trusted review gesture checks the
+already-completed maintenance; a second trusted submission requires an unchecked-
+by-default confirmation. The worker binds its one-use, one-minute ticket to the
+exact active, top-level, non-incognito extension page document. Page messages
+carry only the action and, on confirmation, that volatile UI ticket. Native
+operation IDs, browser intent and native evidence stay out of the page.
+
+Confirmation reuses the existing paused acknowledgement coordinator: clear the
+cookie, cancel alarms, recheck native proof and unchanged persisted browser
+intent, then save clean-but-paused state. Success is acknowledged only with
+`localPauseSaved: true` and `sessionReady: false`. Native errors are not repaired;
+server permission is not changed; no authentication is attempted. A later resume
+requires a new worker and a separate fresh consent review. Lost replies and
+stale or newer pause/sign-out state must not trigger automatic mutation replay.
+
+Node tests cover trusted gestures, document binding, strict messages, expiry,
+restart, redaction and paused state. Joined Node/Python tests exercise the page
+and worker controllers through the actual native frame parser, process
+supervisor, fixed maintenance boundary and SQLite evidence, including absent
+commits and lost browser-storage acknowledgements. Browser DOM, cookies and
+storage remain controlled fixtures; this is not real-browser, TLS, physical Pi,
+Firefox/WPE or production acceptance. Installer provisioning, native mutation
+consent and credential replacement remain separate work.
 
 ## Verified server evidence and exact-generation sessions
 

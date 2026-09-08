@@ -46,6 +46,14 @@ class BrowserResumeRequest:
     expires_at: float | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserRetirementRequest:
+    """Read-only proof request; operation and filesystem selection stay local."""
+
+    identity: str = field(repr=False)
+    intent: str = field(repr=False)
+
+
 def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
     action = value["action"]
     fields = {"review-resume": set(), "prepare-resume": {"intent", "revision", "generation"},
@@ -78,7 +86,9 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
     return result
 
 
-def parse_browser_device_request(payload: bytes) -> BrowserDeviceRequest | BrowserResumeRequest:
+def parse_browser_device_request(
+    payload: bytes,
+) -> BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest:
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -94,6 +104,13 @@ def parse_browser_device_request(payload: bytes) -> BrowserDeviceRequest | Brows
             raise _invalid()
         if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
             return _resume(value)
+        if value["action"] == "confirm-retirement":
+            if (set(value) != {"version", "action", "identity", "intent"}
+                    or any(type(value[key]) is not str
+                           or re.fullmatch(r"[a-f0-9]{64}", value[key]) is None
+                           for key in ("identity", "intent"))):
+                raise _invalid()
+            return BrowserRetirementRequest(value["identity"], value["intent"])
         if set(value) != {"version", "action"}:
             raise _invalid()
         action = BrowserDeviceAction(value["action"])
@@ -121,7 +138,7 @@ def _read_exact(stream: BinaryIO, count: int, *, allow_eof: bool = False) -> byt
 
 def read_browser_device_request(
     stream: BinaryIO,
-) -> BrowserDeviceRequest | BrowserResumeRequest | None:
+) -> BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest | None:
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.

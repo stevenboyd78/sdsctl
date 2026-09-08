@@ -280,6 +280,7 @@ node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
 node --test scripts/experimental/test_browser_device_startup.mjs
 node --test scripts/experimental/test_browser_device_retirement.mjs
+node --test scripts/experimental/test_browser_device_retirement_ui.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests
@@ -311,6 +312,17 @@ operation IDs through a test-owned adapter; browser requests never choose file
 paths. Both maintenance paths remain paused and preserve evidence across lost
 replies. Advisory locks coordinate only participating runtimes/writers; this is
 not a supported credential replacement or installed browser maintenance flow.
+
+`tests/test_browser_device_retirement_bridge.py` joins the confirmation-only
+native endpoint to the candidate trusted page/worker, strict Chromium port and
+paused acknowledgement coordinator. Native profile/archive/operation selection
+is fixed by test-owned wrapper code, never page messages. Read-only confirmation
+runs under the real process supervisor and verifies actual SQLite/archive
+evidence; incomplete commits, changed inputs and lost browser write replies stay
+paused. The Node UI tests cover document/gesture checks and one-use consent.
+DOM/storage/cookies remain controlled fixtures. These adapters are not included
+in generated extensions or registered as native hosts; this is not real-browser,
+Firefox/WPE, Pi-screen or production acceptance.
 
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out

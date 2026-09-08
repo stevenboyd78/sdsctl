@@ -194,6 +194,16 @@ def test_manifest_assets_receipt_and_no_secret_copy(tmp_path, public_key, profil
         canonical = bundle.files("sds200.browser_assets").joinpath(name).read_bytes()
         assert actual["extension/" + name] == canonical
     assert "initialBrowserRecoveryState" not in (extension / "worker.mjs").read_text()
+    assert not (extension / "recovery.html").exists()
+    assert not (extension / "browser_device_retirement_ui.mjs").exists()
+    assert "connectRetirementWorker" not in (extension / "worker.mjs").read_text()
+    denied = subprocess.run([str(root / "native-host"), config.extension_origin],
+        input=frame({"version": 1, "action": "confirm-retirement",
+                     "identity": config.identity, "intent": "f" * 64}),
+        capture_output=True, timeout=13)
+    assert denied.returncode == 0 and denied.stderr == b""
+    assert json.loads(denied.stdout[4:]) == {"version": 1, "ok": False, "mode": "setup_error"}
+    assert snapshot(profile) == before
     assert "window === window.top && ['/', '/device-display']" in (
         extension / "content.js"
     ).read_text()

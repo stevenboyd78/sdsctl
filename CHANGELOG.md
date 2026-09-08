@@ -8,12 +8,20 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add internal confirmation-only resume-maintenance transport and trusted
+  two-step browser recovery-control adapters. Fix native operation/archive
+  selection in trusted wrapper code, reject all mutation/authentication actions,
+  and supervise read-only evidence confirmation. Bind browser acknowledgement
+  to one active page document and one short-lived review; resolve interrupted
+  intent only to clean-but-paused. Test real native framing/SQLite plus controlled
+  browser UI, stale selection, timeout and lost replies. Generated extensions,
+  registered hosts, production displays and automatic sign-in remain unchanged.
 - Add an internal trusted resume-maintenance boundary with fixed profile/archive
   selection, private input and directory-identity bindings, one-use execution,
   fixed-name retained evidence and read-only lost-reply confirmation. Coordinate
   the supervised native runner's shared profile ownership with exclusive
   maintenance ownership using nonblocking Linux advisory locks. No credential
-  replacement installer, maintenance native action, CLI, browser UI or automatic
+  replacement installer, maintenance mutation action, CLI, installed UI or automatic
   login is enabled; arbitrary manual writes and old helpers are not coordinated.
 - Add internal no-matching-record reconciliation for interrupted browser resume:
   an exact private absence review, durable archive before native revision fencing,

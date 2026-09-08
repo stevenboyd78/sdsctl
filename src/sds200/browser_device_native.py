@@ -23,13 +23,17 @@ import sys
 import threading
 import time
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import urlsplit
 
 from .browser_device_profile_access import browser_profile_access
-from .browser_device_protocol import BrowserResumeRequest, read_browser_device_request
+from .browser_device_protocol import (
+    BrowserResumeRequest,
+    BrowserRetirementRequest,
+    read_browser_device_request,
+)
 from .browser_device_recovery import (
     BrowserDeviceRecovery,
     ExchangeFailure,
@@ -42,6 +46,18 @@ from .browser_device_recovery import (
 from .browser_device_store import BrowserDeviceStore
 
 _TOTAL_SECONDS = 10
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserRetirementSelection:
+    """Trusted wrapper-only selection; enables confirmation, never other actions.
+
+    No generated wrapper provisions this internal candidate yet. Neither field
+    may be populated from native messages or browser-controlled storage.
+    """
+
+    archives: Path = field(repr=False)
+    operation_id: str = field(repr=False)
 
 
 def _private_read(root: Path, name: str, maximum: int) -> bytes:
@@ -246,6 +262,7 @@ def _resume_request(
 def _native_request(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
+    retirement: BrowserRetirementSelection | None = None,
 ) -> int:
     try:
         try:
@@ -260,13 +277,28 @@ def _native_request(
                 request = read_browser_device_request(source)
                 if request is None:
                     raise ValueError()
-                recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
-                if isinstance(request, BrowserResumeRequest):
+                if retirement is not None or isinstance(request, BrowserRetirementRequest):
+                    # Separate, confirmation-only endpoint. It cannot execute a
+                    # reconstructed review or fall through to authentication.
+                    if (not isinstance(retirement, BrowserRetirementSelection)
+                            or not isinstance(request, BrowserRetirementRequest)
+                            or expected_identity is None or request.identity != expected_identity):
+                        raise ValueError()
+                    from .browser_device_resume_boundary import BrowserResumeBoundary
+
+                    proof = BrowserResumeBoundary(root, archives=retirement.archives).confirm(
+                        operation_id=retirement.operation_id, browser_intent=request.intent)
+                    document = {"version": 1, "ok": True, "evidence": asdict(proof)}
+                elif isinstance(request, BrowserResumeRequest):
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
                     if expected_identity is None:
                         # Only a fixed identity-bound installed wrapper enables resume.
                         raise ValueError()
                     document = _resume_request(root, request, configuration, recovery)
                 else:
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
                     result = recovery.handle(
                         request, lambda: exchange_browser_device(configuration))
                     document = _result_document(result)
@@ -290,11 +322,13 @@ def _native_request(
 def run_browser_native(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
+    retirement: BrowserRetirementSelection | None = None,
 ) -> int:
     """Dedicated Linux native process: supervise one child and reap it on timeout.
 
     Requires single-threaded main process and unbuffered FileIO native pipes.
-    Root and optional identity are fixed by a trusted wrapper, never caller parameters.
+    Root, optional identity and confirmation-only retirement selection are fixed
+    by a trusted wrapper, never browser/native message parameters.
     Exit 2 means ten-second total deadline (partial/no response must be discarded).
     Parent never loads secrets. Bundle preparation does not register or launch it.
     """
@@ -319,7 +353,7 @@ def run_browser_native(
             libc.prctl.restype = ctypes.c_int
             if libc.prctl(1, signal.SIGKILL, 0, 0, 0) == 0 and os.getppid() == parent:
                 code = _native_request(root, caller_arguments, source, destination,
-                                       expected_identity=expected_identity)
+                                       expected_identity=expected_identity, retirement=retirement)
         except BaseException:
             pass  # Dedicated child exits without exception/secret output or buffered flushing.
         os._exit(code)
