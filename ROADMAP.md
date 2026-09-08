@@ -206,9 +206,12 @@ explicit acknowledged host restoration, always retaining the launch guard.
 An [internal bounded Chromium supervisor](docs/browser-device-resume.md#bounded-chromium-supervisor-internal-candidate)
 now supplies fixed launch arguments, separate exact-generation page/worker
 readiness, a private PID-1 lifetime boundary and kernel-confirmed shutdown.
-Local tests exercise real namespace/native processes with a fictional browser;
-they do not establish real Chromium replacement or display acceptance.
-Real-browser qualification, guard-release review and physical acceptance remain gates.
+Local tests exercise real namespace/native processes with a fictional browser.
+The real-Chromium qualification harness additionally uses installed wheels and
+private virtual Pi displays, with namespace-local procfs and worker-owned page
+opening. It deliberately seeds fictional pending state through browser APIs;
+it is not normal setup/resume or physical-display acceptance. Guard-release
+review, normal-startup qualification and physical acceptance remain gates.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

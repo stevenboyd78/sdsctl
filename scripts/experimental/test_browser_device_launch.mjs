@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {connectRecoveryLaunchWorker,connectRecoveryLaunchPage} from "../../src/sds200/browser_assets/browser_device_launch.mjs";
+import {connectRecoveryLaunchWorker,connectRecoveryLaunchPage,connectRecoveryLaunchNavigation} from "../../src/sds200/browser_assets/browser_device_launch.mjs";
 const c={identity:"b".repeat(64),intent:"c".repeat(64),binding:"d".repeat(64),nativeHost:"org.sdsctl.browser_device"};
 const id="a".repeat(32),url="chrome-extension://"+id+"/recovery.html";
 const flush=()=>new Promise(resolve=>setImmediate(resolve));
@@ -88,3 +88,42 @@ test("page refuses embedded or wrong document",()=>{
   const f=fixture();f.window.top={};assert.throws(f.page);
   f.window.top=f.window;f.window.location.href=url+"#fragment";assert.throws(f.page);
 });
+
+function navigation() {
+  const f=fixture();f.values={};f.opens=[];f.events=[];f.writes=0;f.failure=null;
+  f.chrome.runtime.onStartup=f.chrome.runtime.onInstalled={addListener:fn=>f.events.push(fn)};
+  f.chrome.storage={session:{setAccessLevel:async value=>{
+    assert.deepEqual(value,{accessLevel:"TRUSTED_CONTEXTS"});if(f.failure==="access")throw Error();},
+  get:async()=>{if(f.failure==="read")throw Error();return structuredClone(f.values);},
+  set:async value=>{f.writes++;if(f.failure==="write")throw Error();
+    f.values=structuredClone(value);if(f.failure==="readback")f.values={};
+    if(f.failure==="lost-write")throw Error();}}};
+  f.chrome.tabs={create:async options=>{f.opens.push(options);if(f.failure==="open")throw Error();}};
+  f.startNavigation=()=>connectRecoveryLaunchNavigation(f.chrome,c);
+  return f;
+}
+test("worker owns one exact page opening; startup/install overlap and restart cannot duplicate",async()=>{
+  const f=navigation();f.startNavigation();f.events.forEach(fn=>fn());await flush();
+  assert.deepEqual(f.opens,[{url,active:true}]);assert.equal(f.writes,1);assert.equal(f.calls.length,0);
+  f.startNavigation();await flush();assert.equal(f.opens.length,1);assert.equal(f.writes,1);
+});
+test("new browser session may open a fresh review page, but never automatic consent",async()=>{
+  const f=navigation();f.startNavigation();await flush();f.values={};f.startNavigation();await flush();
+  assert.equal(f.opens.length,2);assert.equal(f.calls.length,0);
+});
+for(const failure of ["access","read","write","readback","lost-write","open"]) {
+  test("navigation uncertainty is not retried in this worker: "+failure,async()=>{
+    const f=navigation();f.failure=failure;f.startNavigation();await flush();
+    f.failure=null;f.events.forEach(fn=>fn());await flush();
+    assert.equal(f.opens.length,failure==="open"?1:0);assert.equal(f.calls.length,0);
+    if(["lost-write","open"].includes(failure)) {
+      f.startNavigation();await flush();assert.equal(f.opens.length,failure==="open"?1:0);
+    }
+  });
+}
+for(const marker of [{binding:"e".repeat(64)},{binding:c.binding,consent:true},null,true]) {
+  test("stale or malformed page claim never gets replaced: "+JSON.stringify(marker),async()=>{
+    const f=navigation();f.values={sdsctlRecoveryLaunchPage:marker};f.startNavigation();await flush();
+    assert.equal(f.opens.length,0);assert.equal(f.writes,0);assert.equal(f.calls.length,0);
+  });
+}

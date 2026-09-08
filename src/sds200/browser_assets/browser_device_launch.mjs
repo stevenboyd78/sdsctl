@@ -1,4 +1,4 @@
-// Fixed canonical generation readiness. No review, consent, storage or login.
+// Fixed canonical readiness and one session-scoped page opening. Never consent/login.
 const exact=(v,keys)=>v!==null&&typeof v==="object"&&!Array.isArray(v)&&
   Object.keys(v).sort().join(",") === [...keys].sort().join(",");
 const hex=v=>typeof v==="string"&&/^[a-f0-9]{64}$/.test(v);
@@ -13,6 +13,28 @@ const eligible=(chrome,sender)=>sender?.id===chrome.runtime.id&&sender.frameId==
   sender.url===chrome.runtime.getURL("recovery.html")&&sender.documentLifecycle==="active"&&
   typeof sender.documentId==="string"&&/^[a-zA-Z0-9-]{1,128}$/.test(sender.documentId)&&
   Number.isSafeInteger(sender.tab?.id)&&sender.tab.id>=0&&sender.tab.incognito===false;
+
+export function connectRecoveryLaunchNavigation(chrome,settings) {
+  const c=config(settings),key="sdsctlRecoveryLaunchPage";let attempt=null;
+  const open=()=>attempt??=Promise.resolve().then(async()=>{
+    const storage=chrome.storage.session;
+    await storage.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"});
+    const previous=(await storage.get(key))[key];
+    if(previous!==undefined) {
+      if(!exact(previous,["binding"])||previous.binding!==c.binding)throw Error("Page launch refused");
+      return; // Worker restart is not another page opening or inherited consent.
+    }
+    const marker={binding:c.binding};
+    // Claim before opening. An uncertain write/open is not replayed on worker restart.
+    await storage.set({[key]:marker});
+    const saved=(await storage.get(key))[key];
+    if(!exact(saved,["binding"])||saved.binding!==c.binding)throw Error("Page launch refused");
+    await chrome.tabs.create({url:chrome.runtime.getURL("recovery.html"),active:true});
+  }).catch(()=>{}); // The independent native readiness deadline still fails closed.
+  chrome.runtime.onStartup.addListener(open);
+  chrome.runtime.onInstalled.addListener(open);
+  void open(); // Installed/replaced worker owns navigation after its assets load.
+}
 
 export function connectRecoveryLaunchWorker(chrome,settings) {
   const c=config(settings);let attempt=null;

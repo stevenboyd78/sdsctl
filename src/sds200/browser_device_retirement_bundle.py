@@ -26,6 +26,7 @@ from .browser_device_bundle import (
     browser_extension_identity,
 )
 from .browser_device_native import _private_read, load_browser_native_configuration
+from .browser_device_proc import HOST_PROC, check_host_proc
 from .browser_device_profile import _platform
 from .browser_device_registration import MAINTENANCE_MARKER, _matches
 from .browser_device_resume_maintenance import BrowserResumeRetirementEvidence
@@ -162,8 +163,10 @@ def _canonical(
         options = json.dumps({"identity": config.identity, "intent": browser_intent,
                               "binding": binding, "nativeHost": NATIVE_HOST}, ensure_ascii=True)
         artifacts["extension/worker.mjs"] += (
-            f"import {{connectRecoveryLaunchWorker}} from './{name}';\n"
-            f"connectRecoveryLaunchWorker(chrome, {options});\n").encode("ascii")
+            f"import {{connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation}} "
+            f"from './{name}';\n"
+            f"connectRecoveryLaunchWorker(chrome, {options});\n"
+            f"connectRecoveryLaunchNavigation(chrome, {options});\n").encode("ascii")
         artifacts["extension/recovery.mjs"] += (
             f"import {{connectRecoveryLaunchPage}} from './{name}';\n"
             f"connectRecoveryLaunchPage({{document,window,runtime:chrome.runtime}}, {options});\n"
@@ -185,12 +188,21 @@ def _canonical(
 
 def _validate(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
     _matches(root / "bundle.json", receipt)
-    if ({p.name for p in root.iterdir()} != {
-            "bundle.json", "extension", "native-host", "native_host.py", NATIVE_HOST + ".json"}
+    supervised = "extension/browser_device_launch.mjs" in artifacts
+    extra = {HOST_PROC} if supervised else set()
+    names = {"bundle.json", "extension", "native-host", "native_host.py", NATIVE_HOST + ".json"}
+    if ({p.name for p in root.iterdir()} != names | extra
             or {p.name for p in (root / "extension").iterdir()} != {
                 name.removeprefix("extension/") for name in artifacts
                 if name.startswith("extension/")}):
         raise ValueError()
+    if supervised:
+        # Outer inspection sees an empty private directory; the fixed native
+        # endpoint in the supervised namespace sees the read-only proc mount.
+        try:
+            check_host_proc(root / HOST_PROC, mounted=False)
+        except ValueError:
+            check_host_proc(root / HOST_PROC, mounted=True)
     for name, body in artifacts.items():
         _matches(root / name, body, 0o700 if name == "native-host" else 0o600)
 
@@ -243,7 +255,10 @@ def _prepare_or_inspect(
             key, artifacts, receipt = _canonical(root, session, operation_id=operation_id,
                 browser_intent=browser_intent, handoff=handoff, supervised=supervised)
             if create:
-                _write_bundle(root, artifacts, receipt)
+                if supervised:
+                    _write_bundle(root, artifacts, receipt, directories=(HOST_PROC,))
+                else:
+                    _write_bundle(root, artifacts, receipt)
             _validate(root, artifacts, receipt)
             # Slow writes, changed native evidence or guard replacement must not
             # turn an old preparation snapshot into a current successful result.

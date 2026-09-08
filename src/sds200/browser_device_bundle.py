@@ -287,7 +287,8 @@ def create_browser_bundle(
     return key
 
 
-def _write_bundle(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
+def _write_bundle(root: Path, artifacts: dict[str, bytes], receipt: bytes,
+                  *, directories: tuple[str, ...] = ()) -> None:
     """Exclusive private output, receipt last; retain partial files on any failure.
 
     Callers validate their distinct canonical artifact contract before and after
@@ -307,6 +308,10 @@ def _write_bundle(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> No
         if (opened.st_dev, opened.st_ino) != (root.stat().st_dev, root.stat().st_ino):
             raise ValueError()
         os.mkdir("extension", 0o700, dir_fd=root_fd)
+        for name in directories:
+            if not name or Path(name).name != name or name in {".", "..", "extension"}:
+                raise ValueError()
+            os.mkdir(name, 0o700, dir_fd=root_fd)
         extension_fd = os.open("extension", flags, dir_fd=root_fd)
         for name, body in artifacts.items():
             if name.startswith("extension/"):

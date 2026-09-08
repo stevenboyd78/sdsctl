@@ -688,11 +688,16 @@ discovered process group or another browser. Bubblewrap's parent-death behavior
 also covers abrupt loss of the outer launcher.
 
 This is process containment, **not filesystem or network isolation**. The normal
-filesystem and device mounts remain available. A read-only host `/proc` view
-allows the existing native owner PID/start checks across the namespace boundary;
-the outer launcher records its own namespace identity before launch. The native
-endpoint does not attempt to weaken proc/ptrace restrictions to inspect that
-outer namespace. Chromium's own sandbox, trust settings and graphical environment
+filesystem and device mounts remain available. Chromium receives a namespace-local
+`/proc`, as its own sandbox requires. The supervised bundle includes an empty
+private `host-proc` mount point; bubblewrap mounts the host's procfs there read-only
+inside the supervised namespace. Only the fixed native handoff construction uses
+that separate view for owner PID/start checks. It verifies actual read-only procfs,
+not merely a directory with process-looking files. No page message or environment
+variable selects that path. Outside the namespace the mount point stays empty.
+The outer launcher records its own namespace identity before launch. The native
+endpoint does not weaken proc/ptrace restrictions to inspect that outer namespace.
+Chromium's own sandbox, trust settings and graphical environment
 remain unchanged. No packages, host policies, certificates, firewall rules or
 production service settings are installed or changed. If isolation is unavailable,
 qualification fails before the host switch; there is no unisolated fallback.
@@ -718,6 +723,16 @@ disabled and asks its matching worker for readiness. Only the exact active,
 top-frame recovery document, matching extension and binding can reach the fixed
 `recovery-launch-ready` native action. Dashboard pages, frames, caller-selected
 paths/PIDs and other bundle generations cannot use it.
+
+The fixed browser command starts at `about:blank`. After the recovery worker's
+assets load, it opens its own fixed confirmation page. This avoids racing
+Chromium's initial extension registration by navigating directly from the command
+line. A generation-bound marker in trusted-context `chrome.storage.session`
+coalesces installation/startup events and prevents a restarted worker from
+reopening an already claimed page. The marker is written and read back before
+opening; an uncertain page-opening reply is not retried. It contains no consent
+or credential, is separate from persistent recovery state, and disappears with
+the browser session. Opening the page never approves maintenance or signs in.
 
 The native endpoint verifies the current handoff, live outer owner, inner
 supervisor, namespace and deadline before writing a separate readiness receipt.
@@ -755,8 +770,20 @@ activation/replacement, Pi display, Firefox/WPE or power-outage acceptance.
 
 The process containment uses the documented [bubblewrap PID namespace and
 parent-death options](https://github.com/containers/bubblewrap/blob/main/bwrap.xml).
-Actual Chromium qualification, a separately reviewed guard-release boundary and
-physical acceptance remain prerequisites for deployment.
+Real-browser qualification is additionally exercised by
+`scripts/experimental/qualify_browser_recovery.py` and its adjacent X11 helper.
+Use only a new private fixture directory, an installed candidate wheel, an
+authenticated private Xvfb display and the required local runtime dependencies.
+The harness uses a separate D-Bus session and encrypted disposable keyring; it
+does not change browser password-store settings, sandbox policy or TLS trust.
+It drives the unmodified generated page with real keyboard events, without a
+debugging endpoint. Its initial pending browser state and fictional cookie/alarm
+are deliberately seeded through a separate fixture extension's browser APIs.
+That seed is **not evidence for the normal setup/resume path**. Success requires
+real page/worker/native readiness, explicit confirmation, clean shutdown, exact
+host restoration and retained guard. Physical display, live scanner, normal
+authentication/TLS, cold boot/outage and Firefox/WPE acceptance remain separate.
+A reviewed guard-release boundary and deployment/service wiring are still absent.
 
 ## Verified server evidence and exact-generation sessions
 

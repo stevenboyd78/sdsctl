@@ -33,6 +33,7 @@ from .browser_device_handoff import (
     _write_file,
 )
 from .browser_device_native import _private_read
+from .browser_device_proc import HOST_PROC, check_host_proc
 from .browser_device_profile_access import BrowserProfileAccessError, browser_profile_access
 from .browser_device_recovery import _object
 from .browser_device_registration import _matches
@@ -76,19 +77,20 @@ def recovery_browser_command(handoff: BrowserRecoveryHandoff, browser: Path) -> 
             "--disable-background-networking", f"--user-data-dir={handoff._session._root}",
             f"--load-extension={handoff._recovery / 'extension'}",
             f"--disable-extensions-except={handoff._recovery / 'extension'}",
-            f"chrome-extension://{extension_id}/recovery.html")
+            "about:blank")  # Matching worker opens its own page only after assets load.
 
 
 class _Namespace:
     """Own exactly one bubblewrap/PID-1 pair. Never signal a discovered process group."""
 
-    def __init__(self, bwrap: Path, command: tuple[str, ...]) -> None:
+    def __init__(self, bwrap: Path, command: tuple[str, ...], host_proc: Path) -> None:
         # No unshare-user-try/fallback, no host policy change. Chromium retains its
         # own sandbox and normal same-account trust stores/graphical environment.
+        check_host_proc(host_proc, mounted=False)
         self.child = subprocess.Popen((str(bwrap), "--unshare-pid", "--as-pid-1",
             "--die-with-parent", "--bind", "/", "/", "--dev-bind", "/dev", "/dev",
-            "--ro-bind", "/proc", "/proc",
-            "--", sys.executable, "-I", "-c", _ENTRY, *command),
+            "--ro-bind", "/proc", str(host_proc), "--proc", "/proc",
+            "--", sys.executable, "-I", "-c", _ENTRY, str(host_proc), *command),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             start_new_session=True)
         self.pidfd: int | None = None
@@ -187,7 +189,7 @@ def run_browser_recovery(handoff: BrowserRecoveryHandoff, *, browser: Path,
         for signum in (signal.SIGINT, signal.SIGTERM):
             previous[signum] = signal.getsignal(signum)
             signal.signal(signum, interrupted)
-        scope = _Namespace(bwrap, command)
+        scope = _Namespace(bwrap, command, handoff._recovery / HOST_PROC)
         scope.preflight()  # No host switch if containment/runtime qualification fails.
         if (_executable(browser), _executable(bwrap)) != bindings:
             raise ValueError()
@@ -295,7 +297,7 @@ def _child() -> None:
     """Fixed isolated PID-1 entry; stdout is only a bounded redacted status pipe."""
     browser: subprocess.Popen[bytes] | None = None
     try:
-        if sys.platform != "linux" or os.getpid() != 1 or len(sys.argv) != 10:
+        if sys.platform != "linux" or os.getpid() != 1 or len(sys.argv) != 11:
             raise ValueError()
 
         def expired(signum: int, frame: object) -> None:
@@ -305,9 +307,12 @@ def _child() -> None:
         signal.signal(signal.SIGTERM, expired)
         signal.signal(signal.SIGINT, expired)
         signal.setitimer(signal.ITIMER_REAL, _NAMESPACE_SECONDS)
-        # Host proc is intentionally visible: the native handoff owner lives in
-        # the outer namespace. Kernel getpid()==1 independently checks isolation.
-        pid = int(os.readlink("/proc/self"))
+        host_proc = Path(sys.argv[1])
+        check_host_proc(host_proc, mounted=True)
+        # /proc must match the local namespace for Chromium's own sandbox.
+        if os.readlink("/proc/self") != "1":
+            raise ValueError()
+        pid = int(os.readlink(host_proc / "self"))
         ns = Path("/proc/self/ns/pid").stat()
 
         def report(value: dict[str, object]) -> None:
@@ -315,13 +320,13 @@ def _child() -> None:
             sys.stdout.buffer.write(body + b"\n")
             sys.stdout.buffer.flush()
 
-        report({"event": "namespace", "process": _process_identity(pid),
+        report({"event": "namespace", "process": _process_identity(pid, proc=host_proc),
                 "namespace": [ns.st_dev, ns.st_ino]})
-        _version(sys.argv[1])
+        _version(sys.argv[2])
         report({"event": "qualified"})
         if not select.select([sys.stdin], [], [], 15)[0] or os.read(0, 1) != b"g":
             raise ValueError()
-        browser = subprocess.Popen(sys.argv[1:], stdin=subprocess.DEVNULL,
+        browser = subprocess.Popen(sys.argv[2:], stdin=subprocess.DEVNULL,
                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         report({"event": "running"})
         while browser.poll() is None:

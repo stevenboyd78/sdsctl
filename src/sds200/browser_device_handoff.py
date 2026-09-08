@@ -1,7 +1,7 @@
 """Internal stopped-browser host handoff and durable paused acknowledgement.
 
-No CLI, browser launcher, service control or guard release. A trusted local
-callback will eventually supervise a browser; its return/exit status is NOT ACK.
+No CLI, service control or guard release. A trusted local callback supplies
+browser supervision; its return/exit status is NOT ACK.
 Only the selected native endpoint can record the browser's explicit paused ACK.
 Same-account/root code is trusted. Advisory ownership does not fence manual edits.
 """
@@ -23,6 +23,7 @@ from pathlib import Path
 
 from .browser_device_bundle import NATIVE_HOST, _json
 from .browser_device_native import BrowserRetirementSelection, _private_read
+from .browser_device_proc import HOST_PROC, check_host_proc
 from .browser_device_profile import _platform, _write
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
@@ -110,7 +111,7 @@ def _busy(path: Path, expected: list[int]) -> None:
         os.close(fd)
 
 
-def _process_identity(pid: int) -> list[int]:
+def _process_identity(pid: int, *, proc: Path = Path("/proc")) -> list[int]:
     """Linux PID plus start ticks; a fork-inherited lock is not a live supervisor.
 
     The comm field may contain spaces and parentheses; fields after its final
@@ -119,7 +120,7 @@ def _process_identity(pid: int) -> list[int]:
     """
     if type(pid) is not int or not 0 < pid < 2**31:
         raise ValueError()
-    with (Path("/proc") / str(pid) / "stat").open("rb") as stream:
+    with (proc / str(pid) / "stat").open("rb") as stream:
         body = stream.read(4097)
     fields = body.rsplit(b")", 1)[1].split()
     if (len(body) > 4096 or body.split(b" ", 1)[0] != str(pid).encode("ascii")
@@ -148,6 +149,7 @@ class BrowserRecoveryHandoff:
                                                   public_key=public_key, archives=archives)
             self._operation, self._intent = operation_id, browser_intent
             self._supervised = supervised
+            self._proc = Path("/proc")  # Only fixed native construction selects host-proc.
             self._targets = {**self._session._targets, "handoff": str(root),
                              "recovery_bundle": str(recovery_bundle)}
             self._attempted = False
@@ -197,7 +199,7 @@ class BrowserRecoveryHandoff:
         if not stopped and not live:
             raise ValueError()
         if live:
-            if _process_identity(process[0]) != process:
+            if _process_identity(process[0], proc=self._proc) != process:
                 raise ValueError()
             _busy(self._root / _OWNER, owner)
             _busy(self._session._root / ".sdsctl-device-launch.lock",
@@ -223,7 +225,7 @@ class BrowserRecoveryHandoff:
             raise ValueError()
         if self._session._confirm_guard(self._operation, self._intent, stopped=stopped) != proof:
             raise ValueError()
-        if live and _process_identity(process[0]) != process:
+        if live and _process_identity(process[0], proc=self._proc) != process:
             raise ValueError()
         _matches(self._root / "operation.json", record)
         return record, original, proof
@@ -338,10 +340,10 @@ class BrowserRecoveryHandoff:
                 or scope != _json(value)):
             raise ValueError()
         if live:
-            if (_process_identity(value["process"][0]) != value["process"]
+            if (_process_identity(value["process"][0], proc=self._proc) != value["process"]
                     or time.monotonic() >= value["expires_at"]):
                 raise ValueError()
-            ns = (Path("/proc") / str(value["process"][0]) / "ns/pid").stat()
+            ns = (self._proc / str(value["process"][0]) / "ns/pid").stat()
             # The outer launcher verified its own namespace before writing this
             # bound scope. Nested user namespaces cannot dereference an outer
             # owner's ns link; do not weaken ptrace/proc protections to do so.
@@ -449,6 +451,11 @@ def handoff_native_request(
         **{key: Path(value) for key, value in targets.items() if key != "handoff"},
         operation_id=selection.operation_id, browser_intent=request.intent,
         supervised=data["supervised"])
+    if handoff._supervised:
+        # Derived only from the fixed selected recovery bundle, not request data
+        # or environment. A missing/fake/writable host view fails closed.
+        handoff._proc = handoff._recovery / HOST_PROC
+        check_host_proc(handoff._proc, mounted=True)
     with browser_profile_access(selection.handoff, exclusive=True):
         record, _, proof = handoff._checked(stopped=False, live=True)
         if record != raw:

@@ -50,8 +50,10 @@ def diagnostic(kind,value,tb):
     (root/'fixture-error.txt').write_text(''.join(traceback.format_exception(value)))
 sys.excepthook=diagnostic
 receipt=json.loads((bundle/'bundle.json').read_text())
+assert os.readlink('/proc/self')==str(os.getpid())
+assert os.readlink(bundle/'host-proc/self')!=str(os.getpid())
 identity=receipt['evidence']['identity']
-assert sys.argv[-1]=='chrome-extension://'+receipt['extension_id']+'/recovery.html'
+assert sys.argv[-1]=='about:blank'
 if kind=='ignore-stop':signal.signal(signal.SIGINT,signal.SIG_IGN)
 else:signal.signal(signal.SIGINT,lambda *_:sys.exit(0))
 def native(body):
@@ -67,7 +69,7 @@ if kind=='descendant':
     child=os.fork()
     if child==0:
         os.setsid()
-        (root/'detached-pid').write_text(os.readlink('/proc/self'))
+        (root/'detached-pid').write_text(os.readlink(bundle/'host-proc/self'))
         while True:time.sleep(.1)
 if kind not in {'no-ready','descendant'}:
     body={'version':1,'action':'recovery-launch-ready','identity':identity,
@@ -94,7 +96,7 @@ def staged(lab, tmp_path, monkeypatch):
         pytest.skip("Existing bubblewrap and Linux pidfd required")
     probe = subprocess.run([bwrap, "--unshare-pid", "--as-pid-1", "--die-with-parent",
         "--bind", "/", "/", "--dev-bind", "/dev", "/dev",
-        "--ro-bind", "/proc", "/proc", "--", "/bin/true"],
+        "--proc", "/proc", "--", "/bin/true"],
         capture_output=True, timeout=5)
     if probe.returncode:
         pytest.skip("PID isolation unavailable; no security bypass fallback")
@@ -236,7 +238,7 @@ def test_absent_browser_markers_do_not_allow_confirmation_while_supervisor_lives
     root, _, _, setup, _ = staged
     obj, browser, bwrap = setup()
     command = launch.recovery_browser_command(obj, browser)
-    scope = launch._Namespace(bwrap, command)
+    scope = launch._Namespace(bwrap, command, obj._recovery / launch.HOST_PROC)
     try:
         scope.preflight()
 
@@ -367,3 +369,43 @@ def test_ordinary_wrapper_rejects_readiness_action_without_mutation(lab):
         "identity": lab.configuration.identity, "intent": "b"*64, "binding": "c"*64})
     assert result == {"version": 1, "ok": False, "mode": "setup_error"}
     assert snap(lab) == before
+
+
+@pytest.mark.parametrize("change", ["missing", "mode", "symlink", "file", "contents"])
+def test_unsafe_host_proc_mount_point_refused_before_handoff(lab, staged, tmp_path, change):
+    root, bundle, _, setup, _ = staged
+    obj, browser, bwrap = setup()
+    path = bundle / launch.HOST_PROC
+    if change in {"missing", "file", "symlink"}:
+        path.rmdir()
+    if change == "mode":
+        path.chmod(0o755)
+    elif change == "file":
+        private(path, b"not proc")
+    elif change == "symlink":
+        target = tmp_path / "unrelated mount"
+        target.mkdir(mode=0o700)
+        path.symlink_to(target)
+    elif change == "contents":
+        private(path / "unexpected", b"preserve")
+    before = snap(lab)
+    with pytest.raises(launch.BrowserRecoveryLaunchError):
+        launch.run_browser_recovery(obj, browser=browser, bwrap=bwrap)
+    assert not root.exists()
+    assert snap(lab) == before
+
+
+def test_host_proc_validation_requires_real_read_only_procfs(tmp_path):
+    from sds200.browser_device_proc import check_host_proc
+    root = tmp_path / "fake-proc"
+    root.mkdir(mode=0o700)
+    check_host_proc(root, mounted=False)
+    with pytest.raises(ValueError):
+        check_host_proc(root, mounted=True)
+    root.chmod(0o555)
+    with pytest.raises(ValueError):
+        check_host_proc(root, mounted=True)
+    # /proc is real procfs, but is not the selected read-only host mount.
+    if not os.statvfs("/proc").f_flag & os.ST_RDONLY:
+        with pytest.raises(ValueError):
+            check_host_proc(Path("/proc"), mounted=True)

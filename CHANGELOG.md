@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Qualify the internal recovery supervisor against real Chromium on private
+  virtual Pi displays. Give Chromium namespace-local `/proc` while keeping native
+  owner checks on a separate validated read-only host-proc mount. Let the loaded
+  recovery worker open its fixed review page with a session-scoped generation
+  claim, avoiding first-navigation/extension-loading races. Neither page opening
+  nor readiness grants consent, releases the maintenance guard or enables login.
 - Add an internal supervised recovery launch with fixed Chromium arguments,
   bounded version/activation/confirmation/shutdown stages, and a private PID-1
   supervisor using existing bubblewrap. Bind generated page/worker readiness to
