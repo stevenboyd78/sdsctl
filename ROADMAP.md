@@ -9,6 +9,30 @@ The broader product direction, architectural constraints, deferred capabilities,
 and ideas that are not ready for scheduling are recorded in
 [the project vision](docs/project-vision.md).
 
+## Proposed v1.0 quality gate — comprehensive coverage
+
+Defer the dedicated push to 100 percent test coverage until late-project
+hardening, as a proposed condition for v1.0 rather than a blocker for the current
+managed-display work. Confirm the final release scope and enforcement policy
+before the v1.0 release-candidate phase.
+
+- Target 100 percent statement and branch coverage, with an explicit reporting
+  scope for production Python and browser code. Re-measure the baseline when
+  this work begins; the current shared Python statement-coverage floor remains
+  86 percent until a separately reviewed change.
+- Add meaningful assertions and failure-injection tests for uncovered behavior;
+  do not weaken tests or introduce exclusions merely to reach the percentage.
+  Continue normal feature, regression and safety testing throughout development.
+- Retain real-browser, scanner, Raspberry Pi, restart and outage acceptance as
+  separate requirements. Complete measured coverage does not prove all input
+  combinations, timing races or physical failure modes are safe.
+
+The focused reconciliation coverage review remains a starting point for that
+later pass: initialization failure/redaction, an unrepresentable review window,
+post-write state mismatch and an out-of-window archived completion time in
+`browser_device_resume_reconciliation.py`. No coverage-only expansion or CI
+threshold change is scheduled as the next active task.
+
 ## Active milestone
 
 ### Managed-display enrollment and unattended recovery
