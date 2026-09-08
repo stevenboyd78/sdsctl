@@ -310,23 +310,31 @@ print(json.dumps({'mode': mode, 'failures': failures}))
         await resuming.locator("#review").click();
         await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Server permission verified."));
         assert(!await hasCookie());
-        await resuming.screenshot({path:path.join(root,"resume-reviewed.png")});
+        await resuming.screenshot({path:path.join(root,"resume-reviewed.png"),fullPage:true});
         if (scenario === "resume-stale") await command("pause");
+        // Managed startup already owns a /device-display tab. Track the new
+        // probe by page identity, never confuse it with that original display.
+        const beforeResume=new Set(context.pages());
+        const probes=[];
+        const probeOpened=p=>{probes.push(p);};
+        context.on("page",probeOpened);
         await resuming.locator("#confirm").check(); await resuming.locator("#resume").click();
         if (scenario === "resume-stale") {
           await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Resume could not be confirmed."));
           assert(!await hasCookie());
           const saved=(await stored()).sdsctlDeviceRecovery;
           assert(saved.paused && saved.phase === "resume_pending");
+          assert.equal(probes.length,0,"Stale approval opened a verification tab");
           step("stale-review-stayed-paused");
         } else {
           await resuming.waitForFunction(()=>document.getElementById("notice").textContent.startsWith("Automatic sign-in resumed."),null,{timeout:40000});
           assert(await hasCookie());
-          await resuming.screenshot({path:path.join(root,"resume-complete.png")});
+          await resuming.screenshot({path:path.join(root,"resume-complete.png"),fullPage:true});
           const saved=(await stored()).sdsctlDeviceRecovery;
           assert(!saved.paused && saved.phase === "clean");
-          const temporary=context.pages().filter(p=>p.url()===origin+"/device-display");
-          assert.equal(temporary.length,0,"Resume verification tab was not retired");
+          await until(()=>probes.length === 1 && probes[0].isClosed(),5000);
+          assert(context.pages().every(p=>beforeResume.has(p)),"Resume verification tab was not retired");
+          assert(!page.isClosed(),"Resume retired the original display tab");
           await page.goto(origin); await until(async()=>await sessionStatus()===200);
           assert.equal(await page.evaluate(()=>document.cookie),"");
           const actual=await page.evaluate(async()=>await (await fetch("/auth/session")).json());
@@ -336,6 +344,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
           await page.getByRole("button",{name:"Sign out and pause automatic login",exact:true}).click();
           await until(async()=>(await command("status")).state === "paused" && !await hasCookie());
         }
+        context.off("page",probeOpened);
       }
     }
   }

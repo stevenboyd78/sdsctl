@@ -117,8 +117,9 @@ Do not delete browser state or the native ledger to fix a refusal. Do not copy a
 used ledger or manually seed browser storage. Keep the files for administrator
 review. Credential replacement/rotation remain separate work. The experimental
 [trusted resume page](browser-device-resume.md) now has a separately reviewed,
-identity-bound bridge, but still requires end-to-end browser acceptance; it is
-not a first-run setup retry. The raw page/native `resume` message remains invalid. The
+identity-bound bridge with isolated end-to-end acceptance on both Pis; production
+deployment and retained-operation maintenance remain separate gates. It is not a
+first-run setup retry. The raw page/native `resume` message remains invalid. The
 [service lifecycle candidate](browser-device-service.md) adds stopped-browser
 code-only registration updates and local retirement, not state reset or migration.
 

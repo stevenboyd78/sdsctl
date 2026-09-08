@@ -26,9 +26,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   generation; keep approval tickets out of page messages and persistent browser
   storage. Verify protected access through an isolated same-origin probe before
   final browser consent. Add strict UI/bridge and timeout regression tests.
-  End-to-end real-browser acceptance remains blocked at local sandbox startup;
-  credential replacement, retained-operation maintenance and production
-  deployment remain separate gates.
+  Retire the previous volatile logout ticket only after verified resume so a
+  second sign-out works in the same worker without replaying the earlier ticket.
+  Qualify eight isolated, sandboxed real-browser cases on both ARM64 Pis:
+  loopback DNS/IPv4/IPv6 resume and stale-review refusal, including retained
+  pause across restart. Credential replacement, retained-operation maintenance,
+  physical-screen/boot acceptance and production deployment remain separate gates.
 - Add experimental `browser-device-service --experimental create/check` to
   prepare and validate inert, canonical graphical-session user-service files.
   Recheck registration on launch and preserve intentional close, bounded crash

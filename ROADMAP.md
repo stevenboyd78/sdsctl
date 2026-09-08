@@ -100,9 +100,12 @@ exact-generation fresh sessions. Isolated tests join TLS, the actual ASGI/owner,
 authority and native core; browser storage/cookie tests remain controlled doubles.
 The generated experimental bundle now wires a two-step, document-bound trusted
 resume page to identity-bound native messages under the ten-second supervisor.
-Its isolated same-origin session probe is implemented, but real Chromium
-end-to-end acceptance remains blocked at local sandbox initialization. History
-maintenance, failed-pending recovery, private-file writer coordination and full
+Its isolated same-origin session probe passed real Chromium acceptance on both
+ARM64 Pis over loopback DNS, IPv4 and IPv6, plus stale-review refusal on each host.
+The corrected runtime also permits a second sign-out in the same worker and
+preserves pause across restart. Workstation sandbox-blocked attempts remain
+distinct from these eight sandboxed, verified-TLS headless passes. History
+maintenance, failed-pending recovery, private-file writer coordination and physical
 coordinated acceptance remain gates. No resume CLI or production migration is enabled.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume

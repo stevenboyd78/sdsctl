@@ -199,9 +199,17 @@ The new resume scenarios use the actual generated two-step review page after
 sign-out and confirmed administrator server resume. The happy case must verify a
 fresh protected display-only session, retire the probe tab, and sign out again;
 the stale case pauses server authority after review and must retain pending local
-pause without a cookie or automatic retry. These cases still need end-to-end
-acceptance: local attempts stopped before extension loading at Chromium sandbox
-initialization. Controlled Node/native tests are not substitutes for that gate.
+pause without a cookie or automatic retry. Eight isolated cases passed on both
+ARM64 Pis using Chromium 152.0.7977.75 and 151.0.7922.173: `resume` over `ip`,
+`dns` (`localhost`) and `ipv6`, plus `resume-stale` over `ip` on each host, all
+through the installed foreground launcher (`startup`). Each case had zero setup
+authentication exchanges and ended paused after browser restart. The happy cases
+also verified protected access, exact probe-tab closure and a second sign-out.
+Real-browser testing caught a harness that counted the original dashboard as a
+probe, then a runtime bug retaining the first logout ticket after resume. The
+final passes use page-identity checks and verified-resume logout-ticket retirement.
+Earlier workstation sandbox failures remain blocked attempts, not passes.
+These are headless fixture results, not physical-display or cold-boot acceptance.
 
 The Linux browser sandbox and TLS verification stay enabled. `bwrap` mounts the
 fictional NSS trust database only inside the browser's isolated mount namespace;

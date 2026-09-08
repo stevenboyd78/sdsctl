@@ -724,8 +724,9 @@ access is restricted to trusted extension contexts, as supported by the
 [Chrome storage API](https://developer.chrome.com/docs/extensions/reference/api/storage).
 Ordinary browser control messages cannot resume sign-in. The experimental
 [trusted resume page and bridge](browser-device-resume.md) require a separate
-document-bound review and explicit consent; end-to-end browser acceptance is
-still outstanding. A native administrator resume alone does not erase a
+document-bound review and explicit consent. Isolated real-browser acceptance
+passed on both Pis over loopback DNS, IPv4 and IPv6, including stale-review
+refusal and sign-out after resume. A native administrator resume alone does not erase a
 browser's persisted intentional pause. A reviewed installation recovery and
 retirement workflow is still required before shipping.
 

@@ -2,8 +2,8 @@
 
 Status: **experimental trusted-page/native-bridge candidate, not production accepted**.
 Generated experimental bundles now include a two-step resume page and an
-identity-bound native bridge. Real-browser end-to-end acceptance is still
-required; this is not a supported production resume or credential-replacement
+identity-bound native bridge. Isolated real-browser acceptance has passed on
+both Raspberry Pis; this is not a supported production resume or credential-replacement
 installer. Do not call internal Python methods, edit browser storage, delete a
 ledger, or rerun first-time setup to work around a refused or uncertain operation.
 The published manual-login kiosk and remote TUI are unchanged.
@@ -103,7 +103,7 @@ The following remain development requirements, not runnable instructions:
 
 The native transaction, verified transport, browser coordination, trusted consent
 page and supervised native protocol bridge are implemented as candidates below.
-The real-browser proof adapter is implemented but not yet accepted end to end.
+The real-browser proof adapter passed the isolated two-Pi matrix described below.
 Credential replacement, retained-operation maintenance and physical deployment
 remain separate requirements.
 
@@ -173,8 +173,8 @@ bounded at 128 approvals and retained, not silently pruned. A reviewed history
 maintenance/retirement path is still required before production use.
 
 These native guarantees are necessary but insufficient for a working display
-resume. The connected UI/native components below still require qualification in
-real Chromium before physical deployment.
+resume. The connected UI/native components below have isolated real-Chromium
+evidence; physical deployment and retained-operation maintenance remain gates.
 
 ## Verified server evidence and exact-generation sessions
 
@@ -294,12 +294,35 @@ does not authorize retry or deletion: retain the pending browser/native records
 for administrator review. A reviewed recovery/retirement path for these records
 is still a prerequisite for production use.
 
-The local end-to-end harness now has `resume` and `resume-stale` cases, using
-generated wheel artifacts, actual form clicks, loopback HTTPS and the real native
-process. On this workstation both available browser attempts stopped at sandbox
-initialization before the extension loaded. **Those cases are not recorded as
-passes.** Do not disable sandboxing, certificate checks or change the password
-store to turn that environment failure into acceptance.
+A successful verified resume also retires the previous volatile logout ticket.
+This permits a fresh sign-out in the same browser worker, while old completion
+tickets cannot finish or upgrade the new logout operation. Only the trusted
+resume path can perform that retirement, and it rechecks verified active
+readiness first. A refused, uncertain or superseded resume does not reset the
+logout bridge.
+
+The end-to-end harness has `resume` and `resume-stale` cases, using generated wheel
+artifacts, actual form clicks, loopback HTTPS and the real native process. Initial
+workstation attempts stopped at sandbox initialization before the extension
+loaded; those attempts remain blocked, not passes. The revised candidate then
+passed eight isolated cases across both ARM64 Raspberry Pis: successful resume
+over IPv4, DNS (`localhost`) and IPv6 on each host, plus refusal when server
+permission changes between review and confirmation. Chromium 152.0.7977.75 and
+151.0.7922.173 ran with sandboxing and TLS verification enabled.
+
+Each successful case verified a fresh protected display-only session, closure of
+only the temporary probe tab, a second sign-out in the same worker, and retained
+pause after browser restart. The stale-review cases installed no session and
+remained paused after restart. Setup performed no authentication exchanges.
+The initial runs exposed a harness tab-counting mistake and then the real
+same-worker logout-ticket lifecycle bug; neither failed run counts as acceptance.
+All eight final passes used the corrected runtime and page-identity assertions.
+
+These are headless, fictional loopback-authority tests through the installed
+foreground launcher, not physical-screen, live-scanner, LAN/proxy, cold-boot or
+power-outage acceptance. Production TUI services, credentials and Home Assistant
+were unchanged. No sandbox, certificate or password-store protections were
+disabled to obtain these results.
 
 ## What the isolated tests establish
 
@@ -317,7 +340,14 @@ store to turn that environment failure into acceptance.
 - `scripts/experimental/test_browser_device_resume_ui.mjs` covers trusted-page
   gestures, document-bound one-use reviews, expiry, strict native wrappers,
   isolated protected-session verdicts, cookie changes and exact probe-tab cleanup.
+  Paired logout tests require verified active readiness before retiring the old
+  one-use ticket; refused or uncertain resume cannot acknowledge that retirement.
   Browser APIs are controlled doubles; this does not qualify actual UI rendering.
+- `scripts/experimental/audit_browser_generated_recovery.mjs` exercises the real
+  installed launcher, setup/resume forms, native helper, ASGI server, cookie and
+  protected display access in sandboxed Chromium. Its eight two-Pi passes cover
+  loopback DNS/IPv4/IPv6, a second sign-out, stale-review refusal and browser
+  restart. It does not seed state or inject cookies, and is not a physical test.
 - `tests/test_browser_device_resume_bridge.py` sends real native frames through
   identity-bound subprocesses, joins the verified loopback TLS/ASGI fixture,
   checks single-use prepare/commit and wrong-caller refusal, and demonstrates

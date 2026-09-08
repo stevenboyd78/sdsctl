@@ -149,8 +149,8 @@ def _artifacts(
             f"const config = {settings};\n"
             "const controller = connectChromeRecovery(chrome, config, "
             "createChromeResumePorts(chrome,config));\n"
-            "connectResumeWorker(chrome,controller);\n"
-            "connectLogoutWorker(chrome, controller, config.origin);\n"
+            "const logout=connectLogoutWorker(chrome, controller, config.origin);\n"
+            "connectResumeWorker(chrome,controller,Date.now,logout.retireAfterResume);\n"
             "connectBrowserEntry(chrome);\n"
         ).encode("ascii"),
         "extension/content.js": content.encode("utf-8"),

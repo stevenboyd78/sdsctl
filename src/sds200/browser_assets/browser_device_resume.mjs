@@ -8,7 +8,7 @@ const eligiblePage = (chrome, sender) => sender.id === chrome.runtime.id &&
   /^[a-zA-Z0-9-]{1,128}$/.test(sender.documentId) && Number.isSafeInteger(sender.tab?.id) &&
   sender.tab.id >= 0 && sender.tab.incognito === false;
 
-export function connectResumeWorker(chrome, controller, clock = Date.now) {
+export function connectResumeWorker(chrome, controller, clock = Date.now, afterResume = () => true) {
   let pending = null;
   chrome.runtime.onMessage.addListener((message, sender, respond) => {
     if (!eligiblePage(chrome,sender)) return false;
@@ -31,8 +31,8 @@ export function connectResumeWorker(chrome, controller, clock = Date.now) {
         message.ticket === pending.ticket && pending.review && !pending.used &&
         clock() < pending.deadline && pending.deadline <= clock()+60000) {
       pending.used = true;
-      void controller.resume(pending.review).then(result=>respond({mode:result.mode === "active"
-        ? "resumed" : "resume_refused"})).catch(()=>respond({mode:"resume_refused"}));
+      void controller.resume(pending.review).then(result=>respond({mode:result.mode === "active" &&
+        afterResume() === true ? "resumed" : "resume_refused"})).catch(()=>respond({mode:"resume_refused"}));
       return true;
     }
     return false;

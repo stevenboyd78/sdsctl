@@ -10,7 +10,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const reviewed={mode:"reviewed",nativeRevision:3,serverGeneration:4};
 const deferred=()=>{let resolve;const promise=new Promise(r=>{resolve=r;});return {resolve,promise};};
 function workerFixture() {
-  const f={time:100000,reviewCalls:0,resumeCalls:[]};
+  const f={time:100000,reviewCalls:0,resumeCalls:[],retired:0};
   f.chrome={runtime:{id,getURL:name=>"chrome-extension://"+id+"/"+name,
     onMessage:{addListener:handler=>{f.handler=handler;}}}};
   f.controller={reviewResume:async()=>{f.reviewCalls++;return reviewed;},
@@ -20,7 +20,8 @@ function workerFixture() {
     const replies=[];const waiting=f.handler(message,sender,value=>replies.push(value));
     await settle();return {waiting,replies};
   };
-  connectResumeWorker(f.chrome,f.controller,()=>f.time);return f;
+  f.afterResume=()=>{f.retired++;return true;};
+  connectResumeWorker(f.chrome,f.controller,()=>f.time,()=>f.afterResume());return f;
 }
 
 test("worker binds one review and confirmation to exact document and returns only redacted status",async()=>{
@@ -32,8 +33,26 @@ test("worker binds one review and confirmation to exact document and returns onl
   const confirmed=await f.send({action:"resume-confirm",ticket:response.ticket});
   assert.deepEqual(confirmed.replies,[{mode:"resumed"}]);
   assert.deepEqual(f.resumeCalls,[{nativeRevision:3,serverGeneration:4}]);
+  assert.equal(f.retired,1);
   assert.deepEqual((await f.send({action:"resume-confirm",ticket:response.ticket})).replies,[]);
   assert.deepEqual((await f.send({action:"resume-review"})).replies,[{mode:"resume_refused"}]);
+});
+for(const mode of ["setup_error","resume_refused","paused"]) {
+  test("unsuccessful resume never retires previous logout: "+mode,async()=>{
+    const f=workerFixture();f.controller.resume=async()=>({mode});
+    const review=(await f.send({action:"resume-review"})).replies[0];
+    assert.deepEqual((await f.send({action:"resume-confirm",ticket:review.ticket})).replies,
+      [{mode:"resume_refused"}]);
+    assert.equal(f.retired,0);
+  });
+}
+test("unconfirmed logout retirement never acknowledges resume or replays its approval",async()=>{
+  const f=workerFixture();f.afterResume=()=>false;
+  const review=(await f.send({action:"resume-review"})).replies[0];
+  assert.deepEqual((await f.send({action:"resume-confirm",ticket:review.ticket})).replies,
+    [{mode:"resume_refused"}]);
+  assert.deepEqual((await f.send({action:"resume-confirm",ticket:review.ticket})).replies,[]);
+  assert.equal(f.resumeCalls.length,1);
 });
 for(const override of [
   {id:"b".repeat(32)},{url:origin+"/"},{url:url+"?x=1"},{url:url.replace("resume","control")},

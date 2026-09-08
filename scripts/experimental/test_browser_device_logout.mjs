@@ -131,13 +131,39 @@ function worker(controller) {
   const chrome = {runtime: {id: "a".repeat(32), onMessage: {addListener(fn) { listener = fn; }}}};
   const sender = {id: chrome.runtime.id, url: origin + "/", origin, frameId: 0,
     documentId: "fictional-document", documentLifecycle: "active", tab: {id: 7, incognito: false}};
-  connectLogoutWorker(chrome, controller, origin);
+  const lifecycle=connectLogoutWorker(chrome, controller, origin);
   const send = (message, from = sender) => new Promise(resolve => {
     let called = false;
     const accepted = listener(message, from, value => { called = true; resolve(value); });
     if (!accepted && !called) resolve(null);
   });
-  return {send, sender};
+  return {send, sender, lifecycle};
+}
+
+test("only verified active resume retires the old logout ticket",async()=>{
+  let ready=false,begins=0,finishes=0;
+  const c={readiness:()=>({mode:ready?"active":"paused",sessionReady:ready}),
+    beginLogout:async()=>{ready=false;begins++;return {mode:"logout_pending",localPauseSaved:true};},
+    finishLogout:async()=>{finishes++;return {mode:"paused"};}};
+  const w=worker(c), first=await w.send({action:"logout-begin"});
+  const oldFinish={action:"logout-finish",ticket:first.ticket,outcome:"unconfirmed"};
+  await w.send(oldFinish);
+  assert.equal(w.lifecycle.retireAfterResume(),false);
+  assert.deepEqual(await w.send({action:"logout-begin"}),{mode:"busy"});
+  ready=true;assert.equal(w.lifecycle.retireAfterResume(),true);
+  assert.equal(await w.send({...oldFinish,outcome:"drained"}),null);
+  const second=await w.send({action:"logout-begin"},{...w.sender,documentId:"new-document"});
+  assert(second.submit);assert.notEqual(second.ticket,first.ticket);
+  assert.equal(await w.send(oldFinish),null);
+  await w.send({action:"logout-finish",ticket:second.ticket,outcome:"drained"},
+    {...w.sender,documentId:"new-document"});
+  assert.equal(begins,2);assert.equal(finishes,2);
+});
+for(const state of [{mode:"active",sessionReady:false},{mode:"paused",sessionReady:true},
+  {mode:"waiting",sessionReady:true},{mode:"setup_error",sessionReady:false}]) {
+  test("incomplete or superseded readiness cannot retire logout: "+JSON.stringify(state),()=>{
+    assert.equal(worker({readiness:()=>state}).lifecycle.retireAfterResume(),false);
+  });
 }
 
 test("document-bound single-use completion cannot be replayed to upgrade outcome", async () => {
