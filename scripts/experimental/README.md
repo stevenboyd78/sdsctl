@@ -23,6 +23,45 @@ implementation.
 - `SDSCTL_PROBE_CHROMIUM=/absolute/path/to/chromium` selects an already installed
   Chromium (used for the ARM64 Pi test), without installing another package.
 
+## Exact headed first-start qualification
+
+`qualify_browser_first_start.py` checks the ordinary installed foreground CLI on
+a private virtual display with a fictional profile. Unlike the server-connected
+Playwright fixtures below, it uses the distribution Chromium directly: no extra
+browser flags, debugging endpoint, seed extension or manual refresh. Do not run
+it against a real browser directory or a user's graphical session.
+
+Required: Linux, a candidate installed into its own virtual environment, Chromium
+120+, OpenSSL, Xvfb with `xvfb-run`/Xauthority, `libX11`, `libXtst`, `dbus-run-session`,
+`gdbus` and `gnome-keyring-daemon`. No Node, Playwright or NSS trust installation is
+needed for this matrix. Keep `browser_recovery_x11.py` and
+`qualify_browser_recovery.py` next to the script; they supply test helpers only.
+
+Create a **new empty private directory for each run**, using absolute paths
+without whitespace for this argument-capture fixture, then run:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' \
+  /absolute/candidate-venv/bin/python -I \
+  scripts/experimental/qualify_browser_first_start.py \
+  /absolute/new-private-case-directory /usr/bin/chromium
+```
+
+The script creates private XDG paths, an isolated D-Bus session and an encrypted
+disposable keyring. It captures visible fictional page text via the private X11
+clipboard, without inspecting browser storage or exposing a debugging port.
+Its loopback listener only counts and closes connections; it implements no TLS
+or authentication server, and success requires zero connections.
+
+The matrix checks fresh startup, setup without consent, uninitialized restart,
+explicit one-time setup confirmation, deliberate native pause and persisted
+paused restart. The [startup guide](../../docs/browser-device-startup.md#exact-headed-first-start-qualification)
+defines the assertions and limits. Success writes `qualification-result.json`,
+visible text, screenshots, and expected/observed browser arguments. An uncertain
+or failed run is retained for review, never replayed over the same profile.
+`private-runtime-path.txt` records the retained disposable runtime directory.
+Only owned test processes are stopped; no production service is involved.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,

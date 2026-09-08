@@ -210,8 +210,12 @@ Local tests exercise real namespace/native processes with a fictional browser.
 The real-Chromium qualification harness additionally uses installed wheels and
 private virtual Pi displays, with namespace-local procfs and worker-owned page
 opening. It deliberately seeds fictional pending state through browser APIs;
-it is not normal setup/resume or physical-display acceptance. Guard-release
-review, normal-startup qualification and physical acceptance remain gates.
+it is not normal setup/resume or physical-display acceptance. A separate
+[exact headed first-start matrix](docs/browser-device-startup.md#exact-headed-first-start-qualification)
+now qualifies the ordinary installed CLI on both Pis: real setup confirmation,
+no-consent preservation and paused restarts, without debugger flags or manual
+refresh. Guard-release review, server-connected deployment qualification and
+physical acceptance remain gates.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

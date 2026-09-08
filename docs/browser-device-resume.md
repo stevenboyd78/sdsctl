@@ -785,6 +785,48 @@ host restoration and retained guard. Physical display, live scanner, normal
 authentication/TLS, cold boot/outage and Firefox/WPE acceptance remain separate.
 A reviewed guard-release boundary and deployment/service wiring are still absent.
 
+### Guard-release review: next boundary, not implemented
+
+The separate [headed first-start qualification](browser-device-startup.md#exact-headed-first-start-qualification)
+shows that normal startup respects missing setup, explicit consent and a paused
+native profile on both tested Pi Chromium versions. It does **not** authorize
+removing a maintenance guard or prove a resumed server session.
+
+The current `confirm(restored=True)` checks still require the retained guard.
+Normal registration/startup refuses any such marker. Do not bypass that contract
+with a manual unlink or a public “ignore guard” option. A future release operation
+needs its own reviewed state transition with these conditions:
+
+- Fresh explicit local consent must name the exact installation and completed
+  maintenance/handoff. An old approval, page readiness, browser exit code or
+  restoration receipt alone must not grant release.
+- Acquire the existing launch/profile ownership in a consistent order; require
+  a stopped browser, no Singleton markers, canonical normal registration and
+  exact completed maintenance, acknowledgement and restoration evidence. Recheck
+  these immediately before the transition, rather than trusting an earlier view.
+- Start with the narrow **paused-only** path. Releasing launch inhibition must
+  not clear browser/native pause, reinitialize state, authenticate, enroll,
+  rotate credentials, repair errors, start a service or start a browser. Other
+  native terminal modes need their own review before becoming eligible.
+- Design interruption-safe durable completion together with normal startup's
+  checks. Merely deleting the marker and then writing a completion receipt has
+  an unsafe crash window: marker absence alone could permit an unconfirmed start.
+  An unfinished or inconsistent release must remain startup-blocking, including
+  after process loss or a failed directory sync.
+- Preserve the original guard and all maintenance/handoff evidence. Lost-result
+  handling must be exact read-only confirmation, not an automatic replay of the
+  mutation. The original historical confirmation must remain interpretable after
+  a successful release, without introducing a general guard bypass.
+
+Required tests include cancellation/expiry, competing ownership, changed paths,
+identities, revisions and receipts, partial writes, process loss around each
+durability boundary, missing/changed completion evidence, and a normal startup
+that remains paused with no authentication connection after a confirmed release.
+Real Chromium checks on both Pis must cover the complete guarded handoff-to-release
+sequence; the two separately passing fixtures are not evidence that this new
+combined transition already works. No guard-release API or marker semantics are
+changed by this review.
+
 ## Verified server evidence and exact-generation sessions
 
 The experimental server adapter adds native-only `POST /auth/device/verify`.

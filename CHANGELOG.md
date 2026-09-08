@@ -8,6 +8,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add exact headed first-start qualification on private Pi displays using the
+  ordinary installed CLI and distribution Chromium. Check fresh/no-consent setup,
+  explicit initialization and paused restarts, with observed argument capture,
+  visible fixture text, and zero connections to a monitored fictional endpoint.
+  This changes test/documentation coverage, not production startup or guard release.
 - Qualify the internal recovery supervisor against real Chromium on private
   virtual Pi displays. Give Chromium namespace-local `/proc` while keeping native
   owner checks on a separate validated read-only host-proc mount. Let the loaded

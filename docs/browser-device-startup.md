@@ -23,8 +23,8 @@ be used or paused; starting it must never reset that state.
 Run as the same non-root Linux user in an existing graphical session. Select an
 absolute Chromium executable, such as `/usr/bin/chromium`. The launcher requires
 Chromium version 120 or newer; that is a minimum capability check, not a promise
-that every distribution works. The real fixture qualification uses Chromium
-152.0.7977.75 on Linux/aarch64.
+that every distribution works. The exact headed first-start fixture has passed
+with Chromium 151.0.7922.173 and 152.0.7977.75 on Debian 13/Linux/aarch64.
 
 Google Chrome-branded builds and Firefox are not supported by this experimental
 launcher. Chrome removed the `--load-extension` flag from branded builds starting
@@ -74,7 +74,7 @@ The tool does not parse Chromium's internal storage to guess whether first-run
 setup succeeded. The extension owns that decision. A changed runtime/bundle or
 receipt is refused, not repaired. Retain the original files for review; do not
 edit receipt hashes, copy browser state or delete the recovery ledger to bypass
-a refusal. Bundle version `0.0.3` includes the startup page and must match this
+a refusal. The current bundle version is `0.0.4` and must match this
 runtime. Do not edit a bundle in place. The
 [stopped-browser lifecycle candidate](browser-device-service.md) stages a new
 bundle and switches its registration without copying or resetting browser state;
@@ -151,6 +151,48 @@ Accepted distribution/updates, explicit replacement/resume, live service behavio
 and physical multi-display/server outage tests remain separate gates.
 
 ## Acceptance boundaries
+
+### Exact headed first-start qualification
+
+`scripts/experimental/qualify_browser_first_start.py` exercises the installed
+foreground CLI with the selected distribution Chromium executable and its normal
+arguments, on an authenticated private Xvfb display. It uses neither a browser
+wrapper nor headless/CDP flags. The bounded extension-entry retry handles initial
+registration timing; the fixture never manually refreshes or navigates the page.
+It records the actual arguments of the CLI's own browser child as well as the
+expected arguments, visible fixture text and screenshots.
+
+The small and HDMI Pi qualification covers six consecutive browser launches:
+
+1. A new registered profile shows that first-run setup is required.
+2. Explicit `--setup` opens the confirmation form, but closing it without consent
+   leaves the native profile unchanged and unclaimed.
+3. Normal restart still requires setup; page visits are not authorization.
+4. Trusted keyboard confirmation saves setup and claims the native profile once,
+   without making an authentication connection.
+5. After deliberate local suspension of the **fictional** native profile while
+   stopped, ordinary startup stays paused without an authentication connection.
+6. Another browser restart preserves that pause.
+
+A fixture-owned loopback socket counts connections throughout; zero are required
+for this matrix. No server implements authentication and no browser/native state
+is injected through a debugger or seed extension. Browser initialization happens
+only through the real generated setup form. Native suspension in step 5 is a
+deliberate test operation, **not** evidence for dashboard sign-out or guard release.
+Every close must return zero and leave no Chromium Singleton markers; none are
+deleted. The canonical bundle remains byte-identical, and the native profile is
+unchanged in the no-consent and paused cases.
+
+The fixture has its own XDG directories, D-Bus session and encrypted disposable
+keyring. Text copying occurs only within its private X server, never on a user's
+desktop or password form. No trust store, sandbox setting, production TUI, Home
+Assistant setting or service configuration is changed. See the
+[fixture instructions](../scripts/experimental/README.md#exact-headed-first-start-qualification).
+This establishes the first-start/consent/pause boundary on those tested versions;
+it does not replace authentication/TLS, cold-boot, physical-layout or Firefox/WPE
+qualification.
+
+### Server-connected recovery qualification
 
 The [experimental harness](../scripts/experimental/README.md) has a `startup`
 mode that uses the installed foreground CLI, actual canonical extension/setup

@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes as C
 import os
 import struct
+import time
 import zlib
 from pathlib import Path
 
@@ -98,6 +99,29 @@ class X11:
             ("XGetPixel", [C.c_void_p, C.c_int, C.c_int], C.c_ulong),
             ("XDestroyImage", [C.c_void_p], C.c_int),
             ("XCloseDisplay", [C.c_void_p], C.c_int),
+            (
+                "XCreateSimpleWindow",
+                [
+                    C.c_void_p,
+                    C.c_ulong,
+                    C.c_int,
+                    C.c_int,
+                    C.c_uint,
+                    C.c_uint,
+                    C.c_uint,
+                    C.c_ulong,
+                    C.c_ulong,
+                ],
+                C.c_ulong,
+            ),
+            ("XDestroyWindow", [C.c_void_p, C.c_ulong], C.c_int),
+            ("XSetSelectionOwner", [C.c_void_p, C.c_ulong, C.c_ulong, C.c_ulong], C.c_int),
+            ("XGetSelectionOwner", [C.c_void_p, C.c_ulong], C.c_ulong),
+            (
+                "XConvertSelection",
+                [C.c_void_p, C.c_ulong, C.c_ulong, C.c_ulong, C.c_ulong, C.c_ulong],
+                C.c_int,
+            ),
         ]:
             function = getattr(self.x, name)
             function.argtypes, function.restype = args, result
@@ -226,6 +250,59 @@ class X11:
                 stream.write(png)
         finally:
             self.x.XDestroyImage(image)
+
+    def text(self, window):
+        """Copy visible FICTIONAL fixture text on this private X server only.
+
+        No DOM/debugger access or browser storage reads. Never call this helper
+        on a real user's desktop, password form or production display.
+        """
+        clipboard = self.x.XInternAtom(self.display, b"CLIPBOARD", 0)
+        utf8 = self.x.XInternAtom(self.display, b"UTF8_STRING", 0)
+        prop = self.x.XInternAtom(self.display, b"SDSCTL_FIXTURE_TEXT", 0)
+        receiver = self.x.XCreateSimpleWindow(self.display, self.root, 0, 0, 1, 1, 0, 0, 0)
+        if not receiver:
+            raise RuntimeError("Private selection receiver unavailable")
+        try:
+            self.x.XSetSelectionOwner(self.display, clipboard, 0, 0)
+            self.chord(window, "Control_L", "a")
+            self.chord(window, "Control_L", "c")
+            deadline = time.monotonic() + 3
+            while not self.x.XGetSelectionOwner(self.display, clipboard):
+                if time.monotonic() >= deadline:
+                    raise RuntimeError("Private fixture copy unavailable")
+                time.sleep(0.05)
+            self.x.XConvertSelection(self.display, clipboard, utf8, prop, receiver, 0)
+            self.x.XSync(self.display, 0)
+            while time.monotonic() < deadline:
+                actual, count, remaining = C.c_ulong(), C.c_ulong(), C.c_ulong()
+                fmt, value = C.c_int(), C.c_void_p()
+                status = self.x.XGetWindowProperty(
+                    self.display,
+                    receiver,
+                    prop,
+                    0,
+                    16384,
+                    0,
+                    utf8,
+                    C.byref(actual),
+                    C.byref(fmt),
+                    C.byref(count),
+                    C.byref(remaining),
+                    C.byref(value),
+                )
+                try:
+                    if status == 0 and actual.value == utf8 and value:
+                        if fmt.value != 8 or remaining.value or count.value > 65536:
+                            raise RuntimeError("Private fixture text exceeded bounds")
+                        return C.string_at(value, count.value).decode("utf-8", "strict")
+                finally:
+                    if value:
+                        self.x.XFree(value)
+                time.sleep(0.05)
+            raise RuntimeError("Private fixture text deadline")
+        finally:
+            self.x.XDestroyWindow(self.display, receiver)
 
     def close(self):
         self.x.XCloseDisplay(self.display)
