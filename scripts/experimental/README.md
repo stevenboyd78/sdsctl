@@ -296,6 +296,14 @@ real native history/archive confirmation through a test-only Python subprocess
 adapter. DNS/IPv4/IPv6 are identity inputs there, not network/TLS acceptance.
 Neither suite can establish physical-display or production recovery readiness.
 
+The joined fixture also tests explicit no-matching-record reconciliation against
+existing schema-1 and schema-2 native ledgers. It uses a separately reviewed,
+archived stopped revision fence, not an approval borrowed from older history.
+`tests/test_browser_device_resume_reconciliation.py` covers preserved history and
+errors, unsafe/stale state, delayed prepares, competing reconciliations and real
+process death before/after commit. All remain local synthetic tests; there is no
+installed native action, browser adapter or automatic reconciliation caller.
+
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
 bridge and document-bound completion tickets. The registered experimental bundle

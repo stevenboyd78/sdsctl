@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add internal no-matching-record reconciliation for interrupted browser resume:
+  an exact private absence review, durable archive before native revision fencing,
+  unchanged schema/history/error state and read-only completion confirmation.
+  Reject matching or other pending approvals, preserve bounded history and fence
+  delayed preparations. Join both ledger schemas to the existing paused browser
+  acknowledgement tests; no authentication, migration, installed transport,
+  native action, CLI or automatic recovery is enabled.
 - Add an internal browser acknowledgement coordinator for the exact retired
   resume intent, backed by read-only native history confirmation. Require a
   separate one-use review/confirmation, fresh matching evidence and unchanged

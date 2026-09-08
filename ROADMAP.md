@@ -122,8 +122,16 @@ latest retired intent. It clears only the matched pending marker, preserves
 intentional pause, refuses stale replies and requires a new worker plus fresh
 server review for later resume. Node/Python tests join real native history with
 controlled browser storage, including lost replies and changed native state.
-There is no installed transport or page binding; no-record reconciliation,
-trusted UI, private-file writer ownership and actual-browser acceptance remain.
+There is no installed transport or page binding; trusted UI, private-file writer
+ownership and actual-browser acceptance remain.
+
+The [internal no-matching-record candidate](docs/browser-device-resume.md#no-matching-record-reconciliation-internal-candidate-only)
+adds an explicit intent-bound absence review and archived revision fence for
+stopped schema-1/schema-2 ledgers. Preserve all retained history and error state;
+reject matching or unrelated pending approvals and fence delayed preparations.
+Absence is not proof that an attempt never existed. Joined Node/Python fixtures
+resolve only to clean-but-paused without authentication, including lost replies.
+No CLI/native action, installed adapter or automatic recovery path is enabled.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

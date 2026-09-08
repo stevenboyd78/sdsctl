@@ -20,6 +20,10 @@ from sds200.browser_device_resume_maintenance import (
     BrowserResumeMaintenance,
     BrowserResumeMaintenanceError,
 )
+from sds200.browser_device_resume_reconciliation import (
+    BrowserResumeReconciliation,
+    BrowserResumeReconciliationError,
+)
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import configure, initialize, private
 from tests.test_browser_device_native import root as root
@@ -91,6 +95,8 @@ from sds200.browser_device_native import load_browser_native_configuration
 from sds200.browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
 from sds200.browser_device_resume_maintenance import (
     BrowserResumeMaintenance, BrowserResumeMaintenanceReview)
+from sds200.browser_device_resume_reconciliation import (
+    BrowserResumeReconciliation, BrowserResumeReconciliationReview)
 root, review_file, archive = map(Path,sys.argv[1:4])
 request = json.load(sys.stdin)
 config = load_browser_native_configuration(root)
@@ -100,9 +106,16 @@ try:
         assert set(request) == {'identity','intent'} and request['identity'] == config.identity
         value = json.loads(review_file.read_bytes())
         value['mode'] = RecoveryMode(value['mode'])
-        core = BrowserResumeMaintenance(root)
-        result = asdict(core.confirm_browser_intent(
-            BrowserResumeMaintenanceReview(**value),archive=archive,browser_intent=request['intent']))
+        if sys.argv[5] == 'history':
+            core = BrowserResumeMaintenance(root)
+            result = asdict(core.confirm_browser_intent(
+                BrowserResumeMaintenanceReview(**value),archive=archive,
+                browser_intent=request['intent']))
+        else:
+            core = BrowserResumeReconciliation(root)
+            result = asdict(core.confirm(
+                BrowserResumeReconciliationReview(**value),archive=archive,
+                browser_intent=request['intent']))
     elif sys.argv[4] == 'invalidate':
         # Fixture-only concurrent administrator change, never a browser API.
         ledger.resume(ledger.inspect().revision)
@@ -124,11 +137,12 @@ import {spawnSync} from 'node:child_process';
 import {readFileSync} from 'node:fs';
 import {pathToFileURL} from 'node:url';
 const {createBrowserRecovery}=await import(pathToFileURL(process.argv[1]));
-const [root,review,archive,python,bridgeFile,caseName,identity,origin]=process.argv.slice(2);
+const [root,review,archive,python,bridgeFile,caseName,identity,origin,strategy]=
+  process.argv.slice(2);
 const bridge=readFileSync(bridgeFile,'utf8');
 let calls=0,auth=0;
 function request(action,body) {
-  const value=spawnSync(python,['-c',bridge,root,review,archive,action],{
+  const value=spawnSync(python,['-c',bridge,root,review,archive,action,strategy],{
     input:JSON.stringify(body),encoding:'utf8',timeout:10000});
   assert.equal(value.status,0);assert.equal(value.stderr,'');return JSON.parse(value.stdout);
 }
@@ -169,8 +183,9 @@ console.log(JSON.stringify({passed:true,caseName,phase:saved.phase,confirmations
                                     "https://[fd00::18]:8443"])
 @pytest.mark.parametrize("case", ["healthy", "wrong-intent", "uncommitted", "native-change",
                                   "lost-write-ack"])
+@pytest.mark.parametrize("strategy", ["history", "missing-v1", "missing-v2"])
 def test_browser_coordinator_joins_real_native_retirement_without_authentication(
-    root, certificates, tmp_path, monkeypatch, origin, case,
+    root, certificates, tmp_path, monkeypatch, origin, case, strategy,
 ):
     node = shutil.which("node")
     if node is None:
@@ -180,25 +195,36 @@ def test_browser_coordinator_joins_real_native_retirement_without_authentication
     configuration = initialize(root)
     ledger = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
     stopped = ledger.suspend()
-    BrowserDeviceResume(root).prepare(expected_revision=stopped.revision, browser_intent=INTENT,
-                                     reviewed_server=evidence(configuration))
-    core = BrowserResumeMaintenance(root)
-    review = core.review()
+    if strategy != "missing-v1":
+        BrowserDeviceResume(root).prepare(
+            expected_revision=stopped.revision,
+            browser_intent=INTENT if strategy == "history" else "a" * 64,
+            reviewed_server=evidence(configuration))
+    if strategy == "history":
+        core = BrowserResumeMaintenance(root)
+        review = core.review()
+        operation, error = core.retire, BrowserResumeMaintenanceError
+    else:
+        ledger.suspend()
+        core = BrowserResumeReconciliation(root)
+        review = core.review(browser_intent=INTENT)
+        operation, error = core.reconcile, BrowserResumeReconciliationError
     archive = tmp_path / "history.json"
     if case == "uncommitted":
         with monkeypatch.context() as patch:
             patch.setattr(core._recovery, "_save", lambda *_: (_ for _ in ()).throw(OSError()))
-            with pytest.raises(BrowserResumeMaintenanceError):
-                core.retire(review, archive=archive)
+            with pytest.raises(error):
+                operation(review, archive=archive)
     else:
-        core.retire(review, archive=archive)
+        operation(review, archive=archive)
     review_file, bridge_file = tmp_path / "review.json", tmp_path / "bridge.py"
     private(review_file, json.dumps(asdict(review)))
     private(bridge_file, _BRIDGE)
     module = Path(sds200.browser_assets.__file__).with_name("browser_device_recovery.mjs")
     result = subprocess.run(
         [node, "--input-type=module", "-e", _JOINED, str(module), str(root), str(review_file),
-         str(archive), sys.executable, str(bridge_file), case, configuration.identity, origin],
+         str(archive), sys.executable, str(bridge_file), case, configuration.identity, origin,
+         strategy],
         capture_output=True, text=True, timeout=20,
     )
     assert result.returncode == 0, result.stdout + result.stderr

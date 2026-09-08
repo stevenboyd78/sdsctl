@@ -270,17 +270,66 @@ The browser operation has these boundaries:
   same-worker resume. A later worker remains paused and needs a separate fresh
   server review and explicit resume consent.
 
-The current handoff deliberately refuses a pending intent whose preparation
-never produced a matching native history record. That case needs a separately
-reviewed no-record reconciliation path, not evidence borrowed from an older
-operation. Fixed installation/transport selection, trusted user-facing consent,
-private-file writer ownership and real-browser/physical acceptance remain gates.
+The history-retirement handoff deliberately refuses a pending intent with no
+matching latest native history record. The separate internal reconciliation
+candidate below handles absence from retained history, without borrowing an
+older approval. Fixed installation/transport selection, trusted user-facing
+consent, private-file writer ownership and real-browser/physical acceptance
+remain gates.
 
 Deterministic browser tests cover state, cookie and message boundaries. A joined
 Node/Python fixture also calls the actual native archive/ledger implementation
 over test-only subprocess I/O for DNS, IPv4 and IPv6 identities. It performs no
 network authentication and uses controlled browser storage/cookies; this is not
 real Chromium, a supported native-message bridge or deployed-Pi acceptance.
+
+## No-matching-record reconciliation: internal candidate only
+
+The browser saves `resume_pending` before native preparation. If preparation
+fails before its transaction commits, a browser can remain paused with no native
+approval for that intent. **A missing retained row does not prove the attempt
+never happened:** older rows might already have been archived. The internal
+`browser_device_resume_reconciliation.py` candidate proves only the present
+absence and a new stopped revision fence. It does not invent an approval or
+claim historical absence.
+
+An explicit, private two-minute review binds the exact browser intent, profile
+path, installation identity, ledger schema, native state and retained history.
+It accepts existing stopped schema-1 or schema-2 ledgers, without migrating
+either. Any matching row, even terminal, or any other prepared/claimed approval
+refuses this path. Corrupt/empty schema-2 history, active state, unsafe files,
+unsupported journal modes and clock rollback also refuse; nothing is repaired.
+
+Explicit confirmation takes the SQLite write lock, compares the whole snapshot,
+then creates and synchronizes a new private archive before advancing the native
+revision. It preserves every history row, the schema, stopped/error mode and
+failure state. It neither frees history capacity nor removes earlier archives.
+If an in-flight prepare commits first, the review is stale and reconciliation
+refuses. If reconciliation commits first, the delayed prepare's old expected
+revision refuses. Neither outcome is permission to authenticate.
+
+Read-only completion inspection reconstructs the exact archived plan and checks
+the live after-state plus the requested browser intent. An archive without a
+committed revision fence is not success; a later native change refuses the old
+confirmation. A lost mutation reply is inspected, never automatically replayed.
+As with retirement, archives and same-account/root adapters are trusted local
+inputs, not signed audit receipts or an atomic transaction with browser storage.
+
+The same internal browser acknowledgement coordinator can consume this exact
+evidence through a test-only adapter. A separate browser review/confirmation
+still resolves only to **clean-but-paused**, with no same-worker resume and no
+authentication call. Joined tests cover both ledger schemas, DNS/IPv4/IPv6
+identities, wrong intent, an uncommitted archive, newer native state and a lost
+browser storage reply. Native tests also cover process death on each side of
+commit, competing preparations/reconciliations, preserved terminal errors and a
+full 128-row history. These are local implementation tests, not browser/TLS or
+physical-display acceptance.
+
+There is still **no installed transport, CLI, native action, page binding or
+automatic caller** for either maintenance path. Do not call these internal
+methods or edit browser storage on a real display to bypass a pending operation.
+Fixed archive selection, trusted consent and private-file writer coordination
+must be reviewed before exposing a supported workflow.
 
 ## Verified server evidence and exact-generation sessions
 
