@@ -175,6 +175,16 @@ Local tests include actual native framing, supervision and SQLite with controlle
 page/storage fixtures. No generated extension, registered host, production
 display, Firefox/WPE support or physical acceptance claim changes at this stage.
 
+The [internal stopped-browser local maintenance session](docs/browser-device-resume.md#stopped-browser-local-maintenance-session-internal-candidate)
+now holds managed-launcher ownership through same-process review and exact,
+short-lived local consent. Persist a launch-blocking marker before native
+execution, retain it on success and uncertainty, and only confirm committed
+evidence after process loss. Preserve browser storage, credentials and server
+authority. Tests use canonical registrations and real local process/lock/SQLite
+behavior. The trusted callback is not a user-facing CLI, browser adapter or
+installation flow. Guarded browser acknowledgement, eventual guard release,
+replacement writers and real-browser/physical acceptance remain separate gates.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

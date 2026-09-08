@@ -435,6 +435,78 @@ storage remain controlled fixtures; this is not real-browser, TLS, physical Pi,
 Firefox/WPE or production acceptance. Installer provisioning, native mutation
 consent and credential replacement remain separate work.
 
+## Stopped-browser local maintenance session: internal candidate
+
+`browser_device_resume_workflow.py` adds a trusted local review/apply session
+around the native maintenance boundary. It is **not a CLI, a browser button or
+an installed recovery procedure**. The local adapter fixes the dedicated browser
+directory, native profile, current canonical bundle, public extension key and
+separate private archive root. These directories must not overlap. The candidate
+requires intact, valid private profile inputs and an exact current-runtime
+registration; missing credentials/trust need a separate recovery workflow.
+
+Before presenting a review, the session validates the registration and acquires
+the managed launcher's nonblocking lock. Existing Chromium Singleton markers,
+another launcher/maintenance owner, or a prior maintenance guard cause refusal;
+the session does not stop processes, disable services or delete stale locks. It
+holds launcher ownership across the local review and execution. Opening a first
+review can create the launcher's empty private coordination file; cancellation
+leaves that file in place but does not change native or opaque browser state.
+
+The immutable local review identifies the display origin/device, selected
+directories, exact native operation, stopped mode/revision, retained/pending
+approval counts and expiry. A trusted local UI must display that context and the
+effects before obtaining confirmation. The callback must return the exact
+session-specific confirmation phrase; returning `None` cancels. The phrase
+includes a fresh random challenge, so a previous confirmation is not accepted
+even if two native reviews otherwise match. The original private execution
+review stays in memory in the same process. A page/native message, saved phrase
+or reconstructed review is not an execution adapter.
+
+Both wall-clock and monotonic limits must remain within the native two-minute
+review window. After consent the session revalidates the registration and
+browser directory/lock identity. It exclusively writes and synchronizes
+`.sdsctl-browser-maintenance.json` in the dedicated browser directory **before**
+calling native execution. The marker records the fixed targets, operation,
+reviewed state and approval time; it contains no credential, cookie or reusable
+resume ticket. It is private local evidence, not signed proof of human consent
+or server authorization. Consent is rechecked after the marker write so slow
+I/O cannot extend the execution window.
+
+The marker remains on **every post-write outcome, including success**. Native
+execution uses the exact one-use in-memory boundary selection, retaining its
+existing archive-before-commit rules. Browser registration, native-host files,
+credentials and opaque Chromium storage are not replaced or reset. Normal
+inspection/startup continues to reject the retained marker. The candidate does
+not remove it, publish a completion receipt that enables launch, acknowledge
+browser pending state or resume automatic sign-in.
+
+After an interrupted or lost reply, a new process can perform exact read-only
+confirmation using the operator-selected operation ID and browser intent. It
+requires the existing launch-lock file (it will not recreate a missing one),
+the matching private marker, the current canonical registration and independently
+confirmed native archive/after-state. It also checks that displayed review
+fields match the recorded native review. A marker written without a native
+commit is not completion; missing, partial or superseded evidence is refused.
+No confirmation path replays execution, overwrites evidence or releases the
+startup guard.
+
+This coordinates **cooperating managed launchers for one dedicated browser and
+native profile**, not arbitrary direct Chromium launches, old runtimes or manual
+same-account/root edits. The native boundary still serializes participating
+private-input writers and fences stale reviews. Neither advisory lock proves
+all possible processes are stopped or implements credential replacement. The
+local callback has not been turned into a user-facing, supervised prompt.
+
+Tests use actual canonical generated registrations, Linux launcher locks,
+private archives and SQLite. They cover all stopped modes, cancellation, stale
+or reused consent, competing owners, changed files, slow/failed guard writes and
+real process loss during review, after the guard and after native commit. No real
+Chromium, Home Assistant, Pi display or production profile is used. A separately
+reviewed handoff that can safely launch the confirmation-only browser controls
+and eventually release this guard is still required before deployment; never
+delete it manually to advance the workflow.
+
 ## Verified server evidence and exact-generation sessions
 
 The experimental server adapter adds native-only `POST /auth/device/verify`.

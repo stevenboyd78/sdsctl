@@ -100,18 +100,30 @@ def inspect_browser_registration(
         _platform()
         if (root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink():
             raise ValueError()
-        result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
-        _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
-        hosts = root / "NativeMessagingHosts"
-        _matches(hosts / (NATIVE_HOST + ".json"), manifest)
-        if {entry.name for entry in hosts.iterdir()} != {NATIVE_HOST + ".json"}:
-            raise ValueError()
-        return result
+        return _inspect_registration_files(root, bundle=bundle, profile=profile,
+                                            public_key=public_key)
     except Exception:
         raise BrowserRegistrationError(
             "Browser registration is invalid or unsafe; nothing was changed. "
             "Review its original runtime, canonical bundle, private profile and registration."
         ) from None
+
+
+def _inspect_registration_files(
+    root: Path, *, bundle: Path, profile: Path, public_key: Path,
+) -> BrowserRegistration:
+    """Canonical files only; callers MUST separately enforce maintenance guards.
+
+    Internal stopped maintenance can inspect files behind its exact retained
+    guard. Normal inspection/startup must always use inspect_browser_registration.
+    """
+    result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
+    _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
+    hosts = root / "NativeMessagingHosts"
+    _matches(hosts / (NATIVE_HOST + ".json"), manifest)
+    if {entry.name for entry in hosts.iterdir()} != {NATIVE_HOST + ".json"}:
+        raise ValueError()
+    return result
 
 
 def register_browser_directory(

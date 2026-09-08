@@ -59,7 +59,7 @@ def check_browser_startup(
 
 
 @contextmanager
-def _launch_lock(root: Path) -> Iterator[None]:
+def _launch_lock(root: Path, *, create: bool = True) -> Iterator[None]:
     import fcntl
 
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -70,8 +70,8 @@ def _launch_lock(root: Path) -> Iterator[None]:
         if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError()
         name = ".sdsctl-device-launch.lock"
-        descriptor = os.open(name, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC
-                             | os.O_NONBLOCK,
+        descriptor = os.open(name, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC
+                             | os.O_NONBLOCK | (os.O_CREAT if create else 0),
                              0o600, dir_fd=directory)
         opened = os.fstat(descriptor)
         if (not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.geteuid()

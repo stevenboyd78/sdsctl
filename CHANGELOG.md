@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal stopped-browser resume-maintenance workflow with canonical
+  registration checks, managed-launcher ownership, same-process review and
+  session-specific local consent. Durably block normal launch before native
+  mutation, retain the guard on success or uncertainty, and support read-only
+  post-loss confirmation without recreating locks or replaying execution.
+  Preserve private inputs and opaque browser state. Test stopped modes, stale
+  consent, competing launchers, changed files, write failures and real process
+  loss; no CLI, installed handoff, automatic guard release or login is enabled.
 - Add internal confirmation-only resume-maintenance transport and trusted
   two-step browser recovery-control adapters. Fix native operation/archive
   selection in trusted wrapper code, reject all mutation/authentication actions,

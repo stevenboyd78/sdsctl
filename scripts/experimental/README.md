@@ -324,6 +324,16 @@ DOM/storage/cookies remain controlled fixtures. These adapters are not included
 in generated extensions or registered as native hosts; this is not real-browser,
 Firefox/WPE, Pi-screen or production acceptance.
 
+`tests/test_browser_device_resume_workflow.py` covers a trusted local
+stopped-browser maintenance session against real generated registration files,
+Linux launch locks and native SQLite/archive evidence. Review holds launcher
+ownership, exact per-session consent expires, and a durable marker blocks normal
+startup before native execution. Real process-loss cases distinguish review,
+guard-only and committed outcomes. Confirmation never replays execution or
+releases that guard. This internal callback-based candidate has no CLI or
+installed handoff, does not stop services, and never opens a real browser or
+production display. Keep all markers/evidence for a future qualified handoff.
+
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
 bridge and document-bound completion tickets. The registered experimental bundle
