@@ -1,9 +1,9 @@
 """Unwired experimental native resume approvals; not a CLI or native action.
 
-Trusted callers must supply authenticated server evidence and an exact browser
-intent fingerprint. This module does not establish either trust boundary, read
-browser storage, mutate server authority, or establish a browser session. A future
-adapter must independently bound proof I/O and coordinate browser consent.
+Trusted callers supply exact browser intent and reviewed state. Low-level prepare/
+commit accepts trusted evidence; verified wrappers obtain private TLS proof and a
+generation-bound session. No browser storage or server authority is mutated. A
+future bridge must bound process lifetime and establish trusted browser consent.
 """
 
 from __future__ import annotations
@@ -28,7 +28,9 @@ from .browser_device_profile import _credential, _platform, _trust
 from .browser_device_recovery import (
     BrowserDeviceRecovery,
     BrowserRecoveryError,
+    ExchangeSession,
     RecoveryMode,
+    RecoveryResult,
     RecoveryStatus,
     _State,
 )
@@ -36,6 +38,11 @@ from .browser_device_store import (
     BrowserDeviceRecord,
     BrowserDeviceState,
     validate_browser_device_record,
+)
+from .browser_device_verification import (
+    BrowserVerifiedRecord,
+    exchange_browser_device_at_generation,
+    verify_browser_device,
 )
 
 _TABLE = "browser_resume"
@@ -201,9 +208,18 @@ class BrowserDeviceResume:
 
     def _proof(
         self,
-        evidence: BrowserResumeEvidence,
+        evidence: BrowserResumeEvidence | BrowserVerifiedRecord,
         expected: BrowserDeviceRecord | None = None,
     ) -> BrowserDeviceRecord:
+        if isinstance(evidence, BrowserVerifiedRecord):
+            record = evidence.record
+            validate_browser_device_record(record)
+            if (evidence.identity != self._configuration.identity or evidence.drained is not True
+                    or record.device_id != self._configuration.device_id
+                    or record.state is not BrowserDeviceState.ACTIVE
+                    or (expected is not None and record != expected)):
+                raise BrowserResumeError()
+            return record
         if (
             not isinstance(evidence, BrowserResumeEvidence)
             or evidence.identity != self._configuration.identity
@@ -226,7 +242,8 @@ class BrowserDeviceResume:
         return record
 
     def prepare(
-        self, *, expected_revision: int, browser_intent: str, reviewed_server: BrowserResumeEvidence
+        self, *, expected_revision: int, browser_intent: str,
+        reviewed_server: BrowserResumeEvidence | BrowserVerifiedRecord,
     ) -> BrowserResumeApproval:
         """Explicit trusted approval: retain stopped mode; create one short-lived grant.
 
@@ -306,13 +323,73 @@ class BrowserDeviceResume:
         except Exception:
             pass  # An uncertain claimed operation is still consumed, never retryable.
 
+    def prepare_verified(
+        self, *, expected_revision: int, browser_intent: str, expected_generation: int,
+    ) -> BrowserResumeApproval:
+        """Trusted consent adapter: verify EXACT reviewed generation using private TLS.
+
+        Requires an independent process deadline. No protocol/CLI/page exposes it.
+        Do not infer consent from browser starts, a credential or a successful GET.
+        """
+        try:
+            current = self._recovery.inspect()
+            if (not _integer(expected_generation) or not _integer(expected_revision)
+                    or not _hex(browser_intent) or current.mode is RecoveryMode.ACTIVE
+                    or current.revision != expected_revision):
+                raise BrowserResumeError()
+            self._inputs()
+            proof = verify_browser_device(self._configuration, BrowserDeviceRecord(
+                self._configuration.device_id, expected_generation, BrowserDeviceState.ACTIVE))
+            return self.prepare(expected_revision=expected_revision, browser_intent=browser_intent,
+                                reviewed_server=proof)
+        except Exception:
+            raise BrowserResumeError() from None
+
+    def commit_session(
+        self, approval: BrowserResumeApproval, *, browser_intent: str,
+    ) -> RecoveryResult:
+        """Verify, consume native approval, then separately issue a generation-bound session.
+
+        No browser state/cookie changes here. On ANY uncertain result the browser
+        must retain its pending pause and never replay this operation. Run under
+        an independent process deadline, not merely per-socket timeouts.
+        """
+        try:
+            inputs = self._inputs()
+            generation: int | None = None
+
+            def prove(
+                config: BrowserNativeConfiguration, record: BrowserDeviceRecord,
+            ) -> BrowserVerifiedRecord:
+                nonlocal generation
+                proof = verify_browser_device(config, record)
+                generation = record.generation
+                return proof
+
+            status = self.commit(approval, browser_intent=browser_intent, prove_server=prove)
+            if generation is None or self._inputs() != inputs:
+                raise BrowserResumeError()
+
+            def exchange() -> ExchangeSession:
+                if self._inputs() != inputs or generation is None:
+                    raise BrowserResumeError()
+                session = exchange_browser_device_at_generation(self._configuration, generation)
+                if self._inputs() != inputs:
+                    raise BrowserResumeError()
+                return session
+
+            return self._recovery.authenticate(exchange, expected_revision=status.revision)
+        except Exception:
+            raise BrowserResumeError() from None
+
     def commit(
         self,
         approval: BrowserResumeApproval,
         *,
         browser_intent: str,
         prove_server: Callable[
-            [BrowserNativeConfiguration, BrowserDeviceRecord], BrowserResumeEvidence
+            [BrowserNativeConfiguration, BrowserDeviceRecord],
+            BrowserResumeEvidence | BrowserVerifiedRecord,
         ],
     ) -> RecoveryStatus:
         """Consume BEFORE external proof, then atomically authorize the native ledger.

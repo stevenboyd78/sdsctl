@@ -126,6 +126,15 @@ def parse_browser_native_configuration(root: Path, body: bytes) -> BrowserNative
 
 
 def exchange_browser_device(configuration: BrowserNativeConfiguration) -> ExchangeSession:
+    status, body, content_type, retry = _post_browser_device(
+        configuration, "/auth/device/session", {"device_id": configuration.device_id},
+    )
+    return parse_exchange_response(status, body, content_type=content_type, retry_after=retry)
+
+
+def _post_browser_device(
+    configuration: BrowserNativeConfiguration, path: str, payload: dict[str, object],
+) -> tuple[int, bytes, str, str | None]:
     """Exactly one verified HTTPS request, no redirects, proxy env or cookie jar.
 
     Call under the native runner's total deadline; the per-I/O timeout alone
@@ -147,8 +156,7 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
             raise ExchangeFailure(RecoveryMode.SETUP_ERROR) from None
         connection = http.client.HTTPSConnection(configuration.hostname, configuration.port,
                                                   context=context, timeout=3)
-        connection.request("POST", "/auth/device/session",
-                           json.dumps({"device_id": configuration.device_id}).encode("ascii"),
+        connection.request("POST", path, json.dumps(payload).encode("ascii"),
                            {"Authorization": "Bearer " + credential,
                             "Content-Type": "application/json", "Accept": "application/json"})
         response = connection.getresponse()
@@ -172,10 +180,7 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
             # Do not persist a protocol error for a server interrupted mid-response.
             if lengths and len(body) < int(lengths[0]):
                 raise ExchangeFailure()
-        return parse_exchange_response(
-            response.status, body, content_type=types[0] if types else "",
-            retry_after=retries[0] if retries else None,
-        )
+        return response.status, body, types[0] if types else "", retries[0] if retries else None
     except ExchangeFailure:
         raise
     except (ssl.SSLEOFError, ssl.SSLZeroReturnError, http.client.IncompleteRead):

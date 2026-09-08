@@ -1,6 +1,6 @@
 # Experimental device replacement and resume boundaries
 
-Status: **internal native approval candidate, not a resume installer**.
+Status: **internal consent/verified-transport candidate, not a resume installer**.
 There is currently no supported command or browser message that coordinates all
 the steps needed to resume an intentionally signed-out managed browser. Do not
 call internal Python methods, edit browser storage, delete a ledger, or rerun
@@ -100,10 +100,10 @@ The following remain development requirements, not runnable instructions:
    secure unattended keyring handling, boot and combined power loss remain
    separate acceptance gates.
 
-The native transaction portion is implemented as an unwired candidate below.
-Browser coordination and the authenticated network evidence adapter are not
-implemented. Directly connecting the existing reset to a browser-state write
-would not satisfy these requirements.
+The native transaction, verified transport and internal browser coordination
+components are implemented as candidates below. A trusted consent page, native
+protocol bridge, independent process deadlines and real browser verification are
+still required before exposing a usable resume workflow.
 
 ## Native approval engine: internal candidate only
 
@@ -156,9 +156,9 @@ an independent process deadline.
 If the process dies after claiming, `claimed` remains consumed. If commit succeeds
 but its acknowledgement is lost, the native ledger may already be active and the
 approval `complete`; the caller receives no assurance of success and cannot replay
-the reset. **The future browser adapter must retain its own durable pending pause
-on that uncertainty.** Current browser pause recovery reasserts native pause; it
-does not finish a resume automatically.
+the reset. **The browser controller retains its own durable pending pause on that
+uncertainty.** Browser pause recovery reasserts native pause; it does not finish
+an interrupted resume automatically.
 
 Explicit preparation atomically upgrades only the selected native ledger to
 schema version 2, including its approval history. Ordinary operations do not
@@ -169,22 +169,103 @@ bounded at 128 approvals and retained, not silently pruned. A reviewed history
 maintenance/retirement path is still required before production use.
 
 These native guarantees are necessary but insufficient for a working display
-resume. Before exposing the engine, implement a durable browser pending/consent
-protocol, a verified network evidence adapter, and a generation-bound fresh
-session exchange. Server authorization can change after proof; the browser must
-not treat this point-in-time native result as permission to accept a session for
-an unreviewed generation. Qualify restart, sign-out races, lost responses, schema
-upgrade/rollback refusal and real Chromium together before any physical deployment.
+resume. The internal components below must still be connected through trusted
+UI/native boundaries and qualified in real Chromium before physical deployment.
+
+## Verified server evidence and exact-generation sessions
+
+The experimental server adapter adds native-only `POST /auth/device/verify`.
+It accepts the fixed device identifier and an optional exact `generation`, using
+the same device Bearer credential, origin validation, bounded body/workers and
+shared rate budget as `/auth/device/session`. Cookies, browser Origin and Fetch
+Metadata are refused. A device credential cannot select administrator operations.
+
+Verification authenticates an active device, waits for older-generation requests
+to finish, then reauthenticates the same binding. Only a confirmed result returns
+the device, generation, active state and `drained: true`. It does not issue a
+session, reveal other records, rotate credentials or resume paused authority.
+Unknown/wrong credentials and stale generations are denied; unavailable or
+unconfirmed drainage never becomes a successful proof.
+
+The existing session endpoint additionally accepts an exact `generation`. If
+supplied, issuance must match it and the response echoes it. Requests containing
+only `device_id` retain the original response contract. A pause/resume cycle
+between verification and exchange changes generation: the approved exchange is
+refused, not silently redirected to the latest record. Every subsequent protected
+request still rechecks server authority; verification is not a durable lease.
+
+`browser_device_verification.py` uses only the fixed private native configuration,
+credential and CA bundle. It shares verified TLS/hostname checks, bounded response
+handling, no redirects, no proxy-environment handling and no cookie jar with the
+ordinary transport. DNS names and IP addresses remain supported. Responses must
+match the exact schema, device and requested generation. No credential or token
+is inserted into the verification result or error text.
+
+The native engine's internal `prepare_verified` checks the reviewed revision and
+generation, obtains this verified proof and prepares the one-use approval.
+`commit_session` consumes that approval using fresh proof, then separately obtains
+a session for its bound generation under an exact native-revision check. It never
+modifies browser storage/cookies. Both calls **require an independent process
+deadline**; socket timeouts alone do not bound DNS or a slowly dripping peer.
+They are not yet exposed by native messaging, a CLI or a generated launcher.
+
+## Durable browser consent: internal controller only
+
+Only a controller explicitly constructed with the trusted resume test adapter
+offers an internal `resume` method. The normal Chrome adapter and generated
+extension still offer no resume method/message/page. Do not call internal APIs
+or construct an adapter to bypass that missing installation/consent boundary.
+
+One explicit reviewed attempt snapshots the native revision and server generation.
+It saves a version-2, paused `resume_pending` record with a fresh intent fingerprint
+**before** native approval or network work. Approval tickets and session tokens
+remain process-local; browser storage contains neither. The same controller queue
+owns approval and normal recovery, so a queued alarm cannot cancel approval
+halfway through its intended operation. A newer sign-out synchronously invalidates
+the old attempt and saves pause intent without waiting for outstanding I/O.
+
+Only after a fresh generation-bound session, matching native revision, cookie
+installation and a trusted adapter's protected-session verification may the
+controller persist final browser consent and schedule ordinary recovery. A native
+`active` response is insufficient. Real cookie/document/session verification by
+the eventual Chrome adapter remains unimplemented: the isolated tests supply
+controlled ports, not browser proof.
+
+Worker loss before the final browser consent commit leaves pending consent paused.
+The next worker clears the cookie and reasserts native suspend, cancelling any
+outstanding native approval. It retains the pending record rather than replaying
+or repairing it; a reviewed recovery/retirement path is still required. Older
+browser code rejects this version-2 pending record instead of interpreting it as
+ordinary recovery. Corrupt/missing state remains refused.
+
+Final storage acknowledgement is a distinct boundary: if verified installation
+and the final consent write actually succeed but its response is lost, saved
+consent may already allow a later worker's ordinary recovery. The failed caller
+does not report readiness or replay the approval. This is not an atomic transaction
+across Chromium storage, native SQLite, the cookie service and server authority.
+The browser adapters and maintenance tooling must preserve that distinction.
 
 ## What the isolated tests establish
 
+- `tests/test_browser_device_verification.py` covers authenticated non-mutating
+  proof, real old-request drain waiting, generation comparison, shared admission,
+  malformed responses, certificate/hostname failure and DNS/IPv4 loopback TLS.
+- `tests/test_browser_device_resume_transport.py` joins verified loopback HTTPS
+  to the real ASGI/owner, authority, native approval and generation-bound session
+  code. It verifies display-only access and refusal after server/native changes.
+  Its HTTPS fixture forwards to ASGI TestClient; it is not a deployed server.
+- `scripts/experimental/test_browser_device_resume.mjs` tests durable pending
+  consent, single-use attempts, exact review snapshots, sign-out races, worker
+  restart, malformed approvals, cookie/proof failure and lost final storage ACK.
+  Storage, cookie and native ports are controlled doubles, not real Chromium.
 - `tests/test_browser_device_resume.py` covers one-use approvals, exact input and
   intent matching, schema integrity, cancellation, expiry/clock rollback,
   concurrent commits, retained uncertain outcomes and atomic write failure.
   Tests join the actual local server-owner acknowledgement for DNS/IPv4/IPv6
   contexts and run a native subprocess that exits immediately after claiming.
   The server-proof callbacks are local trusted test adapters, not verified HTTPS
-  evidence delivery or browser consent. No display session is created by the core.
+  evidence delivery or browser consent. These low-level approval tests do not
+  create a display session.
 - `tests/test_browser_device_resume_boundaries.py` joins the real SQLite authority,
   owner acknowledgement, session middleware and native recovery ledger. It covers
   server-only and native-only resume, all five stopped native modes, paused

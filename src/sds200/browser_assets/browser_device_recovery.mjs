@@ -63,6 +63,7 @@ export function createBrowserRecovery(ports, settings) {
   let failure = false, inFlight = null, pauseSaved = false;
   let holdForLogout = false, logoutStart = null;
   let missing = false, setupAttempted = false;
+  let resumeAttempted = false;
   let readyUntil = 0; // Process-local proof of a completed verified installation, never persisted.
   const now = () => {
     const value = ports.now();
@@ -86,11 +87,14 @@ export function createBrowserRecovery(ports, settings) {
   let ready = (async () => {
     state = await ports.load();
     missing = state === undefined; // Only a successful read of ABSENT state is eligible.
-    if (!exact(state, ["version", "identity", "paused", "phase", "nextAt"]) ||
-        state.version !== 1 || state.identity !== config.identity ||
-        typeof state.paused !== "boolean" || !["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) ||
-        (state.phase === "logout_pending" && !state.paused) ||
-        !finite(state.nextAt, Number.MAX_SAFE_INTEGER)) throw new Error("state");
+    const pendingResume = exact(state, ["version", "identity", "paused", "phase", "nextAt", "intent"]) &&
+      state.version === 2 && state.phase === "resume_pending" && state.paused === true &&
+      state.nextAt === 0 && typeof state.intent === "string" && /^[a-f0-9]{64}$/.test(state.intent);
+    const ordinary = exact(state, ["version", "identity", "paused", "phase", "nextAt"]) &&
+      state.version === 1 && typeof state.paused === "boolean" &&
+      ["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) &&
+      (state.phase !== "logout_pending" || state.paused) && finite(state.nextAt, Number.MAX_SAFE_INTEGER);
+    if ((!pendingResume && !ordinary) || state.identity !== config.identity) throw new Error("state");
     state = {...state};
     pauseSaved = state.paused;
     view = "ready";
@@ -141,7 +145,8 @@ export function createBrowserRecovery(ports, settings) {
     }
     try { await clear(); cookieCleared = true; } catch { /* Retry later. */ }
     state.paused = true;
-    state.phase = "clean";
+    // An interrupted approval is retained, never reset or automatically replayed.
+    if (state.phase !== "resume_pending") state.phase = "clean";
     state.nextAt = 0;
     await save();
     pauseSaved = true;
@@ -256,6 +261,80 @@ export function createBrowserRecovery(ports, settings) {
   }
 
   return Object.freeze({
+    ...(ports.resume ? {
+    resume: review => {
+      // Internal trusted adapter only: no runtime message, page or startup caller.
+      // This same-worker queue must own recovery AND consent; a second controller
+      // or a direct browser-storage write cannot safely coordinate this operation.
+      if (resumeAttempted || !ports.resume || typeof ports.resume.prepare !== "function" ||
+          typeof ports.resume.commit !== "function" || typeof ports.resume.verifySession !== "function" ||
+          typeof ports.intent !== "function" || !exact(review, ["nativeRevision", "serverGeneration"]) ||
+          ![review.nativeRevision, review.serverGeneration].every(n => Number.isSafeInteger(n) && n > 0 && n < Number.MAX_SAFE_INTEGER)) {
+        return Promise.resolve({mode: "resume_refused"});
+      }
+      resumeAttempted = true; // Repeated clicks never replay, even after a lost response.
+      const {nativeRevision, serverGeneration} = review; // Snapshot the reviewed values before awaits.
+      const consentEpoch = epoch;
+      return queue(async () => {
+        await ready;
+        if (failure || holdForLogout || epoch !== consentEpoch || state.version !== 1 ||
+            state.phase !== "clean") return {mode: "resume_refused"};
+        const intent = ports.intent();
+        if (typeof intent !== "string" || !/^[a-f0-9]{64}$/.test(intent)) throw new Error("intent");
+        state = {version: 2, identity: config.identity, paused: true,
+          phase: "resume_pending", nextAt: 0, intent};
+        readyUntil = 0;
+        await save(); // Consent + crash marker BEFORE any approval/network request.
+        pauseSaved = true;
+        const current = () => epoch === consentEpoch && state.phase === "resume_pending" && state.intent === intent;
+        const check = () => { if (!current()) throw new Error("cancelled"); };
+        await clear(true); check();
+        await ports.cancel(); check();
+        const approval = await ports.resume.prepare({intent,
+          nativeRevision, serverGeneration});
+        check();
+        if (!exact(approval, ["ticket", "revision", "expires_at"]) ||
+            typeof approval.ticket !== "string" || !/^[a-f0-9]{64}$/.test(approval.ticket) ||
+            approval.revision !== nativeRevision + 1 ||
+            !finite(approval.expires_at, Number.MAX_SAFE_INTEGER / 1000) ||
+            approval.expires_at * 1000 <= now() || approval.expires_at * 1000 > now() + 120000) {
+          throw new Error("approval");
+        }
+        const started = now();
+        const result = nativeResult(await ports.resume.commit({intent, approval}));
+        check();
+        if (!result.session || result.mode !== "active" || result.revision !== approval.revision + 2) {
+          throw new Error("session");
+        }
+        const expiry = started + result.session.expires_in * 1000;
+        if (now() < started || now() >= approval.expires_at * 1000 || expiry <= now() + 30000) throw new Error("expiry");
+        const before = await native("status"); check();
+        if (before.session || before.mode !== "active" || before.revision !== result.revision) throw new Error("revision");
+        await ports.setCookie({url: config.origin + "/", name: DEVICE_COOKIE,
+          value: result.session.token, path: "/", secure: true, httpOnly: true,
+          sameSite: "strict", expirationDate: expiry / 1000});
+        check();
+        // Trusted adapter must verify the installed cookie and protected display
+        // access using the real browser; native ACTIVE alone is not session proof.
+        if (await ports.resume.verifySession() !== true) throw new Error("verification");
+        check();
+        const after = await native("status"); check();
+        if (after.session || after.mode !== "active" || after.revision !== result.revision ||
+            now() < started || expiry <= now() + 30000) throw new Error("revision");
+        state = {...initialBrowserRecoveryState(config),
+          nextAt: Math.min(started + result.renew_after * 1000, expiry - 30000)};
+        await save(); // Final browser consent commit only AFTER verified installation.
+        if (epoch !== consentEpoch) return pausedCleanup();
+        stopRequested = false;
+        pauseSaved = false;
+        logoutStart = null;
+        await arm(Math.max(0, (state.nextAt - now()) / 1000));
+        if (epoch !== consentEpoch) return pausedCleanup();
+        readyUntil = expiry;
+        return {mode: "active"};
+      });
+    },
+    } : {}),
     readiness: () => ({
       mode: missing && !setupAttempted ? "setup_required" : failure ? "setup_error" :
         stopRequested || state?.paused ? "paused" : view,

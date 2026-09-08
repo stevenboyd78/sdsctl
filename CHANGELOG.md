@@ -13,8 +13,15 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   tickets; fresh server-evidence checks; durable claim before proof; and atomic
   native permission. Cancel outstanding approvals on newer pause or clock
   correction and retain failed/uncertain operations. Only explicit internal
-  preparation upgrades a ledger to schema 2; no CLI/native action, browser consent
-  flow, network proof adapter, session readiness or production migration is enabled.
+  preparation upgrades a ledger to schema 2; no CLI/native resume action or
+  production migration is enabled.
+- Add experimental credential-authenticated, non-mutating device verification
+  with confirmed old-request drainage, and exact-generation session exchange
+  over the existing verified HTTPS transport. Add internal browser pending
+  consent and native verification/session coordination with interruption and
+  sign-out-race tests. Generated extensions still have no resume action: trusted
+  consent-page/native-protocol wiring, independently supervised calls and real
+  Chromium session verification remain acceptance gates.
 - Add experimental `browser-device-service --experimental create/check` to
   prepare and validate inert, canonical graphical-session user-service files.
   Recheck registration on launch and preserve intentional close, bounded crash

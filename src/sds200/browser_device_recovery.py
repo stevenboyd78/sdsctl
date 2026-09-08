@@ -350,7 +350,9 @@ class BrowserDeviceRecovery:
             self._save(db, state)
             return self._status(state, now)
 
-    def authenticate(self, exchange: Callable[[], ExchangeSession]) -> RecoveryResult:
+    def authenticate(
+        self, exchange: Callable[[], ExchangeSession], *, expected_revision: int | None = None,
+    ) -> RecoveryResult:
         """One bounded exchange at most. Caller schedules renewal; no sleeping loop.
 
         Callback must finish within ten seconds. The persisted 15-second claim
@@ -360,6 +362,10 @@ class BrowserDeviceRecovery:
         now = self._now()
         with self._connection() as db:
             state = self._load(db, now)
+            if expected_revision is not None and (
+                type(expected_revision) is not int or expected_revision != state.revision
+            ):
+                raise BrowserRecoveryError()
             if state.mode is not RecoveryMode.ACTIVE or state.next_at > now:
                 return RecoveryResult(self._status(state, now))
             claim = _State(state.revision + 1, state.mode, state.failures, now + 15, now)

@@ -94,10 +94,13 @@ The [native approval engine](docs/browser-device-resume.md#native-approval-engin
 is an unwired internal candidate: short-lived one-use reviews, durable claim before
 server proof, atomic native permission, cancellation on newer pause, and retained
 uncertain outcomes. Only explicit preparation migrates its selected ledger to a
-version that older helpers refuse. Browser consent, verified network evidence,
-generation-bound session exchange, history maintenance and full coordinated
-acceptance remain unimplemented. No public resume action or production migration
-is enabled.
+version that older helpers refuse. The next internal candidate adds persisted
+browser pending consent, credential-authenticated verified HTTPS evidence and
+exact-generation fresh sessions. Isolated tests join TLS, the actual ASGI/owner,
+authority and native core; browser storage/cookie tests remain controlled doubles.
+Trusted consent-page/native-protocol wiring, independent process supervision,
+real Chromium session verification, history maintenance and full coordinated
+acceptance remain gates. No public resume action or production migration is enabled.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
