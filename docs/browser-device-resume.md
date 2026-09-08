@@ -885,8 +885,8 @@ The script's `release` scenario now includes the prior real normal setup;
 their interrupted state synthetically. Failed runs retain their files and never
 count tab navigation, manual reload, a copied browser profile or a new wrapper as
 acceptance. A tested recovery-manifest version change did not resolve the problem
-and was removed. The specific browser loading/registration cause remains under
-investigation; no permissions were broadened, policy bypass added or Chromium
+and was removed. At that checkpoint the specific cause was unresolved; the
+follow-up investigation below narrows it. No permissions were broadened, policy bypass added or Chromium
 database edited. The next gate is a reviewed, reliable normal/recovery bundle
 transition followed by both full Pi sequences. Do not deploy this local API yet.
 
@@ -894,6 +894,75 @@ This fixture still deliberately seeds its initial pending browser state through
 a separate extension. It does not qualify how that pending state originally
 arose, real-server authentication, browser TLS trust, Firefox/WPE, a physical
 display, cold boot, actual power loss or production service deployment.
+
+#### Chromium worker-switch investigation
+
+An isolated follow-up reproduced the underlying stale-worker behavior without
+SDSCTL native messaging, recovery state, credentials or a server. Two fictional
+extensions share an identity and worker URL but have different worker code. On
+both tested Pis, Chromium loads the new manifest while executing the previous
+worker code. The visible readback reports `role: A` and `manifestRole: B` in the
+same fresh worker. This is not merely an old tab title or a delayed scanner update.
+
+The preserved diagnostic matrix also found that changing the worker filename
+produced worker-start status 18, changing just the manifest version did not solve
+the transition, and varying the two extension-loading switches did not solve it.
+Status 18 is Chromium's [worker-disallowed result](https://raw.githubusercontent.com/chromium/chromium/main/third_party/blink/public/common/service_worker/service_worker_status_code.h).
+Its [worker activation code](https://raw.githubusercontent.com/chromium/chromium/main/extensions/browser/service_worker/service_worker_task_queue.cc)
+tracks existing registrations using extension-version information, while its
+[extension worker checks](https://raw.githubusercontent.com/chromium/chromium/main/chrome/browser/extensions/chrome_content_browser_client_extensions_part.cc)
+restrict root-scope worker scripts to the manifest-selected script. Those sources
+support the stale-registration explanation; they do not establish the exact
+internal race/order on every Chromium build. Manual refresh and runtime reload
+were diagnostic interventions only, never accepted as unattended startup fixes.
+
+`scripts/experimental/qualify_browser_worker_switch.py` preserves a smaller
+repeatable comparison. Its `changed` control uses different worker bytes at the
+same URL. Its `stable` prototype uses byte-identical worker code and reads a
+**fictional role** from the current manifest. Both use the fixed foreground
+Chromium flags, private Xvfb/D-Bus/keyring and the existing PID-namespace owner.
+There is no logging wrapper, debugging port, browser-storage reset, manual
+refresh, runtime reload, native messaging or host permission in this comparison.
+Generated inputs are hashed and checked unchanged after each clean shutdown.
+
+The sequence is A → A → B → B → A → A, with a fresh worker nonce, worker start
+time, matching page nonce and matching manifest/executed role required for each
+pass. A restored tab, repeated nonce or a worker from an earlier launch cannot
+pass. On Chromium 151.0.7922.173 and 152.0.7977.75, the stable prototype passed all
+six starts per Pi. Both changed-code controls reproduced the stale A worker on
+the two B starts. The script records `production_acceptance: false`; reproducing
+the expected negative control is not a successful production transition.
+
+#### Stable worker dispatch: next design boundary
+
+The supported primitives above provide a promising implementation direction,
+not a qualified replacement for the real handoff. Do **not** copy the prototype's
+manifest-name selector into production. A display label cannot grant normal
+mode, recovery authority, resume consent or guard release.
+
+The next candidate should keep the worker entry and its complete imported code
+graph identical across normal/recovery roles within one build. Before composing
+either controller, obtain an exact, bounded, read-only context from the selected
+native host. The native side must validate canonical registration, the current
+owned profile, code/build identity and the applicable maintenance/handoff evidence.
+Browser/page messages must not select paths, operation IDs or the authority mode.
+Missing, stale, ambiguous, unknown or inconsistent context must fail closed.
+
+Recovery mode must construct only the existing confirmation-only composition:
+no ordinary startup tick, authentication, cookie installation, resume, alarm
+scheduling or normal control listeners. Normal mode must still respect setup
+consent and browser/native pause. A stale worker/build must be refused explicitly,
+not allowed to fall back to ordinary operation. Existing launch ownership,
+supervisor readiness, acknowledgement, restoration and guard-release checks must
+remain intact. Shared source availability is not permission to execute both modes.
+
+Required follow-up includes strict context/schema and stale-build tests, proof
+that recovery cannot initialize normal capabilities, lost/invalid context with
+zero authentication, and both complete Pi handoff/release sequences with two
+ordinary paused starts and read-only final browser-state inspection. The current
+runtime still uses the earlier separate worker compositions and combined
+acceptance remains blocked. Worker changes across application releases, actual
+power loss and deployment remain separate lifecycle gates.
 
 ## Verified server evidence and exact-generation sessions
 
