@@ -283,6 +283,16 @@ def create_browser_bundle(
             "Check the private profile, matching extension public key and destination."
         ) from None
 
+    _write_bundle(root, artifacts, receipt)
+    return key
+
+
+def _write_bundle(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
+    """Exclusive private output, receipt last; retain partial files on any failure.
+
+    Callers validate their distinct canonical artifact contract before and after
+    writing. This is not registration and does not authorize a browser launch.
+    """
     parent_fd = root_fd = extension_fd = None
     try:
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -312,7 +322,6 @@ def create_browser_bundle(
         os.fsync(extension_fd)
         _write(root_fd, "bundle.json", receipt)  # Completion marker, not a signature.
         os.fsync(root_fd)
-        return key
     except Exception:
         raise BrowserBundleError(
             "Browser bundle creation could not be confirmed. Retain any created directory "

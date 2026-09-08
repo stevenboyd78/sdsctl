@@ -185,6 +185,17 @@ behavior. The trusted callback is not a user-facing CLI, browser adapter or
 installation flow. Guarded browser acknowledgement, eventual guard release,
 replacement writers and real-browser/physical acceptance remain separate gates.
 
+The [internal recovery-only bundle preparation](docs/browser-device-resume.md#recovery-only-bundle-preparation-internal-candidate)
+now stages a distinct canonical bundle bound to exact completed maintenance and
+the existing public extension identity. It reuses one browser state coordinator
+without normal startup, alarm, authentication or resume handlers, and verifies
+the clean-but-paused storage write by read-back. Generated page/worker modules
+join the fixed confirmation-only native executable in controlled tests. Normal
+bundle registration rejects this artifact; preparation never registers a host,
+starts a browser, acknowledges browser state to the local launcher or releases
+the guard. A supervised temporary handoff, durable browser acknowledgement,
+safe registration restoration and real-browser acceptance are still required.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

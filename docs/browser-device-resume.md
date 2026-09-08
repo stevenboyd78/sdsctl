@@ -379,8 +379,8 @@ alone makes credential rotation safe.
 
 Native-process lock tests and joined Node/Python fixtures exercise this boundary
 with private synthetic inputs. Browser storage/cookies remain controlled in those
-fixtures. No native maintenance mutation, CLI, installed Chrome adapter or trusted
-page is enabled yet. The confirmation-only candidate below does not execute
+fixtures. No native-message maintenance mutation action, CLI, installed Chrome
+adapter or trusted page is enabled yet. The confirmation-only candidate below does not execute
 maintenance. Profile ownership does not itself prove browser shutdown,
 server permission, user consent, session readiness or physical outage recovery.
 
@@ -405,11 +405,10 @@ ownership on timeout. Replies contain bounded proof or a fixed redacted error,
 never credential bytes, archive contents or a session cookie.
 
 `browser_device_retirement_ui.mjs` provides candidate Chromium page, worker and
-native-port adapters. They are **not included in generated extension bundles**:
-there is no installed `recovery.html`, registered confirmation host or launcher
-change yet. A future explicitly provisioned integration must bind these controls
-to the same canonical recovery controller and separately selected native host.
-Do not register a wrapper with browser-supplied selection values.
+native-port adapters. They are **not included in normal startup bundles**.
+The separate recovery-only preparation described below can stage `recovery.html`
+and a fixed confirmation wrapper, but does not register a host or change any
+launcher. Do not register a wrapper with browser-supplied selection values.
 
 The page controller is inert on opening. A trusted review gesture checks the
 already-completed maintenance; a second trusted submission requires an unchecked-
@@ -506,6 +505,75 @@ Chromium, Home Assistant, Pi display or production profile is used. A separately
 reviewed handoff that can safely launch the confirmation-only browser controls
 and eventually release this guard is still required before deployment; never
 delete it manually to advance the workflow.
+
+## Recovery-only bundle preparation: internal candidate
+
+`browser_device_retirement_bundle.py` can now prepare a **new, inert** recovery
+bundle for one already-completed stopped-browser maintenance operation. This is
+not an installation command or a runnable recovery procedure. Normal bundle
+generation, registration, startup and service behavior remain unchanged.
+
+The trusted local caller supplies the exact original browser directory, profile,
+normal bundle, public extension key, private archive root, operation ID and
+browser intent. Preparation requires the existing launcher lock and validates
+the retained maintenance guard, canonical original registration, committed native
+evidence and current private-input binding. The new output must be separate from
+all those directories. Missing, partial, edited, superseded or unrelated evidence
+is refused. No browser files, credentials or existing bundles are replaced.
+
+The staged bundle uses the **same public extension key and extension identity**,
+so a future handoff can address the existing extension storage without Python
+reading or changing Chromium's databases. Its artifact contract is distinct
+from a normal startup bundle: canonical normal registration rejects it. An
+inspection reconstructs every expected file from the installed runtime and
+current maintenance context; merely editing the receipt and recomputing file
+hashes cannot authorize arbitrary code. Output is created exclusively, with
+private permissions, synchronized files and a receipt written last. Partial or
+uncertain output is retained, never overwritten or automatically retried.
+
+The recovery worker creates one instance of the existing recovery coordinator
+and exposes only the review/confirmation controls. It does **not** call the
+normal startup adapter or initial recovery tick. There is no startup, install or
+alarm listener, dashboard content script, normal control page, first-run setup
+or resume page. Ordinary native dispatch, alarm scheduling and cookie
+installation are unavailable in this composition. Opening or restarting the
+worker only restricts storage access to trusted extension contexts and reads
+the saved recovery record; it does not authenticate, suspend native state,
+clear an error or initialize missing browser state.
+
+The only staged native endpoint is a confirmation-only wrapper with the fixed
+profile, identity, archive root and operation ID. It deliberately uses the same
+native-host name as normal recovery. A future guarded handoff must **replace**
+the normal endpoint while the browser is stopped, not add a second endpoint
+alongside it: a cached old worker must not retain a reachable authentication
+host. The wrapper rejects ordinary status, suspend, claim, authenticate and
+resume requests. Browser messages cannot select a different operation or path.
+Each accepted request independently reconfirms the native evidence/after-state.
+
+After explicit page review and confirmation, the canonical coordinator verifies
+cookie absence, cancels the old recovery alarm, reconfirms native evidence and
+checks that the browser's pending intent has not changed. The recovery-only
+storage adapter then writes **clean-but-paused** state and reads it back exactly
+before reporting success. Lost writes, mismatched read-back, newer browser
+intent or native proof changes cannot produce a successful acknowledgement or
+automatic retry. A later worker remains paused and cannot use the previous
+volatile page consent.
+
+**Preparation and a successful page reply do not release the maintenance guard.**
+No dedicated host registration is changed, no browser or service is launched,
+and no durable browser-acknowledgement receipt is produced by this candidate.
+Likewise, Chromium exit status alone is not proof of saved browser state. Exact
+temporary registration, supervised launch, process-loss handling, durable
+acknowledgement verification and safely restoring the original registration
+remain required before an end-to-end recovery procedure can be deployed.
+
+Tests exercise generated page and worker modules joined to the generated native
+executable, native framing/supervision, private archives and SQLite. Additional
+Node contracts check inert worker restarts, unavailable ordinary actions,
+cookie/storage failures, changed intent and lost acknowledgements. DOM, browser
+storage and cookie APIs in these tests are controlled fixtures. They do not
+prove actual Chromium loading/replacing the extension, physical Pi display
+behavior, server TLS, Firefox/WPE compatibility or production acceptance.
 
 ## Verified server evidence and exact-generation sessions
 

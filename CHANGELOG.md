@@ -8,6 +8,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add internal recovery-only bundle preparation for one confirmed stopped-browser
+  maintenance operation. Preserve the extension identity, validate the exact
+  retained guard and canonical files, and stage only a fixed confirmation native
+  wrapper and inert browser controls. Reuse the canonical state coordinator
+  without ordinary startup/authentication hooks, and read back clean-but-paused
+  browser state before acknowledgement. Test generated page/worker/native-process
+  integration, unsafe inputs and uncertain writes. No registration, browser
+  launch, guard release, production change or Firefox/WPE support is enabled.
 - Add an internal stopped-browser resume-maintenance workflow with canonical
   registration checks, managed-launcher ownership, same-process review and
   session-specific local consent. Durably block normal launch before native

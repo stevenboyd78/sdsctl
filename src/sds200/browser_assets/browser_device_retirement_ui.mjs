@@ -1,4 +1,4 @@
-// Internal confirmation-only recovery controls. Not installed by bundle generation.
+// Internal confirmation-only recovery controls. Not in normal startup bundles.
 // Native maintenance has already committed; this page only resolves browser intent
 // to clean-but-paused. It cannot select archives, mutate native state or sign in.
 const exact = (v, keys) => v !== null && typeof v === "object" && !Array.isArray(v) &&
