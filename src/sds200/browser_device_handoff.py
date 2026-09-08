@@ -11,9 +11,12 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import math
 import os
 import secrets
+import select
 import stat
+import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -22,7 +25,11 @@ from .browser_device_bundle import NATIVE_HOST, _json
 from .browser_device_native import BrowserRetirementSelection, _private_read
 from .browser_device_profile import _platform, _write
 from .browser_device_profile_access import browser_profile_access
-from .browser_device_protocol import BrowserRetirementAcknowledgement, BrowserRetirementRequest
+from .browser_device_protocol import (
+    BrowserRecoveryLaunchRequest,
+    BrowserRetirementAcknowledgement,
+    BrowserRetirementRequest,
+)
 from .browser_device_recovery import _object
 from .browser_device_registration import MAINTENANCE_MARKER, _matches, _receipt, _validated_bundle
 from .browser_device_resume import _hex
@@ -37,6 +44,7 @@ _HOST = NATIVE_HOST + ".json"
 _RECEIPT = ".sdsctl-browser-registration.json"
 _OWNER = "owner.lock"
 _ACK = "browser-acknowledgement.json"
+_LAUNCH = "browser-launch-ready.json"
 
 
 class BrowserHandoffError(RuntimeError):
@@ -124,20 +132,22 @@ def _process_identity(pid: int) -> list[int]:
 class BrowserRecoveryHandoff:
     def __init__(self, root: Path, *, directory: Path, profile: Path, bundle: Path,
                  public_key: Path, archives: Path, recovery_bundle: Path,
-                 operation_id: str, browser_intent: str) -> None:
+                 operation_id: str, browser_intent: str, supervised: bool = False) -> None:
         try:
             _platform()
             roots = (root, directory, profile, bundle, archives, recovery_bundle)
             if (any(not p.is_absolute() or p.resolve() != p for p in roots)
                     or any(a == b or a.is_relative_to(b) or b.is_relative_to(a)
                            for i, a in enumerate(roots) for b in roots[i + 1:])
-                    or not _hex(operation_id) or not _hex(browser_intent)):
+                    or not _hex(operation_id) or not _hex(browser_intent)
+                    or type(supervised) is not bool):
                 raise ValueError()
             BrowserDeviceStore(root)._check(database=False)
             self._root, self._recovery = root, recovery_bundle
             self._session = BrowserResumeWorkflow(directory, profile=profile, bundle=bundle,
                                                   public_key=public_key, archives=archives)
             self._operation, self._intent = operation_id, browser_intent
+            self._supervised = supervised
             self._targets = {**self._session._targets, "handoff": str(root),
                              "recovery_bundle": str(recovery_bundle)}
             self._attempted = False
@@ -155,12 +165,13 @@ class BrowserRecoveryHandoff:
         _matches(session._root / _RECEIPT, original_receipt)
         key, artifacts, receipt = _canonical(self._recovery, session,
             operation_id=self._operation, browser_intent=self._intent,
-            handoff=self._root, proof=proof)
+            handoff=self._root, proof=proof, supervised=self._supervised)
         _validate(self._recovery, artifacts, receipt)
         guard = _private_read(session._root, MAINTENANCE_MARKER, 32768)
         info = self._root.lstat()
         record = _json({
             "version": 1, "operation": "paused-browser-handoff", "targets": self._targets,
+            "supervised": self._supervised,
             "operation_id": self._operation, "browser_intent": self._intent, "nonce": nonce,
             "identity": proof.identity, "extension_id": key.extension_id, "evidence": asdict(proof),
             "handoff_binding": [info.st_dev, info.st_ino], "owner_binding": owner,
@@ -224,7 +235,12 @@ class BrowserRecoveryHandoff:
                       "local_pause_saved": True, "session_ready": False})
 
     def _ack(self, record: bytes, proof: BrowserResumeRetirementEvidence,
+             *, stopped: bool = False,
              ) -> BrowserHandoffAcknowledgement:
+        if self._supervised:
+            _matches(self._root / _LAUNCH, self._launch_body(record, live=False))
+            if stopped:
+                self._supervisor_stopped()
         body = self._ack_body(record, proof)
         _matches(self._root / _ACK, body)
         return BrowserHandoffAcknowledgement(proof.identity, self._operation, _digest(body),
@@ -247,7 +263,8 @@ class BrowserRecoveryHandoff:
             with _launch_lock(session._root, create=False), browser_profile_access(
                     session._profile, exclusive=False):
                 key, artifacts, receipt = _canonical(self._recovery, session,
-                    operation_id=self._operation, browser_intent=self._intent, handoff=self._root)
+                    operation_id=self._operation, browser_intent=self._intent, handoff=self._root,
+                    supervised=self._supervised)
                 _validate(self._recovery, artifacts, receipt)
                 parent = os.open(self._root.parent, _FLAGS)
                 try:
@@ -279,7 +296,7 @@ class BrowserRecoveryHandoff:
                 self._checked(stopped=True, live=True)
                 callback()  # Explicit trusted local adapter; never a page-provided command.
                 checked, _, proof = self._checked(stopped=True, live=True)
-                return self._ack(checked, proof)
+                return self._ack(checked, proof, stopped=True)
         except Exception:
             raise BrowserHandoffError() from None
         finally:
@@ -301,13 +318,71 @@ class BrowserRecoveryHandoff:
             os.close(fd)
         _matches(hosts / _HOST, after)
 
+    def _launch_body(self, record: bytes, *, live: bool) -> bytes:
+        """Bind page/worker readiness to this exact isolated supervisor; not consent."""
+        if not self._supervised:
+            raise ValueError()
+        scope = _private_read(self._root, "supervisor.json", 8192)
+        value = json.loads(scope, object_pairs_hook=_object)
+        if (type(value) is not dict or set(value) != {
+                "version", "record_sha256", "process", "namespace", "owner_namespace",
+                "expires_at", "command_sha256"}
+                or type(value["version"]) is not int or value["version"] != 1
+                or value["record_sha256"] != _digest(record)
+                or not _hex(value["command_sha256"])
+                or type(value["expires_at"]) not in (int, float)
+                or not math.isfinite(value["expires_at"]) or value["expires_at"] <= 0
+                or any(type(value[key]) is not list or len(value[key]) != 2
+                       or any(type(n) is not int or n <= 0 for n in value[key])
+                       for key in ("process", "namespace", "owner_namespace"))
+                or scope != _json(value)):
+            raise ValueError()
+        if live:
+            if (_process_identity(value["process"][0]) != value["process"]
+                    or time.monotonic() >= value["expires_at"]):
+                raise ValueError()
+            ns = (Path("/proc") / str(value["process"][0]) / "ns/pid").stat()
+            # The outer launcher verified its own namespace before writing this
+            # bound scope. Nested user namespaces cannot dereference an outer
+            # owner's ns link; do not weaken ptrace/proc protections to do so.
+            if ([ns.st_dev, ns.st_ino] != value["namespace"]
+                    or value["namespace"] == value["owner_namespace"]):
+                raise ValueError()
+        bundle = json.loads(_private_read(self._recovery, "bundle.json", 32768),
+                            object_pairs_hook=_object)
+        if not _hex(bundle["launch_binding"]):
+            raise ValueError()
+        return _json({"version": 1, "operation": "recovery-extension-ready",
+                      "handoff_sha256": _digest(record), "supervisor_sha256": _digest(scope),
+                      "binding": bundle["launch_binding"], "browser_consent": False})
+
+    def _supervisor_stopped(self) -> None:
+        """Read-only PID-handle proof: absent Singleton files alone are not enough."""
+        process = json.loads(_private_read(self._root, "supervisor.json", 8192))["process"]
+        try:
+            fd = os.pidfd_open(process[0])
+        except ProcessLookupError:
+            return
+        try:
+            if select.select([fd], [], [], 0)[0]:
+                return  # Kernel reports exit, including an unreaped zombie.
+            try:
+                current = _process_identity(process[0])
+            except (FileNotFoundError, ProcessLookupError):
+                return
+            if current == process:
+                raise ValueError()
+            # The old process exited and its PID was reused; never signal the new one.
+        finally:
+            os.close(fd)
+
     def confirm(self, *, restored: bool = False) -> BrowserHandoffAcknowledgement:
         """Read-only stopped confirmation after callback/process/reply loss."""
         try:
             with _launch_lock(self._session._root, create=False), browser_profile_access(
                     self._session._profile, exclusive=False):
                 record, _, proof = self._checked(stopped=True, restored=restored)
-                ack = self._ack(record, proof)
+                ack = self._ack(record, proof, stopped=True)
                 if restored:
                     body = self._restoration(record, ack)
                     _matches(self._root / "restoration-started.json", body)
@@ -334,7 +409,7 @@ class BrowserRecoveryHandoff:
             with _launch_lock(self._session._root, create=False), browser_profile_access(
                     self._session._profile, exclusive=False):
                 record, original, proof = self._checked(stopped=True)
-                ack = self._ack(record, proof)
+                ack = self._ack(record, proof, stopped=True)
                 body = self._restoration(record, ack)
                 _write_file(self._root, "restoration-started.json", body)
                 replacement = _private_read(self._recovery, _HOST, 16384)
@@ -348,7 +423,8 @@ class BrowserRecoveryHandoff:
 
 def handoff_native_request(
     profile: Path, selection: BrowserRetirementSelection,
-    request: BrowserRetirementRequest | BrowserRetirementAcknowledgement,
+    request: (BrowserRetirementRequest | BrowserRetirementAcknowledgement
+              | BrowserRecoveryLaunchRequest),
 ) -> dict[str, object]:
     """Fixed wrapper-selected context; guarded native supervisor owns the deadline.
 
@@ -371,11 +447,27 @@ def handoff_native_request(
         raise ValueError()
     handoff = BrowserRecoveryHandoff(selection.handoff,
         **{key: Path(value) for key, value in targets.items() if key != "handoff"},
-        operation_id=selection.operation_id, browser_intent=request.intent)
+        operation_id=selection.operation_id, browser_intent=request.intent,
+        supervised=data["supervised"])
     with browser_profile_access(selection.handoff, exclusive=True):
         record, _, proof = handoff._checked(stopped=False, live=True)
         if record != raw:
             raise ValueError()
+        if isinstance(request, BrowserRecoveryLaunchRequest):
+            body = handoff._launch_body(record, live=True)
+            if request.binding != json.loads(body)["binding"]:
+                raise ValueError()
+            path = selection.handoff / _LAUNCH
+            if path.exists() or path.is_symlink():
+                _matches(path, body)  # Worker recreation only confirms exact completed readiness.
+            else:
+                _write_file(selection.handoff, _LAUNCH, body)
+            checked_record, _, _ = handoff._checked(stopped=False, live=True)
+            if checked_record != record or handoff._launch_body(record, live=True) != body:
+                raise ValueError()
+            return {"version": 1, "ok": True, "binding": request.binding}
+        if handoff._supervised:
+            _matches(selection.handoff / _LAUNCH, handoff._launch_body(record, live=True))
         if isinstance(request, BrowserRetirementRequest):
             return {"version": 1, "ok": True, "evidence": asdict(proof)}
         if _json(asdict(request)) != _json(asdict(proof)):

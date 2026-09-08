@@ -662,6 +662,102 @@ page/worker modules through controlled browser APIs to the real native endpoint.
 Failures preserve evidence and guards. These are not real Chromium, Firefox/WPE,
 Home Assistant or physical Pi acceptance, and production services are unchanged.
 
+## Bounded Chromium supervisor: internal candidate
+
+`browser_device_launch.py` now supplies the handoff callback as an internal,
+foreground operation. It is **not a production CLI or service installer**.
+Prepare a new recovery bundle and handoff with `supervised=True`; the ordinary
+bundle/launcher and the earlier confirmation-only composition do not acquire
+this capability. Existing or partial handoffs are not replayed or upgraded.
+
+The launcher requires non-root Linux, the main thread, an existing graphical
+session, Linux process handles (`pidfd`) and an explicitly selected existing
+`bwrap` executable. Browser and isolation executable paths must be canonical,
+executable and not writable by other users. Their file identities are checked
+again before starting the browser. Chromium's bounded version response must
+identify Chromium 120 or newer; Chrome-branded output is refused. No arbitrary
+extra flags, shell command, debugging endpoint, certificate exception, password
+store override or sandbox-disabling option is accepted.
+
+The existing bubblewrap creates a **private PID namespace**, with a small sdsctl
+supervisor as PID 1 and Chromium as its child. The supervisor independently
+checks its PID-1 role before qualification or launch. Exiting that namespace's
+PID 1 ends its descendants, including a process that detached into a different
+session. The outer launcher signals only its owned process handles, never a
+discovered process group or another browser. Bubblewrap's parent-death behavior
+also covers abrupt loss of the outer launcher.
+
+This is process containment, **not filesystem or network isolation**. The normal
+filesystem and device mounts remain available. A read-only host `/proc` view
+allows the existing native owner PID/start checks across the namespace boundary;
+the outer launcher records its own namespace identity before launch. The native
+endpoint does not attempt to weaken proc/ptrace restrictions to inspect that
+outer namespace. Chromium's own sandbox, trust settings and graphical environment
+remain unchanged. No packages, host policies, certificates, firewall rules or
+production service settings are installed or changed. If isolation is unavailable,
+qualification fails before the host switch; there is no unisolated fallback.
+
+The lifetime is bounded at several independent stages:
+
+- Browser version output is limited to 1 KiB and five seconds.
+- Outer namespace/qualification replies have a twelve-second deadline. The inner
+  supervisor waits at most fifteen seconds for the guarded launch instruction.
+- The exact recovery page/worker must report readiness within sixty seconds.
+- The guarded launch/confirmation phase lasts at most 180 seconds.
+- After a saved-pause acknowledgement, graceful Chromium shutdown uses SIGINT
+  and a ten-second limit. Failure triggers owned-namespace termination and is
+  not a successful recovery result.
+- The inner supervisor has an independent 240-second alarm, covering an outer
+  launcher that remains alive but stops making progress. Cleanup waits on kernel
+  process handles rather than treating a sent signal as proof of exit.
+
+The generated supervised bundle adds a fixed **launch binding**. It hashes the
+entire canonical pre-injection bundle, local targets and native evidence, then
+embeds the result in the generated page and worker. The page starts with review
+disabled and asks its matching worker for readiness. Only the exact active,
+top-frame recovery document, matching extension and binding can reach the fixed
+`recovery-launch-ready` native action. Dashboard pages, frames, caller-selected
+paths/PIDs and other bundle generations cannot use it.
+
+The native endpoint verifies the current handoff, live outer owner, inner
+supervisor, namespace and deadline before writing a separate readiness receipt.
+This receipt explicitly states `browser_consent: false`. It is **not** a saved
+pause, recovery approval, server grant or session. Only a verified response
+enables the page's existing explicit review and confirmation controls. An old
+worker without the matching handshake leaves those controls disabled. A recreated
+matching worker may read-confirm an exact completed readiness receipt, but cannot
+rewrite a partial receipt or inherit prior user consent.
+
+The later saved-pause acknowledgement still requires the original explicit
+recovery workflow. The launcher waits for its native publisher to release the
+handoff-directory lock after synchronization and post-write checks before
+requesting shutdown. It does not contend for that lock while waiting for user
+consent. Success requires exact readiness and saved-pause evidence, clean browser
+exit, kernel-confirmed supervisor exit, and stopped-browser revalidation.
+Absent Chromium Singleton files alone are insufficient while that supervisor
+is alive. Read-only confirmation after a lost reply enforces the same stopped
+process requirement.
+
+Timeouts, crashes, interrupted publication or forced shutdown retain the temporary
+host, native state, browser profile and maintenance guard. A complete saved ACK
+can still be inspected after confirmed shutdown; a failed launch does not imply
+that the browser failed to save pause. Explicit exact host restoration remains
+separate, and **even successful restoration does not release the guard**.
+
+Local tests use actual bubblewrap/PID namespaces, PID-1 processes, detached child
+processes and generated native executables with fictional profiles. They cover
+SIGTERM/SIGKILL owner loss, an independent inner timeout, refused versions, absent
+readiness/ACK, changed evidence and failure to shut down. JavaScript tests exercise
+the separate page/worker handshake through controlled browser APIs. The fictional
+browser executable in the process tests does not render an extension or create
+real Chromium storage. These results therefore do not establish real Chromium
+activation/replacement, Pi display, Firefox/WPE or power-outage acceptance.
+
+The process containment uses the documented [bubblewrap PID namespace and
+parent-death options](https://github.com/containers/bubblewrap/blob/main/bwrap.xml).
+Actual Chromium qualification, a separately reviewed guard-release boundary and
+physical acceptance remain prerequisites for deployment.
+
 ## Verified server evidence and exact-generation sessions
 
 The experimental server adapter adds native-only `POST /auth/device/verify`.

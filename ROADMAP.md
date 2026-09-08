@@ -203,8 +203,12 @@ a browser paused acknowledgement after exact read-back; ordinary wrappers cannot
 Bind live work to the owner process start identity as well as locks, including
 inherited-lock process-loss cases. Allow read-only lost-reply confirmation and
 explicit acknowledged host restoration, always retaining the launch guard.
-The callback is not yet a browser supervisor: actual Chromium launch/replacement,
-bounded shutdown, guard-release review and physical acceptance remain gates.
+An [internal bounded Chromium supervisor](docs/browser-device-resume.md#bounded-chromium-supervisor-internal-candidate)
+now supplies fixed launch arguments, separate exact-generation page/worker
+readiness, a private PID-1 lifetime boundary and kernel-confirmed shutdown.
+Local tests exercise real namespace/native processes with a fictional browser;
+they do not establish real Chromium replacement or display acceptance.
+Real-browser qualification, guard-release review and physical acceptance remain gates.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

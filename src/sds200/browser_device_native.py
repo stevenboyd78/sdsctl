@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
+    BrowserRecoveryLaunchRequest,
     BrowserResumeRequest,
     BrowserRetirementAcknowledgement,
     BrowserRetirementRequest,
@@ -280,13 +281,15 @@ def _native_request(
                 if request is None:
                     raise ValueError()
                 if retirement is not None or isinstance(
-                        request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement)):
+                        request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement,
+                                  BrowserRecoveryLaunchRequest)):
                     # Separate recovery endpoint. It can confirm evidence and,
                     # only with a live handoff, acknowledge a saved local pause.
                     # It cannot execute a review or fall through to authentication.
                     if (not isinstance(retirement, BrowserRetirementSelection)
                             or not isinstance(request, (BrowserRetirementRequest,
-                                                        BrowserRetirementAcknowledgement))
+                                                        BrowserRetirementAcknowledgement,
+                                                        BrowserRecoveryLaunchRequest))
                             or expected_identity is None or request.identity != expected_identity):
                         raise ValueError()
                     if retirement.handoff is not None:

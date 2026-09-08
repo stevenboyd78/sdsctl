@@ -49,10 +49,13 @@ class BrowserRetirementBundleError(RuntimeError):
 def _canonical(
     root: Path, session: BrowserResumeWorkflow, *, operation_id: str, browser_intent: str,
     handoff: Path | None = None, proof: BrowserResumeRetirementEvidence | None = None,
+    supervised: bool = False,
 ) -> tuple[BrowserExtensionIdentity, dict[str, bytes], bytes]:
     """Caller owns launcher; handoff callers separately verify guard/registration."""
     if proof is None:
         proof = session._confirm(operation_id, browser_intent)
+    if type(supervised) is not bool or (supervised and handoff is None):
+        raise ValueError()
     key = browser_extension_identity(session._registration["public_key"])
     config = load_browser_native_configuration(session._profile)
     python = Path(sys.executable)
@@ -144,9 +147,31 @@ def _canonical(
             "allowed_origins": [config.extension_origin],
         }),
     })
+    launch = {}
+    if supervised:
+        name = "browser_device_launch.mjs"
+        artifacts["extension/" + name] = assets.joinpath(name).read_bytes()
+        # Hash the entire canonical pre-injection bundle, not a caller-edited
+        # receipt. No recursive hash: the resulting binding is injected last.
+        binding = hashlib.sha256(_json({"version": 1, "handoff": str(handoff),
+            "targets": session._targets, "operation_id": operation_id,
+            "intent": browser_intent, "evidence": asdict(proof),
+            "files": {name: hashlib.sha256(body).hexdigest()
+                      for name, body in artifacts.items()}})).hexdigest()
+        launch = {"launch_binding": binding}
+        options = json.dumps({"identity": config.identity, "intent": browser_intent,
+                              "binding": binding, "nativeHost": NATIVE_HOST}, ensure_ascii=True)
+        artifacts["extension/worker.mjs"] += (
+            f"import {{connectRecoveryLaunchWorker}} from './{name}';\n"
+            f"connectRecoveryLaunchWorker(chrome, {options});\n").encode("ascii")
+        artifacts["extension/recovery.mjs"] += (
+            f"import {{connectRecoveryLaunchPage}} from './{name}';\n"
+            f"connectRecoveryLaunchPage({{document,window,runtime:chrome.runtime}}, {options});\n"
+        ).encode("ascii")
     receipt = _json({
         "version": 1, "experimental": True, "operation": "prepare-retirement-bundle",
         **({"handoff": str(handoff)} if handoff is not None else {}),
+        **launch,
         "targets": session._targets, "destination": str(root),
         "operation_id": operation_id, "browser_intent": browser_intent,
         "evidence": asdict(proof), "extension_id": key.extension_id,
@@ -173,27 +198,30 @@ def _validate(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
 def prepare_browser_retirement_bundle(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
     archives: Path, operation_id: str, browser_intent: str, handoff: Path | None = None,
+    supervised: bool = False,
 ) -> BrowserExtensionIdentity:
     """Only a new inert output. A prepared bundle is NOT a launch or browser ACK."""
     return _prepare_or_inspect(root, directory=directory, profile=profile, bundle=bundle,
         public_key=public_key, archives=archives, operation_id=operation_id,
-        browser_intent=browser_intent, create=True, handoff=handoff)
+        browser_intent=browser_intent, create=True, handoff=handoff, supervised=supervised)
 
 
 def inspect_browser_retirement_bundle(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
     archives: Path, operation_id: str, browser_intent: str, handoff: Path | None = None,
+    supervised: bool = False,
 ) -> BrowserExtensionIdentity:
     """Read-only exact reconstruction from current runtime and committed evidence."""
     return _prepare_or_inspect(root, directory=directory, profile=profile, bundle=bundle,
         public_key=public_key, archives=archives, operation_id=operation_id,
-        browser_intent=browser_intent, create=False, handoff=handoff)
+        browser_intent=browser_intent, create=False, handoff=handoff, supervised=supervised)
 
 
 def _prepare_or_inspect(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
     archives: Path, operation_id: str, browser_intent: str, create: bool,
     handoff: Path | None = None,
+    supervised: bool = False,
 ) -> BrowserExtensionIdentity:
     try:
         _platform()
@@ -213,14 +241,14 @@ def _prepare_or_inspect(
                 raise ValueError()
         with _launch_lock(directory, create=False):
             key, artifacts, receipt = _canonical(root, session, operation_id=operation_id,
-                                                 browser_intent=browser_intent, handoff=handoff)
+                browser_intent=browser_intent, handoff=handoff, supervised=supervised)
             if create:
                 _write_bundle(root, artifacts, receipt)
             _validate(root, artifacts, receipt)
             # Slow writes, changed native evidence or guard replacement must not
             # turn an old preparation snapshot into a current successful result.
             if _canonical(root, session, operation_id=operation_id, browser_intent=browser_intent,
-                          handoff=handoff) != (key, artifacts, receipt):
+                          handoff=handoff, supervised=supervised) != (key, artifacts, receipt):
                 raise ValueError()
             return key
     except Exception:

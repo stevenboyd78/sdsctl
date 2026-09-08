@@ -65,6 +65,15 @@ class BrowserRetirementAcknowledgement:
     revision: int
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserRecoveryLaunchRequest:
+    """Fixed generated page/worker readiness, never browser consent."""
+
+    identity: str = field(repr=False)
+    intent: str = field(repr=False)
+    binding: str = field(repr=False)
+
+
 def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
     action = value["action"]
     fields = {"review-resume": set(), "prepare-resume": {"intent", "revision", "generation"},
@@ -100,7 +109,7 @@ def _object(pairs: list[tuple[str, object]]) -> dict[str, object]:
 def parse_browser_device_request(
     payload: bytes,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
-      | BrowserRetirementAcknowledgement):
+      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest):
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -116,6 +125,14 @@ def parse_browser_device_request(
             raise _invalid()
         if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
             return _resume(value)
+        if value["action"] == "recovery-launch-ready":
+            if (set(value) != {"version", "action", "identity", "intent", "binding"}
+                    or any(type(value[key]) is not str
+                           or re.fullmatch(r"[a-f0-9]{64}", value[key]) is None
+                           for key in ("identity", "intent", "binding"))):
+                raise _invalid()
+            return BrowserRecoveryLaunchRequest(
+                value["identity"], value["intent"], value["binding"])
         if value["action"] in {"confirm-retirement", "acknowledge-retirement"}:
             acknowledge = value["action"] == "acknowledge-retirement"
             fields = {"retirement", "mode", "revision"} if acknowledge else set()
@@ -163,7 +180,7 @@ def _read_exact(stream: BinaryIO, count: int, *, allow_eof: bool = False) -> byt
 def read_browser_device_request(
     stream: BinaryIO,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
-      | BrowserRetirementAcknowledgement | None):
+      | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest | None):
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.
