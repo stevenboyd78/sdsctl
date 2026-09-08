@@ -285,7 +285,7 @@ JOINED = r"""
 import assert from 'node:assert/strict';
 import {pathToFileURL} from 'node:url';
 import {execFileSync} from 'node:child_process';
-const [root,id,identity,origin,intent,failure]=process.argv.slice(1);
+const [root,id,identity,origin,intent,failure,handoff]=process.argv.slice(1);
 const stateKey='sdsctlDeviceRecovery';
 let state={version:2,identity,paused:true,phase:'resume_pending',nextAt:0,intent};
 const original=structuredClone(state), calls=[], listeners=[];
@@ -300,7 +300,14 @@ globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
   }),
   sendNativeMessage:async(host,request)=>{
     calls.push(request.action);assert.equal(host,'org.sdsctl.browser_device');
-    assert.deepEqual(request,{version:1,action:'confirm-retirement',identity,intent});
+    if(request.action==='confirm-retirement')
+      assert.deepEqual(request,{version:1,action:'confirm-retirement',identity,intent});
+    else {
+      assert.equal(handoff,'handoff');assert.equal(request.action,'acknowledge-retirement');
+      assert.deepEqual(Object.keys(request).sort(),
+        ['version','action','identity','intent','retirement','mode','revision'].sort());
+      assert.equal(request.identity,identity);assert.equal(request.intent,intent);
+    }
     const body=Buffer.from(JSON.stringify(request)),header=Buffer.alloc(4);
     // Native messaging uses host byte order; fixture runs on this Linux host.
     if(new Uint8Array(new Uint32Array([1]).buffer)[0]===1)header.writeUInt32LE(body.length);
@@ -309,7 +316,9 @@ globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
       input:Buffer.concat([header,body]),timeout:13000,maxBuffer:8192});
     const size=new Uint8Array(new Uint32Array([1]).buffer)[0]===1
       ? bytes.readUInt32LE() : bytes.readUInt32BE();
-    assert.equal(bytes.length,size+4);return JSON.parse(bytes.subarray(4));
+    assert.equal(bytes.length,size+4);
+    if(failure==='lost-ack' && request.action==='acknowledge-retirement')throw Error('lost reply');
+    return JSON.parse(bytes.subarray(4));
   }},
   storage:{local:{setAccessLevel:async value=>
       assert.deepEqual(value,{accessLevel:'TRUSTED_CONTEXTS'}),
@@ -338,6 +347,8 @@ elements.confirm.checked=true;
 elements['recovery-form'].handlers.submit({isTrusted:true,preventDefault(){}});await settle();
 assert.equal(state.paused,true);assert.equal(calls.filter(c=>c==='save').length,1);
 assert.equal(calls.filter(c=>c==='confirm-retirement').length,2);
+assert.equal(calls.filter(c=>c==='acknowledge-retirement').length,
+  handoff==='handoff' && ['none','lost-ack'].includes(failure) ? 1 : 0);
 assert.equal(elements.notice.textContent.includes('No login was attempted'),failure==='none');
 assert(!elements.notice.textContent.includes('private test diagnostic'));
 assert.deepEqual(state,failure==='incorrect-save' ? original :

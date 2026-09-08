@@ -9,11 +9,17 @@ const same=(a,b)=>a !== null && typeof a === "object" && !Array.isArray(a) &&
   Object.keys(a).sort().join(",") === Object.keys(b).sort().join(",") &&
   Object.keys(b).every(key=>a[key] === b[key]);
 
-export function connectChromeRetirementRecovery(chrome, settings) {
+export function connectChromeRetirementRecovery(chrome, settings, acknowledge = false) {
+  if(typeof acknowledge !== "boolean")throw new Error("Recovery setup invalid");
   // Validate/copy trusted settings before constructing the storage adapter.
   const config=Object.freeze({...settings});
-  const retirement=createChromeRetirementPorts(chrome,
+  const nativePorts=createChromeRetirementPorts(chrome,
     {nativeHost:config.nativeHost,identity:config.identity});
+  let confirmed=null;
+  const retirement={confirm:async request=>{
+    const proof=await nativePorts.confirm(request);
+    confirmed={...proof};return proof;
+  }};
   // Reuse the ONE canonical state/queue owner. Ordinary actions have no native,
   // cookie-install, alarm-scheduling or resume capabilities in this composition.
   const privateStorage=Promise.resolve().then(()=>
@@ -47,7 +53,23 @@ export function connectChromeRetirementRecovery(chrome, settings) {
   // Do not export the full controller to another owner of the same state.
   const controls=Object.freeze({
     reviewPendingRetirement:controller.reviewPendingRetirement,
-    retirePending:controller.retirePending,
+    retirePending:async review=>{
+      const result=await controller.retirePending(review);
+      if(!acknowledge || !same(result,
+        {mode:"retired_paused",localPauseSaved:true,sessionReady:false}))return result;
+      try {
+        // Browser commit and exact read-back precede durable LOCAL acknowledgement.
+        // No page message selects proof/paths. A new worker has no confirmed proof
+        // and cannot synthesize an acknowledgement from generic paused state.
+        if(!confirmed || !same(await load(),{version:1,identity:config.identity,
+          paused:true,phase:"clean",nextAt:0}))throw new Error("Unconfirmed pause");
+        const response=await chrome.runtime.sendNativeMessage(config.nativeHost,
+          {version:1,action:"acknowledge-retirement",...confirmed});
+        if(!same(response,{version:1,ok:true,mode:"retired_paused",acknowledged:true}))
+          throw new Error("Unconfirmed acknowledgement");
+        return result;
+      } catch {return {mode:"retirement_refused"};}
+    },
   });
   connectRetirementWorker(chrome,controls);
 }

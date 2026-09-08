@@ -196,6 +196,16 @@ starts a browser, acknowledges browser state to the local launcher or releases
 the guard. A supervised temporary handoff, durable browser acknowledgement,
 safe registration restoration and real-browser acceptance are still required.
 
+The [internal guarded host handoff](docs/browser-device-resume.md#guarded-host-handoff-and-paused-acknowledgement-internal-candidate)
+now preserves exact original registration evidence and switches only the selected
+native host under managed-launcher ownership. A handoff-bound wrapper can record
+a browser paused acknowledgement after exact read-back; ordinary wrappers cannot.
+Bind live work to the owner process start identity as well as locks, including
+inherited-lock process-loss cases. Allow read-only lost-reply confirmation and
+explicit acknowledged host restoration, always retaining the launch guard.
+The callback is not yet a browser supervisor: actual Chromium launch/replacement,
+bounded shutdown, guard-release review and physical acceptance remain gates.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

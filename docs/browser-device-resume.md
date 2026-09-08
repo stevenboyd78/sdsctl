@@ -560,12 +560,13 @@ automatic retry. A later worker remains paused and cannot use the previous
 volatile page consent.
 
 **Preparation and a successful page reply do not release the maintenance guard.**
-No dedicated host registration is changed, no browser or service is launched,
-and no durable browser-acknowledgement receipt is produced by this candidate.
+Preparation changes no dedicated host registration, launches no browser or
+service, and produces no durable browser-acknowledgement receipt itself.
 Likewise, Chromium exit status alone is not proof of saved browser state. Exact
 temporary registration, supervised launch, process-loss handling, durable
 acknowledgement verification and safely restoring the original registration
-remain required before an end-to-end recovery procedure can be deployed.
+are handled by the separate handoff boundary below or remain required before
+an end-to-end recovery procedure can be deployed.
 
 Tests exercise generated page and worker modules joined to the generated native
 executable, native framing/supervision, private archives and SQLite. Additional
@@ -574,6 +575,92 @@ cookie/storage failures, changed intent and lost acknowledgements. DOM, browser
 storage and cookie APIs in these tests are controlled fixtures. They do not
 prove actual Chromium loading/replacing the extension, physical Pi display
 behavior, server TLS, Firefox/WPE compatibility or production acceptance.
+
+## Guarded host handoff and paused acknowledgement: internal candidate
+
+`browser_device_handoff.py` provides an internal local handoff boundary, not a CLI
+or browser launcher. Preparing a recovery bundle with a separately selected
+handoff directory enables its additional paused-acknowledgement capability.
+Normal startup bundles and confirmation bundles without that selection cannot
+write handoff acknowledgements. All paths and the native maintenance operation
+stay fixed by trusted local code; a page cannot select them.
+
+Activation requires exact current normal/recovery bundles, the retained
+maintenance guard, confirmed native evidence, a stopped dedicated browser and a
+new private handoff directory outside the other selected directories. The local
+owner holds the managed-launcher lock and shared native-profile ownership through
+the callback. A separate empty owner lock and the original owner's Linux PID and
+process start ticks identify the live handoff. An on-disk active record or a
+fork-inherited lock alone does not make a dead supervisor live. This is advisory
+coordination for participating code, not protection from malicious same-account
+or root processes.
+
+Before changing the host, activation writes and synchronizes the exact original
+registration, native-host manifest, guard and handoff operation. It records the
+switch before unlinking the original host and exclusively writing the canonical
+recovery host. A ready marker follows the synchronized replacement. Only the
+single native-host manifest changes: the normal registration receipt, original
+bundle, credentials, native archive and opaque browser storage are preserved.
+The native-host name is unchanged, so the authentication host is replaced rather
+than left reachable alongside a second recovery host. A partial/missing host
+blocks progress; no stale lock or guard is removed to work around it.
+
+The trusted callback is the future browser-supervisor boundary. Activation does
+not itself launch a browser, run an arbitrary page-supplied command, install or
+stop a service, or change server permissions. Returning zero, `True`, a success
+string or a clean browser exit is **not** acknowledgement. The browser must be
+stopped again before activation can confirm the final result. If it is still
+running, preserve its Singleton markers and the guarded handoff for review.
+
+During a live handoff, the selected native wrapper can confirm the exact native
+maintenance evidence and accept `acknowledge-retirement`. That acknowledgement
+contains only the exact installation identity, browser intent, retirement
+fingerprint, stopped mode and native revision. The runner rejects extra fields,
+changed proof, ordinary authentication/resume actions, stale owner identity,
+missing ownership or changed registration/evidence. Native confirmation and
+acknowledgement retain the existing ten-second process supervisor. Receipt
+writes also serialize on the handoff directory; no existing or partial receipt
+is overwritten.
+
+The generated worker first completes the existing explicit page confirmation,
+cookie cleanup and clean-but-paused browser write/read-back. In a handoff bundle
+it performs a further exact paused-state read, then sends the proof already
+confirmed by its native port. A fresh worker cannot manufacture an acknowledgement
+from a generic paused state or reuse the previous volatile consent. Only a
+verified native acknowledgement produces page success. A lost storage write
+leaves no acknowledgement; a lost native reply may leave a valid receipt and must
+not trigger automatic replay.
+
+The private acknowledgement binds the exact handoff record—including the
+original owner, bundle/guard hashes and operation—to the native after-state. It
+states that the trusted browser worker saved pause and has no ready session.
+**This is a trusted-extension attestation, not independent native inspection of
+Chromium's internal databases, a signature, or server authorization.** Same-account
+and root code remain trusted. The native boundary never reads or repairs opaque
+browser storage.
+
+After process/reply loss, exact read-only confirmation requires the browser to
+be stopped, reacquires launcher/profile coordination, and checks the guarded
+registration, current native evidence and complete acknowledgement. No switch,
+browser write or acknowledgement is replayed. An optional explicit restoration
+then journals the exact acknowledgement before replacing only the temporary host
+with its canonical original manifest. A final restoration marker allows
+read-only confirmation of a completed but lost reply. Interrupted restoration
+is retained for review, not automatically rolled back or repeated.
+
+**Even successful restoration leaves the maintenance guard in place.** There is
+no automatic login, native error reset, guard release or resume grant. A real
+Chromium supervisor still needs reviewed executable/arguments, bounded lifetime
+and shutdown, canonical extension activation checks and isolated browser
+qualification before physical deployment. This callback alone does not supervise
+an arbitrary process tree; callers must not substitute an unmanaged launcher.
+
+Tests exercise real generated native executables, Linux locks, PID/start identity,
+private files and SQLite; kill local test owners before/after switching and ACK,
+including a child deliberately retaining inherited locks; and join generated
+page/worker modules through controlled browser APIs to the real native endpoint.
+Failures preserve evidence and guards. These are not real Chromium, Firefox/WPE,
+Home Assistant or physical Pi acceptance, and production services are unchanged.
 
 ## Verified server evidence and exact-generation sessions
 

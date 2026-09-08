@@ -18,7 +18,14 @@ function fixture() {
       onMessage:{addListener:fn=>f.listeners.push(fn)},
       onStartup:{addListener:()=>assert.fail("startup listener")},
       onInstalled:{addListener:()=>assert.fail("installation listener")},
-      sendNativeMessage:async(host,body)=>{record("native",{host,body});return {version:1,ok:true,evidence:{...proof}};}},
+      sendNativeMessage:async(host,body)=>{
+        record("native",{host,body});
+        if(body.action==="acknowledge-retirement") {
+          if(f.failure==="lost-ack")throw Error("private failure");
+          return {version:1,ok:true,mode:"retired_paused",acknowledged:f.failure!=="bad-ack"};
+        }
+        return {version:1,ok:true,evidence:{...proof}};
+      }},
     storage:{local:{
       setAccessLevel:async options=>record("access",options),
       get:async requested=>{record("load",requested);assert.equal(requested,key);return {[key]:structuredClone(f.state)};},
@@ -36,7 +43,8 @@ function fixture() {
   };
   f.sender={id,url:f.chrome.runtime.getURL("recovery.html"),frameId:0,
     documentLifecycle:"active",documentId:"doc-1",tab:{id:1,incognito:false}};
-  f.start=()=>{f.listeners=[];assert.equal(connectChromeRetirementRecovery(f.chrome,config),undefined);};
+  f.start=(acknowledge=false)=>{f.listeners=[];
+    assert.equal(connectChromeRetirementRecovery(f.chrome,config,acknowledge),undefined);};
   f.send=async(message,sender=f.sender)=>{
     const replies=[];assert.equal(f.listeners.length,1);
     const waiting=f.listeners[0](message,sender,r=>replies.push(r));
@@ -116,3 +124,26 @@ test("newer document and worker do not inherit a consent ticket",async()=>{
   f.start();await settle();assert.equal(await f.resolve(r.ticket),undefined);
   assert.deepEqual(f.state,pending);assert(!f.calls.some(c=>c[0]==="save"));
 });
+
+test("explicit handoff records native ACK only after exact browser read-back",async()=>{
+  const f=fixture();f.start(true);const r=await f.review();
+  assert.deepEqual(await f.resolve(r.ticket),{mode:"retired_paused"});
+  assert.deepEqual(f.state,paused);
+  const calls=f.calls.filter(c=>c[0]==="native");assert.equal(calls.length,3);
+  assert.deepEqual(calls[2][1],{host:config.nativeHost,
+    body:{version:1,action:"acknowledge-retirement",...proof}});
+  const actions=f.calls.map(c=>c[0]);
+  assert.deepEqual(actions.slice(-4),["save","load","load","native"]);
+  f.calls=[];f.start(true);await settle();assert.equal((await f.review()).mode,"retirement_refused");
+  assert(!f.calls.some(c=>c[0]==="native"));
+});
+for(const failure of ["save","lost-save","incorrect-save","readback","lost-ack","bad-ack"]) {
+  test("handoff acknowledgement fails closed without automatic replay: "+failure,async()=>{
+    const f=fixture();f.start(true);const r=await f.review();f.failure=failure;
+    assert.notEqual((await f.resolve(r.ticket))?.mode,"retired_paused");
+    const calls=f.calls.filter(c=>c[0]==="native"&&c[1].body.action==="acknowledge-retirement");
+    assert.equal(calls.length,["lost-ack","bad-ack"].includes(failure)?1:0);
+    const count=f.calls.length;await f.resolve(r.ticket);await f.review();
+    assert.equal(f.calls.length,count);assert.equal(f.state.paused,true);
+  });
+}

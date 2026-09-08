@@ -28,6 +28,7 @@ from .browser_device_bundle import (
 from .browser_device_native import _private_read, load_browser_native_configuration
 from .browser_device_profile import _platform
 from .browser_device_registration import MAINTENANCE_MARKER, _matches
+from .browser_device_resume_maintenance import BrowserResumeRetirementEvidence
 from .browser_device_resume_workflow import BrowserResumeWorkflow
 from .browser_device_startup import _launch_lock
 from .browser_device_store import BrowserDeviceStore
@@ -47,9 +48,11 @@ class BrowserRetirementBundleError(RuntimeError):
 
 def _canonical(
     root: Path, session: BrowserResumeWorkflow, *, operation_id: str, browser_intent: str,
+    handoff: Path | None = None, proof: BrowserResumeRetirementEvidence | None = None,
 ) -> tuple[BrowserExtensionIdentity, dict[str, bytes], bytes]:
-    """Caller holds existing managed launcher lock. No generic guard bypass."""
-    proof = session._confirm(operation_id, browser_intent)
+    """Caller owns launcher; handoff callers separately verify guard/registration."""
+    if proof is None:
+        proof = session._confirm(operation_id, browser_intent)
     key = browser_extension_identity(session._registration["public_key"])
     config = load_browser_native_configuration(session._profile)
     python = Path(sys.executable)
@@ -78,7 +81,8 @@ def _canonical(
         "extension/worker.mjs": (
             "import {connectChromeRetirementRecovery} "
             "from './browser_device_retirement_startup.mjs';\n"
-            f"connectChromeRetirementRecovery(chrome, {settings});\n"
+            f"connectChromeRetirementRecovery(chrome, {settings}"
+            + (", true" if handoff is not None else "") + ");\n"
         ).encode("ascii"),
         "extension/recovery.mjs": (
             "import {connectRetirementPage} from './browser_device_retirement_ui.mjs';\n"
@@ -129,7 +133,8 @@ def _canonical(
             "    os.fdopen(os.dup(1), 'wb', buffering=0),\n"
             f"    expected_identity={config.identity!r},\n"
             f"    retirement=BrowserRetirementSelection(Path({str(session._archives)!r}),"
-            f"{operation_id!r}),\n))\n"
+            f"{operation_id!r}"
+            + (f", Path({str(handoff)!r})" if handoff is not None else "") + "),\n))\n"
         ).encode(),
         NATIVE_HOST + ".json": _json({
             # Deliberately the SAME host name: a later guarded handoff must replace
@@ -141,6 +146,7 @@ def _canonical(
     })
     receipt = _json({
         "version": 1, "experimental": True, "operation": "prepare-retirement-bundle",
+        **({"handoff": str(handoff)} if handoff is not None else {}),
         "targets": session._targets, "destination": str(root),
         "operation_id": operation_id, "browser_intent": browser_intent,
         "evidence": asdict(proof), "extension_id": key.extension_id,
@@ -166,27 +172,28 @@ def _validate(root: Path, artifacts: dict[str, bytes], receipt: bytes) -> None:
 
 def prepare_browser_retirement_bundle(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
-    archives: Path, operation_id: str, browser_intent: str,
+    archives: Path, operation_id: str, browser_intent: str, handoff: Path | None = None,
 ) -> BrowserExtensionIdentity:
     """Only a new inert output. A prepared bundle is NOT a launch or browser ACK."""
     return _prepare_or_inspect(root, directory=directory, profile=profile, bundle=bundle,
         public_key=public_key, archives=archives, operation_id=operation_id,
-        browser_intent=browser_intent, create=True)
+        browser_intent=browser_intent, create=True, handoff=handoff)
 
 
 def inspect_browser_retirement_bundle(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
-    archives: Path, operation_id: str, browser_intent: str,
+    archives: Path, operation_id: str, browser_intent: str, handoff: Path | None = None,
 ) -> BrowserExtensionIdentity:
     """Read-only exact reconstruction from current runtime and committed evidence."""
     return _prepare_or_inspect(root, directory=directory, profile=profile, bundle=bundle,
         public_key=public_key, archives=archives, operation_id=operation_id,
-        browser_intent=browser_intent, create=False)
+        browser_intent=browser_intent, create=False, handoff=handoff)
 
 
 def _prepare_or_inspect(
     root: Path, *, directory: Path, profile: Path, bundle: Path, public_key: Path,
     archives: Path, operation_id: str, browser_intent: str, create: bool,
+    handoff: Path | None = None,
 ) -> BrowserExtensionIdentity:
     try:
         _platform()
@@ -198,16 +205,22 @@ def _prepare_or_inspect(
             raise ValueError()
         session = BrowserResumeWorkflow(directory, profile=profile, bundle=bundle,
                                         public_key=public_key, archives=archives)
+        if handoff is not None:
+            BrowserDeviceStore(handoff)._check(database=False)
+            if (handoff.resolve() != handoff or any(
+                    handoff == p or handoff.is_relative_to(p) or p.is_relative_to(handoff)
+                    for p in (root, directory, profile, bundle, archives))):
+                raise ValueError()
         with _launch_lock(directory, create=False):
             key, artifacts, receipt = _canonical(root, session, operation_id=operation_id,
-                                                 browser_intent=browser_intent)
+                                                 browser_intent=browser_intent, handoff=handoff)
             if create:
                 _write_bundle(root, artifacts, receipt)
             _validate(root, artifacts, receipt)
             # Slow writes, changed native evidence or guard replacement must not
             # turn an old preparation snapshot into a current successful result.
-            if _canonical(root, session, operation_id=operation_id,
-                          browser_intent=browser_intent) != (key, artifacts, receipt):
+            if _canonical(root, session, operation_id=operation_id, browser_intent=browser_intent,
+                          handoff=handoff) != (key, artifacts, receipt):
                 raise ValueError()
             return key
     except Exception:

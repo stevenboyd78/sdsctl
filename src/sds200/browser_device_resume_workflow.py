@@ -96,10 +96,13 @@ class BrowserResumeWorkflow:
             raise BrowserResumeWorkflowError() from None
 
     def _stopped_binding(self) -> list[list[int]]:
-        if self._root.resolve() != self._root or any(
+        return self._browser_binding(stopped=True)
+
+    def _browser_binding(self, *, stopped: bool) -> list[list[int]]:
+        if self._root.resolve() != self._root or (stopped and any(
             (self._root / name).exists() or (self._root / name).is_symlink()
             for name in ("SingletonLock", "SingletonSocket", "SingletonCookie")
-        ):
+        )):
             raise ValueError()
         directory, lock = self._root.lstat(), (self._root / _LOCK).lstat()
         if (not stat.S_ISDIR(directory.st_mode) or directory.st_uid != os.geteuid()
@@ -198,6 +201,19 @@ class BrowserResumeWorkflow:
 
     def _confirm(self, operation_id: str, intent: str, *, expected: bytes | None = None,
                  ) -> BrowserResumeRetirementEvidence:
+        registered = _inspect_registration_files(self._root, **self._registration)
+        proof = self._confirm_guard(operation_id, intent, expected=expected, stopped=True)
+        if registered.identity != proof.identity:
+            raise ValueError()
+        return proof
+
+    def _confirm_guard(self, operation_id: str, intent: str, *, stopped: bool,
+                       expected: bytes | None = None) -> BrowserResumeRetirementEvidence:
+        """Guard/native evidence ONLY; caller must validate exact host registration.
+
+        Running access is internal to a fixed handoff with independently checked
+        launcher ownership. It is not a public startup/maintenance override.
+        """
         if not _hex(operation_id) or not _hex(intent):
             raise ValueError()
         raw = _private_read(self._root, MAINTENANCE_MARKER, _MARKER_BYTES)
@@ -211,16 +227,14 @@ class BrowserResumeWorkflow:
                 or (expected is not None and raw != expected)
                 or data["targets"] != self._targets or data["operation_id"] != operation_id
                 or data["intent"] != intent
-                or _encoded(data["browser_binding"]) != _encoded(self._stopped_binding())
+                or _encoded(data["browser_binding"]) != _encoded(
+                    self._browser_binding(stopped=stopped))
                 or not all(_timestamp(data[key]) for key in
                            ("created_at", "expires_at", "approved_at"))
                 or not data["created_at"] <= data["approved_at"] < data["expires_at"]
                 or not _integer(data["native_revision"])
                 or type(data["approvals"]) is not int or not 0 <= data["approvals"] <= 128
                 or type(data["pending"]) is not int or data["pending"] not in (0, 1)):
-            raise ValueError()
-        registered = _inspect_registration_files(self._root, **self._registration)
-        if registered.identity != data["identity"]:
             raise ValueError()
         boundary = BrowserResumeBoundary(self._profile, archives=self._archives, clock=self._clock)
         proof = boundary.confirm(operation_id=operation_id, browser_intent=intent)
@@ -229,7 +243,8 @@ class BrowserResumeWorkflow:
         record = json.loads(_private_read(self._archives / operation_id, "review.json", 16384),
                             object_pairs_hook=_object)
         native = record["native"]
-        if (data["kind"] != record["kind"] or data["native_mode"] != proof.mode
+        if (data["identity"] != proof.identity or data["kind"] != record["kind"]
+                or data["native_mode"] != proof.mode
                 or data["native_revision"] + 1 != proof.revision
                 or data["approvals"] != native["approvals"]
                 or data["pending"] != native.get("pending", 0)
@@ -237,7 +252,7 @@ class BrowserResumeWorkflow:
                 or data["expires_at"] != native["expires_at"]):
             raise ValueError()
         _matches(self._root / MAINTENANCE_MARKER, raw)
-        if data["browser_binding"] != self._stopped_binding():
+        if data["browser_binding"] != self._browser_binding(stopped=stopped):
             raise ValueError()
         return proof
 

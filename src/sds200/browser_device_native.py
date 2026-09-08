@@ -31,6 +31,7 @@ from urllib.parse import urlsplit
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
     BrowserResumeRequest,
+    BrowserRetirementAcknowledgement,
     BrowserRetirementRequest,
     read_browser_device_request,
 )
@@ -50,14 +51,15 @@ _TOTAL_SECONDS = 10
 
 @dataclass(frozen=True, slots=True)
 class BrowserRetirementSelection:
-    """Trusted wrapper-only selection; enables confirmation, never other actions.
+    """Trusted wrapper-only selection; never enables authentication/resume.
 
-    No generated wrapper provisions this internal candidate yet. Neither field
-    may be populated from native messages or browser-controlled storage.
+    Only an explicit handoff also enables a durable paused acknowledgement.
+    No field may come from native messages or browser-controlled storage.
     """
 
     archives: Path = field(repr=False)
     operation_id: str = field(repr=False)
+    handoff: Path | None = field(default=None, repr=False)
 
 
 def _private_read(root: Path, name: str, maximum: int) -> bytes:
@@ -277,18 +279,28 @@ def _native_request(
                 request = read_browser_device_request(source)
                 if request is None:
                     raise ValueError()
-                if retirement is not None or isinstance(request, BrowserRetirementRequest):
-                    # Separate, confirmation-only endpoint. It cannot execute a
-                    # reconstructed review or fall through to authentication.
+                if retirement is not None or isinstance(
+                        request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement)):
+                    # Separate recovery endpoint. It can confirm evidence and,
+                    # only with a live handoff, acknowledge a saved local pause.
+                    # It cannot execute a review or fall through to authentication.
                     if (not isinstance(retirement, BrowserRetirementSelection)
-                            or not isinstance(request, BrowserRetirementRequest)
+                            or not isinstance(request, (BrowserRetirementRequest,
+                                                        BrowserRetirementAcknowledgement))
                             or expected_identity is None or request.identity != expected_identity):
                         raise ValueError()
-                    from .browser_device_resume_boundary import BrowserResumeBoundary
+                    if retirement.handoff is not None:
+                        from .browser_device_handoff import handoff_native_request
 
-                    proof = BrowserResumeBoundary(root, archives=retirement.archives).confirm(
-                        operation_id=retirement.operation_id, browser_intent=request.intent)
-                    document = {"version": 1, "ok": True, "evidence": asdict(proof)}
+                        document = handoff_native_request(root, retirement, request)
+                    else:
+                        if not isinstance(request, BrowserRetirementRequest):
+                            raise ValueError()
+                        from .browser_device_resume_boundary import BrowserResumeBoundary
+
+                        proof = BrowserResumeBoundary(root, archives=retirement.archives).confirm(
+                            operation_id=retirement.operation_id, browser_intent=request.intent)
+                        document = {"version": 1, "ok": True, "evidence": asdict(proof)}
                 elif isinstance(request, BrowserResumeRequest):
                     recovery = BrowserDeviceRecovery(
                         root / "recovery.sqlite", configuration.identity)

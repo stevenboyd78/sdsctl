@@ -8,6 +8,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add an internal guarded recovery-host handoff with synchronized exact backups,
+  a live owner bound to process identity and launcher/profile locks, and an opt-in
+  native acknowledgement written only after browser paused-state read-back.
+  Confirm exact receipts after lost replies; restore only the original host after
+  acknowledgement while retaining the maintenance guard. Cover interrupted
+  switches/restorations, process death and inherited locks. No browser launcher,
+  service change, automatic guard release, login or production deployment is enabled.
 - Add internal recovery-only bundle preparation for one confirmed stopped-browser
   maintenance operation. Preserve the extension identity, validate the exact
   retained guard and canonical files, and stage only a fixed confirmation native
