@@ -132,32 +132,48 @@ def _browser_directory(bundle: Path, extension_origin: str) -> Path:
     return roots[0]
 
 
+def normal_worker_paused_only(
+    configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
+) -> bool:
+    """Revalidate the live normal owner for each request, not only worker startup.
+
+    A released installation is bound to unchanged paused evidence. It permits
+    read-only status, not a new revision, credential operation or authentication.
+    Same-account/root callers remain trusted; this is not an OS security boundary.
+    """
+    from .browser_device_guard_release import _check_worker_guard_release, has_guard_release
+    from .browser_device_handoff import _busy, _lock_file
+    from .browser_device_registration import MAINTENANCE_MARKER, _inspect_registration_files
+
+    if any(value is not None for value in (
+            selection.directory, selection.normal_bundle, selection.intent)):
+        raise ValueError()
+    directory = _browser_directory(selection.bundle, configuration.extension_origin)
+    lock = directory / ".sdsctl-device-launch.lock"
+    fd, binding = _lock_file(lock)
+    os.close(fd)
+    _busy(lock, binding)
+    paused_only = ((directory / MAINTENANCE_MARKER).exists()
+        or (directory / MAINTENANCE_MARKER).is_symlink() or has_guard_release(directory))
+    if paused_only:
+        _check_worker_guard_release(directory, bundle=selection.bundle,
+            profile=configuration.root, public_key=selection.public_key)
+    _inspect_registration_files(directory, bundle=selection.bundle,
+        profile=configuration.root, public_key=selection.public_key)
+    _busy(lock, binding)
+    return paused_only
+
+
 def worker_context(
     configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
     retirement: BrowserRetirementSelection | None,
 ) -> dict[str, object]:
     """Read-only canonical validation; no claim, status tick, readiness ACK or login."""
-    from .browser_device_guard_release import _check_worker_guard_release, has_guard_release
-    from .browser_device_handoff import _busy, _lock_file, handoff_worker_context
-    from .browser_device_registration import MAINTENANCE_MARKER, _inspect_registration_files
+    from .browser_device_handoff import handoff_worker_context
     from .browser_device_retirement_bundle import inspect_browser_retirement_bundle
 
     if retirement is None:
-        if any(value is not None for value in (
-                selection.directory, selection.normal_bundle, selection.intent)):
-            raise ValueError()
-        directory = _browser_directory(selection.bundle, configuration.extension_origin)
-        lock = directory / ".sdsctl-device-launch.lock"
-        fd, binding = _lock_file(lock)
-        os.close(fd)
-        _busy(lock, binding)
-        if ((directory / MAINTENANCE_MARKER).exists()
-                or (directory / MAINTENANCE_MARKER).is_symlink() or has_guard_release(directory)):
-            _check_worker_guard_release(directory, bundle=selection.bundle,
-                profile=configuration.root, public_key=selection.public_key)
-        _inspect_registration_files(directory, bundle=selection.bundle,
-            profile=configuration.root, public_key=selection.public_key)
-        _busy(lock, binding)
+        normal_worker_paused_only(configuration, selection)
         role, acknowledge, launch = "normal", False, None
     else:
         if (selection.directory is None or selection.normal_bundle is None

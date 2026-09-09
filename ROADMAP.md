@@ -268,6 +268,17 @@ session, cross-release migration, credential replacement and broader physical/
 outage acceptance remain gates. Next, review a separate fresh-permission
 continuation without inferring sign-in authority from paused recovery.
 
+That continuation review found and reproduced a native request-boundary gap:
+new resume preparation could invalidate a paused-only release's bound revision.
+The candidate now rechecks live-owner/registration authority for every normal
+worker request and restricts a released installation to read-only status. Its
+ordinary resume link cannot override this boundary. A fresh private candidate
+passed local regression tests and isolated small-Pi Chromium setup, recovery,
+two paused starts and a real UI resume-review refusal with no server connection.
+This is containment, not post-maintenance sign-in support; a separate
+administrator continuation remains required. The earlier genuine interruption
+and physical results belong to their recorded worker build, not this new change.
+
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
 changes separate from isolated synthetic-credential tests. See the

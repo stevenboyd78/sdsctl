@@ -166,6 +166,67 @@ All owned test processes stopped and all evidence was retained. The small Pi's
 existing TUI remained active with its original process and zero restarts.
 Home Assistant, the HDMI Pi, real credentials and port mappings were unchanged.
 
+## Subsequent request-boundary review
+
+The next review found a gap beyond the completed paused-start checkpoint:
+the normal native wrapper did not revalidate the live owner/release before each
+ordinary request. In a new local test fixture, a resume preparation following a
+paused-only release was accepted, advanced the native ledger and invalidated the
+release proof. The regression failed with all three observations: request not
+refused, protected state changed, and release no longer valid. No retained Pi
+profile was used for this reproduction.
+
+The candidate now checks canonical live-owner authority on every normal worker
+request. A paused-only release permits only read-only status and denies resume,
+authentication, setup claim and suspension before dispatch. Read-only inspection
+also avoids clock-correction writes. This preserves the completed paused record;
+an earlier clock that prevents reconciliation confirmation still causes a
+read-only refusal rather than a repair or a relaxed evidence check. This change
+does **not** implement later online sign-in. The normal resume link currently
+receives a refusal on these released installations. A separately designed
+administrator continuation, credential-writer coordination and presentation are
+still required before offering post-maintenance sign-in.
+
+This change modifies native runtime bytes and the derived worker build identity.
+All Pi/Chromium results above remain evidence for their exact earlier candidate,
+not acceptance of the new request-boundary fix. A **new isolated small-Pi case**
+then qualified this separately packaged candidate:
+
+- Wheel SHA-256: `2479a6626b795de952f3c0dfa828348e0929ce39d56765b97dca1f72c4ba2cf8`.
+- Worker build: `186a89399c06f433d535e9fcc727de3a019ba618725fd9102acd78bea3820c23`.
+- All 289 installed package files matched the wheel before creating any state.
+  The private artifact retains scalar version 0.29.5; it is not the public wheel.
+- Real Chromium 151.0.7922.173 completed normal first-run setup after 55 seconds
+  idle. A fictional extension then seeded pending state; this is a synthetic
+  recovery rehearsal, not a new genuine response-loss qualification.
+- Canonical supervised recovery reached verified-ready, idled 35 seconds,
+  accepted one review and one confirmation, acknowledged the pause and exited
+  cleanly. The canonical normal host was restored, then a fresh local paused-only
+  release was committed while retaining the guard.
+- Two ordinary starts remained paused for 30 seconds each with no manual reload.
+  On the second start, one trusted keyboard activation of the normal resume
+  review was visibly refused. No connection to the fictional server occurred.
+- A separate GET-only extension read back clean paused state, no pending intent,
+  no session cookie and no recovery alarm. Host restoration, release confirmation
+  and normal-start eligibility still validated after that observer. The observer
+  used one fixture-only navigation reload; the ordinary starts did not.
+- Protected native, bundle and archive bytes remained unchanged. The virtual
+  screenshots were reviewed. All owned test processes exited; the existing desk
+  TUI retained its process with zero restarts. All old and new evidence remains
+  preserved; Home Assistant, HDMI Pi, real credentials and ports were unchanged.
+
+Local checks passed 170 guard/worker/bundle tests, 96 native/resume/transport tests,
+599 JavaScript tests and 43 documentation/release-contract tests. Ten private
+keyboard-sequence tests passed. Ruff, mypy across 217 source files, all 81 Markdown
+checks and whitespace checks passed. This is targeted validation, not a new full
+suite or coverage claim. The initial regression failures and an incorrect global
+clock-rollback expectation were retained with the corrected passing reports.
+
+This result does not qualify genuine response loss, ordinary server sign-in or
+physical layout on the new build, nor any post-maintenance online continuation.
+Do not rebuild or relaunch a populated preserved profile to manufacture that
+result.
+
 ## CI evidence and remaining review gates
 
 At the exact head `fe7b3e98d3d9f03f6b0ba71095f8250ae968a6ac`, all 27 executed
@@ -178,16 +239,18 @@ was 86.57–86.59%, above the unchanged 86% floor. Exact-head CodeQL analyses fo
 Python, JavaScript/TypeScript and Actions reported zero findings and no analysis
 errors; the repository had no open code-scanning alerts when checked.
 
-Those checks belong to that exact head, not to any later documentation commit.
+Those checks belong to that exact head, not to a later documentation or runtime commit.
 See [the CI run](https://github.com/stevenboyd78/sdsctl/actions/runs/34324509915)
 and [CodeQL run](https://github.com/stevenboyd78/sdsctl/actions/runs/34324507532).
-This checkpoint adds no runtime changes, release tag, production enrollment,
-credential operation, port exposure or Home Assistant catalog change.
+That earlier documentation checkpoint added no runtime changes. The subsequent
+request-boundary review above does change native runtime behavior; its validation
+must be recorded separately. Neither checkpoint adds a release tag, production
+enrollment, credential operation, port exposure or Home Assistant catalog change.
 
 The physical recovery/paused-restart evidence gap is closed **for the earlier
 same-build seeded checkpoint**. The new virtual-display qualification additionally
-proves ordinary interrupted resume and its recovery back to paused for this
-candidate. Neither checkpoint qualifies:
+proves ordinary interrupted resume and its recovery back to paused for its
+recorded candidate. Neither checkpoint qualifies:
 
 - Later server-authorized session establishment after paused maintenance, or
   revocation of a session whose response was lost.

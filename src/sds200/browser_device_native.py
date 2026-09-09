@@ -30,6 +30,8 @@ from urllib.parse import urlsplit
 
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
+    BrowserDeviceAction,
+    BrowserDeviceRequest,
     BrowserRecoveryLaunchRequest,
     BrowserResumeRequest,
     BrowserRetirementAcknowledgement,
@@ -48,7 +50,12 @@ from .browser_device_recovery import (
     parse_exchange_response,
 )
 from .browser_device_store import BrowserDeviceStore
-from .browser_device_worker import BrowserWorkerSelection, worker_context, worker_graph
+from .browser_device_worker import (
+    BrowserWorkerSelection,
+    normal_worker_paused_only,
+    worker_context,
+    worker_graph,
+)
 
 _TOTAL_SECONDS = 10
 
@@ -284,18 +291,33 @@ def _native_request(
                 request = read_browser_device_request(source)
                 if request is None:
                     raise ValueError()
+                paused_only = False
                 if worker is not None:
                     if (expected_identity is None or not isinstance(request,
                             (BrowserWorkerContextRequest, BrowserWorkerRequest))
                             or request.build != worker_graph()[0]):
                         raise ValueError()
                     if isinstance(request, BrowserWorkerRequest):
+                        if retirement is None:
+                            paused_only = normal_worker_paused_only(configuration, worker)
                         request = request.request
                 elif isinstance(request, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
                     raise ValueError()
                 if isinstance(request, BrowserWorkerContextRequest):
                     assert worker is not None
                     document = worker_context(configuration, worker, retirement)
+                elif paused_only:
+                    if (not isinstance(request, BrowserDeviceRequest)
+                            or request.action is not BrowserDeviceAction.STATUS):
+                        raise ValueError()
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
+                    # Even a normal status tick may persist a clock correction.
+                    # Released paused evidence must remain byte-identical.
+                    status = recovery.inspect()
+                    if status.mode is not RecoveryMode.PAUSED:
+                        raise ValueError()
+                    document = _result_document(RecoveryResult(status))
                 elif retirement is not None or isinstance(
                         request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement,
                                   BrowserRecoveryLaunchRequest)):

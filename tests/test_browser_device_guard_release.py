@@ -16,7 +16,7 @@ from sds200 import browser_device_guard_release as release
 from sds200.browser_device_handoff import BrowserHandoffError
 from sds200.browser_device_launch import run_browser_recovery
 from sds200.browser_device_profile_access import BrowserProfileAccessError, browser_profile_access
-from sds200.browser_device_recovery import RecoveryMode
+from sds200.browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
 from sds200.browser_device_registration import MAINTENANCE_MARKER
 from sds200.browser_device_startup import BrowserStartupError, _launch_lock, check_browser_startup
 from tests.test_browser_device_bundle import profile as profile
@@ -451,3 +451,131 @@ def test_worker_context_requires_exact_release_even_with_running_browser(
     if change == "unlocked":
         with pytest.raises(ValueError):
             worker.worker_context(lab.configuration, selected, None)
+
+
+@pytest.mark.parametrize("action", ["prepare-resume", "review-resume", "commit-resume",
+                                    "authenticate", "suspend", "claim-browser"])
+def test_released_worker_refuses_new_resume_preparation_without_invalidating_release(
+        lab, completed, monkeypatch, action):
+    """A local paused-start receipt is not authority for a new native revision."""
+    import io
+    import json
+
+    from sds200 import browser_device_native as native
+    from sds200 import browser_device_resume as resume
+    from sds200 import browser_device_verification as verification
+    from sds200 import browser_device_worker as worker
+    from sds200.browser_device_store import BrowserDeviceRecord, BrowserDeviceState
+    from sds200.browser_device_verification import BrowserVerifiedRecord
+    from tests.test_browser_device_native import frame
+
+    attempt(completed)
+    root = lab.args["directory"]
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
+    calls = []
+
+    def verified(*_):
+        calls.append("server-verification")
+        return BrowserVerifiedRecord(lab.configuration.identity, BrowserDeviceRecord(
+            lab.configuration.device_id, 1, BrowserDeviceState.ACTIVE), True)
+
+    monkeypatch.setattr(resume, "verify_browser_device", verified)
+    monkeypatch.setattr(verification, "verify_browser_device", verified)
+    original_resume, original_handle = native._resume_request, BrowserDeviceRecovery.handle
+
+    def resume_request(*args):
+        calls.append("resume-dispatch")
+        return original_resume(*args)
+
+    def handle(*args):
+        calls.append("ordinary-mutating-dispatch")
+        return original_handle(*args)
+
+    monkeypatch.setattr(native, "_resume_request", resume_request)
+    monkeypatch.setattr(BrowserDeviceRecovery, "handle", handle)
+    with _launch_lock(root, create=False):
+        private(root / "SingletonLock", b"fictional running browser")
+        worker.worker_context(lab.configuration, selected, None)
+        before = state(lab, completed)
+        request = {"version": 1, "action": action}
+        if action in {"prepare-resume", "commit-resume"}:
+            request.update(intent="d" * 64, revision=lab.ledger.inspect().revision)
+            if action == "prepare-resume":
+                request["generation"] = 1
+            else:
+                request.update(ticket="f" * 64, expires_at=1000)
+        envelope = {"version": 1, "action": "worker-request", "build": worker.worker_graph()[0],
+                    "request": request}
+        destination = io.BytesIO()
+        result = native._native_request(lab.args["profile"], [lab.configuration.extension_origin],
+            io.BytesIO(frame(envelope)), destination, expected_identity=lab.configuration.identity,
+            worker=selected)
+        response = json.loads(destination.getvalue()[4:])
+        refused = response.get("ok") is False
+        unchanged = state(lab, completed) == before
+        try:
+            worker.worker_context(lab.configuration, selected, None)
+            release_valid = True
+        except Exception:
+            release_valid = False
+        # Only booleans in a failure; never print a returned private ticket.
+        assert result == 0 and (refused, unchanged, release_valid) == (True, True, True)
+        assert calls == []
+        assert state(lab, completed) == before
+        worker.worker_context(lab.configuration, selected, None)
+
+
+@pytest.mark.parametrize("rollback", ["none", "status", "release"])
+def test_released_worker_status_never_writes_evidence_on_clock_rollback(
+        lab, completed, monkeypatch, rollback):
+    import io
+    import json
+
+    from sds200 import browser_device_native as native
+    from sds200 import browser_device_worker as worker
+    from tests.test_browser_device_native import frame
+
+    attempt(completed)
+    root = lab.args["directory"]
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
+    if rollback == "release":
+        monkeypatch.setattr(BrowserDeviceRecovery, "_now", lambda _: 0)
+    elif rollback == "status":
+        # The wall clock can move after release validation but before status.
+        # Only this final native snapshot sees the rollback; the gate stays real.
+        monkeypatch.setattr(native, "BrowserDeviceRecovery", lambda path, identity:
+            BrowserDeviceRecovery(path, identity, clock=lambda: 0))
+    calls = []
+    original = BrowserDeviceRecovery.handle
+
+    def handle(*args):
+        calls.append("runtime-status-write-path")
+        return original(*args)
+
+    monkeypatch.setattr(BrowserDeviceRecovery, "handle", handle)
+    with _launch_lock(root, create=False):
+        private(root / "SingletonLock", b"fictional running browser")
+        before = state(lab, completed)
+        if rollback != "release":
+            worker.worker_context(lab.configuration, selected, None)
+        destination = io.BytesIO()
+        body = {"version": 1, "action": "worker-request", "build": worker.worker_graph()[0],
+                "request": {"version": 1, "action": "status"}}
+        assert native._native_request(lab.args["profile"], [lab.configuration.extension_origin],
+            io.BytesIO(frame(body)), destination, expected_identity=lab.configuration.identity,
+            worker=selected) == 0
+        response = json.loads(destination.getvalue()[4:])
+        if rollback == "release":
+            # Reconciliation confirmation deliberately refuses a clock older
+            # than its evidence. Do not relax that gate or repair the clock.
+            assert response == {"version": 1, "ok": False, "mode": "setup_error"}
+        else:
+            assert response["ok"] is True and response["mode"] == "paused"
+            assert response["revision"] == lab.ledger.inspect().revision
+        assert "session" not in response and not calls
+        assert state(lab, completed) == before
+        monkeypatch.undo()
+        monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
+        worker.worker_context(lab.configuration, selected, None)

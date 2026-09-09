@@ -845,6 +845,39 @@ launcher's lock. Removing just the guard or just the release database still
 blocks startup. Replacing the completion database or guard with an identical
 copy also fails its inode binding. No hot journal is recovered by inspection.
 
+Normal **native requests**, not just the initial worker-context handshake, now
+revalidate the live managed browser owner and its canonical registration. A
+released paused-only installation can request only read-only `status`. It cannot
+review, prepare or commit resume, authenticate, claim setup or apply a new suspend
+operation through that normal wrapper. Status uses ledger inspection rather than
+the runtime status tick, so even clock rollback cannot silently rewrite its
+bound paused evidence. Unknown or stale owners/guards fail before dispatch.
+Unguarded normal installations retain their ordinary reviewed resume path.
+If reconciliation cannot validate its recorded evidence because the current
+clock is earlier, the request remains refused without a repair. Once that gate
+has passed, a rollback during the final status snapshot is also read-only.
+
+This is an explicit restriction, not completed post-maintenance sign-in support.
+The current normal startup page's resume link does not grant an exception: its
+review is refused for a paused-only released installation before native or server
+changes. A separate administrator continuation and its user-facing presentation
+remain to be designed; do not remove the guard or replace credentials manually.
+
+The follow-up review reproduced why that restriction is necessary: the earlier
+normal wrapper checked its build envelope but did not repeat live-owner/release
+validation before ordinary request dispatch. A new resume preparation could
+advance the native revision and invalidate the paused release. A regression using
+real local retirement/release fixtures reproduced accepted preparation, changed
+ledger and failed release validation. The fix refuses that request without any
+verification callback or ledger change, and separately checks that a valid,
+unguarded owned installation can still review, prepare and commit fresh consent.
+Those are local fixture tests. A separately packaged candidate also passed a new
+isolated small-Pi Chromium run: normal first-run setup, synthetic pending-state
+recovery, two 30-second paused starts, one ordinary UI resume-review refusal,
+and clean paused readback. No fictional endpoint connection occurred, and native
+inputs/release evidence remained unchanged. See the exact build and limitations
+in [the acceptance record](browser-device-recovery-acceptance.md#subsequent-request-boundary-review).
+
 An empty, prepared, partial or inconsistent journal remains blocked and cannot
 be overwritten by another attempt. An interruption before commit does not become
 permission to launch. A commit error or lost reply can be **uncertain**: it may

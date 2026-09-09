@@ -301,24 +301,30 @@ def test_creation_never_resets_profile_or_overwrites(tmp_path, public_key, profi
     before = snapshot(profile)
     root = create(tmp_path, public_key, profile)
     assert snapshot(profile) == before
-    assert invoke(root, config.extension_origin)["mode"] == mode.value
+    # A generated normal host now requires its live managed browser owner on
+    # every request, not only on a separate worker-context call.
+    assert invoke(root, config.extension_origin)["mode"] == "setup_error"
+    assert recovery.inspect().mode is mode
+    assert snapshot(profile) == before
     saved = {p: snapshot(p) for p in (root, root / "extension", profile)}
     with pytest.raises(bundle.BrowserBundleError, match="already exists"):
         bundle.create_browser_bundle(root, profile=profile, public_key=public_key)
     assert {p: snapshot(p) for p in saved} == saved
 
 
-def test_launcher_isolated_quoting_and_exact_caller(tmp_path, public_key, profile):
+def test_launcher_isolated_quoting_exact_caller_and_missing_owner(tmp_path, public_key, profile):
     root = create(tmp_path, public_key, profile)
     config = native.load_browser_native_configuration(profile)
     shadow = tmp_path / "sds200"
     shadow.mkdir()
     (shadow / "__init__.py").write_text("raise RuntimeError('UNTRUSTED IMPORT')")
     env = {**os.environ, "PYTHONPATH": str(tmp_path), "PYTHONHOME": str(tmp_path)}
-    assert invoke(root, config.extension_origin, cwd=tmp_path, env=env)["mode"] == "active"
+    before = snapshot(profile)
+    assert invoke(root, config.extension_origin, cwd=tmp_path, env=env)["mode"] == "setup_error"
     assert invoke(root, "chrome-extension://" + "a" * 32 + "/")["ok"] is False
-    assert invoke(root, config.extension_origin, action="suspend")["mode"] == "paused"
-    assert invoke(root, config.extension_origin)["mode"] == "paused"
+    assert invoke(root, config.extension_origin, action="suspend")["mode"] == "setup_error"
+    assert invoke(root, config.extension_origin)["mode"] == "setup_error"
+    assert snapshot(profile) == before
 
 
 @pytest.mark.parametrize("action", ["status", "authenticate", "suspend", "claim-browser"])

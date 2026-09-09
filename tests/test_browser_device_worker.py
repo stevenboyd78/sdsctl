@@ -130,6 +130,108 @@ def test_context_without_browser_ancestor_is_refused(tmp_path, public_key, profi
     assert snapshot(profile) == before
 
 
+@pytest.mark.parametrize("action,mode", [("status", "active"), ("claim-browser", "active"),
+                                      ("suspend", "paused")])
+def test_owned_unguarded_worker_request_keeps_ordinary_behavior(inputs, monkeypatch, action, mode):
+    config = native.load_browser_native_configuration(inputs["profile"])
+    selected = worker.BrowserWorkerSelection(inputs["bundle"], inputs["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: inputs["root"])
+    request = envelope("worker-request", request={"version": 1, "action": action})
+    destination = io.BytesIO()
+    with _launch_lock(inputs["root"]):
+        assert native._native_request(inputs["profile"], [config.extension_origin],
+            io.BytesIO(frame(request)), destination, expected_identity=config.identity,
+            worker=selected) == 0
+    response = json.loads(destination.getvalue()[4:])
+    assert response["ok"] is True and response["mode"] == mode
+
+
+def test_owned_unguarded_worker_still_allows_fresh_review_prepare_commit(inputs, monkeypatch):
+    from sds200 import browser_device_resume as resume
+    from sds200 import browser_device_verification as verification
+    from sds200.browser_device_recovery import BrowserDeviceRecovery, ExchangeSession
+    from sds200.browser_device_store import BrowserDeviceRecord, BrowserDeviceState
+    from sds200.browser_device_verification import BrowserVerifiedRecord
+    from tests.test_browser_device_native import TOKEN
+
+    config = native.load_browser_native_configuration(inputs["profile"])
+    selected = worker.BrowserWorkerSelection(inputs["bundle"], inputs["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: inputs["root"])
+    ledger = BrowserDeviceRecovery(inputs["profile"] / "recovery.sqlite", config.identity)
+    ledger.claim_browser()
+    ledger.suspend()
+    record = BrowserDeviceRecord(config.device_id, 1, BrowserDeviceState.ACTIVE)
+    calls = []
+
+    def verified(configuration, expected=None):
+        assert configuration == config and expected in (None, record)
+        calls.append("verification")
+        return BrowserVerifiedRecord(config.identity, record, True)
+
+    def exchange(configuration, generation):
+        assert configuration == config and generation == 1
+        calls.append("session")
+        return ExchangeSession(TOKEN, 300)
+
+    monkeypatch.setattr(resume, "verify_browser_device", verified)
+    monkeypatch.setattr(verification, "verify_browser_device", verified)
+    monkeypatch.setattr(resume, "exchange_browser_device_at_generation", exchange)
+
+    def invoke(action, **fields):
+        destination = io.BytesIO()
+        request = envelope("worker-request", request={"version": 1, "action": action, **fields})
+        assert native._native_request(inputs["profile"], [config.extension_origin],
+            io.BytesIO(frame(request)), destination, expected_identity=config.identity,
+            worker=selected) == 0
+        return json.loads(destination.getvalue()[4:])
+
+    with _launch_lock(inputs["root"]):
+        review = invoke("review-resume")
+        assert review["ok"] is True and review["mode"] == "paused"
+        prepared = invoke("prepare-resume", intent="e" * 64,
+                          revision=review["revision"], generation=review["generation"])
+        assert prepared["ok"] is True
+        result = invoke("commit-resume", intent="e" * 64, **prepared["approval"])
+        ready = result.get("ok") is True and result.get("mode") == "active"
+        assert ready and calls == ["verification", "verification", "verification", "session"]
+        assert worker.worker_context(config, selected, None)["role"] == "normal"
+
+
+@pytest.mark.parametrize("change", ["no-owner", "new-guard", "wrong-bundle", "no-ancestor"])
+def test_request_rechecks_authority_after_successful_worker_context(inputs, monkeypatch, change):
+    from sds200.browser_device_registration import MAINTENANCE_MARKER
+
+    config = native.load_browser_native_configuration(inputs["profile"])
+    selected = worker.BrowserWorkerSelection(inputs["bundle"], inputs["public_key"])
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: inputs["root"])
+    lock = _launch_lock(inputs["root"])
+    lock.__enter__()
+    try:
+        assert worker.worker_context(config, selected, None)["role"] == "normal"
+        if change == "no-owner":
+            lock.__exit__(None, None, None)
+            lock = None
+        elif change == "new-guard":
+            (inputs["root"] / MAINTENANCE_MARKER).write_bytes(b"unconfirmed")
+        elif change == "wrong-bundle":
+            selected = worker.BrowserWorkerSelection(inputs["bundle"].parent, inputs["public_key"])
+        else:
+            def missing(*_):
+                raise ValueError()
+            monkeypatch.setattr(worker, "_browser_directory", missing)
+        before = snapshot(inputs["profile"])
+        destination = io.BytesIO()
+        request = envelope("worker-request", request={"version": 1, "action": "claim-browser"})
+        assert native._native_request(inputs["profile"], [config.extension_origin],
+            io.BytesIO(frame(request)), destination, expected_identity=config.identity,
+            worker=selected) == 0
+        assert json.loads(destination.getvalue()[4:]) == FAILURE
+        assert snapshot(inputs["profile"]) == before
+    finally:
+        if lock is not None:
+            lock.__exit__(None, None, None)
+
+
 @pytest.mark.parametrize("flat", [False, True])
 @pytest.mark.parametrize("space", [False, True])
 @pytest.mark.parametrize("page", ["setup.html", "startup.html"])
