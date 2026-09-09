@@ -431,9 +431,46 @@ journalctl -u sdsctl-display@CLIENT_ID.service -f
 ## 6. Recovery and credential changes
 
 An ordinary daemon or Home Assistant App restart is a temporary transport
-failure. The TUI first uses its bounded in-process reconnect sequence; if the
-process exits with status `75`, systemd waits 15 seconds and starts a fresh
-session. A fresh session begins from a new authoritative snapshot.
+failure. The TUI first uses its bounded in-process reconnect sequence.
+
+**Candidate behavior (not in published 0.29.4):** if a managed physical-console
+display cannot finish connecting, it keeps one boxed **Daemon disconnected**
+screen visible. The screen shows the configured remote target and a retry
+countdown; it does not display old scanner readings as live data or scroll a new
+error onto the console for each attempt. This also applies when the Pi boots
+before the daemon is available.
+
+The waiting screen checks the selected API connection 15 seconds after a failed
+attempt finishes, with only one probe in progress. It uses the existing TLS
+verification and client credential; it never falls back to another server or
+weakens authentication. Once that connection succeeds, normal startup repeats
+authorization checks and loads a fresh authoritative snapshot before restoring
+the dashboard. If the daemon disappears again during that handoff, the display
+returns to waiting. `Q` or `Ctrl+C` quits without requesting a service restart.
+Stopping the service also exits the waiting screen. An in-flight connection
+probe may take its configured timeout to drain; its late result cannot reopen
+the display.
+
+Waiting/retry/readiness events contain only fixed failure reasons, not credentials
+or private file paths. They remain in the bounded TUI log buffer and optional
+`--log-file`. When the local systemd journal socket is available, they are also
+sent directly to the journal without redirecting the TUI's terminal streams:
+
+```bash
+journalctl -u sdsctl-display@CLIENT_ID.service --since today
+journalctl -t sdsctl-display --since today
+```
+
+A missing or full journal does not prevent reconnection. The terminal streams
+must remain connected to the console; do not change `StandardError` to `journal`,
+because the full-screen renderer also uses that stream.
+
+Published 0.29.4 and non-interactive invocations retain the status `75` fallback:
+systemd waits 15 seconds and starts a fresh process. During a prolonged outage,
+those older versions can show repeated fixed temporary-failure messages on the
+console until startup succeeds. That scrolling output does not by itself mean
+automatic recovery is broken. The candidate does not change the service unit's
+restart policy or its non-retryable failure statuses.
 
 Changing any client in the Home Assistant App reloads its credential registry
 and closes all existing remote-client sessions. An unchanged, still-authorized

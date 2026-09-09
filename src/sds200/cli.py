@@ -189,6 +189,7 @@ from .managed_display import (
     inspect_managed_display_terminal,
     managed_display_failure_status,
     managed_display_service_template,
+    report_managed_display_wait,
     require_observe_only_display,
 )
 from .models import HealthSummary, RadioEvent, RadioHealth, StatusResponse
@@ -5929,12 +5930,60 @@ def _run_tui_with_logging(
     with capture_package_logs(log_buffer):
         logger.info("sdsctl starting version=%s action=%s", __version__, args.action)
         try:
-            return _run_tui(
-                args,
-                log_buffer=log_buffer,
-                configuration_paths=configuration_paths,
-                environ=environ,
-            )
+            while True:
+                try:
+                    return _run_tui(
+                        args,
+                        log_buffer=log_buffer,
+                        configuration_paths=configuration_paths,
+                        environ=environ,
+                    )
+                except Exception as error:
+                    if (
+                        not args.managed_display
+                        or not args.daemon_client
+                        or args.remote_profile is None
+                        or not sys.stdin.isatty()
+                        or not sys.stdout.isatty()
+                        or managed_display_failure_status(error)
+                        != MANAGED_DISPLAY_TEMPORARY_EXIT
+                    ):
+                        raise
+                    from .managed_display_wait import wait_for_managed_display
+
+                    configuration = _selected_remote_client_configuration(
+                        args.remote_profile,
+                        configuration_paths=configuration_paths,
+                        environ=environ,
+                    )
+                    assert configuration is not None
+                    address = configuration.address
+                    target = (
+                        f"[{address}]:{configuration.port}"
+                        if ":" in address
+                        else f"{address}:{configuration.port}"
+                    )
+
+                    def probe(
+                        selected: DaemonRemoteClientConfiguration = configuration,
+                    ) -> None:
+                        _probe_remote_display_service(
+                            selected,
+                            DaemonRemoteService.API,
+                            timeout=(
+                                DAEMON_API_CLIENT_DEFAULT_TIMEOUT
+                                if args.daemon_timeout is None
+                                else args.daemon_timeout
+                            ),
+                        )
+
+                    report_managed_display_wait("waiting", error)
+                    if not wait_for_managed_display(target, probe):
+                        return 0
+                    # Readiness is not a cached authorization or scanner state.
+                    # The normal path repeats hello, observe-scope verification
+                    # and an authoritative snapshot with fresh transports.
+                    report_managed_display_wait("ready")
         finally:
             logger.info("sdsctl stopped action=%s", args.action)
 
