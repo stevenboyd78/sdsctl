@@ -973,7 +973,7 @@ sign-out sets its pause intent before the startup tick can authenticate. No setu
 retry, keepalive loop, manual reload, storage reset, manifest-name selector or
 weakened native build check is used. The real first-start fixture now waits
 55 seconds before its one setup confirmation; the handoff fixture also waits
-before the first recovery review. Corrected physical acceptance remains required.
+before the first recovery review. Physical acceptance is recorded separately below.
 
 With the corrected installed wheel, private Chromium 151.0.7922.173 (small Pi)
 and 152.0.7977.75 (HDMI Pi) both passed that idle-first-setup check, ordinary
@@ -985,6 +985,28 @@ zero authentication-endpoint connections and required no manual reload of the
 managed pages. These were private virtual-display tests with fictional credentials;
 neither physical production TUI was stopped or changed. They do not turn the
 earlier failed physical canary into a pass.
+
+A **fresh physical HDMI canary** subsequently passed on September 8 using the
+corrected installed wheel and Chromium 152.0.7977.75. Its setup page sat idle for
+at least 85 seconds before the user was invited to confirm once. The user and a
+physical-screen capture confirmed the saved-setup message; after clean browser
+shutdown, read-only native inspection showed revision 2, exactly one successful
+claim. The fictional loopback counter observed no connection during setup.
+
+While that browser was stopped, the canonical offline suspend API deliberately
+paused only the fresh fictional profile at revision 3. Ordinary managed startup,
+then a complete temporary graphical-session restart and another ordinary start,
+showed the expected paused message. The user confirmed the physical restarted
+display. Browser-first session shutdown completed cleanly, all owned browser
+processes and Chromium Singleton markers were gone, and the paused native ledger
+remained byte-identical. The final counter recorded zero connections throughout.
+The production TUI returned to the HDMI screen with its original process still
+running; the earlier failed profile and its original runtime remain preserved.
+No browser storage was edited, uncertain setup retried, trust changed or real
+credential used. This proves this fresh physical setup/paused-session-restart
+checkpoint, not browser sign-out, real-server authentication, recovery handoff on
+the physical display, automatic boot, power-outage recovery or cross-release
+migration. The offline pause was an explicit test fixture, not a user sign-out.
 
 The build digest covers the worker entry template, shared browser modules and
 packaged `browser_device*.py` native implementation. Every subsequent action is
@@ -1013,6 +1035,13 @@ Recovery mode constructs only the existing confirmation-only composition:
 no ordinary startup tick, authentication, cookie installation, resume, alarm
 scheduling or normal control listeners. Normal mode preserves setup consent and
 browser/native pause. There is no fallback from refused context to ordinary mode.
+After native context validation, recovery construction restricts storage to
+trusted contexts and reads only the canonical saved recovery-state key. This is
+the existing controller's read-only initialization, not a startup/authentication
+tick. Combined-worker tests assert that exact access/read sequence for pending,
+paused, unpaused, missing, corrupt and unreadable state, and count forbidden
+adapter calls even when the worker catches their exceptions. Ordinary messages
+and wake events cannot write state, alter cookies, schedule alarms or navigate.
 The selected recovery host supplies the bound readiness options only after live
 handoff/supervisor validation; obtaining context itself writes neither readiness
 nor acknowledgement. Shared source availability is not permission to execute

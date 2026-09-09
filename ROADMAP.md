@@ -35,6 +35,16 @@ threshold change is scheduled as the next active task.
 
 ## Active milestone
 
+### Low-priority TUI usability follow-up
+
+- For remote-daemon connections, show the connected daemon's reported application
+  version in the Connection panel. Keep the local TUI version in the application
+  header and scanner model/firmware in the Scanner panel. Use authenticated
+  endpoint metadata rather than assuming the daemon matches the client version;
+  handle unavailable version information explicitly. Direct USB connections
+  should not gain this remote-only field. This is a future improvement, not part
+  of the active browser-device review or the released 0.29.5 behavior.
+
 ### Managed-display enrollment and unattended recovery
 
 The released manual-login kiosk and isolated recovery foundations are followed

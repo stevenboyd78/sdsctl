@@ -57,25 +57,64 @@ test('context copied and mode consistency enforced',()=>{
   assert(Object.isFrozen(checked));assert(Object.isFrozen(checked.config));
 });
 
-test('recovery installs only confirmation controls, with no normal startup I/O',async()=>{
-  const calls=[],listeners=[];
-  const forbidden=()=>assert.fail('normal capability used');
+for(const [label,saved,failure] of [
+  ['pending',{version:2,identity,paused:true,phase:'resume_pending',nextAt:0,intent:build}],
+  ['paused',{version:1,identity,paused:true,phase:'clean',nextAt:0}],
+  ['unpaused',{version:1,identity,paused:false,phase:'clean',nextAt:0}],
+  ['missing',undefined],['corrupt',{}],
+  ['access failure',undefined,'access'],['read failure',undefined,'load'],
+]) test(`recovery only restricts/reads saved state; normal capabilities stay inert: ${label}`,async()=>{
+  const calls=[],listeners=[],unexpected=[],storage=[];
+  // A worker may intentionally catch adapter errors, so record the attempt as
+  // well as throwing: a swallowed assertion must not count as no side effect.
+  const forbidden=name=>()=>{unexpected.push(name);throw Error(`Forbidden capability: ${name}`);};
   const chrome=receivers({onMessage:{addListener:fn=>listeners.push(fn)},
     sendNativeMessage:async(host,request)=>{
       calls.push(request);return context();
     }});
-  chrome.storage={local:{setAccessLevel:async()=>{},get:forbidden,set:forbidden}};
-  chrome.cookies={get:forbidden,remove:forbidden,set:forbidden};
-  Object.assign(chrome.alarms,{clear:forbidden,create:forbidden});
-  Object.assign(chrome.tabs,{query:forbidden,create:forbidden});
+  // The canonical recovery controller restricts and reads its one saved-state
+  // key at construction. That is not a normal startup tick or a state mutation.
+  chrome.storage={local:{setAccessLevel:async options=>{
+    storage.push(['access',options]);
+    if(failure==='access')throw Error('Private storage access failure');
+  },get:async key=>{
+    storage.push(['load',key]);
+    if(failure==='load')throw Error('Private storage read failure');
+    return {sdsctlDeviceRecovery:structuredClone(saved)};
+  },set:forbidden('storage.local.set')}};
+  chrome.cookies={get:forbidden('cookies.get'),remove:forbidden('cookies.remove'),
+    set:forbidden('cookies.set')};
+  Object.assign(chrome.alarms,{clear:forbidden('alarms.clear'),create:forbidden('alarms.create')});
+  Object.assign(chrome.tabs,{query:forbidden('tabs.query'),create:forbidden('tabs.create'),
+    get:forbidden('tabs.get'),reload:forbidden('tabs.reload')});
   await startBrowserWorker(chrome,build);
   assert.equal(listeners.length,1);assert.equal(calls.length,1);
   // Inert ingress may observe events, but recovery has NO normal handlers.
   chrome.runtime.onStartup.listeners[0]();chrome.runtime.onInstalled.listeners[0]();
   chrome.alarms.onAlarm.listeners[0]({name:'sdsctl-device-recovery'});
-  for(const action of ['initialize','startup-status','status','suspend','prepare-resume','resume']) {
-    assert.equal(listeners[0]({action},{id,url:chrome.runtime.getURL('setup.html')},forbidden),false);
+  for(const page of ['setup.html','startup.html'])chrome.tabs.onUpdated.listeners[0](1,
+    {status:'complete'},{id:1,incognito:false,status:'complete',url:chrome.runtime.getURL(page)});
+  for(const [page,action] of [['setup.html','initialize'],['startup.html','startup-status'],
+    ['control.html','start'],['control.html','status'],['control.html','suspend'],
+    ['resume.html','resume-review'],['resume.html','resume-confirm']]) {
+    const replies=[], message={action,...(action==='resume-confirm'?{ticket:'e'.repeat(36)}:{})};
+    // Valid ingress must reach the selected role, not pass merely because the
+    // gate rejected an incomplete sender before recovery composition saw it.
+    assert.equal(listeners[0](message,sender(page),r=>replies.push(r)),false);
+    assert.deepEqual(replies,[{mode:'setup_error'}]);
   }
+  for(const action of ['logout-begin','logout-finish']) {
+    const document={...sender('unused'),origin:context().config.origin,
+      url:context().config.origin+'/device-display'}, replies=[];
+    const message={action,...(action==='logout-finish'?{ticket:'e'.repeat(36),outcome:'drained'}:{})};
+    assert.equal(listeners[0](message,document,r=>replies.push(r)),false);
+    assert.deepEqual(replies,[{mode:'setup_error'}]);
+  }
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,1); // Context only; no normal native action escaped.
+  assert.deepEqual(storage,[['access',{accessLevel:'TRUSTED_CONTEXTS'}],
+    ...(failure==='access'?[]:[['load','sdsctlDeviceRecovery']])]);
+  assert.deepEqual(unexpected,[]);
 });
 
 test('recovery native proof is bound to the executing build',async()=>{
@@ -94,6 +133,34 @@ test('recovery native proof is bound to the executing build',async()=>{
   assert.deepEqual(calls[1],{version:1,action:'worker-request',build,
     request:{version:1,action:'confirm-retirement',identity,intent:build}});
   assert.equal(nativeHost,context().config.nativeHost);
+});
+
+test('cold recovery review waits for validated role and retains its build envelope',async()=>{
+  const validation=deferred(), response=deferred(), calls=[], io=[], unexpected=[];
+  const chrome=receivers({sendNativeMessage:async(host,request)=>{
+    calls.push(request);
+    return request.action==='worker-context'?validation.promise:{version:1,ok:false};
+  }});
+  chrome.storage={local:{setAccessLevel:async()=>{io.push('access');},get:async()=>{
+    io.push('load');return {sdsctlDeviceRecovery:{version:2,identity,paused:true,
+      phase:'resume_pending',nextAt:0,intent:build}};
+  },set:()=>{unexpected.push('save');throw Error('Review cannot write browser state');}}};
+  const forbidden=name=>()=>{unexpected.push(name);throw Error(`Forbidden review capability: ${name}`);};
+  chrome.cookies={get:forbidden('cookies.get'),remove:forbidden('cookies.remove'),
+    set:forbidden('cookies.set')};
+  Object.assign(chrome.alarms,{clear:forbidden('alarms.clear'),create:forbidden('alarms.create')});
+  Object.assign(chrome.tabs,{query:forbidden('tabs.query'),create:forbidden('tabs.create')});
+  const start=startBrowserWorker(chrome,build);
+  assert.equal(chrome.runtime.onMessage.listeners[0]({action:'retirement-review'},
+    sender('recovery.html'),response.resolve),true);
+  assert.deepEqual(io,[]);assert.equal(calls.length,1);
+  validation.resolve(context());await start;
+  assert.deepEqual(await response.promise,{mode:'retirement_refused'});
+  assert.deepEqual(calls,[{version:1,action:'worker-context',build},
+    {version:1,action:'worker-request',build,
+      request:{version:1,action:'confirm-retirement',identity,intent:build}}]);
+  assert(io.includes('load'));
+  assert.deepEqual(unexpected,[]);
 });
 
 function normalChrome(initial) {

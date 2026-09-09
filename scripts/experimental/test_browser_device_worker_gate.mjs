@@ -68,6 +68,29 @@ test('unselected events never become recovery or normal side effects',()=>{
   f.gate.open();assert.deepEqual(replies,[{mode:'setup_error'}]);
 });
 
+test('a throwing selected message handler refuses once without losing later events',()=>{
+  const f=fixture(), replies=[];let alternate=0, startup=0;
+  f.callbacks.message({action:'initialize'},sender(),r=>replies.push(r));
+  f.callbacks.startup();
+  f.gate.chrome.runtime.onMessage.addListener(()=>{throw Error('private diagnostic');});
+  f.gate.chrome.runtime.onMessage.addListener(()=>{alternate++;return true;});
+  f.gate.chrome.runtime.onStartup.addListener(()=>{startup++;});
+  f.gate.open();
+  assert.deepEqual(replies,[{mode:'setup_error'}]);
+  assert.equal(alternate,0);assert.equal(startup,1);
+});
+
+test('reply followed by a throw is neither answered again nor retried',()=>{
+  const f=fixture(), replies=[];let alternate=0;
+  f.gate.chrome.runtime.onMessage.addListener((m,s,r)=>{
+    r({mode:'ready'});throw Error('after response');
+  });
+  f.gate.chrome.runtime.onMessage.addListener(()=>{alternate++;return true;});
+  f.gate.open();
+  assert.equal(f.callbacks.message({action:'initialize'},sender(),r=>replies.push(r)),false);
+  assert.deepEqual(replies,[{mode:'ready'}]);assert.equal(alternate,0);
+});
+
 test('unrelated alarms and tabs are ignored instead of filling the queue',()=>{
   const f=fixture();let count=0;
   for(let i=0;i<100;i++) {
