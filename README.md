@@ -66,7 +66,7 @@ PortAudio runtime; Debian and Raspberry Pi OS users normally install
 Published container users can pull the current exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.4
+docker pull theboyd78/sdsctl:0.29.5
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -204,9 +204,11 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.29.4` repairs certificate-verification tests across OpenSSL versions
-after the partial v0.29.3 release. It retains the transport-aware managed-display
-security and usability features for public-terminal and browser deployments:
+Version `0.29.5` keeps managed remote TUI displays on a clean waiting screen
+while the daemon is unavailable, then restores live data automatically after
+fresh authorization. Existing 0.29.4 daemons and client credentials remain
+compatible; the waiting-screen improvement requires upgrading the TUI client.
+It retains the transport-aware security and usability features for deployments:
 an opt-in native display login with
 separate operator/display credentials, a hardened browser kiosk HTTPS launch flow,
 and tighter split-screen layout behavior on constrained displays. The `/dev/tty1`

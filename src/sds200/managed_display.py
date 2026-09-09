@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import socket
 import stat
 from contextlib import suppress
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
+from typing import Literal
 
 from .daemon_remote_client import (
     DaemonRemoteClientError,
@@ -22,6 +25,40 @@ from .exceptions import (
 MANAGED_DISPLAY_TEMPORARY_EXIT = 75
 MANAGED_DISPLAY_CONFIGURATION_EXIT = 78
 MANAGED_DISPLAY_SERVICE_FILENAME = "sdsctl-display@.service"
+
+
+def report_managed_display_wait(
+    event: Literal["waiting", "retry", "ready"], error: BaseException | None = None
+) -> None:
+    """Keep fixed outage events in the TUI/file log and best-effort local journal."""
+
+    if event not in {"waiting", "retry", "ready"}:
+        raise ValueError("Unknown managed display event.")
+    reason = "none"
+    if isinstance(error, DaemonRemoteClientError):
+        reason = error.reason.value
+    elif isinstance(error, DaemonDisconnectedError):
+        reason = "disconnected"
+    elif error is not None:
+        reason = "local_failure"
+    message = f"managed display connection event={event} reason={reason}"
+    logging.getLogger(__name__).log(
+        logging.INFO if event == "ready" else logging.WARNING, message
+    )
+    # stdout and stderr belong to the full-screen renderer. Do not redirect
+    # either service stream to journald or put endpoint/credential values here.
+    payload = (
+        f"PRIORITY={6 if event == 'ready' else 4}\n"
+        f"SYSLOG_IDENTIFIER=sdsctl-display\nMESSAGE={message}\n"
+    ).encode("ascii")
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as journal:
+            journal.settimeout(0.1)
+            journal.sendto(payload, "/run/systemd/journal/socket")
+    except OSError:
+        # A missing/full journal must not stop recovery or leak logging errors
+        # onto the console. The bounded TUI buffer and optional file still work.
+        pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,5 +198,6 @@ __all__ = [
     "managed_display_failure_status",
     "managed_display_layout",
     "managed_display_service_template",
+    "report_managed_display_wait",
     "require_observe_only_display",
 ]
