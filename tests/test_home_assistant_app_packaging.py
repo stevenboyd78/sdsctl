@@ -136,18 +136,36 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert 'recording_directory: "str(1,)"\n' in manifest
     assert "  remote_daemon_enabled: false\n" in manifest
     assert "  native_dashboard_enabled: false\n" in manifest
-    assert "  experimental_browser_devices_enabled: false\n" in manifest
-    assert '  browser_device_server_config: ""\n' in manifest
     assert '  advanced_access_server_name: ""\n' in manifest
     assert '  advanced_access_host_address: ""\n' in manifest
     assert "  remote_daemon_enabled: bool\n" in manifest
     assert "  native_dashboard_enabled: bool\n" in manifest
-    assert "  experimental_browser_devices_enabled: bool\n" in manifest
-    assert '  browser_device_server_config: "str?"\n' in manifest
     assert '  advanced_access_server_name: "str?"\n' in manifest
     assert '  advanced_access_host_address: "str?"\n' in manifest
     assert "hassio_api: true\n" not in manifest
     assert "host_network: true\n" not in manifest
+
+
+def test_published_0_29_4_catalog_does_not_advertise_unreleased_options() -> None:
+    """Supervisor reads main's catalog even when its image is an older release.
+
+    Match the strict loader shipped in v0.29.4, not the newer source-tree loader.
+    Keep this contract while advertising that image; a version bump can select
+    a different published contract, but merely merging runtime code cannot.
+    """
+    manifest = _APP_MANIFEST.read_text(encoding="utf-8")
+    if _quoted_scalar(manifest, "version") != "0.29.4":
+        return  # This is the immutable 0.29.4 image's compatibility contract.
+    released = {
+        "scanner_host", "mqtt_topic_prefix", "recording_directory",
+        "remote_daemon_enabled", "native_dashboard_enabled",
+        "advanced_access_server_name", "advanced_access_host_address",
+    }
+    options = manifest.partition("options:\n")[2].partition("schema:\n")[0]
+    schema = manifest.partition("schema:\n")[2]
+    keys = r"^  ([a-z][a-z0-9_]*):"
+    assert set(re.findall(keys, schema, re.MULTILINE)) == released
+    assert set(re.findall(keys, options, re.MULTILINE)) == released - {"scanner_host"}
 
 
 def test_home_assistant_app_configuration_translations_cover_schema() -> None:

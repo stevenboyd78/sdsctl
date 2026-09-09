@@ -37,18 +37,3 @@ configuration:
     description: >-
       Literal private Home Assistant host address used by remote daemon-client
       profiles. Required only when advanced remote daemon clients are enabled.
-  experimental_browser_devices_enabled:
-    name: Experimental managed browser devices
-    description: >-
-      Disabled by default. Requires a prepared native HTTPS dashboard and a
-      private server configuration with an existing enrollment authority and
-      explicit Home Assistant administrator IDs. Does not create credentials,
-      install browser trust, or publish ports. Not yet production-qualified.
-  browser_device_server_config:
-    name: Experimental browser-device server configuration
-    description: >-
-      Absolute path inside the App to the precreated mode-0600 server JSON in
-      a mode-0700 directory. Required only with experimental managed browser
-      devices. The file selects the existing authority, native HTTPS origin,
-      and separate Home Assistant HTTPS origin and administrator allowlist.
-      Leave empty when disabled; edits require an App restart.
