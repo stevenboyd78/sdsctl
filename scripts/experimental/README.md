@@ -65,6 +65,15 @@ or failed run is retained for review, never replayed over the same profile.
 `private-runtime-path.txt` records the retained disposable runtime directory.
 Only owned test processes are stopped; no production service is involved.
 
+The separate September 9 small-Pi
+[physical recovery and paused-restart acceptance record](../../docs/browser-device-recovery-acceptance.md)
+documents two user-observed ordinary starts and a later persisted-state readback.
+It keeps failed attempts, seeded pending state and the observer-only reload
+distinct from normal startup acceptance. A five-second loading/error frame is
+not sufficient evidence of persistent failure; inspect a settled bounded capture
+before requesting physical confirmation. Do not replay a populated fixture,
+preseed human-pass markers, or weaken product timers to obtain a result.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,

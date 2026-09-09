@@ -252,8 +252,15 @@ it is not normal setup/resume or physical-display acceptance. A separate
 [exact headed first-start matrix](docs/browser-device-startup.md#exact-headed-first-start-qualification)
 now qualifies the ordinary installed CLI on both Pis: real setup confirmation,
 no-consent preservation and paused restarts, without debugger flags or manual
-refresh. Guard-release review, server-connected deployment qualification and
-physical acceptance remain gates.
+refresh. A separate same-build
+[small-Pi physical recovery checkpoint](docs/browser-device-recovery-acceptance.md)
+now passed user-reviewed acknowledgement, exact restoration/paused-only release,
+two ordinary paused starts and final persisted-state readback. Its initial pending
+state was synthetic; it does not qualify a genuinely interrupted ordinary resume.
+Server-connected deployment, cross-release migration, credential replacement and
+broader physical/outage acceptance remain gates. Next, design a fresh isolated
+ordinary-resume interruption test with measured fault boundaries, retaining all
+existing uncertain profiles and keeping later sign-in permission separate.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

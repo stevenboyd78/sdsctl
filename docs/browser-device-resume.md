@@ -1027,6 +1027,18 @@ evidence remain preserved, with test services stopped and nothing enabled at boo
 This is the same limited setup/paused-session-restart checkpoint as the HDMI
 result above, not additional authentication, resume, boot or power-loss acceptance.
 
+A separate **small-Pi physical guarded-recovery checkpoint** subsequently
+completed on September 9. It preserved a successful recovery acknowledgement,
+canonical host restoration and paused-only release, then passed two separately
+user-confirmed ordinary paused starts without a manual reload. A later read-only
+browser observer verified exact clean paused storage, no session cookie or recovery
+alarm, zero endpoint connections and unchanged native paused revision 4. Original
+failed attempts and all recovery evidence remain retained. See the
+[acceptance record](browser-device-recovery-acceptance.md) for provenance, the
+test-helper import failure, early-frame timing correction, separate observer
+reload and remaining gates. The fixture seeded its initial pending state; this
+does not prove a genuinely interrupted ordinary resume or live authentication.
+
 The build digest covers the worker entry template, shared browser modules and
 packaged `browser_device*.py` native implementation. Every subsequent action is
 carried in a strict `worker-request` envelope with that executing build identity.
@@ -1077,8 +1089,10 @@ recovery alarm. Both separate `no-consent` runs preserved the guard and produced
 no browser acknowledgement. All six runs observed zero authentication-endpoint
 connections and unchanged native inputs. Production TUI services were not changed.
 
-These are same-build private Chromium results with synthetic pending state, not
-real-server sign-in or physical-display acceptance. Worker changes across
+The virtual runs above are same-build private Chromium results with synthetic
+pending state, not real-server sign-in or physical-display acceptance. The
+separate small-Pi physical checkpoint has the limits in its acceptance record.
+Worker changes across
 application releases, genuinely interrupted user resume, actual power loss,
 Firefox/WPE and production deployment remain separate lifecycle gates.
 
