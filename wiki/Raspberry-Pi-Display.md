@@ -26,9 +26,17 @@ dependency, API, event and audio services, runtime protocol, and observe-only
 authorization. It prints terminal geometry and the responsive layout without
 printing the private endpoint or identity.
 
-The managed TUI option adds service-manager exit classes:
+Starting with 0.29.5, a managed physical-console TUI keeps one **Daemon
+disconnected** screen visible while its daemon is temporarily unavailable. It
+shows the target and a retry countdown without old scanner readings or scrolling
+error messages. When the daemon returns, fresh authorization and a new snapshot
+restore live data automatically. Upgrade the client to get this improvement;
+the existing 0.29.4 daemon and client credential can stay in place.
 
-- `75`: temporary connection loss; the supplied unit retries after 15 seconds;
+The managed TUI option also retains service-manager exit classes:
+
+- `75`: temporary connection loss outside the interactive waiting screen; the
+  supplied unit retries after 15 seconds (also the behavior through 0.29.4);
 - `78`: permanent profile, TLS, authentication, authorization, or service
   configuration failure; the unit stops; and
 - `2`: unexpected local dependency or device failure; the unit stops.
