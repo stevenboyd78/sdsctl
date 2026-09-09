@@ -22,6 +22,7 @@ MODULES = (
     "browser_device_startup.mjs", "browser_device_resume.mjs", "browser_device_retirement_ui.mjs",
     "browser_device_retirement_startup.mjs", "browser_device_launch.mjs",
     "browser_device_worker.mjs", "browser_device_worker_gate.mjs",
+    "browser_device_paused.mjs",
 )
 _ENTRY = ("import {startBrowserWorker} from './browser_device_worker.mjs';\n"
           "void startBrowserWorker(chrome, BUILD).catch(()=>{});\n")
@@ -173,8 +174,8 @@ def worker_context(
     from .browser_device_retirement_bundle import inspect_browser_retirement_bundle
 
     if retirement is None:
-        normal_worker_paused_only(configuration, selection)
-        role, acknowledge, launch = "normal", False, None
+        paused_only = normal_worker_paused_only(configuration, selection)
+        role, acknowledge, launch = "paused" if paused_only else "normal", False, None
     else:
         if (selection.directory is None or selection.normal_bundle is None
                 or selection.intent is None):

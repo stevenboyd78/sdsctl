@@ -63,8 +63,8 @@ test("entry retries are bounded even when the document never becomes available",
   } finally {Date.now=previousNow;}
 });
 function page(response) {
-  const f = {notice:{textContent:""}, scheduled:[], messages:[], navigations:[]};
-  f.document = {getElementById: id => {assert.equal(id,"notice");return f.notice;}};
+  const f = {notice:{textContent:""}, resume:{hidden:false}, scheduled:[], messages:[], navigations:[]};
+  f.document = {getElementById: id => {assert(["notice","resume-link"].includes(id));return id==="notice"?f.notice:f.resume;}};
   f.window = {location:{href:extension+"startup.html", replace:url=>f.navigations.push(url)}};
   f.window.top=f.window;
   f.runtime = {getURL:name=>extension+name, sendMessage:async message=>{
@@ -75,7 +75,7 @@ function page(response) {
 }
 
 for (const mode of ["starting","ready","active","waiting","paused","stopping","logout_pending",
-  "setup_required","setup_error","tls_error","credential_rejected","protocol_error"]) {
+  "setup_required","setup_error","tls_error","credential_rejected","protocol_error","administrator_required"]) {
   test(`startup shows ${mode} without starting or initializing recovery`, async()=>{
     const f=page({mode,sessionReady:false}); connectBrowserStartupPage(f,origin); await settle();
     assert(f.notice.textContent.length>10); assert.deepEqual(f.navigations,[]);
@@ -83,6 +83,18 @@ for (const mode of ["starting","ready","active","waiting","paused","stopping","l
     await f.scheduled.shift()(); assert.equal(f.scheduled.length,1);
   });
 }
+test("paused-only startup explains administrator boundary and keeps resume hidden",async()=>{
+  const f=page({mode:"administrator_required",sessionReady:false});
+  connectBrowserStartupPage(f,origin);assert(f.resume.hidden);await settle();
+  assert(f.resume.hidden);assert.match(f.notice.textContent,/separate administrator continuation/);
+  assert.deepEqual(f.navigations,[]);
+});
+test("ordinary pause exposes resume only after a valid status; failures hide it again",async()=>{
+  const f=page({mode:"paused",sessionReady:false});connectBrowserStartupPage(f,origin);
+  assert(f.resume.hidden);await settle();assert.equal(f.resume.hidden,false);
+  f.runtime.sendMessage=async()=>{throw Error('private');};
+  await f.scheduled.shift()();assert(f.resume.hidden);
+});
 for (const mode of ["active","waiting"]) {
   test(`only installed ${mode} session opens fixed device entry`,async()=>{
     const f=page({mode,sessionReady:true});connectBrowserStartupPage(f,origin);await settle();

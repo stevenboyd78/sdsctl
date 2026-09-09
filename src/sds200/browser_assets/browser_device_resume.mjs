@@ -50,6 +50,11 @@ export function connectResumePage({document,window,runtime}) {
     attempted = true; review.disabled = true;
     notice.textContent = "Verifying this display with the configured server…";
     void runtime.sendMessage({action:"resume-review"}).then(result=>{
+      if(exact(result,["mode"])&&result.mode==='administrator_required') {
+        confirm.disabled=true;submit.disabled=true;
+        notice.textContent="Automatic sign-in is paused after completed recovery. A separate administrator continuation is required. Keep the saved profile and recovery evidence; do not repeat setup or remove the guard. No sign-in was attempted.";
+        return;
+      }
       if (!exact(result,["mode","ticket","nativeRevision","serverGeneration"]) || result.mode !== "reviewed" ||
           typeof result.ticket !== "string" || !/^[a-f0-9-]{36}$/.test(result.ticket) ||
           ![result.nativeRevision,result.serverGeneration].every(n=>Number.isSafeInteger(n)&&n>0)) {

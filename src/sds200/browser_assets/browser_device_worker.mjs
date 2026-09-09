@@ -6,6 +6,7 @@ import {createChromeResumePorts,connectResumeWorker} from './browser_device_resu
 import {connectChromeRetirementRecovery} from './browser_device_retirement_startup.mjs';
 import {connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation} from './browser_device_launch.mjs';
 import {createWorkerEventGate} from './browser_device_worker_gate.mjs';
+import {connectPausedBrowserWorker} from './browser_device_paused.mjs';
 
 const HOST='org.sdsctl.browser_device';
 const hex=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -16,12 +17,12 @@ export function validateWorkerContext(value,build,id) {
   if(!hex(build)||!exact(value,['version','ok','build','role','config','extensionId','acknowledge','launch'])||
     value.version!==1||value.ok!==true||value.build!==build||value.extensionId!==id||
     typeof id!=='string'||!/^[a-p]{32}$/.test(id)||
-    !['normal','recovery'].includes(value.role)||typeof value.acknowledge!=='boolean'||
+    !['normal','paused','recovery'].includes(value.role)||typeof value.acknowledge!=='boolean'||
     !exact(value.config,['origin','identity','nativeHost'])||!hex(value.config.identity)||
     value.config.nativeHost!==HOST||typeof value.config.origin!=='string'||
     value.config.origin.length>2048||!value.config.origin.startsWith('https://')||
     new URL(value.config.origin).origin!==value.config.origin)throw Error('Worker context refused');
-  if(value.role==='normal'&&(value.acknowledge||value.launch!==null))throw Error('Worker context refused');
+  if(value.role!=='recovery'&&(value.acknowledge||value.launch!==null))throw Error('Worker context refused');
   if(value.launch!==null&&(!value.acknowledge||value.role!=='recovery'||
     !exact(value.launch,['identity','intent','binding','nativeHost'])||
     value.launch.identity!==value.config.identity||value.launch.nativeHost!==HOST||
@@ -48,6 +49,11 @@ export async function startBrowserWorker(chrome,build) {
     return chrome.runtime.sendNativeMessage(HOST,{version:1,action:'worker-request',build,request});
   }});
   const scoped=Object.create(gate.chrome);Object.defineProperty(scoped,'runtime',{value:runtime});
+  if(context.role==='paused') {
+    connectPausedBrowserWorker(scoped,context.config);
+    connectBrowserEntry(scoped);
+    gate.open();return;
+  }
   if(context.role==='recovery') {
     connectChromeRetirementRecovery(scoped,context.config,context.acknowledge);
     if(context.launch!==null) {

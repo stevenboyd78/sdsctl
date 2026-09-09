@@ -182,10 +182,11 @@ authentication, setup claim and suspension before dispatch. Read-only inspection
 also avoids clock-correction writes. This preserves the completed paused record;
 an earlier clock that prevents reconciliation confirmation still causes a
 read-only refusal rather than a repair or a relaxed evidence check. This change
-does **not** implement later online sign-in. The normal resume link currently
-receives a refusal on these released installations. A separately designed
-administrator continuation, credential-writer coordination and presentation are
-still required before offering post-maintenance sign-in.
+does **not** implement later online sign-in. At that checkpoint the normal resume
+link received a refusal on these released installations. The later paused-only
+presentation below replaces that unusable link. A separately designed
+administrator continuation and credential-writer coordination are still required
+before offering post-maintenance sign-in.
 
 This change modifies native runtime bytes and the derived worker build identity.
 All Pi/Chromium results above remain evidence for their exact earlier candidate,
@@ -226,6 +227,63 @@ This result does not qualify genuine response loss, ordinary server sign-in or
 physical layout on the new build, nor any post-maintenance online continuation.
 Do not rebuild or relaunch a populated preserved profile to manufacture that
 result.
+
+## Explicit paused-only role and read-only continuation preflight
+
+The next candidate separates the native-selected paused-only worker from ordinary
+recovery/resume composition. The startup page explains that a separate
+administrator continuation is required and hides the ordinary resume link. A
+directly opened resume page remains inert; an explicit review explains the same
+restriction and never enables confirmation. The native request gate remains
+authoritative; this is not just hiding a control.
+
+An internal stopped-checkpoint inspection can now review and re-confirm the exact
+existing release without writes or server access. It is an ephemeral advisory
+selection, not consent, a journal writer, a CLI or an executable permission. The
+[continuation design](browser-device-continuation.md) records the remaining
+durable transition and why historical recovery cannot itself grant sign-in.
+
+A **fresh small-Pi virtual-display fixture** passed on Chromium 151.0.7922.173:
+
+- Wheel SHA-256: `1cff8bf95dc0b9f56476b2cd618e009d840c8ce00c65b323c67890c33bd5b6d6`.
+- Worker build: `3df9e413095920b1473b439ea54d2b25061537a77802159c92689be5df0005e9`.
+- All 291 installed package files matched the candidate wheel. Its scalar version
+  remains 0.29.5; this is not the public Python artifact or a deployed App update.
+- Normal first-run setup after 55 seconds idle, synthetic pending-state seeding,
+  supervised recovery after 35 seconds idle, explicit review/confirmation, clean
+  shutdown, canonical host restoration and local paused-only release passed.
+- Both ordinary starts showed the administrator-required message for 30 seconds
+  without manual reload. The resume link was absent from visible text and could
+  not be activated with keyboard focus. No fictional endpoint connection occurred.
+- Stopped continuation inspection and confirmation returned the same advisory
+  selection without granting permission or invalidating the existing release.
+- A separate GET-only browser observer found exact clean paused state with no
+  pending intent, session cookie or recovery alarm. Full stopped host/release
+  checks passed afterwards; protected native, bundle and archive bytes matched.
+- The paused and readback screenshots were reviewed. All owned fixture processes
+  exited; the desk TUI retained its original PID with zero restarts. Host NSS
+  trust, Home Assistant, HDMI Pi, real credentials and port mappings were unchanged.
+
+An initial new fixture reached local release but its harness lacked a test-helper
+import before ordinary startup. That run remains preserved, not replayed or
+counted as a pass. The successful run used a new directory and the complete
+harness against the same immutable candidate. Its browser state was not borrowed
+from the failed run or any older retained profile.
+
+Local final checks passed 83 guard-release/continuation cases, 41 namespace launch
+cases, 199 worker/bundle/native/resume cases, 43 documentation/release-contract
+cases, 652 JavaScript tests and 10 private input-sequence tests. No case in these
+final reports was skipped. Ruff, mypy over 218 source files, all 82 Markdown
+checks and whitespace checks passed. Two earlier guard reports each retained a
+fixture setup error; those runs overlapped edits to hashed runtime source. The
+final unchanged-graph run passed all 83 cases without weakening validation or
+reusing a failed fixture. This is targeted validation, not a new full-suite or
+coverage claim; remote checks must qualify their own exact commit.
+
+This validates paused presentation and preflight, not online continuation,
+genuine response loss on these new bytes, physical layout, credential replacement,
+cross-release migration or boot/power-loss behavior. No merge, release tag,
+public wiki publication or real-device configuration change is implied.
 
 ## CI evidence and remaining review gates
 

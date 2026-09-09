@@ -148,6 +148,10 @@ journal and all original supervised maintenance evidence validate. Neither the
 guard nor its evidence is removed. Missing, changed, prepared or inconsistent
 completion remains blocked; there is no ignore-guard flag and release does not
 resume sign-in. This is not yet a public maintenance/deployment command.
+On that released installation the native helper selects a paused-only worker:
+startup explains that administrator continuation is required and hides ordinary
+resume. It makes no authentication attempt and does not repair saved state. See
+the [continuation boundary](browser-device-continuation.md).
 
 No service is installed or enabled. The command does not restart itself after a
 clean close, change ports/firewalls, enroll/rotate a device, install trust or

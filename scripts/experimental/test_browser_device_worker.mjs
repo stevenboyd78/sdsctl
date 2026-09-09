@@ -23,6 +23,7 @@ for(const [name,change] of [
   ['unknown role',v=>({...v,role:'operator'})],['another extension',v=>({...v,extensionId:'p'.repeat(32)})],
   ['extra path',v=>({...v,directory:'/tmp/elsewhere'})],['numeric version',v=>({...v,version:'1'})],
   ['normal ACK',v=>({...v,role:'normal',acknowledge:true})],
+  ['paused ACK',v=>({...v,role:'paused',acknowledge:true})],
   ['bad origin',v=>({...v,config:{...v.config,origin:'http://127.0.0.1'}})],
   ['extra config',v=>({...v,config:{...v.config,mode:'normal'}})],
   ['wrong host',v=>({...v,config:{...v.config,nativeHost:'other.host'}})],
@@ -35,6 +36,10 @@ for(const [name,change] of [
   }});
   await assert.rejects(startBrowserWorker(chrome,build));
   assert.deepEqual(calls,[{version:1,action:'worker-context',build}]);
+});
+test('paused role is native-selected and has no acknowledgement authority',()=>{
+  assert.equal(validateWorkerContext({...context(),role:'paused'},build,id).role,'paused');
+  assert.throws(()=>validateWorkerContext({...context(),role:'paused',launch:{}},build,id));
 });
 
 test('waiting for native context initializes nothing',async()=>{
@@ -55,6 +60,39 @@ test('context copied and mode consistency enforced',()=>{
   value.config.origin='https://other.example';value.role='normal';
   assert.equal(checked.role,'recovery');assert.equal(checked.config.origin,'https://127.0.0.1:8443');
   assert(Object.isFrozen(checked));assert(Object.isFrozen(checked.config));
+});
+
+test('native paused selection composes no normal recovery or resume capabilities',async()=>{
+  const calls=[],unexpected=[],responses=[];
+  const forbidden=name=>()=>{unexpected.push(name);throw Error('Forbidden normal capability');};
+  const chrome=receivers({sendNativeMessage:async(host,request)=>{
+    calls.push(request);
+    if(request.action==='worker-context')return {...context(),role:'paused'};
+    assert.deepEqual(request,{version:1,action:'worker-request',build,
+      request:{version:1,action:'status'}});
+    return {version:1,ok:true,mode:'paused',revision:4,retry_after:0,renew_after:0};
+  }});
+  chrome.storage={local:{setAccessLevel:async()=>{},get:async()=>({sdsctlDeviceRecovery:{
+    version:1,identity,paused:true,phase:'clean',nextAt:0}}),set:forbidden('storage.set')}};
+  chrome.cookies={get:async()=>null,remove:forbidden('cookies.remove'),set:forbidden('cookies.set')};
+  Object.assign(chrome.alarms,{get:async()=>undefined,clear:forbidden('alarms.clear'),
+    create:forbidden('alarms.create')});
+  Object.assign(chrome.tabs,{query:async()=>[],create:forbidden('tabs.create')});
+  await startBrowserWorker(chrome,build);
+  const dispatch=(message,page)=>new Promise(resolve=>{
+    chrome.runtime.onMessage.listeners[0](message,sender(page),resolve);
+  });
+  assert.deepEqual(await dispatch({action:'startup-status'},'startup.html'),
+    {mode:'administrator_required',sessionReady:false});
+  assert.deepEqual(await dispatch({action:'resume-review'},'resume.html'),{mode:'administrator_required'});
+  for(const [action,page] of [['initialize','setup.html'],['start','control.html'],
+    ['suspend','control.html'],['resume-confirm','resume.html']])
+    responses.push(await dispatch({action},page));
+  assert(responses.every(r=>r.mode==='setup_error'));
+  chrome.runtime.onStartup.listeners[0]();chrome.runtime.onInstalled.listeners[0]();
+  chrome.alarms.onAlarm.listeners[0]({name:'sdsctl-device-recovery'});
+  await new Promise(r=>setImmediate(r));
+  assert.deepEqual(unexpected,[]);assert.equal(calls.length,3);
 });
 
 for(const [label,saved,failure] of [

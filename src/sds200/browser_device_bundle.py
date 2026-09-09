@@ -160,7 +160,8 @@ def _artifacts(
             f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd></dl>"
             "<p id='notice' role='status'>Starting managed display…</p>"
             "<p>This page never initializes, repairs or resumes a profile automatically.</p>"
-            "<p><a href='resume.html'>Review automatic sign-in resume</a></p>"
+            "<p id='resume-link' hidden><a href='resume.html'>"
+            "Review automatic sign-in resume</a></p>"
             "</main><script type='module' src='startup.mjs'></script></html>\n"
         ).encode(),
         "extension/resume.mjs": (

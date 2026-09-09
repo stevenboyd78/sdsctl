@@ -442,7 +442,7 @@ def test_worker_context_requires_exact_release_even_with_running_browser(
         before = state(lab, completed)
         if change in {"none", "unlocked"}:
             result = worker.worker_context(lab.configuration, selected, None)
-            assert result["role"] == "normal" and result["acknowledge"] is False
+            assert result["role"] == "paused" and result["acknowledge"] is False
         else:
             with pytest.raises((ValueError, release.BrowserGuardReleaseError,
                                 BrowserHandoffError, BrowserProfileAccessError, OSError)):
@@ -579,3 +579,88 @@ def test_released_worker_status_never_writes_evidence_on_clock_rollback(
         monkeypatch.undo()
         monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
         worker.worker_context(lab.configuration, selected, None)
+
+
+def test_continuation_inspection_is_read_only_and_grants_no_authority(lab, completed, monkeypatch):
+    from sds200 import browser_device_native as native
+    from sds200.browser_device_continuation import BrowserContinuationInspection
+
+    released = attempt(completed)
+    calls = []
+    monkeypatch.setattr(native, "_post_browser_device", lambda *args: calls.append(args))
+    before = state(lab, completed)
+    inspection = BrowserContinuationInspection(completed, release_id=released.release_id)
+    selected = inspection.review()
+    assert selected.identity == lab.configuration.identity and selected.mode is RecoveryMode.PAUSED
+    assert selected.native_revision == released.revision
+    assert inspection.confirm(selected) is selected
+    assert not any(hasattr(inspection, name) for name in ("apply", "execute", "resume", "grant"))
+    assert lab.configuration.origin not in repr(selected)
+    assert selected.release_id not in repr(selected)
+    assert state(lab, completed) == before and calls == []
+    release.BrowserPausedGuardRelease(completed).confirm(release_id=released.release_id)
+
+
+@pytest.mark.parametrize("change", ["missing-release", "wrong-release", "running-browser",
+                                    "busy-launcher", "busy-profile", "changed-guard"])
+def test_continuation_preflight_refuses_unsafe_installation(lab, completed, change):
+    from sds200.browser_device_continuation import (
+        BrowserContinuationError,
+        BrowserContinuationInspection,
+    )
+    released = attempt(completed) if change != "missing-release" else None
+    chosen = released.release_id if released and change != "wrong-release" else "0" * 64
+    inspection = BrowserContinuationInspection(completed, release_id=chosen)
+    root = lab.args["directory"]
+    if change == "running-browser":
+        (root / "SingletonLock").symlink_to("fictional-pid")
+    if change == "changed-guard":
+        private(root / MAINTENANCE_MARKER, b"changed")
+    before = state(lab, completed)
+    from contextlib import nullcontext
+    scope = (_launch_lock(root, create=False) if change == "busy-launcher" else
+             browser_profile_access(lab.args["profile"], exclusive=True)
+             if change == "busy-profile" else nullcontext())
+    with scope, pytest.raises(BrowserContinuationError):
+        inspection.review()
+    assert state(lab, completed) == before
+
+
+@pytest.mark.parametrize("change", ["copied-review", "other-inspector", "repeat-review",
+                                    "expired", "wall-rollback", "monotonic-rollback", "nan",
+                                    "new-revision", "changed-guard"])
+def test_continuation_checkpoint_cannot_be_reused_as_a_stale_permission(lab, completed, change):
+    import time
+    from dataclasses import replace
+
+    from sds200.browser_device_continuation import (
+        BrowserContinuationError,
+        BrowserContinuationInspection,
+    )
+
+    released = attempt(completed)
+    wall, elapsed = [time.time()], [10.0]
+    inspection = BrowserContinuationInspection(completed, release_id=released.release_id,
+        clock=lambda: wall[0], monotonic=lambda: elapsed[0])
+    selected = inspection.review()
+    if change == "copied-review":
+        selected = replace(selected)
+    elif change == "other-inspector":
+        inspection = BrowserContinuationInspection(completed, release_id=released.release_id)
+    elif change == "expired":
+        elapsed[0] += 120
+    elif change == "wall-rollback":
+        wall[0] -= 1
+    elif change == "monotonic-rollback":
+        elapsed[0] -= 1
+    elif change == "nan":
+        wall[0] = float("nan")
+    elif change == "new-revision":
+        lab.ledger.resume(lab.ledger.inspect().revision)
+        lab.ledger.suspend()
+    elif change == "changed-guard":
+        private(lab.args["directory"] / MAINTENANCE_MARKER, b"changed")
+    before = state(lab, completed)
+    with pytest.raises(BrowserContinuationError):
+        inspection.review() if change == "repeat-review" else inspection.confirm(selected)
+    assert state(lab, completed) == before

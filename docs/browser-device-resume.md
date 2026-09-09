@@ -858,10 +858,23 @@ clock is earlier, the request remains refused without a repair. Once that gate
 has passed, a rollback during the final status snapshot is also read-only.
 
 This is an explicit restriction, not completed post-maintenance sign-in support.
-The current normal startup page's resume link does not grant an exception: its
-review is refused for a paused-only released installation before native or server
-changes. A separate administrator continuation and its user-facing presentation
-remain to be designed; do not remove the guard or replace credentials manually.
+The native context now selects a distinct **paused-only worker role** after this
+release. That worker does not compose ordinary recovery, initialization, resume,
+logout or alarm handlers. Its read-only startup check requires an exact clean
+paused browser record, matching paused native status, no device-session cookie
+and no recovery alarm. Missing or inconsistent state is retained and refused;
+it is never initialized or repaired. The native per-request gate remains the
+authority even if an older page or worker tries to send a mutating request.
+
+The startup screen explicitly says that a separate administrator continuation is
+required. It hides the ordinary resume link for this role. Opening `resume.html`
+directly remains inert; its explicit review reports the same boundary and never
+enables confirmation. Unguarded ordinary paused installations retain their
+existing reviewed resume link. A local paused release is not permission to sign
+in, delete the guard or replace credentials manually.
+
+The separate [continuation design and read-only preflight](browser-device-continuation.md)
+describe what is implemented and what must precede a future online transition.
 
 The follow-up review reproduced why that restriction is necessary: the earlier
 normal wrapper checked its build envelope but did not repeat live-owner/release

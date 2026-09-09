@@ -117,6 +117,17 @@ test("page opening is inert; two trusted gestures and checked consent produce on
   f.elements["resume-form"].emit("submit");f.elements.review.emit("click");await settle();
   assert.equal(f.calls.length,2);assert(f.elements.resume.disabled);
 });
+test("paused-only review explains the required administrator continuation and cannot confirm",async()=>{
+  const f=pageFixture();
+  f.runtime.sendMessage=async message=>{f.calls.push(message);return {mode:"administrator_required"};};
+  f.start();assert.deepEqual(f.calls,[]);
+  f.elements.review.emit("click");await settle();
+  assert.match(f.elements.notice.textContent,/separate administrator continuation/);
+  assert(f.elements.confirm.disabled);assert(f.elements.resume.disabled);
+  f.elements.confirm.checked=true;f.elements["resume-form"].emit("submit");
+  f.elements.review.emit("click");await settle();
+  assert.deepEqual(f.calls,[{action:"resume-review"}]);
+});
 for(const result of [null,{mode:"reviewed"},{...reviewed,ticket,extra:"secret"},
   {...reviewed,ticket,nativeRevision:true},{...reviewed,ticket:"bad"}]) {
   test("page refuses malformed review "+JSON.stringify(result),async()=>{
