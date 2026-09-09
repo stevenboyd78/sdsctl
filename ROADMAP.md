@@ -53,6 +53,25 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
   handle unavailable version information explicitly. Direct USB connections
   should not gain this remote-only field. This is a future improvement, not part
   of the active browser-device review or the released 0.29.5 behavior.
+- Make connection timing and the header clock unambiguous across midnight and
+  long-running sessions. The current Connection value is a presentation-state
+  transition timestamp (`CONNECTED since HH:MM:SS`), not measured connection
+  uptime. Distinguish that state-change time from an actual connection start;
+  do not reset connection uptime merely because a stale/degraded label changes.
+  Use explicit labels and full ISO 8601 UTC timestamps in 24-hour form for
+  `Connected since` and the current header date/time, for example
+  `2026-09-09T06:59:40Z`. Keep the application name/version in the header.
+  If elapsed connection time is shown, label it `Connected for` and use a
+  compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
+  variable-length calendar months/years as fixed durations. Derive elapsed time
+  from a monotonic clock, distinguish it from process uptime, and define which
+  connection it measures (client-to-daemon versus daemon-to-scanner). Reset it
+  only for a new connection and do not present disconnected time as connected
+  uptime. Apply consistent timestamp formatting to the related status-since
+  fields. Verify UTC conversion, midnight/day rollover, reconnects, wall-clock
+  adjustments, and header/panel fit on both 100x30 and 160x45 Pi consoles without
+  introducing wrapping or panel shifts. This is a low-priority follow-up, not a
+  change to the active browser-device acceptance scope or released behavior.
 
 ### Managed-display enrollment and unattended recovery
 
