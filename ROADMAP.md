@@ -33,6 +33,15 @@ post-write state mismatch and an out-of-window archived completion time in
 `browser_device_resume_reconciliation.py`. No coverage-only expansion or CI
 threshold change is scheduled as the next active task.
 
+## v0.29.5 maintenance release
+
+The focused managed-TUI waiting-screen patch is maintained on `release/0.29`
+from the published v0.29.4 base. It does not include the newer browser-enrollment
+development below. The accepted implementation passed waiting screens,
+same-process automatic live recovery, and production restoration on both
+100x30 and 160x45 Pi consoles. Release and installed-artifact results are recorded
+in the versioned release notes; these TUI checks do not qualify browser enrollment.
+
 ## Active milestone
 
 ### Low-priority TUI usability follow-up

@@ -184,6 +184,27 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   experimental browser-owner lock failure cannot be treated as unsupported
   lifespan and leave a failed application listening. Return a nonzero exit code
   when server startup fails.
+
+## [0.29.5] - 2026-09-08
+
+### Fixed
+
+- Keep managed physical-console remote TUIs on one boxed **Daemon disconnected**
+  screen during temporary outages, including startup before the daemon is ready.
+  Show the target and a bounded retry countdown without stale scanner readings
+  or repeated scrolling failure messages. Re-enter normal startup with fresh
+  authorization and scanner state after the connection becomes available.
+- Preserve intentional quit, service stop, permanent authentication/TLS failure,
+  direct USB behavior and non-interactive exit statuses. Keep fixed, sanitized
+  waiting events in the bounded TUI/file log and best-effort local journal.
+- Add a regression check that the Home Assistant App catalog options match the
+  strict release runtime. Retain the existing options, credentials, ports,
+  recordings, independently versioned cards and Core integration.
+
+This patch is based on v0.29.4 with the focused PR #247 backport. Later browser
+enrollment development on `main` is not included. Upgrade the TUI client to get
+the waiting screen; an existing 0.29.4 daemon does not need an upgrade for it.
+
 ## [0.29.4] - 2026-09-06
 
 ### Fixed
@@ -2073,7 +2094,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
+[0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3
 [0.29.2]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.1...v0.29.2

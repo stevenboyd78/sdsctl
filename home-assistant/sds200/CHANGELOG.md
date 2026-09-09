@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.29.5
+
+- Track the focused sdsctl managed-TUI outage-screen patch. Update remote Pi
+  clients to 0.29.5 to use the waiting screen; an existing 0.29.4 App daemon is
+  compatible and does not require upgrading for this client-side improvement.
+- Preserve the published 0.29.4 App option schema and defaults, credentials,
+  ports, recordings, cards and Core integration. Later experimental browser
+  enrollment changes from `main` are not part of this patch.
+
 ## 0.29.4
 
 - Track the sdsctl patch that repairs DNS, IPv4, and IPv6 certificate tests
