@@ -10,7 +10,7 @@ instead.
 Use an exact release tag for controlled deployments:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.4
+docker pull theboyd78/sdsctl:0.29.5
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.

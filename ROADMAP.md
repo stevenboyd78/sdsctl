@@ -9,6 +9,15 @@ The broader product direction, architectural constraints, deferred capabilities,
 and ideas that are not ready for scheduling are recorded in
 [the project vision](docs/project-vision.md).
 
+## v0.29.5 maintenance release
+
+The focused managed-TUI waiting-screen patch is maintained on `release/0.29`
+from the published v0.29.4 base. It does not include the newer browser-enrollment
+development below. The accepted implementation passed waiting screens,
+same-process automatic live recovery, and production restoration on both
+100x30 and 160x45 Pi consoles. Release and installed-artifact results are recorded
+in the versioned release notes; these TUI checks do not qualify browser enrollment.
+
 ## Active milestone
 
 ### Managed-display enrollment and unattended recovery

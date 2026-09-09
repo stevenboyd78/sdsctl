@@ -146,16 +146,17 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert "host_network: true\n" not in manifest
 
 
-def test_published_0_29_4_catalog_does_not_advertise_unreleased_options() -> None:
+def test_published_0_29_catalog_does_not_advertise_unreleased_options() -> None:
     """Supervisor reads main's catalog even when its image is an older release.
 
-    Match the strict loader shipped in v0.29.4, not the newer source-tree loader.
+    Match the strict loader in v0.29.4 and its v0.29.5 maintenance backport,
+    not the newer source-tree loader.
     Keep this contract while advertising that image; a version bump can select
     a different published contract, but merely merging runtime code cannot.
     """
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")
-    if _quoted_scalar(manifest, "version") != "0.29.4":
-        return  # This is the immutable 0.29.4 image's compatibility contract.
+    if _quoted_scalar(manifest, "version") not in {"0.29.4", "0.29.5"}:
+        return  # These two releases share the same immutable option contract.
     released = {
         "scanner_host", "mqtt_topic_prefix", "recording_directory",
         "remote_daemon_enabled", "native_dashboard_enabled",

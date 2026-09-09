@@ -5,6 +5,20 @@ version before starting.
 
 ## 1. Prepare the repository
 
+For an explicitly approved maintenance release, use its protected release branch
+instead of `main` throughout this checklist. For v0.29.5 that branch is
+`release/0.29`, based on published v0.29.4 with only the reviewed TUI backport.
+Open its PR against that maintenance branch and require the same CI and CodeQL
+gates. Never merge the older maintenance tree over newer development on main.
+
+Keep the public App catalog on the existing image until all matching maintenance
+images are published and verified. Then merge a separate main-based catalog,
+version and documentation follow-up that preserves unreleased work, publish
+only the reviewed changed wiki pages, and complete installed-release acceptance
+before creating the GitHub Release. This maintenance ordering is an explicit
+exception to publishing wiki source before tagging; it avoids advertising an
+App image that does not exist yet. No version tag may be moved or reused.
+
 - Confirm the default branch is clean and current.
 - Confirm `pyproject.toml` and `sds200.__version__` both contain the intended release version.
 - Confirm `home-assistant/sds200/config.yaml` contains that same release version.
