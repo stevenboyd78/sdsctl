@@ -38,6 +38,18 @@ The App automatically obtains the selected MQTT service from Supervisor and
 enables Home Assistant MQTT Discovery plus the dedicated Home Assistant control
 adapter. The generic daemon MQTT request-envelope command topic remains disabled.
 
+## Published 0.29.4 startup compatibility
+
+If 0.29.4 reports unsupported options named
+`browser_device_server_config` and `experimental_browser_devices_enabled`,
+refresh the App store first. Those unreleased experimental fields were mistakenly
+advertised by the repository catalog; they are not supported by the 0.29.4 image.
+After saving a copy of the App configuration, remove only those two fields if
+they are empty and `false`, respectively, then start the App again. Keep every
+other setting unchanged. No Home Assistant Core restart or recording deletion is
+required. If either field is active, preserve it and seek administrator review
+instead of disabling an experiment or deleting its authority/configuration files.
+
 ## Network audio
 
 The SDS200 sends RTP audio back to the client over UDP. The App fixes that
