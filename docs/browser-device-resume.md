@@ -1008,6 +1008,25 @@ checkpoint, not browser sign-out, real-server authentication, recovery handoff o
 the physical display, automatic boot, power-outage recovery or cross-release
 migration. The offline pause was an explicit test fixture, not a user sign-out.
 
+The corresponding **small-Pi physical checkpoint** passed on September 9 with
+Chromium 151.0.7922.173 at 800×480, using the integrated private review wheel and
+the same worker/native digest. A fresh, isolated non-login account and fictional
+profile were used; no existing profile or desktop keyring was reused. After
+92 seconds without browser/native interaction, the user confirmed setup once.
+The saved message and native revision 2 established exactly one successful claim.
+Canonical offline suspension of only that fictional profile produced paused
+revision 3. Ordinary startup and a complete temporary graphical-session restart
+both showed the paused page, which the user confirmed was readable. An initial
+restart screenshot caught a blank loading frame; the page subsequently rendered
+without a manual reload or another browser start. Browser-first shutdown left
+no owned browser/compositor/keyring process or Chromium Singleton marker, and
+the paused ledger remained byte-identical. The connection counter recorded zero
+throughout. The original production TUI returned to its console with the same
+process ID, zero restarts and an established daemon connection. Test inputs and
+evidence remain preserved, with test services stopped and nothing enabled at boot.
+This is the same limited setup/paused-session-restart checkpoint as the HDMI
+result above, not additional authentication, resume, boot or power-loss acceptance.
+
 The build digest covers the worker entry template, shared browser modules and
 packaged `browser_device*.py` native implementation. Every subsequent action is
 carried in a strict `worker-request` envelope with that executing build identity.
