@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 import struct
 from pathlib import Path
 
 from sds200 import __version__
+from sds200.home_assistant_app import load_home_assistant_app_options
 from sds200.home_assistant_app_runtime import (
     HOME_ASSISTANT_APP_INGRESS_PORT,
     HOME_ASSISTANT_APP_NATIVE_DASHBOARD_PORT,
@@ -144,6 +146,36 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert '  advanced_access_host_address: "str?"\n' in manifest
     assert "hassio_api: true\n" not in manifest
     assert "host_network: true\n" not in manifest
+
+
+def test_patch_catalog_matches_the_strict_release_runtime(tmp_path: Path) -> None:
+    """The catalog must describe this maintenance image, not main's newer loader."""
+    manifest = _APP_MANIFEST.read_text(encoding="utf-8")
+    released = {
+        "scanner_host", "mqtt_topic_prefix", "recording_directory",
+        "remote_daemon_enabled", "native_dashboard_enabled",
+        "advanced_access_server_name", "advanced_access_host_address",
+    }
+    assert manifest.count("options:\n") == manifest.count("schema:\n") == 1
+    options = manifest.partition("options:\n")[2].partition("schema:\n")[0]
+    schema = manifest.partition("schema:\n")[2]
+    schema_keys = re.findall(r"^  ([a-z][a-z0-9_]*):", schema, re.MULTILINE)
+    option_pairs = re.findall(r"^  ([a-z][a-z0-9_]*): (.+)$", options, re.MULTILINE)
+    assert set(schema_keys) == released
+    assert len(schema_keys) == len(released)
+    assert {key for key, _ in option_pairs} == released - {"scanner_host"}
+    assert len(option_pairs) == len(released) - 1
+
+    # Every current catalog default is a JSON-compatible scalar. Exercise the
+    # actual strict parser without constructing a server or using real settings.
+    payload = {key: json.loads(value) for key, value in option_pairs}
+    payload["scanner_host"] = "scanner.example"
+    path = tmp_path / "options.json"
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    loaded = load_home_assistant_app_options(path)
+    assert loaded.scanner_host == "scanner.example"
+    assert not loaded.remote_daemon_enabled
+    assert not loaded.native_dashboard_enabled
 
 
 def test_home_assistant_app_configuration_translations_cover_schema() -> None:

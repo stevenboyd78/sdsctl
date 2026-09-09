@@ -38,6 +38,30 @@ The App automatically obtains the selected MQTT service from Supervisor and
 enables Home Assistant MQTT Discovery plus the dedicated Home Assistant control
 adapter. The generic daemon MQTT request-envelope command topic remains disabled.
 
+## Published 0.29.4 startup compatibility
+
+If 0.29.4 reports unsupported options named
+`browser_device_server_config` and `experimental_browser_devices_enabled`,
+refresh the App store first. Those unreleased experimental fields were mistakenly
+advertised by the repository catalog; they are not supported by the 0.29.4 image.
+Save a private copy of the App configuration first. Supervisor keeps a separate
+installed schema, so a store refresh alone may leave those fields present. If
+both the installed and store version are still 0.29.4, an administrator can
+refresh the installed metadata by recreating **only this App container** from the
+same published image with `ha apps rebuild YOUR_SDS200_APP_SLUG --force`. Replace
+the placeholder with this installation's actual sds200 App slug. This supported
+Supervisor operation retains the App data; do not uninstall the App or edit
+Supervisor's internal registry to achieve the same result.
+
+Once the installed schema no longer advertises those fields, the stale default
+entries may disappear automatically. If either entry remains in the saved
+configuration, remove only those two entries when they are empty and `false`,
+respectively, then start the App. Keep every other setting and Network mapping
+unchanged. No Home Assistant
+Core restart or recording deletion is required. If either experimental field is
+active, preserve it and seek administrator review instead of disabling an
+experiment or deleting its authority/configuration files.
+
 ## Network audio
 
 The SDS200 sends RTP audio back to the client over UDP. The App fixes that

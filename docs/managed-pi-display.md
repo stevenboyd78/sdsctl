@@ -433,7 +433,7 @@ journalctl -u sdsctl-display@CLIENT_ID.service -f
 An ordinary daemon or Home Assistant App restart is a temporary transport
 failure. The TUI first uses its bounded in-process reconnect sequence.
 
-**Candidate behavior (not in published 0.29.4):** if a managed physical-console
+**Starting with 0.29.5:** if a managed physical-console
 display cannot finish connecting, it keeps one boxed **Daemon disconnected**
 screen visible. The screen shows the configured remote target and a retry
 countdown; it does not display old scanner readings as live data or scroll a new
@@ -465,11 +465,11 @@ A missing or full journal does not prevent reconnection. The terminal streams
 must remain connected to the console; do not change `StandardError` to `journal`,
 because the full-screen renderer also uses that stream.
 
-Published 0.29.4 and non-interactive invocations retain the status `75` fallback:
+Versions through 0.29.4 and non-interactive invocations retain the status `75` fallback:
 systemd waits 15 seconds and starts a fresh process. During a prolonged outage,
 those older versions can show repeated fixed temporary-failure messages on the
 console until startup succeeds. That scrolling output does not by itself mean
-automatic recovery is broken. The candidate does not change the service unit's
+automatic recovery is broken. This improvement does not change the service unit's
 restart policy or its non-retryable failure statuses.
 
 Changing any client in the Home Assistant App reloads its credential registry
@@ -495,12 +495,12 @@ authentication failures and an operator's intentional quit into a retry loop.
 
 Upgrade only after reviewing the target version. Stop the display before
 replacing its package, install the exact published release, check dependencies,
-then start it again. For v0.29.2:
+then start it again. Once v0.29.5 is published:
 
 ```bash
 sudo systemctl stop sdsctl-display@CLIENT_ID.service
 sudo /opt/sdsctl-display/bin/python -m pip install --upgrade \
-  "sds200[tui,playback]==0.29.2"
+  "sds200[tui,playback]==0.29.5"
 sudo /opt/sdsctl-display/bin/python -m pip check
 sudo systemctl start sdsctl-display@CLIENT_ID.service
 ```
@@ -508,7 +508,11 @@ sudo systemctl start sdsctl-display@CLIENT_ID.service
 If installation or the dependency check fails, keep the service stopped and
 restore the previously reviewed package version before starting it. The existing
 client profile, credential, certificate, recording directory, console font,
-and service enablement do not need to change for this presentation-only update.
+and service enablement do not need to change for this recovery-screen update.
+Reuse the existing virtual environment; do not rerun `python3 -m venv` for an
+ordinary package upgrade. If this environment uses all optional interfaces,
+use `"sds200[all]==0.29.5"` in the install command instead. A successful package
+upgrade needs a display-service restart, not a reboot or daemon/App upgrade.
 
 To return `/dev/tty1` to its ordinary login prompt:
 

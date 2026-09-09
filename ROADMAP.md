@@ -11,7 +11,17 @@ and ideas that are not ready for scheduling are recorded in
 
 ## Active milestone
 
-### Milestone 34.1 — Display-only native browser kiosk
+### v0.29.5 — Focused managed-TUI recovery patch
+
+This maintenance candidate is based on the published v0.29.4 tree and backports
+the accepted managed-TUI waiting screen from PR 247. It excludes subsequent
+browser enrollment development on `main`. The accepted implementation passed
+physical waiting-screen and same-process automatic recovery checks on both
+100x30 and 160x45 Pi consoles, followed by production restoration. The separate
+backport and release artifacts still require their own validation; publication
+and installed-release acceptance are not claimed by this roadmap entry.
+
+### Milestone 34.1 — Display-only native browser kiosk history
 
 The operator approved building and testing the display-only direction after
 the initial design and documentation only review. The candidate adds a separate
@@ -37,7 +47,9 @@ temporary-resource cleanup is complete. Kiosk cold-boot and production
 graphical-service qualification are not claimed.
 No acceptance is inherited from the TUI tests. Fully unattended re-login,
 per-device browser enrollment, audio and recording access remain outside this
-first implementation. The candidate remains unreleased.
+first implementation. Manual-login kiosk support shipped in v0.29.3, followed
+by the fully published v0.29.4 recovery patch. Later browser-enrollment work
+remains separate from this maintenance release.
 
 #### Closed v0.29.2 — TUI application header and production acceptance
 
