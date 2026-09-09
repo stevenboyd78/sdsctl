@@ -56,13 +56,13 @@ authenticate to a dashboard or replace real Chromium/display acceptance.
 
 On a compatible Debian/Ubuntu development machine, install `bubblewrap` with
 the system package manager. The tests may skip when these platform prerequisites
-are unavailable locally. GitHub's Linux Python jobs install `bubblewrap` and
-require both namespace-test modules to execute without skips; a green result
-must not depend on silently omitting these checks. Reproduce this gate with:
+are unavailable locally. Separate GitHub namespace jobs for Python 3.11–3.14
+install `bubblewrap` and require both modules to execute without skips; a green
+result must not depend on silently omitting these checks. Reproduce this gate with:
 
 ```bash
-pytest --junitxml=/tmp/sdsctl-python-test-results.xml
-python scripts/check_browser_namespace_results.py /tmp/sdsctl-python-test-results.xml
+pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py --junitxml=/tmp/sdsctl-namespace-test-results.xml
+python scripts/check_browser_namespace_results.py /tmp/sdsctl-namespace-test-results.xml
 ```
 
 The result check must follow a successful pytest run and use that run's report.
@@ -70,6 +70,14 @@ If namespace creation is blocked by host policy, report the prerequisite failure
 do not disable AppArmor, relax kernel settings, run the tests as root, or bypass
 browser sandboxing to make the gate pass. This execution requirement is separate
 from the project's coverage-percentage target.
+
+The full-suite/coverage jobs remain on `ubuntu-latest`. Its current hosted image
+refuses unprivileged `bwrap` UID mapping even after the package is installed, so
+the dedicated namespace gate uses `ubuntu-22.04` without policy overrides. This is
+a bounded runner choice, not a production OS recommendation: [GitHub's runner
+notice](https://github.com/actions/runner-images/issues/14254) schedules brownouts
+from 2027-03-23 and removal on 2027-04-17. Qualify a replacement before the first
+brownout rather than removing the gate or weakening the runner's security policy.
 
 ## Project structure
 

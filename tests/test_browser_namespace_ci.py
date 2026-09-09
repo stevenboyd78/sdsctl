@@ -100,13 +100,20 @@ def test_cli_failure_returns_nonzero(tmp_path, report, capsys, kind):
     assert "gate failed:" in output.err
 
 
-def test_workflow_checks_actual_full_suite_report():
+def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/ci.yml").read_text()
-    assert "sudo apt-get install --yes --no-install-recommends bubblewrap" in workflow
+    ordinary, namespace = workflow.split("  browser-namespace:\n", 1)
+    namespace = namespace.split("  package:\n", 1)[0]
+    assert "runs-on: ubuntu-latest" in ordinary
+    assert "run: pytest --cov=sds200 --cov-report=term-missing" in ordinary
+    assert "runs-on: ubuntu-22.04" in namespace
+    assert 'python-version: ["3.11", "3.12", "3.13", "3.14"]' in namespace
+    assert "sudo apt-get install --yes --no-install-recommends bubblewrap" in namespace
     assert "assert os.geteuid() != 0; os.close(os.pidfd_open(os.getpid()))" in workflow
     assert ('bwrap --unshare-pid --as-pid-1 --die-with-parent --bind / / '
             '--dev-bind /dev /dev --proc /proc -- /bin/true') in workflow
-    assert ('pytest --cov=sds200 --cov-report=term-missing '
-            '--junitxml="${RUNNER_TEMP}/python-test-results.xml"') in workflow
+    assert ('pytest tests/test_browser_device_launch.py '
+            'tests/test_browser_device_guard_release.py') in namespace
+    assert '--junitxml="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
     assert ('python scripts/check_browser_namespace_results.py '
-            '"${RUNNER_TEMP}/python-test-results.xml"') in workflow
+            '"${RUNNER_TEMP}/namespace-test-results.xml"') in namespace

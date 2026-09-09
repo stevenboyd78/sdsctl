@@ -35,8 +35,43 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
-      - name: Install namespace test prerequisite
+      - name: Ruff
+        run: ruff check .
+
+      - name: MyPy
+        run: mypy src/sds200
+
+      - name: Pytest
+        run: pytest --cov=sds200 --cov-report=term-missing
+
+  browser-namespace:
+    name: Browser namespace / Python ${{ matrix.python-version }}
+    # The latest Ubuntu image denies bwrap UID mapping. Do not disable AppArmor
+    # or relax kernel policy. Keep the full suite above on ubuntu-latest; this
+    # separate gate uses the still-supported, namespace-capable runner.
+    # Migrate before ubuntu-22.04 brownouts start on 2027-03-23, after qualifying a
+    # replacement's unprivileged namespace policy (see CONTRIBUTING.md).
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      # actions/setup-python v7.0.0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install project and namespace prerequisite
         run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
           sudo apt-get update
           sudo apt-get install --yes --no-install-recommends bubblewrap
 
@@ -45,17 +80,13 @@ jobs:
           python -c 'import os; assert os.geteuid() != 0; os.close(os.pidfd_open(os.getpid()))'
           bwrap --unshare-pid --as-pid-1 --die-with-parent --bind / / --dev-bind /dev /dev --proc /proc -- /bin/true
 
-      - name: Ruff
-        run: ruff check .
-
-      - name: MyPy
-        run: mypy src/sds200
-
-      - name: Pytest
-        run: pytest --cov=sds200 --cov-report=term-missing --junitxml="${RUNNER_TEMP}/python-test-results.xml"
+      - name: Pytest namespace modules
+        run: >-
+          pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py
+          --junitxml="${RUNNER_TEMP}/namespace-test-results.xml"
 
       - name: Require browser namespace tests to execute
-        run: python scripts/check_browser_namespace_results.py "${RUNNER_TEMP}/python-test-results.xml"
+        run: python scripts/check_browser_namespace_results.py "${RUNNER_TEMP}/namespace-test-results.xml"
 
   package:
     name: Documentation and package
