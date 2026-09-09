@@ -35,6 +35,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
+      - name: Install namespace test prerequisite
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends bubblewrap
+
+      - name: Check unprivileged PID isolation
+        run: |
+          python -c 'import os; assert os.geteuid() != 0; os.close(os.pidfd_open(os.getpid()))'
+          bwrap --unshare-pid --as-pid-1 --die-with-parent --bind / / --dev-bind /dev /dev --proc /proc -- /bin/true
+
       - name: Ruff
         run: ruff check .
 
@@ -42,7 +52,10 @@ jobs:
         run: mypy src/sds200
 
       - name: Pytest
-        run: pytest --cov=sds200 --cov-report=term-missing
+        run: pytest --cov=sds200 --cov-report=term-missing --junitxml="${RUNNER_TEMP}/python-test-results.xml"
+
+      - name: Require browser namespace tests to execute
+        run: python scripts/check_browser_namespace_results.py "${RUNNER_TEMP}/python-test-results.xml"
 
   package:
     name: Documentation and package

@@ -47,6 +47,30 @@ python -m twine check dist/*
 
 The automated test suite must run without scanner hardware.
 
+### Linux browser process-isolation checks
+
+The browser recovery-launch and paused-guard-release tests use real Linux PID
+namespaces with a fictional browser executable. They require a non-root test
+user, Linux `pidfd` support, and working `bubblewrap` (`bwrap`). They do not
+authenticate to a dashboard or replace real Chromium/display acceptance.
+
+On a compatible Debian/Ubuntu development machine, install `bubblewrap` with
+the system package manager. The tests may skip when these platform prerequisites
+are unavailable locally. GitHub's Linux Python jobs install `bubblewrap` and
+require both namespace-test modules to execute without skips; a green result
+must not depend on silently omitting these checks. Reproduce this gate with:
+
+```bash
+pytest --junitxml=/tmp/sdsctl-python-test-results.xml
+python scripts/check_browser_namespace_results.py /tmp/sdsctl-python-test-results.xml
+```
+
+The result check must follow a successful pytest run and use that run's report.
+If namespace creation is blocked by host policy, report the prerequisite failure;
+do not disable AppArmor, relax kernel settings, run the tests as root, or bypass
+browser sandboxing to make the gate pass. This execution requirement is separate
+from the project's coverage-percentage target.
+
 ## Project structure
 
 - `src/sds200/transport.py`: transport contract and USB serial transport
