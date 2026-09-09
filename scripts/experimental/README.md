@@ -55,7 +55,10 @@ or authentication server, and success requires zero connections.
 
 The matrix checks fresh startup, setup without consent, uninitialized restart,
 explicit one-time setup confirmation, deliberate native pause and persisted
-paused restart. The [startup guide](../../docs/browser-device-startup.md#exact-headed-first-start-qualification)
+paused restart. Before setup confirmation it waits **55 seconds without browser
+or native interaction**, allowing the worker to idle naturally. The first click
+must succeed without a retry or manual reload; a warm worker alone is insufficient
+acceptance. The [startup guide](../../docs/browser-device-startup.md#exact-headed-first-start-qualification)
 defines the assertions and limits. Success writes `qualification-result.json`,
 visible text, screenshots, and expected/observed browser arguments. An uncertain
 or failed run is retained for review, never replayed over the same profile.
@@ -318,6 +321,7 @@ node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
 node --test scripts/experimental/test_browser_device_startup.mjs
+node --test scripts/experimental/test_browser_device_worker.mjs scripts/experimental/test_browser_device_worker_gate.mjs
 node --test scripts/experimental/test_browser_device_retirement.mjs
 node --test scripts/experimental/test_browser_device_retirement_ui.mjs
 ```

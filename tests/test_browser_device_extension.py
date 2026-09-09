@@ -29,6 +29,9 @@ def test_browser_recovery_coordinator_contract() -> None:
          "scripts/experimental/test_browser_device_retirement.mjs",
          "scripts/experimental/test_browser_device_retirement_ui.mjs",
          "scripts/experimental/test_browser_device_retirement_startup.mjs",
+         "scripts/experimental/test_browser_device_worker.mjs",
+         "scripts/experimental/test_browser_device_worker_gate.mjs",
+         "scripts/experimental/test_browser_device_launch.mjs",
          "scripts/experimental/test_browser_cookie_interruption.mjs"],
         capture_output=True, text=True, timeout=30,
     )

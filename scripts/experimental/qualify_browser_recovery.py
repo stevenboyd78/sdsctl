@@ -275,6 +275,8 @@ def main():
             window = wait(lambda: next((wid for wid, title in x.windows()
                 if "SDSCTL experimental first-run setup" in title), None), 45)
             wait(lambda: "Initialization saves local state" in x.text(window))
+            emit("normal-setup-idle-before-first-confirmation", seconds=55)
+            time.sleep(55)  # No browser/native calls until the trusted input below.
             x.key(window, "Tab")
             x.key(window, "space")
             x.key(window, "Tab")
@@ -389,6 +391,8 @@ def main():
         if scenario == "no-consent":
             os.kill(process, signal.SIGTERM)
         else:
+            emit("recovery-idle-before-first-review", seconds=55)
+            time.sleep(55)  # Natural MV3 idle; no consent/readiness messages sent.
             # Real trusted keyboard events, not DOM event dispatch or direct
             # native acknowledgement calls. The generated page stays unchanged.
             x.key(window, "Tab")

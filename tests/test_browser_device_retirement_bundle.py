@@ -300,6 +300,7 @@ const sender={id,url:extensionOrigin+'recovery.html',frameId:0,
   documentLifecycle:'active',documentId:'doc-1',tab:{id:1,incognito:false}};
 globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
   onMessage:{addListener:fn=>listeners.push(fn)},
+  onStartup:{addListener:()=>{}},onInstalled:{addListener:()=>{}},
   sendMessage:message=>new Promise((resolve,reject)=>{
     assert.equal(listeners.length,1);
     if(!listeners[0](message,sender,resolve))reject(Error('unregistered'));
@@ -345,7 +346,9 @@ globalThis.chrome={runtime:{id,getURL:name=>extensionOrigin+name,
     }}},
   cookies:{remove:async()=>{calls.push('remove-cookie');},get:async()=>null,
     set:()=>assert.fail('cookie install forbidden')},
-  alarms:{clear:async()=>{calls.push('cancel-alarm');},create:()=>assert.fail('alarm forbidden')},
+  alarms:{onAlarm:{addListener:()=>{}},clear:async()=>{calls.push('cancel-alarm');},
+    create:()=>assert.fail('alarm forbidden')},
+  tabs:{onUpdated:{addListener:()=>{}},create:()=>assert.fail('navigation forbidden')},
 };
 const names=['review','recovery-form','confirm','resolve','notice','reviewed'];
 const elements=Object.fromEntries(names.map(name=>[name,{checked:false,disabled:true,textContent:'',

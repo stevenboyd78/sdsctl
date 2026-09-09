@@ -267,7 +267,8 @@ await import(pathToFileURL(extension + '/worker.mjs'));
 await new Promise(resolve => setTimeout(resolve, 0));
 let response;
 for (const handler of handlers) handler({action:'status'},
-  {id, url:chrome.runtime.getURL('control.html')}, result => { response=result; });
+  {id, url:chrome.runtime.getURL('control.html'),frameId:0,documentLifecycle:'active',
+   documentId:'doc-1',tab:{id:1,incognito:false}}, result => { response=result; });
 assert.equal(response.mode, 'setup_error');
 const content = readFileSync(extension + '/content.js', 'utf8');
 for (const [href, child, count] of [[origin+'/',false,1], [origin+'/',true,0],

@@ -21,7 +21,7 @@ MODULES = (
     "browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs",
     "browser_device_startup.mjs", "browser_device_resume.mjs", "browser_device_retirement_ui.mjs",
     "browser_device_retirement_startup.mjs", "browser_device_launch.mjs",
-    "browser_device_worker.mjs",
+    "browser_device_worker.mjs", "browser_device_worker_gate.mjs",
 )
 _ENTRY = ("import {startBrowserWorker} from './browser_device_worker.mjs';\n"
           "void startBrowserWorker(chrome, BUILD).catch(()=>{});\n")

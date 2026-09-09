@@ -5,6 +5,7 @@ import {connectBrowserEntry} from './browser_device_startup.mjs';
 import {createChromeResumePorts,connectResumeWorker} from './browser_device_resume.mjs';
 import {connectChromeRetirementRecovery} from './browser_device_retirement_startup.mjs';
 import {connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation} from './browser_device_launch.mjs';
+import {createWorkerEventGate} from './browser_device_worker_gate.mjs';
 
 const HOST='org.sdsctl.browser_device';
 const hex=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -31,28 +32,34 @@ export function validateWorkerContext(value,build,id) {
 
 export async function startBrowserWorker(chrome,build) {
   if(!hex(build))throw Error('Worker context refused');
-  // No listener, browser-state access, normal tick or recovery navigation until
-  // the fixed selected native endpoint validates its current canonical context.
-  const context=validateWorkerContext(await chrome.runtime.sendNativeMessage(HOST,
-    {version:1,action:'worker-context',build}),build,chrome.runtime.id);
+  const gate=createWorkerEventGate(chrome);
+  try {
+  // Inert receivers are synchronous; no role-specific handler, browser-state
+  // access, startup tick or recovery navigation precedes validated context.
+  const context=validateWorkerContext(await Promise.race([
+    chrome.runtime.sendNativeMessage(HOST,{version:1,action:'worker-context',build}),
+    gate.deadline]),build,chrome.runtime.id);
+  gate.check(); // Also reject a late result when a throttled timer has not fired.
   // Every subsequent native action carries the executing graph's identity. A
   // cached old worker cannot bypass the new host's build check with old envelopes.
-  const runtime=Object.create(chrome.runtime);
+  const runtime=Object.create(gate.chrome.runtime);
   Object.defineProperty(runtime,'sendNativeMessage',{value:(host,request)=>{
     if(host!==HOST)throw Error('Worker host refused');
     return chrome.runtime.sendNativeMessage(HOST,{version:1,action:'worker-request',build,request});
   }});
-  const scoped=Object.create(chrome);Object.defineProperty(scoped,'runtime',{value:runtime});
+  const scoped=Object.create(gate.chrome);Object.defineProperty(scoped,'runtime',{value:runtime});
   if(context.role==='recovery') {
     connectChromeRetirementRecovery(scoped,context.config,context.acknowledge);
     if(context.launch!==null) {
       connectRecoveryLaunchWorker(scoped,context.launch);
       connectRecoveryLaunchNavigation(scoped,context.launch);
     }
-    return;
+    gate.open();return;
   }
   const controller=connectChromeRecovery(scoped,context.config,createChromeResumePorts(scoped,context.config));
   const logout=connectLogoutWorker(scoped,controller,context.config.origin);
   connectResumeWorker(scoped,controller,Date.now,logout.retireAfterResume);
   connectBrowserEntry(scoped);
+  gate.open();
+  } catch {gate.fail();throw Error('Worker context refused');}
 }

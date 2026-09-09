@@ -18,6 +18,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 
 from sds200.browser_device_bundle import browser_extension_identity, create_browser_bundle
@@ -329,6 +330,11 @@ def main():
         window = launch("explicit-setup", True)
         # Verify the page before sending real trusted confirmation keyboard events.
         read("explicit-setup-before-consent", window, "Initialization saves local state")
+        # Let MV3 naturally idle before the FIRST action. No extension/native
+        # calls or browser interaction keep the worker warm during this interval.
+        # A warm-only setup test missed asynchronous listener registration.
+        emit("idle-before-one-confirmation", seconds=55)
+        time.sleep(55)
         x.key(window, "Tab")
         x.key(window, "space")
         x.key(window, "Tab")
@@ -357,6 +363,7 @@ def main():
             "manual_refreshes": 0,
             "exact_foreground_cli": True,
             "native_pause_fixture": True,
+            "setup_idle_seconds": 55,
             "production_targets": False,
         }
         put(stage / "qualification-result.json", json.dumps(result))

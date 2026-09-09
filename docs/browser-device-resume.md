@@ -949,6 +949,43 @@ current owned profile, build identity and applicable maintenance/handoff evidenc
 Browser/page messages cannot select paths, operation IDs or the authority mode.
 Missing, stale, ambiguous, unknown or inconsistent context fails closed.
 
+The September 8 physical HDMI canary exposed a missing **idle-worker** case:
+the prior implementation installed message listeners only after awaiting native
+context. Immediate setup passed, but a fresh isolated comparison that waited
+55 seconds before its first confirmation reproduced the lost-acknowledgement
+warning, with the native record still at revision 1 and zero endpoint connections.
+The failed physical profile was retained and the production TUI returned to the
+screen without a restart. This is a failed canary, not completed physical acceptance.
+
+The correction registers small, inert MV3 receivers synchronously, as required by
+[Chrome's service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/migrate/to-service-workers#register-listeners).
+They retain at most 64 bounded eligible messages/events while the fixed native
+context is checked, with a 12-second deadline. They do not read browser recovery
+storage, choose a role, initialize a controller or perform privileged operations.
+Validation failure, deadline expiry, clock rollback or queue overflow refuses the
+pending worker and drains held replies with fixed errors. A late native response
+cannot reopen it. Original per-role sender, origin, schema and one-use checks still
+apply after dispatch; ingress filtering grants no additional authority.
+
+Once context succeeds, only its selected composition receives the held events.
+Dispatch occurs in the same JavaScript turn as controller construction so a queued
+sign-out sets its pause intent before the startup tick can authenticate. No setup
+retry, keepalive loop, manual reload, storage reset, manifest-name selector or
+weakened native build check is used. The real first-start fixture now waits
+55 seconds before its one setup confirmation; the handoff fixture also waits
+before the first recovery review. Corrected physical acceptance remains required.
+
+With the corrected installed wheel, private Chromium 151.0.7922.173 (small Pi)
+and 152.0.7977.75 (HDMI Pi) both passed that idle-first-setup check, ordinary
+paused startup/restart, and the normal-first handoff including idle recovery review.
+Both handoff runs retained their guard/evidence and returned to clean paused
+browser state without a session cookie or recovery alarm. Separate no-consent
+runs produced no acknowledgement or guard release. All six scenarios observed
+zero authentication-endpoint connections and required no manual reload of the
+managed pages. These were private virtual-display tests with fictional credentials;
+neither physical production TUI was stopped or changed. They do not turn the
+earlier failed physical canary into a pass.
+
 The build digest covers the worker entry template, shared browser modules and
 packaged `browser_device*.py` native implementation. Every subsequent action is
 carried in a strict `worker-request` envelope with that executing build identity.
