@@ -86,6 +86,86 @@ the final readback helper passed 25 tests, including wrong/missing/extra state,
 cookie/alarm refusal and populated-output refusal. These are private fixture
 tests, not additions to the repository-wide coverage measurement.
 
+## Genuine ordinary-resume interruption and paused recovery
+
+A later September 9 qualification used a **new isolated profile** on the small
+Pi, real Chromium 151.0.7922.173 and the same verified 289-file candidate above.
+This was an authenticated virtual X11 display, not another physical-display
+test. A private home, D-Bus session, encrypted fictional keyring and network
+namespace separated it from the desk displays and Home Assistant. The local
+TLS authority and device enrollment existed only in that fictional namespace;
+browser sandboxing and certificate verification remained enabled.
+
+Unlike the earlier seeded fixture, the ordinary product UI performed setup,
+initial sign-in, sign-out, paused startup, resume review and one confirmation.
+The fault wrapper withheld the complete successful response to the second
+`POST /auth/device/session`. It observed HTTP 200 and the native client's real
+disconnect after approximately 3.00 seconds, forwarding **no response messages**.
+No product timeout, extension source, browser storage or native approval was
+altered to cause the interruption.
+
+| Boundary | Verified result |
+| --- | --- |
+| Ordinary setup and initial sign-in | Setup saved without attempting login; the following ordinary start established a session and obtained a successful protected session read. |
+| Explicit sign-out | One logout request paused server/native authority and removed the first server session. The waiting landing page was observed; the transient sign-out confirmation sentence was not claimed readable. |
+| Interrupted explicit resume | The server completed session issuance, but its response was withheld until native disconnect. The browser displayed that resume could not be confirmed; native state was paused at revision 8 with one complete, consumed approval. |
+| Two ordinary starts before maintenance | Both showed the paused page for 30 seconds without another session request, manual reload, repeated approval or injected storage. |
+| Once-only native retirement | Archived the exact consumed history, retained its complete terminal anchor and advanced the paused revision from 8 to 9. It did not replay that approval or authenticate. |
+| Canonical supervised recovery | After verified page/worker/native readiness and 35 seconds idle, one review and one confirmation produced a real paused acknowledgement and clean supervised shutdown. |
+| Restoration and local release | Exact canonical host restoration was confirmed. Normal startup remained refused until a separate, fresh local paused-only guard release; the guard file itself remained retained. |
+| Two ordinary starts after recovery | Both used the normal installed CLI and the same complete distro-expanded browser arguments as the accepted pre-maintenance start. Each remained paused for 30 seconds, with no authentication connection or manual reload. |
+| Independent saved-state readback | A separate GET-only observer found exact clean paused state, no pending intent, no device-session cookie and no recovery alarm. Actual-host proofs before and after the observer confirmed stopped supervision, restoration/release and unchanged native, bundle, archive, handoff and recovery evidence. |
+
+The separate records are `PASS_ORDINARY_RESPONSE_LOSS_AND_PAUSED_STARTS`,
+`PASS_GENUINE_INTERRUPTION_RECOVERY`, `PASS_GENUINE_CLEAN_PAUSED_READBACK` and
+`PASS_HOST_PROOF_BEFORE_AND_AFTER_READBACK`. Recovery and readback each recorded
+zero endpoint connections. The earlier authentication phase intentionally made
+two session requests, one logout request and three verification requests; do not
+describe the whole scenario as having zero authentication traffic.
+
+The undelivered second response corresponded to a server-issued session. Local
+paused recovery and absent browser cookies **do not prove server revocation**.
+The fictional server was shut down after the ordinary interruption test; this
+checkpoint does not prove later server-authorized sign-in after maintenance or
+credential replacement. Those need a separately reviewed continuation.
+
+The final observer had only storage/cookie/alarm read APIs, no native messaging
+or background worker. Its first navigation required one fixture-only reload
+after extension replacement; none of the four ordinary starts required one.
+Browser extension/cache metadata is not claimed unchanged by the observer.
+Native and recovery evidence stayed read-only inside its sandbox. Full stopped
+supervisor/host/release proofs ran in the actual host PID namespace before and
+afterward, where their existing owner lock can be opened without weakening the
+read-only sandbox. Content and identity/metadata snapshots matched throughout.
+
+### Qualification corrections and preserved uncertainty
+
+An earlier genuine interrupted case remains **incomplete**, not relabeled a
+pass. Native retirement completed, but a test namespace first made trusted
+root-owned executables appear unmapped, and a subsequent namespace setup could
+not start D-Bus because its private temporary directory was not writable. A
+later canonical launch reached verified readiness, but the harness waited for
+the page's superseded initial placeholder. It timed out before any browser
+review or confirmation; no acknowledgement was written. Its consumed history,
+guard, handoff, archives and retained Chromium Singleton markers remain intact.
+Normal startup correctly refuses that case. It was not reset or relaunched to
+obtain the new result.
+
+Before the new genuine case, a fresh synthetic Chromium rehearsal qualified the
+corrected sequence: wait for settled verified-ready text, idle, review once,
+check the exact paused native revision, then confirm once. The same shared
+keyboard helper was used for the successful genuine case. The outer recovery
+namespace preserved executable ownership and writable private temporary storage;
+only namespace setup used privilege, with all candidate/browser work running as
+the ordinary test user. No product security deadline or browser safety control
+was relaxed. Private helper checks passed 10 input-sequence tests, 13 observer
+host-boundary tests and 26 GET-only readback tests; these are not additional
+repository-wide coverage claims.
+
+All owned test processes stopped and all evidence was retained. The small Pi's
+existing TUI remained active with its original process and zero restarts.
+Home Assistant, the HDMI Pi, real credentials and port mappings were unchanged.
+
 ## CI evidence and remaining review gates
 
 At the exact head `fe7b3e98d3d9f03f6b0ba71095f8250ae968a6ac`, all 27 executed
@@ -104,22 +184,23 @@ and [CodeQL run](https://github.com/stevenboyd78/sdsctl/actions/runs/34324507532
 This checkpoint adds no runtime changes, release tag, production enrollment,
 credential operation, port exposure or Home Assistant catalog change.
 
-The physical recovery/paused-restart evidence gap is now closed **for this
-same-build fictional checkpoint**. It does not qualify:
+The physical recovery/paused-restart evidence gap is closed **for the earlier
+same-build seeded checkpoint**. The new virtual-display qualification additionally
+proves ordinary interrupted resume and its recovery back to paused for this
+candidate. Neither checkpoint qualifies:
 
-- How a genuinely interrupted ordinary resume creates pending state, or its
-  recovery through real server authority and session establishment.
+- Later server-authorized session establishment after paused maintenance, or
+  revocation of a session whose response was lost.
 - A coordinated credential-file replacement workflow or cross-release worker,
   browser cache and profile migration.
 - Automatic boot, actual power loss or a combined server/display outage.
 - Physical HDMI recovery handoff, Firefox/WPE unattended enrollment, or secure
   unattended keyring handling in other deployments.
 
-The next bounded qualification should use a **new isolated profile**, obtain its
-state through ordinary setup/sign-out/resume, and interrupt only test-owned work
-at a measured boundary rather than injecting pending browser storage. It should
-prove pause persists, stale consent cannot authenticate, reviewed recovery ends
-clean-but-paused, and later sign-in still requires separate fresh permission.
-Design and review that fault boundary before running it; do not repurpose any
-retained uncertain profile. Passing this record alone does not mark PR #250 ready
-for merge or make the broader unattended-browser feature production accepted.
+The next bounded qualification should separately review fresh permission and
+session establishment after paused recovery, including any credential-file
+replacement it requires. Do not infer a working online continuation from the
+offline paused result, restore an old credential snapshot, replay consumed
+consent or repurpose a retained uncertain profile. Passing this record alone
+does not mark PR #250 ready for merge or make the broader unattended-browser
+feature production accepted.

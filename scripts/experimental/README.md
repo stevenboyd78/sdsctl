@@ -74,6 +74,16 @@ not sufficient evidence of persistent failure; inspect a settled bounded capture
 before requesting physical confirmation. Do not replay a populated fixture,
 preseed human-pass markers, or weaken product timers to obtain a result.
 
+The same [acceptance record](../../docs/browser-device-recovery-acceptance.md#genuine-ordinary-resume-interruption-and-paused-recovery)
+also records a later fresh ordinary setup/sign-out/resume case with a measured
+lost-response fault, real paused recovery and two normal restarts on each side
+of maintenance. That private qualification uses no seeded pending state; do not
+substitute the synthetic harness above for it. Its readback uses GET-only APIs
+in a read-only evidence sandbox, with full stopped-process/host/release proof in
+the actual host namespace before and after. Later online session establishment
+and credential replacement are still separate gates. Retain failed cases and
+consumed operations; never replay them to obtain a pass.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,

@@ -1039,6 +1039,14 @@ test-helper import failure, early-frame timing correction, separate observer
 reload and remaining gates. The fixture seeded its initial pending state; this
 does not prove a genuinely interrupted ordinary resume or live authentication.
 
+The later [genuine ordinary-resume interruption checkpoint](browser-device-recovery-acceptance.md#genuine-ordinary-resume-interruption-and-paused-recovery)
+used a fresh private virtual-display profile, ordinary UI actions and a measured
+lost session-response boundary instead of seeded state. Reviewed maintenance
+returned it to clean paused state; two ordinary paused starts before and after
+recovery and independent browser readback passed. This adds same-build interrupted
+resume evidence, not physical outage acceptance, server-side revocation or a
+later online sign-in after maintenance.
+
 The build digest covers the worker entry template, shared browser modules and
 packaged `browser_device*.py` native implementation. Every subsequent action is
 carried in a strict `worker-request` envelope with that executing build identity.
@@ -1092,9 +1100,10 @@ connections and unchanged native inputs. Production TUI services were not change
 The virtual runs above are same-build private Chromium results with synthetic
 pending state, not real-server sign-in or physical-display acceptance. The
 separate small-Pi physical checkpoint has the limits in its acceptance record.
-Worker changes across
-application releases, genuinely interrupted user resume, actual power loss,
-Firefox/WPE and production deployment remain separate lifecycle gates.
+The later genuine interruption checkpoint is separate from that synthetic matrix.
+Worker changes across application releases, later server-authorized sign-in
+after maintenance, actual power loss, Firefox/WPE and production deployment
+remain separate lifecycle gates.
 
 ## Verified server evidence and exact-generation sessions
 

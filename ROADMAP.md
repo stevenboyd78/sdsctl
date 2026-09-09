@@ -256,11 +256,17 @@ refresh. A separate same-build
 [small-Pi physical recovery checkpoint](docs/browser-device-recovery-acceptance.md)
 now passed user-reviewed acknowledgement, exact restoration/paused-only release,
 two ordinary paused starts and final persisted-state readback. Its initial pending
-state was synthetic; it does not qualify a genuinely interrupted ordinary resume.
-Server-connected deployment, cross-release migration, credential replacement and
-broader physical/outage acceptance remain gates. Next, design a fresh isolated
-ordinary-resume interruption test with measured fault boundaries, retaining all
-existing uncertain profiles and keeping later sign-in permission separate.
+state was synthetic. A later fresh virtual-display qualification obtained its
+interrupted state through ordinary setup/sign-out/resume and withheld only a
+test server's completed session response until the real native timeout. One
+reviewed recovery then returned it to clean paused state, with two ordinary
+paused starts both before and after maintenance and a separate GET-only readback.
+No consumed approval was replayed; earlier uncertain attempts remain preserved.
+See the [genuine interruption record](docs/browser-device-recovery-acceptance.md#genuine-ordinary-resume-interruption-and-paused-recovery).
+Later online session establishment, server-side revocation of an undelivered
+session, cross-release migration, credential replacement and broader physical/
+outage acceptance remain gates. Next, review a separate fresh-permission
+continuation without inferring sign-in authority from paused recovery.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production
