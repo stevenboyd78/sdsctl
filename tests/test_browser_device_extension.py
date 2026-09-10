@@ -99,6 +99,8 @@ def test_generated_recovery_harness_help_is_non_mutating() -> None:
     assert "no recovery-state seeding, cookie injection or production access" in result.stdout
     assert "Sandbox and verified TLS required" in result.stdout
     assert "bad-ca, bad-name" in result.stdout
+    assert "headed-startup uses an existing private X server and CDP" in result.stdout
+    assert "production ownership checks stay strict" in result.stdout
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux") or os.geteuid() == 0,

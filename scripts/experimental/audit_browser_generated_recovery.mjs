@@ -14,12 +14,13 @@ import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
 
 if (process.argv[2] === "--help") {
-  console.log("Usage: node audit_browser_generated_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL INSTALLED_PYTHON [SCENARIO] [ip|dns|ipv6] [review|startup]");
+  console.log("Usage: node audit_browser_generated_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL INSTALLED_PYTHON [SCENARIO] [ip|dns|ipv6] [review|startup|headed-startup]");
   console.log("Scenarios: healthy, deadline, truncated, tls-eof, server-restart, worker-restart, revoke, bad-ca, bad-name, resume, resume-stale.");
   console.log("Non-root Linux, five absolute paths, private existing stage, installed candidate wheel with web dependencies.");
   console.log("Actual CLI/generated bundle/setup form; no recovery-state seeding, cookie injection or production access.");
   console.log("Sandbox and verified TLS required; bwrap isolates temporary certificate trust. Retains fictional fixtures.");
-  console.log("startup runs the installed foreground CLI with fixture-only headless/CDP flags, not a physical display.");
+  console.log("startup uses fixture-only headless/CDP flags; headed-startup uses an existing private X server and CDP.");
+  console.log("Both run the installed foreground CLI, not a physical display; production ownership checks stay strict.");
   process.exit(0);
 }
 const [stage, playwright, executable, certutil, python, scenario = "healthy", identityKind = "ip",
@@ -28,7 +29,8 @@ assert(process.platform === "linux" && process.getuid() !== 0);
 assert([stage, playwright, executable, certutil, python].every(p => p && path.isAbsolute(p)));
 assert(["healthy", "deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "bad-ca", "bad-name", "resume", "resume-stale"].includes(scenario));
 assert(["ip", "dns", "ipv6"].includes(identityKind));
-assert(["review", "startup"].includes(flow));
+assert(["review", "startup", "headed-startup"].includes(flow));
+const managed = flow !== "review";
 const info = await lstat(stage);
 assert(info.isDirectory() && !info.isSymbolicLink() && info.uid === process.getuid() &&
   (info.mode & 0o777) === 0o700 && await realpath(stage) === stage, "Unsafe stage");
@@ -131,7 +133,10 @@ try {
     "--public-key", path.join(root, "extension.pub.pem")]);
   const receipt = JSON.parse(await readFile(path.join(root, "bundle/bundle.json")));
   const legacy = path.join(os.homedir(), ".pki/nssdb"), mount = existsSync(legacy) ? legacy : path.join(root, "data/pki/nssdb");
-  const fixtureFlags = flow === "startup" ? ["--headless", "--remote-debugging-port=0"] : [];
+  // Headless Chromium can append switches inside the managed command tail.
+  // Keep production ancestor matching strict; use a private X server for headed-startup.
+  const fixtureFlags = managed ?
+    [...(flow === "headed-startup" ? [] : ["--headless"]), "--remote-debugging-port=0"] : [];
   await put("browser", `#!/usr/bin/python3\nimport os,sys\nextra=[] if sys.argv[1:]==['--version'] else ${JSON.stringify(fixtureFlags)}\nos.execvp('bwrap',['bwrap','--ro-bind','/','/','--bind',${JSON.stringify(root)},${JSON.stringify(root)},'--bind',${JSON.stringify(nss)},${JSON.stringify(mount)},'--dev-bind','/dev','/dev','--proc','/proc','--',${JSON.stringify(executable)},*extra,*sys.argv[1:]])\n`, 0o700);
   const {chromium} = await import(pathToFileURL(playwright));
   const extension = path.join(root, "bundle/extension");
@@ -195,7 +200,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   await until(async () => await mode() === "setup_error");
   assert.equal((await command("status")).exchanges, 0);
   assert.equal(Object.keys(await stored()).length, 0); assert(!await hasCookie());
-  if(flow === "startup") {
+  if(managed) {
     await until(()=>context.pages().some(p=>p.url()===`chrome-extension://${id}/startup.html`));
     const startup=context.pages().find(p=>p.url()===`chrome-extension://${id}/startup.html`);
     assert(startup,"Launcher did not open its fixed startup page");
@@ -204,7 +209,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     await context.close();context=await launch(true);await openControl();
     await until(()=>context.pages().some(p=>p.url()===`chrome-extension://${id}/setup.html`));
   }
-  const setup = flow === "startup" ? context.pages().find(p=>p.url()===`chrome-extension://${id}/setup.html`)
+  const setup = managed ? context.pages().find(p=>p.url()===`chrome-extension://${id}/setup.html`)
     : await context.newPage();
   assert(setup,"Explicit setup launch did not open its fixed page");
   if(flow === "review") await setup.goto(`chrome-extension://${id}/setup.html`);
@@ -245,7 +250,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     const cookies = await context.cookies(origin);
     assert(cookies.some(c => c.name === "__Host-sdsctl-device-session" && c.httpOnly && c.secure && c.sameSite === "Strict"));
     let page;
-    if(flow === "startup") {
+    if(managed) {
       await until(()=>context.pages().some(p=>p.url()===origin+"/device-display"));
       page=context.pages().find(p=>p.url()===origin+"/device-display");
       await page.waitForLoadState("domcontentloaded");
@@ -257,7 +262,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
     };
     await until(async()=>await sessionStatus()===200);
     assert.equal(await page.evaluate(() => document.cookie), "");
-    if(flow === "startup") {
+    if(managed) {
       await page.getByRole("button",{name:"Open dashboard menu",exact:true}).waitFor();
       await page.screenshot({path:path.join(root,"managed-display.png")});
     }
@@ -353,7 +358,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   const expected = trustFailure ? "tls_error" : scenario === "revoke" ? "credential_rejected" : "paused";
   await until(async () => await mode() === expected, terminalStartupTimeout);
   assert.equal((await command("status")).exchanges, beforeRestart); assert(!await hasCookie());
-  if(flow === "startup") {
+  if(managed) {
     const startup=context.pages().find(p=>p.url()===`chrome-extension://${id}/startup.html`);assert(startup);
     const expectedNotice = trustFailure ? "Certificate verification failed." : scenario === "revoke"
       ? "This display credential was rejected or revoked." : "Automatic sign-in is paused.";
@@ -365,7 +370,7 @@ print(json.dumps({'mode': mode, 'failures': failures}))
   const browserState = JSON.stringify(await stored());
   const secret = (await readFile(path.join(root, "native/device.secret"), "utf8")).trim();
   assert(!browserState.includes(secret) && !browserState.includes("sdsctl-browser-session-v1."), "Secret persisted in browser storage");
-  const result = {passed: true, scenario, identityKind, flow, managedLauncher:flow==="startup",
+  const result = {passed: true, scenario, identityKind, flow, managedLauncher:managed,
     physicalDisplay:false,browser: context.browser().version(),
     installedRuntime: true, generatedBundle: true, realSetupForm: true, realASGI: true,
     realNative: true, sandbox: true, verifiedTLS: true, stateSeeding: false, cookieInjection: false,
