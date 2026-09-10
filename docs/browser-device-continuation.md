@@ -1,6 +1,6 @@
 # Post-recovery continuation: design boundary
 
-Status: **development design, read-only preflight and internal intent journal;
+Status: **development design, read-only preflight, archive-plan inspection and internal intent journal;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -100,6 +100,35 @@ release confirmation remains available, but cannot authorize launching. No nativ
 revision changes, server request, browser start, service change or sign-in occurs.
 Do not invoke this writer on real retained profiles until the successor path has
 been implemented and qualified: it intentionally leaves the installation stopped.
+
+## Native archive-plan inspection (not committed recovery evidence)
+
+`inspect_resume_archive` separates structural validation of a native retirement
+or reconciliation archive from comparison with the current ledger. It reads
+only caller-supplied bytes: no file access, SQLite connection, credential read,
+browser action or network request. It reconstructs the exact selected transition
+and returns a frozen, redacted `BrowserResumeArchivePlan`, not a retirement
+acknowledgement or current continuation permission.
+
+The parser requires bounded canonical JSON with exact fields, the selected
+identity/profile/review, valid typed state and approval rows, canonical ordering,
+the original two-minute review window and precisely the permitted after-state.
+Retirement retains its terminal anchor; reconciliation cannot reinterpret a
+matching or pending row as absent. Malformed values, duplicate keys, unexpected
+fields, unsupported schemas and substituted selections are refused.
+
+**A valid archive plan can exist even when the native transaction rolled back.**
+It can also still describe the old transition after a newer pause. Both cases
+remain insufficient for the existing `confirm` methods: those independently
+compare the reconstructed after-state with the current validated ledger and
+recheck the archive bytes before returning. A plan cannot be supplied as the
+review input to those methods. No `ignore_revision` switch or relaxed revision
+comparison has been added.
+
+This is the structural building block for a future historical-chain reader,
+not that complete reader or its commit anchor. Existing release/intent checks,
+normal startup and per-request refusal remain unchanged. Nothing in this parser
+activates a successor or grants browser/server authority.
 
 ## Remaining successor activation, not implemented
 

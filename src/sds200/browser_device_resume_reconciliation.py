@@ -8,7 +8,6 @@ No CLI, native-message action or installed browser adapter is connected.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import time
 from collections.abc import Callable
@@ -16,8 +15,9 @@ from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 
 from .browser_device_native import _private_read, load_browser_native_configuration
-from .browser_device_recovery import RecoveryMode, _object, _State
+from .browser_device_recovery import RecoveryMode
 from .browser_device_resume import _COLUMNS, _hex, _integer, _timestamp
+from .browser_device_resume_archive import inspect_resume_archive
 from .browser_device_resume_maintenance import (
     _ARCHIVE_BYTES,
     _REVIEW_SECONDS,
@@ -176,32 +176,19 @@ class BrowserResumeReconciliation:
             if (not _hex(browser_intent) or browser_intent != review.intent
                     or archive.is_relative_to(self._configuration.root)):
                 raise BrowserResumeReconciliationError()
-            document = json.loads(_private_read(archive.parent, archive.name, _ARCHIVE_BYTES),
-                                  object_pairs_hook=_object)
-            if (not isinstance(document, dict)
-                    or set(document) != {"version", "operation", "review", "before", "after"}
-                    or type(document["version"]) is not int or document["version"] != 1
-                    or document["operation"] != _OPERATION
-                    or _encoded(document["review"]) != _encoded(asdict(review))
-                    or _fingerprint(document["before"]) != review.fingerprint
-                    or self._review(document["before"], review.created_at) != review):
-                raise BrowserResumeReconciliationError()
-            before, after = document["before"], document["after"]
-            revised_at = after["state"]["observed_at"]
-            if (not _timestamp(revised_at)
-                    or not review.created_at <= revised_at < review.expires_at):
-                raise BrowserResumeReconciliationError()
-            expected = {**before, "state": asdict(replace(
-                _State(**before["state"]), revision=review.revision + 1, observed_at=revised_at))}
-            if _encoded(after) != _encoded(expected):
-                raise BrowserResumeReconciliationError()
+            raw = _private_read(archive.parent, archive.name, _ARCHIVE_BYTES)
+            plan = inspect_resume_archive(raw, kind="reconcile",
+                identity=self._configuration.identity, profile=self._configuration.root,
+                expected_review=_encoded(asdict(review)))
             with self._recovery._inspection() as db:
                 current = self._snapshot(db, self._recovery._now(), browser_intent)
-                if _encoded(current) != _encoded(expected):
+                if _encoded(current) != plan.after:
                     raise BrowserResumeReconciliationError()
+            if _private_read(archive.parent, archive.name, _ARCHIVE_BYTES) != raw:
+                raise BrowserResumeReconciliationError()
             return BrowserResumeRetirementEvidence(
                 self._configuration.identity, browser_intent, review.fingerprint,
-                review.mode, review.revision + 1,
+                plan.mode, plan.proposed_revision,
             )
         except Exception:
             raise BrowserResumeReconciliationError() from None

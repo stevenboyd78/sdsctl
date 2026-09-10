@@ -336,6 +336,35 @@ desk Pi displays, real credentials, listeners and all retained profiles were unt
 Successor activation and online post-recovery sign-in remain unimplemented;
 PR #250 remains draft, with no merge, release or public wiki publication.
 
+## Native archive-plan separation
+
+The archive-plan parser now reconstructs selected native retirement and
+reconciliation archives without reading the current ledger. It returns a
+different, immutable result type that does not establish commit or permission.
+Existing strict confirmations still require the exact current ledger state and
+now recheck archive bytes after that comparison. No native schema, activation
+writer, historical commit anchor, startup role or browser message was added.
+
+The new parser suite passed **115 cases**, including no-I/O checks, typed and
+canonical validation, all stopped modes, both reconciliation schema versions,
+malformed/duplicate/oversized records and real synthetic native transactions.
+Those transaction cases distinguish a valid archive preceding rollback, exact
+post-commit confirmation and a newer pause; passing a plan as a confirmation
+review is refused. Archive changes during the live-ledger check are retained
+and refused, not repaired.
+
+The existing maintenance, reconciliation and private ownership-boundary suites
+also passed **225 cases**. The combined coverage run before the final two
+readback tests passed 338 cases and covered all 96 statements of the new parser.
+This is targeted statement coverage, not whole-project coverage or proof of
+all interruption schedules. The project coverage floor remains 86%; the broader
+100% goal is still deferred to v1.0. Wider process-isolation, runtime, package
+and exact-commit CI results must be recorded separately for this changed runtime.
+
+No retained browser profile, real credential, Home Assistant service or Pi
+configuration was touched. The full historical-chain/current-permission
+selector and successor activation remain unimplemented; PR #250 stays draft.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

@@ -7,7 +7,6 @@ input writers. Same-account/root callers and their selected archives are trusted
 
 from __future__ import annotations
 
-import hashlib
 import json
 import os
 import sqlite3
@@ -19,8 +18,11 @@ from pathlib import Path
 
 from .browser_device_native import _private_read, load_browser_native_configuration
 from .browser_device_profile import _platform, _write
-from .browser_device_recovery import BrowserDeviceRecovery, RecoveryMode, _object, _State
+from .browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
 from .browser_device_resume import _COLUMNS, _hex, _integer, _timestamp, validate_resume_state
+from .browser_device_resume_archive import _encoded as _encoded
+from .browser_device_resume_archive import _fingerprint as _fingerprint
+from .browser_device_resume_archive import inspect_resume_archive
 from .browser_device_store import BrowserDeviceStore
 
 _REVIEW_SECONDS = 120
@@ -71,15 +73,6 @@ class BrowserResumeRetirementEvidence:
     retirement: str = field(repr=False)
     mode: RecoveryMode
     revision: int
-
-
-def _encoded(value: object) -> bytes:
-    return (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
-            + "\n").encode("ascii")
-
-
-def _fingerprint(value: object) -> str:
-    return hashlib.sha256(_encoded(value)).hexdigest()
 
 
 class BrowserResumeMaintenance:
@@ -229,38 +222,19 @@ class BrowserResumeMaintenance:
             if archive.is_relative_to(self._configuration.root):
                 raise BrowserResumeMaintenanceError()
             raw = _private_read(archive.parent, archive.name, _ARCHIVE_BYTES)
-            document = json.loads(raw, object_pairs_hook=_object)
-            if (not isinstance(document, dict)
-                    or set(document) != {"version", "operation", "review", "before", "after"}
-                    or type(document["version"]) is not int or document["version"] != 1
-                    or document["operation"] != "retire-native-resume-history"
-                    or _encoded(document["review"]) != _encoded(asdict(review))
-                    or _fingerprint(document["before"]) != review.fingerprint):
-                raise BrowserResumeMaintenanceError()
-            # Reconstruct the exact plan, not an arbitrary after-state from a file.
-            before = document["before"]
-            after = document["after"]
-            if self._review(before, review.created_at) != review:
-                raise BrowserResumeMaintenanceError()
-            state = _State(**before["state"])
-            revised_at = after["state"]["observed_at"]
-            if (not _timestamp(revised_at)
-                    or not review.created_at <= revised_at < review.expires_at):
-                raise BrowserResumeMaintenanceError()
-            anchor = dict(before["approvals"][-1])
-            if anchor["phase"] in {"prepared", "claimed"}:
-                anchor["phase"] = "cancelled"
-            expected = {**before, "state": asdict(replace(
-                state, revision=state.revision + 1, observed_at=revised_at)), "approvals": [anchor]}
-            if _encoded(after) != _encoded(expected):
-                raise BrowserResumeMaintenanceError()
+            plan = inspect_resume_archive(raw, kind="retire", identity=self._configuration.identity,
+                profile=self._configuration.root, expected_review=_encoded(asdict(review)))
+            # A valid archive can exist BEFORE native commit. Only this independent
+            # live-ledger comparison permits the existing strict confirmation result.
             with self._recovery._inspection() as db:
                 current = self._snapshot(db, self._recovery._now())
-                if _encoded(current) != _encoded(expected):
+                if _encoded(current) != plan.after:
                     raise BrowserResumeMaintenanceError()
+            if _private_read(archive.parent, archive.name, _ARCHIVE_BYTES) != raw:
+                raise BrowserResumeMaintenanceError()
             return BrowserResumeMaintenanceResult(
-                state.revision + 1, RecoveryMode(state.mode), review.approvals - 1, review.pending,
-            ), anchor
+                plan.proposed_revision, plan.mode, plan.archived, plan.cancelled,
+            ), json.loads(plan.after)["approvals"][0]
         except Exception:
             raise BrowserResumeMaintenanceError() from None
 
