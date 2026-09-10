@@ -153,6 +153,117 @@ Canonical HTTPS DNS names, private IPv4 and IPv6 origins remain supported. Neith
 internal DNS nor a reverse proxy should become a requirement, and certificate
 verification must not be bypassed for an IP-address installation.
 
+## Proposed activation contract: history is not current permission
+
+This section specifies the next implementation boundary; **none of the proposed
+activation reader, writer, manifest, epoch schema or request role exists yet**.
+It does not change the stop condition imposed by a complete intent. Implement
+and qualify the whole selected path before enabling any part on a real profile.
+
+### Separate the evidence types
+
+The current release confirmation reconstructs the handoff, guard and native
+retirement/reconciliation chain and compares it with the **current** paused
+ledger. That comparison is correct for the existing paused-only release. It
+must not be relaxed to accept `current_revision >= released_revision`, or replaced
+with a caller-selected `ignore_revision` flag.
+
+The successor needs two distinct internal results:
+
+- **Historical recovery evidence** reconstructs the exact prior transition from
+  the retained canonical archive, guard, handoff acknowledgement, restoration,
+  release and administrator intent. It verifies their bindings and hashes,
+  including the recorded prior native state, without claiming that this is the
+  current ledger state. An archive that merely describes a possible transition
+  is not by itself proof that the transition committed. It must be anchored by
+  the complete release/intent chain validated before successor activation.
+- **Current continuation permission** additionally verifies the exact committed
+  successor epoch and current native state in one read transaction, plus the
+  unchanged runtime and private-input bindings. Only this result may select the
+  future resume-review role. Historical evidence must not be accepted where
+  current permission is required, including by a cached worker.
+
+Keep existing release, intent, maintenance and handoff `confirm` methods strict.
+Provide a separately named internal historical reader rather than changing what
+their existing successful results mean. Neither result proves current browser
+storage, server authorization, drained requests or an installed session.
+
+### One authoritative activation commit
+
+The proposed design uses an exclusively created, immutable activation manifest
+and an activation anchor committed **inside the existing native ledger**. It
+must not require successful final writes to two independent SQLite databases to
+decide whether activation happened.
+
+1. With the browser stopped, hold the launch lock, coordinated private-input
+   ownership and the native write transaction. Revalidate the exact complete
+   intent, unchanged paused revision and complete historical chain. Refuse an
+   existing activation artifact or anchor; never adopt or overwrite one.
+2. Derive the only permitted plan from that validated state: retain the device
+   identity, retain pause, advance the native revision exactly once and enable
+   only a later fresh resume review. Bind the plan to the intent and release
+   digests, exact targets, runtime/private inputs, native ledger inode, old and
+   proposed revisions and a fresh authorization epoch. No credential, cookie,
+   session token, reusable approval or plaintext confirmation belongs in it.
+3. Create the private manifest exclusively, write its canonical bytes and sync
+   the file and parent directory. Check its exact bytes and inode and revalidate
+   the selected state. A file that exists but was not fully synced cannot be used
+   as an activation result.
+4. In **one native SQLite transaction**, commit the manifest digest/binding and
+   successor epoch together with the planned revision change. The native state
+   remains paused; no old approval becomes usable. This transaction is the sole
+   activation commit point. There is no later "complete" file write that grants
+   permission or repairs the outcome.
+5. Return success only after exact read-only confirmation of both the immutable
+   manifest and committed native anchor. A lost reply requires that confirmation,
+   not another apply call. Confirmation never inserts a missing anchor, completes
+   a prepared artifact or changes pause.
+
+The native schema version, migration and synchronous-commit behavior require
+implementation review before step 4 exists. Reject unsupported schema/journal
+modes without automatic conversion; qualify any explicit migration in the same
+transaction as the anchor. In particular, an older worker must fail closed on
+the new schema. Do not silently change ordinary unguarded installations. Sync
+claims remain conditional on the filesystem honoring them, not merely on a
+successful process-exit test.
+
+### Interruption decisions
+
+| Observed state after an interruption | Exact confirmation | Launch or mutation |
+| --- | --- | --- |
+| Complete intent; no activation artifact or anchor | No activation | Blocked by intent |
+| Empty, partial, unsafe or unsynced manifest; no anchor | Refused | Blocked; retain all evidence |
+| Complete manifest; native transaction never committed | Not activated | Blocked; do not replay or fill in the anchor |
+| Native transaction committed but reply was lost | Confirm only the exact matching epoch, plan and paused post-state | At most eligible for the separately implemented resume-review role |
+| Anchor without its exact manifest, conflicting epoch, changed identity/input/runtime or replaced inode | Refused | Blocked; no fallback to the old release |
+| Later native revision after confirmed activation | Do not report the old paused post-state as current | Revalidate current epoch and state; revision ordering alone grants nothing |
+
+An exact historical activation result may later be useful to an administrator,
+but it must be a different result from permission to proceed now. A newer
+sign-out, pause, rejection or pending/uncertain operation still controls current
+behavior. A rollback to an old release, an earlier intent or an earlier native
+ledger is not a supported way to recover a conflict.
+
+### Wire current permission before exposing the writer
+
+Ordinary launch and every native request must select the same exact completed
+epoch from fixed installation paths. A missing selector, unsupported worker or
+partial combination must keep the present stop behavior. Do not expose a writer
+that leaves users dependent on an unimplemented selector to recover their display.
+
+The first permitted successor role is **resume review while paused**, not ordinary
+authentication. It must freshly observe the clean browser pause and absence of
+unexpected session/alarm state, require the existing trusted-page gesture and
+bind new native approval to the selected epoch and current revision. The
+administrator's local intent is not browser consent. Existing approvals,
+restoration acknowledgements and automatic startup cannot substitute for it.
+
+Any later online flow must separately verify current server authority and
+generation over verified TLS, enforce server-side administrator resume when
+required, handle old-request drainage and account for a session whose response
+was lost. Credential rotation remains a separately authorized operation. These
+conditions apply equally to canonical DNS, private IPv4 and IPv6 installations.
+
 ## Acceptance gates
 
 Use only fresh isolated fixtures with fictional device identities until the
@@ -165,6 +276,15 @@ newer sign-out, stale workers, server rejection and session-response loss. A new
 real-browser run must independently prove protected display access after explicit
 consent, plus the unchanged behavior of another display. Stopped preflight and
 paused startup are necessary but are not that online acceptance.
+
+Before integrating an activation writer, add explicit negative tests for a
+historical result passed where current permission is required, complete manifest
+without a native commit, native anchor without the selected manifest, a lost
+post-commit reply, schema migration rollback and an old worker against the new
+schema. After activation, test a newer pause/sign-out and an old approval against
+the same epoch as well as against a different one. Re-run the existing strict
+confirmations to prove their meaning has not changed. Those successor tests are
+requirements, not claims about the currently implemented intent-only candidate.
 
 Physical layout, service ordering, boot and actual combined power loss remain
 separate checks. See the [versioned acceptance record](browser-device-recovery-acceptance.md)

@@ -315,13 +315,38 @@ frozen source. The private wheel SHA256 is
 worker build is `0b88cbe6862ce4f76eba9d0fb20d5ae88293f7fba22f2a4ea4f3c6b3fab0e247`.
 The unchanged scalar 0.29.5 is not a claim that this is the published artifact.
 
-The broader full-suite/coverage run and exact new-commit hosted checks are
-separate from these completed targeted results. Record their status on the PR;
-do not transfer earlier green checks to these changed runtime bytes. No new
-real-browser/physical acceptance is claimed. Home Assistant, both desk Pi
-displays, real credentials, listeners and all retained profiles were untouched.
+At runtime head `477deae65da519997e96d923785a81aed239b484`, the final full local
+suite passed **7,202 tests**, with no failures, errors or skips and 87.22%
+statement coverage. All 27 executed hosted checks passed; three publication
+jobs skipped as intended. Across both push and PR events, all eight Python
+3.11–3.14 full-suite jobs passed 7,041 tests with 161 explicit environment-dependent
+skips each and 86.40–86.41% coverage. All eight dedicated namespace jobs ran the
+173 required cases without skips. The coverage floor remains 86%. The jobs
+reported the upstream Starlette/AnyIO deprecation warning; the local full run
+also emitted background capture-stream logging errors in the unchanged audio
+failure-listener test without a test failure. These observations were retained,
+not suppressed or treated as failures in the recovery cases.
+
+Exact-head CodeQL analyses reported zero findings and no analysis errors or
+warnings. See [the completed PR CI](https://github.com/stevenboyd78/sdsctl/actions/runs/34420692944)
+and [CodeQL](https://github.com/stevenboyd78/sdsctl/actions/runs/34420690222).
+These results describe that exact runtime checkpoint, not future activation
+code. No new real-browser/physical acceptance is claimed. Home Assistant, both
+desk Pi displays, real credentials, listeners and all retained profiles were untouched.
 Successor activation and online post-recovery sign-in remain unimplemented;
 PR #250 remains draft, with no merge, release or public wiki publication.
+
+## Successor activation design checkpoint
+
+The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)
+separates immutable historical recovery evidence from current permission. It
+specifies an immutable prepared manifest and a single authoritative native
+transaction, interruption decisions, unchanged strict confirmation methods and
+the requirement to implement the current-epoch selector before exposing a writer.
+This is a design-only addition. No manifest format, schema migration, epoch writer,
+historical reader, resume-review role or online activation is implemented or
+qualified by that document. Existing complete intents still block startup and
+native requests; no receipt becomes a runnable permission through documentation.
 
 ## CI evidence and remaining review gates
 
