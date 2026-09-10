@@ -112,10 +112,8 @@ def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
     assert "assert os.geteuid() != 0; os.close(os.pidfd_open(os.getpid()))" in workflow
     assert ('bwrap --unshare-pid --as-pid-1 --die-with-parent --bind / / '
             '--dev-bind /dev /dev --proc /proc -- /bin/true') in workflow
-    assert ('pytest tests/test_browser_device_launch.py '
-            'tests/test_browser_device_guard_release.py') in namespace
-    assert "tests/test_browser_device_continuation_intent.py" in namespace
-    assert "tests/test_browser_device_continuation_history.py" in namespace
-    assert '--junitxml="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
+    assert "timeout-minutes: 25" in namespace
+    assert "python scripts/run_browser_namespace_tests.py" in namespace
+    assert '--report="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
     assert ('python scripts/check_browser_namespace_results.py '
             '"${RUNNER_TEMP}/namespace-test-results.xml"') in namespace

@@ -62,13 +62,23 @@ install `bubblewrap` and require all four modules to execute without skips; a gr
 result must not depend on silently omitting these checks. Reproduce this gate with:
 
 ```bash
-pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py \
-  tests/test_browser_device_continuation_intent.py tests/test_browser_device_continuation_history.py \
-  --junitxml=/tmp/sdsctl-namespace-test-results.xml
-python scripts/check_browser_namespace_results.py /tmp/sdsctl-namespace-test-results.xml
+namespace_evidence=$(mktemp -d /tmp/sdsctl-namespace-check.XXXXXX)
+python scripts/run_browser_namespace_tests.py --report="$namespace_evidence/results.xml"
+python scripts/check_browser_namespace_results.py "$namespace_evidence/results.xml"
 ```
 
-The result check must follow a successful pytest run and use that run's report.
+The runner launches two independent pytest processes on the same machine: the
+launch, guard-release and continuation-intent modules form one batch, and retained
+history forms the other. Every module still runs in full. Both batches must exit
+successfully, with no skipped, failed, duplicate or missing-module results, before
+the runner publishes the combined report. It preserves individual logs and reports
+in the printed evidence directory and never overwrites an earlier report. Leave
+`PYTEST_ADDOPTS` unset; hidden selection options are refused.
+
+This scheduling keeps the existing 25-minute CI job limit, with a 23-minute limit
+for the two batches together. It does not extend test deadlines or weaken the
+namespace prerequisite checks. The separate result check must follow a successful
+runner invocation and use that invocation's report.
 If namespace creation is blocked by host policy, report the prerequisite failure;
 do not disable AppArmor, relax kernel settings, run the tests as root, or bypass
 browser sandboxing to make the gate pass. This execution requirement is separate

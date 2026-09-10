@@ -80,12 +80,10 @@ jobs:
           python -c 'import os; assert os.geteuid() != 0; os.close(os.pidfd_open(os.getpid()))'
           bwrap --unshare-pid --as-pid-1 --die-with-parent --bind / / --dev-bind /dev /dev --proc /proc -- /bin/true
 
-      - name: Pytest namespace modules
+      - name: Pytest namespace batches
         run: >-
-          pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py
-          tests/test_browser_device_continuation_intent.py
-          tests/test_browser_device_continuation_history.py
-          --junitxml="${RUNNER_TEMP}/namespace-test-results.xml"
+          python scripts/run_browser_namespace_tests.py
+          --report="${RUNNER_TEMP}/namespace-test-results.xml"
 
       - name: Require browser namespace tests to execute
         run: python scripts/check_browser_namespace_results.py "${RUNNER_TEMP}/namespace-test-results.xml"
