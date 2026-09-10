@@ -84,6 +84,38 @@ the actual host namespace before and after. Later online session establishment
 and credential replacement are still separate gates. Retain failed cases and
 consumed operations; never replay them to obtain a pass.
 
+### Internal paused-continuation reader qualification
+
+The test-only `continuation-read` scenario of `qualify_browser_recovery.py`
+extends its synthetic-pending-state recovery and guard-release fixture. Keep
+`qualify_browser_continuation_read.py` alongside the existing helpers. Run with
+a new empty private case directory, private authenticated Xvfb and the installed
+candidate interpreter, followed by absolute Chromium and bwrap paths:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' \
+  /absolute/candidate-venv/bin/python -I \
+  scripts/experimental/qualify_browser_recovery.py \
+  /absolute/new-private-case-directory /usr/bin/chromium /usr/bin/bwrap continuation-read
+```
+
+After actual recovery acknowledgement and release, explicit **fictional fixture
+consent** records the internal continuation intent and paused authorization epoch.
+A separate test launcher then owns the existing launch lock and starts Chromium
+twice with the fixed managed arguments. The installed native helper must discover
+the actual browser ancestry and complete retained history; no browser parent,
+role, result or saved browser pause is simulated for these later reads.
+
+The ordinary product launcher must still refuse the continuation profile. This
+fixture is **not a product continuation-start command**, an online review, a new
+session, renewal or physical-display acceptance. Its listener requires zero
+authentication connections, both screens must settle paused without a manual
+reload, and all native/bundle/archive bytes must remain unchanged **after the
+explicit activation**. The result distinguishes that deliberate activation from
+unchanged reader inputs. Final browser-API readback still requires the exact
+recovery-produced clean pause, no cookie and no recovery alarm. Failed fixtures
+are retained and never replayed; forced test-process cleanup is not a pass.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,

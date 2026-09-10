@@ -64,8 +64,10 @@ def main():
     initial_owner = ExitStack()
     stage, browser, bwrap = map(Path, sys.argv[1:4])
     scenario = sys.argv[4] if len(sys.argv) == 5 else "confirm"
-    assert scenario in {"confirm", "no-consent", "release", "release-seed-first"}
-    releasing = scenario in {"release", "release-seed-first"}
+    assert scenario in {"confirm", "no-consent", "release", "release-seed-first",
+                        "continuation-read"}
+    continuing = scenario == "continuation-read"
+    releasing = scenario in {"release", "release-seed-first", "continuation-read"}
     assert os.geteuid() != 0 and all(
         p.is_absolute() and p.resolve() == p for p in (stage, browser, bwrap)
     )
@@ -162,7 +164,7 @@ def main():
     )
     config = load_browser_native_configuration(native)
     ledger = BrowserDeviceRecovery(native / "recovery.sqlite", config.identity)
-    if scenario != "release":
+    if scenario not in {"release", "continuation-read"}:
         ledger.claim_browser()
         ledger.suspend()
     with _launch_lock(directory):
@@ -258,7 +260,7 @@ def main():
             f"--disable-extensions-except={seed}",
             f"chrome-extension://{key.extension_id}/seed.html",
         )
-        if scenario == "release":
+        if scenario in {"release", "continuation-read"}:
             initial_owner.enter_context(_launch_lock(directory))
             phase = "prior-normal-setup"
             # Establish the actual prior normal installation in Chromium, not
@@ -521,6 +523,12 @@ def main():
             assert obj.confirm(restored=True) == old_ack
             assert BrowserPausedGuardRelease(obj).confirm(
                 release_id=released.release_id) == released
+            if continuing:
+                phase = "actual-continuation-reader"
+                from qualify_browser_continuation_read import qualify
+
+                frozen = qualify(obj, released, startup_args, expected_command,
+                    stage, x, wait, put, emit, no_connections)
         if scenario == "confirm" or releasing:
             phase = "read-only-observer"
             # A separate read-only fixture extension inspects actual browser
@@ -609,7 +617,10 @@ def main():
             "scenario": scenario,
             "browser": browser_version,
             "guard_retained": True,
-            "native_inputs_unchanged": True,
+            "native_inputs_unchanged": not continuing,
+            "explicit_fixture_continuation_activation": continuing,
+            "activated_inputs_unchanged_by_reader": continuing,
+            "actual_continuation_reader_starts": 2 if continuing else 0,
             "acknowledgement_present": (handoff / "browser-acknowledgement.json").exists(),
             "persisted_paused_readback_checked": scenario == "confirm" or releasing,
             "ordinary_paused_starts_after_release": 2 if releasing else 0,
