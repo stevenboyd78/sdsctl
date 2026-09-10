@@ -1582,6 +1582,14 @@ function browserAuditLibrary() {
     if (document.querySelectorAll(".connected-client").length !== 2) {
       failures.push("The two fictional remote clients did not render");
     }
+    const ages = Array.from(document.querySelectorAll(".connected-client"))
+      .map(row => row.lastElementChild?.textContent);
+    if (ages.join("|") !== [
+      "Oldest current connection: 2d 03:04:05",
+      "Oldest current connection: 00:00:30",
+    ].join("|")) {
+      failures.push("Connected-client ages must render as days and HH:MM:SS");
+    }
     return {failures, tracks};
   }
 
