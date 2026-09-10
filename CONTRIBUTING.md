@@ -49,7 +49,7 @@ The automated test suite must run without scanner hardware.
 
 ### Linux browser process-isolation checks
 
-The browser recovery-launch and paused-guard-release tests use real Linux PID
+The browser recovery-launch, paused-guard-release and continuation-intent tests use real Linux PID
 namespaces with a fictional browser executable. They require a non-root test
 user, Linux `pidfd` support, and working `bubblewrap` (`bwrap`). They do not
 authenticate to a dashboard or replace real Chromium/display acceptance.
@@ -57,11 +57,12 @@ authenticate to a dashboard or replace real Chromium/display acceptance.
 On a compatible Debian/Ubuntu development machine, install `bubblewrap` with
 the system package manager. The tests may skip when these platform prerequisites
 are unavailable locally. Separate GitHub namespace jobs for Python 3.11–3.14
-install `bubblewrap` and require both modules to execute without skips; a green
+install `bubblewrap` and require all three modules to execute without skips; a green
 result must not depend on silently omitting these checks. Reproduce this gate with:
 
 ```bash
-pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py --junitxml=/tmp/sdsctl-namespace-test-results.xml
+pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py \
+  tests/test_browser_device_continuation_intent.py --junitxml=/tmp/sdsctl-namespace-test-results.xml
 python scripts/check_browser_namespace_results.py /tmp/sdsctl-namespace-test-results.xml
 ```
 

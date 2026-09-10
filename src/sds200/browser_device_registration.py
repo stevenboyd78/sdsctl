@@ -100,8 +100,12 @@ def inspect_browser_registration(
         _platform()
         # Lazy import avoids the internal handoff/startup dependency cycle. There
         # is no public ignore-guard flag: every proof is revalidated read-only.
+        from .browser_device_continuation_intent import has_continuation_intent
         from .browser_device_guard_release import check_paused_guard_release, has_guard_release
 
+        # A recorded intent is not successor activation, even when complete.
+        if has_continuation_intent(root):
+            raise ValueError()
         if ((root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink()
                 or has_guard_release(root)):
             check_paused_guard_release(root, bundle=bundle, profile=profile, public_key=public_key)

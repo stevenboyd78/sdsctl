@@ -39,6 +39,18 @@ class BrowserContinuationCheckpoint:
     mode: RecoveryMode = RecoveryMode.PAUSED
 
 
+def _released_checkpoint(handoff: BrowserRecoveryHandoff,
+                         release_id: str) -> tuple[str, str, str, int, str]:
+    evidence = _confirmed(handoff, release_id=release_id)
+    config = load_browser_native_configuration(handoff._session._profile)
+    if evidence.identity != config.identity or evidence.mode is not RecoveryMode.PAUSED:
+        raise ValueError()
+    # Full canonical handoff/archive/host/guard chain plus this installed profile.
+    digest = hashlib.sha256((evidence.receipt_sha256 + "\0" +
+                             str(config.root)).encode()).hexdigest()
+    return config.identity, config.origin, config.device_id, evidence.revision, digest
+
+
 class BrowserContinuationInspection:
     """One same-process review and recheck; never an executable consent object.
 
@@ -58,16 +70,11 @@ class BrowserContinuationInspection:
         self._started = self._wall = 0.0
 
     def _snapshot(self) -> tuple[str, str, str, int, str]:
-        h = self._handoff
-        evidence = _confirmed(h, release_id=self._release_id)
-        config = load_browser_native_configuration(h._session._profile)
-        if evidence.identity != config.identity or evidence.mode is not RecoveryMode.PAUSED:
+        from .browser_device_continuation_intent import has_continuation_intent
+
+        if has_continuation_intent(self._handoff._session._root):
             raise ValueError()
-        # _confirmed checks the full canonical handoff/archive/host/guard chain.
-        # Include this explicit installed profile in the advisory fingerprint.
-        digest = hashlib.sha256((evidence.receipt_sha256 + "\0" +
-                                 str(config.root)).encode()).hexdigest()
-        return config.identity, config.origin, config.device_id, evidence.revision, digest
+        return _released_checkpoint(self._handoff, self._release_id)
 
     def _time(self) -> None:
         now, elapsed = self._clock(), self._monotonic()

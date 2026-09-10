@@ -1,7 +1,7 @@
 """Reject absent or skipped browser process-isolation tests in pytest's JUnit report.
 
 This checks execution evidence, not real Chromium acceptance or a coverage target.
-Run after a successful pytest invocation of both modules; a missing prerequisite must not
+Run after a successful pytest invocation of all modules; a missing prerequisite must not
 silently turn the hosted Linux namespace gate into a passing, skipped test run.
 """
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 REQUIRED_MODULES = (
     "tests.test_browser_device_launch",
     "tests.test_browser_device_guard_release",
+    "tests.test_browser_device_continuation_intent",
 )
 
 
@@ -45,7 +46,7 @@ def check_report(path: Path) -> dict[str, int]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("report", type=Path, help="JUnit XML containing both namespace modules")
+    parser.add_argument("report", type=Path, help="JUnit XML containing all namespace modules")
     args = parser.parse_args(argv)
     try:
         counts = check_report(args.report)

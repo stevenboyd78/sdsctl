@@ -83,6 +83,7 @@ jobs:
       - name: Pytest namespace modules
         run: >-
           pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py
+          tests/test_browser_device_continuation_intent.py
           --junitxml="${RUNNER_TEMP}/namespace-test-results.xml"
 
       - name: Require browser namespace tests to execute

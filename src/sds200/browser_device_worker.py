@@ -142,6 +142,7 @@ def normal_worker_paused_only(
     read-only status, not a new revision, credential operation or authentication.
     Same-account/root callers remain trusted; this is not an OS security boundary.
     """
+    from .browser_device_continuation_intent import has_continuation_intent
     from .browser_device_guard_release import _check_worker_guard_release, has_guard_release
     from .browser_device_handoff import _busy, _lock_file
     from .browser_device_registration import MAINTENANCE_MARKER, _inspect_registration_files
@@ -150,6 +151,10 @@ def normal_worker_paused_only(
             selection.directory, selection.normal_bundle, selection.intent)):
         raise ValueError()
     directory = _browser_directory(selection.bundle, configuration.extension_origin)
+    # Recheck on every request, including already-started workers. No completed
+    # intent may be interpreted as activation or an unguarded normal profile.
+    if has_continuation_intent(directory):
+        raise ValueError()
     lock = directory / ".sdsctl-device-launch.lock"
     fd, binding = _lock_file(lock)
     os.close(fd)

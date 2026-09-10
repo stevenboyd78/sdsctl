@@ -873,8 +873,10 @@ enables confirmation. Unguarded ordinary paused installations retain their
 existing reviewed resume link. A local paused release is not permission to sign
 in, delete the guard or replace credentials manually.
 
-The separate [continuation design and read-only preflight](browser-device-continuation.md)
+The separate [continuation design, preflight and internal intent journal](browser-device-continuation.md)
 describe what is implemented and what must precede a future online transition.
+A recorded administrator intent leaves the installation stopped; it is not native
+activation, browser consent or permission to authenticate.
 
 The follow-up review reproduced why that restriction is necessary: the earlier
 normal wrapper checked its build envelope but did not repeat live-owner/release

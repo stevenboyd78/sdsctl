@@ -1,7 +1,7 @@
 # Post-recovery continuation: design boundary
 
-Status: **development design and read-only preflight, not an online resume
-implementation or an administrator runbook**. PR #250 remains experimental.
+Status: **development design, read-only preflight and internal intent journal;
+not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
 The published manual-login kiosk and remote TUI are unchanged.
@@ -50,9 +50,60 @@ new browser-state observation. Cookie absence is not proof that an undelivered
 server session was revoked. Advisory locks coordinate trusted cooperating
 processes; they are not protection against root or arbitrary same-account edits.
 
-## Proposed next transition, not implemented
+## Administrator intent journal (internal, not activation)
 
-The next candidate should preserve the existing identity for same-device
+`BrowserContinuationIntent` adds the first durable step after preflight. It
+accepts a fresh trusted **local** confirmation callback, not an advisory
+checkpoint, browser message or saved approval. There is no CLI or deployed UI.
+The callback displays the exact installation, release, native revision and a
+one-use confirmation phrase. Its recorded purpose is narrowly fixed to enabling
+a future **fresh browser resume review**, not automatic sign-in or credential
+replacement; a broader or different purpose cannot confirm. Cancellation creates nothing; wrong, expired or
+failed consent does not create an intent. Both wall and monotonic clocks bound
+consent to two minutes, including a final recheck before committing.
+
+The writer holds stopped managed-launcher ownership, shared private-profile
+ownership and an **unchanged** native SQLite write transaction. Together these
+exclude cooperating launchers, private-input writers and native revision changes
+through the consent and commit window. They do not make browser storage or a
+remote server part of that transaction and do not protect against arbitrary
+root/same-account changes.
+
+The fixed, private `.sdsctl-browser-continuation-intent.sqlite` records the exact
+prior release fingerprint, targets, identity, native revision, consent hash and
+its own inode. The original guard, release, handoff, archive, native ledger,
+credentials, host registration and Chromium-owned storage remain unchanged.
+The plaintext confirmation phrase and credentials are not journaled.
+
+| Durable point | Exact read-only confirmation | Normal launch and native requests |
+| --- | --- | --- |
+| No intent; consent cancelled or refused | No completed intent | Existing paused-only release rules |
+| Empty name, prepared row, partial write or any SQLite sidecar | Refused; retain all evidence | Blocked |
+| Complete intent commit with unchanged evidence | Confirms only that intent, including after a lost reply | Still blocked |
+| Changed evidence, replaced inode, conflicting schema or later native revision | Refused; retain all evidence | Blocked |
+
+The name is created exclusively. Preparation is committed and its parent directory
+synced before completion is possible. SQLite rollback-journal mode with
+`synchronous=EXTRA` supplies the completion commit/directory synchronization.
+An interrupted commit is never retried, rolled forward by the application or
+treated as consent merely because a file exists. Confirmation opens read-only,
+refuses sidecars before SQLite access, checks exact schema/canonical bytes and
+revalidates the original recovery chain. It does not repair an uncertain database.
+These durability claims depend on the operating system/filesystem honoring sync;
+process-exit tests are not a physical power-loss qualification.
+
+**A complete intent is deliberately not a runnable grant.** Any intent name or
+sidecar, including a dangling link, blocks ordinary startup and every normal
+worker request. An already-running worker cannot bypass that check. The earlier
+advisory inspector also refuses further reviews. Internal exact historical
+release confirmation remains available, but cannot authorize launching. No native
+revision changes, server request, browser start, service change or sign-in occurs.
+Do not invoke this writer on real retained profiles until the successor path has
+been implemented and qualified: it intentionally leaves the installation stopped.
+
+## Remaining successor activation, not implemented
+
+The next candidate must preserve the existing identity for same-device
 continuation and use a separately reviewed durable authorization epoch. A new
 profile or identity is not an interchangeable workaround: enrollment, credential
 generation, extension identity and old-session invalidation have different
@@ -61,7 +112,8 @@ semantics. Revoked-device replacement remains its own enrollment operation.
 | Checkpoint | Required evidence | Does not yet establish |
 | --- | --- | --- |
 | Recovered and paused | Existing complete release and unchanged historical chain | Permission to change the bound ledger |
-| Administrator continuation recorded | Fresh exact consent and a durable successor transition bound to that chain | Browser consent or server authorization |
+| Administrator intent recorded | Fresh exact consent and a durable intent bound to that chain | Native activation, browser consent or server authorization |
+| Successor activated (not implemented) | Exact completed intent plus a separately validated durable successor epoch | Browser consent or an installed session |
 | Browser resume reviewed | Current clean pause, trusted-page gesture and exact native revision/generation | An installed or usable session |
 | Fresh session confirmed | Verified current server authority, completed native/browser exchange and protected-page access | Earlier lost sessions revoked or a power-outage qualification |
 
@@ -73,11 +125,13 @@ Before any new native revision is written, the design must answer all of these:
    Every normal launch and native request must select the same exact completed
    successor. Missing, partial, stale or conflicting successor evidence blocks
    mutation, including through cached workers.
-2. **Specify crash states before adding a writer.** Record selected old evidence,
+2. **Specify activation crash states before adding its writer.** Bind selected old evidence,
    expected revision, runtime identity, consent and the intended next state.
    Define synchronization order, commit points and exact confirmation after every
    interruption. A lost reply must never automatically repeat a mutation, issue
-   replacement consent or reinterpret a prepared operation as complete.
+   replacement consent or reinterpret a prepared operation as complete. The
+   intent journal implements preparation/confirmation only; it does not implement
+   the successor's native activation or a consumable runtime permission.
 3. **Serialize private-input changes.** Coordinate credential/configuration
    replacement with this transition and native approval handling. Shared read
    locks alone are not a transaction across credential files, SQLite, Chromium

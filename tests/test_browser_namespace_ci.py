@@ -83,7 +83,7 @@ def test_unknown_report_root_rejected(report):
 def test_cli_success_reports_count(report, capsys):
     assert main([str(report())]) == 0
     output = capsys.readouterr()
-    assert "gate passed: 2 tests" in output.out
+    assert f"gate passed: {len(REQUIRED_MODULES)} tests" in output.out
     assert output.err == ""
 
 
@@ -114,6 +114,7 @@ def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
             '--dev-bind /dev /dev --proc /proc -- /bin/true') in workflow
     assert ('pytest tests/test_browser_device_launch.py '
             'tests/test_browser_device_guard_release.py') in namespace
+    assert "tests/test_browser_device_continuation_intent.py" in namespace
     assert '--junitxml="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
     assert ('python scripts/check_browser_namespace_results.py '
             '"${RUNNER_TEMP}/namespace-test-results.xml"') in namespace

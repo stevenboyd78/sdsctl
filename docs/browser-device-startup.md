@@ -151,7 +151,10 @@ resume sign-in. This is not yet a public maintenance/deployment command.
 On that released installation the native helper selects a paused-only worker:
 startup explains that administrator continuation is required and hides ordinary
 resume. It makes no authentication attempt and does not repair saved state. See
-the [continuation boundary](browser-device-continuation.md).
+the [continuation boundary](browser-device-continuation.md). The internal
+continuation-intent writer is not activation: any such intent or SQLite sidecar
+blocks ordinary startup, including after a complete intent commit. No public
+command exposes that unfinished successor workflow.
 
 No service is installed or enabled. The command does not restart itself after a
 clean close, change ports/firewalls, enroll/rotate a device, install trust or

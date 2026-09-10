@@ -285,6 +285,44 @@ genuine response loss on these new bytes, physical layout, credential replacemen
 cross-release migration or boot/power-loss behavior. No merge, release tag,
 public wiki publication or real-device configuration change is implied.
 
+## Internal administrator continuation intent
+
+The following candidate adds only the stopped, local administrator intent step
+described in the [continuation design](browser-device-continuation.md). Its
+fixed purpose is enabling a future fresh browser resume review. It does not
+activate a successor, grant browser consent, rotate a credential or contact a
+server. Even a completed intent blocks normal startup and native requests.
+
+Final combined local validation passed **173 cases** without failures, errors or
+skips: 41 process-isolated launch cases, 83 guard-release/preflight cases and
+49 new intent cases. The JUnit execution gate now requires all three modules
+on every dedicated Python 3.11–3.14 namespace job. Coverage includes exact
+consent/cancellation, clock expiry, busy launch/profile/native owners, changed
+credentials/evidence, inode replacement, malformed/conflicting journals and
+request refusal after a worker has already started.
+
+Seven process-loss cases terminate the writer without Python cleanup at empty,
+prepared, directory-sync, updated, before-commit, after-commit and final-read
+boundaries. Only a complete unchanged record can subsequently confirm read-only;
+none may replay, clear pause, start a browser or authenticate. These checks use
+fresh fictional fixtures, not retained real-device profiles or physical power loss.
+
+All 652 JavaScript cases and 70 documentation/release/gate cases passed. Ruff,
+strict mypy (219 source files), all 82 Markdown checks, whitespace, isolated wheel
+build and wheel metadata validation passed. All 292 packaged files matched the
+frozen source. The private wheel SHA256 is
+`0f558959796ec1d384c534aae9145293754309112f83acae740b533281bae1fa`;
+worker build is `0b88cbe6862ce4f76eba9d0fb20d5ae88293f7fba22f2a4ea4f3c6b3fab0e247`.
+The unchanged scalar 0.29.5 is not a claim that this is the published artifact.
+
+The broader full-suite/coverage run and exact new-commit hosted checks are
+separate from these completed targeted results. Record their status on the PR;
+do not transfer earlier green checks to these changed runtime bytes. No new
+real-browser/physical acceptance is claimed. Home Assistant, both desk Pi
+displays, real credentials, listeners and all retained profiles were untouched.
+Successor activation and online post-recovery sign-in remain unimplemented;
+PR #250 remains draft, with no merge, release or public wiki publication.
+
 ## CI evidence and remaining review gates
 
 At the exact head `fe7b3e98d3d9f03f6b0ba71095f8250ae968a6ac`, all 27 executed
