@@ -1215,10 +1215,9 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
-@pytest.mark.parametrize("outcome", ["valid", "refused", "pause",
-                                     "release-before", "intent-before"])
+@pytest.mark.parametrize("scenario", ["read-only", "release-before", "intent-before"])
 def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
-        lab, chain, monkeypatch, outcome):
+        lab, chain, monkeypatch, scenario):
     from sds200 import browser_device_continuation_activation as activation
     from sds200 import browser_device_continuation_cancel as cancel
     from sds200 import browser_device_continuation_current as current
@@ -1249,49 +1248,56 @@ def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
                 intent="e" * 64, reviewed_generation=7, consent=lambda review: review)
             observed = current._observe_worker_continuation(lab.configuration, selection)
             stable = state(lab, h)
-            saved, calls = [], []
-
-            def verify(config, record):
-                calls.append(record)
-                assert record.generation == observed.generation == 7
-                with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
-                    db.execute("BEGIN IMMEDIATE")
-                    db.rollback()
-                if outcome == "pause":
-                    cancel._BrowserWorkerCancellation(config, selection).pause(observed.state)
-                saved.append(state(lab, h))
-                if outcome == "refused":
-                    raise RuntimeError("PRIVATE refusal")
-                return transport.BrowserVerifiedRecord(config.identity, record, True)
-
-            monkeypatch.setattr(transport, "verify_browser_device", verify)
             monkeypatch.setattr(transport, "exchange_browser_device_at_generation",
                                 lambda *a: pytest.fail("Recheck allocated a session"))
-            obj = recheck._BrowserWorkerActiveVerification(lab.configuration, selection)
-            if outcome.endswith("-before"):
-                name = (current.release.RELEASE_JOURNAL if outcome == "release-before"
-                        else current.intent.INTENT_JOURNAL)
-                path = root / name
-                path.write_bytes(path.read_bytes() + b" ")
-                changed = state(lab, h)
+            # Each real retained chain is expensive to construct. Reuse its
+            # unchanged grant for valid/refused checks, with a fresh one-use
+            # verifier for each. Pause runs last. Journal mutation scenarios have
+            # separate chains and retain their changed bytes/metadata untouched.
+            outcomes = ("valid", "refused", "pause") if scenario == "read-only" else (scenario,)
+            for outcome in outcomes:
+                assert state(lab, h) == stable
+                saved, calls = [], []
+
+                def verify(config, record, *, outcome=outcome, calls=calls, saved=saved):
+                    calls.append(record)
+                    assert record.generation == observed.generation == 7
+                    with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
+                        db.execute("BEGIN IMMEDIATE")
+                        db.rollback()
+                    if outcome == "pause":
+                        cancel._BrowserWorkerCancellation(config, selection).pause(observed.state)
+                    saved.append(state(lab, h))
+                    if outcome == "refused":
+                        raise RuntimeError("PRIVATE refusal")
+                    return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+                monkeypatch.setattr(transport, "verify_browser_device", verify)
+                obj = recheck._BrowserWorkerActiveVerification(lab.configuration, selection)
+                if outcome.endswith("-before"):
+                    name = (current.release.RELEASE_JOURNAL if outcome == "release-before"
+                            else current.intent.INTENT_JOURNAL)
+                    path = root / name
+                    path.write_bytes(path.read_bytes() + b" ")
+                    changed = state(lab, h)
+                    with pytest.raises(recheck.BrowserContinuationRecheckError):
+                        obj.run(observed)
+                    assert calls == [] and state(lab, h) == changed
+                    with pytest.raises(recheck.BrowserContinuationRecheckError):
+                        obj.run(observed)
+                    assert calls == [] and state(lab, h) == changed
+                    return  # Retain the fictional changed journal; no fixture repair.
+                if outcome == "valid":
+                    assert obj.run(observed) == observed
+                else:
+                    with pytest.raises(recheck.BrowserContinuationRecheckError):
+                        obj.run(observed)
+                assert len(calls) == 1 and state(lab, h) == saved[0]
+                if outcome != "pause":
+                    assert saved[0] == stable
                 with pytest.raises(recheck.BrowserContinuationRecheckError):
                     obj.run(observed)
-                assert calls == [] and state(lab, h) == changed
-                with pytest.raises(recheck.BrowserContinuationRecheckError):
-                    obj.run(observed)
-                assert calls == [] and state(lab, h) == changed
-                return  # Retain the fictional changed journal; no repair in this fixture.
-            if outcome == "valid":
-                assert obj.run(observed) == observed
-            else:
-                with pytest.raises(recheck.BrowserContinuationRecheckError):
-                    obj.run(observed)
-            assert len(calls) == 1 and state(lab, h) == saved[0]
-            if outcome != "pause":
-                assert saved[0] == stable
-            with pytest.raises(recheck.BrowserContinuationRecheckError):
-                obj.run(observed)
-            assert len(calls) == 1 and state(lab, h) == saved[0]
+                assert len(calls) == 1 and state(lab, h) == saved[0]
         finally:
             (root / "SingletonLock").unlink()  # Fresh fictional fixture only.
     assert inspect(chain) == retained
