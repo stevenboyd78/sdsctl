@@ -176,7 +176,8 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     await w.evaluate(()=>openFixtureProbe());
     const replaced=context.pages().find(p=>p.url()===origin+'/device-display');assert(replaced);
     await replaced.reload().catch(()=>{}); // A loading replacement closes only this owned tab.
-    assert.equal(await w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}catch{return true;}}),true);
+    assert.equal(await w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+      catch(error){return error?.message==='Browser display verification is unconfirmed.';}}),true);
     await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
     step("document-probe-pending-close");
     await w.evaluate(()=>openFixtureProbe());
@@ -184,7 +185,8 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     let entered,release;
     const reached=new Promise(resolve=>{entered=resolve;}),unblock=new Promise(resolve=>{release=resolve;});
     await held.route(origin+'/auth/session',async route=>{entered();await unblock;await route.continue().catch(()=>{});});
-    const stopped=w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}catch{return true;}});
+    const stopped=w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+      catch(error){return error?.message==='Browser display verification is unconfirmed.';}});
     try {
       await Promise.race([reached,new Promise((_,reject)=>setTimeout(()=>reject(Error('Probe request missing')),5000))]);
       await w.evaluate(()=>fixtureProbe.close());assert.equal(await stopped,true);
@@ -224,11 +226,30 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     assert.equal(await sessionStatus(), 401);
     await until(async () => await mode() === "credential_rejected", 100000);
   } else {
+    if(documentProbe!==null) {
+      step("document-probe-selected-before-sign-out");
+      await (await worker()).evaluate(()=>openFixtureProbe());
+    }
     step("explicit-sign-out");
     await page.getByRole("button", {name: "Open dashboard menu", exact: true}).click();
     await page.getByRole("button", {name: "Sign out and pause automatic login", exact: true}).click();
     await until(async () => (await command("status")).state === "paused");
     await until(async () => !(await context.cookies(origin)).some(c => c.name === "__Host-sdsctl-device-session"));
+    if(documentProbe!==null) {
+      const w=await worker(),storedBefore=await w.evaluate(()=>chrome.storage.local.get(null));
+      const ledgerBefore=await readFile(path.join(root,"recovery.sqlite"));
+      const exchangesBefore=(await command("status")).exchanges;
+      assert.equal(await sessionStatus(),401);
+      assert.equal(await w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+        catch(error){return error?.message==='Browser display verification is unconfirmed.';}}),true);
+      await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
+      assert.deepEqual(await w.evaluate(()=>chrome.storage.local.get(null)),storedBefore);
+      assert.deepEqual(await readFile(path.join(root,"recovery.sqlite")),ledgerBefore);
+      assert(!(await context.cookies(origin)).some(c=>c.name==='__Host-sdsctl-device-session'));
+      assert.equal((await command("status")).exchanges,exchangesBefore);
+      documentProbe.signOutInvalidationRefused=true;
+      documentProbe.pausePreserved=true;
+    }
   }
   const beforeRestart = (await command("status")).exchanges;
   await context.close(); context = await launch();

@@ -810,6 +810,10 @@ the existing actual-native authentication fixture to obtain a fictional session
 without driver cookie injection. It checks successful document-bound access,
 replacement-document refusal, cancellation during a pending browser request,
 owned-tab cleanup and unchanged native state, browser storage and cookie.
+It also selects a probe before the ordinary fixture sign-out and requires its
+specific refusal afterwards, a 401 protected route, no cookie/session issuance,
+and unchanged paused native/browser state. An unrelated JavaScript error does
+not satisfy the negative checks; subsequent browser restart stays paused.
 It is not the new continuation controller, installed-wheel or physical-Pi
 acceptance. Its loopback IP/DNS/IPv6 cases require normal sandboxing and verified
 TLS; unavailable sandbox support is a failed prerequisite, not a skip or a

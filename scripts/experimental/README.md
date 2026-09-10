@@ -186,8 +186,12 @@ and installs the fictional session. The new probe then verifies the exact
 Chromium-supplied document identity, refuses a replacement document, and closes
 its owned tab when interrupted during a pending protected-page request. Success
 requires unchanged native ledger bytes, browser storage, cookie and session
-issuance count across the probe checks. The ordinary fixture sign-out/restart
-checks still run afterwards. Results distinguish this browser I/O test from
+issuance count across the probe checks. Another probe is selected before the
+ordinary fixture sign-out; it must refuse afterwards, with the protected route
+returning 401 and paused native/browser state, absent cookie and issuance count
+unchanged by that refusal. Negative cases require the probe's exact sanitized
+error, not any unrelated JavaScript exception. Restart must remain paused.
+Results distinguish this browser I/O test from
 new continuation-controller or installed-wheel acceptance. No new normal
 worker role, Home Assistant access or physical display test is enabled.
 
