@@ -2,7 +2,7 @@
 
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
-controlled native cancellation and owned prepare/claim fixtures;
+controlled native cancellation, owned prepare/claim and owned verification fixtures;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -447,8 +447,8 @@ invalidation. If the object/expected state is lost, preserve the uncertainty for
 review instead of replaying the write. There is no second completion journal,
 automatic repair, pruning, browser-storage change, server exchange or credential
 replacement. Native cancellation does **not** revoke browser/server sessions or
-prove that sign-out completed. The owned approval fixtures below and the still
-unimplemented online/session adapters are separate from native cancellation.
+prove that sign-out completed. The owned approval and verification fixtures below,
+and unimplemented session handling, are separate from native cancellation.
 
 ## Owned prepare and claim (fixture-only, one process)
 
@@ -506,11 +506,57 @@ failed readback or expired phase disables further progression. Same-attempt
 replays the write or starts external proof. A new process/object cannot adopt a
 pending row. Readback is not durable operation provenance or a permission lease.
 
-Fresh-page consent, exact-generation server verification/drainage, post-network
-claim comparison, failure terminalization and session issuance/installation remain
-required before a real continuation path can be enabled. The fixture adapter
+The separate verification fixture below supplies exact-generation proof and
+post-network claim comparison. Fresh-page consent and session handling remain
+required before a real continuation path can be enabled. This prepare/claim adapter
 does not call `_stage_complete`, relax legacy schema acceptance, edit browser
 storage, exchange sessions, replace credentials or repair uncertain profiles.
+
+## Owned server verification (fixture-only, no browser session)
+
+`browser_device_continuation_verification` creates its own approval internally,
+requires successful prepare and claim returns, and performs one fixed-context
+HTTPS verification. It accepts no caller-provided approval object, ticket, server
+proof, transport callback, credential/trust digest or requested permission role.
+The supplied current snapshot is comparison input, not authority. The fresh
+in-process review callback still simulates browser consent; no trusted browser
+gesture or native-message integration is established by these fixtures.
+
+One finite, nondecreasing wall/monotonic timer bounds the **whole** operation to
+less than ten seconds, including review, prepare, claim, proof and completion.
+This does not interrupt blocked I/O. Eventual native dispatch must also preserve
+the existing independent supervising-process deadline; it cannot renew the
+deadline per phase or spread the private attempt across the old message pair.
+
+Before contacting the server, the adapter reacquires the actual live owner and
+rechecks the exact acknowledged claim, fixed inputs and original bindings. It
+closes every native SQLite transaction before the network call while retaining
+shared private-input coordination. It uses the existing verified TLS transport
+to request the exact reviewed active device generation and requires confirmed
+old-request drainage. It cannot resume a server-side pause or issue a session.
+
+After proof, a dedicated native write transaction reconstructs complete retained
+history, rechecks the actual files/owner and compares the **original exact claim**
+with current SQL. It must not substitute the latest snapshot as approval. A newer
+pause, same-revision state change, changed inputs or expired/backward clock blocks
+completion. The adapter stages completion, validates staged state and inputs,
+commits once, and confirms the exact after-state in a separate read transaction.
+
+A transport refusal or malformed proof permits only best-effort terminalization
+of that exact claim. Changed state/ownership/inputs or an expired operation may
+prevent even that cleanup, leaving the claim for review. Interrupts and completion
+commit/readback failures never trigger an automatic second write to mark it failed.
+A lost completion reply may describe an already committed native ACTIVE state;
+exact readback cannot replay proof, create a session or renew server authority.
+An unchanged ledger after an uncommitted prepare does not permanently forbid a
+separately initiated fresh review; the failed attempt itself remains consumed.
+
+Server verification is a point-in-time observation, not a transaction shared
+with the remote server or permission cached indefinitely. Later session exchange
+must independently enforce exact-generation authority and handle session-response
+loss. This adapter returns no session/token, installs no cookie, changes no
+Chromium storage and does not expose activation or normal schema-3 dispatch.
+Real retained profiles, Home Assistant and both bench Pis remain out of scope.
 
 ## Remaining selected successor path, not implemented end to end
 
@@ -570,8 +616,9 @@ This section specifies the complete implementation boundary. The isolated native
 core and fixture-only owned adapter above implement the manifest and single-ledger
 paused anchor/view. The fixture-only epoch core adds current SQL and approval
 transactions; the owned prepare/claim fixtures above add actual file/ownership
-checks but not verified browser consent. **Online authorization/session adapters
-and request-role integration are not implemented**.
+checks but not verified browser consent. The owned verification fixture adds
+exact-generation HTTPS proof and native completion. **Session handling, real
+browser consent and request-role integration are not implemented**.
 The read-only selector above supplies the file/ownership/current-SQL read
 boundary, not a mutation lease or browser-facing permission.
 It does not change the stop condition imposed by a complete intent. Implement

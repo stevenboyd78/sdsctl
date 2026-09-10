@@ -578,6 +578,42 @@ old prepare/commit message pair. Home Assistant, both bench Pis, retained profil
 and credentials remain unchanged. Exact-commit qualification is recorded in the
 draft PR, separately from these scope descriptions.
 
+## Owned verification/completion candidate
+
+The isolated live-owner adapter now creates its own prepare/claim attempt and
+uses the fixed verified HTTPS transport before native completion. It does not
+accept supplied proof or approval objects, create a browser session, expose a
+native request role or permit ordinary schema-3 startup. Consent and later
+Chromium ancestry remain simulated fixture inputs.
+
+Portable cases cover completion and exact-claim failure handling, private-input
+coordination without an open native transaction during proof, newer pause and
+same-revision changes, altered files/owners, whole-operation wall/monotonic timing,
+interruptions, rollback failure and uncertain commit/readback. A failed approval
+acknowledgement cannot reach network proof. A lost completion reply cannot be
+rewritten as failure or replayed by readback. A truly uncommitted prepare can be
+followed by a separately initiated fresh review, not reuse of the old attempt.
+
+Selected fixtures additionally use actual verified TLS and fictional responses
+at DNS and IPv4 origins, testing exact generation and refusal of wrong authority,
+unconfirmed drainage, malformed responses, redirects, cookies/compression,
+rate limits, and untrusted or hostname-mismatched certificates. Certificate
+failures must send no credential-bearing HTTP request. These are not physical
+LAN/Pi tests or a complete browser/session acceptance run.
+
+The full-chain namespace cases preserve actual retained retirement/reconciliation
+evidence through completion, transport refusal, a newer owned pause during proof,
+and a lost completion reply. The later ancestor, trusted consent/generation and
+server response are simulated in that layer; the actual chain/files/SQL/locks are
+not. The original history and all non-native inputs remain unchanged.
+
+The adapter checks elapsed time across one whole operation; fixtures do not prove
+independent supervisor termination of a blocked proof request. That deadline must
+remain enforced when native dispatch is wired. A native ACTIVE after-state is
+not an installed session, ongoing server permission or proof of old-session
+revocation. Real profiles, Home Assistant and bench Pis remain unchanged.
+Exact-head test counts and qualification results belong to the draft PR record.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

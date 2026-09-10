@@ -961,3 +961,81 @@ def test_owned_approval_complete_chain_uncertainty_never_permits_claim(
             obj.claim()
         assert state(lab, h) == stable
     blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("outcome", ["complete", "failed", "pause", "lost-completion"])
+def test_owned_verification_complete_chain_keeps_history_and_cancellation(
+        lab, chain, monkeypatch, outcome):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_verification as verification
+    from sds200 import browser_device_verification as transport
+    from sds200.browser_device_store import BrowserDeviceState
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda review: review.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    before = state(lab, h)
+    before["profile"].pop("recovery.sqlite")
+    calls, paused = [], []
+
+    def verify(config, record):
+        calls.append(record)
+        assert record.generation == 7 and record.state is BrowserDeviceState.ACTIVE
+        with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.rollback()
+        if outcome == "failed":
+            raise RuntimeError("PRIVATE fixture server refusal")
+        if outcome == "pause":
+            with current._worker_current_scope(config, selection) as reader:
+                claimed = reader.inspect()
+            paused.append(cancel._BrowserWorkerCancellation(config, selection).pause(claimed))
+        return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+    def uncertain(db):
+        db.commit()
+        raise RuntimeError("PRIVATE lost completion reply")
+
+    monkeypatch.setattr(transport, "verify_browser_device", verify)
+    if outcome == "lost-completion":
+        monkeypatch.setattr(verification, "_commit", uncertain)
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            obj = verification._BrowserWorkerVerification(lab.configuration, selection)
+            kwargs = dict(intent="e" * 64, reviewed_generation=7, consent=lambda review: review)
+            if outcome == "complete":
+                result = obj.run(expected, **kwargs)
+                assert result.phase == "complete" and result.state.mode is RecoveryMode.ACTIVE
+                assert obj.confirm() == result
+            else:
+                with pytest.raises(verification.BrowserContinuationVerificationError):
+                    obj.run(expected, **kwargs)
+                if outcome == "pause":
+                    with pytest.raises(verification.BrowserContinuationVerificationError):
+                        obj.confirm()
+                    with current._worker_current_scope(lab.configuration, selection) as reader:
+                        assert reader.inspect() == paused[0].state
+                else:
+                    assert obj.confirm().phase == (
+                        "complete" if outcome == "lost-completion" else "failed")
+            stable = state(lab, h)
+            with pytest.raises(verification.BrowserContinuationVerificationError):
+                obj.run(expected, **kwargs)
+            assert state(lab, h) == stable and len(calls) == 1
+        finally:
+            (root / "SingletonLock").unlink()  # Fresh fictional fixture only.
+    after = state(lab, h)
+    after["profile"].pop("recovery.sqlite")
+    assert after == before and inspect(chain) == retained
+    blocked(lab)
