@@ -1,10 +1,10 @@
 """Internal paused-activation transaction core, NOT current runtime permission.
 
-No file opener, consent adapter, migration command or worker dispatch calls this
-module. A future trusted stopped-owner adapter must reconstruct current history,
-exclusively create and sync the selected manifest, pin/recheck its bytes and inode,
-then use one checked native transaction. These functions cannot establish those
-filesystem/ownership facts from a supplied dataclass or byte string.
+The fixture-only stopped-owner adapter reconstructs current history, exclusively
+creates and syncs the selected manifest, pins/rechecks its bytes and inode, then
+uses one checked native transaction. No CLI or worker dispatch exposes it. These
+core functions cannot establish filesystem/ownership facts from a supplied
+dataclass or byte string.
 
 Schema 3 is deliberately rejected by existing recovery/resume helpers. Accepting
 it there requires the complete current-epoch selector and epoch-bound approvals,
@@ -147,9 +147,16 @@ def _plan(raw: bytes, history: BrowserContinuationHistory, profile: Path,
 
 def _transaction(db: sqlite3.Connection, profile: Path, *, readonly: bool) -> None:
     # Never set a pragma, open another database or silently start a transaction.
+    databases = db.execute("PRAGMA database_list").fetchall()
+    main = [(0, "main", str(profile / "recovery.sqlite"))]
+    # quick_check may materialize SQLite's empty, unnamed temp schema. Repeated
+    # validation on the same connection must allow that, but no attached database
+    # or temporary SQL object (including one that could shadow a native table).
+    if databases not in (main, main + [(1, "temp", "")]):
+        raise ValueError()
+    if len(databases) == 2 and db.execute("SELECT 1 FROM temp.sqlite_schema LIMIT 1").fetchone():
+        raise ValueError()
     if (not db.in_transaction
-            or db.execute("PRAGMA database_list").fetchall()
-                != [(0, "main", str(profile / "recovery.sqlite"))]
             or db.execute("PRAGMA journal_mode").fetchone() != ("delete",)
             or db.execute("PRAGMA trusted_schema").fetchone() != (0,)
             or db.execute("PRAGMA query_only").fetchone() != (int(readonly),)

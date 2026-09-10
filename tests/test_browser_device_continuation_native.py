@@ -280,7 +280,8 @@ def test_malformed_or_substituted_manifest_refuses(lab, candidate, change):
 
 
 @pytest.mark.parametrize("change", ["no-transaction", "query-only", "trusted", "synchronous",
-                                    "attached", "expired", "backward", "nan"])
+                                    "attached", "temp-table", "temp-view",
+                                    "expired", "backward", "nan"])
 def test_transaction_policy_and_fresh_consent_window_are_required(lab, candidate, change):
     before = snapshot(lab)
     with transaction(lab.ledger.path) as db:
@@ -297,6 +298,10 @@ def test_transaction_policy_and_fresh_consent_window_are_required(lab, candidate
             db.execute("BEGIN IMMEDIATE")
         elif change == "attached":
             db.execute("ATTACH ':memory:' AS other")
+        elif change == "temp-table":
+            db.execute("CREATE TEMP TABLE recovery (secret TEXT)")
+        elif change == "temp-view":
+            db.execute("CREATE TEMP VIEW recovery AS SELECT 1")
         elif change == "expired":
             now = candidate.preparation["reviewed_at"] + 120
         elif change == "backward":
@@ -306,6 +311,17 @@ def test_transaction_policy_and_fresh_consent_window_are_required(lab, candidate
         with pytest.raises(ERROR):
             native._stage_paused_activation(db, **candidate.args, now=now)
     assert snapshot(lab) == before
+
+
+def test_transaction_recheck_allows_only_empty_sqlite_temp_schema(lab, candidate):
+    with transaction(lab.ledger.path) as db:
+        native._transaction(db, lab.root, readonly=False)
+        db.execute("PRAGMA quick_check").fetchall()
+        native._transaction(db, lab.root, readonly=False)
+        native._stage_paused_activation(db, **candidate.args, now=candidate.now)
+        native._transaction(db, lab.root, readonly=False)
+        db.commit()
+    inspect(lab, candidate)
 
 
 @pytest.mark.parametrize("field,value", [

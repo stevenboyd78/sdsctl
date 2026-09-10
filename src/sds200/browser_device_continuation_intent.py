@@ -31,6 +31,7 @@ from .browser_device_resume import _hex
 from .browser_device_startup import _launch_lock
 
 INTENT_JOURNAL = ".sdsctl-browser-continuation-intent.sqlite"
+ACTIVATION_MANIFEST = ".sdsctl-browser-continuation-activation.json"
 _SIDECARS = ("-journal", "-wal", "-shm")
 _SCHEMA = ("CREATE TABLE intent (id INTEGER PRIMARY KEY CHECK(id=1), "
            "phase TEXT NOT NULL, body BLOB NOT NULL)")
@@ -71,8 +72,9 @@ class BrowserContinuationIntentEvidence:
 
 
 def has_continuation_intent(root: Path) -> bool:
-    """Presence is a stop condition, including empty files and dangling sidecars."""
-    return any(_present(root / (INTENT_JOURNAL + suffix)) for suffix in ("", *_SIDECARS))
+    """Intent/activation presence blocks launch, including partial or dangling files."""
+    return any(_present(root / (name + suffix)) for name in (INTENT_JOURNAL, ACTIVATION_MANIFEST)
+               for suffix in ("", *_SIDECARS))
 
 
 def _snapshot(handoff: BrowserRecoveryHandoff, release_id: str) -> dict[str, object]:

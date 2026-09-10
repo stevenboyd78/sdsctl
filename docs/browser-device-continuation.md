@@ -1,7 +1,7 @@
 # Post-recovery continuation: design boundary
 
 Status: **development design, read-only preflight/history, internal intent journal
-and isolated native activation core;
+and fixture-only owned paused activation;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -203,7 +203,8 @@ separate from verification of a later live Chromium owner.
 
 `browser_device_continuation_native` implements the native transaction portion
 only. It is not called by startup, worker dispatch, a browser message, a CLI or
-an installed activation writer. **Do not call it on a real profile.** Existing
+an installed command. Its only workflow caller is the fixture-only stopped-owner
+adapter described below. **Do not call either on a real profile.** Existing
 recovery/resume helpers continue rejecting schema 3, and the continuation-intent
 marker continues blocking ordinary startup and native requests.
 
@@ -217,7 +218,7 @@ approval, credential or session token belongs in the manifest.
 
 The retained-history digest binds the previously checked targets, runtime assets
 and private inputs. **A supplied history object or manifest byte string cannot
-prove those files are still unchanged.** The future stopped-owner adapter must
+prove those files are still unchanged.** The stopped-owner adapter must
 reconstruct that history, collect fresh local consent, exclusively create and
 sync the private manifest and its parent directory, and check the actual bytes
 and inode under coordinated ownership. This module performs no filesystem I/O
@@ -255,6 +256,47 @@ fixtures additionally reconstruct the real retained chain under stopped ownershi
 history is checked before native DML, its reader refuses the writer's rollback
 journal, and after commit or rollback the same retained history remains readable.
 These tests are not physical power-loss durability or headed-browser acceptance.
+
+## Owned paused activation workflow (fixture-only)
+
+`browser_device_continuation_activation` now owns the filesystem and consent part
+of that transaction. No CLI, browser message, native role or ordinary startup path
+exposes this workflow. Schema 3 still cannot be used by ordinary recovery helpers.
+**This is not yet a real-profile migration or permission to sign in.**
+
+The workflow holds stopped launcher ownership, coordinated private-profile and
+archive locks, and a dedicated fixed-ledger `BEGIN IMMEDIATE`. Before asking for
+confirmation, it reconstructs the complete retained chain and verifies the exact
+old native state. It refuses any existing activation manifest or sidecar—even an
+empty file, dangling symlink or directory—without adoption, overwrite or cleanup.
+
+Fresh local confirmation is bound to a random epoch and checked against both wall
+and monotonic clocks within two minutes. Cancellation creates no manifest and
+makes no native change. Accepted confirmation exclusively creates the fixed
+private `.sdsctl-browser-continuation-activation.json`, pins its created file
+descriptor's inode, syncs the file and parent directory, and rechecks actual bytes,
+mode, identity and inputs. Only a confirmation digest is retained, not its text.
+
+After native DML, a scoped **input-only** verifier rechecks retained files, runtime
+assets, private inputs, ownership and other journals. It is not a historical or
+current native-state reader; the writer validates its own transaction and pinned
+ledger separately. The full historical reader remains sidecar-refusing, with no
+"ignore my journal" flag. The input verifier expires with ownership and latches
+failure: restoring changed inputs does not make that verifier reusable.
+
+All final checks precede the single native commit. Exact read-only confirmation
+then reconstructs history and verifies the actual manifest and native anchor.
+If the commit reply or final acknowledgement is lost, confirmation may establish
+that exact paused transition; it cannot retry the write, renew consent, repair
+partial state, accept a later revision or grant ongoing runtime permission.
+Partial manifests and uncertain artifacts are retained. Manifest presence alone
+also blocks ordinary startup and requests if the intent journal is absent.
+
+Portable tests use real ownership, private files and SQLite, with explicitly
+simulated history. Required namespace tests additionally exercise complete
+retirement/reconciliation chains, interrupted writes, post-DML input changes,
+read-only confirmation and unchanged refusal by old helpers. Fault injection is
+not a claim of physical power-loss durability or online browser acceptance.
 
 ## Remaining selected successor path, not implemented
 
@@ -311,9 +353,9 @@ verification must not be bypassed for an IP-address installation.
 ## Proposed activation contract: history is not current permission
 
 This section specifies the complete implementation boundary. The isolated native
-core above implements candidate manifest bytes and the single-ledger anchor/view;
-**the owned filesystem/consent writer, current permission selector and request role
-are not implemented**.
+core and fixture-only owned adapter above implement the manifest and single-ledger
+paused anchor/view. **The current permission selector, epoch-bound approvals and
+request role are not implemented**.
 It does not change the stop condition imposed by a complete intent. Implement
 and qualify the whole selected path before enabling any part on a real profile.
 
@@ -434,14 +476,14 @@ real-browser run must independently prove protected display access after explici
 consent, plus the unchanged behavior of another display. Stopped preflight and
 paused startup are necessary but are not that online acceptance.
 
-Before integrating an activation writer, add explicit negative tests for a
+Before enabling the complete selected path, add explicit negative tests for a
 historical result passed where current permission is required, complete manifest
 without a native commit, native anchor without the selected manifest, a lost
 post-commit reply, schema migration rollback and an old worker against the new
 schema. After activation, test a newer pause/sign-out and an old approval against
 the same epoch as well as against a different one. Re-run the existing strict
 confirmations to prove their meaning has not changed. Those successor tests are
-requirements, not claims about the currently implemented intent-only candidate.
+requirements, not claims about the fixture-only paused activation candidate.
 
 Physical layout, service ordering, boot and actual combined power loss remain
 separate checks. See the [versioned acceptance record](browser-device-recovery-acceptance.md)

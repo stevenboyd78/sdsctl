@@ -114,6 +114,11 @@ class _Reader:
         self.files[path] = raw, mode
 
     def recheck(self) -> None:
+        self.recheck_files()
+        for path in self.databases:
+            self.database(path)
+
+    def recheck_files(self) -> None:
         from .browser_device_registration import _matches
 
         for path, (raw, mode) in self.files.items():
@@ -121,8 +126,6 @@ class _Reader:
         for path, inode in self.inodes.items():
             if release_journal._inode(path) != inode:
                 raise ValueError()
-        for path in self.databases:
-            self.database(path)
 
     def database(self, path: Path) -> None:
         # File boundary only: never inspect the current native ledger's schema.
@@ -302,9 +305,60 @@ def _inspect_worker_continuation_history(
         raise BrowserContinuationHistoryError() from None
 
 
+class _HistoryInputs:
+    """Scoped retained INPUT recheck, not a historical/current native-state reader.
+
+    Only a dedicated activation transaction may pair this with its own native
+    ledger validation. The full history reader never bypasses SQLite sidecars.
+    """
+
+    def __init__(self, reader: _Reader, boundary: BrowserResumeBoundary, binding: str,
+                 proof: BrowserResumeArchiveBinding) -> None:
+        self._reader, self._boundary = reader, boundary
+        self._binding, self._proof = binding, proof
+        self._active = True
+
+    def recheck(self) -> None:
+        try:
+            if not self._active:
+                raise ValueError()
+            r, h = self._reader, self._reader.h
+            r.owner.binding(h)
+            if self._boundary._binding() != self._binding:
+                raise ValueError()
+            # Reconstruct executable bytes against the current runtime/key too;
+            # comparing retained files alone would miss a changed source runtime.
+            s = h._session
+            _canonical_bundle_files(**s._registration)
+            _, artifacts, receipt = _canonical(h._recovery, s, operation_id=h._operation,
+                browser_intent=h._intent, handoff=h._root, proof=self._proof, supervised=True)
+            _validate(h._recovery, artifacts, receipt)
+            if {p.name for p in (s._root / "NativeMessagingHosts").iterdir()} != {
+                    NATIVE_HOST + ".json"}:
+                raise ValueError()
+            r.recheck_files()  # Includes the pinned native ledger inode, not its changing bytes.
+            for path in r.databases:
+                if path != s._profile / "recovery.sqlite":
+                    r.database(path)
+            if self._boundary._binding() != self._binding:
+                raise ValueError()
+            r.owner.binding(h)
+        except Exception:
+            self._active = False
+            raise BrowserContinuationHistoryError() from None
+
+
 def _inspect_owned_history(handoff: BrowserRecoveryHandoff, owner: _HistoryOwnership, *,
                            release_id: str, intent_id: str) -> BrowserContinuationHistory:
     """Reconstruct within an existing checked scope; never reacquire the launch lock."""
+    result, _ = _capture_owned_history(handoff, owner, release_id=release_id, intent_id=intent_id)
+    return result
+
+
+def _capture_owned_history(handoff: BrowserRecoveryHandoff, owner: _HistoryOwnership, *,
+                           release_id: str, intent_id: str
+                           ) -> tuple[BrowserContinuationHistory, _HistoryInputs]:
+    """Full sidecar-refusing read plus a scope-bound, non-native input recheck."""
     try:
         if (type(handoff) is not BrowserRecoveryHandoff or not handoff._supervised
                 or type(owner) is not _HistoryOwnership
@@ -344,7 +398,8 @@ def _inspect_owned_history(handoff: BrowserRecoveryHandoff, owner: _HistoryOwner
             "native_after": _digest(after), "private_inputs": binding,
             "files": {str(p): {"sha256": _digest(raw), "inode": reader.inodes[p]}
                       for p, (raw, _) in reader.files.items()}})
-        return BrowserContinuationHistory(config.identity, config.origin, config.device_id,
+        result = BrowserContinuationHistory(config.identity, config.origin, config.device_id,
             release_id, intent_id, digest, after, proof.revision)
+        return result, _HistoryInputs(reader, boundary, binding, proof)
     except Exception:
         raise BrowserContinuationHistoryError() from None

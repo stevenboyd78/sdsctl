@@ -60,6 +60,141 @@ def inspect(chain):
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_owned_activation_workflow_with_complete_retained_chain(lab, chain):
+    from sds200.browser_device_continuation_activation import (
+        BrowserPausedActivation,
+        BrowserPausedActivationError,
+    )
+
+    h, r, i = chain
+    retained = inspect(chain)
+    core = BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id)
+    seen = []
+    result = core.apply(confirmation=lambda review: seen.append(review) or review.confirmation)
+    assert result.mode is RecoveryMode.PAUSED and result.native_revision == r.revision + 1
+    assert result.epoch == seen[0].epoch
+    assert inspect(chain) == retained
+    before = state(lab, h)
+    assert core.confirm(epoch=result.epoch) == result
+    assert state(lab, h) == before
+    with pytest.raises(BrowserPausedActivationError):
+        BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+            confirmation=lambda _: pytest.fail("Replayed activation"))
+    with pytest.raises(BrowserHandoffError):
+        h.confirm(restored=True)
+    with pytest.raises(release.BrowserGuardReleaseError):
+        release.BrowserPausedGuardRelease(h).confirm(release_id=r.release_id)
+    with pytest.raises(intent.BrowserContinuationIntentError):
+        intent.BrowserContinuationIntent(h, release_id=r.release_id).confirm(intent_id=i.intent_id)
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("failure", ["after-create", "after-native", "late-credential",
+                                    "late-bundle", "late-journal", "late-ack"])
+def test_owned_activation_interruptions_keep_evidence_and_never_replay(
+        lab, chain, monkeypatch, failure):
+    from sds200 import browser_device_continuation_activation as activation
+
+    h, r, i = chain
+    core = activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id)
+    before = lab.ledger.path.read_bytes()
+    epochs = []
+    create, stage = activation._create_manifest, activation.native._stage_paused_activation
+
+    def created(*args):
+        create(*args)
+        raise RuntimeError("PRIVATE after creation")
+
+    def staged(*args, **kwargs):
+        stage(*args, **kwargs)
+        if failure == "late-credential":
+            private(lab.args["profile"] / "device.secret", b"changed after native DML")
+        elif failure == "late-bundle":
+            path = h._session._registration["bundle"] / "extension" / "worker.mjs"
+            path.write_bytes(path.read_bytes() + b"\n// changed after native DML\n")
+        elif failure == "late-journal":
+            path = h._session._root / intent.INTENT_JOURNAL
+            path.with_name(path.name + "-journal").symlink_to("missing")
+        else:
+            raise RuntimeError("PRIVATE after native stage")
+
+    def unconfirmed(*args):
+        raise RuntimeError("PRIVATE lost final acknowledgement")
+
+    with monkeypatch.context() as patch:
+        if failure == "after-create":
+            patch.setattr(activation, "_create_manifest", created)
+        elif failure == "late-ack":
+            patch.setattr(core, "_confirm_owned", unconfirmed)
+        else:
+            patch.setattr(activation.native, "_stage_paused_activation", staged)
+        with pytest.raises(activation.BrowserPausedActivationError) as error:
+            core.apply(confirmation=lambda review:
+                       epochs.append(review.epoch) or review.confirmation)
+        assert "PRIVATE" not in str(error.value)
+    assert (lab.args["directory"] / activation.ACTIVATION_MANIFEST).exists()
+    if failure == "late-ack":
+        assert core.confirm(epoch=epochs[0]).native_revision == r.revision + 1
+    else:
+        assert lab.ledger.path.read_bytes() == before
+        with pytest.raises(activation.BrowserPausedActivationError):
+            core.confirm(epoch=epochs[0])
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_captured_history_input_check_expires_with_owner(lab, chain):
+    h, r, i = chain
+    before = state(lab, h)
+    with ownership._stopped_history_ownership(h) as owner:
+        retained, inputs = history._capture_owned_history(h, owner,
+            release_id=r.release_id, intent_id=i.intent_id)
+        inputs.recheck()
+        assert retained.native_revision == r.revision
+    with pytest.raises(history.BrowserContinuationHistoryError):
+        inputs.recheck()
+    assert state(lab, h) == before
+
+
+@pytest.mark.parametrize("change", ["archive", "runtime", "inventory"])
+def test_captured_history_inputs_latch_failure_after_restored_change(
+        lab, chain, monkeypatch, change):
+    h, r, i = chain
+    with ownership._stopped_history_ownership(h) as owner:
+        _, inputs = history._capture_owned_history(h, owner,
+            release_id=r.release_id, intent_id=i.intent_id)
+        with monkeypatch.context() as patch:
+            if change == "runtime":
+                def changed_runtime(**kwargs):
+                    raise RuntimeError("PRIVATE changed runtime")
+
+                patch.setattr(history, "_canonical_bundle_files", changed_runtime)
+            elif change == "archive":
+                path = h._session._archives / h._operation / "native-history.json"
+                raw = path.read_bytes()
+                path.write_bytes(raw + b" ")
+            else:
+                path = h._session._root / "NativeMessagingHosts" / "unselected.json"
+                private(path, b"unselected host")
+            with pytest.raises(history.BrowserContinuationHistoryError):
+                inputs.recheck()
+        if change == "archive":
+            path.write_bytes(raw)
+        elif change == "inventory":
+            path.unlink()
+        # The old scope is still owned, but the failed input capture cannot revive.
+        owner.binding(h)
+        before = state(lab, h)
+        with pytest.raises(history.BrowserContinuationHistoryError):
+            inputs.recheck()
+        # A separate full read still validates independently, without a bypass.
+        assert history._inspect_owned_history(h, owner,
+            release_id=r.release_id, intent_id=i.intent_id).native_revision == r.revision
+        assert state(lab, h) == before
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
 @pytest.mark.parametrize("committed", [False, True])
 def test_internal_native_activation_uses_owned_history_before_dml_and_exact_readback(
         lab, chain, tmp_path, committed):
