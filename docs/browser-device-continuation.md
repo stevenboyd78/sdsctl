@@ -432,7 +432,45 @@ usable, without allocating a token or setting a cookie. Its drainage check waits
 for older generations only. This supports later accepted-state verification; it
 does not implement unattended renewal or permit replaying initial approval.
 
+### Owned active-generation server recheck
+
+The internal `browser_device_continuation_recheck` adapter performs one fixed
+verified-HTTPS proof between two owned native observations. It validates actual
+live ownership, the original private files, complete retained history, immutable
+activation manifest and current full fingerprint before contacting the server.
+The supplied expected observation is an exact comparison, not authority. Its
+generation must match the actual complete active approval; a latest-generation
+lookup is not substituted for that approval.
+
+Native SQLite scopes are closed before the network request. Private-input and
+live-launch coordination remain held. The fixed existing verification transport
+authenticates the exact approved generation and confirms older request drainage;
+no session or cookie is allocated. Before return, a new owned read must match the
+entire original observation. A newer pause, same-revision change, private-file
+replacement, owner/process loss or invalid/expired clock refuses the result.
+Failure, interruption and lost proof never rewrite the grant, advance revision,
+repair state or retry initial approval. One object executes at most once and
+offers no cached proof or `confirm()` API.
+
+The same conservative wall/monotonic ten-second elapsed budget spans selection,
+all native reads and network I/O. It does not interrupt blocked I/O: eventual
+native dispatch must retain the separate supervising-process deadline. A success
+returns only its actual last local observation, not a browser-ready flag or a
+reusable server permission. The server can change immediately after proof.
+
+This is **not unattended renewal or browser acceptance**. Native ACTIVE can
+remain after an uncertain initial exchange, so the real browser controller must
+still refuse pending state even if this recheck would succeed. No browser role,
+message, CLI, cookie handler or ordinary schema-3 startup invokes the adapter.
+Portable cases simulate historical ancestry while selected cases use real TLS;
+complete namespace chains cover successful proof, refusal and concurrent pause.
+They do not qualify real-browser or bench-Pi activation.
+
 ## Owned native cancellation (fixture-only)
+
+The separate active-state server recheck described below does not invoke these
+mutations. Routine verification must preserve the complete native fingerprint;
+it must not replay initial prepare/claim or rewrite a scheduling/backoff field.
 
 `browser_device_continuation_cancel` adds narrowly scoped **pause** and
 **backward-clock correction** operations. Separate stopped and live-worker

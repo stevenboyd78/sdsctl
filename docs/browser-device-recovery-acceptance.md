@@ -598,6 +598,21 @@ while obtaining exact same-generation proof. The original session remains valid,
 no cookie/token is issued, and the device store is unchanged. This in-process
 check does not qualify real-browser unattended renewal.
 
+## Owned active-generation recheck candidate
+
+The internal read/network/read recheck uses actual selected active approval and
+the fixed verified transport without any native mutation or session allocation.
+Portable tests retain real private files and SQL but simulate history/ancestry;
+DNS and private-IP TLS cases check exact generation, refusal, malformed replies,
+redirect/cookie rejection and no automatic replay. Complete retained-history
+namespace chains exercise success, server refusal and a newer native pause.
+The existing ordinary request parser still refuses the unenabled recheck action.
+
+The adapter is one-use and exposes no saved proof or confirmed-browser state.
+Elapsed checks span the operation, but do not replace an independent native
+termination deadline. Actual accepted browser state, cookie usability, renewal
+and real profile activation remain separate gates. No live display is changed.
+
 ## Owned verification/completion candidate
 
 The isolated live-owner adapter now creates its own prepare/claim attempt and

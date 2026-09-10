@@ -1212,3 +1212,87 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
     assert after == before and inspect(chain) == retained
     assert TOKEN.encode() not in lab.ledger.path.read_bytes()
     blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("outcome", ["valid", "refused", "pause",
+                                     "release-before", "intent-before"])
+def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
+        lab, chain, monkeypatch, outcome):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_recheck as recheck
+    from sds200 import browser_device_continuation_session as session
+    from sds200 import browser_device_verification as transport
+    from sds200.browser_device_recovery import ExchangeSession
+    from tests.test_browser_device_native import TOKEN
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda review: review.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(transport, "verify_browser_device", lambda config, record:
+                        transport.BrowserVerifiedRecord(config.identity, record, True))
+    monkeypatch.setattr(transport, "exchange_browser_device_at_generation",
+                        lambda config, generation: ExchangeSession(TOKEN, 300))
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            session._BrowserWorkerInitialSession(lab.configuration, selection).run(expected,
+                intent="e" * 64, reviewed_generation=7, consent=lambda review: review)
+            observed = current._observe_worker_continuation(lab.configuration, selection)
+            stable = state(lab, h)
+            saved, calls = [], []
+
+            def verify(config, record):
+                calls.append(record)
+                assert record.generation == observed.generation == 7
+                with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
+                    db.execute("BEGIN IMMEDIATE")
+                    db.rollback()
+                if outcome == "pause":
+                    cancel._BrowserWorkerCancellation(config, selection).pause(observed.state)
+                saved.append(state(lab, h))
+                if outcome == "refused":
+                    raise RuntimeError("PRIVATE refusal")
+                return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+            monkeypatch.setattr(transport, "verify_browser_device", verify)
+            monkeypatch.setattr(transport, "exchange_browser_device_at_generation",
+                                lambda *a: pytest.fail("Recheck allocated a session"))
+            obj = recheck._BrowserWorkerActiveVerification(lab.configuration, selection)
+            if outcome.endswith("-before"):
+                name = (current.release.RELEASE_JOURNAL if outcome == "release-before"
+                        else current.intent.INTENT_JOURNAL)
+                path = root / name
+                path.write_bytes(path.read_bytes() + b" ")
+                changed = state(lab, h)
+                with pytest.raises(recheck.BrowserContinuationRecheckError):
+                    obj.run(observed)
+                assert calls == [] and state(lab, h) == changed
+                with pytest.raises(recheck.BrowserContinuationRecheckError):
+                    obj.run(observed)
+                assert calls == [] and state(lab, h) == changed
+                return  # Retain the fictional changed journal; no repair in this fixture.
+            if outcome == "valid":
+                assert obj.run(observed) == observed
+            else:
+                with pytest.raises(recheck.BrowserContinuationRecheckError):
+                    obj.run(observed)
+            assert len(calls) == 1 and state(lab, h) == saved[0]
+            if outcome != "pause":
+                assert saved[0] == stable
+            with pytest.raises(recheck.BrowserContinuationRecheckError):
+                obj.run(observed)
+            assert len(calls) == 1 and state(lab, h) == saved[0]
+        finally:
+            (root / "SingletonLock").unlink()  # Fresh fictional fixture only.
+    assert inspect(chain) == retained
+    blocked(lab)
