@@ -1,7 +1,7 @@
 """Internal paused server review, not consent, native approval or a session.
 
-No native role/action invokes this adapter. It reads fixed installed state and
-server authority for a future fresh browser review. Initial issuance must repeat
+Only the fixed read-only continuation endpoint invokes this adapter. It reads
+installed state and current server authority, not consent. Initial issuance must repeat
 its own current-state and server-generation checks after actual browser consent.
 """
 from __future__ import annotations
@@ -39,8 +39,8 @@ class BrowserContinuationReview:
 class _BrowserWorkerPausedReview:
     """One owned read/network/read; no browser-supplied state, proof or selectors.
 
-    Elapsed checks do not interrupt I/O. Future native dispatch must also keep
-    the existing independent ten-second native-process termination deadline.
+    Elapsed checks do not interrupt I/O. The fixed native dispatch also retains
+    the independent ten-second native-process termination deadline.
     """
 
     def __init__(self, configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,

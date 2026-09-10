@@ -27,6 +27,7 @@ MODULES = (
     "browser_device_continuation_probe.mjs",
     "browser_device_continuation_context.mjs",
     "browser_device_continuation_cookie.mjs",
+    "browser_device_continuation_worker.mjs",
 )
 _ENTRY = ("import {startBrowserWorker} from './browser_device_worker.mjs';\n"
           "void startBrowserWorker(chrome, BUILD).catch(()=>{});\n")
@@ -174,6 +175,27 @@ def normal_worker_paused_only(
     return paused_only
 
 
+def continuation_worker_selected(
+    configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
+) -> bool:
+    """Select from the fixed wrapper and actual ancestor, never a requested role.
+
+    A marker selects strict continuation validation, not permission. Missing or
+    invalid history/activation must fail there and never fall back to normal.
+    """
+    from .browser_device_continuation_intent import has_continuation_intent
+    from .browser_device_native import BrowserNativeConfiguration, load_browser_native_configuration
+
+    if (type(configuration) is not BrowserNativeConfiguration
+            or type(selection) is not BrowserWorkerSelection
+            or any(v is not None for v in (
+                selection.directory, selection.normal_bundle, selection.intent))
+            or configuration != load_browser_native_configuration(configuration.root)):
+        raise ValueError()
+    return has_continuation_intent(_browser_directory(
+        selection.bundle, configuration.extension_origin))
+
+
 def worker_context(
     configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
     retirement: BrowserRetirementSelection | None,
@@ -183,6 +205,10 @@ def worker_context(
     from .browser_device_retirement_bundle import inspect_browser_retirement_bundle
 
     if retirement is None:
+        if continuation_worker_selected(configuration, selection):
+            from .browser_device_continuation_context import _continuation_worker_context
+
+            return _continuation_worker_context(configuration, selection)
         paused_only = normal_worker_paused_only(configuration, selection)
         role, acknowledge, launch = "paused" if paused_only else "normal", False, None
     else:

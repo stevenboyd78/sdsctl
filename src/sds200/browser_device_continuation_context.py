@@ -1,8 +1,8 @@
-"""Internal owned continuation context producer; not selected by native dispatch.
+"""Owned continuation context producer for the fixed read-only native route.
 
 Only fixed installed wrapper inputs are accepted. The returned read point is
 neither browser consent nor server verification, acceptance, renewal or a lease.
-Ordinary worker contexts/actions still reject continuation installations.
+Normal authentication/actions still reject continuation installations.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _continuation_worker_context(
     """Construct inside actual live ownership and return only after scope exit.
 
     No requested role, saved browser state, serialized observation or filesystem
-    path from a browser message may select this adapter. It remains unwired.
+    path from a browser message may select this adapter. It authorizes no mutation.
     """
     try:
         if (type(configuration) is not BrowserNativeConfiguration

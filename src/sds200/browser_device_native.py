@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
+    BrowserContinuationReadRequest,
     BrowserDeviceAction,
     BrowserDeviceRequest,
     BrowserRecoveryLaunchRequest,
@@ -52,6 +53,7 @@ from .browser_device_recovery import (
 from .browser_device_store import BrowserDeviceStore
 from .browser_device_worker import (
     BrowserWorkerSelection,
+    continuation_worker_selected,
     normal_worker_paused_only,
     worker_context,
     worker_graph,
@@ -298,7 +300,9 @@ def _native_request(
                             or request.build != worker_graph()[0]):
                         raise ValueError()
                     if isinstance(request, BrowserWorkerRequest):
-                        if retirement is None:
+                        if (retirement is None
+                                and not isinstance(request.request,
+                                                   BrowserContinuationReadRequest)):
                             paused_only = normal_worker_paused_only(configuration, worker)
                         request = request.request
                 elif isinstance(request, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
@@ -306,6 +310,13 @@ def _native_request(
                 if isinstance(request, BrowserWorkerContextRequest):
                     assert worker is not None
                     document = worker_context(configuration, worker, retirement)
+                elif isinstance(request, BrowserContinuationReadRequest):
+                    if (worker is None or retirement is not None
+                            or not continuation_worker_selected(configuration, worker)):
+                        raise ValueError()
+                    from .browser_device_continuation_dispatch import continuation_read_request
+
+                    document = continuation_read_request(configuration, worker, request)
                 elif paused_only:
                     if (not isinstance(request, BrowserDeviceRequest)
                             or request.action is not BrowserDeviceAction.STATUS):

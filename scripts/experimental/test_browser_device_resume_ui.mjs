@@ -128,6 +128,17 @@ test("paused-only review explains the required administrator continuation and ca
   f.elements.review.emit("click");await settle();
   assert.deepEqual(f.calls,[{action:"resume-review"}]);
 });
+test('read-only continuation review never enables confirmation or issues a ticket',async()=>{
+  const f=pageFixture();
+  f.runtime.sendMessage=async message=>{f.calls.push(message);return {
+    mode:'continuation_reviewed',nativeRevision:5,serverGeneration:19};};
+  f.start();f.elements.review.emit('click');await settle();
+  assert.match(f.elements.notice.textContent,/remains paused/);
+  assert.match(f.elements.notice.textContent,/no permission was granted and no session was issued/);
+  assert(f.elements.confirm.disabled);assert(f.elements.resume.disabled);
+  f.elements.confirm.checked=true;f.elements['resume-form'].emit('submit');await settle();
+  assert.deepEqual(f.calls,[{action:'resume-review'}]);
+});
 for(const result of [null,{mode:"reviewed"},{...reviewed,ticket,extra:"secret"},
   {...reviewed,ticket,nativeRevision:true},{...reviewed,ticket:"bad"}]) {
   test("page refuses malformed review "+JSON.stringify(result),async()=>{

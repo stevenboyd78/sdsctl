@@ -1,6 +1,7 @@
 """Retained committed history cannot grant current permission or revive old consent."""
 from __future__ import annotations
 
+import io
 import json
 import os
 import shutil
@@ -33,6 +34,7 @@ from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
 from tests.test_browser_device_guard_release import attempt, blocked, state
 from tests.test_browser_device_native import certificates as certificates
+from tests.test_browser_device_native import frame
 from tests.test_browser_device_profile import CREDENTIAL, private
 from tests.test_browser_device_registration import source as source
 from tests.test_browser_device_resume_workflow import lab as lab
@@ -41,6 +43,21 @@ from tests.test_browser_device_startup import inputs as inputs
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux" or os.geteuid() == 0,
                                reason="Non-root Linux supervised historical chain")
+
+
+def _framed_continuation_read(lab, selection, action):
+    """Exercise real framing/dispatch within the caller's owned fixture lock."""
+    from sds200 import browser_device_native as native
+    from sds200.browser_device_worker import worker_graph
+
+    request = dict(version=1, action="worker-context", build=worker_graph()[0])
+    if action != "worker-context":
+        request.update(action="worker-request", request=dict(version=1, action=action))
+    destination = io.BytesIO()
+    assert native._native_request(lab.args["profile"], [lab.configuration.extension_origin],
+        io.BytesIO(frame(request)), destination, expected_identity=lab.configuration.identity,
+        worker=selection) == 0
+    return json.loads(destination.getvalue()[4:])
 
 
 def _browser_core_checks_native_fixture(expected, observed, result=None):
@@ -727,6 +744,7 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
     from sds200 import browser_device_continuation_context as context
     from sds200 import browser_device_continuation_current as current
     from sds200 import browser_device_native as native
+    from sds200 import browser_device_worker as worker
 
     h, r, i = chain
     result = activation.BrowserPausedActivation(h,
@@ -739,6 +757,7 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
     # is simulated. This is not headed-browser or physical-display acceptance.
     monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
     monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
     monkeypatch.setattr(native, "_post_browser_device", lambda *a, **k: pytest.fail("Network I/O"))
     expected = current.inspect_stopped_continuation(root, **paths)
     before = state(lab, h)
@@ -758,6 +777,8 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
             assert document["continuation"] == dict(epoch=expected.epoch, mode="paused",
                 binding=dict(fingerprint=expected.state_fingerprint,
                              revision=expected.native_revision, generation=None))
+            for action in ("worker-context", "continuation-current"):
+                assert _framed_continuation_read(lab, selection, action) == document
         finally:
             (root / "SingletonLock").unlink()  # Fixture-owned marker only.
     assert state(lab, h) == before
@@ -772,6 +793,7 @@ def test_owned_paused_server_review_complete_chain_never_grants_a_session(
     from sds200 import browser_device_continuation_current as current
     from sds200 import browser_device_continuation_review as review
     from sds200 import browser_device_verification as transport
+    from sds200 import browser_device_worker as worker
     from sds200.browser_device_store import BrowserDeviceRecord, BrowserDeviceState
 
     h, r, i = chain
@@ -784,6 +806,7 @@ def test_owned_paused_server_review_complete_chain_never_grants_a_session(
     selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
     monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
     monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
     monkeypatch.setattr(transport, "exchange_browser_device_at_generation",
                         lambda *a: pytest.fail("Unexpected session exchange"))
     before = state(lab, h)
@@ -816,6 +839,11 @@ def test_owned_paused_server_review_complete_chain_never_grants_a_session(
                     result = obj.run()
                     assert result.state == expected and result.generation == 19
                     assert result.state.mode is RecoveryMode.PAUSED
+                    framed = _framed_continuation_read(lab, selection, "continuation-review")
+                    assert framed == dict(version=1, ok=True, build=worker.worker_graph()[0],
+                        identity=expected.identity, epoch=expected.epoch, mode="paused",
+                        binding=dict(fingerprint=expected.state_fingerprint,
+                                     revision=expected.native_revision, generation=19))
                 else:
                     with pytest.raises(review.BrowserContinuationReviewError):
                         obj.run()
@@ -825,7 +853,7 @@ def test_owned_paused_server_review_complete_chain_never_grants_a_session(
                 with pytest.raises(review.BrowserContinuationReviewError):
                     obj.run()
                 assert state(lab, h) == stable
-            assert calls == ["reviewed", "refused", "pause"]
+            assert calls == ["reviewed", "reviewed", "refused", "pause"]
             with current._worker_current_scope(lab.configuration, selection) as reader:
                 assert reader.inspect() == paused[0]
         finally:

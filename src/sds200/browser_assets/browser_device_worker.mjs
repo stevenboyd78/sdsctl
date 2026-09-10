@@ -7,6 +7,8 @@ import {connectChromeRetirementRecovery} from './browser_device_retirement_start
 import {connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation} from './browser_device_launch.mjs';
 import {createWorkerEventGate} from './browser_device_worker_gate.mjs';
 import {connectPausedBrowserWorker} from './browser_device_paused.mjs';
+import {validateContinuationContext} from './browser_device_continuation_context.mjs';
+import {connectContinuationBrowserWorker} from './browser_device_continuation_worker.mjs';
 
 const HOST='org.sdsctl.browser_device';
 const hex=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -37,9 +39,12 @@ export async function startBrowserWorker(chrome,build) {
   try {
   // Inert receivers are synchronous; no role-specific handler, browser-state
   // access, startup tick or recovery navigation precedes validated context.
-  const context=validateWorkerContext(await Promise.race([
+  const raw=await Promise.race([
     chrome.runtime.sendNativeMessage(HOST,{version:1,action:'worker-context',build}),
-    gate.deadline]),build,chrome.runtime.id);
+    gate.deadline]);
+  const continuation=raw?.role==='continuation';
+  const context=continuation?validateContinuationContext(raw,build,chrome.runtime.id):
+    validateWorkerContext(raw,build,chrome.runtime.id);
   gate.check(); // Also reject a late result when a throttled timer has not fired.
   // Every subsequent native action carries the executing graph's identity. A
   // cached old worker cannot bypass the new host's build check with old envelopes.
@@ -49,6 +54,12 @@ export async function startBrowserWorker(chrome,build) {
     return chrome.runtime.sendNativeMessage(HOST,{version:1,action:'worker-request',build,request});
   }});
   const scoped=Object.create(gate.chrome);Object.defineProperty(scoped,'runtime',{value:runtime});
+  if(continuation) {
+    connectContinuationBrowserWorker(scoped,raw,build);
+    // No normal entry controller: even a clean paused continuation must not
+    // select a dashboard or acquire normal authentication/alarm capabilities.
+    gate.open();return;
+  }
   if(context.role==='paused') {
     connectPausedBrowserWorker(scoped,context.config);
     connectBrowserEntry(scoped);

@@ -55,6 +55,15 @@ export function connectResumePage({document,window,runtime}) {
         notice.textContent="Automatic sign-in is paused after completed recovery. A separate administrator continuation is required. Keep the saved profile and recovery evidence; do not repeat setup or remove the guard. No sign-in was attempted.";
         return;
       }
+      if(exact(result,['mode','nativeRevision','serverGeneration'])&&
+        result.mode==='continuation_reviewed'&&
+        [result.nativeRevision,result.serverGeneration].every(n=>
+          Number.isSafeInteger(n)&&n>0&&n<Number.MAX_SAFE_INTEGER)) {
+        confirm.disabled=true;submit.disabled=true;
+        record.textContent=`Native revision ${result.nativeRevision}; server generation ${result.serverGeneration}.`;
+        notice.textContent='Server status was verified. This display remains paused. Continuation sign-in is not enabled yet; no permission was granted and no session was issued. Keep the saved profile and recovery evidence.';
+        return;
+      }
       if (!exact(result,["mode","ticket","nativeRevision","serverGeneration"]) || result.mode !== "reviewed" ||
           typeof result.ticket !== "string" || !/^[a-f0-9-]{36}$/.test(result.ticket) ||
           ![result.nativeRevision,result.serverGeneration].every(n=>Number.isSafeInteger(n)&&n>0)) {

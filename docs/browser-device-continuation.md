@@ -3,6 +3,7 @@
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
 controlled native cancellation, owned prepare/claim, verification and initial-session fixtures;
+fixed read-only continuation context and explicit server-review routing;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -16,6 +17,38 @@ the release; merely exposing a resume button or allowing a native action cannot
 safely implement the next transition.
 
 ## Implemented now
+
+### Fixed read-only continuation route
+
+After a valid fixture-owned activation, a fixed installed worker/native wrapper
+can select a separate **read-only continuation** role from the actual owned
+manifest/epoch. A mere intent, missing anchor, invalid history or different build
+still fails; no browser-supplied role or path can select the route. The ordinary
+startup guard remains in place: this is not a runnable activation command or
+permission to launch a retained real installation.
+
+The actual synchronous worker gate constructs only a read-only handler. It
+restricts storage access to trusted extension contexts but never edits stored
+values. Startup status checks fixed native state twice, exact clean saved pause,
+cookie absence and alarm absence. An explicit trusted resume-page review may
+add one fixed verified server-status request, followed by fresh native/browser
+readbacks. Its UI reports the current revision/generation **without a ticket**,
+and leaves confirmation disabled. Initial sign-in, native pause, initialization,
+renewal, state migration, cookie cleanup and accepted-state adoption are refused.
+
+Both a clean legacy paused record and an exact same-build schema-3 paused record
+can be inspected, but neither is rewritten. Missing, pending, accepted, malformed,
+different-build or unexpected-cookie/alarm state requires administrator review.
+An in-flight operation owns the lane. Timeouts do not cancel browser/native API
+work: a timed-out worker remains failed, and late completion cannot trigger
+another request or change state. The browser's whole-operation wall/monotonic
+budget and native process's independent ten-second deadline remain distinct.
+
+This route is under isolated qualification. It does not enable the complete
+post-recovery sign-in or unattended-renewal flow, remove guards, change published
+installations or constitute physical-display acceptance.
+
+### Existing paused-only guard-release route
 
 The native context selects a distinct paused-only worker for this installation.
 It does not construct the normal authentication or resume controllers. A trusted
@@ -193,8 +226,9 @@ and stays invalid after an observed ownership failure. Returning the original
 files or process selection cannot revive it. These are cooperative local ownership
 checks, not protection against arbitrary same-account/root Python code.
 
-The live-owner reader is **not wired into normal startup, worker dispatch, browser
-messages or a CLI**. Its result is still historical evidence only. It cannot clear
+The live-owner reader has no standalone browser message or CLI. The fixed
+read-only continuation route uses it internally; normal startup and authentication
+remain blocked. Its result is still historical evidence only. It cannot clear
 the intent blocker, prove the current native ledger is healthy, grant a role,
 authenticate, or turn a retained result into permission on a subsequent request.
 The old recovery supervisor must still have exited; that historical check is
@@ -208,7 +242,8 @@ an installed command. The fixture-only stopped-owner adapter and current-epoch
 transaction core below share its internal validators.
 **Do not call these on a real profile.** Existing
 recovery/resume helpers continue rejecting schema 3, and the continuation-intent
-marker continues blocking ordinary startup and native requests.
+marker continues blocking ordinary startup and authentication/mutation requests.
+The narrowly scoped continuation read/review route does not remove that blocker.
 
 The core derives canonical candidate manifest bytes from a selected paused
 historical after-state. The manifest binds the exact old state and terminal
@@ -387,8 +422,9 @@ distinct from historical evidence and the exact initial paused-activation result
 It is **not a cached permission lease**, trusted-page consent, server proof,
 session or browser role. It performs no clock correction, writes, repair,
 credential replacement or network request. The old strict confirmation methods
-still reject later native revisions, and ordinary schema-3 startup/requests remain
-blocked even if this isolated reader sees a valid active epoch.
+still reject later native revisions, and ordinary schema-3 startup and
+authentication/mutation requests remain blocked even if this reader sees a valid
+active epoch. Read-only continuation dispatch does not grant those capabilities.
 
 Portable tests use real files, locks and SQLite with explicitly simulated full
 history/browser ancestry. Required namespace fixtures also select complete
@@ -432,10 +468,10 @@ usable, without allocating a token or setting a cookie. Its drainage check waits
 for older generations only. This supports later accepted-state verification; it
 does not implement unattended renewal or permit replaying initial approval.
 
-### Fixed continuation context (internal, inactive adapter)
+### Fixed continuation context (read-only routing)
 
 `browser_device_continuation_context` produces a narrow metadata envelope for
-the future continuation worker. Fixed installed configuration and wrapper
+the separate read-only continuation worker. Fixed installed configuration and wrapper
 selection enter the actual owned current-state scope; no browser-supplied path,
 role, saved epoch or serialized observation selects the read. It accepts only
 the current paused or active mode, verifies the exact identity/origin/device,
@@ -451,9 +487,9 @@ credential, approval, cookie, session-ready result or authority lease. Native
 active state alone still cannot promote saved browser pause or pending state
 to acceptance. Later requests must reacquire current ownership and state.
 
-This adapter performs no mutation, network call or clock correction. It is not
-selected by ordinary native dispatch, and the existing worker parser continues
-to reject its new role. Portable tests use real private files and SQL with
+This adapter performs no mutation, network call or clock correction. Only the
+fixed read-only native route selects it; the normal-role parser still rejects
+its separate envelope. Portable tests use real private files and SQL with
 simulated history/ancestry; complete retained-chain tests exercise the same
 producer with both paused and active epochs. Later browser ancestry in those
 chain tests remains simulated. This is not real-browser continuation, a runnable
@@ -553,7 +589,8 @@ and unimplemented session handling, are separate from native cancellation.
 `browser_device_continuation_approval` supplies a separate **live-worker-only**
 adapter for preparing and consuming one native approval. It has no stopped
 administrator entrypoint, dispatcher action, CLI, external transport or active
-grant completion. Normal startup and native requests still refuse schema 3.
+grant completion. Normal startup and authentication/mutation requests still refuse
+schema 3; the fixed read/review route cannot invoke this approval adapter.
 Do not run this adapter against a retained real profile.
 
 Preparation reconstructs fixed installed paths, actual live ownership, complete
@@ -769,8 +806,9 @@ result without repairing state. The same object cannot replay a review.
 The result is one online review point, **not consent, a lease or an issuance
 ticket**. A fresh trusted browser gesture and the initial-session adapter's own
 exact-generation verification are still required later. The ten-second elapsed
-budget does not interrupt blocked I/O; eventual native dispatch must also retain
-the independent supervising-process deadline. This adapter remains unwired.
+budget does not interrupt blocked I/O; the fixed native dispatch retains the
+independent supervising-process deadline. The fixed read-only native route
+now invokes this review without enabling any continuation mutation or sign-in.
 
 Tests exercise private SQL/files, changed inputs and same-revision fingerprints,
 newer pauses, malformed/refused or lost proof, deadlines, scope-exit changes and

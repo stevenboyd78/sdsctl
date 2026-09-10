@@ -80,10 +80,18 @@ class BrowserWorkerContextRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class BrowserContinuationReadRequest:
+    """Fixed owned read/review only; never mutation, consent or session issuance."""
+
+    action: str
+
+
+@dataclass(frozen=True, slots=True)
 class BrowserWorkerRequest:
     build: str
     request: (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
-              | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest)
+              | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
+              | BrowserContinuationReadRequest)
 
 
 def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
@@ -122,7 +130,7 @@ def parse_browser_device_request(
     payload: bytes,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
       | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
-      | BrowserWorkerContextRequest | BrowserWorkerRequest):
+      | BrowserWorkerContextRequest | BrowserWorkerRequest | BrowserContinuationReadRequest):
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -153,6 +161,10 @@ def parse_browser_device_request(
             if isinstance(parsed, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
                 raise _invalid()
             return BrowserWorkerRequest(value["build"], parsed)
+        if value["action"] in {"continuation-current", "continuation-review"}:
+            if set(value) != {"version", "action"}:
+                raise _invalid()
+            return BrowserContinuationReadRequest(value["action"])
         if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
             return _resume(value)
         if value["action"] == "recovery-launch-ready":
@@ -211,7 +223,7 @@ def read_browser_device_request(
     stream: BinaryIO,
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
       | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
-      | BrowserWorkerContextRequest | BrowserWorkerRequest | None):
+      | BrowserWorkerContextRequest | BrowserWorkerRequest | BrowserContinuationReadRequest | None):
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.
