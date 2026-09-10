@@ -764,6 +764,79 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
     blocked(lab)
 
 
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_owned_paused_server_review_complete_chain_never_grants_a_session(
+        lab, chain, monkeypatch):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_review as review
+    from sds200 import browser_device_verification as transport
+    from sds200.browser_device_store import BrowserDeviceRecord, BrowserDeviceState
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda result: result.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(transport, "exchange_browser_device_at_generation",
+                        lambda *a: pytest.fail("Unexpected session exchange"))
+    before = state(lab, h)
+    calls, paused = [], []
+    outcome = "reviewed"
+
+    def verify(configuration):
+        calls.append(outcome)
+        with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.rollback()
+        if outcome == "refused":
+            raise RuntimeError("PRIVATE fictional server refusal")
+        if outcome == "pause":
+            paused.append(cancel._BrowserWorkerCancellation(configuration, selection).pause(
+                expected).state)
+        return transport.BrowserVerifiedRecord(configuration.identity,
+            BrowserDeviceRecord(configuration.device_id, 19, BrowserDeviceState.ACTIVE), True)
+
+    monkeypatch.setattr(transport, "verify_browser_device", verify)
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            # Reuse this expensive real retained chain for independent read-only
+            # review objects. Only the final newer-pause scenario changes state.
+            for outcome in ("reviewed", "refused", "pause"):
+                obj = review._BrowserWorkerPausedReview(lab.configuration, selection)
+                original = state(lab, h)
+                if outcome == "reviewed":
+                    result = obj.run()
+                    assert result.state == expected and result.generation == 19
+                    assert result.state.mode is RecoveryMode.PAUSED
+                else:
+                    with pytest.raises(review.BrowserContinuationReviewError):
+                        obj.run()
+                stable = state(lab, h)
+                if outcome != "pause":
+                    assert stable == original
+                with pytest.raises(review.BrowserContinuationReviewError):
+                    obj.run()
+                assert state(lab, h) == stable
+            assert calls == ["reviewed", "refused", "pause"]
+            with current._worker_current_scope(lab.configuration, selection) as reader:
+                assert reader.inspect() == paused[0]
+        finally:
+            (root / "SingletonLock").unlink()  # Fixture-only marker; not a real browser.
+    after = state(lab, h)
+    after["profile"].pop("recovery.sqlite")
+    before["profile"].pop("recovery.sqlite")
+    assert after == before and inspect(chain) == retained
+    blocked(lab)
+
+
 @pytest.mark.parametrize("change", ["archive", "release", "credential", "runtime"])
 def test_current_read_rechecks_real_retained_chain_and_latches(lab, chain, monkeypatch, change):
     from sds200 import browser_device_continuation_activation as activation

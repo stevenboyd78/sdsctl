@@ -750,6 +750,34 @@ Fresh initial consent/issuance, pending/accepted records and active observations
 still require a positive exact reviewed generation. Unknown is never zero,
 latest-generation permission or a sign-in fallback.
 
+### Fresh paused server review (internal, not consent or session issuance)
+
+Offline paused context deliberately has no current server generation. The internal
+`_BrowserWorkerPausedReview` obtains a fresh generation through the fixed verified
+HTTPS device-review endpoint without changing native state, approving an attempt
+or issuing a browser token. It accepts installed configuration and worker selection,
+not browser-provided state, proof, role or filesystem selectors.
+
+One process owns the full read/network/read operation: private input coordination
+and browser ownership remain pinned, while SQLite transactions are closed during
+network I/O so a newer native pause can commit. The adapter checks the complete
+paused-state fingerprint before and after review, exact device identity, active
+server generation, drained response, both elapsed clocks, scope exit, selected
+journals and executing build. Any observed change or lost response refuses the
+result without repairing state. The same object cannot replay a review.
+
+The result is one online review point, **not consent, a lease or an issuance
+ticket**. A fresh trusted browser gesture and the initial-session adapter's own
+exact-generation verification are still required later. The ten-second elapsed
+budget does not interrupt blocked I/O; eventual native dispatch must also retain
+the independent supervising-process deadline. This adapter remains unwired.
+
+Tests exercise private SQL/files, changed inputs and same-revision fingerprints,
+newer pauses, malformed/refused or lost proof, deadlines, scope-exit changes and
+actual verified DNS/IP TLS. Separate retained-history fixtures cover both recovery
+paths. Later browser ancestry is still simulated in those fixtures; these passes
+are not complete browser continuation or physical-display acceptance.
+
 ### Accepted cookie identity (inert comparison, not permission)
 
 An accepted native binding alone cannot identify the cookie installed by that
