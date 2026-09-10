@@ -2,7 +2,7 @@
 
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
-controlled native cancellation, owned prepare/claim and owned verification fixtures;
+controlled native cancellation, owned prepare/claim, verification and initial-session fixtures;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -557,6 +557,47 @@ must independently enforce exact-generation authority and handle session-respons
 loss. This adapter returns no session/token, installs no cookie, changes no
 Chromium storage and does not expose activation or normal schema-3 dispatch.
 Real retained profiles, Home Assistant and both bench Pis remain out of scope.
+
+## Owned initial session issuance (fixture-only, no browser installation)
+
+`browser_device_continuation_session` composes a new owned verification attempt
+internally and consumes its successful return once. No supplied verifier, proof,
+completed grant, transport or result can serve as a session-issuance ticket. A
+lost verification acknowledgement prevents issuance even when exact readback
+later reports native completion. A new object cannot adopt an old ACTIVE grant.
+
+Before the one fixed exact-generation session request, it reacquires the
+original owner and rechecks the exact completed state, retained history and
+pinned private configuration/credential/trust. Native SQLite scopes are closed
+during the request, while shared private-input coordination remains held. The
+server independently reauthenticates the exact generation; earlier verification
+is not a transaction with the server or authority to substitute its latest state.
+A newer pause or changed files/owner/state prevents returning the session.
+
+One wall/monotonic budget spans the entire operation, including consent,
+verification and issuance. All elapsed time is conservatively subtracted from
+the returned session lifetime. The existing independent native supervisor's
+ten-second deadline is still required before wiring dispatch; these elapsed
+checks do not interrupt a blocked socket.
+
+The private result contains an in-memory bearer only once, with redacted
+representations. This does not make the bearer single-use for HTTP requests.
+No token is saved in the ledger, history, manifest, diagnostics or command line.
+Exact confirmation reports native state only and never retrieves a token,
+repeats issuance or establishes browser readiness.
+
+A refused, interrupted, late or lost session response does not trigger an
+automatic retry, a failure-state rewrite or a second approval. Native ACTIVE
+may remain after uncertainty, and a server-issued token may still be valid.
+Neither readback nor the absence of a browser cookie proves remote revocation.
+Ordinary schema-3 dispatch remains blocked; no retained pending browser record
+may treat this native state as permission to retry initialization or sign in.
+
+The adapter adds no session-claim database or schema relaxation and does not
+call the legacy schema-1/2 recovery authenticator. Browser clean/pending-state
+selection, trusted gesture integration, cookie installation/protected-page
+confirmation, renewal and restart roles remain separately unimplemented
+boundaries. No real retained profile, Home Assistant or bench Pi was used.
 
 ## Remaining selected successor path, not implemented end to end
 

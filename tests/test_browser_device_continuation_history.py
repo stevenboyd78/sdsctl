@@ -1039,3 +1039,92 @@ def test_owned_verification_complete_chain_keeps_history_and_cancellation(
     after["profile"].pop("recovery.sqlite")
     assert after == before and inspect(chain) == retained
     blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("outcome", ["issued", "refused", "pause", "lost-verification"])
+def test_owned_initial_session_complete_chain_preserves_history_and_pause(
+        lab, chain, monkeypatch, outcome):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_session as session
+    from sds200 import browser_device_continuation_verification as verification
+    from sds200 import browser_device_verification as transport
+    from sds200.browser_device_recovery import ExchangeSession
+    from tests.test_browser_device_native import TOKEN
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda review: review.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    before = state(lab, h)
+    before["profile"].pop("recovery.sqlite")
+    calls, paused = [], []
+
+    def verify(config, record):
+        calls.append("verify")
+        assert record.generation == 7
+        return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+    def exchange(config, generation):
+        calls.append("exchange")
+        assert generation == 7
+        with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.rollback()
+        if outcome == "refused":
+            raise RuntimeError("PRIVATE fixture refusal")
+        if outcome == "pause":
+            with current._worker_current_scope(config, selection) as reader:
+                completed = reader.inspect()
+            paused.append(cancel._BrowserWorkerCancellation(config, selection).pause(completed))
+        return ExchangeSession(TOKEN, 300)
+
+    def uncertain(db):
+        db.commit()
+        raise RuntimeError("PRIVATE lost verification reply")
+
+    monkeypatch.setattr(transport, "verify_browser_device", verify)
+    monkeypatch.setattr(transport, "exchange_browser_device_at_generation", exchange)
+    if outcome == "lost-verification":
+        monkeypatch.setattr(verification, "_commit", uncertain)
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            obj = session._BrowserWorkerInitialSession(lab.configuration, selection)
+            kwargs = dict(intent="e" * 64, reviewed_generation=7, consent=lambda review: review)
+            if outcome == "issued":
+                result = obj.run(expected, **kwargs)
+                assert result.state.mode is RecoveryMode.ACTIVE
+                assert result.session.token == TOKEN and 290 < result.session.expires_in <= 300
+                assert obj.confirm().state == result.state
+            else:
+                with pytest.raises(session.BrowserContinuationSessionError):
+                    obj.run(expected, **kwargs)
+                if outcome == "pause":
+                    with pytest.raises(session.BrowserContinuationSessionError):
+                        obj.confirm()
+                    with current._worker_current_scope(lab.configuration, selection) as reader:
+                        assert reader.inspect() == paused[0].state
+                else:
+                    assert obj.confirm().phase == "complete"
+            stable = state(lab, h)
+            with pytest.raises(session.BrowserContinuationSessionError):
+                obj.run(expected, **kwargs)
+            assert state(lab, h) == stable
+            assert calls == (["verify"] if outcome == "lost-verification"
+                             else ["verify", "exchange"])
+        finally:
+            (root / "SingletonLock").unlink()  # Fresh fictional fixture only.
+    after = state(lab, h)
+    after["profile"].pop("recovery.sqlite")
+    assert after == before and inspect(chain) == retained
+    assert TOKEN.encode() not in lab.ledger.path.read_bytes()
+    blocked(lab)

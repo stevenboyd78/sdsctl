@@ -614,6 +614,36 @@ not an installed session, ongoing server permission or proof of old-session
 revocation. Real profiles, Home Assistant and bench Pis remain unchanged.
 Exact-head test counts and qualification results belong to the draft PR record.
 
+## Owned initial-session candidate
+
+The isolated initial-session adapter creates its own verification attempt,
+requires the successful same-process return and performs at most one fixed
+exact-generation issuance. It never accepts a supplied proof/grant, replays a
+lost response or changes native state after an uncertain session exchange.
+Exact readback describes native completion only, not a cookie or protected page.
+
+Portable cases cover original private-input/owner coordination with native SQL
+closed during issuance, current-state and same-revision changes, malformed or
+lost responses, interruption, original total wall/monotonic budget, conservative
+session lifetime and readback without replay. Selected actual verified TLS cases
+at DNS/IPv4 origins exercise both fixed requests and strict session-response
+validation. Separately, an in-process real server authority/session registry
+checks rotation, pause/revoke, generation changes, admission limits and another
+display's surviving session. The latter is not an end-to-end HTTPS-server test.
+
+Complete retained retirement/reconciliation namespace fixtures cover issuance,
+refusal, a newer owned pause during issuance and a lost verification reply.
+Later browser ancestry, consent and server responses remain fictional at that
+layer. No token is persisted in native state and all non-native evidence stays
+unchanged; ordinary schema-3 startup remains blocked.
+
+Native ACTIVE after lost issuance is deliberately not a sign-in success or
+proof of server revocation. No browser cookie is installed, no protected page
+or renewal is qualified, and no native request role is enabled. Independent
+supervisor termination still needs to be preserved at dispatch integration.
+Real profiles, Home Assistant and the bench Pis remain untouched. Exact-head
+counts and results belong to the draft PR qualification record.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)
