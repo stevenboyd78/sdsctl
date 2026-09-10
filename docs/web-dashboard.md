@@ -41,6 +41,14 @@ access scopes, service counts, and oldest-current-connection age. The local
 and Control clients cannot call it. Shared runtime snapshots and events remain
 unchanged and contain no client identities.
 
+Connection age is elapsed time, shown as `HH:MM:SS`, with a day count for
+connections lasting 24 hours or longer—for example, `2d 03:04:05` means two days,
+three hours, four minutes and five seconds. Days do not wrap at a month or year.
+This is the oldest connection **still open** for that client, not lifetime uptime;
+the age can decrease when that connection closes. Missing or invalid ages show
+`Unavailable`, not a misleading zero. The server supplies elapsed seconds, so the
+dashboard does not invent a "connected since" date using the browser's clock.
+
 The inventory does not include browser/native-dashboard or Ingress sessions,
 enrolled-but-offline credentials, secrets, certificates, private paths, or peer
 addresses. Unavailable data clears the previous rows and is labeled unavailable.

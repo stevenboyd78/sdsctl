@@ -4155,6 +4155,22 @@ function initializeHomeAssistantAdvancedAccess() {
 
 let connectedClientsRefreshInProgress = false;
 
+function formatConnectionAge(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return "Unavailable";
+  }
+  const seconds = Math.floor(value);
+  if (!Number.isSafeInteger(seconds)) {
+    return "Unavailable";
+  }
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const clock = [hours, minutes, seconds % 60]
+    .map(part => String(part).padStart(2, "0")).join(":");
+  return days > 0 ? `${days}d ${clock}` : clock;
+}
+
 async function refreshConnectedClients() {
   const status = document.getElementById("connected-clients-status");
   if (!status || connectedClientsRefreshInProgress || document.hidden) {
@@ -4187,7 +4203,8 @@ async function refreshConnectedClients() {
       services.textContent = Object.entries(client.services)
         .map(([service, count]) => `${service}: ${count}`).join(" · ");
       const age = document.createElement("p");
-      age.textContent = `Oldest current connection: ${client.connected_seconds}s`;
+      age.textContent = `Oldest current connection: ${formatConnectionAge(client.connected_seconds)}`;
+      age.title = "Elapsed time (days and HH:MM:SS).";
       row.append(name, access, services, age);
       rows.push(row);
     }
