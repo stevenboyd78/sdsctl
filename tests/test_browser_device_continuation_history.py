@@ -8,6 +8,7 @@ import sys
 import time
 from contextlib import closing
 from dataclasses import FrozenInstanceError
+from types import SimpleNamespace
 
 import pytest
 
@@ -704,4 +705,140 @@ def test_current_read_rechecks_real_retained_chain_and_latches(lab, chain, monke
             reader.inspect()
         assert "PRIVATE" not in str(error.value) and CREDENTIAL not in str(error.value)
         assert state(lab, h) == before
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("mode", ["claimed", "active"])
+def test_owned_cancellation_preserves_complete_history_and_blocks_stale_grants(lab, chain, mode):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_epoch as epoch
+    from tests.test_browser_device_continuation_current import native_step
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activated = activation.BrowserPausedActivation(h,
+        release_id=r.release_id, intent_id=i.intent_id).apply(confirmation=lambda r: r.confirmation)
+    assert activated is not None
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    candidate = SimpleNamespace(
+        paths={"manifest": h._session._root / activation.ACTIVATION_MANIFEST}, history=retained)
+    # Only the initial core seed supplies fictional consent/server facts. The
+    # cancellation adapter itself owns and reconstructs the complete real chain.
+    lab.clock[0] = time.time() + 2
+    for stage in (("prepare", "claim", "complete") if mode == "active" else ("prepare", "claim")):
+        native_step(lab, candidate, stage)
+    expected = current.inspect_stopped_continuation(h._session._root, **paths)
+    lab.clock[0] -= 100
+    clocks = dict(clock=lambda: lab.clock[0], monotonic=time.monotonic)
+    before = state(lab, h)
+    before["profile"].pop("recovery.sqlite")
+    corrector = cancel.BrowserStoppedCancellation(h._session._root, **paths, **clocks)
+    corrected = corrector.correct_clock(expected)
+    assert corrected.state.native_revision == expected.native_revision + 1
+    assert corrected.state.mode is expected.mode
+    assert corrector.confirm() == corrected
+    pauser = cancel.BrowserStoppedCancellation(h._session._root, **paths, **clocks)
+    paused = pauser.pause(corrected.state)
+    assert paused.state.mode is RecoveryMode.PAUSED
+    assert paused.state.native_revision == corrected.state.native_revision + 1
+    assert pauser.confirm() == paused
+    after = state(lab, h)
+    after["profile"].pop("recovery.sqlite")
+    assert after == before and inspect(chain) == retained
+    with pytest.raises(cancel.BrowserContinuationCancellationError):
+        corrector.confirm()  # A later pause is not the exact earlier after-state.
+    with pytest.raises(epoch.BrowserContinuationEpochError):
+        native_step(lab, candidate, "complete")  # Cancelled/completed old claim is not reusable.
+    blocked(lab)
+
+
+@pytest.mark.parametrize("failure", ["archive", "runtime", "commit-before", "commit-after",
+                                    "copied-release", "copied-intent"])
+def test_owned_cancellation_full_chain_interruptions_retain_state(
+        lab, chain, monkeypatch, failure):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_epoch as epoch
+
+    h, r, i = chain
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda r: r.confirmation)
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(h._session._root, **paths)
+    before = lab.ledger.path.read_bytes()
+    pauser = cancel.BrowserStoppedCancellation(h._session._root, **paths)
+    if failure.startswith("copied"):
+        path = h._session._root / (release.RELEASE_JOURNAL if failure == "copied-release"
+                                  else intent.INTENT_JOURNAL)
+        raw = path.read_bytes()
+        path.rename(path.with_name(path.name + ".retained"))
+        private(path, raw)
+    stage = epoch._stage_pause
+
+    def staged(*args, **kwargs):
+        result = stage(*args, **kwargs)
+        if failure == "archive":
+            path = h._session._archives / h._operation / "native-history.json"
+            path.write_bytes(path.read_bytes() + b" ")
+        elif failure == "runtime":
+            def changed(**kwargs):
+                raise RuntimeError("PRIVATE changed runtime")
+
+            monkeypatch.setattr(history, "_canonical_bundle_files", changed)
+        return result
+
+    def commit(db):
+        if failure == "commit-after":
+            db.commit()
+        raise sqlite3.OperationalError("PRIVATE uncertain reply")
+
+    with monkeypatch.context() as patch:
+        if failure.startswith("commit"):
+            patch.setattr(cancel, "_commit", commit)
+        else:
+            patch.setattr(epoch, "_stage_pause", staged)
+        with pytest.raises(cancel.BrowserContinuationCancellationError) as error:
+            pauser.pause(expected)
+        assert "PRIVATE" not in str(error.value)
+    after = state(lab, h)
+    if failure == "commit-after":
+        assert pauser.confirm().state.native_revision == expected.native_revision + 1
+    else:
+        assert lab.ledger.path.read_bytes() == before
+        with pytest.raises(cancel.BrowserContinuationCancellationError):
+            pauser.confirm()
+    assert state(lab, h) == after
+    blocked(lab)
+
+
+def test_live_owned_cancellation_uses_complete_chain_without_ordinary_dispatch(
+        lab, chain, monkeypatch):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+
+    h, r, i = chain
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda r: r.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    # Only the later Chromium ancestor is simulated, not the retained chain or locks.
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            attempt = cancel._BrowserWorkerCancellation(lab.configuration, selection)
+            result = attempt.pause(expected)
+            assert result.state.native_revision == expected.native_revision + 1
+            assert result.state.mode is RecoveryMode.PAUSED and attempt.confirm() == result
+        finally:
+            (root / "SingletonLock").unlink()  # Fixture-only marker.
+    assert current.inspect_stopped_continuation(root, **paths) == result.state
     blocked(lab)

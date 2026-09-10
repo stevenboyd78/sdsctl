@@ -518,6 +518,37 @@ credential, Home Assistant service or bench Pi was changed. Owned mutation,
 online authority/session exchange, browser-role integration and physical
 acceptance remain unqualified; no user test is requested for this internal reader.
 
+## Owned native cancellation candidate
+
+The internal adapter now owns explicit native pause and backward-clock
+correction, without exposing a browser role, dispatcher or CLI. It reconstructs
+fixed files, complete history and current SQL inside an actual-owner native write
+transaction, compares the entire expected current snapshot and rechecks inputs,
+ledger policy/identity, clocks and exact staged state before one commit.
+
+Portable fixtures cover both owner paths and legacy archive schemas, paused and
+pending/active native states, atomic clock-correction-plus-pause, unchanged legacy
+history, exact readback, stale same-revision claims, wrong selections, unsafe
+files/sidecars, competing writers, ownership/process changes, invalid/backward/
+expired clocks, post-DML input/SQL changes, interrupted writes and rollback failure.
+They distinguish committed-but-unacknowledged state from uncommitted rollback;
+neither a lost reply nor a later paused state permits automatic replay.
+
+The complete-chain namespace cases additionally exercise both archive forms,
+cancelled old claims, preserved historical evidence, post-DML archive/runtime
+changes, copied release/intent journals before selection and uncertain commits.
+The minimal portable journals simulate historical inode anchors; their copied
+journal test therefore checks replacement after bootstrap, not original journal
+provenance. The namespace cases supply that missing full-chain evidence.
+
+Readback pins the original selected files and directory/launcher identities.
+It describes only the exact expected current state retained by the same-process
+attempt object, not durable operation provenance or a cached permission lease.
+Lost process state is not reconstructed or repaired. No test here establishes
+server-session revocation, browser sign-out, physical power-loss durability or
+headed-browser acceptance. Real retained profiles and both bench Pis remain
+untouched. Exact-commit qualification belongs to the draft PR checkpoint.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

@@ -1,7 +1,8 @@
 # Post-recovery continuation: design boundary
 
 Status: **development design, read-only preflight/history, internal intent journal,
-fixture-only owned paused activation, current-epoch transactions and owned current-state reads;
+fixture-only owned paused activation, current-epoch transactions, owned current-state reads
+and controlled native cancellation;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -394,8 +395,59 @@ history/browser ancestry. Required namespace fixtures also select complete
 supervised retirement/reconciliation chains, read later epoch states, exercise
 the live-owner boundary with simulated later ancestry, and inject retained-input
 changes after selection. These are not headed-browser, physical-Pi, online
-authorization or power-loss acceptance. Owned mutations, pre-/post-network
+authorization or power-loss acceptance. Approval-producing mutations, pre-/post-network
 authority checks and runtime-role integration are still separate work.
+
+## Owned native cancellation (fixture-only)
+
+`browser_device_continuation_cancel` adds narrowly scoped **pause** and
+**backward-clock correction** operations. Separate stopped and live-worker
+entrypoints retain the same fixed-file and actual-owner requirements as the
+current reader. There is no browser action, native dispatcher, CLI or normal
+schema-3 startup support. Do not invoke this on a retained real profile.
+
+Each attempt reconstructs the complete historical chain, actual immutable
+manifest, private inputs and exact current SQL under coordinated ownership and a
+dedicated `BEGIN IMMEDIATE`. A supplied current snapshot is only an optimistic
+comparison value: its complete binding must match the reconstructed current view.
+A changed revision, same-revision claim, epoch, input, file identity or owner
+refuses the write. The read-only selector has not gained a write switch.
+
+Pause cancels pending native approvals, clears the active native grant and
+advances the paused revision. If the wall clock is behind the stored observation,
+the explicit pause first stages clock correction and then pause in the **same
+transaction**: two revision advances, one commit, no intermediate visible grant.
+Explicit clock correction alone requires a real backstep; it cancels pending
+approvals, advances revision, applies the existing ten-second delay and preserves
+mode (including an already completed active grant). It is not automatic status
+maintenance. Any further wall/monotonic backstep, invalid clock or ten-second
+attempt-window expiry before commit refuses the whole write. These elapsed checks
+are not an independent process-kill deadline.
+
+After staging, the adapter rechecks scoped inputs, retained records, runtime,
+owner, actual ledger identity, the exact same-connection after-state, transaction
+policy and clocks before a single commit. The full historical reader and
+read-only selector still refuse active SQLite sidecars; only the dedicated
+writer validates its own rollback-mode transaction. Exceptions and interruptions
+abort the entire transaction. Failed rollback closes the connection rather than
+leaving reusable staged changes.
+
+An attempt object is one-use even after failure. Before committing, it retains
+the exact expected after-state and selected file/owner bindings privately in
+memory. Final acknowledgement uses a new query-only transaction and must match
+that exact state. A lost commit reply may be followed by **read-only confirmation
+on the same attempt object**, never another cancellation write. A later state
+that merely happens to be paused is not a match. A new process/object cannot
+reconstruct this expected state from a caller-supplied receipt.
+
+`BrowserCancellationState` describes an exact current after-state; it is not a
+durable operation-provenance record, permission lease or proof of session
+invalidation. If the object/expected state is lost, preserve the uncertainty for
+review instead of replaying the write. There is no second completion journal,
+automatic repair, pruning, browser-storage change, server exchange or credential
+replacement. Native cancellation does **not** revoke browser/server sessions or
+prove that sign-out completed. Owned approval and online/session adapters remain
+separate prerequisites before any real continuation path is enabled.
 
 ## Remaining selected successor path, not implemented end to end
 
@@ -454,7 +506,7 @@ verification must not be bypassed for an IP-address installation.
 This section specifies the complete implementation boundary. The isolated native
 core and fixture-only owned adapter above implement the manifest and single-ledger
 paused anchor/view. The fixture-only epoch core adds current SQL and approval
-transactions. **Owned mutation, online approval/authentication adapters and
+transactions. **Owned approval, online authentication/session adapters and
 request-role integration are not implemented**.
 The read-only selector above supplies the file/ownership/current-SQL read
 boundary, not a mutation lease or browser-facing permission.

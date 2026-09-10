@@ -173,21 +173,27 @@ def _worker_current_scope(configuration: BrowserNativeConfiguration,
                           selection: BrowserWorkerSelection) -> Iterator[_CurrentRead]:
     """Internal live native child only; derive root from its actual browser ancestor."""
     try:
-        if (type(configuration) is not BrowserNativeConfiguration
-                or type(selection) is not BrowserWorkerSelection
-                or any(v is not None for v in (
-                    selection.directory, selection.normal_bundle, selection.intent))
-                or configuration != load_browser_native_configuration(configuration.root)):
-            raise ValueError()
-        root = _browser_directory(selection.bundle, configuration.extension_origin)
-        selected = _SelectedFiles(root, bundle=selection.bundle, profile=configuration.root,
-                                  public_key=selection.public_key)
+        selected = _select_worker_files(configuration, selection)
         with (ownership._worker_history_ownership(selected.handoff,
                 configuration=configuration, selection=selection) as owner,
               _read_owned(selected, owner) as reader):
             yield reader
     except Exception:
         raise BrowserContinuationCurrentError() from None
+
+
+def _select_worker_files(configuration: BrowserNativeConfiguration,
+                          selection: BrowserWorkerSelection) -> _SelectedFiles:
+    """Fixed bootstrap only, shared by separately owned internal readers/writers."""
+    if (type(configuration) is not BrowserNativeConfiguration
+            or type(selection) is not BrowserWorkerSelection
+            or any(v is not None for v in (
+                selection.directory, selection.normal_bundle, selection.intent))
+            or configuration != load_browser_native_configuration(configuration.root)):
+        raise ValueError()
+    root = _browser_directory(selection.bundle, configuration.extension_origin)
+    return _SelectedFiles(root, bundle=selection.bundle, profile=configuration.root,
+                          public_key=selection.public_key)
 
 
 def inspect_stopped_continuation(root: Path, *, bundle: Path, profile: Path,
