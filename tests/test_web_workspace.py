@@ -259,10 +259,23 @@ async function dashboardFetch(url, options) {
   assert.equal(row.children[0].children.length, 0); // Never HTML insertion.
   assert.match(row.children[1].textContent, /observe.*2 connection/);
   assert.equal(row.children[2].textContent, "api: 1 · events: 1");
-  assert.match(row.children[3].textContent, /12s/);
+  assert.equal(row.children[3].textContent, "Oldest current connection: 00:00:12");
+  assert.equal(row.children[3].title, "Elapsed time (days and HH:MM:SS).");
+  payload.clients[0].connected_seconds = 183845;
+  await refreshConnectedClients();
+  row = element("connected-clients-list").children[0];
+  assert.equal(row.children[3].textContent, "Oldest current connection: 2d 03:04:05");
+  payload.clients[0].connected_seconds = 3;
+  await refreshConnectedClients();
+  row = element("connected-clients-list").children[0];
+  assert.equal(row.children[3].textContent, "Oldest current connection: 00:00:03");
+  payload.clients[0].connected_seconds = null;
+  await refreshConnectedClients();
+  row = element("connected-clients-list").children[0];
+  assert.equal(row.children[3].textContent, "Oldest current connection: Unavailable");
   document.hidden = true;
   await refreshConnectedClients();
-  assert.equal(calls, 1);
+  assert.equal(calls, 4);
   document.hidden = false;
   success = false;
   await refreshConnectedClients();
@@ -283,6 +296,31 @@ async function dashboardFetch(url, options) {
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """
     _run_node(f"{harness}\n{implementation}\n{assertions}")
+
+
+def test_connection_age_uses_elapsed_days_and_24_hour_units() -> None:
+    script = _asset("dashboard.js")
+    implementation = "function formatConnectionAge(value) {" + script.split(
+        "function formatConnectionAge(value) {", 1,
+    )[1].split("async function refreshConnectedClients()", 1)[0]
+    assertions = r"""
+const assert = require("node:assert/strict");
+for (const [value, expected] of [
+  [0, "00:00:00"], [0.9, "00:00:00"], [1, "00:00:01"],
+  [59, "00:00:59"], [59.9, "00:00:59"], [60, "00:01:00"],
+  [3599, "00:59:59"], [3600, "01:00:00"], [86399, "23:59:59"],
+  [86400, "1d 00:00:00"], [183845, "2d 03:04:05"],
+  [366 * 86400 + 1, "366d 00:00:01"],
+]) {
+  assert.equal(formatConnectionAge(value), expected);
+}
+// Missing/bad telemetry must not look like a newly established connection.
+for (const value of [null, undefined, "12", true, {}, [], NaN, Infinity,
+                    -Infinity, -1, -0.1, Number.MAX_SAFE_INTEGER + 1]) {
+  assert.equal(formatConnectionAge(value), "Unavailable");
+}
+"""
+    _run_node(f"{implementation}\n{assertions}")
 
 
 def test_workspace_radio_and_recording_browser_behaviors() -> None:

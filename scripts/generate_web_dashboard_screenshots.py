@@ -595,7 +595,7 @@ class DemoDaemonApiClient:
             "clients": [
                 {"client_id": "demo-pi-display", "scopes": ["observe"],
                  "services": {"api": 1, "events": 1}, "connections": 2,
-                 "connected_seconds": 120},
+                 "connected_seconds": 183845},
                 {"client_id": "demo-operator", "scopes": ["observe", "control"],
                  "services": {"api": 1}, "connections": 1, "connected_seconds": 30},
             ],

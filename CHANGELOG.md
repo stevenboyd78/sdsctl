@@ -162,6 +162,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   credential-file replacement and persistent browser sign-out. Preserve separate
   consent and terminal revocation; do not add a resume command, accept rotation
   imports, change runtime behavior or qualify unattended production recovery.
+- Show Home Assistant WebGUI Diagnostics remote-client connection ages as
+  `HH:MM:SS`, with elapsed days for connections lasting at least 24 hours,
+  instead of a raw seconds count. Keep the oldest-still-open connection meaning
+  and label missing or invalid ages as unavailable.
 - Clarify experimental managed-browser shutdown ordering: a separate compositor
   service must wait for browser close before ending the graphical session. Add a
   reviewed synchronous-stop example, failure checks and narrowly scoped physical
