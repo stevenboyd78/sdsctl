@@ -633,7 +633,7 @@ single-queue ownership and refusal of foreign/content-script/cached callers.
 
 | Browser record | Native observation | Restart classification |
 | --- | --- | --- |
-| Selected clean pause | Matching selected paused native state | Paused; no sign-in |
+| Selected clean pause | Matching selected paused native state; generation may be unknown offline | Paused; no sign-in |
 | Initial installation pending | Any state, including ACTIVE | Administrator review; never replay initial issuance |
 | Accepted | Exact selected active fingerprint/revision/generation | Fresh verification required; **not session-ready** |
 | Accepted | Paused, changed, missing or conflicting native state | Administrator review; no automatic adoption |
@@ -645,6 +645,12 @@ may use the accepted classification only as an additional precondition for fresh
 native/server/browser verification. It must never convert classification into
 an issuance ticket or dashboard readiness. The same-build unattended path remains
 the target; cross-build migration and hardware boot acceptance are separate gates.
+
+Only read-only **paused** classification permits an explicitly unknown (`null`)
+server generation, so offline paused status does not force a network request.
+Fresh initial consent/issuance, pending/accepted records and active observations
+still require a positive exact reviewed generation. Unknown is never zero,
+latest-generation permission or a sign-in fallback.
 
 ### Initial installation ordering and acknowledgement cuts
 

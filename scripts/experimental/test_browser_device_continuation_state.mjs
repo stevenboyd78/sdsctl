@@ -255,3 +255,24 @@ test('ordinary recovery schema is never upgraded or initialized by classificatio
   assert.equal(JSON.stringify(saved),beforeBytes);
   const f=fixture();rejects(()=>createInitialInstallation(config,saved,before,f.clocks));
 });
+
+test('clean paused status works offline with no reviewed server generation',()=>{
+  const f=fixture(),offline={...before,binding:{...before.binding,generation:null}};
+  assert.deepEqual(classifyContinuationStartup(config,f.saved,offline),{mode:'paused',sessionReady:false});
+  // Read-only offline status is not fresh review or consent to issue a session.
+  rejects(()=>createInitialInstallation(config,f.saved,offline,f.clocks));
+});
+
+test('unknown generation never qualifies accepted state or an initial session',()=>{
+  const f=fixture().advance(2),unknown=result();unknown.binding.generation=null;
+  rejects(()=>f.attempt.sessionReturned(unknown,after));
+  const g=fixture().advance(6),observed={...after,binding:{...after.binding,generation:null}};
+  assert.deepEqual(classifyContinuationStartup(config,g.saved,observed),stopped);
+  const saved={...g.saved,binding:{...g.saved.binding,generation:null}};
+  assert.deepEqual(classifyContinuationStartup(config,saved,after),stopped);
+});
+
+for(const generation of [false,0,'7',undefined,NaN,Infinity])test('offline status refuses malformed generation '+String(generation),()=>{
+  const f=fixture(),observed={...before,binding:{...before.binding,generation}};
+  assert.deepEqual(classifyContinuationStartup(config,f.saved,observed),stopped);
+});

@@ -20,15 +20,15 @@ function selection(value) {
     url.pathname!=='/'||url.search||url.hash)refuse();
   return Object.freeze({...value});
 }
-function binding(value) {
+function binding(value,unreviewed=false) {
   if(!exact(value,['fingerprint','revision','generation'])||!hex(value.fingerprint)||
-    !integer(value.revision)||!integer(value.generation))refuse();
+    !integer(value.revision)||!(integer(value.generation)||(unreviewed&&value.generation===null)))refuse();
   return Object.freeze({...value});
 }
-function native(value,config,mode) {
+function native(value,config,mode,unreviewed=false) {
   if(!exact(value,['identity','epoch','mode','binding'])||value.identity!==config.identity||
     value.epoch!==config.epoch||value.mode!==mode)refuse();
-  return binding(value.binding);
+  return binding(value.binding,unreviewed);
 }
 function record(value,config) {
   if(!exact(value,['version','identity','epoch','build','phase','binding','intent'])||
@@ -60,7 +60,9 @@ export function classifyContinuationStartup(settings,saved,observed) {
   try {
     const config=selection(settings),state=record(saved,config);
     if(state.phase==='initial_pending')refuse();
-    const current=native(observed,config,state.phase==='paused'?'paused':'active');
+    // Offline paused status has no freshly reviewed server generation. Null is
+    // allowed ONLY here; initial consent/issuance and accepted state require it.
+    const current=native(observed,config,state.phase==='paused'?'paused':'active',state.phase==='paused');
     if(state.phase==='accepted'&&!same(current,state.binding))refuse();
     return Object.freeze({mode:state.phase==='paused'?'paused':'verification_required',sessionReady:false});
   } catch {
