@@ -644,6 +644,33 @@ supervisor termination still needs to be preserved at dispatch integration.
 Real profiles, Home Assistant and the bench Pis remain untouched. Exact-head
 counts and results belong to the draft PR qualification record.
 
+## Inert browser acceptance-state checkpoint
+
+The browser acceptance core now specifies pending versus accepted records bound
+to the exact selected identity, native epoch, build, fingerprint, revision and
+server generation. Initial issuance cannot follow a lost pending acknowledgement.
+Acceptance is produced only after strict session/cookie, selected protected-page
+probe and unchanged native-state observations. Exact accepted persistence is the
+browser commit point; a later lost acknowledgement never permits initial replay.
+Restart classification always reports not ready, including for an accepted record:
+fresh native/server/browser verification remains required before dashboard use.
+
+This is an inert core and deterministic Node contract, not a real browser
+controller, trusted consent bridge, storage writer, cookie installer, renewal
+adapter or native request role. It is included in canonical package/build identity
+but the active worker does not import or invoke it. Ordinary schema-3 startup and
+native dispatch stay blocked. No second native completion ledger, legacy schema
+relaxation, real-profile migration, credential operation or host change is added.
+
+Tests exercise interrupted stages, duplicate/out-of-order calls, newer
+invalidation, wall/monotonic failure, malformed or stale native/session/cookie/
+page observations, expiry rounding and late expiry, and immutable state copies.
+DNS/IPv4/IPv6 coverage here is pure data validation, not actual TLS or browser
+interoperability. Same-worker I/O ordering, late storage/cookie calls, actual
+protected-page access, bounded native dispatch and both Pi displays remain gates.
+See the [browser acceptance contract](browser-device-continuation.md#browser-acceptance-record-and-restart-contract-inert-core-only).
+Exact-head counts and package/hosted results belong to the draft PR evidence.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

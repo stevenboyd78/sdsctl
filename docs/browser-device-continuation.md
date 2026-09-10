@@ -599,6 +599,105 @@ selection, trusted gesture integration, cookie installation/protected-page
 confirmation, renewal and restart roles remain separately unimplemented
 boundaries. No real retained profile, Home Assistant or bench Pi was used.
 
+## Browser acceptance record and restart contract (inert core only)
+
+`browser_device_continuation_state.mjs` defines a strict browser-side acceptance
+state machine and read-only restart classification. It is included in the
+canonical build graph but is **not imported by the active worker, registered as
+a listener, or called by native dispatch**. It performs no storage, cookie,
+network, timer or service operation. Its supplied observations are fixture
+inputs, not proof of actual browser consent, file ownership, a cookie, or a page.
+The owning browser/native adapters still need implementation and qualification.
+
+### Decision: separate browser acceptance from native approval
+
+The browser record describes whether this trusted worker completed installation;
+the existing native epoch ledger describes the approved device and exact current
+state. This design does **not** add a second native completion database or pretend
+that one transaction covers SQLite, Chromium storage and the remote server.
+
+For this browser format, the selected identity, activation epoch and canonical
+build are fixed. An accepted record binds the exact completed native fingerprint,
+revision and reviewed server generation. These comparison values are not bearer
+tokens, signed permissions or substitutes for freshly reconstructed native state.
+The proposed ordinary request adapter must recheck original approval-bound
+credential/trust files, fixed live ownership and exact current server generation
+on every exchange. It must not accept browser-provided fields as those proofs.
+
+Only the fixed trusted MV3 worker may load the actual trusted-context storage and
+interpret it. The core cannot establish that caller boundary: a supplied object
+or fabricated call sequence is not evidence. Same-account/root malicious code
+is outside the existing ownership threat model. Before exposure, the real worker
+must prove fixed build/context selection, active document/gesture binding,
+single-queue ownership and refusal of foreign/content-script/cached callers.
+
+| Browser record | Native observation | Restart classification |
+| --- | --- | --- |
+| Selected clean pause | Matching selected paused native state | Paused; no sign-in |
+| Initial installation pending | Any state, including ACTIVE | Administrator review; never replay initial issuance |
+| Accepted | Exact selected active fingerprint/revision/generation | Fresh verification required; **not session-ready** |
+| Accepted | Paused, changed, missing or conflicting native state | Administrator review; no automatic adoption |
+| Missing, legacy, malformed or different-build record | Any state | Administrator review; no initialization or migration |
+
+This deliberately separates uncertain first installation from ordinary outage
+recovery of an already accepted display. A later bounded renewal/restart adapter
+may use the accepted classification only as an additional precondition for fresh
+native/server/browser verification. It must never convert classification into
+an issuance ticket or dashboard readiness. The same-build unattended path remains
+the target; cross-build migration and hardware boot acceptance are separate gates.
+
+### Initial installation ordering and acknowledgement cuts
+
+After fresh document-bound consent, one process-local attempt produces the
+pending browser record. Only its exact successful persistence/readback permits
+progression to the owned initial native request. A failed or out-of-order step
+permanently invalidates that in-memory attempt; supplying a later matching
+snapshot cannot restore the gate. No core method repeats issuance or native writes.
+
+The native result must match the reviewed generation and expected three revision
+advances (prepare, claim, complete), with a changed fingerprint and an exact
+fresh active native observation. The token is handed privately to the owning
+cookie adapter, never included in the saved browser record or comparison request.
+It must produce the fixed secure, HttpOnly, host-only, SameSite=Strict cookie in
+the normal cookie store, with the exact token and conservative expiration.
+Browser expiration rounding down is allowed; extension or later replacement is
+not. The full browser-attempt elapsed time is subtracted conservatively in
+addition to the native operation's own lifetime deduction.
+
+The owning isolated top-frame probe must select and bind its tab, document and
+fresh ticket, verify the fixed protected display route, and recheck the same
+cookie and unchanged native state. Only then can the core produce an accepted
+record. Its final successful persistence/readback and native/time checks allow
+the current in-memory attempt to report readiness. No later token getter exists.
+
+| Interrupted boundary | Durable browser outcome | Required treatment |
+| --- | --- | --- |
+| Before pending commit | Existing paused record, or uncertain pending write | Never issue without successful exact pending acknowledgement |
+| After pending, before accepted commit | Pending, even if a server session was issued or a cookie installed | Retain evidence; no initial replay or automatic authentication |
+| During accepted write | Pending or accepted; acknowledgement may be lost | Current attempt remains unconfirmed; no repair/rewrite to infer success |
+| Accepted write committed, acknowledgement lost | Accepted was written only after verified installation | Restart still requires fresh native/server/browser verification; never repeat the initial request |
+| Newer pause/sign-out or changed epoch/build | New intent/state must win | Invalidate the attempt and refuse stale completion; no cookie cleanup claim implies remote revocation |
+
+The accepted browser write is the browser acceptance commit point, not its later
+UI acknowledgement. A matching accepted record after restart is not proof that a
+specific lost caller received its response, nor does it recover that caller's
+token. The future owning adapter must serialize actual storage writes with
+pause/sign-out and deal explicitly with late writes/cookie calls; this inert
+core does not supply a Chromium compare-and-swap or an I/O cancellation mechanism.
+
+Dual finite wall/monotonic checks bound the in-memory attempt to strictly less
+than 45 seconds, starting **after** human consent. Every subsequent sample must
+be nondecreasing, and cookie/session life must retain more than 30 seconds.
+These elapsed checks do not interrupt a blocked browser API or native child.
+The actual adapters still require bounded browser calls and the independent
+ten-second native supervisor. The existing legacy resume protocol is unchanged.
+
+Deterministic Node tests cover exact ordering, interruption/restart cuts,
+invalidation at every stage, both clocks, stale native bindings, cookie scope and
+expiration, selected probe/document mismatches, immutable snapshots and redacted
+failures. DNS/private IPv4/IPv6 origin cases here test **pure data contracts**, not
+real browser cookie representations, TLS interoperability or Pi acceptance.
+
 ## Remaining selected successor path, not implemented end to end
 
 The next candidate must preserve the existing identity for same-device
@@ -658,8 +757,10 @@ core and fixture-only owned adapter above implement the manifest and single-ledg
 paused anchor/view. The fixture-only epoch core adds current SQL and approval
 transactions; the owned prepare/claim fixtures above add actual file/ownership
 checks but not verified browser consent. The owned verification fixture adds
-exact-generation HTTPS proof and native completion. **Session handling, real
-browser consent and request-role integration are not implemented**.
+exact-generation HTTPS proof and native completion. Owned initial issuance and
+the inert browser acceptance core are separately qualified fixtures. **Real
+browser consent, session installation and request-role integration are not
+implemented end to end**.
 The read-only selector above supplies the file/ownership/current-SQL read
 boundary, not a mutation lease or browser-facing permission.
 It does not change the stop condition imposed by a complete intent. Implement

@@ -47,6 +47,26 @@ def test_fixed_graph_and_all_imports_are_present():
     assert b"manifest" not in graph["extension/worker.mjs"]
 
 
+def test_acceptance_core_is_build_bound_but_not_imported_by_active_worker(monkeypatch):
+    name = "browser_device_continuation_state.mjs"
+    digest, graph = worker.worker_graph()
+    assert "extension/" + name in graph
+    for path, body in graph.items():
+        if path != "extension/" + name:
+            assert name.encode() not in body
+    monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != name))
+    assert worker.worker_graph()[0] != digest
+
+
+@pytest.mark.parametrize("action", ["continuation-initial-session", "continuation-accepted",
+                                    "continuation-status", "continuation-renew"])
+def test_inert_acceptance_core_does_not_expose_a_native_request(action):
+    for body in ({"version": 1, "action": action}, envelope("worker-request",
+            request={"version": 1, "action": action})):
+        with pytest.raises(BrowserDeviceProtocolError):
+            parse_browser_device_request(json.dumps(body).encode())
+
+
 @pytest.mark.parametrize("action", ["worker-context", "worker-request"])
 def test_exact_worker_envelope(action):
     body = envelope(action, **({"request": {"version": 1, "action": "status"}}
