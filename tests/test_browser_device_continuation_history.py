@@ -720,6 +720,7 @@ def test_live_history_final_readback_refuses_changed_owner_or_inputs(
 def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
         lab, chain, monkeypatch):
     from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_context as context
     from sds200 import browser_device_continuation_current as current
     from sds200 import browser_device_native as native
 
@@ -747,6 +748,12 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
                     current.inspect_stopped_continuation(root, **paths)
             with pytest.raises(current.BrowserContinuationCurrentError):
                 reader.inspect()
+            document = context._continuation_worker_context(lab.configuration, selection)
+            assert document["role"] == "continuation" and document["acknowledge"] is False
+            assert document["launch"] is None
+            assert document["continuation"] == dict(epoch=expected.epoch, mode="paused",
+                binding=dict(fingerprint=expected.state_fingerprint,
+                             revision=expected.native_revision, generation=None))
         finally:
             (root / "SingletonLock").unlink()  # Fixture-owned marker only.
     assert state(lab, h) == before
@@ -1219,6 +1226,7 @@ def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
         lab, chain, monkeypatch, scenario):
     from sds200 import browser_device_continuation_activation as activation
     from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_context as context
     from sds200 import browser_device_continuation_current as current
     from sds200 import browser_device_continuation_recheck as recheck
     from sds200 import browser_device_continuation_session as session
@@ -1255,6 +1263,12 @@ def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
             # separate chains and retain their changed bytes/metadata untouched.
             outcomes = ("valid", "refused", "pause") if scenario == "read-only" else (scenario,)
             for outcome in outcomes:
+                assert state(lab, h) == stable
+                document = context._continuation_worker_context(lab.configuration, selection)
+                assert document["continuation"] == dict(epoch=observed.state.epoch, mode="active",
+                    binding=dict(fingerprint=observed.state.state_fingerprint,
+                                 revision=observed.state.native_revision, generation=7))
+                assert document["acknowledge"] is False and document["launch"] is None
                 assert state(lab, h) == stable
                 saved, calls = [], []
 

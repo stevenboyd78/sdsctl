@@ -432,6 +432,33 @@ usable, without allocating a token or setting a cookie. Its drainage check waits
 for older generations only. This supports later accepted-state verification; it
 does not implement unattended renewal or permit replaying initial approval.
 
+### Fixed continuation context (internal, inactive adapter)
+
+`browser_device_continuation_context` produces a narrow metadata envelope for
+the future continuation worker. Fixed installed configuration and wrapper
+selection enter the actual owned current-state scope; no browser-supplied path,
+role, saved epoch or serialized observation selects the read. It accepts only
+the current paused or active mode, verifies the exact identity/origin/device,
+and returns the selected epoch, state fingerprint, native revision and locally
+approved generation. Paused mode carries no generation. It returns only after
+the repeated observation, successful ownership-scope exit and final runtime
+graph check. A changed input or failed exit yields no successful context.
+
+The paired inert JavaScript parser requires the exact envelope and executing
+build/extension identity, canonical HTTPS DNS/IPv4/IPv6 origin, typed bindings
+and fixed native host. Its copied, frozen settings and observation contain no
+credential, approval, cookie, session-ready result or authority lease. Native
+active state alone still cannot promote saved browser pause or pending state
+to acceptance. Later requests must reacquire current ownership and state.
+
+This adapter performs no mutation, network call or clock correction. It is not
+selected by ordinary native dispatch, and the existing worker parser continues
+to reject its new role. Portable tests use real private files and SQL with
+simulated history/ancestry; complete retained-chain tests exercise the same
+producer with both paused and active epochs. Later browser ancestry in those
+chain tests remains simulated. This is not real-browser continuation, a runnable
+migration, online authority, fresh user consent or physical-display acceptance.
+
 ### Owned active-generation server recheck
 
 The internal `browser_device_continuation_recheck` adapter performs one fixed
