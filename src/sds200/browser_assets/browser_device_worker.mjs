@@ -1,7 +1,7 @@
 // Both bundle roles load this SAME complete static graph. Imports are inert.
 import {connectChromeRecovery} from './browser_device_recovery.mjs';
 import {connectLogoutWorker} from './browser_device_logout.mjs';
-import {connectBrowserEntry} from './browser_device_startup.mjs';
+import {connectBrowserEntry,connectContinuationEntry} from './browser_device_startup.mjs';
 import {createChromeResumePorts,connectResumeWorker} from './browser_device_resume.mjs';
 import {connectChromeRetirementRecovery} from './browser_device_retirement_startup.mjs';
 import {connectRecoveryLaunchWorker,connectRecoveryLaunchNavigation} from './browser_device_launch.mjs';
@@ -56,8 +56,9 @@ export async function startBrowserWorker(chrome,build) {
   const scoped=Object.create(gate.chrome);Object.defineProperty(scoped,'runtime',{value:runtime});
   if(continuation) {
     connectContinuationBrowserWorker(scoped,raw,build);
-    // No normal entry controller: even a clean paused continuation must not
-    // select a dashboard or acquire normal authentication/alarm capabilities.
+    // Only retry the already-selected own startup document after an unpacked
+    // extension load race. No setup selection, dashboard or authentication.
+    connectContinuationEntry(scoped);
     gate.open();return;
   }
   if(context.role==='paused') {

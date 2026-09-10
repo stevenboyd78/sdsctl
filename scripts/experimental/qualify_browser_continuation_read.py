@@ -116,10 +116,12 @@ def qualify(handoff, released, startup_args, command, stage, x, wait, put, emit,
                 x.screenshot(stage / (label + "-failed.png"))
                 raise
             finally:
-                # Only the test's newly created process group, never a service
-                # or unrelated browser. Forced cleanup is a failure, not a pass.
+                # Match ordinary product shutdown: SIGINT asks Chromium to
+                # flush the profile and remove its own Singleton markers.
+                # SIGTERM can leave them behind even after a zero exit. Never
+                # remove markers ourselves or accept forced cleanup as a pass.
                 if process.poll() is None:
-                    os.killpg(process.pid, signal.SIGTERM)
+                    process.send_signal(signal.SIGINT)
                 try:
                     process.wait(timeout=15)
                 except subprocess.TimeoutExpired:

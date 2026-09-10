@@ -115,6 +115,9 @@ explicit activation**. The result distinguishes that deliberate activation from
 unchanged reader inputs. Final browser-API readback still requires the exact
 recovery-produced clean pause, no cookie and no recovery alarm. Failed fixtures
 are retained and never replayed; forced test-process cleanup is not a pass.
+The reader uses the same SIGINT shutdown request as the ordinary product
+launcher, allowing Chromium to remove its own Singleton markers. It never
+deletes profile locks to manufacture a stopped-state result.
 
 For a separate **diagnostic** run, an administrator may set
 `SDSCTL_READER_PLAYWRIGHT=/absolute/existing/playwright/index.mjs` and provide

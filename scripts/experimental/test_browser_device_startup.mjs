@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import vm from "node:vm";
-import {connectBrowserEntry,connectBrowserStartupPage} from "../../src/sds200/browser_assets/browser_device_startup.mjs";
+import {connectBrowserEntry,connectContinuationEntry,connectBrowserStartupPage} from "../../src/sds200/browser_assets/browser_device_startup.mjs";
 
 const origin = "https://192.0.2.18:8443", extension = `chrome-extension://${"a".repeat(32)}/`;
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -59,6 +59,51 @@ test("entry retries are bounded even when the document never becomes available",
     for(let i=0;i<10;i++){time+=1001;f.listener(10,{status:"complete"},tab);await settle();}
     assert.equal(f.updates.length,3);
     for(const job of scheduled){job.fn();await settle();}
+    assert.equal(f.updates.length,3);
+  } finally {Date.now=previousNow;}
+});
+
+test("continuation entry only retries its fixed startup document",async()=>{
+  const tab={id:7,status:"complete",incognito:false,url:extension+"startup.html"};
+  const f=entry(tab);connectContinuationEntry(f.chrome,()=>{});await settle();
+  assert.deepEqual(f.queries,[{url:[extension+"startup.html"]}]);
+  assert.deepEqual(f.updates,[{id:7}]);
+});
+for(const change of [{id:-1},{status:"loading"},{incognito:true},
+  {url:extension+"setup.html"},{url:extension+"resume.html"},
+  {url:extension+"startup.html?other"},{url:origin+"/device-display"},
+  {url:"chrome-error://chromewebdata/"},{pendingUrl:origin+"/"}]) {
+  test(`continuation entry refuses another target ${JSON.stringify(change)}`,async()=>{
+    const tab={id:7,status:"complete",incognito:false,url:extension+"startup.html",...change};
+    const f=entry(tab);connectContinuationEntry(f.chrome,()=>{});await settle();
+    f.listener(7,{status:"complete"},tab);f.startup();f.installed();await settle();
+    assert.deepEqual(f.updates,[]);
+  });
+}
+for(const fault of ['present','arrived','moved','closed','query-failed']) {
+  test(`continuation entry does not reload when ${fault}`,async()=>{
+    const tab={id:7,status:"complete",incognito:false,url:extension+"startup.html"};
+    const f=entry(tab,fault==='present'?[{documentId:'loaded'}]:[]);
+    if(fault==='arrived') {let reads=0;f.chrome.runtime.getContexts=async()=>
+      ++reads===1?[]:[{documentId:'loaded'}];}
+    if(fault==='moved')f.chrome.tabs.get=async()=>({...tab,url:extension+'setup.html'});
+    if(fault==='closed')f.chrome.tabs.get=async()=>{throw Error('closed');};
+    if(fault==='query-failed')f.chrome.tabs.query=async()=>{throw Error('unavailable');};
+    connectContinuationEntry(f.chrome,()=>{});await settle();
+    assert.deepEqual(f.updates,[]);
+  });
+}
+test("continuation retries stay bounded across all lifecycle events",async()=>{
+  const previousNow=Date.now;let time=10000;Date.now=()=>time;
+  try {
+    const tab={id:7,status:"complete",incognito:false,url:extension+"startup.html"};
+    const f=entry(tab),jobs=[];connectContinuationEntry(f.chrome,(fn,ms)=>jobs.push({fn,ms}));
+    await settle();assert.deepEqual(jobs.map(j=>j.ms),[1000,5000]);
+    for(let i=0;i<10;i++) {
+      time+=1001;f.listener(7,{status:"complete"},tab);f.startup();f.installed();
+      for(const job of jobs)job.fn();
+      await settle();
+    }
     assert.equal(f.updates.length,3);
   } finally {Date.now=previousNow;}
 });

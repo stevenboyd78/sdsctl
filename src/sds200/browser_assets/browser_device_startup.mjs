@@ -1,9 +1,19 @@
 // Fixed trusted extension page. No credential/token reads, repair, claim or resume.
 export function connectBrowserEntry(chrome, schedule = setTimeout) {
+  connectEntry(chrome, ["startup.html", "setup.html"], schedule);
+}
+
+// A native-validated continuation can repair only its already-selected local
+// status entry. It cannot select setup, create a tab or open a server page.
+export function connectContinuationEntry(chrome, schedule = setTimeout) {
+  connectEntry(chrome, ["startup.html"], schedule);
+}
+
+function connectEntry(chrome, pages, schedule) {
   // Chromium can navigate a command-line extension URL before loading that
   // unpacked extension. Retry only an explicitly selected own entry that has
   // finished without an extension document; never create tabs or reset state.
-  const urls = [chrome.runtime.getURL("startup.html"), chrome.runtime.getURL("setup.html")];
+  const urls = pages.map(page => chrome.runtime.getURL(page));
   const attempted = new Map(), busy = new Set();
   const eligible = tab => Number.isSafeInteger(tab?.id) && tab.id >= 0 &&
     tab.incognito === false && tab.status === "complete" && urls.includes(tab.url) &&

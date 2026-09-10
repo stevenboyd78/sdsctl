@@ -27,7 +27,7 @@ still fails; no browser-supplied role or path can select the route. The ordinary
 startup guard remains in place: this is not a runnable activation command or
 permission to launch a retained real installation.
 
-The actual synchronous worker gate constructs only a read-only handler. It
+The actual synchronous worker gate constructs a read-only state handler. It
 restricts storage access to trusted extension contexts but never edits stored
 values. Startup status checks fixed native state twice, exact clean saved pause,
 cookie absence and alarm absence. An explicit trusted resume-page review may
@@ -35,6 +35,16 @@ add one fixed verified server-status request, followed by fresh native/browser
 readbacks. Its UI reports the current revision/generation **without a ticket**,
 and leaves confirmation disabled. Initial sign-in, native pause, initialization,
 renewal, state migration, cookie cleanup and accepted-state adoption are refused.
+
+After native context validation, a separate bounded entry helper can reload only
+the already-selected, exact local `startup.html` tab when Chromium attempted to
+open it before the unpacked extension loaded. It never creates tabs, selects
+setup/resume/dashboard URLs, reloads an existing valid extension document, or
+changes saved authentication state. It rechecks the current tab and document
+before each retry, permits at most three retries per tab in that worker, and
+uses only the existing bounded startup rescans. Invalid native context permits
+no entry retry. This local loading recovery is not authentication or permission
+to start the profile through the ordinary product launcher.
 
 Both a clean legacy paused record and an exact same-build schema-3 paused record
 can be inspected, but neither is rewritten. Missing, pending, accepted, malformed,

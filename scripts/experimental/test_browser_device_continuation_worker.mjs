@@ -183,7 +183,11 @@ test('overlapping explicit review cannot start a second native operation',async(
 });
 
 test('actual worker gate selects only readonly continuation capabilities and envelopes',async()=>{
-  const f=fixture(undefined,true);await startBrowserWorker(f.chrome,build);
+  const f=fixture(undefined,true);
+  f.chrome.tabs.query=async filter=>{
+    assert.deepEqual(filter,{url:[f.chrome.runtime.getURL('startup.html')]});return [];
+  };
+  await startBrowserWorker(f.chrome,build);
   assert.deepEqual(await f.ask(),{mode:'paused',sessionReady:false});
   assert.equal((await f.ask('resume-review')).mode,'continuation_reviewed');
   for(const action of ['initialize','start','suspend','resume-confirm'])
@@ -194,4 +198,31 @@ test('actual worker gate selects only readonly continuation capabilities and env
   assert.equal(f.calls[0].action,'worker-context');
   assert(f.calls.slice(1).every(r=>r.action==='worker-request'&&r.build===build&&
     ['continuation-current','continuation-review'].includes(r.request.action)));
+});
+
+test('continuation entry is inert until native validation and never opens setup',async()=>{
+  const f=fixture(undefined,true),held=deferred(),send=f.send,reloads=[];
+  const target={id:7,status:'complete',incognito:false,url:f.chrome.runtime.getURL('startup.html')};
+  f.send=request=>request.action==='worker-context'?held.promise:send(request);
+  let queries=0;
+  f.chrome.tabs.query=async filter=>{
+    queries++;assert.deepEqual(filter,{url:[target.url]});return [target];
+  };
+  f.chrome.tabs.get=async id=>{assert.equal(id,7);return target;};
+  f.chrome.runtime.getContexts=async()=>[];
+  f.chrome.tabs.reload=async id=>{reloads.push(id);};
+  const started=startBrowserWorker(f.chrome,build);
+  f.chrome.runtime.onStartup.listeners[0]();
+  f.chrome.tabs.onUpdated.listeners[0](7,{status:'complete'},target);
+  await settle();assert.equal(queries,0);assert.deepEqual(reloads,[]);
+  held.resolve(f.context);await started;await settle();
+  assert.deepEqual(reloads,[7]);assert.deepEqual(f.unexpected,[]);
+  assert.deepEqual(f.calls.map(r=>r.action),['worker-context']);
+});
+
+test('refused continuation context never starts local entry retry',async()=>{
+  const f=fixture(undefined,true);f.context.continuation.epoch='invalid';
+  await assert.rejects(startBrowserWorker(f.chrome,build));
+  f.chrome.runtime.onStartup.listeners[0]();await settle();
+  assert.deepEqual(f.unexpected,[]);
 });
