@@ -1,6 +1,7 @@
 # Post-recovery continuation: design boundary
 
-Status: **development design, read-only preflight/history and internal intent journal;
+Status: **development design, read-only preflight/history, internal intent journal
+and isolated native activation core;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -167,8 +168,9 @@ history. Historical success is deliberately **not a health check or permission t
 use that ledger**. Normal profile/bundle/registration checks still validate its
 current supported schema and state, and normal startup/requests still stop on the
 existing intent marker. Changed private inputs or runtime assets still invalidate
-the bound history. No successor schema support, migration, current-epoch selector,
-activation writer, browser action or administrator CLI is added here.
+the bound history. This historical reader does not add successor schema support,
+migration, a current-epoch selector, an activation writer, a browser action or an
+administrator CLI. The isolated native transaction core below is separate.
 
 ### Scoped ownership for historical reads
 
@@ -197,7 +199,64 @@ authenticate, or turn a retained result into permission on a subsequent request.
 The old recovery supervisor must still have exited; that historical check is
 separate from verification of a later live Chromium owner.
 
-## Remaining successor activation, not implemented
+## Isolated paused activation core (internal, not a runnable migration)
+
+`browser_device_continuation_native` implements the native transaction portion
+only. It is not called by startup, worker dispatch, a browser message, a CLI or
+an installed activation writer. **Do not call it on a real profile.** Existing
+recovery/resume helpers continue rejecting schema 3, and the continuation-intent
+marker continues blocking ordinary startup and native requests.
+
+The core derives canonical candidate manifest bytes from a selected paused
+historical after-state. The manifest binds the exact old state and terminal
+approval rows, identity/profile, release and intent IDs, retained-history digest,
+ledger inode, fresh epoch, two-minute approval window and a confirmation digest.
+Its after-state preserves pause and approval history, advances the revision by
+exactly one, and records the approved time. No plaintext confirmation, reusable
+approval, credential or session token belongs in the manifest.
+
+The retained-history digest binds the previously checked targets, runtime assets
+and private inputs. **A supplied history object or manifest byte string cannot
+prove those files are still unchanged.** The future stopped-owner adapter must
+reconstruct that history, collect fresh local consent, exclusively create and
+sync the private manifest and its parent directory, and check the actual bytes
+and inode under coordinated ownership. This module performs no filesystem I/O
+and is not that adapter. A caller-supplied inode is not an ownership proof.
+
+Within a caller-owned, dedicated `BEGIN IMMEDIATE` transaction, the staging
+function requires the exact legacy schema-1/2 ledger and canonical table/index
+definitions, rollback journaling and `synchronous=EXTRA`. It refuses unknown
+schemas, extra tables/views/triggers/indexes, pending approvals and any change
+to the selected prior state. The manifest digest and inode/epoch anchor, the
+schema-3 marker and the paused revision change are staged together in that same
+ledger. Success is **uncommitted** until the owning adapter commits. No second
+completion database decides whether activation happened.
+
+Any failure or interruption after DML starts rolls back the **whole** native
+transaction. This avoids leaving a partial transition—or SQLite savepoint
+rollback bookkeeping—for a caller that catches the error and tries to commit.
+If rollback itself fails, the connection is closed rather than left reusable.
+The manifest remains retained evidence, not permission to retry the operation.
+The adapter must never mix unrelated work into this dedicated transaction.
+
+A separate read-only transaction can inspect the exact anchor and after-state,
+including after a lost commit reply. It neither renews expired consent nor
+accepts a later revision by ordering. Any subsequent native state/history change
+invalidates this exact activation view. That result is deliberately **not current
+continuation permission**, does not select a role, and cannot authorize a browser
+resume or server exchange. Current-epoch validation and epoch-bound approval
+cancellation still need their complete implementation before schema 3 can be
+accepted by the ordinary recovery path.
+
+Fictional native-ledger tests cover schemas 1 and 2, both archive forms, exact
+readback, rollback, injected write/readback interruptions, altered anchors and
+manifests, stale state, unsupported SQL shape and old-helper refusal. The namespace
+fixtures additionally reconstruct the real retained chain under stopped ownership:
+history is checked before native DML, its reader refuses the writer's rollback
+journal, and after commit or rollback the same retained history remains readable.
+These tests are not physical power-loss durability or headed-browser acceptance.
+
+## Remaining selected successor path, not implemented
 
 The next candidate must preserve the existing identity for same-device
 continuation and use a separately reviewed durable authorization epoch. A new
@@ -209,11 +268,11 @@ semantics. Revoked-device replacement remains its own enrollment operation.
 | --- | --- | --- |
 | Recovered and paused | Existing complete release and unchanged historical chain | Permission to change the bound ledger |
 | Administrator intent recorded | Fresh exact consent and a durable intent bound to that chain | Native activation, browser consent or server authorization |
-| Successor activated (not implemented) | Exact completed intent plus a separately validated durable successor epoch | Browser consent or an installed session |
+| Successor activated (isolated native core only) | Exact completed intent plus a separately validated durable successor epoch | A runnable migration, browser consent or an installed session |
 | Browser resume reviewed | Current clean pause, trusted-page gesture and exact native revision/generation | An installed or usable session |
 | Fresh session confirmed | Verified current server authority, completed native/browser exchange and protected-page access | Earlier lost sessions revoked or a power-outage qualification |
 
-Before any new native revision is written, the design must answer all of these:
+Before a real-profile activation writer is enabled, the design must answer all of these:
 
 1. **Preserve history while describing the successor.** Never rewrite the old
    receipt to match current state. Historical recovery validation and current
@@ -251,8 +310,10 @@ verification must not be bypassed for an IP-address installation.
 
 ## Proposed activation contract: history is not current permission
 
-This section specifies the next implementation boundary; **none of the proposed
-activation permission reader, writer, manifest, epoch schema or request role exists yet**.
+This section specifies the complete implementation boundary. The isolated native
+core above implements candidate manifest bytes and the single-ledger anchor/view;
+**the owned filesystem/consent writer, current permission selector and request role
+are not implemented**.
 It does not change the stop condition imposed by a complete intent. Implement
 and qualify the whole selected path before enabling any part on a real profile.
 

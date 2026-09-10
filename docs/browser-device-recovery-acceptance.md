@@ -452,6 +452,40 @@ power-loss acceptance. Current-permission selection, successor schema/activation
 and online continuation remain unimplemented. No real profile is eligible for
 reuse from the success of these historical checks alone.
 
+## Isolated native activation transaction candidate
+
+The native-only core now derives a canonical candidate manifest, stages its
+epoch/digest/inode anchor and one paused revision advance in a single native
+transaction, and provides an exact read-only after-state view. It does not open
+or create manifests, obtain consent, prove ownership from supplied bytes, expose
+a CLI/browser action, or grant current permission. Ordinary recovery/resume
+helpers still reject schema 3; retained real profiles remain blocked and untouched.
+
+Portable tests build fresh schema-1/2 ledgers with real retirement/reconciliation
+archives. They cover atomic commit, retained terminal approvals, uncommitted and
+rolled-back state, lost-reply confirmation without replay, malformed/substituted
+manifests and anchors, later native changes, noncanonical SQLite schemas, WAL and
+transaction-policy refusal, consent expiry/clock rollback, integer timestamp
+roundtrips, and failure or interruption after each write/readback boundary.
+Injected rollback failure must close the writer; a caller that catches the error
+must not be able to commit it. No test contacts a device/session server.
+
+Both archive forms also run through the full retained-chain namespace fixture.
+The same stopped owner reconstructs history before native DML under the write
+transaction. A competing writer is refused, and the historical reader still
+refuses the active rollback journal. After commit or rollback it can reconstruct
+the unchanged retained history; only the committed exact native after-state can
+pass the new read-only activation view. Existing handoff/release/intent confirms
+remain strict and refuse the changed native ledger. Normal startup remains blocked.
+
+These checks qualify this internal transaction component, not an installed
+activation workflow, current-epoch selector, physical power-loss behavior or
+headed-browser/Pi acceptance. The future owned filesystem/consent adapter must
+sync and recheck the actual immutable manifest and all ownership/private-input
+bindings around a dedicated transaction. Epoch-bound approvals and their
+cancellation on pause/sign-out/clock correction must be complete before ordinary
+helpers can accept the new schema. No user testing is requested for this core.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)
@@ -459,9 +493,9 @@ separates immutable historical recovery evidence from current permission. It
 specifies an immutable prepared manifest and a single authoritative native
 transaction, interruption decisions, unchanged strict confirmation methods and
 the requirement to implement the current-epoch selector before exposing a writer.
-This is a design-only addition. No manifest format, schema migration, epoch writer,
-historical reader, resume-review role or online activation is implemented or
-qualified by that document. Existing complete intents still block startup and
+The contract is design guidance; the separately qualified internal components
+above do not implement the complete selected activation path or resume-review
+role. Existing complete intents still block startup and
 native requests; no receipt becomes a runnable permission through documentation.
 
 ## CI evidence and remaining review gates

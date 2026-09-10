@@ -5,6 +5,7 @@ import json
 import os
 import sqlite3
 import sys
+import time
 from contextlib import closing
 from dataclasses import FrozenInstanceError
 
@@ -56,6 +57,72 @@ def chain(lab, tmp_path, monkeypatch, request):
 def inspect(chain):
     h, r, i = chain
     return history.inspect_continuation_history(h, release_id=r.release_id, intent_id=i.intent_id)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("committed", [False, True])
+def test_internal_native_activation_uses_owned_history_before_dml_and_exact_readback(
+        lab, chain, tmp_path, committed):
+    from sds200 import browser_device_continuation_native as activation
+    from sds200.browser_device_profile import _write
+    from tests.test_browser_device_continuation_native import inode, transaction
+
+    h, r, i = chain
+    selected = dict(release_id=r.release_id, intent_id=i.intent_id)
+    profile = lab.args["profile"]
+    path = profile / "recovery.sqlite"
+    original = path.read_bytes()
+    with ownership._stopped_history_ownership(h) as owner:
+        retained = history._inspect_owned_history(h, owner, **selected)
+        parameters = dict(history=retained, profile=profile, ledger_binding=inode(path))
+        # Only this fixture supplies consent and owns/syncs a fictional manifest.
+        # No installed writer or native role exposes this transaction core.
+        now = time.time()
+        raw = activation._prepare_activation_manifest(**parameters, epoch="a" * 64,
+            consent_sha256="b" * 64, reviewed_at=now, approved_at=now)
+        descriptor = os.open(tmp_path, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            _write(descriptor, "activation.json", raw)
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        arguments = dict(**parameters, manifest=raw,
+                         manifest_binding=inode(tmp_path / "activation.json"))
+        with transaction(path) as db:
+            assert history._inspect_owned_history(h, owner, **selected) == retained
+            with (closing(sqlite3.connect(path, timeout=0)) as rival,
+                  pytest.raises(sqlite3.OperationalError)):
+                rival.execute("BEGIN IMMEDIATE")
+            activation._stage_paused_activation(db, **arguments, now=time.time())
+            with pytest.raises(history.BrowserContinuationHistoryError):
+                history._inspect_owned_history(h, owner, **selected)
+            # Never ignore our rollback journal to force a second historical read.
+            if committed:
+                db.commit()
+            else:
+                db.rollback()
+        assert history._inspect_owned_history(h, owner, **selected) == retained
+        with transaction(path, readonly=True) as db:
+            if committed:
+                result = activation._inspect_paused_activation(db, **arguments)
+                assert (result.revision, result.mode) == (r.revision + 1, RecoveryMode.PAUSED)
+            else:
+                with pytest.raises(activation.BrowserContinuationNativeError):
+                    activation._inspect_paused_activation(db, **arguments)
+        owner.binding(h)
+    if committed:
+        with pytest.raises(BrowserHandoffError):
+            h.confirm(restored=True)
+        with pytest.raises(release.BrowserGuardReleaseError):
+            release.BrowserPausedGuardRelease(h).confirm(release_id=r.release_id)
+        with pytest.raises(intent.BrowserContinuationIntentError):
+            intent.BrowserContinuationIntent(h, release_id=r.release_id).confirm(
+                intent_id=i.intent_id)
+    else:
+        assert path.read_bytes() == original
+        h.confirm(restored=True)
+    assert (tmp_path / "activation.json").read_bytes() == raw
+    blocked(lab)  # Neither the internal anchor nor historical evidence enables startup.
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
