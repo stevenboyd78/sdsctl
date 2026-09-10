@@ -171,6 +171,26 @@ forbidden hosts, protocol errors and invalid responses still fail closed. See
 Native retry state survives worker recreation and clock rollback; explicit
 suspend/sign-out always takes precedence.
 
+## Document-bound page verification fixture
+
+The same `audit_browser_recovery.mjs` command accepts `document-probe` with
+`ip`, `dns` or `ipv6`. Each run creates a fresh fictional profile and private
+loopback server; it never reuses a real display profile. It needs the existing
+Playwright module, Chromium, certutil and Python paths shown above, with normal
+browser sandboxing and verified TLS. Do not disable either if a prerequisite
+fails. The fixture's temporary CA is confined to its browser mount namespace,
+not imported into the user's trust database.
+
+The existing native authentication fixture—not the automation driver—obtains
+and installs the fictional session. The new probe then verifies the exact
+Chromium-supplied document identity, refuses a replacement document, and closes
+its owned tab when interrupted during a pending protected-page request. Success
+requires unchanged native ledger bytes, browser storage, cookie and session
+issuance count across the probe checks. The ordinary fixture sign-out/restart
+checks still run afterwards. Results distinguish this browser I/O test from
+new continuation-controller or installed-wheel acceptance. No new normal
+worker role, Home Assistant access or physical display test is enabled.
+
 ## Earlier native-message proof
 
 ```sh

@@ -779,6 +779,42 @@ expiration, selected probe/document mismatches, immutable snapshots and redacted
 failures. DNS/private IPv4/IPv6 origin cases here test **pure data contracts**, not
 real browser cookie representations, TLS interoperability or Pi acceptance.
 
+### Document-bound browser probe (experimental adapter)
+
+The separate `browser_device_continuation_probe.mjs` adapter exercises real
+browser I/O but is **not imported by the active worker**. Its fixed selected
+HTTPS origin cannot come from a page request. It creates one temporary display
+tab, obtains its document identity from Chrome's actual `MessageSender`, and
+targets subsequent messages to that exact document rather than adopting any
+later top-frame document at the same URL. The isolated content script performs
+one bounded same-origin request to `/auth/session`, validates the exact
+display-only response, and sends only the redacted result back to its worker.
+
+The probe has one open/verify lifecycle and a whole-attempt wall/monotonic budget
+of less than 15 seconds. Cancellation invalidates pending work synchronously;
+a tab created after cancellation is still owned and receives a close request.
+Navigation after document selection, missing replies, malformed content, changed
+sender metadata and expired lifetime refuse completion. A Promise race alone is
+not treated as API cancellation. Cleanup targets only the tab created by this
+attempt; cleanup failure is not reported as successful deletion.
+
+This component neither installs/removes cookies nor reads/writes acceptance
+storage, grants native permission or issues a session. Its result is a
+point-in-time page observation, not a live-document lease. The future owning
+controller must still compare the actual cookie and exact native state before
+and after verification and serialize final acceptance with pause/sign-out.
+Missing or initial-pending browser state cannot be promoted by this probe.
+
+The experimental `document-probe` fixture in `audit_browser_recovery.mjs` uses
+the existing actual-native authentication fixture to obtain a fictional session
+without driver cookie injection. It checks successful document-bound access,
+replacement-document refusal, cancellation during a pending browser request,
+owned-tab cleanup and unchanged native state, browser storage and cookie.
+It is not the new continuation controller, installed-wheel or physical-Pi
+acceptance. Its loopback IP/DNS/IPv6 cases require normal sandboxing and verified
+TLS; unavailable sandbox support is a failed prerequisite, not a skip or a
+reason to disable the sandbox.
+
 ## Remaining selected successor path, not implemented end to end
 
 The next candidate must preserve the existing identity for same-device
