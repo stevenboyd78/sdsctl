@@ -59,6 +59,17 @@ def wait(check, timeout=45):
     raise RuntimeError("Qualification condition deadline")
 
 
+def released_pause_text(text):
+    """Require the current paused-only warning, never an ordinary resumable pause."""
+    normalized = " ".join(text.split())
+    expected = (
+        "Automatic sign-in is paused after completed recovery. A separate administrator "
+        "continuation is required before this display can sign in again. Keep the saved "
+        "profile and recovery evidence; do not repeat setup or remove the guard."
+    )
+    return expected in normalized and "Review automatic sign-in resume" not in normalized
+
+
 def main():
     os.umask(0o077)
     initial_owner = ExitStack()
@@ -492,7 +503,7 @@ def main():
                     assert child.poll() is None
                     no_connections()
                     text = x.text(selected)
-                    return text if "Automatic sign-in is paused." in text else None
+                    return text if released_pause_text(text) else None
 
                 text = wait(paused_text, 60)
                 put(stage / (name + "-visible.txt"), text)
