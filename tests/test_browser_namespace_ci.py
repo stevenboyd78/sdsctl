@@ -115,6 +115,7 @@ def test_workflow_checks_actual_namespace_report_and_keeps_latest_full_suite():
     assert ('pytest tests/test_browser_device_launch.py '
             'tests/test_browser_device_guard_release.py') in namespace
     assert "tests/test_browser_device_continuation_intent.py" in namespace
+    assert "tests/test_browser_device_continuation_history.py" in namespace
     assert '--junitxml="${RUNNER_TEMP}/namespace-test-results.xml"' in namespace
     assert ('python scripts/check_browser_namespace_results.py '
             '"${RUNNER_TEMP}/namespace-test-results.xml"') in namespace

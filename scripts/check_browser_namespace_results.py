@@ -15,6 +15,7 @@ REQUIRED_MODULES = (
     "tests.test_browser_device_launch",
     "tests.test_browser_device_guard_release",
     "tests.test_browser_device_continuation_intent",
+    "tests.test_browser_device_continuation_history",
 )
 
 

@@ -28,6 +28,7 @@ from .browser_device_native import _private_read, load_browser_native_configurat
 from .browser_device_proc import HOST_PROC, check_host_proc
 from .browser_device_profile import _platform
 from .browser_device_registration import MAINTENANCE_MARKER, _matches
+from .browser_device_resume_archive import BrowserResumeArchiveBinding
 from .browser_device_resume_maintenance import BrowserResumeRetirementEvidence
 from .browser_device_resume_workflow import BrowserResumeWorkflow
 from .browser_device_startup import _launch_lock
@@ -48,10 +49,15 @@ class BrowserRetirementBundleError(RuntimeError):
 
 def _canonical(
     root: Path, session: BrowserResumeWorkflow, *, operation_id: str, browser_intent: str,
-    handoff: Path | None = None, proof: BrowserResumeRetirementEvidence | None = None,
+    handoff: Path | None = None,
+    proof: BrowserResumeRetirementEvidence | BrowserResumeArchiveBinding | None = None,
     supervised: bool = False,
 ) -> tuple[BrowserExtensionIdentity, dict[str, bytes], bytes]:
-    """Caller owns launcher; handoff callers separately verify guard/registration."""
+    """Render bytes only; callers independently establish commit/current authority.
+
+    An archive binding supports historical reconstruction, never live handoff.
+    The default still strictly confirms the current guard and native ledger.
+    """
     if proof is None:
         proof = session._confirm(operation_id, browser_intent)
     if type(supervised) is not bool or (supervised and handoff is None):

@@ -362,8 +362,43 @@ all interruption schedules. The project coverage floor remains 86%; the broader
 and exact-commit CI results must be recorded separately for this changed runtime.
 
 No retained browser profile, real credential, Home Assistant service or Pi
-configuration was touched. The full historical-chain/current-permission
-selector and successor activation remain unimplemented; PR #250 stays draft.
+configuration was touched. This checkpoint did not implement the historical-chain
+reader, current-permission selector or successor activation; PR #250 stays draft.
+
+## Retained historical-chain reader
+
+The next candidate adds `inspect_continuation_history`, a separately typed,
+read-only result anchored by the complete paused-release and administrator-intent
+SQLite journals. It reconstructs native archive/review/guard bindings, both
+canonical runtime bundles, the supervised handoff and paused acknowledgement,
+restored host and fixed file identities. It rechecks retained evidence while
+holding stopped launch and shared private-profile/archive ownership.
+
+The new suite passed **26 cases** using actual isolated Linux processes with the
+fictional browser/native-pipe fixture. Both retirement and reconciliation chains
+validate before and after a simulated later native pause. Existing strict current
+confirmations refuse that later revision, and ordinary startup/worker requests
+remain blocked even when historical inspection succeeds. Separate frozen result
+types prevent an internal archive representation from being mistaken for the
+existing live retirement or continuation evidence.
+
+Negative cases cover altered archive, review, guard, handoff, acknowledgement,
+restoration, readiness, supervisor, host and bundle files; replaced release,
+intent and ledger inodes; changed credentials; missing or prepared journals;
+malformed canonical bodies; wrong selections; dangling SQLite sidecars; competing
+ownership and final-readback changes. Each case retains the observed fixture
+state. The journals are opened read-only; inspection never repairs or completes
+them. The two journal tests also exercise multiple malformed bodies in each case.
+
+All four namespace modules are now required by the hosted execution gate;
+the full-suite jobs remain on their existing runner and the 86% coverage floor
+is unchanged. These focused results do not substitute for a fresh whole-suite,
+package or exact-head hosted result, and they are not physical power-loss,
+real-Chromium or online-server acceptance.
+
+Current permission selection, successor schema/activation and online continuation
+remain unimplemented. No real profile, credential, Home Assistant or Pi change
+was made. This internal reader is not an administrator runbook; PR #250 stays draft.
 
 ## Successor activation design checkpoint
 

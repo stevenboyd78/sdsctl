@@ -52,7 +52,7 @@ jobs:
     # Migrate before ubuntu-22.04 brownouts start on 2027-03-23, after qualifying a
     # replacement's unprivileged namespace policy (see CONTRIBUTING.md).
     runs-on: ubuntu-22.04
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -84,6 +84,7 @@ jobs:
         run: >-
           pytest tests/test_browser_device_launch.py tests/test_browser_device_guard_release.py
           tests/test_browser_device_continuation_intent.py
+          tests/test_browser_device_continuation_history.py
           --junitxml="${RUNNER_TEMP}/namespace-test-results.xml"
 
       - name: Require browser namespace tests to execute

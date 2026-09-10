@@ -1,6 +1,6 @@
 # Post-recovery continuation: design boundary
 
-Status: **development design, read-only preflight, archive-plan inspection and internal intent journal;
+Status: **development design, read-only preflight/history and internal intent journal;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -125,10 +125,40 @@ recheck the archive bytes before returning. A plan cannot be supplied as the
 review input to those methods. No `ignore_revision` switch or relaxed revision
 comparison has been added.
 
-This is the structural building block for a future historical-chain reader,
-not that complete reader or its commit anchor. Existing release/intent checks,
+This is the structural building block for the separate historical-chain reader
+below, not that complete reader or its commit anchor. Existing release/intent checks,
 normal startup and per-request refusal remain unchanged. Nothing in this parser
 activates a successor or grants browser/server authority.
+
+## Retained historical chain (internal, not current permission)
+
+`inspect_continuation_history` reconstructs the selected archive, canonical review,
+launch guard, original and recovery bundles, supervised handoff, browser paused
+acknowledgement and restored native host. It then requires the exact **complete**
+paused-release and administrator-intent SQLite records. Their checked bindings
+anchor the archive transition: the trusted writers confirmed its committed native
+after-state before committing those records. A valid archive, a prepared journal,
+a copied journal inode or an unrelated completed record cannot substitute.
+
+The reader holds stopped managed-launcher ownership and shared private-profile
+and archive ownership. It uses fixed filenames, checks current canonical runtime
+assets and private-input bindings, verifies the old supervisor has exited, and
+rechecks retained bytes and inodes. It does not read Chromium-owned storage,
+write or repair files, start a browser or contact the server. Filesystem and
+same-account/root trust remain the same as the existing recovery workflow.
+
+Its frozen, redacted `BrowserContinuationHistory` is a distinct result, not a
+live retirement, release or intent confirmation. An internal, separately typed
+archive binding is used only to reconstruct old wire bytes. **A later native
+pause can leave this history valid while all existing current-state confirmations
+refuse.** The historical revision and paused mode describe the old transition;
+they do not describe current state or imply current authority.
+
+The current native profile must still pass the existing read-only schema and
+private-file checks. This is not support for an unimplemented successor schema,
+an old-runtime migration, or changed credentials. Every ordinary launch and
+native request still stops on the existing intent marker. No current-epoch
+selector, activation writer, browser action or administrator CLI is added here.
 
 ## Remaining successor activation, not implemented
 
@@ -185,7 +215,7 @@ verification must not be bypassed for an IP-address installation.
 ## Proposed activation contract: history is not current permission
 
 This section specifies the next implementation boundary; **none of the proposed
-activation reader, writer, manifest, epoch schema or request role exists yet**.
+activation permission reader, writer, manifest, epoch schema or request role exists yet**.
 It does not change the stop condition imposed by a complete intent. Implement
 and qualify the whole selected path before enabling any part on a real profile.
 
@@ -212,9 +242,9 @@ The successor needs two distinct internal results:
   future resume-review role. Historical evidence must not be accepted where
   current permission is required, including by a cached worker.
 
-Keep existing release, intent, maintenance and handoff `confirm` methods strict.
-Provide a separately named internal historical reader rather than changing what
-their existing successful results mean. Neither result proves current browser
+Existing release, intent, maintenance and handoff `confirm` methods remain strict.
+The separately named historical reader implements the first result only; it does
+not change what their successful results mean. Neither result proves current browser
 storage, server authorization, drained requests or an installed session.
 
 ### One authoritative activation commit

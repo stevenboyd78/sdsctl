@@ -47,6 +47,21 @@ class BrowserResumeArchivePlan:
     after: bytes = field(repr=False)
 
 
+@dataclass(frozen=True, slots=True)
+class BrowserResumeArchiveBinding:
+    """Historical wire representation ONLY, not live retirement evidence.
+
+    Used solely to reconstruct retained bundle/receipt bytes. This distinct type
+    must never be supplied to a native request or accepted as current authority.
+    """
+
+    identity: str = field(repr=False)
+    intent: str = field(repr=False)
+    retirement: str = field(repr=False)
+    mode: RecoveryMode
+    revision: int
+
+
 def _encoded(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False)
             + "\n").encode("ascii")
