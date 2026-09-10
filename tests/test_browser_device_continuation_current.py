@@ -5,6 +5,7 @@ The separate required namespace fixtures use complete real retained chains.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import sqlite3
@@ -446,3 +447,137 @@ def test_worker_advisory_returns_only_after_live_scope_rechecks(lab, candidate, 
         selected = BrowserWorkerSelection(candidate.args["bundle"], candidate.args["public_key"])
         assert current._inspect_worker_continuation(lab.configuration, selected) == expected
     assert snap(lab) == before
+
+
+def active_native(lab, candidate, **changes):
+    """Real current SQL, fixture approval only; no server/browser permission."""
+    selection = epoch._EpochSelection(candidate.paths["manifest"].read_bytes(),
+        current.activation._binding(candidate.paths["manifest"]), candidate.history,
+        lab.args["profile"], current.activation._binding(lab.ledger.path))
+    values = dict(digest="d" * 64, intent="e" * 64, device=lab.configuration.device_id,
+                  generation=7,
+                  credential_hash=hashlib.sha256(candidate.paths["credential"].read_bytes()).hexdigest(),
+                  trust_hash=current._trust(candidate.paths["trust"].read_bytes()))
+    inputs = epoch._ApprovalInputs(**{**values, **changes})
+    for operation in ("prepare", "claim", "complete"):
+        with transaction(lab.ledger.path) as db:
+            before = epoch._read(db, selection, readonly=False).snapshot
+            getattr(epoch, "_stage_" + operation)(db, selection, before, inputs,
+                                                  now=lab.clock[0] + 1)
+            db.commit()
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_observation_is_owned_read_only_and_not_session_or_consent(
+        lab, candidate, access, monkeypatch, active):
+    from sds200 import browser_device_native as native
+
+    if active:
+        active_native(lab, candidate)
+    monkeypatch.setattr(native, "_post_browser_device", lambda *a, **k: pytest.fail("Network I/O"))
+    if not active:
+        monkeypatch.setattr(current._CurrentRead, "_active_generation",
+                            lambda *a: pytest.fail("Paused status is not server review"))
+    before = snap(lab)
+    with access() as reader:
+        observed = reader.observe()
+        assert observed.state == reader.inspect()
+        assert observed.generation == (7 if active else None)
+        assert reader.observe() == observed
+        assert snap(lab) == before
+        with pytest.raises(FrozenInstanceError):
+            observed.generation = 8
+        for field in ("token", "session", "session_ready", "intent", "grant", "credential_hash"):
+            assert not hasattr(observed, field)
+        for value in (CREDENTIAL, str(candidate.root), observed.state.identity,
+                      observed.state.origin, observed.state.epoch,
+                      observed.state.state_fingerprint):
+            assert value not in repr(observed)
+    with pytest.raises(ERROR):
+        reader.observe()
+    assert snap(lab) == before
+    blocked(lab)
+
+
+@pytest.mark.parametrize("field", ["credential_hash", "trust_hash"])
+def test_active_observation_requires_approval_bound_private_bytes(
+        lab, candidate, access, field):
+    active_native(lab, candidate, **{field: "9" * 64})
+    before = snap(lab)
+    with pytest.raises(ERROR), access() as reader:
+        # Syntactically valid ACTIVE SQL does not prove approval inputs match.
+        assert reader.inspect().mode is recovery.RecoveryMode.ACTIVE
+        with pytest.raises(ERROR):
+            reader.observe()
+        with pytest.raises(ERROR):
+            reader.inspect()
+    assert snap(lab) == before
+
+
+@pytest.mark.parametrize("name", ["client.json", "device.secret", "ca.pem"])
+@pytest.mark.parametrize("change", ["bytes", "inode", "mode"])
+def test_private_input_changes_after_active_read_are_refused(
+        lab, candidate, access, monkeypatch, name, change):
+    active_native(lab, candidate)
+    path = lab.args["profile"] / name
+    original = current._trust
+    changed = []
+
+    def trust(raw):
+        result = original(raw)
+        if not changed:
+            changed.append(True)
+            if change == "bytes":
+                path.write_bytes(b"fictional changed input")
+            elif change == "mode":
+                path.chmod(0o644)
+            else:
+                saved = path.with_name(path.name + ".retained")
+                path.rename(saved)
+                private(path, saved.read_bytes())
+        return result
+
+    monkeypatch.setattr(current, "_trust", trust)
+    with pytest.raises(ERROR), access() as reader:
+        with pytest.raises(ERROR):
+            reader.observe()
+        assert changed == [True]
+        with pytest.raises(ERROR):
+            reader.observe()
+
+
+@pytest.mark.parametrize("event", ["process", "parent", "owner", "native-journal"])
+def test_observation_cannot_survive_lost_ownership_or_native_writer(
+        lab, candidate, access, monkeypatch, event):
+    active_native(lab, candidate)
+    with closing(sqlite3.connect(lab.ledger.path, timeout=0)) as rival:
+        with pytest.raises(ERROR), access() as reader:
+            assert reader.observe().generation == 7
+            if event == "owner":
+                reader._owner._active = False
+            elif event == "native-journal":
+                rival.execute("BEGIN IMMEDIATE")
+                rival.execute("UPDATE recovery SET revision=revision+1")
+            else:
+                name = "getpid" if event == "process" else "getppid"
+                value = getattr(current.os, name)()
+                monkeypatch.setattr(current.os, name, lambda: value + 1)
+            with pytest.raises(ERROR):
+                reader.observe()
+        rival.rollback()
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_worker_observation_reacquires_current_selected_scope(
+        lab, candidate, monkeypatch, active):
+    if active:
+        active_native(lab, candidate)
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: candidate.root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: candidate.root)
+    selection = BrowserWorkerSelection(candidate.args["bundle"], candidate.args["public_key"])
+    with _launch_lock(candidate.root, create=False):
+        observed = current._observe_worker_continuation(lab.configuration, selection)
+        assert observed.generation == (7 if active else None)
+        with current._worker_current_scope(lab.configuration, selection) as reader:
+            assert observed == reader.observe()
+    blocked(lab)

@@ -399,6 +399,39 @@ authorization or power-loss acceptance. The separate owned prepare/claim boundar
 below does not add permission to this reader. Online checks and runtime-role
 integration remain separate work.
 
+### Owned mode and generation observations
+
+The internal reader's `observe()` method adds a redacted
+`BrowserContinuationObservation` containing that exact current read point and
+the locally approved generation. A stopped state returns `generation=None`:
+offline status does not invent a generation or obtain fresh server review.
+For an active state, the method selects the exact complete active approval from
+the fully validated epoch view and compares its device, credential digest and
+trust digest with the actual fixed configuration and private files. The retained
+history still requires the original file bytes and identities. A syntactically
+valid active row with different approval inputs is refused, not repaired.
+
+The complete scope, current fingerprint and private files are rechecked before
+return. Scope/process/owner loss, a native writer journal, same-revision changes
+or a changed private file invalidate the reader. The result exposes no secret,
+grant digest, cookie, completion token or session-ready field. An internal live
+worker helper reacquires the same owned read; no message role or startup path
+invokes it. This is **local observation, not online authority**. An active local
+approval may still be revoked on the server, or may have no installed browser
+session after an interrupted initial exchange.
+
+Complete retained-history tests now pass this actual observation and native
+session output into the JavaScript model. When issuance or its acknowledgement
+is uncertain, the native active observation cannot promote the browser's pending
+record: it still requires administrator review. Browser storage, cookie and page
+I/O remain modeled; these checks do not enable or qualify a real continuation.
+
+An in-process HTTP regression also confirms that the existing generation-bound
+server verification leaves a current same-generation live request and session
+usable, without allocating a token or setting a cookie. Its drainage check waits
+for older generations only. This supports later accepted-state verification; it
+does not implement unattended renewal or permit replaying initial approval.
+
 ## Owned native cancellation (fixture-only)
 
 `browser_device_continuation_cancel` adds narrowly scoped **pause** and

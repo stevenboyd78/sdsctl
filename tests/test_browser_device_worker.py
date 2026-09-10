@@ -59,7 +59,8 @@ def test_acceptance_core_is_build_bound_but_not_imported_by_active_worker(monkey
 
 
 @pytest.mark.parametrize("action", ["continuation-initial-session", "continuation-accepted",
-                                    "continuation-status", "continuation-renew"])
+                                    "continuation-status", "continuation-renew",
+                                    "continuation-observe"])
 def test_inert_acceptance_core_does_not_expose_a_native_request(action):
     for body in ({"version": 1, "action": action}, envelope("worker-request",
             request={"version": 1, "action": action})):

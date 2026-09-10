@@ -578,6 +578,26 @@ old prepare/commit message pair. Home Assistant, both bench Pis, retained profil
 and credentials remain unchanged. Exact-commit qualification is recorded in the
 draft PR, separately from these scope descriptions.
 
+## Owned current approval observation
+
+The internal current reader now observes the exact locally approved generation
+only after checking the selected complete active grant against the original
+private configuration, credential and CA files. Stopped states have no reviewed
+generation. The read remains side-effect-free, scope-bound and distinct from
+server authority or browser acceptance. It does not enable any native action.
+
+Focused cases exercise read-only stopped/active observations, wrong approval
+digests, private-file changes during readback, lost owner/process and native
+writer sidecars. Both complete retained-history paths feed actual native results
+into the browser model, including active native state left after uncertain
+issuance: the pending browser record stays stopped. Browser I/O and later ancestry
+remain simulated; no real profile or display is used for this check.
+
+The server verification regression additionally keeps a current live lease open
+while obtaining exact same-generation proof. The original session remains valid,
+no cookie/token is issued, and the device store is unchanged. This in-process
+check does not qualify real-browser unattended renewal.
+
 ## Owned verification/completion candidate
 
 The isolated live-owner adapter now creates its own prepare/claim attempt and

@@ -151,6 +151,33 @@ def test_real_proof_waits_for_old_request_cleanup(setup):
     asyncio.run(run())
 
 
+def test_same_generation_proof_preserves_current_live_request_and_session(setup):
+    client, store, device, sessions, *_ = setup
+    issued = sessions.issue("display", device.credential)
+    assert issued is not None
+    before = store.path.read_bytes()
+    keys = set(sessions._sessions)
+
+    async def run():
+        lease = sessions.acquire(issued.token)
+        assert lease is not None
+        try:
+            result = await asyncio.wait_for(asyncio.to_thread(
+                request, client, device.credential, generation=1), 2)
+            assert result.status_code == 200
+            assert result.json() == {"version": 1, "device_id": "display", "generation": 1,
+                                     "state": "active", "drained": True}
+            assert "set-cookie" not in result.headers and not lease.revoked.is_set()
+            assert set(sessions._sessions) == keys and store.path.read_bytes() == before
+            still_valid = sessions.acquire(issued.token)
+            assert still_valid is not None
+            still_valid.release()
+        finally:
+            lease.release()
+
+    asyncio.run(run())
+
+
 def proof_body(**changes):
     return json.dumps({"version": 1, "device_id": "display", "generation": 4,
                        "state": "active", "drained": True, **changes}).encode()

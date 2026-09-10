@@ -44,28 +44,44 @@ pytestmark = pytest.mark.skipif(sys.platform != "linux" or os.geteuid() == 0,
                                reason="Non-root Linux supervised historical chain")
 
 
-def _browser_core_accepts_native_fixture(expected, result):
+def _browser_core_checks_native_fixture(expected, observed, result=None):
     """Actual owned native result, but modeled browser I/O: not browser acceptance."""
     from sds200.browser_device_worker import worker_graph
 
     node = shutil.which("node")
     assert node is not None, "The native/browser contract requires Node; do not skip it."
 
-    def observation(value):
+    def observation(value, generation):
         return dict(identity=value.identity, epoch=value.epoch, mode=value.mode.value,
                     binding=dict(fingerprint=value.state_fingerprint,
-                                 revision=value.native_revision, generation=7))
+                                 revision=value.native_revision, generation=generation))
 
     payload = dict(settings=dict(identity=expected.identity, epoch=expected.epoch,
                                  origin=expected.origin, build=worker_graph()[0]),
-                   before=observation(expected), after=observation(result.state),
-                   session=dict(token=result.session.token, expires_in=result.session.expires_in))
+                   before=observation(expected, 7),
+                   after=observation(observed.state, observed.generation),
+                   session=(None if result is None else
+                            dict(token=result.session.token, expires_in=result.session.expires_in)))
     script = """
       import assert from 'node:assert/strict';
       import {readFileSync} from 'node:fs';
       import {pausedContinuationRecord,createInitialInstallation,classifyContinuationStartup} from
         './src/sds200/browser_assets/browser_device_continuation_state.mjs';
       const {settings,before,after,session}=JSON.parse(readFileSync(0,'utf8'));
+      const paused=pausedContinuationRecord(settings);
+      const pendingOwner=createInitialInstallation(settings,paused,before,
+        {wall:()=>1000000,monotonic:()=>500000});
+      const pending=pendingOwner.pendingRecord('e'.repeat(64));
+      assert.deepEqual(classifyContinuationStartup(settings,pending,after),
+        {mode:'administrator_required',sessionReady:false});
+      assert.throws(()=>createInitialInstallation(settings,pending,before,
+        {wall:()=>1000000,monotonic:()=>500000}));
+      if(session===null) {
+        // Actual native ACTIVE after uncertain issuance is never adopted.
+        assert.equal(after.mode,'active');
+        console.log('Native/browser modeled contract passed');
+        process.exit(0);
+      }
       const make=()=>{
         const a=createInitialInstallation(settings,pausedContinuationRecord(settings),before,
           {wall:()=>1000000,monotonic:()=>500000});
@@ -1167,7 +1183,9 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
                 assert result.state.native_revision == expected.native_revision + 2
                 assert result.session.token == TOKEN and 290 < result.session.expires_in <= 300
                 assert obj.confirm().state == result.state
-                _browser_core_accepts_native_fixture(expected, result)
+                observed = current._observe_worker_continuation(lab.configuration, selection)
+                assert observed.state == result.state and observed.generation == 7
+                _browser_core_checks_native_fixture(expected, observed, result)
             else:
                 with pytest.raises(session.BrowserContinuationSessionError):
                     obj.run(expected, **kwargs)
@@ -1178,6 +1196,9 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
                         assert reader.inspect() == paused[0].state
                 else:
                     assert obj.confirm().phase == "complete"
+                    observed = current._observe_worker_continuation(lab.configuration, selection)
+                    assert observed.state.mode is RecoveryMode.ACTIVE and observed.generation == 7
+                    _browser_core_checks_native_fixture(expected, observed)
             stable = state(lab, h)
             with pytest.raises(session.BrowserContinuationSessionError):
                 obj.run(expected, **kwargs)

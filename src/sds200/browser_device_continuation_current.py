@@ -8,6 +8,7 @@ as a substitute for the unfinished owned mutation and online proof adapters.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import sqlite3
 from collections.abc import Iterator
@@ -27,6 +28,7 @@ from .browser_device_native import (
     _private_read,
     load_browser_native_configuration,
 )
+from .browser_device_profile import _credential, _trust
 from .browser_device_recovery import RecoveryMode
 from .browser_device_resume import _hex
 from .browser_device_worker import BrowserWorkerSelection, _browser_directory
@@ -51,6 +53,14 @@ class BrowserCurrentContinuation:
     state_fingerprint: str = field(repr=False)
     native_revision: int
     mode: RecoveryMode
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserContinuationObservation:
+    """Owned read point only, NOT browser acceptance, consent or online authority."""
+
+    state: BrowserCurrentContinuation = field(repr=False)
+    generation: int | None = field(repr=False)
 
 
 class _SelectedFiles:
@@ -136,6 +146,63 @@ class _CurrentRead:
             self._active = False
             raise BrowserContinuationCurrentError() from None
 
+    def observe(self) -> BrowserContinuationObservation:
+        """Read active approval generation against original private inputs.
+
+        Stopped modes expose no reviewed generation and perform no network I/O.
+        Active does NOT mean this browser accepted/installed a session. This
+        result cannot be supplied instead of reacquiring an actual owned scope.
+        """
+        try:
+            state = self.inspect()
+            view = epoch._read(self._db, self._selection, readonly=True)
+            if view.snapshot != self._expected:
+                raise ValueError()
+            generation = (self._active_generation(view) if state.mode is RecoveryMode.ACTIVE
+                          else None)
+            self._files()
+            if self.inspect() != state:
+                raise ValueError()
+            return BrowserContinuationObservation(state, generation)
+        except Exception:
+            self._active = False
+            raise BrowserContinuationCurrentError() from None
+
+    def _active_generation(self, view: epoch._View) -> int:
+        # _read validated the exact current epoch, complete last approval, active
+        # grant and full consistency fingerprint. Do not use generation ordering.
+        row = view.approvals[-1]
+        if row["digest"] != view.grant or row["phase"] != "complete":
+            raise ValueError()
+        profile = self._selection.profile
+        config = load_browser_native_configuration(profile)
+        retained = self._selection.history
+        if (config.identity, config.origin, config.device_id) != (
+                retained.identity, retained.origin, retained.device_id):
+            raise ValueError()
+        private: dict[str, tuple[bytes, tuple[int, int]]] = {}
+        for name, limit in (("client.json", 4096), ("device.secret", 128), ("ca.pem", 128 * 1024)):
+            path = profile / name
+            binding = activation._binding(path)
+            raw = _private_read(profile, name, limit)
+            activation._manifest_check(path, raw, binding)
+            private[name] = raw, binding
+        _credential(private["device.secret"][0])
+        generation = row["generation"]
+        if (type(generation) is not int or not 1 <= generation < 2**53 - 1
+                or row["device"] != config.device_id
+                or row["credential_hash"] != hashlib.sha256(private["device.secret"][0]).hexdigest()
+                or row["trust_hash"] != _trust(private["ca.pem"][0])):
+            raise ValueError()
+        # History rechecks include the ORIGINAL private bytes and file attributes,
+        # not just whatever was present at entry to this observation.
+        self._files()
+        for name, (raw, binding) in private.items():
+            activation._manifest_check(profile / name, raw, binding)
+        if load_browser_native_configuration(profile) != config:
+            raise ValueError()
+        return generation
+
 
 @contextmanager
 def _read_owned(selected: _SelectedFiles, owner: ownership._HistoryOwnership
@@ -208,3 +275,11 @@ def _inspect_worker_continuation(configuration: BrowserNativeConfiguration,
                                  selection: BrowserWorkerSelection) -> BrowserCurrentContinuation:
     with _worker_current_scope(configuration, selection) as reader:
         return reader.inspect()
+
+
+def _observe_worker_continuation(
+    configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
+) -> BrowserContinuationObservation:
+    """Internal owned observation only; no action, role, startup or renewal wiring."""
+    with _worker_current_scope(configuration, selection) as reader:
+        return reader.observe()
