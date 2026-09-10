@@ -12,6 +12,7 @@ import pytest
 
 from sds200 import browser_device_continuation_history as history
 from sds200 import browser_device_continuation_intent as intent
+from sds200 import browser_device_continuation_ownership as ownership
 from sds200 import browser_device_guard_release as release
 from sds200.browser_device_bundle import NATIVE_HOST, _json
 from sds200.browser_device_handoff import BrowserHandoffError
@@ -22,6 +23,7 @@ from sds200.browser_device_recovery import RecoveryMode
 from sds200.browser_device_registration import MAINTENANCE_MARKER
 from sds200.browser_device_resume_maintenance import BrowserResumeRetirementEvidence
 from sds200.browser_device_startup import _launch_lock
+from sds200.browser_device_worker import BrowserWorkerSelection
 from tests import test_browser_device_launch as launch_fixture
 from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
@@ -280,3 +282,102 @@ def test_final_readback_refuses_changed_archive_and_sanitizes_errors(lab, chain,
         inspect(chain)
     assert state(lab, h) == retained[0]
     assert CREDENTIAL not in str(error.value) and str(path) not in str(error.value)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_owned_reconstruction_reuses_lock_but_never_reuses_expired_scope(lab, chain):
+    h, r, i = chain
+    original, before = inspect(chain), state(lab, h)
+    with ownership._stopped_history_ownership(h) as owner:
+        # This is the future transaction caller's shape: reconstruct inside the
+        # existing owner, without attempting a second exclusive launch lock.
+        assert history._inspect_owned_history(h, owner, release_id=r.release_id,
+                                              intent_id=i.intent_id) == original
+        with pytest.raises(history.BrowserContinuationHistoryError):
+            inspect(chain)  # Public entrypoint still insists on its own lock.
+    for expired in (owner, object()):
+        with pytest.raises(history.BrowserContinuationHistoryError):
+            history._inspect_owned_history(h, expired, release_id=r.release_id,
+                                           intent_id=i.intent_id)
+    assert state(lab, h) == before
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+@pytest.mark.parametrize("later", [False, True])
+def test_live_owner_reads_identical_history_without_normal_worker_authority(
+        lab, chain, monkeypatch, later):
+    from sds200 import browser_device_native as native
+    from sds200 import browser_device_worker as worker
+
+    h, r, i = chain
+    original = inspect(chain)
+    if later:
+        lab.ledger.resume(lab.ledger.inspect().revision)
+        lab.ledger.suspend()
+    before = state(lab, h)
+    selected = BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    root = lab.args["directory"]
+    # Completed historical chain is real supervised fixture evidence; ONLY the
+    # later live browser ancestor is simulated. This is not real-browser acceptance.
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(worker, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(native, "_post_browser_device", lambda *a, **k: pytest.fail("Network I/O"))
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            assert history._inspect_worker_continuation_history(h,
+                configuration=lab.configuration, selection=selected,
+                release_id=r.release_id, intent_id=i.intent_id) == original
+            with pytest.raises(history.BrowserContinuationHistoryError):
+                inspect(chain)
+            with pytest.raises(ValueError):
+                worker.normal_worker_paused_only(lab.configuration, selected)
+        finally:
+            (root / "SingletonLock").unlink()  # Fixture-only marker, not profile repair.
+    with pytest.raises(history.BrowserContinuationHistoryError):
+        history._inspect_worker_continuation_history(h, configuration=lab.configuration,
+            selection=selected, release_id=r.release_id, intent_id=i.intent_id)
+    assert state(lab, h) == before
+    blocked(lab)
+
+
+@pytest.mark.parametrize("change", ["ancestor", "lock-inode", "credential", "trust",
+    "ledger-mode", "ledger-sidecar", "release-sidecar", "intent-sidecar"])
+def test_live_history_final_readback_refuses_changed_owner_or_inputs(
+        lab, chain, monkeypatch, change):
+    h, r, i = chain
+    root = lab.args["directory"]
+    selected = BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    original = history._Reader.recheck
+    retained = []
+
+    def changed(reader):
+        if change == "ancestor":
+            monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root.parent)
+        elif change == "lock-inode":
+            path = root / ".sdsctl-device-launch.lock"
+            path.rename(path.with_name("retained-launch-lock"))
+            private(path, b"")
+        elif change == "credential":
+            private(lab.args["profile"] / "device.secret", "sdsctl-browser-v1." + "e" * 64)
+        elif change == "trust":
+            path = lab.args["profile"] / "ca.pem"
+            path.write_bytes(path.read_bytes() + b"\n")
+        elif change == "ledger-mode":
+            (lab.args["profile"] / "recovery.sqlite").chmod(0o644)
+        else:
+            path = {"ledger-sidecar": lab.args["profile"] / "recovery.sqlite",
+                    "release-sidecar": root / release.RELEASE_JOURNAL,
+                    "intent-sidecar": root / intent.INTENT_JOURNAL}[change]
+            path.with_name(path.name + "-journal").symlink_to("fictional-sidecar")
+        retained.append(state(lab, h))
+        original(reader)
+
+    monkeypatch.setattr(history._Reader, "recheck", changed)
+    with _launch_lock(root, create=False), pytest.raises(history.BrowserContinuationHistoryError):
+        history._inspect_worker_continuation_history(h, configuration=lab.configuration,
+            selection=selected, release_id=r.release_id, intent_id=i.intent_id)
+    assert state(lab, h) == retained[0]
+    blocked(lab)

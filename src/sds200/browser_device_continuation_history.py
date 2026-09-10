@@ -18,9 +18,17 @@ from typing import Any
 from . import browser_device_continuation_intent as intent_journal
 from . import browser_device_guard_release as release_journal
 from .browser_device_bundle import NATIVE_HOST, _json
+from .browser_device_continuation_ownership import (
+    _HistoryOwnership,
+    _stopped_history_ownership,
+    _worker_history_ownership,
+)
 from .browser_device_handoff import BrowserRecoveryHandoff, _lock_file
-from .browser_device_native import _private_read, load_browser_native_configuration
-from .browser_device_profile_access import browser_profile_access
+from .browser_device_native import (
+    BrowserNativeConfiguration,
+    _private_read,
+    load_browser_native_configuration,
+)
 from .browser_device_recovery import RecoveryMode, _object
 from .browser_device_registration import MAINTENANCE_MARKER, _canonical_bundle_files, _receipt
 from .browser_device_resume import _hex, _timestamp
@@ -32,8 +40,8 @@ from .browser_device_resume_archive import (
 )
 from .browser_device_resume_boundary import BrowserResumeBoundary
 from .browser_device_retirement_bundle import _canonical, _validate
-from .browser_device_startup import _launch_lock
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import BrowserWorkerSelection
 
 
 class BrowserContinuationHistoryError(RuntimeError):
@@ -69,10 +77,12 @@ def _document(raw: bytes, *, newline: bool = False) -> dict[str, Any]:
 
 
 class _Reader:
-    def __init__(self, handoff: BrowserRecoveryHandoff) -> None:
+    def __init__(self, handoff: BrowserRecoveryHandoff, owner: _HistoryOwnership) -> None:
         self.h = handoff
+        self.owner = owner
         self.files: dict[Path, tuple[bytes, int]] = {}
         self.inodes: dict[Path, list[int]] = {}
+        self.databases: set[Path] = set()
 
     def inode(self, path: Path) -> list[int]:
         value = release_journal._inode(path)
@@ -111,6 +121,19 @@ class _Reader:
         for path, inode in self.inodes.items():
             if release_journal._inode(path) != inode:
                 raise ValueError()
+        for path in self.databases:
+            self.database(path)
+
+    def database(self, path: Path) -> None:
+        # File boundary only: never inspect the current native ledger's schema.
+        # Check again at final readback, including sidecars created after the
+        # canonical reconstruction. Historical reads cannot adopt active DML.
+        BrowserDeviceStore(path)._check()
+        if any(release_journal._present(Path(str(path) + suffix))
+               for suffix in ("-journal", "-wal", "-shm")):
+            raise ValueError()
+        self.inode(path)
+        self.databases.add(path)
 
     def native(self, boundary: BrowserResumeBoundary) -> tuple[BrowserResumeArchiveBinding, bytes]:
         h, s = self.h, self.h._session
@@ -136,7 +159,7 @@ class _Reader:
         guard = _document(raw, newline=True)
         native = review["native"]
         expected = {"version": 1, "operation": "resume-maintenance", "targets": s._targets,
-            "browser_binding": s._browser_binding(stopped=True), "identity": proof.identity,
+            "browser_binding": self.owner.binding(h), "identity": proof.identity,
             "intent": h._intent, "operation_id": h._operation,
             "approved_at": guard["approved_at"], "kind": plan.kind, "native_mode": plan.mode,
             "native_revision": plan.prior_revision, "approvals": native["approvals"],
@@ -174,7 +197,7 @@ class _Reader:
             "nonce": value["nonce"], "identity": proof.identity, "extension_id": key.extension_id,
             "evidence": asdict(proof), "handoff_binding": self.inode(h._root),
             "owner_binding": owner, "owner_process": process,
-            "browser_binding": s._browser_binding(stopped=True), "guard_sha256": _digest(guard),
+            "browser_binding": self.owner.binding(h), "guard_sha256": _digest(guard),
             "original_host_sha256": _digest(original), "original_receipt_sha256": _digest(receipt),
             "recovery_receipt_sha256": _digest(recovery_receipt),
             "recovery_host_sha256": _digest(artifacts[NATIVE_HOST + ".json"])}
@@ -207,11 +230,7 @@ class _Reader:
             "native_ledger": s._profile / "recovery.sqlite"}
         # Preserve the private, fixed ledger inode and stopped-file boundary,
         # without parsing its current schema/state or treating history as health.
-        ledger = paths["native_ledger"]
-        BrowserDeviceStore(ledger)._check()
-        if any(release_journal._present(Path(str(ledger) + suffix))
-               for suffix in ("-journal", "-wal", "-shm")):
-            raise ValueError()
+        self.database(paths["native_ledger"])
         return {"targets": h._targets, "operation_id": h._operation, "browser_intent": h._intent,
             "identity": proof.identity, "revision": proof.revision, "mode": str(proof.mode),
             "handoff_sha256": _digest(raw), "ack_sha256": _digest(ack),
@@ -226,6 +245,7 @@ class _Reader:
         # _read checks exact SQLite schema, complete phase, private files, rollback
         # header and absence of sidecars. A canonical prepared body is not enough.
         raw = read(path)
+        self.database(path)
         self.read(path, 65536)
         value = _document(raw)
         fields = {"version", "operation", "release_id", "reviewed_at", "approved_at",
@@ -257,43 +277,74 @@ def inspect_continuation_history(handoff: BrowserRecoveryHandoff, *, release_id:
     refuses. There is no revision-order shortcut, writer, activation or CLI here.
     """
     try:
+        with _stopped_history_ownership(handoff) as owner:
+            return _inspect_owned_history(handoff, owner, release_id=release_id,
+                                          intent_id=intent_id)
+    except Exception:
+        raise BrowserContinuationHistoryError() from None
+
+
+def _inspect_worker_continuation_history(
+    handoff: BrowserRecoveryHandoff, *, configuration: BrowserNativeConfiguration,
+    selection: BrowserWorkerSelection, release_id: str, intent_id: str,
+) -> BrowserContinuationHistory:
+    """Internal historical read for a verified live native owner, not current permission.
+
+    Not wired to ordinary startup, worker context, native dispatch or a CLI.
+    A valid result cannot clear an intent marker, resume a browser or authenticate.
+    """
+    try:
+        with _worker_history_ownership(handoff, configuration=configuration,
+                                       selection=selection) as owner:
+            return _inspect_owned_history(handoff, owner, release_id=release_id,
+                                          intent_id=intent_id)
+    except Exception:
+        raise BrowserContinuationHistoryError() from None
+
+
+def _inspect_owned_history(handoff: BrowserRecoveryHandoff, owner: _HistoryOwnership, *,
+                           release_id: str, intent_id: str) -> BrowserContinuationHistory:
+    """Reconstruct within an existing checked scope; never reacquire the launch lock."""
+    try:
         if (type(handoff) is not BrowserRecoveryHandoff or not handoff._supervised
+                or type(owner) is not _HistoryOwnership
                 or not _hex(release_id) or not _hex(intent_id)):
             raise ValueError()
+        owner.binding(handoff)
         s = handoff._session
-        with (_launch_lock(s._root, create=False),
-              browser_profile_access(s._profile, exclusive=False),
-              browser_profile_access(s._archives, exclusive=False)):
-            boundary = BrowserResumeBoundary(s._profile, archives=s._archives)
-            binding = boundary._binding()
-            reader = _Reader(handoff)
-            proof, after = reader.native(boundary)
-            chain = reader.handoff(proof)
-            release = reader.journal(intent=False, release_id=release_id, intent_id=intent_id,
-                                     evidence=chain)
-            config = load_browser_native_configuration(s._profile)
-            release_fingerprint = _digest((_digest(release) + "\0" + str(config.root)).encode())
-            evidence = {"identity": config.identity, "origin": config.origin,
-                "device_id": config.device_id, "revision": proof.revision,
-                "release_fingerprint": release_fingerprint, "targets": dict(handoff._targets),
-                "operation_id": handoff._operation}
-            intent = reader.journal(intent=True, release_id=release_id, intent_id=intent_id,
-                                    evidence=evidence)
-            # Reconstruct canonical executable assets once more and compare every
-            # retained byte/inode. No final live-state equality is implied here.
-            if reader.handoff(proof) != chain or boundary._binding() != binding:
+        boundary = BrowserResumeBoundary(s._profile, archives=s._archives)
+        binding = boundary._binding()
+        reader = _Reader(handoff, owner)
+        proof, after = reader.native(boundary)
+        chain = reader.handoff(proof)
+        release = reader.journal(intent=False, release_id=release_id, intent_id=intent_id,
+                                 evidence=chain)
+        config = load_browser_native_configuration(s._profile)
+        release_fingerprint = _digest((_digest(release) + "\0" + str(config.root)).encode())
+        evidence = {"identity": config.identity, "origin": config.origin,
+            "device_id": config.device_id, "revision": proof.revision,
+            "release_fingerprint": release_fingerprint, "targets": dict(handoff._targets),
+            "operation_id": handoff._operation}
+        intent = reader.journal(intent=True, release_id=release_id, intent_id=intent_id,
+                                evidence=evidence)
+        # Reconstruct canonical executable assets once more and compare every
+        # retained byte/inode. No final live-state equality is implied here.
+        if reader.handoff(proof) != chain or boundary._binding() != binding:
+            raise ValueError()
+        for is_intent, expected, snapshot in (
+                (False, release, chain), (True, intent, evidence)):
+            if reader.journal(intent=is_intent, release_id=release_id, intent_id=intent_id,
+                              evidence=snapshot) != expected:
                 raise ValueError()
-            for is_intent, expected, snapshot in (
-                    (False, release, chain), (True, intent, evidence)):
-                if reader.journal(intent=is_intent, release_id=release_id, intent_id=intent_id,
-                                  evidence=snapshot) != expected:
-                    raise ValueError()
-            reader.recheck()
-            digest = _fingerprint({"release": _digest(release), "intent": _digest(intent),
-                "native_after": _digest(after), "private_inputs": binding,
-                "files": {str(p): {"sha256": _digest(raw), "inode": reader.inodes[p]}
-                          for p, (raw, _) in reader.files.items()}})
-            return BrowserContinuationHistory(config.identity, config.origin, config.device_id,
-                release_id, intent_id, digest, after, proof.revision)
+        reader.recheck()
+        if boundary._binding() != binding:
+            raise ValueError()
+        owner.binding(handoff)
+        digest = _fingerprint({"release": _digest(release), "intent": _digest(intent),
+            "native_after": _digest(after), "private_inputs": binding,
+            "files": {str(p): {"sha256": _digest(raw), "inode": reader.inodes[p]}
+                      for p, (raw, _) in reader.files.items()}})
+        return BrowserContinuationHistory(config.identity, config.origin, config.device_id,
+            release_id, intent_id, digest, after, proof.revision)
     except Exception:
         raise BrowserContinuationHistoryError() from None

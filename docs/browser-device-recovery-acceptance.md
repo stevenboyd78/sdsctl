@@ -426,6 +426,32 @@ support, activation or permission follows from a successful history inspection.
 These are local/isolated-process checks, not a real-device acceptance or physical
 power-loss test. Retained real profiles and both bench Pis remain untouched.
 
+## Scoped history ownership candidate
+
+The canonical historical reader now accepts an internal, short-lived ownership
+scope. Separate entrypoints preserve stopped-administrator checks and validate a
+selected live native child. Neither introduces a browser-selectable ownership
+flag, a normal-worker role or current permission.
+
+Portable tests use real private directories and advisory locks with explicitly
+simulated Chromium ancestry. They cover competing launchers/private writers,
+Singleton markers, changed directory/lock inodes and permissions, wrong native
+selection/configuration, missing ancestry, lost locks, process/parent changes,
+scope expiry, failure latching and sanitized errors. A separate case exercises
+actual process discovery and rejects the unselected test process.
+
+Retained-chain tests reconstruct both legacy archive kinds inside an already-held
+stopped scope and under the simulated later live owner. The fingerprint must agree
+with the public stopped reader, including after a fixture-only later native pause.
+Expired scopes and final-readback changes must fail. The public reader and normal
+worker still refuse the already-recorded continuation intent; no reader contacts
+the server or writes the retained state.
+
+These are automated qualification cases, not physical-Pi, real-browser or
+power-loss acceptance. Current-permission selection, successor schema/activation
+and online continuation remain unimplemented. No real profile is eligible for
+reuse from the success of these historical checks alone.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

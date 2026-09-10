@@ -140,7 +140,7 @@ anchor the archive transition: the trusted writers confirmed its committed nativ
 after-state before committing those records. A valid archive, a prepared journal,
 a copied journal inode or an unrelated completed record cannot substitute.
 
-The reader holds stopped managed-launcher ownership and shared private-profile
+The public reader holds stopped managed-launcher ownership and shared private-profile
 and archive ownership. It uses fixed filenames, checks current canonical runtime
 assets and private-input bindings, verifies the old supervisor has exited, and
 rechecks retained bytes and inodes. It does not read Chromium-owned storage,
@@ -169,6 +169,33 @@ current supported schema and state, and normal startup/requests still stop on th
 existing intent marker. Changed private inputs or runtime assets still invalidate
 the bound history. No successor schema support, migration, current-epoch selector,
 activation writer, browser action or administrator CLI is added here.
+
+### Scoped ownership for historical reads
+
+The canonical reconstruction now has two separate internal ownership boundaries.
+The public `inspect_continuation_history` contract is unchanged: it must acquire
+its own stopped launcher lock and refuses any Chromium Singleton marker. It never
+adopts an already-busy lock. An internal caller that already holds a checked scope
+can reconstruct within that scope without reacquiring the exclusive launch lock.
+
+The other internal boundary requires a fixed native-worker selection, matching
+private configuration, the actual selected Chromium ancestor, and the same busy
+launcher-lock inode. Only this boundary permits a running browser's Singleton
+markers. Both boundaries pin the browser directory and lock inodes, share the
+private-profile/archive directory locks, and repeatedly recheck their bindings.
+They never inspect or repair Chromium-owned storage.
+
+An ownership scope is tied to one handoff and one process/parent, expires on exit,
+and stays invalid after an observed ownership failure. Returning the original
+files or process selection cannot revive it. These are cooperative local ownership
+checks, not protection against arbitrary same-account/root Python code.
+
+The live-owner reader is **not wired into normal startup, worker dispatch, browser
+messages or a CLI**. Its result is still historical evidence only. It cannot clear
+the intent blocker, prove the current native ledger is healthy, grant a role,
+authenticate, or turn a retained result into permission on a subsequent request.
+The old recovery supervisor must still have exited; that historical check is
+separate from verification of a later live Chromium owner.
 
 ## Remaining successor activation, not implemented
 
