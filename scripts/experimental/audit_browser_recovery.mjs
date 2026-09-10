@@ -236,7 +236,13 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     await until(async () => (await command("status")).state === "paused");
     await until(async () => !(await context.cookies(origin)).some(c => c.name === "__Host-sdsctl-device-session"));
     if(documentProbe!==null) {
+      // Native pause and cookie absence precede the final browser save. Wait for
+      // the actual completed flow before testing that the probe changes nothing.
+      await until(async () => (await page.getByRole("status").allTextContents()).includes(
+        "Signed out. Server shutdown confirmed; automatic sign-in remains paused."));
       const w=await worker(),storedBefore=await w.evaluate(()=>chrome.storage.local.get(null));
+      assert.deepEqual(storedBefore,{sdsctlDeviceRecovery:{version:1,identity:config.identity,
+        paused:true,phase:"clean",nextAt:0}});
       const ledgerBefore=await readFile(path.join(root,"recovery.sqlite"));
       const exchangesBefore=(await command("status")).exchanges;
       assert.equal(await sessionStatus(),401);

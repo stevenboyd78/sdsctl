@@ -47,6 +47,33 @@ test("lost POST result retains pause but never claims server drain", async () =>
   assert.equal(f.cookie, null); assert.equal(f.state.paused, true);
 });
 
+test("native pause and absent cookie can precede the final clean browser save", async () => {
+  const f=fixture(),c=f.make(),entered=deferred(),release=deferred();
+  await c.beginLogout();
+  // The successful same-origin server response expires its authentication
+  // cookie before the worker processes logout-finish and saves clean pause.
+  f.cookie=null;
+  f.ports.save=async value=>{
+    if(value.phase==="clean"){entered.resolve();await release.promise;}
+    f.state=structuredClone(value);
+  };
+  let completed=false;
+  const finished=c.finishLogout("drained").then(value=>{completed=true;return value;});
+  try {
+    await entered.promise;
+    assert.equal(f.nativeMode,"paused");
+    assert.equal(f.cookie,null);
+    assert.equal(f.state.paused,true);
+    assert.equal(f.state.phase,"logout_pending");
+    assert.equal(completed,false);
+  } finally {release.resolve();}
+  const result=await finished;
+  assert.equal(result.serverRevocation,"drained");
+  assert.equal(result.cookieCleared,true);
+  assert.equal(completed,true);
+  assert.deepEqual(f.state,{version:1,identity:config.identity,paused:true,phase:"clean",nextAt:0});
+});
+
 test("worker restart during pending logout preserves bounded cookie hold", async () => {
   const f = fixture(); await f.make().beginLogout();
   f.time += 30000; await f.make().tick(); assert.equal(f.cookie, token);

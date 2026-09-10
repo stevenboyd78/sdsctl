@@ -814,6 +814,9 @@ It also selects a probe before the ordinary fixture sign-out and requires its
 specific refusal afterwards, a 401 protected route, no cookie/session issuance,
 and unchanged paused native/browser state. An unrelated JavaScript error does
 not satisfy the negative checks; subsequent browser restart stays paused.
+The sign-out comparison waits for the completed content-script acknowledgement
+and exact clean paused browser storage; native pause and cookie absence alone
+can precede that final save. The probe must not change the completed state.
 It is not the new continuation controller, installed-wheel or physical-Pi
 acceptance. Its loopback IP/DNS/IPv6 cases require normal sandboxing and verified
 TLS; unavailable sandbox support is a failed prerequisite, not a skip or a
