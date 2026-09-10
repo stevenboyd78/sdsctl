@@ -7,10 +7,12 @@ ordinary CLI must remain blocked, and no online review or sign-in is attempted.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import signal
 import subprocess
 import time
+from pathlib import Path
 
 from sds200.browser_device_continuation_activation import BrowserPausedActivation
 from sds200.browser_device_continuation_current import inspect_stopped_continuation
@@ -18,6 +20,7 @@ from sds200.browser_device_continuation_history import inspect_continuation_hist
 from sds200.browser_device_continuation_intent import BrowserContinuationIntent
 from sds200.browser_device_recovery import RecoveryMode
 from sds200.browser_device_startup import BrowserStartupError, _launch_lock, check_browser_startup
+from sds200.browser_device_worker import worker_graph
 
 
 def fingerprint(roots):
@@ -57,9 +60,33 @@ def qualify(handoff, released, startup_args, command, stage, x, wait, put, emit,
         # fictional launcher holds the actual existing launch-lock inode here.
         # No role/path is supplied in a browser message or native stdin envelope.
         with _launch_lock(root, create=False):
-            process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+            playwright = os.environ.get("SDSCTL_READER_PLAYWRIGHT")
+            active_port = root / "DevToolsActivePort"
+            prior = active_port.stat().st_mtime_ns if active_port.exists() else None
+            launch = ((command[0], "--remote-debugging-port=0", *command[1:])
+                      if playwright else command)
+            process = subprocess.Popen(launch, stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
             try:
+                if playwright:
+                    # Optional diagnostic run, NOT an uninstrumented UI pass.
+                    assert Path(playwright).is_absolute()
+
+                    def new_port(child=process, original=prior, marker=active_port):
+                        assert child.poll() is None
+                        return marker.exists() and marker.stat().st_mtime_ns != original
+
+                    wait(new_port, 15)
+                    port = active_port.read_text().splitlines()[0]
+                    extension_id = command[-1].split("/")[2]
+                    inspected = subprocess.run(["node", str(Path(__file__).with_name(
+                        "diagnose_browser_continuation_read.mjs")), playwright, port,
+                        extension_id, worker_graph()[0]], capture_output=True, text=True,
+                        timeout=35, check=True)
+                    report = json.loads(inspected.stdout)
+                    put(stage / (label + "-diagnostic.json"), json.dumps(report))
+                    emit("actual-reader-context-diagnostic", **report)
+
                 def window(child=process):
                     assert child.poll() is None, "Fictional reader exited"
                     no_connections()
@@ -81,6 +108,13 @@ def qualify(handoff, released, startup_args, command, stage, x, wait, put, emit,
                 time.sleep(6)  # Observe a second ordinary five-second UI read.
                 assert paused()
                 assert fingerprint(roots) == frozen
+            except BaseException:
+                # Capture while the private browser still exists. The outer
+                # ledger reporter cannot recover this display after shutdown.
+                emit("reader-failed-private-display-titles",
+                     titles=[title for _, title in x.windows()])
+                x.screenshot(stage / (label + "-failed.png"))
+                raise
             finally:
                 # Only the test's newly created process group, never a service
                 # or unrelated browser. Forced cleanup is a failure, not a pass.
@@ -99,5 +133,6 @@ def qualify(handoff, released, startup_args, command, stage, x, wait, put, emit,
         assert fingerprint(roots) == frozen
         no_connections()
         emit(label, actual_native_reader=True, paused=True, authentication_connections=0,
-             manual_reload=False, product_continuation_launcher=False)
+             manual_reload=False, product_continuation_launcher=False,
+             cdp_diagnostic=bool(playwright))
     return frozen

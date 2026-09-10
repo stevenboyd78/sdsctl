@@ -632,6 +632,8 @@ def main():
             "explicit_fixture_continuation_activation": continuing,
             "activated_inputs_unchanged_by_reader": continuing,
             "actual_continuation_reader_starts": 2 if continuing else 0,
+            "continuation_cdp_diagnostic": bool(os.environ.get("SDSCTL_READER_PLAYWRIGHT"))
+                if continuing else False,
             "acknowledgement_present": (handoff / "browser-acknowledgement.json").exists(),
             "persisted_paused_readback_checked": scenario == "confirm" or releasing,
             "ordinary_paused_starts_after_release": 2 if releasing else 0,
@@ -645,10 +647,21 @@ def main():
             no_endpoint_connection = True
         except AssertionError:
             no_endpoint_connection = False
+        try:
+            if phase == "actual-continuation-reader":
+                from sds200.browser_device_continuation_current import inspect_stopped_continuation
+
+                observed = inspect_stopped_continuation(directory, bundle=normal, profile=native,
+                                                        public_key=stage / "public.pem")
+            else:
+                observed = ledger.inspect()
+            native_mode = str(observed.mode)
+        except Exception:
+            native_mode = "unconfirmed"  # Diagnostic failure must not mask original failure.
         failure = {"result": "FAIL", "scenario": scenario, "browser": browser_version,
                    "phase": phase, "no_endpoint_connection": no_endpoint_connection,
                    "guard_retained": (directory / MAINTENANCE_MARKER).exists(),
-                   "native_mode": str(ledger.inspect().mode)}
+                   "native_mode": native_mode}
         put(stage / "qualification-failure.json", json.dumps(failure))
         emit("FAIL", **failure)
         x.screenshot(stage / "failed.png")

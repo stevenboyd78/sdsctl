@@ -116,6 +116,15 @@ unchanged reader inputs. Final browser-API readback still requires the exact
 recovery-produced clean pause, no cookie and no recovery alarm. Failed fixtures
 are retained and never replayed; forced test-process cleanup is not a pass.
 
+For a separate **diagnostic** run, an administrator may set
+`SDSCTL_READER_PLAYWRIGHT=/absolute/existing/playwright/index.mjs` and provide
+Node plus the adjacent `diagnose_browser_continuation_read.mjs`. Only the later
+test-launched reader gets a temporary loopback CDP endpoint. A read-only observer
+records the actual fixed native context's mode/role and current page URLs, never
+credentials or browser state. The diagnostic flags are identified in the result;
+this does not replace an uninstrumented start/restart UI pass. It does not supply
+a role, simulate ancestry, navigate pages, initialize state or attempt login.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,
