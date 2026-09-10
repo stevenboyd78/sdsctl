@@ -22,7 +22,7 @@ from .browser_device_handoff import BrowserRecoveryHandoff, _lock_file
 from .browser_device_native import _private_read, load_browser_native_configuration
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_recovery import RecoveryMode, _object
-from .browser_device_registration import MAINTENANCE_MARKER, _receipt, _validated_bundle
+from .browser_device_registration import MAINTENANCE_MARKER, _canonical_bundle_files, _receipt
 from .browser_device_resume import _hex, _timestamp
 from .browser_device_resume_archive import (
     BrowserResumeArchiveBinding,
@@ -33,6 +33,7 @@ from .browser_device_resume_archive import (
 from .browser_device_resume_boundary import BrowserResumeBoundary
 from .browser_device_retirement_bundle import _canonical, _validate
 from .browser_device_startup import _launch_lock
+from .browser_device_store import BrowserDeviceStore
 
 
 class BrowserContinuationHistoryError(RuntimeError):
@@ -149,7 +150,7 @@ class _Reader:
 
     def handoff(self, proof: BrowserResumeArchiveBinding) -> dict[str, object]:
         h, s = self.h, self.h._session
-        registration, original = _validated_bundle(**s._registration, fresh=False)
+        registration, original, _ = _canonical_bundle_files(**s._registration)
         receipt = _receipt(registration, s._registration["bundle"], s._profile)
         self.remember(s._root / ".sdsctl-browser-registration.json", receipt)
         key, artifacts, recovery_receipt = _canonical(h._recovery, s, operation_id=h._operation,
@@ -204,6 +205,13 @@ class _Reader:
             "restoration_started": h._root / "restoration-started.json",
             "restored": h._root / "restored.json", "supervisor": h._root / "supervisor.json",
             "native_ledger": s._profile / "recovery.sqlite"}
+        # Preserve the private, fixed ledger inode and stopped-file boundary,
+        # without parsing its current schema/state or treating history as health.
+        ledger = paths["native_ledger"]
+        BrowserDeviceStore(ledger)._check()
+        if any(release_journal._present(Path(str(ledger) + suffix))
+               for suffix in ("-journal", "-wal", "-shm")):
+            raise ValueError()
         return {"targets": h._targets, "operation_id": h._operation, "browser_intent": h._intent,
             "identity": proof.identity, "revision": proof.revision, "mode": str(proof.mode),
             "handoff_sha256": _digest(raw), "ack_sha256": _digest(ack),

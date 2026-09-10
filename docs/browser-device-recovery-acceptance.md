@@ -400,6 +400,32 @@ Current permission selection, successor schema/activation and online continuatio
 remain unimplemented. No real profile, credential, Home Assistant or Pi change
 was made. This internal reader is not an administrator runbook; PR #250 stays draft.
 
+## Historical file/current-state separation
+
+The next local candidate separates canonical private-input/bundle reconstruction
+from native-state inspection. The file reader validates fixed configuration and
+credential syntax, actual CA certificates, extension key identity, private file
+ownership/modes, exact paths, the canonical receipt and every installed-runtime
+asset. It never opens SQLite. Normal bundle/profile/registration APIs retain
+their current-ledger inspection and new-registration freshness requirement.
+
+Portable regression cases exercise this separation, unsafe/malformed inputs,
+changed paths and identities, and disagreement between live inspection and the
+file snapshot. Existing arbitrary-asset, forged-receipt, extra-file and runtime
+substitution cases also run against the extracted reader. Neither missing nor
+corrupt/unsupported current state becomes usable merely because bundle bytes
+still validate.
+
+The supervised historical-chain fixture separately tests both legacy archive
+kinds with an unsupported or corrupt same-inode native ledger. It asserts that
+historical inspection never opens that ledger, while current confirmation and
+startup still refuse it. Missing/replaced/unsafe ledger files and sidecars remain
+errors, as does a syntactically valid replacement credential. No current-schema
+support, activation or permission follows from a successful history inspection.
+
+These are local/isolated-process checks, not a real-device acceptance or physical
+power-loss test. Retained real profiles and both bench Pis remain untouched.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

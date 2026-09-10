@@ -16,6 +16,7 @@ from sds200 import browser_device_guard_release as release
 from sds200.browser_device_bundle import NATIVE_HOST, _json
 from sds200.browser_device_handoff import BrowserHandoffError
 from sds200.browser_device_launch import run_browser_recovery
+from sds200.browser_device_profile import BrowserProfileError, inspect_browser_profile
 from sds200.browser_device_profile_access import browser_profile_access
 from sds200.browser_device_recovery import RecoveryMode
 from sds200.browser_device_registration import MAINTENANCE_MARKER
@@ -100,9 +101,70 @@ def test_history_survives_later_pause_but_current_confirmation_does_not(
     assert state(lab, h) == before
 
 
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_history_never_parses_current_ledger_or_establishes_current_health(
+        lab, chain, monkeypatch):
+    h, r, i = chain
+    original = inspect(chain)
+    path = lab.args["profile"] / "recovery.sqlite"
+    inode = path.stat().st_ino
+    connect = sqlite3.connect
+
+    def journal_only(database, *args, **kwargs):
+        assert "recovery.sqlite" not in str(database), "Historical reader opened current ledger"
+        return connect(database, *args, **kwargs)
+
+    # Same-inode fixture corruption/unsupported schema is NOT a successor schema
+    # implementation. Historical success says nothing about native ledger health.
+    with closing(connect(path)) as db:
+        db.execute("PRAGMA user_version=999")
+    for corrupt in (False, True):
+        if corrupt:
+            path.write_bytes(b"retained unusable native state")
+        assert path.stat().st_ino == inode
+        before = state(lab, h)
+        with monkeypatch.context() as patch:
+            patch.setattr(sqlite3, "connect", journal_only)
+            assert inspect(chain) == original
+        with pytest.raises(BrowserProfileError):
+            inspect_browser_profile(lab.args["profile"])
+        with pytest.raises(BrowserHandoffError):
+            h.confirm(restored=True)
+        with pytest.raises(release.BrowserGuardReleaseError):
+            release.BrowserPausedGuardRelease(h).confirm(release_id=r.release_id)
+        with pytest.raises(intent.BrowserContinuationIntentError):
+            intent.BrowserContinuationIntent(h, release_id=r.release_id).confirm(
+                intent_id=i.intent_id)
+        blocked(lab)
+        assert state(lab, h) == before
+
+
+@pytest.mark.parametrize("damage", ["mode", "hardlink", "missing", "symlink",
+                                    "-wal", "-shm", "-journal"])
+def test_history_keeps_private_ledger_inode_and_stopped_file_checks(lab, chain, damage):
+    path = lab.args["profile"] / "recovery.sqlite"
+    if damage == "mode":
+        path.chmod(0o644)
+    elif damage == "hardlink":
+        os.link(path, path.with_name("extra-ledger-link"))
+    elif damage in {"missing", "symlink"}:
+        retained = path.with_name("retained-ledger")
+        path.rename(retained)
+        if damage == "symlink":
+            path.symlink_to(retained)
+    else:
+        path.with_name(path.name + damage).symlink_to("fictional-sidecar")
+    before = state(lab, chain[0])
+    with pytest.raises(history.BrowserContinuationHistoryError):
+        inspect(chain)
+    assert state(lab, chain[0]) == before
+    blocked(lab)
+
+
 @pytest.mark.parametrize("target", ["review", "archive", "guard", "operation", "ack", "restored",
     "restoration-started", "ready", "launch", "supervisor", "original-host", "registered-host",
-    "bundle", "recovery-bundle", "credential", "release-inode", "intent-inode", "ledger-inode"])
+    "bundle", "recovery-bundle", "credential", "credential-valid", "release-inode", "intent-inode",
+    "ledger-inode"])
 def test_changed_or_replaced_retained_evidence_is_not_history(lab, chain, target):
     h, _, _ = chain
     s = h._session
@@ -118,12 +180,17 @@ def test_changed_or_replaced_retained_evidence_is_not_history(lab, chain, target
         "bundle": s._registration["bundle"] / "extension" / "worker.mjs",
         "recovery-bundle": h._recovery / "extension" / "worker.mjs",
         "credential": s._profile / "device.secret",
+        "credential-valid": s._profile / "device.secret",
         "release-inode": s._root / release.RELEASE_JOURNAL,
         "intent-inode": s._root / intent.INTENT_JOURNAL,
         "ledger-inode": s._profile / "recovery.sqlite"}
     path = paths[target]
     raw = path.read_bytes()
-    if target.endswith("-inode"):
+    if target == "credential-valid":
+        path.write_bytes(b"sdsctl-browser-v1." + b"e" * 64)
+        # Correct syntax is insufficient: old history binds the original secret.
+        history._canonical_bundle_files(**s._registration)
+    elif target.endswith("-inode"):
         path.rename(path.with_name(path.name + ".retained"))
         private(path, raw)
     else:

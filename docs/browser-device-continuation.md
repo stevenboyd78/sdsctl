@@ -154,11 +154,21 @@ pause can leave this history valid while all existing current-state confirmation
 refuse.** The historical revision and paused mode describe the old transition;
 they do not describe current state or imply current authority.
 
-The current native profile must still pass the existing read-only schema and
-private-file checks. This is not support for an unimplemented successor schema,
-an old-runtime migration, or changed credentials. Every ordinary launch and
-native request still stops on the existing intent marker. No current-epoch
-selector, activation writer, browser action or administrator CLI is added here.
+Canonical bundle reconstruction validates the fixed private configuration,
+credential syntax, CA certificates, extension public key and exact installed
+runtime bytes **without opening the current native ledger**. This breaks the
+dependency on current-schema inspection; it does not provide a way around it.
+The historical reader separately preserves the bound private ledger inode and
+refuses missing/unsafe files or SQLite sidecars. It still validates the complete
+release and intent journals read-only.
+
+An unsupported or damaged same-inode native ledger can coexist with valid retained
+history. Historical success is deliberately **not a health check or permission to
+use that ledger**. Normal profile/bundle/registration checks still validate its
+current supported schema and state, and normal startup/requests still stop on the
+existing intent marker. Changed private inputs or runtime assets still invalidate
+the bound history. No successor schema support, migration, current-epoch selector,
+activation writer, browser action or administrator CLI is added here.
 
 ## Remaining successor activation, not implemented
 
