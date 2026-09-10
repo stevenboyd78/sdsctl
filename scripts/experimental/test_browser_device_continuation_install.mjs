@@ -203,6 +203,19 @@ test('resolved storage set with wrong readback is insufficient for either persis
   }
 });
 
+for(const kind of ['cookie','alarm','saved','native'])
+  test('changed '+kind+' during issuance is retained, not overwritten by cookie installation',async()=>{
+    const f=fixture();f.after=name=>{if(name!=='issue')return;
+      if(kind==='cookie')f.cookie={value:'foreign-cookie'};
+      if(kind==='alarm')f.alarm={name:'sdsctl-device-recovery'};
+      if(kind==='saved')f.saved[KEY].intent='9'.repeat(64);
+      if(kind==='native')f.native.binding.fingerprint='9'.repeat(64);
+    };
+    await assert.rejects(f.owner.run(),failure);assert.equal(f.issues,1);
+    assert(!f.calls.includes('cookie-set'));assert.equal(f.saved[KEY].phase,'initial_pending');
+    if(kind==='cookie')assert.deepEqual(f.cookie,{value:'foreign-cookie'});
+  });
+
 test('external invalidation before run does no browser I/O',async()=>{
   const f=fixture();f.owner.invalidate();await assert.rejects(f.owner.run(),failure);
   assert.deepEqual(f.calls,[]);
