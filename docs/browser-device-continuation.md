@@ -1,8 +1,8 @@
 # Post-recovery continuation: design boundary
 
 Status: **development design, read-only preflight/history, internal intent journal,
-fixture-only owned paused activation, current-epoch transactions, owned current-state reads
-and controlled native cancellation;
+fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
+controlled native cancellation and owned prepare/claim fixtures;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -395,8 +395,9 @@ history/browser ancestry. Required namespace fixtures also select complete
 supervised retirement/reconciliation chains, read later epoch states, exercise
 the live-owner boundary with simulated later ancestry, and inject retained-input
 changes after selection. These are not headed-browser, physical-Pi, online
-authorization or power-loss acceptance. Approval-producing mutations, pre-/post-network
-authority checks and runtime-role integration are still separate work.
+authorization or power-loss acceptance. The separate owned prepare/claim boundary
+below does not add permission to this reader. Online checks and runtime-role
+integration remain separate work.
 
 ## Owned native cancellation (fixture-only)
 
@@ -446,8 +447,70 @@ invalidation. If the object/expected state is lost, preserve the uncertainty for
 review instead of replaying the write. There is no second completion journal,
 automatic repair, pruning, browser-storage change, server exchange or credential
 replacement. Native cancellation does **not** revoke browser/server sessions or
-prove that sign-out completed. Owned approval and online/session adapters remain
-separate prerequisites before any real continuation path is enabled.
+prove that sign-out completed. The owned approval fixtures below and the still
+unimplemented online/session adapters are separate from native cancellation.
+
+## Owned prepare and claim (fixture-only, one process)
+
+`browser_device_continuation_approval` supplies a separate **live-worker-only**
+adapter for preparing and consuming one native approval. It has no stopped
+administrator entrypoint, dispatcher action, CLI, external transport or active
+grant completion. Normal startup and native requests still refuse schema 3.
+Do not run this adapter against a retained real profile.
+
+Preparation reconstructs fixed installed paths, actual live ownership, complete
+history and current SQL. Its expected snapshot is only an exact comparison value.
+The adapter reads and validates the actual fixed configuration, credential and
+CA files, pins their bytes/inodes and derives their digests itself. Browser-supplied
+hashes or a constructed proof record cannot stand in for those private inputs.
+
+The trusted in-process callback receives a fresh immutable context containing
+the exact current state, intent and reviewed generation. Only that same context
+object may be acknowledged; a boolean, copied context or earlier receipt is
+refused. **This callback is a fixture boundary, not an implementation of browser
+gesture verification or fresh TLS server proof.** The eventual trusted bridge must
+establish those facts. Generation is bound as reviewed input, not silently replaced
+by the newest generation. No SQLite transaction is held while the callback runs;
+the actual owner/private-input coordination remains held.
+
+After acknowledgement, the adapter reconstructs history/current SQL again inside
+its own `BEGIN IMMEDIATE`, rechecks the complete expected state and private files,
+enforces `next_at` and backward-clock refusal, and stages preparation. It generates
+fresh private random material and persists only its digest in the existing epoch
+approval row. Neither the random material nor a reusable ticket is returned.
+Legacy rows stay unchanged; the existing 128-row bound is not pruned or bypassed.
+
+A successful prepare return permits **one claim on that same process/object**.
+Claim reacquires actual ownership and validates the original file/directory/lock
+bindings and exact prepared fingerprint in a new dedicated transaction. It changes
+the phase without advancing revision; revision equality alone is therefore not
+enough. A newer pause, changed input, copied inode, competing claim or different
+owner/process refuses the claim. Both prepared and claimed states remain stopped,
+without an active grant, server permission or browser session.
+
+The same-process lifetime uses finite, nondecreasing wall and monotonic clocks,
+starting conservatively before the review and expiring at 120 seconds. Each phase
+also enforces a ten-second elapsed window before commit and after exact readback.
+These checks do not implement an independent process-kill deadline. In particular,
+an object-local timer cannot span the old separate `sendNativeMessage` prepare
+and commit calls. This adapter **does not serialize/adopt an attempt across those
+processes**. Eventual request-role integration must preserve one native attempt
+and the independent worker deadline, with fresh trusted-page consent verified
+before it runs; it must not expose this prototype through the old message pair.
+
+Each phase stages and commits once, validates exact SQL and scoped inputs, and
+reads the result in a separate query-only transaction. Interruptions roll back the
+whole native write; failed rollback closes the connection. An uncertain reply,
+failed readback or expired phase disables further progression. Same-attempt
+`confirm` may describe the exact staged after-state, but never restores that gate,
+replays the write or starts external proof. A new process/object cannot adopt a
+pending row. Readback is not durable operation provenance or a permission lease.
+
+Fresh-page consent, exact-generation server verification/drainage, post-network
+claim comparison, failure terminalization and session issuance/installation remain
+required before a real continuation path can be enabled. The fixture adapter
+does not call `_stage_complete`, relax legacy schema acceptance, edit browser
+storage, exchange sessions, replace credentials or repair uncertain profiles.
 
 ## Remaining selected successor path, not implemented end to end
 
@@ -506,8 +569,9 @@ verification must not be bypassed for an IP-address installation.
 This section specifies the complete implementation boundary. The isolated native
 core and fixture-only owned adapter above implement the manifest and single-ledger
 paused anchor/view. The fixture-only epoch core adds current SQL and approval
-transactions. **Owned approval, online authentication/session adapters and
-request-role integration are not implemented**.
+transactions; the owned prepare/claim fixtures above add actual file/ownership
+checks but not verified browser consent. **Online authorization/session adapters
+and request-role integration are not implemented**.
 The read-only selector above supplies the file/ownership/current-SQL read
 boundary, not a mutation lease or browser-facing permission.
 It does not change the stop condition imposed by a complete intent. Implement

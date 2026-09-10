@@ -549,6 +549,35 @@ server-session revocation, browser sign-out, physical power-loss durability or
 headed-browser acceptance. Real retained profiles and both bench Pis remain
 untouched. Exact-commit qualification belongs to the draft PR checkpoint.
 
+## Owned prepare/claim candidate
+
+The new live-worker-only fixture adapter prepares and consumes one native approval
+without completing an active grant, contacting a server or enabling ordinary
+schema-3 requests. A fresh in-process review callback acknowledges its exact
+context; this is fictional trusted consent/generation input for qualification,
+not headed-browser gesture verification or verified online authority.
+
+Portable cases use real private files, ownership locks and native SQL with
+simulated retained history and later Chromium ancestry. They cover actual private
+digest reconstruction, redaction, unchanged stopped modes and legacy records,
+single-use phases, exact same-revision claim comparison, retry delays, wall and
+monotonic lifetime, stale/changed inputs and owners, competing writers, rollback
+failure, interruptions and uncertain commit/readback outcomes. Confirmation never
+restores a failed phase gate or adopts a pending row into a new object/process.
+
+The complete-chain namespace cases additionally exercise both retained archive
+forms, prepare/claim followed by newer pause, copied release/intent records,
+post-DML historical-input/runtime changes and uncertain commits. Only the later
+browser ancestor and trusted consent/generation are simulated there; the retained
+chain and current filesystem/database boundaries are reconstructed in full.
+
+Neither test layer establishes cross-native-message lifetime, fresh server proof,
+session issuance/revocation, cookie installation, physical power-loss durability
+or live browser continuation. The same-process prototype is not wired into the
+old prepare/commit message pair. Home Assistant, both bench Pis, retained profiles
+and credentials remain unchanged. Exact-commit qualification is recorded in the
+draft PR, separately from these scope descriptions.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

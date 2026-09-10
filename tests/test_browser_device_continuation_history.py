@@ -842,3 +842,122 @@ def test_live_owned_cancellation_uses_complete_chain_without_ordinary_dispatch(
             (root / "SingletonLock").unlink()  # Fixture-only marker.
     assert current.inspect_stopped_continuation(root, **paths) == result.state
     blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_live_owned_approval_retains_complete_history_and_pause_wins(lab, chain, monkeypatch):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_approval as approval
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_current as current
+
+    h, r, i = chain
+    retained = inspect(chain)
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda r: r.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    before = state(lab, h)
+    before["profile"].pop("recovery.sqlite")
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            obj = approval._BrowserWorkerApproval(lab.configuration, selection)
+            # Consent/generation are fictional; files, SQL and the entire prior
+            # chain are actual. Later Chromium ancestry alone is simulated.
+            prepared = obj.prepare(expected, intent="e" * 64, reviewed_generation=7,
+                                   consent=lambda review: review)
+            claimed = obj.claim()
+            assert claimed.state.native_revision == prepared.state.native_revision
+            assert claimed.state.state_fingerprint != prepared.state.state_fingerprint
+            assert claimed.state.mode is RecoveryMode.PAUSED and obj.confirm() == claimed
+            paused = cancel._BrowserWorkerCancellation(lab.configuration, selection).pause(
+                claimed.state)
+            assert paused.state.native_revision == claimed.state.native_revision + 1
+            with pytest.raises(approval.BrowserContinuationApprovalError):
+                obj.confirm()
+            with pytest.raises(approval.BrowserContinuationApprovalError):
+                obj.claim()
+        finally:
+            (root / "SingletonLock").unlink()  # Fixture-only marker.
+    after = state(lab, h)
+    after["profile"].pop("recovery.sqlite")
+    assert after == before and inspect(chain) == retained
+    blocked(lab)
+
+
+@pytest.mark.parametrize("failure", ["prepare-before", "prepare-after", "claim-before",
+    "claim-after", "prepare-archive", "claim-runtime", "copied-release", "copied-intent"])
+def test_owned_approval_complete_chain_uncertainty_never_permits_claim(
+        lab, chain, monkeypatch, failure):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_approval as approval
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_continuation_epoch as epoch
+
+    h, r, i = chain
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda r: r.confirmation)
+    root = h._session._root
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    expected = current.inspect_stopped_continuation(root, **paths)
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    selection = BrowserWorkerSelection(paths["bundle"], paths["public_key"])
+    obj = approval._BrowserWorkerApproval(lab.configuration, selection)
+
+    def prepare():
+        return obj.prepare(expected, intent="e" * 64, reviewed_generation=7,
+                           consent=lambda review: review)
+
+    if failure.startswith("copied"):
+        path = root / (release.RELEASE_JOURNAL if failure == "copied-release" else
+                       intent.INTENT_JOURNAL)
+        raw = path.read_bytes()
+        path.rename(path.with_name(path.name + ".retained"))
+        private(path, raw)
+    with _launch_lock(root, create=False):
+        if failure.startswith("claim"):
+            prepare()
+        before = lab.ledger.path.read_bytes()
+
+        def uncertain(db):
+            if failure.endswith("after"):
+                db.commit()
+            raise sqlite3.OperationalError("PRIVATE uncertain commit")
+
+        name = "_stage_claim" if failure.startswith("claim") else "_stage_prepare"
+        stage = getattr(epoch, name)
+
+        def changed(*args, **kwargs):
+            result = stage(*args, **kwargs)
+            if failure == "prepare-archive":
+                path = h._session._archives / h._operation / "native-history.json"
+                path.write_bytes(path.read_bytes() + b" ")
+            elif failure == "claim-runtime":
+                def invalid(**kwargs):
+                    raise RuntimeError("PRIVATE changed runtime")
+
+                monkeypatch.setattr(history, "_canonical_bundle_files", invalid)
+            return result
+
+        with monkeypatch.context() as patch:
+            if failure.endswith(("before", "after")):
+                patch.setattr(approval, "_commit", uncertain)
+            else:
+                patch.setattr(epoch, name, changed)
+            with pytest.raises(approval.BrowserContinuationApprovalError):
+                obj.claim() if failure.startswith("claim") else prepare()
+        if failure.endswith("after"):
+            assert obj.confirm().phase == ("claimed" if failure.startswith("claim") else "prepared")
+        else:
+            assert lab.ledger.path.read_bytes() == before
+        stable = state(lab, h)
+        with pytest.raises(approval.BrowserContinuationApprovalError):
+            obj.claim()
+        assert state(lab, h) == stable
+    blocked(lab)
