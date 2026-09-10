@@ -486,6 +486,38 @@ bindings around a dedicated transaction. Epoch-bound approvals and their
 cancellation on pause/sign-out/clock correction must be complete before ordinary
 helpers can accept the new schema. No user testing is requested for this core.
 
+## Owned current-state selector candidate
+
+The internal current reader now selects the fixed release/intent/activation
+records from installed paths, reconstructs their complete historical chain under
+ownership, and reads the anchored current epoch in one query-only native
+transaction. Stopped and live-worker ownership are distinct; neither accepts a
+caller-supplied history object or a cached result as permission. The live boundary
+derives the profile directory from the selected browser ancestor and rechecks its
+fixed native wrapper and busy launcher lock.
+
+Portable fixtures exercise actual private files, SQL and locks with simulated
+history/ancestry. They cover exact read-only state, later valid epochs, prepared
+or noncanonical journals, unsupported SQL shape, unsafe files and sidecars,
+replaced inodes, changed private inputs/runtime, competing writers, lost ownership,
+process/parent changes, interruption, final-readback checks and latched failures.
+The returned current snapshot is a distinct frozen/redacted type, not a grant,
+browser session, consent object or historical activation confirmation.
+
+The full-chain namespace fixtures additionally select both supervised archive
+forms after paused activation and later native prepare/claim/complete/pause
+stages. Current state changes while retained historical evidence stays valid;
+ordinary startup and requests remain blocked even for a valid active epoch.
+The live-owner cases simulate only the later browser ancestor, not the complete
+historical chain. Late archive/journal/credential/runtime changes invalidate an
+open read scope without repair, adoption or network access.
+
+Exact-candidate test counts, package hashes and hosted CI results are recorded
+with the draft PR checkpoint, not inferred from earlier commits. No real profile,
+credential, Home Assistant service or bench Pi was changed. Owned mutation,
+online authority/session exchange, browser-role integration and physical
+acceptance remain unqualified; no user test is requested for this internal reader.
+
 ## Successor activation design checkpoint
 
 The [proposed activation contract](browser-device-continuation.md#proposed-activation-contract-history-is-not-current-permission)

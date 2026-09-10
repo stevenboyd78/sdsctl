@@ -1,7 +1,7 @@
 # Post-recovery continuation: design boundary
 
 Status: **development design, read-only preflight/history, internal intent journal,
-fixture-only owned paused activation and current-epoch transactions;
+fixture-only owned paused activation, current-epoch transactions and owned current-state reads;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -354,6 +354,49 @@ retirement/reconciliation chains under stopped ownership, with fresh input and
 manifest checks. Those are not a current-permission adapter, browser consent,
 online server-proof test, sign-out/session-invalidation test or hardware acceptance.
 
+## Owned current-state selector (fixture-only, read-only)
+
+`browser_device_continuation_current` connects actual fixed files, scoped
+ownership, the complete retained chain and current native SQL. It does not take
+a caller's historical result, saved epoch, approval or manifest bytes as proof.
+The trusted installed paths select the fixed complete release and intent journals
+and the private activation manifest. Their canonical contents select the retained
+handoff/archive targets; full historical reconstruction must validate those
+selections before any current-state result is returned.
+
+Stopped inspection acquires its own managed-launcher lock. The separate internal
+worker entrypoint derives the directory from the actual selected Chromium
+ancestor and revalidates its fixed wrapper, private configuration and busy lock.
+It has no caller-selected directory, intent or normal-bundle override. Only that
+worker boundary permits the current browser's Singleton markers.
+
+Within one existing-ledger, query-only transaction, the scope pins actual file
+identities, checks canonical private bytes and runtime assets, reconstructs the
+retained chain, and validates the manifest/anchor and exact current epoch state.
+Every inspection checks ownership, inputs, selected records, ledger identity and
+all SQLite sidecars both before and after the native read. A reader never adopts
+an active native rollback journal. The same scope cannot observe a different
+snapshot; later state requires a new owned read. A failure latches, and process,
+parent or scope exit invalidates the reader. Normal exit also performs a final
+check, so a caught failure cannot make the scope succeed.
+
+The frozen, redacted `BrowserCurrentContinuation` describes **one verified read
+point**, including current mode/revision, epoch and state fingerprint. It is
+distinct from historical evidence and the exact initial paused-activation result.
+It is **not a cached permission lease**, trusted-page consent, server proof,
+session or browser role. It performs no clock correction, writes, repair,
+credential replacement or network request. The old strict confirmation methods
+still reject later native revisions, and ordinary schema-3 startup/requests remain
+blocked even if this isolated reader sees a valid active epoch.
+
+Portable tests use real files, locks and SQLite with explicitly simulated full
+history/browser ancestry. Required namespace fixtures also select complete
+supervised retirement/reconciliation chains, read later epoch states, exercise
+the live-owner boundary with simulated later ancestry, and inject retained-input
+changes after selection. These are not headed-browser, physical-Pi, online
+authorization or power-loss acceptance. Owned mutations, pre-/post-network
+authority checks and runtime-role integration are still separate work.
+
 ## Remaining selected successor path, not implemented end to end
 
 The next candidate must preserve the existing identity for same-device
@@ -411,8 +454,10 @@ verification must not be bypassed for an IP-address installation.
 This section specifies the complete implementation boundary. The isolated native
 core and fixture-only owned adapter above implement the manifest and single-ledger
 paused anchor/view. The fixture-only epoch core adds current SQL and approval
-transactions. **The owned current-permission selector, online approval and
-authentication adapters, and request role are not implemented**.
+transactions. **Owned mutation, online approval/authentication adapters and
+request-role integration are not implemented**.
+The read-only selector above supplies the file/ownership/current-SQL read
+boundary, not a mutation lease or browser-facing permission.
 It does not change the stop condition imposed by a complete intent. Implement
 and qualify the whole selected path before enabling any part on a real profile.
 

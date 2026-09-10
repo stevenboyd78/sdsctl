@@ -92,6 +92,7 @@ def test_owned_activation_workflow_with_complete_retained_chain(lab, chain):
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
 def test_epoch_core_preserves_complete_history_without_enabling_runtime(lab, chain):
     from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_current as current
     from sds200 import browser_device_continuation_epoch as epoch
 
     h, r, i = chain
@@ -103,10 +104,11 @@ def test_epoch_core_preserves_complete_history_without_enabling_runtime(lab, cha
                                    1, "c" * 64, "d" * 64)
     # Fictional consent/server facts only. This exercises native transactions
     # against a complete retained chain, NOT an owned online permission adapter.
-    with ownership._stopped_history_ownership(h) as owner:
-        path = h._session._root / activation.ACTIVATION_MANIFEST
-        raw, binding = path.read_bytes(), activation._binding(path)
-        for operation in ("prepare", "claim", "complete", "pause"):
+    path = h._session._root / activation.ACTIVATION_MANIFEST
+    raw, binding = path.read_bytes(), activation._binding(path)
+    selected_paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    for operation in ("prepare", "claim", "complete", "pause"):
+        with ownership._stopped_history_ownership(h) as owner:
             with activation._ledger_transaction(lab.args["profile"],
                                                   readonly=False) as (db, ledger):
                 selected, captured = history._capture_owned_history(h, owner,
@@ -129,7 +131,14 @@ def test_epoch_core_preserves_complete_history_without_enabling_runtime(lab, cha
                 db.commit()
             assert history._inspect_owned_history(h, owner,
                 release_id=r.release_id, intent_id=i.intent_id) == retained
-        assert result.mode is RecoveryMode.PAUSED
+        before_read = state(lab, h)
+        current_state = current.inspect_stopped_continuation(h._session._root, **selected_paths)
+        assert current_state.mode is result.mode and current_state.epoch == activated.epoch
+        assert current_state.native_revision == result.revision
+        assert current_state.state_fingerprint == result.fingerprint
+        assert state(lab, h) == before_read
+        blocked(lab)  # Even a verified active epoch is not a normal runtime role.
+    assert result.mode is RecoveryMode.PAUSED
     assert inspect(chain) == retained and path.read_bytes() == raw
     with pytest.raises(activation.BrowserPausedActivationError):
         core.confirm(epoch=activated.epoch)
@@ -629,4 +638,70 @@ def test_live_history_final_readback_refuses_changed_owner_or_inputs(
         history._inspect_worker_continuation_history(h, configuration=lab.configuration,
             selection=selected, release_id=r.release_id, intent_id=i.intent_id)
     assert state(lab, h) == retained[0]
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
+        lab, chain, monkeypatch):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_current as current
+    from sds200 import browser_device_native as native
+
+    h, r, i = chain
+    result = activation.BrowserPausedActivation(h,
+        release_id=r.release_id, intent_id=i.intent_id).apply(confirmation=lambda r: r.confirmation)
+    assert result is not None
+    root = h._session._root
+    selection = BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    # Full supervised historical chain above; the later browser ancestor alone
+    # is simulated. This is not headed-browser or physical-display acceptance.
+    monkeypatch.setattr(current, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(ownership, "_browser_directory", lambda *_: root)
+    monkeypatch.setattr(native, "_post_browser_device", lambda *a, **k: pytest.fail("Network I/O"))
+    expected = current.inspect_stopped_continuation(root, **paths)
+    before = state(lab, h)
+    with _launch_lock(root, create=False):
+        (root / "SingletonLock").symlink_to("fictional-later-browser")
+        try:
+            with current._worker_current_scope(lab.configuration, selection) as reader:
+                assert reader.inspect() == expected
+                assert expected.epoch == result.epoch and expected.mode is RecoveryMode.PAUSED
+                with pytest.raises(current.BrowserContinuationCurrentError):
+                    current.inspect_stopped_continuation(root, **paths)
+            with pytest.raises(current.BrowserContinuationCurrentError):
+                reader.inspect()
+        finally:
+            (root / "SingletonLock").unlink()  # Fixture-owned marker only.
+    assert state(lab, h) == before
+    blocked(lab)
+
+
+@pytest.mark.parametrize("change", ["archive", "release", "credential", "runtime"])
+def test_current_read_rechecks_real_retained_chain_and_latches(lab, chain, monkeypatch, change):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_current as current
+
+    h, r, i = chain
+    activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id).apply(
+        confirmation=lambda r: r.confirmation)
+    paths = {k: lab.args[k] for k in ("bundle", "profile", "public_key")}
+    with pytest.raises(current.BrowserContinuationCurrentError), current._stopped_current_scope(
+            h._session._root, **paths) as reader:
+        if change == "runtime":
+            def changed_runtime(**kwargs):
+                raise RuntimeError("PRIVATE changed runtime")
+
+            monkeypatch.setattr(history, "_canonical_bundle_files", changed_runtime)
+        else:
+            path = {"archive": h._session._archives / h._operation / "native-history.json",
+                    "release": h._session._root / release.RELEASE_JOURNAL,
+                    "credential": lab.args["profile"] / "device.secret"}[change]
+            path.write_bytes(path.read_bytes() + b" ")
+        before = state(lab, h)
+        with pytest.raises(current.BrowserContinuationCurrentError) as error:
+            reader.inspect()
+        assert "PRIVATE" not in str(error.value) and CREDENTIAL not in str(error.value)
+        assert state(lab, h) == before
     blocked(lab)

@@ -308,8 +308,9 @@ def _inspect_worker_continuation_history(
 class _HistoryInputs:
     """Scoped retained INPUT recheck, not a historical/current native-state reader.
 
-    Only a dedicated activation transaction may pair this with its own native
-    ledger validation. The full history reader never bypasses SQLite sidecars.
+    Dedicated continuation transactions pair this with same-connection native
+    ledger validation. A current read-only scope additionally refuses all native
+    sidecars. The full history reader never bypasses SQLite sidecars.
     """
 
     def __init__(self, reader: _Reader, boundary: BrowserResumeBoundary, binding: str,
