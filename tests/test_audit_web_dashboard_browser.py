@@ -12,6 +12,17 @@ _CAPTURE_SCRIPT = Path("scripts/capture_web_dashboard_screenshot.mjs")
 _NODE = shutil.which("node")
 
 
+def test_browser_startup_diagnostics_contract() -> None:
+    if _NODE is None:
+        pytest.skip("Node.js is unavailable")
+    completed = subprocess.run(
+        [_NODE, "--test", "scripts/test_browser_audit_startup.mjs"],
+        capture_output=True, text=True, timeout=15,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stderr == ""
+
+
 def _run_node(*arguments: str) -> subprocess.CompletedProcess[str]:
     if _NODE is None:
         pytest.skip("Node.js is unavailable")

@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 import traceback
 from contextlib import suppress
 from pathlib import Path
@@ -122,20 +123,30 @@ def staged(lab, tmp_path, monkeypatch):
     return root, bundle, proof, run, values
 
 
+def fixture_recovery(handoff, *, browser, bwrap):
+    """Diagnose fictional setup failures without retrying or changing runtime errors."""
+    started = time.monotonic()
+    try:
+        return launch.run_browser_recovery(handoff, browser=browser, bwrap=bwrap)
+    except launch.BrowserRecoveryLaunchError as error:
+        cause = error
+        seen = {id(cause)}
+        while cause.__context__ is not None and id(cause.__context__) not in seen:
+            cause = cause.__context__
+            seen.add(id(cause))
+        diagnostic = handoff._root / "fixture-error.txt"
+        detail = diagnostic.read_text()[-16000:] if diagnostic.exists() else "(no child diagnostic)"
+        # These are only synthetic test profiles. Production errors stay redacted;
+        # the existing fixture evidence is read, never reset or retried.
+        pytest.fail(f"Fictional recovery setup failed after {time.monotonic() - started:.3f}s\n"
+                    + "".join(traceback.format_exception(cause)) + "\n" + detail, pytrace=False)
+
+
 def test_real_namespace_handoff_and_exact_receipts_restore(lab, staged):
     root, bundle, proof, setup, _ = staged
     obj, browser, bwrap = setup()
     before = snap(lab)
-    try:
-        result = launch.run_browser_recovery(obj, browser=browser, bwrap=bwrap)
-    except launch.BrowserRecoveryLaunchError as error:
-        cause = error
-        while cause.__context__ is not None:
-            cause = cause.__context__
-        # Only fictional fixture diagnostics; production errors remain redacted.
-        diagnostic = root / "fixture-error.txt"
-        pytest.fail("".join(traceback.format_exception(cause)) + (
-            diagnostic.read_text() if diagnostic.exists() else ""))
+    result = fixture_recovery(obj, browser=browser, bwrap=bwrap)
     assert result.identity == proof.identity
     assert obj.confirm() == result
     scope = json.loads((root / "supervisor.json").read_text())

@@ -21,7 +21,6 @@ from sds200 import browser_device_continuation_ownership as ownership
 from sds200 import browser_device_guard_release as release
 from sds200.browser_device_bundle import NATIVE_HOST, _json
 from sds200.browser_device_handoff import BrowserHandoffError
-from sds200.browser_device_launch import run_browser_recovery
 from sds200.browser_device_profile import BrowserProfileError, inspect_browser_profile
 from sds200.browser_device_profile_access import browser_profile_access
 from sds200.browser_device_recovery import RecoveryMode
@@ -122,7 +121,7 @@ def chain(lab, tmp_path, monkeypatch, request):
     monkeypatch.setattr(launch_fixture, "committed", lambda lab: committed(lab, kind))
     _, _, _, setup, _ = launch_fixture.staged.__wrapped__(lab, tmp_path, monkeypatch)
     handoff, browser, bwrap = setup()
-    run_browser_recovery(handoff, browser=browser, bwrap=bwrap)
+    launch_fixture.fixture_recovery(handoff, browser=browser, bwrap=bwrap)
     handoff.restore()
     released = attempt(handoff)
     recorded = intent.BrowserContinuationIntent(handoff, release_id=released.release_id).apply(

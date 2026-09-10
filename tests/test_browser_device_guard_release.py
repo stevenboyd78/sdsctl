@@ -14,13 +14,13 @@ import pytest
 
 from sds200 import browser_device_guard_release as release
 from sds200.browser_device_handoff import BrowserHandoffError
-from sds200.browser_device_launch import run_browser_recovery
 from sds200.browser_device_profile_access import BrowserProfileAccessError, browser_profile_access
 from sds200.browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
 from sds200.browser_device_registration import MAINTENANCE_MARKER
 from sds200.browser_device_startup import BrowserStartupError, _launch_lock, check_browser_startup
 from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
+from tests.test_browser_device_launch import fixture_recovery
 from tests.test_browser_device_launch import staged as staged
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_profile import CREDENTIAL, private, snapshot
@@ -36,7 +36,7 @@ pytestmark = pytest.mark.skipif(sys.platform != "linux" or os.geteuid() == 0,
 def completed(lab, staged):
     _, _, _, setup, _ = staged
     handoff, browser, bwrap = setup()
-    run_browser_recovery(handoff, browser=browser, bwrap=bwrap)
+    fixture_recovery(handoff, browser=browser, bwrap=bwrap)
     handoff.restore()
     return handoff
 
@@ -265,7 +265,7 @@ def test_completed_evidence_change_blocks_ordinary_startup(lab, completed, targe
 def test_unrestored_handoff_not_eligible(lab, staged):
     _, _, _, setup, _ = staged
     handoff, browser, bwrap = setup()
-    run_browser_recovery(handoff, browser=browser, bwrap=bwrap)
+    fixture_recovery(handoff, browser=browser, bwrap=bwrap)
     with pytest.raises(release.BrowserGuardReleaseError):
         attempt(handoff, lambda _: pytest.fail("Must reject before consent"))
     with pytest.raises(BrowserHandoffError):
