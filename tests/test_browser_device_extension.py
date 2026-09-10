@@ -31,6 +31,7 @@ def test_browser_recovery_coordinator_contract() -> None:
          "scripts/experimental/test_browser_device_continuation_context.mjs",
          "scripts/experimental/test_browser_device_continuation_cookie.mjs",
          "scripts/experimental/test_browser_device_continuation_worker.mjs",
+         "scripts/experimental/test_browser_device_continuation_install.mjs",
          "scripts/experimental/test_browser_device_retirement.mjs",
          "scripts/experimental/test_browser_device_retirement_ui.mjs",
          "scripts/experimental/test_browser_device_retirement_startup.mjs",
@@ -57,6 +58,20 @@ def test_real_browser_logout_harness_help_is_non_mutating() -> None:
     assert "sandbox-enabled Chromium and verified TLS" in result.stdout
     assert "Driver never installs authentication cookies" in result.stdout
     assert "cookie-set-stop, cookie-remove-stop" in result.stdout
+
+
+def test_continuation_install_harness_describes_modeled_authority() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "scripts/experimental/audit_browser_continuation_install.mjs", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    assert "Actual sandboxed Chromium storage/cookies" in result.stdout
+    assert "modeled native and page observations" in result.stdout
+    assert "no real sign-in, network request or production profile" in result.stdout
 
 
 def test_generated_bundle_harness_help_is_non_mutating() -> None:

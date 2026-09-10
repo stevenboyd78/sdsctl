@@ -561,3 +561,27 @@ not claim instantaneous invalidation merely because the worker stopped.
 The six additional deterministic hook/parser tests verify fixed operation names,
 real-API result/rejection forwarding and exact process-argument token matching.
 They complement, rather than replace, the physical host's real-browser runs.
+
+## Continuation installation I/O qualification
+
+`audit_browser_continuation_install.mjs` exercises actual sandbox-enabled Chromium
+storage and cookie APIs with **modeled native and protected-page observations**.
+It does not sign in, contact a server, install a native host, or touch a user
+profile. The driver seeds a fictional clean pause in a fresh private profile;
+this is not browser consent or complete continuation acceptance.
+
+Run `node scripts/experimental/audit_browser_continuation_install.mjs --help`
+for the exact four absolute-path arguments. The scenarios are `healthy`,
+`pending-late`, `cookie-late`, and `accepted-late`. Each invocation creates a new
+case inside an already-existing private mode-0700 stage, preserves its observed
+result and checks actual browser restart. Failed profiles must be retained,
+not reset or replayed for a passing result. The installed Chrome sandbox remains
+enabled; unavailable sandbox support is a failed prerequisite, never permission
+to use `--no-sandbox`.
+
+The late-operation cases defer one actual Chrome write/cookie call, invalidate
+the owner, and then allow that same operation to finish. They require no
+follow-on issuance, no saved-state/cookie repair, and no repeat initial attempt
+after browser restart. The healthy case uses the unwrapped Chrome API object.
+All cases still use modeled native authority and page proof; do not report them
+as real-session or physical-Pi acceptance.

@@ -3,6 +3,7 @@
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
 controlled native cancellation, owned prepare/claim, verification and initial-session fixtures;
+one-shot browser installation I/O with modeled authority qualification;
 fixed read-only continuation context and explicit server-review routing;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
@@ -752,7 +753,9 @@ canonical build graph but is **not imported by the active worker, registered as
 a listener, or called by native dispatch**. It performs no storage, cookie,
 network, timer or service operation. Its supplied observations are fixture
 inputs, not proof of actual browser consent, file ownership, a cookie, or a page.
-The owning browser/native adapters still need implementation and qualification.
+The one-shot installation I/O adapter below now composes this core. Fixed-role
+consent/native/probe dispatch and complete browser/native qualification remain
+unfinished; the active worker does not import either installation component.
 
 ### Decision: separate browser acceptance from native approval
 
@@ -958,6 +961,64 @@ It is not the new continuation controller, installed-wheel or physical-Pi
 acceptance. Its loopback IP/DNS/IPv6 cases require normal sandboxing and verified
 TLS; unavailable sandbox support is a failed prerequisite, not a skip or a
 reason to disable the sandbox.
+
+## One-shot browser installation I/O (fixture-only)
+
+`browser_device_continuation_install.mjs` composes the acceptance core with
+actual Chrome storage and cookie calls. It is in the canonical graph but **not
+imported by the active worker or exposed through native dispatch**. It adds no
+UI action, administrator command, launch permission or background renewal.
+Construction is inert. Only a future fixed-role worker holding fresh
+document-bound consent may construct and run it; injected native/probe functions
+and a supplied review object are internal adapter inputs, not authority.
+
+One object owns at most one run. It checks exact clean paused storage, cookie
+and alarm absence, and matching paused native observations before writing. A
+clean legacy pause may become schema-3 `initial_pending` directly; it is never
+rewritten to an intermediate clean schema-3 pause. There is no initialization
+of missing records, adoption of pending/accepted records, or automatic migration.
+
+The pending write must resolve **and** match actual whole-storage readback before
+the one initial-session request. Changed native state, cookie/alarm presence or
+changed saved bytes prevents issuance. After issuance, the adapter checks actual
+cookie installation/readback, hashes its exact scope and value, invokes the
+owned document probe, and rechecks saved/native/cookie state around the protected
+page observation. Acceptance requires the accepted write, actual readback and
+final native/cookie/hash/alarm checks. Only the fingerprint, never the bearer,
+is saved in the browser record. Object-key ordering is not treated as a state
+change: Chrome may reorder keys when saving and returning objects.
+
+One 45-second wall/monotonic budget bounds the whole browser run. Every awaited
+API return is checked before its successor may start. Failure or synchronous
+invalidation permanently consumes that object, aborts the owned probe and
+refuses new runs; it does not enqueue another attempt. The native supervisor's
+independent ten-second deadline is still required by the future native binding.
+
+**Timeout is not cancellation of a Chrome API call.** A late pending write may
+still leave a pending record; a late cookie installation may leave an installed
+cookie beside pending state; and a lost accepted-write acknowledgement may leave
+accepted state. None triggers a retry, cookie removal, native pause, state repair
+or retrospective success. On restart, pending requires administrator review;
+accepted still requires fresh verification and is not itself session-ready.
+
+Chrome storage/cookies have no compare-and-swap transaction covering native SQL,
+browser storage and server state. Read/check/write/read catches observed conflicts
+but is not an atomic transaction or a lease. The future active worker must own a
+single serialized mutation lane and independently implement fresh consent,
+durable sign-out/cancellation fencing, accepted restart and renewal. This adapter
+does not yet provide those boundaries or permit real-profile activation.
+
+Deterministic tests cover every modeled browser/native/probe API boundary before
+and after acknowledgement, lost/late writes, changed state/cookies/alarms,
+clock reversal/expiry, concurrent invocation refusal and restart cuts. A separate
+`audit_browser_continuation_install.mjs` fixture uses actual sandbox-enabled
+Chromium storage and cookies in fresh disposable profiles, but **models native
+issuance and protected-page observations** and seeds a fictional clean pause.
+It makes no server request and uses no native host or real credential. Healthy,
+late-pending, late-cookie and late-accepted cases check persistence across actual
+browser restart, refusal of repeat initial installation, no saved bearer and no
+renewal alarm. These are browser-I/O checks, not real sign-in, verified TLS,
+generated-package, physical-display or power-loss acceptance.
 
 ## Remaining selected successor path, not implemented end to end
 
