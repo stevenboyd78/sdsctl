@@ -214,13 +214,15 @@ def run_browser_recovery(handoff: BrowserRecoveryHandoff, *, browser: Path,
                 if scope.child.poll() is not None:
                     raise ValueError()  # A clean exit is not browser acknowledgement.
                 acknowledged = False
-                if not ready and (handoff._root / _LAUNCH).exists():
-                    _matches(handoff._root / _LAUNCH, handoff._launch_body(record, live=True))
-                    ready = True  # Readiness alone never causes shutdown or success.
                 try:
                     # Native writers hold this directory exclusively through
                     # fsync and post-write checks. Never stop the browser merely
                     # because a partially published receipt is already visible.
+                    if not ready and (handoff._root / _LAUNCH).exists():
+                        with browser_profile_access(handoff._root, exclusive=False):
+                            _matches(handoff._root / _LAUNCH,
+                                     handoff._launch_body(record, live=True))
+                        ready = True  # Includes successful scope-exit validation; not an ACK.
                     # Do not contend with ordinary native requests while waiting
                     # for consent. Acknowledge only after its file exists and its
                     # publisher has released exclusive ownership.
@@ -228,7 +230,7 @@ def run_browser_recovery(handoff: BrowserRecoveryHandoff, *, browser: Path,
                         with browser_profile_access(handoff._root, exclusive=False):
                             current, _, proof = handoff._checked(stopped=False, live=True)
                             handoff._ack(current, proof)
-                            acknowledged = True
+                        acknowledged = True  # Scope-exit failure cannot leave a success flag.
                 except BrowserProfileAccessError:
                     pass  # Busy or changed context never becomes success; deadlines still apply.
                 if not ready and time.monotonic() >= startup:
