@@ -66,6 +66,8 @@ def _browser_core_checks_native_fixture(expected, observed, result=None):
       import {readFileSync} from 'node:fs';
       import {pausedContinuationRecord,createInitialInstallation,classifyContinuationStartup} from
         './src/sds200/browser_assets/browser_device_continuation_state.mjs';
+      import {fingerprintContinuationCookie} from
+        './src/sds200/browser_assets/browser_device_continuation_cookie.mjs';
       const {settings,before,after,session}=JSON.parse(readFileSync(0,'utf8'));
       const paused=pausedContinuationRecord(settings);
       const pendingOwner=createInitialInstallation(settings,paused,before,
@@ -93,11 +95,13 @@ def _browser_core_checks_native_fixture(expected, observed, result=None):
       const {url,...values}=details;
       const cookie={...values,domain:new URL(url).hostname,hostOnly:true,session:false};
       a.cookieInstalled(cookie);
+      const cookieFingerprint=await fingerprintContinuationCookie(settings.origin,cookie);
       const probe={tabId:1,documentId:'fixture-document',ticket:'f'.repeat(64)};
       a.probeStarted(probe);
       const accepted=a.protectedPageVerified({...probe,url:settings.origin+'/device-display',
-        displayOnly:true,deviceEnrolled:true,remainingSeconds:session.expires_in},cookie,after);
-      assert.deepEqual(a.acceptedSaved(structuredClone(accepted),after,cookie),
+        displayOnly:true,deviceEnrolled:true,remainingSeconds:session.expires_in},
+        cookie,after,cookieFingerprint);
+      assert.deepEqual(a.acceptedSaved(structuredClone(accepted),after,cookie,cookieFingerprint),
         {mode:'accepted',sessionReady:true});
       assert.deepEqual(classifyContinuationStartup(settings,accepted,after),
         {mode:'verification_required',sessionReady:false});

@@ -9,6 +9,9 @@ const before={identity:config.identity,epoch:config.epoch,mode:'paused',
   binding:{fingerprint:'d'.repeat(64),revision:4,generation:7}};
 const after={...before,mode:'active',binding:{...before.binding,fingerprint:'e'.repeat(64),revision:6}};
 const intent='f'.repeat(64),token='sdsctl-browser-session-v1.'+'1'.repeat(64);
+// This pure-core fixture models the trusted cookie adapter's digest. The separate
+// cookie tests exercise actual Web Crypto and replacement-cookie comparisons.
+const cookieFingerprint='3'.repeat(64);
 const selectedProbe={tabId:12,documentId:'document-1',ticket:'2'.repeat(64)};
 const proof={...selectedProbe,url:config.origin+'/device-display',displayOnly:true,
   deviceEnrolled:true,remainingSeconds:300};
@@ -35,8 +38,8 @@ function fixture(settings=config) {
     },
     ()=>f.attempt.cookieInstalled(f.cookie),
     ()=>f.attempt.probeStarted(selectedProbe),
-    ()=>{f.saved=f.attempt.protectedPageVerified({...proof,url:settings.origin+'/device-display'},f.cookie,f.after);},
-    ()=>{f.ready=f.attempt.acceptedSaved(f.saved,f.after,f.cookie);},
+    ()=>{f.saved=f.attempt.protectedPageVerified({...proof,url:settings.origin+'/device-display'},f.cookie,f.after,cookieFingerprint);},
+    ()=>{f.ready=f.attempt.acceptedSaved(f.saved,f.after,f.cookie,cookieFingerprint);},
   ];
   f.advance=n=>{for(let i=0;i<n;i++)f.steps[i]();return f;};
   return f;
@@ -151,7 +154,8 @@ for(const [index,change] of stateChanges.entries()) {
       const f=fixture().advance(cut),bad=change(clone(f.saved));
       assert.deepEqual(classifyContinuationStartup(config,bad,after),stopped);
       rejects(()=>createInitialInstallation(config,bad,before,f.clocks));
-      rejects(()=>cut===1?f.attempt.pendingSaved(bad):f.attempt.acceptedSaved(bad,after));
+      rejects(()=>cut===1?f.attempt.pendingSaved(bad):
+        f.attempt.acceptedSaved(bad,after,f.cookie,cookieFingerprint));
     }
   });
 }
@@ -166,7 +170,8 @@ for(const [index,change] of nativeChanges.entries())for(const cut of [2,5,6]) {
   test('native mismatch '+index+' at '+cut+' cannot complete browser acceptance',()=>{
     const f=fixture().advance(cut),bad=change(clone(after));
     rejects(()=>cut===2?f.attempt.sessionReturned(result(),bad):cut===5?
-      f.attempt.protectedPageVerified(proof,f.cookie,bad):f.attempt.acceptedSaved(f.saved,bad));
+      f.attempt.protectedPageVerified(proof,f.cookie,bad,cookieFingerprint):
+      f.attempt.acceptedSaved(f.saved,bad,f.cookie,cookieFingerprint));
     if(cut===6)assert.deepEqual(classifyContinuationStartup(config,f.saved,bad),stopped);
   });
 }
@@ -196,7 +201,8 @@ for(const [index,change] of cookieChanges.entries())for(const cut of [3,5,6]) {
   test('wrong cookie '+index+' at '+cut+' never reports readiness',()=>{
     const f=fixture().advance(cut),bad=change(clone(f.cookie));
     rejects(()=>cut===3?f.attempt.cookieInstalled(bad):cut===5?
-      f.attempt.protectedPageVerified(proof,bad,after):f.attempt.acceptedSaved(f.saved,after,bad));
+      f.attempt.protectedPageVerified(proof,bad,after,cookieFingerprint):
+      f.attempt.acceptedSaved(f.saved,after,bad,cookieFingerprint));
     assert.equal(f.saved.phase,cut===6?'accepted':'initial_pending');
     assert.equal(classifyContinuationStartup(config,f.saved,after).sessionReady,false);
   });
@@ -210,7 +216,7 @@ const proofChanges=[v=>null,v=>({...v,extra:true}),v=>({...v,url:'https://evil.t
 ];
 for(const [index,change] of proofChanges.entries())test('protected-page mismatch '+index+' stays pending',()=>{
   const f=fixture().advance(5);
-  rejects(()=>f.attempt.protectedPageVerified(change(clone(proof)),f.cookie,after));
+  rejects(()=>f.attempt.protectedPageVerified(change(clone(proof)),f.cookie,after,cookieFingerprint));
   assert.equal(f.saved.phase,'initial_pending');
 });
 
@@ -218,7 +224,7 @@ for(const change of [p=>null,p=>({...p,extra:true}),p=>({...p,tabId:-1}),p=>({..
   p=>({...p,documentId:''}),p=>({...p,documentId:'x'.repeat(129)}),p=>({...p,ticket:'bad'})]) {
   test('invalid probe selection is not a protected-page acknowledgement',()=>{
     const f=fixture().advance(4);rejects(()=>f.attempt.probeStarted(change(clone(selectedProbe))));
-    rejects(()=>f.attempt.protectedPageVerified(proof,f.cookie,after));
+    rejects(()=>f.attempt.protectedPageVerified(proof,f.cookie,after,cookieFingerprint));
   });
 }
 
@@ -284,4 +290,23 @@ for(const delta of [-1,0,1,3,4])test('initial completion requires exactly two na
   const issued={...result(),binding:changed.binding};
   rejects(()=>f.attempt.sessionReturned(issued,changed));
   assert.equal(f.saved.phase,'initial_pending');
+});
+
+for(const value of [undefined,null,true,'',token,'z'.repeat(64)])
+test('unbound cookie cannot produce an accepted record '+String(value).slice(0,8),()=>{
+  const f=fixture().advance(5),saved=clone(f.saved);
+  rejects(()=>f.attempt.protectedPageVerified(proof,f.cookie,after,value));
+  assert.deepEqual(f.saved,saved);rejects(f.steps[5]);
+});
+for(const value of [undefined,null,true,'','9'.repeat(64)])
+test('final cookie digest must still match installed acceptance '+String(value).slice(0,8),()=>{
+  const f=fixture().advance(6),saved=clone(f.saved);
+  rejects(()=>f.attempt.acceptedSaved(f.saved,after,f.cookie,value));
+  assert.deepEqual(f.saved,saved);rejects(f.steps[6]);
+});
+for(const cut of [0,1,6])test('cookie binding has an exact phase-specific schema '+cut,()=>{
+  const f=fixture().advance(cut),missing=clone(f.saved);
+  delete missing.cookieFingerprint;
+  for(const bad of [missing,{...f.saved,cookieFingerprint:cut===6?null:cookieFingerprint}])
+    assert.deepEqual(classifyContinuationStartup(config,bad,cut===6?after:before),stopped);
 });

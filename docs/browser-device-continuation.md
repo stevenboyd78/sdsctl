@@ -716,7 +716,7 @@ that one transaction covers SQLite, Chromium storage and the remote server.
 
 For this browser format, the selected identity, activation epoch and canonical
 build are fixed. An accepted record binds the exact completed native fingerprint,
-revision and reviewed server generation. These comparison values are not bearer
+revision, reviewed server generation and installed cookie fingerprint. These comparison values are not bearer
 tokens, signed permissions or substitutes for freshly reconstructed native state.
 The proposed ordinary request adapter must recheck original approval-bound
 credential/trust files, fixed live ownership and exact current server generation
@@ -749,6 +749,40 @@ server generation, so offline paused status does not force a network request.
 Fresh initial consent/issuance, pending/accepted records and active observations
 still require a positive exact reviewed generation. Unknown is never zero,
 latest-generation permission or a sign-in fallback.
+
+### Accepted cookie identity (inert comparison, not permission)
+
+An accepted native binding alone cannot identify the cookie installed by that
+browser attempt. Another same-origin display session could satisfy the generic
+protected-page check, so the unreleased browser record also requires a
+`cookieFingerprint`. It is null while paused or initial-pending, and a SHA-256
+digest only when accepted. Older unbound experimental records are refused;
+there is no automatic adoption, migration or repair.
+
+The inert `fingerprintContinuationCookie` helper uses Web Crypto to hash a
+domain-separated, fixed-order snapshot containing the selected canonical HTTPS
+origin and exact token, scope, flags, cookie store and expiration. The bearer
+itself is never saved in the browser record. Changing the token, expiration,
+scope or origin changes the comparison or is refused. The trusted controller
+must hash actual cookie readback after installation, supply the digest only
+after the same-cookie/protected-page/native checks, and freshly hash/recheck it
+again before accepting final persistence. The pure state core's supplied digest
+is still a modeled adapter input, not browser provenance.
+
+`cookieMatchesContinuationRecord` is read-only and returns false for an unbound
+record or changed/malformed cookie snapshot. Even true means only matching
+comparison bytes: it proves neither the cookie is still in Chrome nor current
+expiry, native/server authority or protected-page access. Those remain separate
+checks before readiness or bounded renewal. It never authorizes cookie removal;
+Chrome has no compare-and-swap cookie deletion, and failure cleanup must not
+delete or replace a possibly foreign cookie. Neither helper reads or changes
+actual browser storage/cookies, registers a listener or enables a native action.
+
+Tests compare actual Web Crypto results with an independent SHA-256 oracle and
+feed them into the inert acceptance core for DNS, IPv4 and IPv6. They cover
+foreign-token and expiration replacement, wrong scope/store, old unbound state,
+final-digest mismatch, malformed fields and snapshot changes during hashing.
+These are data-contract tests, not actual-browser continuation qualification.
 
 ### Initial installation ordering and acknowledgement cuts
 

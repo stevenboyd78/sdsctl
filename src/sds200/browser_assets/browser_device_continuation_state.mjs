@@ -1,6 +1,7 @@
 // Experimental browser acceptance core. Inert: no listeners, native dispatch,
 // storage, cookie, network or timer side effects. Trusted adapters must own those
 // operations and the worker queue; supplied observations are NOT authority.
+import {fingerprintContinuationCookie} from './browser_device_continuation_cookie.mjs';
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
   Object.keys(v).sort().join(',')===[...keys].sort().join(',');
 const hex=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -31,7 +32,7 @@ function native(value,config,mode,unreviewed=false) {
   return binding(value.binding,unreviewed);
 }
 function record(value,config) {
-  if(!exact(value,['version','identity','epoch','build','phase','binding','intent'])||
+  if(!exact(value,['version','identity','epoch','build','phase','binding','intent','cookieFingerprint'])||
     value.version!==3||value.identity!==config.identity||value.epoch!==config.epoch||
     value.build!==config.build||!['paused','initial_pending','accepted'].includes(value.phase))refuse();
   if(value.phase==='paused') {
@@ -40,6 +41,7 @@ function record(value,config) {
     binding(value.binding);
     if(!hex(value.intent))refuse();
   }
+  if(value.phase==='accepted'?!hex(value.cookieFingerprint):value.cookieFingerprint!==null)refuse();
   return copy(value);
 }
 
@@ -49,7 +51,7 @@ export function pausedContinuationRecord(settings) {
   try {
   const config=selection(settings);
   return copy({version:3,identity:config.identity,epoch:config.epoch,build:config.build,
-    phase:'paused',binding:null,intent:null});
+    phase:'paused',binding:null,intent:null,cookieFingerprint:null});
   } catch {refuse();}
 }
 
@@ -68,6 +70,17 @@ export function classifyContinuationStartup(settings,saved,observed) {
   } catch {
     return Object.freeze({mode:'administrator_required',sessionReady:false});
   }
+}
+
+// Comparison only: even a matching hash proves neither browser provenance nor
+// current server/native permission, expiry, protected-page use or session readiness.
+// Never use this result as permission to delete a cookie: Chrome has no cookie CAS.
+export async function cookieMatchesContinuationRecord(settings,saved,cookie) {
+  try {
+    const config=selection(settings),state=record(saved,config);
+    if(state.phase!=='accepted')return false;
+    return await fingerprintContinuationCookie(config.origin,cookie)===state.cookieFingerprint;
+  } catch {return false;}
 }
 
 export function createInitialInstallation(settings,saved,reviewed,clocks) {
@@ -170,7 +183,7 @@ function initialInstallation(settings,saved,reviewed,clocks) {
         !hex(observed.ticket))refuse();
       probe=Object.freeze({...observed});
     }),
-    protectedPageVerified:(proof,observedCookie,observedNative)=>step('probe','accepted_write',()=>{
+    protectedPageVerified:(proof,observedCookie,observedNative,cookieFingerprint)=>step('probe','accepted_write',()=>{
       if(!exact(proof,['url','tabId','documentId','ticket','displayOnly','deviceEnrolled','remainingSeconds'])||
         proof.url!==config.origin+'/device-display'||proof.tabId!==probe.tabId||
         proof.documentId!==probe.documentId||proof.ticket!==probe.ticket||
@@ -180,10 +193,13 @@ function initialInstallation(settings,saved,reviewed,clocks) {
       // exact probe/document and check the SAME cookie before and after access.
       // A supplied object passed to this inert core is not proof of a real page.
       cookie(observedCookie);unchanged(observedNative);remaining();
+      if(!hex(cookieFingerprint))refuse();
+      accepted=copy({...accepted,cookieFingerprint});
       return copy(accepted);
     }),
-    acceptedSaved:(observed,observedNative,observedCookie)=>step('accepted_write','accepted',()=>{
+    acceptedSaved:(observed,observedNative,observedCookie,cookieFingerprint)=>step('accepted_write','accepted',()=>{
       if(!same(record(observed,config),accepted))refuse();
+      if(cookieFingerprint!==accepted.cookieFingerprint)refuse();
       unchanged(observedNative);cookie(observedCookie);remaining();
       return Object.freeze({mode:'accepted',sessionReady:true});
     }),
