@@ -90,6 +90,53 @@ def test_owned_activation_workflow_with_complete_retained_chain(lab, chain):
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
+def test_epoch_core_preserves_complete_history_without_enabling_runtime(lab, chain):
+    from sds200 import browser_device_continuation_activation as activation
+    from sds200 import browser_device_continuation_epoch as epoch
+
+    h, r, i = chain
+    retained = inspect(chain)
+    core = activation.BrowserPausedActivation(h, release_id=r.release_id, intent_id=i.intent_id)
+    activated = core.apply(confirmation=lambda review: review.confirmation)
+    assert activated is not None
+    inputs = epoch._ApprovalInputs("a" * 64, "b" * 64, lab.configuration.device_id,
+                                   1, "c" * 64, "d" * 64)
+    # Fictional consent/server facts only. This exercises native transactions
+    # against a complete retained chain, NOT an owned online permission adapter.
+    with ownership._stopped_history_ownership(h) as owner:
+        path = h._session._root / activation.ACTIVATION_MANIFEST
+        raw, binding = path.read_bytes(), activation._binding(path)
+        for operation in ("prepare", "claim", "complete", "pause"):
+            with activation._ledger_transaction(lab.args["profile"],
+                                                  readonly=False) as (db, ledger):
+                selected, captured = history._capture_owned_history(h, owner,
+                    release_id=r.release_id, intent_id=i.intent_id)
+                assert selected == retained
+                activation._manifest_check(path, raw, binding)
+                selection = epoch._EpochSelection(raw, binding, selected,
+                                                   lab.args["profile"], ledger.binding)
+                before = epoch._read(db, selection, readonly=False).snapshot
+                args = [] if operation == "pause" else [inputs]
+                result = getattr(epoch, "_stage_" + operation)(db, selection, before, *args,
+                                                               now=time.time())
+                captured.recheck()
+                ledger.check_identity()
+                activation._manifest_check(path, raw, binding)
+                assert epoch._read(db, selection, readonly=False).snapshot == result
+                with pytest.raises(history.BrowserContinuationHistoryError):
+                    history._inspect_owned_history(h, owner,
+                        release_id=r.release_id, intent_id=i.intent_id)
+                db.commit()
+            assert history._inspect_owned_history(h, owner,
+                release_id=r.release_id, intent_id=i.intent_id) == retained
+        assert result.mode is RecoveryMode.PAUSED
+    assert inspect(chain) == retained and path.read_bytes() == raw
+    with pytest.raises(activation.BrowserPausedActivationError):
+        core.confirm(epoch=activated.epoch)
+    blocked(lab)
+
+
+@pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
 @pytest.mark.parametrize("failure", ["after-create", "after-native", "late-credential",
                                     "late-bundle", "late-journal", "late-ack"])
 def test_owned_activation_interruptions_keep_evidence_and_never_replay(

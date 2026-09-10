@@ -40,6 +40,16 @@ _ANCHOR_SCHEMA = (
     "epoch TEXT NOT NULL, manifest_sha256 TEXT NOT NULL, "
     "manifest_device INTEGER NOT NULL, manifest_inode INTEGER NOT NULL)"
 )
+_EPOCH_COLUMNS = ("digest", "identity", "epoch", *_COLUMNS[2:])
+_EPOCH_APPROVAL_SCHEMA = (
+    "CREATE TABLE browser_epoch_approval (digest TEXT PRIMARY KEY, identity TEXT, "
+    "epoch TEXT, phase TEXT, revision INTEGER, mode TEXT, intent TEXT, device TEXT, "
+    "generation INTEGER, credential_hash TEXT, trust_hash TEXT, created REAL, expires REAL)"
+)
+_EPOCH_STATE_SCHEMA = (
+    "CREATE TABLE browser_epoch_state (id INTEGER PRIMARY KEY CHECK(id=1), "
+    "epoch TEXT NOT NULL, snapshot_sha256 TEXT NOT NULL, active_grant TEXT)"
+)
 _OPERATION = "activate-paused-browser-continuation"
 _LIMIT = 256 * 1024
 
@@ -106,7 +116,7 @@ def _manifest_document(history: BrowserContinuationHistory, *, profile: Path,
             or not before["state"]["observed_at"] <= reviewed_at <= approved_at
             or not approved_at < reviewed_at + 120):
         raise ValueError()
-    return {"version": 1, "operation": _OPERATION, "epoch": epoch,
+    return {"version": 2, "operation": _OPERATION, "epoch": epoch,
             "release_id": history.release_id, "intent_id": history.intent_id,
             "history_fingerprint": history.fingerprint, "ledger_binding": list(ledger_binding),
             "consent_sha256": consent_sha256, "reviewed_at": reviewed_at,
@@ -164,8 +174,7 @@ def _transaction(db: sqlite3.Connection, profile: Path, *, readonly: bool) -> No
         raise ValueError()
 
 
-def _snapshot(db: sqlite3.Connection, before: dict[str, Any], *, activated: bool
-              ) -> dict[str, Any]:
+def _layout(db: sqlite3.Connection, before: dict[str, Any], *, activated: bool) -> None:
     schema = 3 if activated else before["schema"]
     expected: list[tuple[str, str, str, str | None]] = [
         ("table", "recovery", "recovery", _RECOVERY_SCHEMA)]
@@ -173,7 +182,11 @@ def _snapshot(db: sqlite3.Connection, before: dict[str, Any], *, activated: bool
         expected.extend([("table", "browser_resume", "browser_resume", _RESUME_SCHEMA),
                          ("index", "sqlite_autoindex_browser_resume_1", "browser_resume", None)])
     if activated:
-        expected.append(("table", "browser_continuation", "browser_continuation", _ANCHOR_SCHEMA))
+        expected.extend([
+            ("table", "browser_continuation", "browser_continuation", _ANCHOR_SCHEMA),
+            ("table", "browser_epoch_approval", "browser_epoch_approval", _EPOCH_APPROVAL_SCHEMA),
+            ("index", "sqlite_autoindex_browser_epoch_approval_1", "browser_epoch_approval", None),
+            ("table", "browser_epoch_state", "browser_epoch_state", _EPOCH_STATE_SCHEMA)])
     if (db.execute("PRAGMA user_version").fetchone() != (schema,)
             or db.execute("PRAGMA application_id").fetchone() != (0,)
             or db.execute("PRAGMA quick_check").fetchall() != [("ok",)]
@@ -181,6 +194,12 @@ def _snapshot(db: sqlite3.Connection, before: dict[str, Any], *, activated: bool
                 .fetchall()
                 != sorted(expected, key=lambda row: row[1])):
         raise ValueError()
+
+
+def _snapshot(db: sqlite3.Connection, before: dict[str, Any], *, activated: bool
+              ) -> dict[str, Any]:
+    _layout(db, before, activated=activated)
+    schema = 3 if activated else before["schema"]
     rows = db.execute("SELECT id,identity,revision,mode,failures,next_at,observed_at "
                       "FROM recovery LIMIT 2").fetchall()
     if len(rows) != 1 or rows[0][:2] != (1, before["identity"]):
@@ -201,11 +220,22 @@ def _anchor(raw: bytes, plan: dict[str, Any], binding: tuple[int, int]) -> tuple
     return (1, plan["epoch"], hashlib.sha256(raw).hexdigest(), *binding)
 
 
+def _epoch_fence(epoch: str, state: dict[str, Any], approvals: list[dict[str, Any]],
+                 active_grant: str | None) -> tuple[object, ...]:
+    # A same-ledger consistency fence, NOT a signature or protection from a
+    # malicious same-UID writer. Actual ownership/input checks remain mandatory.
+    raw = _encoded(dict(epoch=epoch, state=state, approvals=approvals, active_grant=active_grant))
+    return (1, epoch, hashlib.sha256(raw).hexdigest(), active_grant)
+
+
 def _exact_after(db: sqlite3.Connection, raw: bytes, plan: dict[str, Any],
                  binding: tuple[int, int]) -> _PausedActivationSnapshot:
     if (_encoded(_snapshot(db, plan["before"], activated=True)) != _encoded(plan["after"])
             or db.execute("SELECT * FROM browser_continuation LIMIT 2").fetchall()
-                != [_anchor(raw, plan, binding)]):
+                != [_anchor(raw, plan, binding)]
+            or db.execute("SELECT * FROM browser_epoch_approval LIMIT 1").fetchall()
+            or db.execute("SELECT * FROM browser_epoch_state LIMIT 2").fetchall()
+                != [_epoch_fence(plan["epoch"], plan["after"]["state"], [], None)]):
         raise ValueError()
     return _PausedActivationSnapshot(plan["epoch"], hashlib.sha256(raw).hexdigest(),
                                      plan["after"]["state"]["revision"])
@@ -234,8 +264,12 @@ def _stage_paused_activation(db: sqlite3.Connection, *, manifest: bytes,
         try:
             db.execute(_ANCHOR_SCHEMA)
             db.execute("INSERT INTO browser_continuation VALUES (?,?,?,?,?)", anchor)
+            db.execute(_EPOCH_APPROVAL_SCHEMA)
+            db.execute(_EPOCH_STATE_SCHEMA)
             db.execute("UPDATE recovery SET revision=?,observed_at=? WHERE id=1",
                        (plan["after"]["state"]["revision"], plan["approved_at"]))
+            db.execute("INSERT INTO browser_epoch_state VALUES (?,?,?,?)",
+                       _epoch_fence(plan["epoch"], plan["after"]["state"], [], None))
             db.execute("PRAGMA user_version=3")
             _exact_after(db, manifest, plan, manifest_binding)
         except BaseException:

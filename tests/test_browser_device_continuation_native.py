@@ -179,7 +179,10 @@ def test_staging_is_not_commit_and_rollback_keeps_prepared_manifest(lab, candida
 
 
 @pytest.mark.parametrize("fault", ["CREATE TABLE browser_continuation", "INSERT INTO",
-    "UPDATE recovery", "PRAGMA user_version=3", "SELECT * FROM browser_continuation"])
+    "CREATE TABLE browser_epoch_approval", "CREATE TABLE browser_epoch_state",
+    "INSERT INTO browser_epoch_state", "UPDATE recovery", "PRAGMA user_version=3",
+    "SELECT * FROM browser_continuation", "SELECT * FROM browser_epoch_approval",
+    "SELECT * FROM browser_epoch_state"])
 def test_partial_failure_cannot_be_committed_by_outer_caller(lab, candidate, fault):
     before = snapshot(lab), candidate.path.read_bytes()
     with transaction(lab.ledger.path) as db:

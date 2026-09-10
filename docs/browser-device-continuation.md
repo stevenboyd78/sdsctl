@@ -1,7 +1,7 @@
 # Post-recovery continuation: design boundary
 
-Status: **development design, read-only preflight/history, internal intent journal
-and fixture-only owned paused activation;
+Status: **development design, read-only preflight/history, internal intent journal,
+fixture-only owned paused activation and current-epoch transactions;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -203,8 +203,9 @@ separate from verification of a later live Chromium owner.
 
 `browser_device_continuation_native` implements the native transaction portion
 only. It is not called by startup, worker dispatch, a browser message, a CLI or
-an installed command. Its only workflow caller is the fixture-only stopped-owner
-adapter described below. **Do not call either on a real profile.** Existing
+an installed command. The fixture-only stopped-owner adapter and current-epoch
+transaction core below share its internal validators.
+**Do not call these on a real profile.** Existing
 recovery/resume helpers continue rejecting schema 3, and the continuation-intent
 marker continues blocking ordinary startup and native requests.
 
@@ -230,7 +231,11 @@ definitions, rollback journaling and `synchronous=EXTRA`. It refuses unknown
 schemas, extra tables/views/triggers/indexes, pending approvals and any change
 to the selected prior state. The manifest digest and inode/epoch anchor, the
 schema-3 marker and the paused revision change are staged together in that same
-ledger. Success is **uncommitted** until the owning adapter commits. No second
+ledger, together with an empty epoch-approval table and an exact current-state
+consistency fence. The internal manifest is now version 2: earlier version-1
+fixture manifests/layouts are rejected, not migrated or repaired. No real
+schema-3 profile has been qualified for deployment. Success is **uncommitted**
+until the owning adapter commits. No second
 completion database decides whether activation happened.
 
 Any failure or interruption after DML starts rolls back the **whole** native
@@ -245,9 +250,9 @@ including after a lost commit reply. It neither renews expired consent nor
 accepts a later revision by ordering. Any subsequent native state/history change
 invalidates this exact activation view. That result is deliberately **not current
 continuation permission**, does not select a role, and cannot authorize a browser
-resume or server exchange. Current-epoch validation and epoch-bound approval
-cancellation still need their complete implementation before schema 3 can be
-accepted by the ordinary recovery path.
+resume or server exchange. The current-epoch native transactions below are still
+missing their owned current-permission and online adapters. Schema 3 cannot be
+accepted by the ordinary recovery path until the complete contract is qualified.
 
 Fictional native-ledger tests cover schemas 1 and 2, both archive forms, exact
 readback, rollback, injected write/readback interruptions, altered anchors and
@@ -298,7 +303,58 @@ retirement/reconciliation chains, interrupted writes, post-DML input changes,
 read-only confirmation and unchanged refusal by old helpers. Fault injection is
 not a claim of physical power-loss durability or online browser acceptance.
 
-## Remaining selected successor path, not implemented
+## Current-epoch transaction core (fixture-only)
+
+`browser_device_continuation_epoch` validates current native SQL separately from
+the exact initial paused activation. It has no filesystem opener, server exchange,
+CLI, browser action or ordinary runtime caller. A supplied selection or snapshot
+does **not** establish current permission, actual ownership or fresh consent.
+
+The selected immutable manifest/anchor, canonical SQL layout and unchanged legacy
+terminal rows must match. New approvals live in a separate `browser_epoch_approval`
+table and bind the selected epoch, identity, exact native revision, intent, device,
+generation and credential/trust digests. A legacy ticket digest cannot be reused
+as new consent. Terminal rows are preserved, with a hard 128-row limit and no
+automatic pruning. No raw credential, reusable ticket or session is stored.
+
+The singleton `browser_epoch_state` binds the actual state, epoch-approval history
+and active-grant digest with a same-ledger consistency hash. A higher revision by
+itself is insufficient. This hash is **not a signature, anti-rollback mechanism,
+or defense against a malicious same-account/root writer**; private ownership and
+fresh file/ledger selection remain independent requirements.
+
+Within a dedicated existing write transaction, the internal stages are:
+
+| Stage | Native effect | Still required outside this core |
+| --- | --- | --- |
+| Prepare | New epoch-bound row; stopped revision advances; two-minute expiry | Fresh trusted-page consent and reviewed current server inputs |
+| Claim | Prepared becomes claimed; claim time and exact snapshot change | Commit before bounded external proof; no automatic replay |
+| Complete | Exact claimed row becomes complete; native state becomes active with that grant | Fresh ownership/input/epoch rechecks, verified server proof and separate session exchange |
+| Fail | Pending or uncertain row becomes terminal, including after expiry | Adapter must record uncertainty without overwriting cancellation |
+| Pause/sign-out cancellation | Cancel pending rows, clear active grant, advance paused revision | Actual browser/server session invalidation is separate |
+| Clock correction | Cancel pending rows, advance revision, apply ten-second delay while preserving mode | Trusted clocks and monotonic timing checks in the owned adapter |
+
+Every stage re-reads the exact current SQL view and compares the supplied snapshot,
+including phase/history changes that do not change the native revision. Claim time
+must not move backward; completion must precede approval expiry and occur within
+ten wall-clock seconds of claim. The future adapter must also enforce monotonic
+elapsed time. A newer pause, sign-out or clock correction defeats old completion,
+even with a newly fetched snapshot. An already completed active grant survives
+clock correction, but old in-flight snapshots do not. Each explicit pause advances
+the revision even if already paused, invalidating outstanding review snapshots.
+
+Success remains **uncommitted**. Any exception or interruption aborts the whole
+transaction; uncertain rollback closes the connection. No second database is
+written, no browser storage is altered, and confirmation never replays a stage.
+The original paused confirmation remains exact and rejects all later states.
+
+Portable tests use fictional selections with real native archives and SQLite.
+The separate namespace fixtures run the stages against complete retained
+retirement/reconciliation chains under stopped ownership, with fresh input and
+manifest checks. Those are not a current-permission adapter, browser consent,
+online server-proof test, sign-out/session-invalidation test or hardware acceptance.
+
+## Remaining selected successor path, not implemented end to end
 
 The next candidate must preserve the existing identity for same-device
 continuation and use a separately reviewed durable authorization epoch. A new
@@ -354,8 +410,9 @@ verification must not be bypassed for an IP-address installation.
 
 This section specifies the complete implementation boundary. The isolated native
 core and fixture-only owned adapter above implement the manifest and single-ledger
-paused anchor/view. **The current permission selector, epoch-bound approvals and
-request role are not implemented**.
+paused anchor/view. The fixture-only epoch core adds current SQL and approval
+transactions. **The owned current-permission selector, online approval and
+authentication adapters, and request role are not implemented**.
 It does not change the stop condition imposed by a complete intent. Implement
 and qualify the whole selected path before enabling any part on a real profile.
 
