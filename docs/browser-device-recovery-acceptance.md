@@ -655,6 +655,13 @@ browser commit point; a later lost acknowledgement never permits initial replay.
 Restart classification always reports not ready, including for an accepted record:
 fresh native/server/browser verification remains required before dashboard use.
 
+The complete retained-history fixtures for both retirement and reconciliation
+also pass the actual native session result through the JavaScript model. They
+check the native two-revision transition (claim changes phase without advancing
+revision) and refuse a missing or extra revision in both result and readback.
+Browser storage, cookie and page observations are still modeled in that check;
+it does not qualify real-browser installation or native dispatch.
+
 This is an inert core and deterministic Node contract, not a real browser
 controller, trusted consent bridge, storage writer, cookie installer, renewal
 adapter or native request role. It is included in canonical package/build identity

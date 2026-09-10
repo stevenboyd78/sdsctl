@@ -79,7 +79,9 @@ function initialInstallation(settings,saved,reviewed,clocks) {
   const config=selection(settings),before=record(saved,config);
   if(before.phase!=='paused')refuse();
   const expected=native(reviewed,config,'paused');
-  if(!integer(expected.revision+3))refuse();
+  // Native prepare and completion advance revision; claim changes the exact
+  // fingerprint/phase at the SAME revision. Never equate steps with revisions.
+  if(!integer(expected.revision+2))refuse();
   // Construct only AFTER fresh document-bound consent, never before human review.
   // These elapsed checks are not a process-kill deadline. The owning adapters
   // must bound browser calls and retain the independent native supervisor.
@@ -145,7 +147,7 @@ function initialInstallation(settings,saved,reviewed,clocks) {
     sessionReturned:(result,observed)=>step('issue','cookie',()=>{
       if(!exact(result,['binding','session'])||!exact(result.session,['token','expires_in']))refuse();
       const after=binding(result.binding),session=result.session;
-      if(after.revision!==expected.revision+3||after.generation!==expected.generation||
+      if(after.revision!==expected.revision+2||after.generation!==expected.generation||
         after.fingerprint===expected.fingerprint||typeof session.token!=='string'||
         !/^sdsctl-browser-session-v1\.[a-f0-9]{64}$/.test(session.token)||
         !finite(session.expires_in)||session.expires_in<=30||session.expires_in>3600)refuse();

@@ -660,9 +660,13 @@ progression to the owned initial native request. A failed or out-of-order step
 permanently invalidates that in-memory attempt; supplying a later matching
 snapshot cannot restore the gate. No core method repeats issuance or native writes.
 
-The native result must match the reviewed generation and expected three revision
-advances (prepare, claim, complete), with a changed fingerprint and an exact
-fresh active native observation. The token is handed privately to the owning
+The native result must match the reviewed generation and expected two revision
+advances (prepare and complete). Claim changes phase and fingerprint at the same
+revision; three phases do not mean three revision increments. Cross-language
+fixture tests feed the actual owned native result from both retained-history
+paths into the browser core, rather than inventing its final revision. The result
+must have a changed fingerprint and an exact fresh active native observation.
+The token is handed privately to the owning
 cookie adapter, never included in the saved browser record or comparison request.
 It must produce the fixed secure, HttpOnly, host-only, SameSite=Strict cookie in
 the normal cookie store, with the exact token and conservative expiration.

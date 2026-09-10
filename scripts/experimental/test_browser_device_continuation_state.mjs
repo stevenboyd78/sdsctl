@@ -7,7 +7,7 @@ const config={identity:'a'.repeat(64),epoch:'b'.repeat(64),build:'c'.repeat(64),
   origin:'https://192.0.2.18:8443'};
 const before={identity:config.identity,epoch:config.epoch,mode:'paused',
   binding:{fingerprint:'d'.repeat(64),revision:4,generation:7}};
-const after={...before,mode:'active',binding:{...before.binding,fingerprint:'e'.repeat(64),revision:7}};
+const after={...before,mode:'active',binding:{...before.binding,fingerprint:'e'.repeat(64),revision:6}};
 const intent='f'.repeat(64),token='sdsctl-browser-session-v1.'+'1'.repeat(64);
 const selectedProbe={tabId:12,documentId:'document-1',ticket:'2'.repeat(64)};
 const proof={...selectedProbe,url:config.origin+'/device-display',displayOnly:true,
@@ -172,7 +172,7 @@ for(const [index,change] of nativeChanges.entries())for(const cut of [2,5,6]) {
 }
 
 const resultChanges=[v=>null,v=>({...v,extra:token}),v=>({...v,binding:null}),
-  v=>({...v,binding:{...v.binding,revision:6}}),v=>({...v,binding:{...v.binding,generation:8}}),
+  v=>({...v,binding:{...v.binding,revision:7}}),v=>({...v,binding:{...v.binding,generation:8}}),
   v=>({...v,binding:{...v.binding,fingerprint:before.binding.fingerprint}}),v=>({...v,session:null}),
   v=>({...v,session:{...v.session,token:'private-invalid'}}),
   v=>({...v,session:{...v.session,extra:true}}),
@@ -275,4 +275,13 @@ test('unknown generation never qualifies accepted state or an initial session',(
 for(const generation of [false,0,'7',undefined,NaN,Infinity])test('offline status refuses malformed generation '+String(generation),()=>{
   const f=fixture(),observed={...before,binding:{...before.binding,generation}};
   assert.deepEqual(classifyContinuationStartup(config,f.saved,observed),stopped);
+});
+
+for(const delta of [-1,0,1,3,4])test('initial completion requires exactly two native revision advances: '+delta,()=>{
+  const f=fixture().advance(2),changed=clone(after);
+  changed.binding.revision=before.binding.revision+delta;
+  // Mutate BOTH observations so their equality cannot mask the revision guard.
+  const issued={...result(),binding:changed.binding};
+  rejects(()=>f.attempt.sessionReturned(issued,changed));
+  assert.equal(f.saved.phase,'initial_pending');
 });

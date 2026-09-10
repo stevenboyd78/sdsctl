@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import sys
 import time
 from contextlib import closing
 from dataclasses import FrozenInstanceError
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -39,6 +42,62 @@ from tests.test_browser_device_startup import inputs as inputs
 
 pytestmark = pytest.mark.skipif(sys.platform != "linux" or os.geteuid() == 0,
                                reason="Non-root Linux supervised historical chain")
+
+
+def _browser_core_accepts_native_fixture(expected, result):
+    """Actual owned native result, but modeled browser I/O: not browser acceptance."""
+    from sds200.browser_device_worker import worker_graph
+
+    node = shutil.which("node")
+    assert node is not None, "The native/browser contract requires Node; do not skip it."
+
+    def observation(value):
+        return dict(identity=value.identity, epoch=value.epoch, mode=value.mode.value,
+                    binding=dict(fingerprint=value.state_fingerprint,
+                                 revision=value.native_revision, generation=7))
+
+    payload = dict(settings=dict(identity=expected.identity, epoch=expected.epoch,
+                                 origin=expected.origin, build=worker_graph()[0]),
+                   before=observation(expected), after=observation(result.state),
+                   session=dict(token=result.session.token, expires_in=result.session.expires_in))
+    script = """
+      import assert from 'node:assert/strict';
+      import {readFileSync} from 'node:fs';
+      import {pausedContinuationRecord,createInitialInstallation,classifyContinuationStartup} from
+        './src/sds200/browser_assets/browser_device_continuation_state.mjs';
+      const {settings,before,after,session}=JSON.parse(readFileSync(0,'utf8'));
+      const make=()=>{
+        const a=createInitialInstallation(settings,pausedContinuationRecord(settings),before,
+          {wall:()=>1000000,monotonic:()=>500000});
+        const pending=a.pendingRecord('e'.repeat(64));
+        a.pendingSaved(structuredClone(pending));
+        return a;
+      };
+      const a=make();
+      const details=a.sessionReturned({binding:after.binding,session},after);
+      const {url,...values}=details;
+      const cookie={...values,domain:new URL(url).hostname,hostOnly:true,session:false};
+      a.cookieInstalled(cookie);
+      const probe={tabId:1,documentId:'fixture-document',ticket:'f'.repeat(64)};
+      a.probeStarted(probe);
+      const accepted=a.protectedPageVerified({...probe,url:settings.origin+'/device-display',
+        displayOnly:true,deviceEnrolled:true,remainingSeconds:session.expires_in},cookie,after);
+      assert.deepEqual(a.acceptedSaved(structuredClone(accepted),after,cookie),
+        {mode:'accepted',sessionReady:true});
+      assert.deepEqual(classifyContinuationStartup(settings,accepted,after),
+        {mode:'verification_required',sessionReady:false});
+      // Neither a missing completion nor an extra native mutation may be adopted.
+      for(const delta of [-1,1]) {
+        const changed={...after,binding:{...after.binding,revision:after.binding.revision+delta}};
+        assert.throws(()=>make().sessionReturned({binding:changed.binding,session},changed));
+      }
+      console.log('Native/browser modeled contract passed');
+    """
+    checked = subprocess.run([node, "--input-type=module", "-e", script],
+        cwd=Path(__file__).resolve().parents[1], input=json.dumps(payload),
+        text=True, capture_output=True, timeout=15, check=False)
+    assert checked.returncode == 0, checked.stderr
+    assert checked.stdout.strip() == "Native/browser modeled contract passed"
 
 
 @pytest.fixture
@@ -1103,8 +1162,12 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
             if outcome == "issued":
                 result = obj.run(expected, **kwargs)
                 assert result.state.mode is RecoveryMode.ACTIVE
+                # Prepare and completion advance revision; claim only changes
+                # phase/fingerprint. Feed actual native fields to the JS core.
+                assert result.state.native_revision == expected.native_revision + 2
                 assert result.session.token == TOKEN and 290 < result.session.expires_in <= 300
                 assert obj.confirm().state == result.state
+                _browser_core_accepts_native_fixture(expected, result)
             else:
                 with pytest.raises(session.BrowserContinuationSessionError):
                     obj.run(expected, **kwargs)
