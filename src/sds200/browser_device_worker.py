@@ -123,8 +123,15 @@ def _browser_directory(bundle: Path, extension_origin: str) -> Path:
         if len(before) > 4096 or len(raw) > 32768 or not raw.endswith(b"\0"):
             raise ValueError()
         parts = before.rsplit(b")", 1)[1].split()
-        if b"--user-data-dir=" in raw and (proc / "exe").resolve(strict=True).name in {
-                "chromium", "chromium-browser"}:
+        # A launcher such as bwrap also carries the browser's switches, but its
+        # executable link may be unreadable from the child's user namespace.
+        # Filter using the kernel comm (15 visible bytes) BEFORE dereferencing
+        # exe. This is not identity proof or a fallback: every browser candidate
+        # must still pass the real executable, exact argv and stable-PID checks.
+        comm = before.split(b"(", 1)[1].rsplit(b")", 1)[0]
+        if (b"--user-data-dir=" in raw and comm in {b"chromium", b"chromium-browse"}
+                and (proc / "exe").resolve(strict=True).name in {
+                    "chromium", "chromium-browser"}):
             roots.append(_selected_directory(raw, bundle, extension_origin))
         with (proc / "stat").open("rb") as stream:
             after = stream.read(4097).rsplit(b")", 1)[1].split()
