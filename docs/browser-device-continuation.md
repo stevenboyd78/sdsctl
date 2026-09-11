@@ -2,9 +2,9 @@
 
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
-controlled native cancellation, owned prepare/claim, verification and initial-session fixtures;
+controlled native cancellation, owned prepare/claim, verification and initial-session core;
 one-shot browser installation I/O with modeled authority qualification;
-fixed read-only continuation context and explicit server-review routing;
+fixed continuation context, server-review and initial-session native routing;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -21,9 +21,12 @@ safely implement the next transition.
 
 The [operation ownership and stop boundary](browser-device-continuation-operation.md)
 describes the unselected asynchronous composition of document confirmation,
-installation and the separate-key browser stop marker. Native issuance and
-protected-page proof remain modeled boundaries in this composition; it is not
-a new live continuation or sign-out route.
+installation and the separate-key browser stop marker. A fixed native
+initial-session request now reaches the owned issuance core, but this browser
+composition does not select that request yet: its issuance and protected-page
+proof ports remain modeled boundaries. It is not a new live continuation or
+sign-out route. See [owned initial session issuance](#owned-initial-session-issuance)
+for the native request's limited scope.
 
 ### Fixed read-only continuation route
 
@@ -759,7 +762,23 @@ loss. This adapter returns no session/token, installs no cookie, changes no
 Chromium storage and does not expose activation or normal schema-3 dispatch.
 Real retained profiles, Home Assistant and both bench Pis remain out of scope.
 
-## Owned initial session issuance (fixture-only, no browser installation)
+## Owned initial session issuance
+
+**Fixed native wire; no ordinary browser selection or browser installation.**
+The `continuation-initial-session` action is accepted only inside the exact
+build-bound worker envelope for an independently selected continuation
+installation. It accepts comparison fields for epoch, intent, native
+fingerprint/revision and reviewed server generation, never a caller-selected
+role, path, URL, proof, approval or credential. Native reconstructs the actual
+owned PAUSED state before creating a new attempt; request fields do not create
+that state or bypass the ordinary startup guard.
+
+The installed worker is responsible for document-bound consent. The native
+acknowledgement callback only compares its reconstructed review to this one
+request; it does not prove that a physical click occurred. Native independently
+rechecks private inputs and fresh server generation. The active page and worker
+do not select this action, and installed-wrapper and end-to-end browser
+qualification remain separate gates before live-profile or physical testing.
 
 `browser_device_continuation_session` composes a new owned verification attempt
 internally and consumes its successful return once. No supplied verifier, proof,
@@ -777,21 +796,26 @@ A newer pause or changed files/owner/state prevents returning the session.
 
 One wall/monotonic budget spans the entire operation, including consent,
 verification and issuance. All elapsed time is conservatively subtracted from
-the returned session lifetime. The existing independent native supervisor's
-ten-second deadline is still required before wiring dispatch; these elapsed
-checks do not interrupt a blocked socket.
+the returned session lifetime. Fixed native dispatch also deducts its whole
+elapsed time conservatively, including final owned-state confirmation, before
+returning the token. The existing independent native supervisor enforces the
+ten-second process deadline for this action, including output; elapsed checks
+alone do not interrupt a blocked socket.
 
 The private result contains an in-memory bearer only once, with redacted
 representations. This does not make the bearer single-use for HTTP requests.
 No token is saved in the ledger, history, manifest, diagnostics or command line.
 Exact confirmation reports native state only and never retrieves a token,
-repeats issuance or establishes browser readiness.
+repeats issuance or establishes browser readiness. The initial response binds
+the transient session to the build, identity, epoch, ACTIVE fingerprint/revision
+and reviewed generation. A lost output cannot be recovered by resending the
+same stale-binding request, even with a different intent.
 
 A refused, interrupted, late or lost session response does not trigger an
 automatic retry, a failure-state rewrite or a second approval. Native ACTIVE
 may remain after uncertainty, and a server-issued token may still be valid.
 Neither readback nor the absence of a browser cookie proves remote revocation.
-Ordinary schema-3 dispatch remains blocked; no retained pending browser record
+Ordinary schema-3 startup/authentication remains blocked; no retained pending browser record
 may treat this native state as permission to retry initialization or sign in.
 
 The adapter adds no session-claim database or schema relaxation and does not

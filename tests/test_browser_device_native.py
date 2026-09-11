@@ -82,7 +82,7 @@ def certificates(tmp_path_factory):
         pytest.skip("OpenSSL TLS fixture")
     root = tmp_path_factory.mktemp("native-tls")
     pairs = []
-    for name, san in [("right", "DNS:localhost,IP:127.0.0.1"),
+    for name, san in [("right", "DNS:localhost,IP:127.0.0.1,IP:::1"),
                       ("wrong", "DNS:not-the-server.invalid")]:
         cert, key = root / f"{name}.pem", root / f"{name}.key"
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
@@ -131,13 +131,19 @@ def server(root, certificates, request):
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
-    selected = certificates[getattr(request, "param", 0)]
+    ipv6 = getattr(request, "param", 0) == "ipv6"
+    selected = certificates[0 if ipv6 else getattr(request, "param", 0)]
     context.load_cert_chain(*selected)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    class IPv6Server(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+
+    httpd = (IPv6Server(("::1", 0), Handler) if ipv6
+             else ThreadingHTTPServer(("127.0.0.1", 0), Handler))
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
-    configure(root, f"https://localhost:{httpd.server_port}")
+    hostname = "[::1]" if ipv6 else "localhost"
+    configure(root, f"https://{hostname}:{httpd.server_port}")
     private(root / "ca.pem", selected[0].read_bytes())
     configuration = initialize(root)
     try:

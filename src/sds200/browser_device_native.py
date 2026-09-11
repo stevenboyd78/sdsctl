@@ -30,6 +30,7 @@ from urllib.parse import urlsplit
 
 from .browser_device_profile_access import browser_profile_access
 from .browser_device_protocol import (
+    BrowserContinuationInitialRequest,
     BrowserContinuationReadRequest,
     BrowserDeviceAction,
     BrowserDeviceRequest,
@@ -305,7 +306,8 @@ def _native_request(
                     if isinstance(request, BrowserWorkerRequest):
                         if (retirement is None
                                 and not isinstance(request.request,
-                                                   BrowserContinuationReadRequest)):
+                                    (BrowserContinuationReadRequest,
+                                     BrowserContinuationInitialRequest))):
                             paused_only = normal_worker_paused_only(configuration, worker)
                         request = request.request
                 elif isinstance(request, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
@@ -313,13 +315,19 @@ def _native_request(
                 if isinstance(request, BrowserWorkerContextRequest):
                     assert worker is not None
                     document = worker_context(configuration, worker, retirement)
-                elif isinstance(request, BrowserContinuationReadRequest):
+                elif isinstance(request, (BrowserContinuationReadRequest,
+                                          BrowserContinuationInitialRequest)):
                     if (worker is None or retirement is not None
                             or not continuation_worker_selected(configuration, worker)):
                         raise ValueError()
-                    from .browser_device_continuation_dispatch import continuation_read_request
+                    from .browser_device_continuation_dispatch import (
+                        continuation_initial_request,
+                        continuation_read_request,
+                    )
 
-                    document = continuation_read_request(configuration, worker, request)
+                    document = (continuation_read_request(configuration, worker, request)
+                        if isinstance(request, BrowserContinuationReadRequest)
+                        else continuation_initial_request(configuration, worker, request))
                 elif paused_only:
                     if (not isinstance(request, BrowserDeviceRequest)
                             or request.action is not BrowserDeviceAction.STATUS):

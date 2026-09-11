@@ -1,9 +1,10 @@
-"""Fixture-only owned exact-generation verification; no session or browser wiring.
+"""Private owned exact-generation verification for one native attempt.
 
-One process creates and consumes its own approval. A trusted in-process callback
-still SIMULATES browser consent. Verified HTTPS proof is real, but completion is
+One process creates and consumes its own approval. The trusted in-process callback
+does not independently prove browser consent. Verified HTTPS proof is real, but completion is
 only native state, never an installed session or cached permission. Ordinary
-schema-3 dispatch remains blocked. Do not run this adapter on real profiles.
+schema-3 startup remains blocked. Do not invoke this private adapter directly
+on deployed profiles.
 """
 from __future__ import annotations
 
@@ -48,10 +49,10 @@ def _commit(db: sqlite3.Connection) -> None:
 
 
 class _BrowserWorkerVerification:
-    """One private fixture attempt; no supplied approval, proof, transport or role.
+    """One private attempt; no supplied approval, proof, transport or role.
 
     Elapsed checks cover the WHOLE operation, not a renewed per-phase allowance.
-    They do not interrupt blocked I/O: eventual native dispatch must also retain
+    They do not interrupt blocked I/O: fixed native dispatch also retains
     the independent ten-second supervising process deadline. This is not wired
     to the old two-message prepare/commit protocol or any ordinary worker role.
     """

@@ -1,9 +1,11 @@
-"""Fixture-only live-owner prepare/claim; no online authority or browser dispatch.
+"""Private live-owner prepare/claim; no caller-supplied online authority.
 
-The trusted, in-process review callback is a fixture boundary, NOT a browser
-gesture verifier or TLS proof. One process owns the entire attempt; nothing can
+The trusted in-process callback is NOT a browser gesture verifier or TLS proof.
+It is supplied by fixtures or the fixed initial-session dispatch, never serialized
+from the browser. One process owns the entire attempt; nothing can
 serialize/adopt it across native messages. No ticket, credential or grant is
-returned. Ordinary schema-3 startup remains blocked. Do not use on real profiles.
+returned. Ordinary schema-3 startup remains blocked. Do not invoke this private
+adapter directly on deployed profiles.
 """
 from __future__ import annotations
 

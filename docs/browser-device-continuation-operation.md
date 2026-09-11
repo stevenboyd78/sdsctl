@@ -31,13 +31,26 @@ boundary, separately from issuance. If that document read crosses the 45-second
 installation deadline, the native issuance callback is never selected, even
 while the one-minute confirmation budget has not yet expired.
 
-The future fixed native initial request has only comparison inputs: the selected
+The fixed native initial request has only comparison inputs: the selected
 epoch, fresh random intent, reviewed native fingerprint/revision, and reviewed
 server generation, inside the existing build-bound worker envelope. It carries
 no credential, browser cookie, arbitrary URL/path, role, supplied proof, reusable
-approval or browser readiness. This is a **proposed schema**, not a newly accepted
-protocol action. Native reconstructs the owned current state and private inputs,
+approval or browser readiness. The inner action is
+`continuation-initial-session`, with exact `epoch`, `intent` and
+`binding: {fingerprint, revision, generation}` fields. The fixed wrapper accepts
+it only in the existing build-bound worker envelope for an independently selected
+continuation installation; ordinary, unwrapped and retirement routes reject it.
+Native reconstructs the owned current state and private inputs,
 performs its own verification, and consumes one same-process issuance attempt.
+
+The installed worker owns document-bound consent. Native does **not** treat the
+message, a boolean or the private acknowledgement callback as evidence of a
+physical click. That callback only compares the reconstructed review with this
+one fixed request. The unchanged same-process owner independently verifies
+private inputs and current server generation before issuance. Response fields
+bind the transient session to the current build, identity, epoch and resulting
+native state, never browser readiness. No ordinary browser page/worker selects
+this request yet; real installed end-to-end acceptance remains outstanding.
 
 Before dispatch the owner must observe the exact pending browser record and a
 still-current confirmed document. Native keeps its independent ten-second

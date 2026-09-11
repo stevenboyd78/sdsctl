@@ -1,9 +1,10 @@
-"""Fixture-only initial session issuance after the same owned verification attempt.
+"""Private initial session issuance after the same owned verification attempt.
 
-No native/browser dispatch, cookie installation, renewal or retry is enabled.
+The fixed native initial request may select this adapter; ordinary browser
+selection, cookie installation, renewal and retry remain disabled.
 Native completion is not browser readiness. Lost/late issuance stays uncertain:
 a server token may exist, but readback cannot retrieve it or issue another one.
-Do not use this adapter on real profiles.
+Do not invoke this private adapter directly on deployed profiles.
 """
 from __future__ import annotations
 
@@ -38,11 +39,12 @@ class BrowserInitialSession:
 
 
 class _BrowserWorkerInitialSession:
-    """One fixture operation creates its own verifier and consumes its return once.
+    """One operation creates its own verifier and consumes its return once.
 
     No supplied proof/result/transport/grant is accepted. The total elapsed budget
-    spans consent, proof and issuance; future dispatch must ALSO retain the native
-    supervisor's independent ten-second deadline. Consent remains simulated here.
+    spans consent, proof and issuance; dispatch ALSO retains the native supervisor's
+    independent ten-second deadline. The callback is a trusted in-process boundary,
+    not native evidence that the user physically confirmed a browser document.
     A bearer is returned at most once, not made into a single-use HTTP credential.
     """
 
