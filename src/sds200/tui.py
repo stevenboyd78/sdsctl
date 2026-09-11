@@ -251,6 +251,14 @@ _SHARED_TUI_STYLESHEET = """
         min-height: 6;
     }
 
+    Screen.-wide.-tall #connection {
+        min-height: 6;
+    }
+
+    Screen.-wide.-tall.-connection-target #connection {
+        min-height: 7;
+    }
+
     Screen.hide-logs #logs {
         display: none;
     }
@@ -1630,19 +1638,18 @@ class ScannerTuiApp(App[None]):
         if connection is None:
             return
         connection_value = _state_label(presentation.connection.value)
+        connection_stamp = self._transition_stamp("connection", connection_value)
         connection_rows = [
             (
-                "Connection",
-                connection_value,
+                "Status" if self._uses_short_layout() else "Connection",
+                f"{connection_value} @ {connection_stamp}"
+                if self._uses_short_layout() else connection_value,
                 roles.connection,
             ),
-            (
-                "Status since",
-                self._transition_stamp("connection", connection_value),
-                ThemeRole.TEXT_PRIMARY,
-            ),
-            ("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY),
         ]
+        if not self._uses_short_layout():
+            connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
+        connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
         if self._identity.connection_target is not None:
             connection_rows.append(
                 (

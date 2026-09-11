@@ -18,8 +18,10 @@ the header and scanner model/firmware stays in the Scanner panel. The clock
 updates once per second; an unavailable or timezone-ambiguous clock is labeled
 `UTC time unavailable` rather than showing a fabricated timestamp.
 
-The Connection panel keeps its connection label on one line and adds a separate
-`Status since: 2026-09-11T04:03:27Z` line so the date fits on the small Pi.
+On taller screens the Connection panel keeps its connection label on one line
+and adds a separate `Status since: 2026-09-11T04:03:27Z` line. Short screens use
+`Status: CONNECTED @ 2026-09-11T04:03:27Z` on one line, preserving room for the
+other panels on the small Pi, including network audio. `@` means status since.
 This is when this TUI first observed the current **displayed status**, not socket
 uptime or the original daemon/scanner connection time. It can change when a
 connection becomes degraded and resets when the TUI starts. Repeated frames,

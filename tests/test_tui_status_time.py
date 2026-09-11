@@ -66,23 +66,28 @@ def test_utc_status_row_fits_and_repeated_frames_do_not_move_panels(size, remote
         async with app.run_test(size=size) as pilot:
             await pilot.pause()
             connection = app.query_one("#connection", Static)
-            assert "Status since: 2026-12-31T23:59:59Z" in _plain(connection)
-            assert len(_plain(connection).splitlines()) == (4 if remote else 3)
+            short = size[1] < 32
+            prefix = "Status: CONNECTED @ " if short else "Status since: "
+            assert prefix + "2026-12-31T23:59:59Z" in _plain(connection)
+            assert len(_plain(connection).splitlines()) == 3 + int(remote) - int(short)
             assert ("Target:" in _plain(connection)) is remote
             assert all(cell_len(line) <= connection.content_region.width
                        for line in _plain(connection).splitlines())
+            assert len(_plain(connection).splitlines()) <= connection.content_region.height
+            if remote:
+                assert "2001:db8::18" in app.export_screenshot()
             regions = {name: app.query_one(name).region for name in
                        ("#connection", "#system", "#channel", "#state", "#status")}
             now[0] += timedelta(days=2, seconds=1)
             app.update_snapshot(app._snapshot, connected=True)
             await pilot.press("t")
             await pilot.pause()
-            assert "Status since: 2026-12-31T23:59:59Z" in _plain(connection)
+            assert prefix + "2026-12-31T23:59:59Z" in _plain(connection)
             assert {name: app.query_one(name).region for name in regions} == regions
             app._apply_connection(False)
             await pilot.pause()
-            assert "Connection: DISCONNECTED" in _plain(connection)
-            assert "Status since: 2027-01-03T00:00:00Z" in _plain(connection)
+            assert "DISCONNECTED" in _plain(connection)
+            assert "2027-01-03T00:00:00Z" in _plain(connection)
             assert connection.region == regions["#connection"]
             # The full dates must actually be visible, not only in a renderable.
             assert "2027-01-03T00:00:00Z" in app.export_screenshot()
@@ -94,4 +99,38 @@ def test_utc_status_row_fits_and_repeated_frames_do_not_move_panels(size, remote
             await pilot.press("g")
             await pilot.pause()
             assert connection.region == regions["#connection"]
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("size", [(100, 30), (160, 45)])
+def test_remote_timestamp_preserves_scanner_panel_with_audio_and_drawers(tmp_path, size):
+    from sds200.audio import AudioStream
+    from sds200.tui_audio import RecordingPathPolicy, TuiAudioSession
+
+    from .fakes import FakeAudioTransport
+
+    async def exercise():
+        session = TuiAudioSession(AudioStream(FakeAudioTransport()),
+                                  RecordingPathPolicy(directory=tmp_path))
+        app = ScannerTuiApp(
+            ScannerIdentity("sdsctl-remote-daemon", "SDS200", "Version 1.26.01",
+                            connection_target="192.0.2.25:50443"),
+            snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+            now=lambda: datetime(2027, 1, 1, tzinfo=UTC), audio_session=session)
+        async with app.run_test(size=size) as pilot:
+            for key in (None, "g", "question_mark", "question_mark"):
+                if key:
+                    await pilot.press(key)
+                await pilot.pause()
+                if not app.key_help_visible:
+                    body = app.query_one("#body")
+                    identity = app.query_one("#identity")
+                    assert identity.region.bottom <= body.content_region.bottom
+                    assert body.max_scroll_y == 0
+                connection = app.query_one("#connection", Static)
+                assert len(_plain(connection).splitlines()) <= connection.content_region.height
+                svg = app.export_screenshot()
+                if not app.key_help_visible:
+                    assert "192.0.2.25:50443" in svg
+                    assert "2027-01-01T00:00:00Z" in svg
     asyncio.run(exercise())
