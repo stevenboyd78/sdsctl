@@ -48,15 +48,17 @@ def test_fixed_graph_and_all_imports_are_present():
 
 
 @pytest.mark.parametrize("name", ["browser_device_continuation_state.mjs",
-                                  "browser_device_continuation_install.mjs"])
+                                  "browser_device_continuation_install.mjs",
+                                  "browser_device_continuation_stop.mjs"])
 def test_acceptance_core_is_build_bound_but_not_imported_by_active_worker(monkeypatch, name):
     digest, graph = worker.worker_graph()
     assert "extension/" + name in graph
-    adapter = "extension/browser_device_continuation_install.mjs"
+    adapters = {"extension/browser_device_continuation_install.mjs",
+                "extension/browser_device_continuation_stop.mjs"}
     for path, body in graph.items():
-        # Only the unconnected I/O adapter may import the pure core. No graph
-        # member (including the active reader) may import that adapter itself.
-        permitted = path == adapter and name == "browser_device_continuation_state.mjs"
+        # Only these unconnected I/O adapters may import the pure core. No graph
+        # member (including the active reader) may import either adapter itself.
+        permitted = path in adapters and name == "browser_device_continuation_state.mjs"
         if path != "extension/" + name and not permitted:
             assert name.encode() not in body
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != name))

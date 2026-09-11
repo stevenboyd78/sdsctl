@@ -19,6 +19,10 @@ safely implement the next transition.
 
 ## Implemented now
 
+The [operation ownership and stop boundary](browser-device-continuation-operation.md)
+defines the next integration handoff and the unselected separate-key browser
+stop marker. It is not a new live continuation or sign-out route.
+
 ### Fixed read-only continuation route
 
 After a valid fixture-owned activation, a fixed installed worker/native wrapper

@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createContinuationInstallation} from '../../src/sds200/browser_assets/browser_device_continuation_install.mjs';
+import {createContinuationStopFence} from '../../src/sds200/browser_assets/browser_device_continuation_stop.mjs';
 import {pausedContinuationRecord,classifyContinuationStartup} from '../../src/sds200/browser_assets/browser_device_continuation_state.mjs';
 
 // Deterministic Chrome/native/probe contract doubles, NOT end-to-end native
 // consent or real-Chromium acceptance. The production dispatch remains read-only.
 const KEY='sdsctlDeviceRecovery', COOKIE='__Host-sdsctl-device-session';
+const STOP='sdsctlContinuationStop';
 const config={identity:'a'.repeat(64),epoch:'b'.repeat(64),build:'c'.repeat(64),
   origin:'https://display.example.test'};
 const review={identity:config.identity,epoch:config.epoch,mode:'paused',
@@ -33,9 +35,14 @@ function fixture({origin=config.origin,legacy=true}={}) {
   };
   f.chrome={storage:{local:{
     setAccessLevel:options=>f.call('access',()=>assert.deepEqual(options,{accessLevel:'TRUSTED_CONTEXTS'})),
-    get:key=>f.call('read',()=>{assert.equal(key,null);return reordered(f.saved);}),
-    set:values=>f.call('write-'+values[KEY].phase,()=>{
-      f.writes.push(clone(values));f.saved=reordered(clone(values));
+    get:key=>f.call(key===STOP?'read-stop':'read',()=>{
+      assert([null,STOP].includes(key));
+      return reordered(key===null?f.saved:Object.hasOwn(f.saved,key)?{[key]:f.saved[key]}:{});
+    }),
+    set:values=>f.call(Object.hasOwn(values,STOP)?'write-stop':'write-'+values[KEY].phase,()=>{
+      // Chrome set updates the provided keys; it does not replace the whole
+      // storage area. Preserve unrelated keys, including a concurrent stop.
+      f.writes.push(clone(values));f.saved=reordered({...f.saved,...clone(values)});
     }),
   }},cookies:{
     get:query=>f.call('cookie',()=>{
@@ -225,4 +232,106 @@ test('probe abort/cleanup does not remove a cookie or rewrite uncertain accepted
   const f=fixture();f.after=name=>{if(name==='probe-open')f.owner.invalidate();};
   await assert.rejects(f.owner.run(),failure);assert.equal(f.signal.aborted,true);
   assert.equal(f.closed,1);assert.equal(f.cookie.value,token);assert.equal(f.saved[KEY].phase,'initial_pending');
+});
+
+const stopFailure={message:'Browser continuation stop is unconfirmed; retain all saved state.'};
+function stopFence(f) {
+  f.stopTimers??=new Set();
+  return createContinuationStopFence(f.chrome,f.config,{wall:()=>f.wall,monotonic:()=>f.mono,
+    schedule:(fn,ms)=>{assert.equal(ms,10000);const t={fn};f.stopTimers.add(t);return t;},
+    cancel:t=>f.stopTimers.delete(t)});
+}
+const stopped={mode:'continuation_stopped',browserStopSaved:true,
+  nativePauseConfirmed:false,serverRevocationConfirmed:false,sessionReady:false};
+
+test('stop fence is inert until selected and never touches the original recovery record',async()=>{
+  const f=fixture(),before=clone(f.saved),fence=stopFence(f);
+  assert.deepEqual(f.calls,[]);
+  assert.deepEqual(await fence.save(),stopped);
+  assert.deepEqual(f.saved[KEY],before[KEY]);
+  assert.deepEqual(f.saved[STOP],{version:1,identity:config.identity,epoch:config.epoch,
+    build:config.build,stopped:true});
+  assert.deepEqual(f.calls,['access','read-stop','write-stop','read-stop']);
+  assert(!JSON.stringify(f.saved).includes(token));assert.equal(f.stopTimers.size,0);
+  const count=f.calls.length;await assert.rejects(fence.save(),stopFailure);
+  assert.equal(f.calls.length,count);
+  await assert.rejects(f.make().run(),failure);assert.equal(f.issues,0);
+});
+
+for(const name of ['write-initial_pending','issue','cookie-set','write-accepted'])
+  test('separate stop survives late '+name+' and blocks a new installer',async()=>{
+    const f=fixture(),entered=deferred(),release=deferred();
+    f.before=async action=>{if(action===name){entered.resolve();await release.promise;}};
+    const running=f.owner.run();await entered.promise;
+    // The trusted future owner must do this synchronously BEFORE awaiting save.
+    f.owner.invalidate();await assert.rejects(running,failure);
+    assert.deepEqual(await stopFence(f).save(),stopped);
+    const marker=clone(f.saved[STOP]),count=f.calls.length;
+    release.resolve();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.calls.length,count);assert.deepEqual(f.saved[STOP],marker);
+    assert.equal(f.saved[KEY].phase,name==='write-accepted'?'accepted':'initial_pending');
+    const nativeBefore=clone(f.native),cookieBefore=clone(f.cookie),issues=f.issues;
+    f.before=null;await assert.rejects(f.make().run(),failure);
+    assert.equal(f.issues,issues);assert.deepEqual(f.native,nativeBefore);
+    assert.deepEqual(f.cookie,cookieBefore);assert.deepEqual(f.saved[STOP],marker);
+  });
+
+for(const when of ['before','after'])for(let cut=0;cut<4;cut++)
+  test('stop '+when+' API failure '+cut+' is unconfirmed and never replayed',async()=>{
+    const f=fixture(),fence=stopFence(f);f[when]=(_,index)=>{if(index===cut)throw Error('private detail');};
+    await assert.rejects(fence.save(),stopFailure);
+    const saved=clone(f.saved),count=f.calls.length;f[when]=null;
+    await assert.rejects(fence.save(),stopFailure);assert.deepEqual(f.saved,saved);
+    assert.equal(f.calls.length,count);assert.equal(f.stopTimers.size,0);assert.equal(f.issues,0);
+    if(when==='after'&&cut>=2)assert.equal(f.saved[STOP].stopped,true);
+  });
+
+for(const key of ['wall','mono'])for(const change of ['back','expired','invalid'])
+  for(let cut=0;cut<4;cut++)test('stop '+key+' '+change+' after API '+cut+' refuses readiness',async()=>{
+    const f=fixture(),fence=stopFence(f);
+    f.after=(_,index)=>{if(index===cut)f[key]=change==='back'?f[key]-1:
+      change==='expired'?f[key]+10000:NaN;};
+    await assert.rejects(fence.save(),stopFailure);assert.equal(f.calls.length,cut+1);
+    assert.equal(f.issues,0);assert.equal(f.stopTimers.size,0);
+  });
+
+for(const method of ['timeout','invalidate'])
+  test(method+' does not undo an outstanding stop write or adopt its late completion',async()=>{
+    const f=fixture(),fence=stopFence(f),entered=deferred(),release=deferred();
+    f.before=async name=>{if(name==='write-stop'){entered.resolve();await release.promise;}};
+    const pending=fence.save();await entered.promise;
+    if(method==='timeout')for(const t of f.stopTimers)t.fn();else fence.invalidate();
+    await assert.rejects(pending,stopFailure);assert.equal(f.saved[STOP],undefined);
+    const count=f.calls.length;release.resolve();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.saved[STOP].stopped,true);assert.equal(f.calls.length,count);
+    await assert.rejects(fence.save(),stopFailure);assert.equal(f.calls.length,count);
+    assert.equal(f.stopTimers.size,0);
+  });
+
+for(const marker of [null,false,{}, {version:1,identity:config.identity,epoch:config.epoch,
+  build:config.build,stopped:true}])test('pre-existing stop is retained without adoption '+JSON.stringify(marker),async()=>{
+    const f=fixture();f.saved[STOP]=clone(marker);const saved=clone(f.saved);
+    await assert.rejects(stopFence(f).save(),stopFailure);
+    assert.deepEqual(f.saved,saved);assert.equal(f.writes.length,0);
+    await assert.rejects(f.make().run(),failure);assert.equal(f.issues,0);
+  });
+
+for(const mutate of [v=>null,v=>({...v,stopped:false}),v=>({...v,epoch:'e'.repeat(64)}),
+  v=>({...v,extra:true})])test('stop write requires exact readback '+mutate.toString(),async()=>{
+    const f=fixture();f.after=name=>{if(name==='write-stop')f.saved[STOP]=mutate(f.saved[STOP]);};
+    await assert.rejects(stopFence(f).save(),stopFailure);assert.equal(f.writes.length,1);
+  });
+
+for(const change of [v=>({...v,build:'invalid'}),v=>({...v,role:'continuation'}),
+  v=>({...v,origin:'http://display.example.test'}),v=>({...v,epoch:null})])
+  test('invalid stop selection is refused before storage '+change.toString(),()=>{
+    const f=fixture();assert.throws(()=>createContinuationStopFence(f.chrome,change(f.config)));
+    assert.deepEqual(f.calls,[]);
+  });
+
+test('stop invalidation before save is inert; mutation of supplied settings cannot retarget it',async()=>{
+  const f=fixture(),fence=stopFence(f);fence.invalidate();
+  await assert.rejects(fence.save(),stopFailure);assert.deepEqual(f.calls,[]);
+  const next=stopFence(f);f.config.identity='f'.repeat(64);
+  assert.deepEqual(await next.save(),stopped);assert.equal(f.saved[STOP].identity,config.identity);
 });
