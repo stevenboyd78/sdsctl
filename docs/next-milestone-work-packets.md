@@ -7,9 +7,11 @@ managed-browser recovery path or new hardware evidence. The
 [project vision](project-vision.md) retains unscheduled product ideas. Do not
 assign new milestone numbers or release versions from this document.
 
-Repository inspection baseline: `ffb3e101de7014d7513daef49d454c81bdc7c59b`
-(`main`, including the merged connected-client age presentation). Browser
-continuation is separately under review in
+Initial inspection baseline: `ffb3e101de7014d7513daef49d454c81bdc7c59b`
+(`main`, including the merged connected-client age presentation). The TUI time
+packet below was updated after [PR #253](https://github.com/stevenboyd78/sdsctl/pull/253)
+merged as `6f8c1b2ea606368c793a0136ff38d1463440a991`; unrelated source findings
+still name the initial baseline. Browser continuation is separately under review in
 [draft PR #250](https://github.com/stevenboyd78/sdsctl/pull/250). Recheck both
 baselines before implementing a packet; this is not a claim that the draft is
 merged or that its installed recovery path is complete.
@@ -18,7 +20,7 @@ merged or that its installed recovery path is complete.
 
 | Work packet | Can start without browser continuation? | Safe preparation now | Gate before claiming support |
 | --- | --- | --- | --- |
-| TUI time and endpoint identity | Yes | Trace metadata and clock ownership; deterministic formatting, compatibility and layout tests | Exact endpoint semantics and both Pi layouts |
+| TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
 | TUI waterfall | Yes, but use the existing daemon data plane | Read-only renderer design, bounded history and fake-stream tests | Subscription cleanup, resizing and scanner-mode acceptance |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |
@@ -37,9 +39,11 @@ follow-up into the browser authorization PR.
 
 ### Source findings
 
-- [TUI composition](../src/sds200/tui.py) uses Textual's header clock and
-  `_transition_display`, which records a presentation-state change and formats
-  only the time of day. That is not measured socket uptime.
+- At the initial baseline, [TUI composition](../src/sds200/tui.py) used a
+  time-only header and transition label. PR #253 replaced those with local
+  RFC 2822-style dates. `_transition_display` still records a presentation-state
+  change, not measured socket uptime; the date must not be relabeled as a
+  verified connection start.
 - [Daemon TUI adaptation](../src/sds200/daemon_tui.py) uses `scanner_connected`
   from the authoritative snapshot, but also reports disconnection when its
   event stream is unavailable. That boolean alone cannot establish separate
@@ -54,23 +58,31 @@ follow-up into the browser authorization PR.
   values shown as unavailable. This packet must not reimplement that completed
   web change or claim it is already released.
 
-### Small implementation slices
+### Completed time presentation
 
-1. **Header only:** render an aware UTC wall-clock timestamp in ISO 8601
-   24-hour form, such as `2026-09-11T06:59:40Z`, while retaining the local
-   application name/version. Verify date rollover and width before changing
-   connection-row semantics.
-2. **Status timestamps:** retain the actual meaning of each presentation-state
-   transition. Prefer explicit `Status since` wording rather than relabeling
-   this existing value as a connection start. Keep full UTC dates and avoid
-   wrapping long values into adjacent panels.
-3. **Endpoint version:** introduce optional, bounded application-version
+The user accepted full local dates with a numeric UTC offset and 24-hour time,
+for example `Fri, 11 Sep 2026 08:06:34 -0600`, instead of the earlier UTC-only
+proposal. The local `SDSCTL` application name/version remains in the header;
+scanner model and firmware remain in the Scanner pane. The timezone belongs to
+the machine running the TUI, including when that TUI is viewed through SSH.
+
+The header follows the current local clock. `Status since` (or the compact
+status label plus timestamp) retains the observed transition's date and offset,
+including across a later DST change. Unavailable timestamps are explicit; no
+socket start or elapsed connection duration is invented. Both 100x30 and 160x45
+bench displays passed visual acceptance, and a user-initiated Home Assistant
+App restart passed disconnected/retrying and automatic recovery acceptance.
+These are merged development changes, not a claim that a new release is published.
+
+### Remaining implementation slices
+
+1. **Endpoint version:** introduce optional, bounded application-version
    metadata on an authenticated daemon response, with compatibility tests for
    old clients and old daemons. Render it only for a remote daemon, with an
    explicit unavailable value when missing. Refresh or invalidate it when the
    selected connection changes; do not retain an old daemon version after an
    upgrade or use a second scanner connection to discover it.
-4. **Connection duration, if implemented:** first add an explicit owner for the
+2. **Connection duration, if implemented:** first add an explicit owner for the
    selected link's successful connection/reconnection events. Use monotonic
    time for elapsed duration and aware wall time for `Connected since`.
    Separate unavailable transport, stale scanner state and process uptime.
@@ -81,10 +93,10 @@ follow-up into the browser authorization PR.
 
 | Case | Required result |
 | --- | --- |
-| UTC midnight, year rollover and non-UTC input | Full correct date/time with `Z`; no ambiguous local timestamp |
+| Local midnight, year rollover and non-UTC input | Full correct local date, English weekday/month, 24-hour time and numeric UTC offset |
 | 59/60 seconds, 3599/3600 seconds, 86399/86400 seconds | Exact duration boundaries; days do not wrap at 24 hours |
 | Multi-day/month-length duration | Elapsed days, not invented fixed-length calendar months or years |
-| Wall-clock correction or DST transition | Header follows current UTC; monotonic duration does not jump |
+| Wall-clock correction or DST transition | Header follows local time and offset; the recorded status transition remains fixed; any future monotonic duration does not jump |
 | Unknown original connection start | Explicit unavailable/observed-state semantics; no fabricated uptime |
 | Stale PSI, healthy PSI, scanner reconnect, daemon reconnect | Distinct state transitions; only the selected actual link resets duration |
 | Older daemon, mixed application versions, malformed metadata | Compatible connection and safe bounded unavailable/version display |
