@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import {connectContinuationOperationWorker} from '../../src/sds200/browser_assets/browser_device_continuation_consent.mjs';
 import {createWorkerEventGate} from '../../src/sds200/browser_assets/browser_device_worker_gate.mjs';
 import {classifyContinuationStartup} from '../../src/sds200/browser_assets/browser_device_continuation_state.mjs';
+import {createContinuationNativePorts} from '../../src/sds200/browser_assets/browser_device_continuation_native.mjs';
 
-// Actual event gate, document consent, installation and independent stop adapter.
-// Only Chrome/native/probe boundaries are fictional. No installed native wire,
-// actual TLS exchange, server revocation or physical browser acceptance here.
+// Actual event gate, document consent, native-response adapter, installation and
+// independent stop adapter. Chrome/native/probe boundaries are fictional. No
+// installed native host, TLS, revocation or physical browser acceptance here.
 const id='a'.repeat(32),build='b'.repeat(64),identity='c'.repeat(64),epoch='d'.repeat(64);
 const extension=`chrome-extension://${id}`,url=extension+'/resume.html';
 const KEY='sdsctlDeviceRecovery',STOP='sdsctlContinuationStop';
@@ -45,10 +46,21 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
     onInstalled:event('installed'),getContexts:filter=>f.call('contexts',()=>{
       assert.deepEqual(filter,{contextTypes:['TAB'],documentIds:['document-1'],tabIds:[7],frameIds:[0],incognito:false});
       return f.rows;
-    }),sendNativeMessage:(host,request)=>{
-      assert.equal(host,'org.sdsctl.browser_device');assert.deepEqual(Object.keys(request).sort(),['action','version']);
+    }),sendNativeMessage:(host,envelope)=>{
+      assert.equal(host,'org.sdsctl.browser_device');
+      assert.deepEqual(Object.keys(envelope).sort(),['action','build','request','version']);
+      assert.equal(envelope.version,1);assert.equal(envelope.action,'worker-request');assert.equal(envelope.build,build);
+      const request=envelope.request;
       assert.equal(request.version,1);
-      if(request.action==='continuation-current')return f.call('consent-current',()=>f.initial);
+      if(request.action==='continuation-initial-session')return f.call('issue',()=>{
+        f.issues++;assert.equal(f.saved[KEY].phase,'initial_pending');
+        assert.deepEqual(request,{version:1,action:'continuation-initial-session',
+          epoch,intent:f.saved[KEY].intent,binding:f.review.binding});
+        f.native=clone(f.active);return {version:1,ok:true,build,...f.active,session:{token,expires_in:300}};
+      });
+      assert.deepEqual(Object.keys(request).sort(),['action','version']);
+      if(request.action==='continuation-current')return f.call('current',()=>({...f.initial,
+        continuation:{epoch:f.native.epoch,mode:f.native.mode,binding:clone(f.native.binding)}}));
       assert.equal(request.action,'continuation-review');return f.call('server-review',()=>({version:1,ok:true,
         build,...f.review}));
     }},storage:{local:{setAccessLevel:value=>f.call('access',()=>{
@@ -71,12 +83,7 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
     }),create:forbidden('alarm.create'),clear:forbidden('alarm.clear')},
     tabs:{onUpdated:event('tab'),get:tab=>f.call('tab',()=>{assert.equal(tab,7);return f.tab;}),
       create:forbidden('tab.create'),update:forbidden('tab.update'),remove:forbidden('tab.remove')}};
-  f.options={readCurrent:()=>f.call('install-current',()=>f.native),
-    issueInitial:request=>f.call('issue',()=>{
-      f.issues++;assert.equal(f.saved[KEY].phase,'initial_pending');
-      assert.deepEqual(request,{epoch,intent:f.saved[KEY].intent,binding:f.review.binding});
-      f.native=clone(f.active);return {binding:clone(f.active.binding),session:{token,expires_in:300}};
-    }),createProbe:({signal})=>{
+  f.options={createProbe:({signal})=>{
       assert.equal(signal.aborted,false);f.signal=signal;
       return {open:()=>f.call('probe-open',()=>selection),
         verify:()=>f.call('probe-verify',()=>({url:origin+'/device-display',...selection,
@@ -86,8 +93,14 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
       const timer={fn,ms};f.timers.add(timer);return timer;},cancel:timer=>f.timers.delete(timer)};
   f.start=()=>{
     f.gate=createWorkerEventGate(f.chrome,()=>f.clock[1],f.options.schedule,f.options.cancel);
-    f.scoped=f.gate.prepareContinuationConsent();
-    f.owner=connectContinuationOperationWorker(f.scoped,f.initial,build,f.options);f.gate.open();
+    const gated=f.gate.prepareContinuationConsent(),runtime=Object.create(gated.runtime);
+    Object.defineProperty(runtime,'sendNativeMessage',{value:(host,request)=>
+      f.chrome.runtime.sendNativeMessage(host,{version:1,action:'worker-request',build,request})});
+    f.scoped=Object.create(gated);Object.defineProperty(f.scoped,'runtime',{value:runtime});
+    f.nativePorts=createContinuationNativePorts(f.scoped,f.initial,build,f.options);
+    f.owner=connectContinuationOperationWorker(f.scoped,f.initial,build,{...f.options,
+      readCurrent:f.nativePorts.readCurrent,issueInitial:f.nativePorts.issueInitial,
+      invalidateNative:f.nativePorts.invalidate});f.gate.open();
     assert.deepEqual(Object.keys(f.events),['message','startup','installed','alarm','tab']);
   };
   f.ask=(message={action:'resume-review'},document=sender())=>new Promise(resolve=>{

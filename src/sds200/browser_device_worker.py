@@ -31,6 +31,7 @@ MODULES = (
     "browser_device_continuation_install.mjs",
     "browser_device_continuation_consent.mjs",
     "browser_device_continuation_stop.mjs",
+    "browser_device_continuation_native.mjs",
 )
 _ENTRY = ("import {startBrowserWorker} from './browser_device_worker.mjs';\n"
           "void startBrowserWorker(chrome, BUILD).catch(()=>{});\n")

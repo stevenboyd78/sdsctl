@@ -78,8 +78,8 @@ export function connectContinuationConsentWorker(chrome,initial,build,
 // Native/probe ports remain isolated fixture boundaries until fixed installed
 // native issuance, server sign-out and accepted startup are qualified together.
 export function connectContinuationOperationWorker(chrome,initial,build,
-  {readCurrent,issueInitial,createProbe,wall,monotonic,schedule,cancel}) {
-  if([readCurrent,issueInitial,createProbe].some(value=>typeof value!=='function'))throw refusal();
+  {readCurrent,issueInitial,createProbe,invalidateNative=()=>{},wall,monotonic,schedule,cancel}) {
+  if([readCurrent,issueInitial,createProbe,invalidateNative].some(value=>typeof value!=='function'))throw refusal();
   const clocks={wall,monotonic,schedule,cancel};
   let lane,installation,fence,stopping=false;
   const stop=()=>{
@@ -87,6 +87,9 @@ export function connectContinuationOperationWorker(chrome,initial,build,
     stopping=true;
     // Never queue this behind installation or a native/Chrome promise.
     installation?.invalidate();lane?.invalidate();
+    // Fence a separately composed native adapter without waiting for its reply.
+    // A broken private callback must not suppress the independent STOP write.
+    try {invalidateNative();} catch { /* No raw exception or native-pause claim. */ }
     return fence.save();
   };
   lane=connectDocumentWorker(chrome,initial,build,{...clocks,asynchronous:true,

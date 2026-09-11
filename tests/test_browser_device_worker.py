@@ -107,6 +107,18 @@ def test_consent_component_is_build_bound_but_not_selected_by_active_roles(monke
     assert worker.worker_graph()[0] != digest
 
 
+def test_native_response_adapter_is_build_bound_but_not_selected_by_active_roles(monkeypatch):
+    digest, graph = worker.worker_graph()
+    adapter = "browser_device_continuation_native.mjs"
+    assert b"export function createContinuationNativePorts" in graph["extension/" + adapter]
+    for path, body in graph.items():
+        if path != "extension/" + adapter:
+            assert adapter.encode() not in body, path
+            assert b"createContinuationNativePorts" not in body, path
+    monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != adapter))
+    assert worker.worker_graph()[0] != digest
+
+
 @pytest.mark.parametrize("action", ["worker-context", "worker-request"])
 def test_exact_worker_envelope(action):
     body = envelope(action, **({"request": {"version": 1, "action": "status"}}

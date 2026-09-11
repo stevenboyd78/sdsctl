@@ -5,6 +5,7 @@ fixture-only owned paused activation, current-epoch transactions, owned current-
 controlled native cancellation, owned prepare/claim, verification and initial-session core;
 one-shot browser installation I/O with modeled authority qualification;
 fixed continuation context, server-review and initial-session native routing;
+unselected strict browser/native response adapter;
 not an online resume implementation or an administrator runbook**. PR #250 remains experimental.
 Do not invoke internal methods on a real profile, delete guards, edit Chromium
 storage, replay setup or replace credentials to make a blocked display sign in.
@@ -22,9 +23,11 @@ safely implement the next transition.
 The [operation ownership and stop boundary](browser-device-continuation-operation.md)
 describes the unselected asynchronous composition of document confirmation,
 installation and the separate-key browser stop marker. A fixed native
-initial-session request now reaches the owned issuance core, but this browser
-composition does not select that request yet: its issuance and protected-page
-proof ports remain modeled boundaries. It is not a new live continuation or
+initial-session request now reaches the owned issuance core. A separate,
+unselected browser/native adapter validates that full response before handing a
+transient session to the installer; deterministic composition tests still model
+the native and protected-page boundaries. No active worker/page selects this
+composition. It is not a new live continuation or
 sign-out route. See [owned initial session issuance](#owned-initial-session-issuance)
 for the native request's limited scope.
 

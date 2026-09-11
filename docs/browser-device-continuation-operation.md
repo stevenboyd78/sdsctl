@@ -16,9 +16,10 @@ callback remains confirmation-only and must not start installation covertly.
 
 The separately exported `connectContinuationOperationWorker` now composes the
 document-confirmation lane, initial installation and independent stop adapter.
-It is **not selected by the active worker or page**. Native issuance and protected
-page proof remain fictional boundary callbacks in its isolated tests, not newly
-accepted native wire actions or browser-derived authority.
+It is **not selected by the active worker or page**. Its isolated tests now use
+the separate native-response adapter against a modeled fixed native wire.
+Native execution, Chrome APIs and protected-page proof in those tests remain
+fictional boundaries, not installed end-to-end acceptance or click proof.
 
 Only the confirmed document may begin installation, at most once. After exact
 pending persistence the owner rechecks that document immediately before selecting
@@ -58,6 +59,42 @@ process deadline; the installation keeps its bounded wall/monotonic budget.
 Neither restarts a consumed page confirmation or supplies a fresh budget after
 uncertainty. A received token remains transient; no status/readback recovers it.
 
+## Unselected native-response adapter
+
+`createContinuationNativePorts` is included in the canonical build graph but is
+not imported or constructed by any active role. It takes only a validated paused
+continuation context, fixed build/extension identity and the installed worker's
+scoped Chrome facade. That facade already supplies the outer build-bound
+`worker-request` envelope. The adapter sends the exact inner native action to
+the fixed host; it never accepts or adds another caller-selected envelope.
+
+One instance consumes its issuance attempt before validating or awaiting the
+comparison request. Missing/extra fields, changed state, unsafe revision
+headroom, native refusal, lost output and cancellation cannot authorize a second
+request. It validates the **entire** native success envelope before projecting
+the installer's narrower `binding` and `session` values: exact version/ok/build,
+identity/epoch, ACTIVE mode, revision +2, same generation, new fingerprint and a
+bounded session shape/lifetime. Stripping unknown fields before checking the
+full response would hide a protocol mismatch and is not permitted.
+
+Fresh `readCurrent` calls validate the full fixed native context and require the
+same selected state before issuance, or the exact returned ACTIVE state after
+issuance. Reads never retrieve a token or resume a failed instance. Each native
+call has a 12-second outer browser deadline in addition to the unchanged native
+10-second process supervisor. The original 45-second installer and one-minute
+review deadlines still span the operation; no adapter call renews them. Both
+wall and monotonic clocks must remain finite, safe and nondecreasing, including
+between reads. The larger elapsed interval is conservatively deducted from the
+returned lifetime, in addition to native and installer deductions.
+
+Invalidation fences immediately, without waiting for a native promise. The
+composing operation owner forwards invalidation before attempting its separate
+STOP write. Late native completion may have committed ACTIVE state or issued an
+unreturned token, but cannot revive the adapter, expose that reply to the
+installer, write a cookie or trigger another request. All failure messages are
+fixed and sanitized. These ports perform no cookie/storage/alarm mutation,
+sign-out, native pause, renewal, acceptance, state repair or physical-click check.
+
 ## Why a separate stop key
 
 An outstanding Chrome storage write can complete after its caller times out.
@@ -74,7 +111,8 @@ to the recovery key cannot by itself erase this separate marker. This is not a
 multi-key transaction, compare-and-swap, defense against a hostile same-account
 writer, or guarantee about sudden power-loss persistence.
 
-The unselected asynchronous owner first invalidates its consent and installation lanes
+The unselected asynchronous owner first invalidates its consent, installation and
+separately composed native-response lanes
 **synchronously**, then attempts one marker save. The adapter restricts storage
 access, refuses any pre-existing marker (including an identical one), writes
 once, and requires exact readback within ten seconds on both clocks. Lost,
@@ -131,7 +169,7 @@ record and cookie alongside the marker. This is not session revocation.
 
 The owner and its adapters are in the canonical graph but no ordinary page,
 worker or native dispatch selects them. Tests compose the actual synchronous
-event gate, document checks, installation and stop adapter using modeled Chrome,
+event gate, document checks, strict native-response adapter, installation and stop adapter using modeled Chrome,
 native and probe calls. Every asynchronous boundary is tested on both sides of
 its potential side effect for cancellation and acknowledgement failure, including
 late pending/issuance/cookie/accepted completions and the final document check.
@@ -141,9 +179,11 @@ The separate adapter tests retain clock-fault, pre-existing-marker and wrong-rea
 The model now uses Chrome's key-update semantics rather than whole-area
 replacement. Simulated browser/native callbacks are not installed acceptance.
 
-Before enabling the route, connect the unselected owner to the fixed native request,
-generation-aware server sign-out, accepted-startup verification and marker
-checks, then qualify actual installed native execution and verified TLS for DNS,
-IPv4 and IPv6. Real Chromium persistence/restart and physical display tests remain
+Before enabling the route, qualify the composed owner and response adapter with
+the actual fixed native request, generation-aware server sign-out,
+accepted-startup verification and whole-storage marker checks. Native-only TLS
+qualification for DNS, IPv4 and IPv6 does not prove actual Chrome cookie domain,
+host-only, path, store, expiry or restart behavior for those origins.
+Real Chromium persistence/restart and physical display tests remain
 separate from deterministic callback tests. Do not infer sudden-power-loss or
 complete unattended-recovery guarantees from a resolved storage promise.
