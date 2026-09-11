@@ -59,6 +59,49 @@ This route is under isolated qualification. It does not enable the complete
 post-recovery sign-in or unattended-renewal flow, remove guards, change published
 installations or constitute physical-display acceptance.
 
+### Unselected document-confirmation handshake
+
+The experimental confirmation component reuses the same fixed native paused
+reader without selecting a new native action. Its separate page adapter requires
+a trusted review click followed by a trusted, explicitly checked submit. A
+one-use random ticket stays in that page/worker only and expires within one
+minute on both wall and monotonic clocks, measured from the start of review.
+The worker binds it to Chrome's actual top-level extension document and tab,
+then performs a second complete server/native/browser review on confirmation.
+Saved pause, native fingerprint/revision, selected epoch/build/identity and
+server generation must remain equal; a supplied ticket is not server authority.
+
+The worker checks the exact active extension context, reads the tab's status,
+then checks the context again. A matching tab ID and URL alone do not prove the
+document survived a same-URL reload. An opt-in navigation observer behind the
+existing synchronous MV3 gate cancels the selected document on navigation,
+retaining only a tab ID and navigation signal, never the destination URL.
+Closed/replaced documents fail fresh context reads. Explicit cancellation and
+fixed-origin sign-out fence the in-memory handshake. A timeout or late response
+cannot revive its lane. An undetectably lost response leaves only the unused,
+bounded ticket: it does not permit another review or automatic replay.
+
+The completion sink is deliberately **synchronous, in-process and fixture-only**.
+It is invoked at most once after fresh checks, receives no ticket or credential,
+and cannot return an asynchronous job or claim an accepted session. The result
+is always confirmation-only with `sessionReady: false`. This callback is not a
+native grant or a durable approval record. Browser/native snapshots are not a
+cross-process transaction or a lease; the future mutation owner must independently
+revalidate authority, own issuance and serialize durable sign-out/cancellation.
+In-memory sign-out fencing here does not acknowledge native pause, revoke a
+session, change browser storage or complete that future durability requirement.
+
+Neither the active worker nor the ordinary resume page selects this component.
+Its distinct review/result modes cannot enable the ordinary confirmation UI.
+The entire component is included in the canonical build identity and graph tests
+enforce its unselected status. Deterministic adapter/DOM fixtures are not real
+browser gesture, full continuation or physical-display acceptance. No profile
+activation, initialization, cookie mutation, native issuance or renewal is added.
+
+Chrome's [runtime context API](https://developer.chrome.com/docs/extensions/reference/api/runtime#method-getContexts)
+provides the active document IDs used for these comparisons; the identity is
+never accepted from page-supplied message fields.
+
 ### Existing paused-only guard-release route
 
 The native context selects a distinct paused-only worker for this installation.

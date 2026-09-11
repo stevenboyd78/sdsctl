@@ -54,7 +54,7 @@ export function createWorkerEventGate(chrome,clock=()=>performance.now(),
   const id=chrome.runtime.id;
   if(typeof id!=='string'||!/^[a-p]{32}$/.test(id))throw Error('Worker context refused');
   const started=clock(), handlers=new Map();
-  let state='pending', queue=[], timer, rejectDeadline, probeOrigin=null;
+  let state='pending', queue=[], timer, rejectDeadline, probeOrigin=null,consentPrepared=false;
   const deadline=new Promise((_,reject)=>{rejectDeadline=reject;});
   deadline.catch(()=>{});
   const reply=(respond,value)=>{try {respond(value);} catch {/* Closed document: never replay. */}};
@@ -134,6 +134,14 @@ export function createWorkerEventGate(chrome,clock=()=>performance.now(),
     [runtime,'onInstalled','installed'],[alarms,'onAlarm','alarm'],[tabs,'onUpdated','tab']])
     Object.defineProperty(owner,key,{value:collect(name)});
   Object.defineProperties(scoped,{runtime:{value:runtime},alarms:{value:alarms},tabs:{value:tabs}});
+  const prepareContinuationConsent=()=>{
+    check();if(consentPrepared)throw Error('Worker consent already selected');
+    consentPrepared=true;
+    const consentTabs=Object.create(tabs),selected=Object.create(scoped);
+    Object.defineProperty(consentTabs,'onUpdated',{value:collect('consent-tab')});
+    Object.defineProperty(selected,'tabs',{value:consentTabs});
+    return selected;
+  };
   // All actual Chrome listeners are installed in this synchronous call, before
   // the first native promise. Receivers only snapshot bounded eligible events.
   try {
@@ -149,6 +157,11 @@ export function createWorkerEventGate(chrome,clock=()=>performance.now(),
       if(alarm?.name==='sdsctl-device-recovery')receive({name:'alarm',args:[{name:alarm.name}]});
     });
     chrome.tabs.onUpdated.addListener((tabId,change,tab)=>{
+      if(consentPrepared&&Number.isSafeInteger(tabId)&&tabId>=0&&change&&
+        (change.status==='loading'||Object.hasOwn(change,'url'))) {
+        // Cancellation needs a navigation signal, never a destination URL.
+        receive({name:'consent-tab',args:[tabId,{navigating:true}]});
+      }
       if(probeOrigin!==null&&Number.isSafeInteger(tabId)&&tabId>=0&&change&&
         (['loading','complete'].includes(change.status)||Object.hasOwn(change,'url'))) {
         // Navigation away matters even when its destination is not our origin.
@@ -166,7 +179,8 @@ export function createWorkerEventGate(chrome,clock=()=>performance.now(),
     });
     timer=schedule(fail,DEADLINE);
   } catch {fail();throw Error('Worker receiver unavailable');}
-  return Object.freeze({chrome:scoped,deadline,check,fail,prepareContinuationProbe,open:()=>{
+  return Object.freeze({chrome:scoped,deadline,check,fail,prepareContinuationProbe,
+    prepareContinuationConsent,open:()=>{
     // The caller checked the deadline immediately before synchronous role
     // construction. Do not invalidate already-constructed controllers mid-turn.
     if(state!=='pending')throw Error('Worker context refused');

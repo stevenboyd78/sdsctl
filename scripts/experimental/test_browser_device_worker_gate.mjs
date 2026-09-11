@@ -21,6 +21,25 @@ test('all five inert ingress listeners register synchronously',()=>{
   f.gate.fail();
 });
 
+test('consent navigation is opt-in, sanitized, synchronous and independent of startup routing',()=>{
+  const f=fixture(),seen=[],ordinary=[];
+  const scoped=f.gate.prepareContinuationConsent();
+  scoped.tabs.onUpdated.addListener((...values)=>seen.push(values));
+  f.gate.chrome.tabs.onUpdated.addListener((...values)=>ordinary.push(values));
+  f.callbacks.tab(7,{url:'https://elsewhere.example/PRIVATE'},{id:7});
+  assert.equal(seen.length,0);assert.throws(()=>f.gate.prepareContinuationConsent());f.gate.open();
+  assert.deepEqual(seen,[[7,{navigating:true}]]);assert.deepEqual(ordinary,[]);
+  assert(!JSON.stringify(seen).includes('PRIVATE'));
+  assert.throws(()=>scoped.tabs.onUpdated.addListener(()=>{}));
+  assert.deepEqual(Object.keys(f.callbacks),['message','startup','installed','alarm','tab']);
+  f.gate.fail();f.callbacks.tab(7,{status:'loading'},{id:7});assert.equal(seen.length,1);
+});
+
+test('unselected consent navigation is ignored and cannot be enabled after opening',()=>{
+  const f=fixture();for(let n=0;n<100;n++)f.callbacks.tab(7,{status:'loading'},{id:7});
+  f.gate.check();f.gate.open();assert.throws(()=>f.gate.prepareContinuationConsent());
+});
+
 test('queued message and sender are bounded snapshots, not mutable caller objects',()=>{
   const f=fixture(), message={action:'initialize'}, document=sender(), replies=[], seen=[];
   assert.equal(f.callbacks.message(message,document,r=>replies.push(r)),true);

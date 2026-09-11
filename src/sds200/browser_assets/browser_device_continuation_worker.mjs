@@ -20,7 +20,7 @@ function cleanPaused(values,settings) {
     v.cookieFingerprint===null;
 }
 
-export function connectContinuationBrowserWorker(chrome,initial,build,
+export function createContinuationPausedReader(chrome,initial,build,
   {wall=Date.now,monotonic=()=>performance.now(),schedule=setTimeout,cancel=clearTimeout}={}) {
   // Copy/validate even this internal entry; ordinary start obtains it only from
   // the fixed native context behind the synchronous MV3 event gate.
@@ -82,8 +82,7 @@ export function connectContinuationBrowserWorker(chrome,initial,build,
       const after=await context();check();
       if(!same(after,before)||!same(await snapshot(),saved))throw refusal();
       await noSession();check();
-      return online?{mode:'continuation_reviewed',nativeRevision:before.binding.revision,
-        serverGeneration:generation}:{mode:'paused',sessionReady:false};
+      return {saved,observed:{...before,binding:{...before.binding,generation}}};
     })();
     // A timeout is NOT cancellation. Never release an undrained lane or let a
     // late reply revive it. This worker stays failed; saved bytes are untouched.
@@ -96,6 +95,11 @@ export function connectContinuationBrowserWorker(chrome,initial,build,
     } catch {failed=true;throw refusal();}
     finally {cancel(timer);}
   };
+  return Object.freeze({settings,inspect,invalidate:()=>{failed=true;}});
+}
+
+export function connectContinuationBrowserWorker(chrome,initial,build,options={}) {
+  const reader=createContinuationPausedReader(chrome,initial,build,options);
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
     if(sender?.id!==chrome.runtime.id||sender.frameId!==0||sender.documentLifecycle!=='active'||
       typeof sender.documentId!=='string'||!/^[a-zA-Z0-9-]{1,128}$/.test(sender.documentId)||
@@ -104,7 +108,10 @@ export function connectContinuationBrowserWorker(chrome,initial,build,
     const startup=sender.url===chrome.runtime.getURL('startup.html')&&message.action==='startup-status';
     const review=sender.url===chrome.runtime.getURL('resume.html')&&message.action==='resume-review';
     if(!startup&&!review)return false;
-    void inspect(review).then(value=>{try {respond(value);} catch {/* Closed document; no replay. */}},
+    void reader.inspect(review).then(value=>{try {respond(review?
+      {mode:'continuation_reviewed',nativeRevision:value.observed.binding.revision,
+        serverGeneration:value.observed.binding.generation}:{mode:'paused',sessionReady:false});
+    } catch {/* Closed document; no replay. */}},
       ()=>{try {respond(startup?{mode:'administrator_required',sessionReady:false}:
         {mode:'administrator_required'});} catch {/* No mutation or late retry. */}});
     return true;
