@@ -56,9 +56,13 @@ def test_acceptance_core_is_build_bound_but_not_imported_by_active_worker(monkey
     adapters = {"extension/browser_device_continuation_install.mjs",
                 "extension/browser_device_continuation_stop.mjs"}
     for path, body in graph.items():
-        # Only these unconnected I/O adapters may import the pure core. No graph
-        # member (including the active reader) may import either adapter itself.
-        permitted = path in adapters and name == "browser_device_continuation_state.mjs"
+        # The unselected operation owner may compose the two I/O adapters; only
+        # those adapters import the pure core. The separate consent-isolation
+        # test prevents any active role from reaching this entire composition.
+        permitted = (path in adapters and name == "browser_device_continuation_state.mjs"
+                     or path == "extension/browser_device_continuation_consent.mjs"
+                     and name in {"browser_device_continuation_install.mjs",
+                                  "browser_device_continuation_stop.mjs"})
         if path != "extension/" + name and not permitted:
             assert name.encode() not in body
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != name))
@@ -91,10 +95,12 @@ def test_consent_component_is_build_bound_but_not_selected_by_active_roles(monke
     consent = "browser_device_continuation_consent.mjs"
     gate = "browser_device_worker_gate.mjs"
     assert "extension/" + consent in graph
+    assert b"export function connectContinuationOperationWorker" in graph["extension/" + consent]
     assert b"prepareContinuationConsent" in graph["extension/" + gate]
     for path, body in graph.items():
         if path != "extension/" + consent:
             assert consent.encode() not in body, path
+            assert b"connectContinuationOperationWorker" not in body, path
         if path != "extension/" + gate:
             assert b"prepareContinuationConsent" not in body, path
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != consent))

@@ -68,6 +68,15 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
   return f;
 }
 
+test('legacy public options cannot select private asynchronous completion or invalidation hooks',async()=>{
+  const f=fixture();Object.assign(f.options,{asynchronous:true,
+    complete:()=>assert.fail('private completion selected'),
+    onInvalidate:()=>assert.fail('private invalidation selected')});
+  f.start();const r=await f.ask();
+  assert.deepEqual(await f.confirm(r.ticket),{mode:'continuation_confirmation_checked',sessionReady:false});
+  f.owner.invalidate();assert.equal(f.sinks.length,1);assert.equal(f.timers.size,0);
+});
+
 for(const origin of ['https://192.0.2.18:8443','https://display.example','https://[::1]:8443'])
   for(const legacy of [false,true])test('one document, two fresh reviews, one confirmation-only sink '+origin+' '+legacy,async()=>{
     const f=fixture(origin,legacy),saved=clone(f.saved);f.start();

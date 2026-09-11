@@ -33,6 +33,7 @@ def test_browser_recovery_coordinator_contract() -> None:
          "scripts/experimental/test_browser_device_continuation_worker.mjs",
          "scripts/experimental/test_browser_device_continuation_consent.mjs",
          "scripts/experimental/test_browser_device_continuation_install.mjs",
+         "scripts/experimental/test_browser_device_continuation_operation.mjs",
          "scripts/experimental/test_browser_device_retirement.mjs",
          "scripts/experimental/test_browser_device_retirement_ui.mjs",
          "scripts/experimental/test_browser_device_retirement_startup.mjs",

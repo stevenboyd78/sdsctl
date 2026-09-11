@@ -20,8 +20,10 @@ safely implement the next transition.
 ## Implemented now
 
 The [operation ownership and stop boundary](browser-device-continuation-operation.md)
-defines the next integration handoff and the unselected separate-key browser
-stop marker. It is not a new live continuation or sign-out route.
+describes the unselected asynchronous composition of document confirmation,
+installation and the separate-key browser stop marker. Native issuance and
+protected-page proof remain modeled boundaries in this composition; it is not
+a new live continuation or sign-out route.
 
 ### Fixed read-only continuation route
 
@@ -101,6 +103,12 @@ The entire component is included in the canonical build identity and graph tests
 enforce its unselected status. Deterministic adapter/DOM fixtures are not real
 browser gesture, full continuation or physical-display acceptance. No profile
 activation, initialization, cookie mutation, native issuance or renewal is added.
+
+A distinct unselected asynchronous export now composes this document handshake
+with the existing installation and stop adapters; it does not change the
+synchronous callback contract above. See the
+[operation ownership boundary](browser-device-continuation-operation.md) for its
+actual composition, cancellation guarantees and remaining native/server gates.
 
 Chrome's [runtime context API](https://developer.chrome.com/docs/extensions/reference/api/runtime#method-getContexts)
 provides the active document IDs used for these comparisons; the identity is

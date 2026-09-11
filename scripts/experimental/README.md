@@ -564,6 +564,15 @@ They complement, rather than replace, the physical host's real-browser runs.
 
 ## Continuation installation I/O qualification
 
+`test_browser_device_continuation_operation.mjs` deterministically composes the
+actual worker event gate, document consent, installation and separate stop-key
+owner. Run it with `node --test`; it is also included in the Python extension
+test wrapper. It checks cancellation and failed acknowledgements before and
+after each modeled asynchronous boundary, including the final document check,
+without selecting the active browser route. Native issuance and protected-page
+proof remain fictional callbacks; these tests do not qualify a real session,
+installed native wire protocol, server sign-out or physical display.
+
 `audit_browser_continuation_install.mjs` exercises actual sandbox-enabled Chromium
 storage and cookie APIs with **modeled native and protected-page observations**.
 It does not sign in, contact a server, install a native host, or touch a user

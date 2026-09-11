@@ -15,7 +15,7 @@ const same=(actual,expected)=>expected!==null&&typeof expected==='object'?
 const refusal=()=>Error('Browser continuation installation is unconfirmed; retain saved state.');
 
 export function createContinuationInstallation(chrome,settings,reviewed,
-  {readCurrent,issueInitial,createProbe,wall=Date.now,monotonic=()=>performance.now(),
+  {readCurrent,issueInitial,createProbe,beforeIssue=()=>{},wall=Date.now,monotonic=()=>performance.now(),
     schedule=setTimeout,cancel=clearTimeout}) {
   // Validate/copy before any asynchronous work or browser access. The state core
   // also validates the reviewed positive generation and allowable revision.
@@ -92,6 +92,10 @@ export function createContinuationInstallation(chrome,settings,reviewed,
           // an intermediate clean schema-3 record that could authorize a retry.
           const request=attempt.pendingSaved(await save(before,pending));
           await currentAs(offline);await noSession();await savedAs(pending);
+          // A composing owner may need a fresh asynchronous document check.
+          // Keep it INSIDE this deadline, separately from selecting issuance:
+          // expiry/invalidation during that check must prevent the request.
+          await io(beforeIssue);
           let issued=await io(()=>issueInitial(request));
           const active=structuredClone(await io(readCurrent));
           let details=attempt.sessionReturned(issued,active);issued=null;

@@ -1,6 +1,6 @@
 # Continuation operation ownership and stop boundary
 
-Status: **development design and unselected stop-marker adapter, not an enabled
+Status: **development design and unselected asynchronous operation owner, not an enabled
 sign-in/sign-out route or administrator runbook**. Read the
 [continuation boundary](browser-device-continuation.md) first. Existing deployed
 profiles must not be edited, replayed or cleared to exercise this work.
@@ -11,8 +11,25 @@ One trusted worker must own review, confirmation, pending persistence, one nativ
 issuance request, installation, probe and acceptance. Its selected identity,
 epoch, build and origin come from the fixed installed native context, never a
 page-supplied path or role. A page ticket remains local to that exact document;
-it must not be forwarded as native authority. The current synchronous fixture
-callback is not that asynchronous owner and must not start installation covertly.
+it must not be forwarded as native authority. The existing synchronous fixture
+callback remains confirmation-only and must not start installation covertly.
+
+The separately exported `connectContinuationOperationWorker` now composes the
+document-confirmation lane, initial installation and independent stop adapter.
+It is **not selected by the active worker or page**. Native issuance and protected
+page proof remain fictional boundary callbacks in its isolated tests, not newly
+accepted native wire actions or browser-derived authority.
+
+Only the confirmed document may begin installation, at most once. After exact
+pending persistence the owner rechecks that document immediately before selecting
+the issuance callback. It checks the document again after installation acceptance
+before returning readiness. The original one-minute review budget spans the
+asynchronous operation; installation has its separate 45-second budget. Neither
+clock budget is renewed by confirmation, a late reply or a duplicate message.
+The final pre-issuance document check runs inside the installer's checked I/O
+boundary, separately from issuance. If that document read crosses the 45-second
+installation deadline, the native issuance callback is never selected, even
+while the one-minute confirmation budget has not yet expired.
 
 The future fixed native initial request has only comparison inputs: the selected
 epoch, fresh random intent, reviewed native fingerprint/revision, and reviewed
@@ -44,7 +61,7 @@ to the recovery key cannot by itself erase this separate marker. This is not a
 multi-key transaction, compare-and-swap, defense against a hostile same-account
 writer, or guarantee about sudden power-loss persistence.
 
-The trusted future owner first invalidates its consent and installation lanes
+The unselected asynchronous owner first invalidates its consent and installation lanes
 **synchronously**, then attempts one marker save. The adapter restricts storage
 access, refuses any pre-existing marker (including an identical one), writes
 once, and requires exact readback within ten seconds on both clocks. Lost,
@@ -88,16 +105,30 @@ uncertainty and request administrator review, not pause unrelated devices or
 retry issuance to obtain a logout cookie. A future owner may use the existing
 device-scoped path only with its independently verified authority and response.
 
+Explicit owner stop, selected-document cancellation/navigation, exact-origin
+sign-out and operation failure all invalidate the operation before attempting
+the separate marker. A content-message cancellation receives no saved-stop
+acknowledgement. Only the owner's awaited `stop()` can report checked browser
+storage, and it always reports native pause and server revocation as unconfirmed.
+An uncertain marker save remains terminal; a second stop never retries or adopts
+an existing marker. Stopping after acceptance retains the original accepted
+record and cookie alongside the marker. This is not session revocation.
+
 ## Qualification and remaining integration
 
-The adapter is in the canonical graph but no ordinary page, worker or native
-dispatch selects it. Tests compose it with the actual installer using modeled
-Chrome calls, including late pending/issuance/cookie/accepted completions,
-failed acknowledgements, clock faults, pre-existing markers and wrong readback.
+The owner and its adapters are in the canonical graph but no ordinary page,
+worker or native dispatch selects them. Tests compose the actual synchronous
+event gate, document checks, installation and stop adapter using modeled Chrome,
+native and probe calls. Every asynchronous boundary is tested on both sides of
+its potential side effect for cancellation and acknowledgement failure, including
+late pending/issuance/cookie/accepted completions and the final document check.
+Additional cases cover sender isolation, exact document replacement, duplicate
+confirmation, stop uncertainty and independent review/installation deadlines.
+The separate adapter tests retain clock-fault, pre-existing-marker and wrong-readback coverage.
 The model now uses Chrome's key-update semantics rather than whole-area
 replacement. Simulated browser/native callbacks are not installed acceptance.
 
-Before enabling the route, connect the single owner, fixed native request,
+Before enabling the route, connect the unselected owner to the fixed native request,
 generation-aware server sign-out, accepted-startup verification and marker
 checks, then qualify actual installed native execution and verified TLS for DNS,
 IPv4 and IPv6. Real Chromium persistence/restart and physical display tests remain

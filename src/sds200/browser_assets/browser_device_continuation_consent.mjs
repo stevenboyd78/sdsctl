@@ -1,7 +1,9 @@
-// Experimental document-bound confirmation. NOT selected by the active worker
-// or page. The sole completion sink is an in-process fixture boundary, not native
-// authority, durable approval, session issuance or a reusable serialized grant.
+// Experimental document-bound confirmation and separately selected asynchronous
+// operation owner. Neither is selected by the active worker/page. Native/probe
+// ports are fixture boundaries, not native authority or reusable serialized grants.
 import {createContinuationPausedReader} from './browser_device_continuation_worker.mjs';
+import {createContinuationInstallation} from './browser_device_continuation_install.mjs';
+import {createContinuationStopFence} from './browser_device_continuation_stop.mjs';
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
   Object.keys(v).sort().join(',')===[...keys].sort().join(',');
 const same=(a,b)=>b!==null&&typeof b==='object'?
@@ -57,15 +59,65 @@ export function connectContinuationConfirmationPage({document,window,runtime}) {
 }
 
 export function connectContinuationConsentWorker(chrome,initial,build,
-  {onConfirmed,wall=Date.now,monotonic=()=>performance.now(),schedule=setTimeout,cancel=clearTimeout}) {
+  {onConfirmed,wall,monotonic,schedule,cancel}) {
   if(typeof onConfirmed!=='function')throw refusal();
+  const clocks={wall,monotonic,schedule,cancel};
+  const lane=connectDocumentWorker(chrome,initial,build,{...clocks,complete:value=>{
+    const result=onConfirmed(value);
+    // Preserve the existing synchronous, confirmation-only fixture contract.
+    if(result!==undefined) {
+      if(result&&typeof result.then==='function')void Promise.resolve(result).catch(()=>{});
+      throw refusal();
+    }
+    return {mode:'continuation_confirmation_checked',sessionReady:false};
+  }});
+  return Object.freeze({invalidate:lane.invalidate});
+}
+
+// Explicit asynchronous composition, still NOT selected by the shipped worker.
+// Native/probe ports remain isolated fixture boundaries until fixed installed
+// native issuance, server sign-out and accepted startup are qualified together.
+export function connectContinuationOperationWorker(chrome,initial,build,
+  {readCurrent,issueInitial,createProbe,wall,monotonic,schedule,cancel}) {
+  if([readCurrent,issueInitial,createProbe].some(value=>typeof value!=='function'))throw refusal();
+  const clocks={wall,monotonic,schedule,cancel};
+  let lane,installation,fence,stopping=false;
+  const stop=()=>{
+    if(stopping)return Promise.reject(refusal());
+    stopping=true;
+    // Never queue this behind installation or a native/Chrome promise.
+    installation?.invalidate();lane?.invalidate();
+    return fence.save();
+  };
+  lane=connectDocumentWorker(chrome,initial,build,{...clocks,asynchronous:true,
+    onInvalidate:()=>{void stop().catch(()=>{});},
+    complete:async(value,currentDocument)=>{
+      if(stopping||installation)throw refusal();
+      installation=createContinuationInstallation(chrome,value.settings,value.reviewed,
+        {...clocks,readCurrent,createProbe,issueInitial,beforeIssue:async()=>{
+          // The confirmed document must STILL exist after pending persistence,
+          // immediately before the one initial issuance callback is selected.
+          await currentDocument();
+          if(stopping||value.signal.aborted)throw refusal();
+        }});
+      return installation.run();
+    }});
+  fence=createContinuationStopFence(chrome,lane.settings,clocks);
+  return Object.freeze({stop,invalidate:()=>{void stop().catch(()=>{});}});
+}
+
+function connectDocumentWorker(chrome,initial,build,
+  {complete,asynchronous=false,onInvalidate=()=>{},wall=Date.now,
+    monotonic=()=>performance.now(),schedule=setTimeout,cancel=clearTimeout}) {
   const reader=createContinuationPausedReader(chrome,initial,build,{wall,monotonic,schedule,cancel});
   const id=chrome.runtime.id,origin=`chrome-extension://${id}`,url=chrome.runtime.getURL('resume.html');
   const settings=reader.settings,abort=new AbortController();
   let phase='new',selected=null,reviewed=null,ticket=null,started=null,last=null,timer=null,rejectPending=null;
   const stop=()=>{
+    const alreadyFailed=phase==='failed';
     phase='failed';ticket=null;reviewed=null;reader.invalidate();abort.abort();cancel(timer);
     rejectPending?.(refusal());
+    if(!alreadyFailed)onInvalidate();
   };
   const sample=()=>{
     const pair=[wall(),monotonic()];
@@ -140,16 +192,15 @@ export function connectContinuationConsentWorker(chrome,initial,build,
       await currentDocument();check();
       const observed=Object.freeze({...fresh.observed,binding:Object.freeze({...fresh.observed.binding})});
       phase='consumed';
-      const result=onConfirmed(Object.freeze({settings,reviewed:observed,document:selected,signal:abort.signal}));
-      // This seam is deliberately synchronous and confirmation-only. A future
-      // async mutation owner needs its own durable cancellation/issuance wiring;
-      // a Promise or an "accepted" result cannot quietly enable that here.
-      if(result!==undefined) {
-        if(result&&typeof result.then==='function')void Promise.resolve(result).catch(()=>{});
-        throw refusal();
+      let result=complete(Object.freeze({settings,reviewed:observed,document:selected,
+        signal:abort.signal}),currentDocument);
+      if(asynchronous) {
+        result=await result;check();await currentDocument();check();
+        if(!exact(result,['mode','sessionReady'])||result.mode!=='accepted'||result.sessionReady!==true)
+          throw refusal();
       }
       check();cancel(timer);reviewed=null;
-      return {mode:'continuation_confirmation_checked',sessionReady:false};
+      return result;
     });
   };
   const respondSafely=(respond,value)=>{try {respond(value);} catch {stop();}};
@@ -158,8 +209,9 @@ export function connectContinuationConsentWorker(chrome,initial,build,
       (change?.navigating===true||change?.status==='loading'||Object.hasOwn(change||{},'url')))stop();
   });
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
-    // Sign-out only fences this in-memory confirmation. It is NOT a durable
-    // sign-out acknowledgement, native pause or server-session revocation.
+    // The confirmation-only adapter fences memory; the asynchronous owner also
+    // attempts its separate stop marker. Neither acknowledges native pause or
+    // server revocation, and this content message gets no saved-stop receipt.
     if(sender?.id===id&&sender.frameId===0&&sender.documentLifecycle==='active'&&
       documentId(sender.documentId)&&Number.isSafeInteger(sender.tab?.id)&&sender.tab.id>=0&&
       sender.tab.incognito===false&&sender.origin===settings.origin&&
@@ -180,5 +232,5 @@ export function connectContinuationConsentWorker(chrome,initial,build,
       ()=>respondSafely(respond,{mode:'administrator_required'}));
     return true;
   });
-  return Object.freeze({invalidate:stop});
+  return Object.freeze({settings,invalidate:stop});
 }
