@@ -122,6 +122,16 @@ async def main(root: Path, origin: str, *, generated: bool = False) -> None:
                 server, task, _ = await start(port)
             elif command == "revoke":
                 store.transition("fixture", BrowserDeviceState.REVOKED)
+            elif command == "resume":
+                result = await asyncio.to_thread(BrowserDeviceAdmin(store).transition,
+                    store.inventory()[0], BrowserDeviceState.ACTIVE)
+                if not result.as_dict()["completed"]:
+                    raise RuntimeError("Fixture administrator resume unconfirmed")
+            elif command == "pause":
+                result = await asyncio.to_thread(BrowserDeviceAdmin(store).transition,
+                    store.inventory()[0], BrowserDeviceState.PAUSED)
+                if not result.as_dict()["completed"]:
+                    raise RuntimeError("Fixture administrator pause unconfirmed")
             elif command != "status":
                 raise ValueError("Unknown fixture action")
             print(json.dumps({"action": command, "exchanges": exchanges,

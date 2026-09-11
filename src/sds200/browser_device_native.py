@@ -23,23 +23,57 @@ import sys
 import threading
 import time
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import BinaryIO
 from urllib.parse import urlsplit
 
-from .browser_device_protocol import read_browser_device_request
+from .browser_device_profile_access import browser_profile_access
+from .browser_device_protocol import (
+    BrowserContinuationInitialRequest,
+    BrowserContinuationReadRequest,
+    BrowserDeviceAction,
+    BrowserDeviceRequest,
+    BrowserRecoveryLaunchRequest,
+    BrowserResumeRequest,
+    BrowserRetirementAcknowledgement,
+    BrowserRetirementRequest,
+    BrowserWorkerContextRequest,
+    BrowserWorkerRequest,
+    read_browser_device_request,
+)
 from .browser_device_recovery import (
     BrowserDeviceRecovery,
     ExchangeFailure,
     ExchangeSession,
     RecoveryMode,
+    RecoveryResult,
     _object,
     parse_exchange_response,
 )
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import (
+    BrowserWorkerSelection,
+    continuation_worker_selected,
+    normal_worker_paused_only,
+    worker_context,
+    worker_graph,
+)
 
 _TOTAL_SECONDS = 10
+
+
+@dataclass(frozen=True, slots=True)
+class BrowserRetirementSelection:
+    """Trusted wrapper-only selection; never enables authentication/resume.
+
+    Only an explicit handoff also enables a durable paused acknowledgement.
+    No field may come from native messages or browser-controlled storage.
+    """
+
+    archives: Path = field(repr=False)
+    operation_id: str = field(repr=False)
+    handoff: Path | None = field(default=None, repr=False)
 
 
 def _private_read(root: Path, name: str, maximum: int) -> bytes:
@@ -126,6 +160,15 @@ def parse_browser_native_configuration(root: Path, body: bytes) -> BrowserNative
 
 
 def exchange_browser_device(configuration: BrowserNativeConfiguration) -> ExchangeSession:
+    status, body, content_type, retry = _post_browser_device(
+        configuration, "/auth/device/session", {"device_id": configuration.device_id},
+    )
+    return parse_exchange_response(status, body, content_type=content_type, retry_after=retry)
+
+
+def _post_browser_device(
+    configuration: BrowserNativeConfiguration, path: str, payload: dict[str, object],
+) -> tuple[int, bytes, str, str | None]:
     """Exactly one verified HTTPS request, no redirects, proxy env or cookie jar.
 
     Call under the native runner's total deadline; the per-I/O timeout alone
@@ -147,35 +190,34 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
             raise ExchangeFailure(RecoveryMode.SETUP_ERROR) from None
         connection = http.client.HTTPSConnection(configuration.hostname, configuration.port,
                                                   context=context, timeout=3)
-        connection.request("POST", "/auth/device/session",
-                           json.dumps({"device_id": configuration.device_id}).encode("ascii"),
+        connection.request("POST", path, json.dumps(payload).encode("ascii"),
                            {"Authorization": "Bearer " + credential,
                             "Content-Type": "application/json", "Accept": "application/json"})
-        response = connection.getresponse()
-        types = response.headers.get_all("Content-Type", [])
-        retries = response.headers.get_all("Retry-After", [])
-        if (len(types) > 1 or (response.status == 200 and len(types) != 1)
-                or len(retries) > 1 or response.headers.get_all("Set-Cookie")
-                or response.headers.get_all("Content-Encoding")):
-            raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
-        body = b""
-        if response.status == 200:
-            lengths = response.headers.get_all("Content-Length", [])
-            encodings = response.headers.get_all("Transfer-Encoding", [])
-            if (len(lengths) > 1 or len(encodings) > 1 or (lengths and encodings)
-                    or (encodings and encodings[0].lower() != "chunked")
-                    or (lengths and (re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None
-                                     or int(lengths[0]) > 4096))):
+        # A close-delimited/HTTP/1.0 response owns its socket after getresponse;
+        # closing only the connection leaves unread/error responses to GC.
+        # Close the response first on every path, including KeyboardInterrupt.
+        with connection.getresponse() as response:
+            types = response.headers.get_all("Content-Type", [])
+            retries = response.headers.get_all("Retry-After", [])
+            if (len(types) > 1 or (response.status == 200 and len(types) != 1)
+                    or len(retries) > 1 or response.headers.get_all("Set-Cookie")
+                    or response.headers.get_all("Content-Encoding")):
                 raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
-            body = response.read(4097)
-            # read(amt) may silently return a short Content-Length body at EOF.
-            # Do not persist a protocol error for a server interrupted mid-response.
-            if lengths and len(body) < int(lengths[0]):
-                raise ExchangeFailure()
-        return parse_exchange_response(
-            response.status, body, content_type=types[0] if types else "",
-            retry_after=retries[0] if retries else None,
-        )
+            body = b""
+            if response.status == 200:
+                lengths = response.headers.get_all("Content-Length", [])
+                encodings = response.headers.get_all("Transfer-Encoding", [])
+                if (len(lengths) > 1 or len(encodings) > 1 or (lengths and encodings)
+                        or (encodings and encodings[0].lower() != "chunked")
+                        or (lengths and (re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None
+                                         or int(lengths[0]) > 4096))):
+                    raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
+                body = response.read(4097)
+                # read(amt) may silently return a short Content-Length body at EOF.
+                # Do not persist a protocol error for a server interrupted mid-response.
+                if lengths and len(body) < int(lengths[0]):
+                    raise ExchangeFailure()
+            return response.status, body, types[0] if types else "", retries[0] if retries else None
     except ExchangeFailure:
         raise
     except (ssl.SSLEOFError, ssl.SSLZeroReturnError, http.client.IncompleteRead):
@@ -191,30 +233,150 @@ def exchange_browser_device(configuration: BrowserNativeConfiguration) -> Exchan
             connection.close()
 
 
+def _result_document(result: RecoveryResult) -> dict[str, object]:
+    document: dict[str, object] = {
+        "version": 1, "ok": True, "mode": result.status.mode.value,
+        "revision": result.status.revision, "retry_after": result.status.retry_after,
+        "renew_after": result.renew_after,
+    }
+    if result.session is not None:
+        document["session"] = {"token": result.session.token,
+                               "expires_in": result.session.expires_in}
+    return document
+
+
+def _resume_request(
+    root: Path, request: BrowserResumeRequest, configuration: BrowserNativeConfiguration,
+    recovery: BrowserDeviceRecovery,
+) -> dict[str, object]:
+    # Lazy import: resume's verified transport shares this native module.
+    from .browser_device_resume import BrowserDeviceResume, BrowserResumeApproval
+    from .browser_device_verification import verify_browser_device
+
+    if request.action == "review-resume":
+        before = recovery.inspect()
+        if before.mode is RecoveryMode.ACTIVE:
+            raise ValueError()
+        proof = verify_browser_device(configuration)
+        after = recovery.inspect()
+        if (before.revision, before.mode) != (after.revision, after.mode):
+            raise ValueError()
+        return {"version": 1, "ok": True, "mode": after.mode.value,
+                "revision": after.revision, "generation": proof.record.generation}
+    engine = BrowserDeviceResume(root)
+    assert request.intent is not None and request.revision is not None
+    if request.action == "prepare-resume":
+        assert request.generation is not None
+        approval = engine.prepare_verified(expected_revision=request.revision,
+            browser_intent=request.intent, expected_generation=request.generation)
+        return {"version": 1, "ok": True, "approval": {"ticket": approval.ticket,
+            "revision": approval.revision, "expires_at": approval.expires_at}}
+    assert request.action == "commit-resume"
+    assert request.ticket is not None and request.expires_at is not None
+    return _result_document(engine.commit_session(
+        BrowserResumeApproval(request.ticket, request.revision, request.expires_at),
+        browser_intent=request.intent))
+
+
 def _native_request(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
+    retirement: BrowserRetirementSelection | None = None,
+    worker: BrowserWorkerSelection | None = None,
 ) -> int:
     try:
         try:
-            configuration = load_browser_native_configuration(root)
-            if (caller_arguments != [configuration.extension_origin]
-                    or (expected_identity is not None
-                        and configuration.identity != expected_identity)):
-                raise ValueError()
-            request = read_browser_device_request(source)
-            if request is None:
-                raise ValueError()
-            recovery = BrowserDeviceRecovery(root / "recovery.sqlite", configuration.identity)
-            result = recovery.handle(request, lambda: exchange_browser_device(configuration))
-            document: dict[str, object] = {
-                "version": 1, "ok": True, "mode": result.status.mode.value,
-                "revision": result.status.revision, "retry_after": result.status.retry_after,
-                "renew_after": result.renew_after,
-            }
-            if result.session is not None:
-                document["session"] = {"token": result.session.token,
-                                       "expires_in": result.session.expires_in}
+            # Held across input parsing, private reads and dispatch/network work.
+            # A busy maintenance/input-writer owner fails closed without waiting.
+            with browser_profile_access(root, exclusive=False):
+                configuration = load_browser_native_configuration(root)
+                if (caller_arguments != [configuration.extension_origin]
+                        or (expected_identity is not None
+                            and configuration.identity != expected_identity)):
+                    raise ValueError()
+                request = read_browser_device_request(source)
+                if request is None:
+                    raise ValueError()
+                paused_only = False
+                if worker is not None:
+                    if (expected_identity is None or not isinstance(request,
+                            (BrowserWorkerContextRequest, BrowserWorkerRequest))
+                            or request.build != worker_graph()[0]):
+                        raise ValueError()
+                    if isinstance(request, BrowserWorkerRequest):
+                        if (retirement is None
+                                and not isinstance(request.request,
+                                    (BrowserContinuationReadRequest,
+                                     BrowserContinuationInitialRequest))):
+                            paused_only = normal_worker_paused_only(configuration, worker)
+                        request = request.request
+                elif isinstance(request, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
+                    raise ValueError()
+                if isinstance(request, BrowserWorkerContextRequest):
+                    assert worker is not None
+                    document = worker_context(configuration, worker, retirement)
+                elif isinstance(request, (BrowserContinuationReadRequest,
+                                          BrowserContinuationInitialRequest)):
+                    if (worker is None or retirement is not None
+                            or not continuation_worker_selected(configuration, worker)):
+                        raise ValueError()
+                    from .browser_device_continuation_dispatch import (
+                        continuation_initial_request,
+                        continuation_read_request,
+                    )
+
+                    document = (continuation_read_request(configuration, worker, request)
+                        if isinstance(request, BrowserContinuationReadRequest)
+                        else continuation_initial_request(configuration, worker, request))
+                elif paused_only:
+                    if (not isinstance(request, BrowserDeviceRequest)
+                            or request.action is not BrowserDeviceAction.STATUS):
+                        raise ValueError()
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
+                    # Even a normal status tick may persist a clock correction.
+                    # Released paused evidence must remain byte-identical.
+                    status = recovery.inspect()
+                    if status.mode is not RecoveryMode.PAUSED:
+                        raise ValueError()
+                    document = _result_document(RecoveryResult(status))
+                elif retirement is not None or isinstance(
+                        request, (BrowserRetirementRequest, BrowserRetirementAcknowledgement,
+                                  BrowserRecoveryLaunchRequest)):
+                    # Separate recovery endpoint. It can confirm evidence and,
+                    # only with a live handoff, acknowledge a saved local pause.
+                    # It cannot execute a review or fall through to authentication.
+                    if (not isinstance(retirement, BrowserRetirementSelection)
+                            or not isinstance(request, (BrowserRetirementRequest,
+                                                        BrowserRetirementAcknowledgement,
+                                                        BrowserRecoveryLaunchRequest))
+                            or expected_identity is None or request.identity != expected_identity):
+                        raise ValueError()
+                    if retirement.handoff is not None:
+                        from .browser_device_handoff import handoff_native_request
+
+                        document = handoff_native_request(root, retirement, request)
+                    else:
+                        if not isinstance(request, BrowserRetirementRequest):
+                            raise ValueError()
+                        from .browser_device_resume_boundary import BrowserResumeBoundary
+
+                        proof = BrowserResumeBoundary(root, archives=retirement.archives).confirm(
+                            operation_id=retirement.operation_id, browser_intent=request.intent)
+                        document = {"version": 1, "ok": True, "evidence": asdict(proof)}
+                elif isinstance(request, BrowserResumeRequest):
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
+                    if expected_identity is None:
+                        # Only a fixed identity-bound installed wrapper enables resume.
+                        raise ValueError()
+                    document = _resume_request(root, request, configuration, recovery)
+                else:
+                    recovery = BrowserDeviceRecovery(
+                        root / "recovery.sqlite", configuration.identity)
+                    result = recovery.handle(
+                        request, lambda: exchange_browser_device(configuration))
+                    document = _result_document(result)
         except Exception:
             document = {"version": 1, "ok": False, "mode": "setup_error"}
         body = json.dumps(document, allow_nan=False, separators=(",", ":")).encode("ascii")
@@ -235,11 +397,14 @@ def _native_request(
 def run_browser_native(
     root: Path, caller_arguments: list[str], source: BinaryIO, destination: BinaryIO,
     *, expected_identity: str | None = None,
+    retirement: BrowserRetirementSelection | None = None,
+    worker: BrowserWorkerSelection | None = None,
 ) -> int:
     """Dedicated Linux native process: supervise one child and reap it on timeout.
 
     Requires single-threaded main process and unbuffered FileIO native pipes.
-    Root and optional identity are fixed by a trusted wrapper, never caller parameters.
+    Root, optional identity and confirmation-only retirement selection are fixed
+    by a trusted wrapper, never browser/native message parameters.
     Exit 2 means ten-second total deadline (partial/no response must be discarded).
     Parent never loads secrets. Bundle preparation does not register or launch it.
     """
@@ -264,7 +429,7 @@ def run_browser_native(
             libc.prctl.restype = ctypes.c_int
             if libc.prctl(1, signal.SIGKILL, 0, 0, 0) == 0 and os.getppid() == parent:
                 code = _native_request(root, caller_arguments, source, destination,
-                                       expected_identity=expected_identity)
+                    expected_identity=expected_identity, retirement=retirement, worker=worker)
         except BaseException:
             pass  # Dedicated child exits without exception/secret output or buffered flushing.
         os._exit(code)

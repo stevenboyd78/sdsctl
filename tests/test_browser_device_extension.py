@@ -24,6 +24,23 @@ def test_browser_recovery_coordinator_contract() -> None:
          "scripts/experimental/test_browser_device_logout.mjs",
          "scripts/experimental/test_browser_device_setup.mjs",
          "scripts/experimental/test_browser_device_startup.mjs",
+         "scripts/experimental/test_browser_device_resume.mjs",
+         "scripts/experimental/test_browser_device_resume_ui.mjs",
+         "scripts/experimental/test_browser_device_continuation_state.mjs",
+         "scripts/experimental/test_browser_device_continuation_probe.mjs",
+         "scripts/experimental/test_browser_device_continuation_context.mjs",
+         "scripts/experimental/test_browser_device_continuation_cookie.mjs",
+         "scripts/experimental/test_browser_device_continuation_worker.mjs",
+         "scripts/experimental/test_browser_device_continuation_consent.mjs",
+         "scripts/experimental/test_browser_device_continuation_install.mjs",
+         "scripts/experimental/test_browser_device_continuation_operation.mjs",
+         "scripts/experimental/test_browser_device_continuation_native.mjs",
+         "scripts/experimental/test_browser_device_retirement.mjs",
+         "scripts/experimental/test_browser_device_retirement_ui.mjs",
+         "scripts/experimental/test_browser_device_retirement_startup.mjs",
+         "scripts/experimental/test_browser_device_worker.mjs",
+         "scripts/experimental/test_browser_device_worker_gate.mjs",
+         "scripts/experimental/test_browser_device_launch.mjs",
          "scripts/experimental/test_browser_cookie_interruption.mjs"],
         capture_output=True, text=True, timeout=30,
     )
@@ -44,6 +61,20 @@ def test_real_browser_logout_harness_help_is_non_mutating() -> None:
     assert "sandbox-enabled Chromium and verified TLS" in result.stdout
     assert "Driver never installs authentication cookies" in result.stdout
     assert "cookie-set-stop, cookie-remove-stop" in result.stdout
+
+
+def test_continuation_install_harness_describes_modeled_authority() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node.js is unavailable")
+    result = subprocess.run(
+        [node, "scripts/experimental/audit_browser_continuation_install.mjs", "--help"],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 0 and result.stderr == ""
+    assert "Actual sandboxed Chromium storage/cookies" in result.stdout
+    assert "modeled native and page observations" in result.stdout
+    assert "no real sign-in, network request or production profile" in result.stdout
 
 
 def test_generated_bundle_harness_help_is_non_mutating() -> None:
@@ -86,6 +117,8 @@ def test_generated_recovery_harness_help_is_non_mutating() -> None:
     assert "no recovery-state seeding, cookie injection or production access" in result.stdout
     assert "Sandbox and verified TLS required" in result.stdout
     assert "bad-ca, bad-name" in result.stdout
+    assert "headed-startup uses an existing private X server and CDP" in result.stdout
+    assert "production ownership checks stay strict" in result.stdout
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux") or os.geteuid() == 0,
@@ -166,7 +199,7 @@ def test_javascript_pause_uses_real_native_framing_and_persistent_ledger(tmp_pat
     # No credential or CA exists: suspend/status must work offline without either.
     script = r'''
 import assert from 'node:assert/strict';
-import {spawn} from 'node:child_process';
+import {spawn, spawnSync} from 'node:child_process';
 import {endianness} from 'node:os';
 import {createBrowserRecovery, initialBrowserRecoveryState} from
   './scripts/experimental/browser_device_recovery.mjs';
@@ -208,10 +241,22 @@ const stopped = await createBrowserRecovery(ports, config).suspend();
 assert.equal(stopped.nativePaused, true);
 assert.equal(stopped.serverRevocation, 'unconfirmed');
 assert.equal((await createBrowserRecovery(ports, config).tick()).mode, 'paused');
+// A trusted native-only administrator reset must not grant browser consent.
+const reset = spawnSync(process.argv[1], ['-c', `import sys
+from pathlib import Path
+from sds200.browser_device_recovery import BrowserDeviceRecovery
+ledger = BrowserDeviceRecovery(Path(sys.argv[1]) / 'recovery.sqlite', sys.argv[2])
+ledger.resume(ledger.inspect().revision)`, process.argv[2], config.identity], {timeout:10000});
+assert.equal(reset.status, 0); assert.equal(reset.stdout.length, 0);
+assert.equal(reset.stderr.length, 0);
+const restarted = createBrowserRecovery(ports, config);
+assert.equal((await restarted.tick()).mode, 'paused');
+assert.equal((await restarted.initialize()).mode, 'setup_refused');
+assert.equal(restarted.readiness().sessionReady, false);
 // Native pause still wins over browser-state replacement.
 saved = initialBrowserRecoveryState(config);
 assert.equal((await createBrowserRecovery(ports, config).tick()).mode, 'paused');
-assert.deepEqual(actions, ['suspend', 'suspend', 'status']);
+assert.deepEqual(actions, ['suspend', 'suspend', 'suspend', 'status']);
 '''
     result = subprocess.run(
         [node, "--input-type=module", "-e", script, sys.executable, str(root), identity],

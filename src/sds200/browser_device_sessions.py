@@ -242,14 +242,22 @@ class BrowserDeviceSessions:
         except BrowserSessionUnavailable:
             return None
 
-    def issue_or_raise(self, device_id: str, credential: str) -> IssuedBrowserSession | None:
+    def issue_or_raise(
+        self, device_id: str, credential: str, *, expected_generation: int | None = None,
+    ) -> IssuedBrowserSession | None:
         """Return None for rejected credentials; distinguish transient unavailability."""
+        if expected_generation is not None and (
+            type(expected_generation) is not int or not 1 <= expected_generation < 2**53 - 1
+        ):
+            return None
         with self._lock:
             if not self._reconcile_locked():
                 raise BrowserSessionUnavailable()
             try:
                 binding = self._store.authenticate(device_id, credential)
-                if binding is None or not self._store.is_current(binding):
+                if (binding is None or not self._store.is_current(binding)
+                        or (expected_generation is not None
+                            and binding.generation != expected_generation)):
                     return None
             except BrowserDeviceStoreError:
                 self._close_locked()
@@ -265,6 +273,41 @@ class BrowserDeviceSessions:
             now = self._clock()
             self._sessions[digest] = _Session(binding, now + self._absolute, now + self._idle)
             return IssuedBrowserSession(token, self._absolute)
+
+    def verify_for_resume(
+        self, device_id: str, credential: str, *, expected_generation: int | None = None,
+    ) -> BrowserDeviceRecord | None:
+        """Credential-authenticated snapshot + older-request drain, never a mutation.
+
+        Run in the existing bounded exchange worker. Release our lock while
+        waiting for request cleanup; reauthenticate the SAME binding afterwards.
+        A subsequent session request must separately require this generation.
+        """
+        if expected_generation is not None and (
+            type(expected_generation) is not int or not 1 <= expected_generation < 2**53 - 1
+        ):
+            return None
+        try:
+            with self._lock:
+                if not self._reconcile_locked():
+                    raise BrowserSessionUnavailable()
+                binding = self._store.authenticate(device_id, credential)
+                if (binding is None or binding.generation >= 2**53 - 1
+                        or (expected_generation is not None
+                            and binding.generation != expected_generation)):
+                    return None
+            record = BrowserDeviceRecord(device_id, binding.generation, BrowserDeviceState.ACTIVE)
+            if not self.acknowledge(record):
+                raise BrowserSessionUnavailable()
+            with self._lock:
+                if not self._reconcile_locked():
+                    raise BrowserSessionUnavailable()
+                if self._store.authenticate(device_id, credential) != binding:
+                    return None
+            return record
+        except BrowserDeviceStoreError:
+            self.close()
+            raise BrowserSessionUnavailable() from None
 
     def acquire(self, token: str | None) -> BrowserSessionLease | None:
         """Call from the request's event loop; rejected requests get no lease."""

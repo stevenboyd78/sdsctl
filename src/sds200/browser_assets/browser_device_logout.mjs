@@ -41,6 +41,14 @@ export function connectLogoutWorker(chrome, controller, origin, clock = Date.now
     }
     return false;
   });
+  return Object.freeze({retireAfterResume: () => {
+    // Trusted worker wiring only, never a dashboard message. A fresh verified
+    // resume starts a new logout cycle; old document tickets cannot finish it.
+    const state=controller.readiness();
+    if (state.mode !== "active" || state.sessionReady !== true) return false;
+    pending=null;
+    return true;
+  }});
 }
 
 export async function submitDeviceLogout(fetcher, origin) {

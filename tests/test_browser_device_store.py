@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import sqlite3
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-from contextlib import suppress
+from contextlib import closing, suppress
 from pathlib import Path
 
 import pytest
@@ -163,7 +163,7 @@ def test_corrupt_authority_is_redacted(store: BrowserDeviceStore, content: bytes
 
 
 def test_unknown_schema_version_is_rejected(store: BrowserDeviceStore) -> None:
-    with sqlite3.connect(store.path) as connection:
+    with closing(sqlite3.connect(store.path)) as connection, connection:
         connection.execute("PRAGMA user_version=999")
     with pytest.raises(BrowserDeviceStoreError):
         store.inventory()
@@ -231,7 +231,7 @@ def test_malformed_authority_record_fails_closed(
     store: BrowserDeviceStore, column: str, value: object,
 ) -> None:
     issued = store.enroll("display")
-    with sqlite3.connect(store.path) as connection:
+    with closing(sqlite3.connect(store.path)) as connection, connection:
         # Column names are fixed test parameters, never caller-provided SQL.
         connection.execute(f"UPDATE devices SET {column}=?", (value,))
     with pytest.raises(BrowserDeviceStoreError):
@@ -240,7 +240,7 @@ def test_malformed_authority_record_fails_closed(
 
 def test_generation_cannot_wrap_or_reset(store: BrowserDeviceStore) -> None:
     issued = store.enroll("display")
-    with sqlite3.connect(store.path) as connection:
+    with closing(sqlite3.connect(store.path)) as connection, connection:
         connection.execute("UPDATE devices SET generation=?", (2**63 - 1,))
     with pytest.raises(BrowserDeviceStoreError):
         store.rotate("display")

@@ -176,21 +176,39 @@ def test_xml_assembler_expires_during_continuous_input_and_recovers() -> None:
 
 def test_xml_assembler_idle_watchdog_clears_state_and_marks_late_xml_consumed() -> None:
     expired = threading.Event()
+    advance_clock = threading.Event()
+    watchdog_checked = threading.Event()
+    test_thread = threading.current_thread()
+
+    def clock() -> float:
+        if threading.current_thread() is not test_thread:
+            watchdog_checked.set()
+        return 101.0 if advance_clock.is_set() else 100.0
+
     assembler = XmlResponseAssembler(
         max_lifetime=0.01,
+        monotonic=clock,
         expiration_handler=lambda _error: expired.set(),
     )
-    assert assembler.feed("GSI,<XML>,") is None
-    assert assembler.feed("<ScannerInfo>") is None
+    try:
+        assert assembler.feed("GSI,<XML>,") is None
+        # Exercise the real timer before setup finishes, but hold the injected
+        # clock still. Scheduler latency must not spend a 10 ms setup deadline.
+        assert watchdog_checked.wait(2.0)
+        assert not expired.is_set()
+        assert assembler.feed("<ScannerInfo>") is None
+        advance_clock.set()
 
-    assert expired.wait(1.0)
-    assert assembler.collecting is False
-    result = assembler.feed_with_status('<Property Private="discard" />')
+        assert expired.wait(2.0)
+        assert assembler.collecting is False
+        result = assembler.feed_with_status('<Property Private="discard" />')
 
-    assert result.expired is True
-    assert result.report_expiration is False
-    assert result.consumed is True
-    assert result.response is None
+        assert result.expired is True
+        assert result.report_expiration is False
+        assert result.consumed is True
+        assert result.response is None
+    finally:
+        assembler.reset()  # Do not leave a rearming timer after a failed assertion.
 
 
 def test_xml_assembler_accepts_document_just_before_lifetime_limit() -> None:

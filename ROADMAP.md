@@ -9,6 +9,30 @@ The broader product direction, architectural constraints, deferred capabilities,
 and ideas that are not ready for scheduling are recorded in
 [the project vision](docs/project-vision.md).
 
+## Proposed v1.0 quality gate — comprehensive coverage
+
+Defer the dedicated push to 100 percent test coverage until late-project
+hardening, as a proposed condition for v1.0 rather than a blocker for the current
+managed-display work. Confirm the final release scope and enforcement policy
+before the v1.0 release-candidate phase.
+
+- Target 100 percent statement and branch coverage, with an explicit reporting
+  scope for production Python and browser code. Re-measure the baseline when
+  this work begins; the current shared Python statement-coverage floor remains
+  86 percent until a separately reviewed change.
+- Add meaningful assertions and failure-injection tests for uncovered behavior;
+  do not weaken tests or introduce exclusions merely to reach the percentage.
+  Continue normal feature, regression and safety testing throughout development.
+- Retain real-browser, scanner, Raspberry Pi, restart and outage acceptance as
+  separate requirements. Complete measured coverage does not prove all input
+  combinations, timing races or physical failure modes are safe.
+
+The focused reconciliation coverage review remains a starting point for that
+later pass: initialization failure/redaction, an unrepresentable review window,
+post-write state mismatch and an out-of-window archived completion time in
+`browser_device_resume_reconciliation.py`. No coverage-only expansion or CI
+threshold change is scheduled as the next active task.
+
 ## v0.29.5 maintenance release
 
 The focused managed-TUI waiting-screen patch is maintained on `release/0.29`
@@ -19,6 +43,35 @@ same-process automatic live recovery, and production restoration on both
 in the versioned release notes; these TUI checks do not qualify browser enrollment.
 
 ## Active milestone
+
+### Low-priority TUI usability follow-up
+
+- For remote-daemon connections, show the connected daemon's reported application
+  version in the Connection panel. Keep the local TUI version in the application
+  header and scanner model/firmware in the Scanner panel. Use authenticated
+  endpoint metadata rather than assuming the daemon matches the client version;
+  handle unavailable version information explicitly. Direct USB connections
+  should not gain this remote-only field. This is a future improvement, not part
+  of the active browser-device review or the released 0.29.5 behavior.
+- Make connection timing and the header clock unambiguous across midnight and
+  long-running sessions. The current Connection value is a presentation-state
+  transition timestamp (`CONNECTED since HH:MM:SS`), not measured connection
+  uptime. Distinguish that state-change time from an actual connection start;
+  do not reset connection uptime merely because a stale/degraded label changes.
+  Use explicit labels and full ISO 8601 UTC timestamps in 24-hour form for
+  `Connected since` and the current header date/time, for example
+  `2026-09-09T06:59:40Z`. Keep the application name/version in the header.
+  If elapsed connection time is shown, label it `Connected for` and use a
+  compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
+  variable-length calendar months/years as fixed durations. Derive elapsed time
+  from a monotonic clock, distinguish it from process uptime, and define which
+  connection it measures (client-to-daemon versus daemon-to-scanner). Reset it
+  only for a new connection and do not present disconnected time as connected
+  uptime. Apply consistent timestamp formatting to the related status-since
+  fields. Verify UTC conversion, midnight/day rollover, reconnects, wall-clock
+  adjustments, and header/panel fit on both 100x30 and 160x45 Pi consoles without
+  introducing wrapping or panel shifts. This is a low-priority follow-up, not a
+  change to the active browser-device acceptance scope or released behavior.
 
 ### Managed-display enrollment and unattended recovery
 
@@ -91,6 +144,140 @@ and production TUI restoration after correcting browser-before-compositor stop
 ordering. The [seat integration guide](docs/browser-device-seat.md) records that
 limited result and a shell-tested example, not a production-installed seat. The
 lab's blank-password keyring does not qualify secure unattended keyring handling.
+
+The [replacement/resume boundary tests](docs/browser-device-resume.md) join server
+authority/acknowledgement, native recovery and browser sign-out checks in isolated
+fixtures. Server resume, credential-file replacement and native-only reset do not
+silently grant the other layers' consent; stale reviews and old sessions remain
+invalid. These are prerequisites, not an accepted production resume workflow or
+credential installer.
+
+The [native approval engine](docs/browser-device-resume.md#native-approval-engine-internal-candidate-only)
+is an internal candidate: short-lived one-use reviews, durable claim before
+server proof, atomic native permission, cancellation on newer pause, and retained
+uncertain outcomes. Only explicit preparation migrates its selected ledger to a
+version that older helpers refuse. The connected candidate adds persisted
+browser pending consent, credential-authenticated verified HTTPS evidence and
+exact-generation fresh sessions. Isolated tests join TLS, the actual ASGI/owner,
+authority and native core; browser storage/cookie tests remain controlled doubles.
+The generated experimental bundle now wires a two-step, document-bound trusted
+resume page to identity-bound native messages under the ten-second supervisor.
+Its isolated same-origin session probe passed real Chromium acceptance on both
+ARM64 Pis over loopback DNS, IPv4 and IPv6, plus stale-review refusal on each host.
+The corrected runtime also permits a second sign-out in the same worker and
+preserves pause across restart. Workstation sandbox-blocked attempts remain
+distinct from these eight sandboxed, verified-TLS headless passes. History
+maintenance, failed-pending recovery, private-file writer coordination and physical
+coordinated acceptance remain gates. No resume CLI or production migration is enabled.
+
+The [native history-retirement candidate](docs/browser-device-resume.md#retained-history-retirement-internal-candidate-only)
+adds read-only exact review, a durable private archive before mutation, atomic
+revision fencing while preserving stopped/error modes, and read-only confirmation
+after lost acknowledgement. It frees bounded native history while retaining an
+anchor and archived evidence; it never clears browser pause or grants permission.
+There is no CLI/native-message/UI caller. Coordinated pending-browser recovery,
+private-file writer serialization and production acceptance remain separate work.
+
+The [internal browser retirement acknowledgement](docs/browser-device-resume.md#browser-acknowledgement-of-retired-intent-internal-candidate-only)
+now binds a separate browser review/confirmation to native evidence for the exact
+latest retired intent. It clears only the matched pending marker, preserves
+intentional pause, refuses stale replies and requires a new worker plus fresh
+server review for later resume. Node/Python tests join real native history with
+controlled browser storage, including lost replies and changed native state.
+There is no installed transport or page binding; trusted UI, private-file writer
+ownership and actual-browser acceptance remain.
+
+The [internal no-matching-record candidate](docs/browser-device-resume.md#no-matching-record-reconciliation-internal-candidate-only)
+adds an explicit intent-bound absence review and archived revision fence for
+stopped schema-1/schema-2 ledgers. Preserve all retained history and error state;
+reject matching or unrelated pending approvals and fence delayed preparations.
+Absence is not proof that an attempt never existed. Joined Node/Python fixtures
+resolve only to clean-but-paused without authentication, including lost replies.
+No CLI/native action, installed adapter or automatic recovery path is enabled.
+
+The [internal maintenance selection/ownership boundary](docs/browser-device-resume.md#trusted-maintenance-selection-and-profile-ownership-internal-candidate)
+fixes the profile/archive roots out of band, binds reviews to unchanged private
+inputs and directory identities, and retains fixed-name operation evidence for
+read-only restart confirmation. The supervised native runner now shares a
+nonblocking profile lock; boundary mutations take exclusive ownership. This
+coordinates participating callers, not old helpers or arbitrary manual edits.
+Private-input replacement still needs its own durable writer/fencing workflow;
+no installed maintenance UI, mutation action, CLI or automatic login is enabled.
+
+The [internal confirmation-only recovery controls](docs/browser-device-resume.md#confirmation-only-recovery-controls-internal-candidate)
+join explicit document-bound browser acknowledgement to a separately selected,
+read-only native endpoint. The trusted wrapper fixes the archive and operation;
+browser messages cannot supply either or execute native maintenance. Require a
+fresh matching proof and keep automatic sign-in paused after resolving intent.
+Local tests include actual native framing, supervision and SQLite with controlled
+page/storage fixtures. No generated extension, registered host, production
+display, Firefox/WPE support or physical acceptance claim changes at this stage.
+
+The [internal stopped-browser local maintenance session](docs/browser-device-resume.md#stopped-browser-local-maintenance-session-internal-candidate)
+now holds managed-launcher ownership through same-process review and exact,
+short-lived local consent. Persist a launch-blocking marker before native
+execution, retain it on success and uncertainty, and only confirm committed
+evidence after process loss. Preserve browser storage, credentials and server
+authority. Tests use canonical registrations and real local process/lock/SQLite
+behavior. The trusted callback is not a user-facing CLI, browser adapter or
+installation flow. Guarded browser acknowledgement, eventual guard release,
+replacement writers and real-browser/physical acceptance remain separate gates.
+
+The [internal recovery-only bundle preparation](docs/browser-device-resume.md#recovery-only-bundle-preparation-internal-candidate)
+now stages a distinct canonical bundle bound to exact completed maintenance and
+the existing public extension identity. It reuses one browser state coordinator
+without normal startup, alarm, authentication or resume handlers, and verifies
+the clean-but-paused storage write by read-back. Generated page/worker modules
+join the fixed confirmation-only native executable in controlled tests. Normal
+bundle registration rejects this artifact; preparation never registers a host,
+starts a browser, acknowledges browser state to the local launcher or releases
+the guard. A supervised temporary handoff, durable browser acknowledgement,
+safe registration restoration and real-browser acceptance are still required.
+
+The [internal guarded host handoff](docs/browser-device-resume.md#guarded-host-handoff-and-paused-acknowledgement-internal-candidate)
+now preserves exact original registration evidence and switches only the selected
+native host under managed-launcher ownership. A handoff-bound wrapper can record
+a browser paused acknowledgement after exact read-back; ordinary wrappers cannot.
+Bind live work to the owner process start identity as well as locks, including
+inherited-lock process-loss cases. Allow read-only lost-reply confirmation and
+explicit acknowledged host restoration, always retaining the launch guard.
+An [internal bounded Chromium supervisor](docs/browser-device-resume.md#bounded-chromium-supervisor-internal-candidate)
+now supplies fixed launch arguments, separate exact-generation page/worker
+readiness, a private PID-1 lifetime boundary and kernel-confirmed shutdown.
+Local tests exercise real namespace/native processes with a fictional browser.
+The real-Chromium qualification harness additionally uses installed wheels and
+private virtual Pi displays, with namespace-local procfs and worker-owned page
+opening. It deliberately seeds fictional pending state through browser APIs;
+it is not normal setup/resume or physical-display acceptance. A separate
+[exact headed first-start matrix](docs/browser-device-startup.md#exact-headed-first-start-qualification)
+now qualifies the ordinary installed CLI on both Pis: real setup confirmation,
+no-consent preservation and paused restarts, without debugger flags or manual
+refresh. A separate same-build
+[small-Pi physical recovery checkpoint](docs/browser-device-recovery-acceptance.md)
+now passed user-reviewed acknowledgement, exact restoration/paused-only release,
+two ordinary paused starts and final persisted-state readback. Its initial pending
+state was synthetic. A later fresh virtual-display qualification obtained its
+interrupted state through ordinary setup/sign-out/resume and withheld only a
+test server's completed session response until the real native timeout. One
+reviewed recovery then returned it to clean paused state, with two ordinary
+paused starts both before and after maintenance and a separate GET-only readback.
+No consumed approval was replayed; earlier uncertain attempts remain preserved.
+See the [genuine interruption record](docs/browser-device-recovery-acceptance.md#genuine-ordinary-resume-interruption-and-paused-recovery).
+Later online session establishment, server-side revocation of an undelivered
+session, cross-release migration, credential replacement and broader physical/
+outage acceptance remain gates. Next, review a separate fresh-permission
+continuation without inferring sign-in authority from paused recovery.
+
+That continuation review found and reproduced a native request-boundary gap:
+new resume preparation could invalidate a paused-only release's bound revision.
+The candidate now rechecks live-owner/registration authority for every normal
+worker request and restricts a released installation to read-only status. Its
+ordinary resume link cannot override this boundary. A fresh private candidate
+passed local regression tests and isolated small-Pi Chromium setup, recovery,
+two paused starts and a real UI resume-review refusal with no server connection.
+This is containment, not post-maintenance sign-in support; a separate
+administrator continuation remains required. The earlier genuine interruption
+and physical results belong to their recorded worker build, not this new change.
 
 Accepted extension distribution/updates/removal, service wiring, explicit replacement/resume
 and physical multi-display/outage acceptance remain gates. Keep production

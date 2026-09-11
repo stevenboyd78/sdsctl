@@ -8,6 +8,107 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add exact headed first-start qualification on private Pi displays using the
+  ordinary installed CLI and distribution Chromium. Check fresh/no-consent setup,
+  explicit initialization and paused restarts, with observed argument capture,
+  visible fixture text, and zero connections to a monitored fictional endpoint.
+  This changes test/documentation coverage, not production startup or guard release.
+- Qualify the internal recovery supervisor against real Chromium on private
+  virtual Pi displays. Give Chromium namespace-local `/proc` while keeping native
+  owner checks on a separate validated read-only host-proc mount. Let the loaded
+  recovery worker open its fixed review page with a session-scoped generation
+  claim, avoiding first-navigation/extension-loading races. Neither page opening
+  nor readiness grants consent, releases the maintenance guard or enables login.
+- Add an internal supervised recovery launch with fixed Chromium arguments,
+  bounded version/activation/confirmation/shutdown stages, and a private PID-1
+  supervisor using existing bubblewrap. Bind generated page/worker readiness to
+  the exact recovery bundle and live supervisor, separately from saved-pause
+  acknowledgement. Require kernel-confirmed supervisor exit for stopped
+  confirmation; retain guards and evidence on timeout, crash or owner loss.
+  No production CLI, service wiring, guard release or automatic sign-in is added.
+- Add an internal guarded recovery-host handoff with synchronized exact backups,
+  a live owner bound to process identity and launcher/profile locks, and an opt-in
+  native acknowledgement written only after browser paused-state read-back.
+  Confirm exact receipts after lost replies; restore only the original host after
+  acknowledgement while retaining the maintenance guard. Cover interrupted
+  switches/restorations, process death and inherited locks. No browser launcher,
+  service change, automatic guard release, login or production deployment is enabled.
+- Add internal recovery-only bundle preparation for one confirmed stopped-browser
+  maintenance operation. Preserve the extension identity, validate the exact
+  retained guard and canonical files, and stage only a fixed confirmation native
+  wrapper and inert browser controls. Reuse the canonical state coordinator
+  without ordinary startup/authentication hooks, and read back clean-but-paused
+  browser state before acknowledgement. Test generated page/worker/native-process
+  integration, unsafe inputs and uncertain writes. No registration, browser
+  launch, guard release, production change or Firefox/WPE support is enabled.
+- Add an internal stopped-browser resume-maintenance workflow with canonical
+  registration checks, managed-launcher ownership, same-process review and
+  session-specific local consent. Durably block normal launch before native
+  mutation, retain the guard on success or uncertainty, and support read-only
+  post-loss confirmation without recreating locks or replaying execution.
+  Preserve private inputs and opaque browser state. Test stopped modes, stale
+  consent, competing launchers, changed files, write failures and real process
+  loss; no CLI, installed handoff, automatic guard release or login is enabled.
+- Add internal confirmation-only resume-maintenance transport and trusted
+  two-step browser recovery-control adapters. Fix native operation/archive
+  selection in trusted wrapper code, reject all mutation/authentication actions,
+  and supervise read-only evidence confirmation. Bind browser acknowledgement
+  to one active page document and one short-lived review; resolve interrupted
+  intent only to clean-but-paused. Test real native framing/SQLite plus controlled
+  browser UI, stale selection, timeout and lost replies. Generated extensions,
+  registered hosts, production displays and automatic sign-in remain unchanged.
+- Add an internal trusted resume-maintenance boundary with fixed profile/archive
+  selection, private input and directory-identity bindings, one-use execution,
+  fixed-name retained evidence and read-only lost-reply confirmation. Coordinate
+  the supervised native runner's shared profile ownership with exclusive
+  maintenance ownership using nonblocking Linux advisory locks. No credential
+  replacement installer, maintenance mutation action, CLI, installed UI or automatic
+  login is enabled; arbitrary manual writes and old helpers are not coordinated.
+- Add internal no-matching-record reconciliation for interrupted browser resume:
+  an exact private absence review, durable archive before native revision fencing,
+  unchanged schema/history/error state and read-only completion confirmation.
+  Reject matching or other pending approvals, preserve bounded history and fence
+  delayed preparations. Join both ledger schemas to the existing paused browser
+  acknowledgement tests; no authentication, migration, installed transport,
+  native action, CLI or automatic recovery is enabled.
+- Add an internal browser acknowledgement coordinator for the exact retired
+  resume intent, backed by read-only native history confirmation. Require a
+  separate one-use review/confirmation, fresh matching evidence and unchanged
+  persisted state; resolve pending state only to clean-but-paused, never signed
+  in. Cover sign-out races, stale replies, clock changes and lost storage replies
+  with Node tests and joined native-ledger fixtures. No installed page, native
+  message, production adapter or automatic recovery caller is enabled.
+- Add an internal experimental native resume-history retirement candidate:
+  read-only profile-bound review, a private durable archive before mutation,
+  stale-review refusal, revision fencing of old approvals, preservation of all
+  stopped/error modes and read-only confirmation after a lost reply. Retain one
+  terminal history anchor and all archived evidence. Test full history, process
+  interruption and concurrent operations; no CLI, native action, browser-pause
+  reset, automatic login or production recovery workflow is enabled.
+- Add an experimental native resume-approval engine with exact revision,
+  installation, browser-intent and private-input bindings; short-lived one-use
+  tickets; fresh server-evidence checks; durable claim before proof; and atomic
+  native permission. Cancel outstanding approvals on newer pause or clock
+  correction and retain failed/uncertain operations. Only explicit internal
+  preparation upgrades a ledger to schema 2; no resume CLI or production
+  migration is enabled.
+- Add experimental credential-authenticated, non-mutating device verification
+  with confirmed old-request drainage, and exact-generation session exchange
+  over the existing verified HTTPS transport. Add internal browser pending
+  consent and native verification/session coordination with interruption and
+  sign-out-race tests.
+- Wire an experimental two-step trusted extension resume page to identity-bound
+  review/prepare/commit native messages under the ten-second process supervisor.
+  Bind a one-use review to its exact page document, native revision and server
+  generation; keep approval tickets out of page messages and persistent browser
+  storage. Verify protected access through an isolated same-origin probe before
+  final browser consent. Add strict UI/bridge and timeout regression tests.
+  Retire the previous volatile logout ticket only after verified resume so a
+  second sign-out works in the same worker without replaying the earlier ticket.
+  Qualify eight isolated, sandboxed real-browser cases on both ARM64 Pis:
+  loopback DNS/IPv4/IPv6 resume and stale-review refusal, including retained
+  pause across restart. Credential replacement, retained-operation maintenance,
+  physical-screen/boot acceptance and production deployment remain separate gates.
 - Add experimental `browser-device-service --experimental create/check` to
   prepare and validate inert, canonical graphical-session user-service files.
   Recheck registration on launch and preserve intentional close, bounded crash
@@ -56,6 +157,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Document experimental device replacement/resume boundaries and add isolated
+  cross-layer regression coverage for server generations, native revisions,
+  credential-file replacement and persistent browser sign-out. Preserve separate
+  consent and terminal revocation; do not add a resume command, accept rotation
+  imports, change runtime behavior or qualify unattended production recovery.
 - Show Home Assistant WebGUI Diagnostics remote-client connection ages as
   `HH:MM:SS`, with elapsed days for connections lasting at least 24 hours,
   instead of a raw seconds count. Keep the oldest-still-open connection meaning

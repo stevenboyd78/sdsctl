@@ -167,6 +167,36 @@ function fixture(saved = initialBrowserRecoveryState(config)) {
   return f;
 }
 
+test("a native administrator reset cannot override persisted browser sign-out", async () => {
+  const f = fixture();
+  await f.make().suspend();
+  const paused = structuredClone(f.saved);
+  // Model a separately authorized native-only reset. No browser consent changed.
+  f.nativeMode = "active"; f.revision++;
+  const before = f.calls.length, restarted = f.make();
+  assert.equal((await restarted.tick()).mode, "paused");
+  assert.deepEqual(f.calls.slice(before), ["suspend"]);
+  assert.equal(f.nativeMode, "paused");
+  assert.deepEqual(f.saved, paused);
+  assert.equal(f.cookie, null); assert.equal(f.alarm, null);
+  assert.deepEqual(restarted.readiness(), {mode:"paused",sessionReady:false});
+  assert.equal((await restarted.initialize()).mode, "setup_refused");
+  assert(!f.calls.includes("authenticate"));
+});
+
+test("a replacement installation identity cannot inherit a paused browser record", async () => {
+  const f = fixture();
+  await f.make().suspend();
+  const saved = structuredClone(f.saved), before = f.calls.length;
+  const replacement = createBrowserRecovery(f.ports, {...config, identity:"d".repeat(64)});
+  assert.equal((await replacement.tick()).mode, "setup_error");
+  assert.equal((await replacement.initialize()).mode, "setup_refused");
+  assert.deepEqual(f.saved, saved);
+  assert.deepEqual(f.calls.slice(before), []);
+  assert.equal(f.cookie, null);
+  assert.equal(replacement.readiness().sessionReady, false);
+});
+
 test("verified response becomes exact host-only HttpOnly cookie, not storage or UI output", async () => {
   const f = fixture(), c = f.make();
   assert.deepEqual(await c.tick(), {mode: "active"});

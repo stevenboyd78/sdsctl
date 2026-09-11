@@ -722,9 +722,13 @@ fingerprint, paused intent, installation phase and next renewal time. Missing,
 corrupt or mismatched state fails closed; it is not silently initialized. Storage
 access is restricted to trusted extension contexts, as supported by the
 [Chrome storage API](https://developer.chrome.com/docs/extensions/reference/api/storage).
-There is no browser-message resume operation. A native administrator resume alone
-does not erase a browser's persisted intentional pause; a reviewed installation
-recovery workflow is still required before shipping.
+Ordinary browser control messages cannot resume sign-in. The experimental
+[trusted resume page and bridge](browser-device-resume.md) require a separate
+document-bound review and explicit consent. Isolated real-browser acceptance
+passed on both Pis over loopback DNS, IPv4 and IPv6, including stale-review
+refusal and sign-out after resume. A native administrator resume alone does not erase a
+browser's persisted intentional pause. A reviewed installation recovery and
+retirement workflow is still required before shipping.
 
 Renewal uses one named alarm, with a minimum scheduled delay of 30 seconds.
 The worker must call the adapter once at top level on each incarnation to reconcile

@@ -19,18 +19,17 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass
-from importlib.resources import files
 from pathlib import Path
 
 from .browser_device_native import BrowserNativeConfiguration, _private_read
 from .browser_device_native import load_browser_native_configuration as load_configuration
 from .browser_device_profile import _platform, _write, inspect_browser_profile
 from .browser_device_store import BrowserDeviceStore
+from .browser_device_worker import MODULES as MODULES
+from .browser_device_worker import worker_graph
 from .exceptions import ConfigurationError
 
 NATIVE_HOST = "org.sdsctl.browser_device"
-MODULES = ("browser_device_recovery.mjs", "browser_device_logout.mjs", "browser_device_setup.mjs",
-           "browser_device_startup.mjs")
 
 
 class BrowserBundleError(ConfigurationError):
@@ -96,19 +95,16 @@ def _json(value: object) -> bytes:
 
 
 def _artifacts(
-    root: Path, config: BrowserNativeConfiguration, key: BrowserExtensionIdentity,
+    root: Path, config: BrowserNativeConfiguration, key: BrowserExtensionIdentity, public_key: Path,
 ) -> dict[str, bytes]:
     python = Path(sys.executable)
     if not python.is_absolute() or not python.is_file() or not os.access(python, os.X_OK):
         raise ValueError()
     # Keep the venv interpreter path; resolving its symlink would lose that venv.
-    settings = json.dumps({"origin": config.origin, "identity": config.identity,
-                           "nativeHost": NATIVE_HOST}, ensure_ascii=True)
     origin = json.dumps(config.origin)
     host = f"[{config.hostname}]" if ":" in config.hostname else config.hostname
     pattern = f"https://{host}:{config.port}/"
-    assets = files("sds200.browser_assets")
-    result = {f"extension/{name}": assets.joinpath(name).read_bytes() for name in MODULES}
+    _, result = worker_graph()
     logout = result["extension/browser_device_logout.mjs"].decode("utf-8")
     # The packaged logout module has no imports; build a classic isolated-world
     # entrypoint without exposing its symbols in the page or requiring WAR access.
@@ -118,9 +114,14 @@ def _artifacts(
                 f"location.href === {origin} + p)) "
                 "connectLogoutContent({document, window, runtime: chrome.runtime, "
                 f"fetcher: fetch.bind(globalThis)}}, {origin});\n}})();\n")
+    resume_content = result["extension/browser_device_resume.mjs"].decode("utf-8")
+    content += "\n(() => {\n" + re.sub(r"^export (?=(?:async )?function )", "", resume_content,
+                                        flags=re.MULTILINE)
+    content += ("\nconnectResumeContent({window,runtime:chrome.runtime,"
+                f"fetcher:fetch.bind(globalThis)}}, {origin});\n}})();\n")
     result.update({
         "extension/manifest.json": _json({
-            "manifest_version": 3, "version": "0.0.3",
+            "manifest_version": 3, "version": "0.0.4",
             "name": "SDSCTL experimental device recovery review",
             "key": key.manifest_key,
             "permissions": ["nativeMessaging", "storage", "cookies", "alarms", "tabs"],
@@ -135,15 +136,6 @@ def _artifacts(
                 "extension_pages": "script-src 'self'; object-src 'none'; connect-src 'none'",
             },
         }),
-        "extension/worker.mjs": (
-            "import {connectChromeRecovery} from './browser_device_recovery.mjs';\n"
-            "import {connectLogoutWorker} from './browser_device_logout.mjs';\n"
-            "import {connectBrowserEntry} from './browser_device_startup.mjs';\n"
-            f"const config = {settings};\n"
-            "const controller = connectChromeRecovery(chrome, config);\n"
-            "connectLogoutWorker(chrome, controller, config.origin);\n"
-            "connectBrowserEntry(chrome);\n"
-        ).encode("ascii"),
         "extension/content.js": content.encode("utf-8"),
         "extension/control.html": (
             "<!doctype html><meta charset='utf-8'><title>SDSCTL review bundle</title>"
@@ -168,8 +160,35 @@ def _artifacts(
             f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd></dl>"
             "<p id='notice' role='status'>Starting managed display…</p>"
             "<p>This page never initializes, repairs or resumes a profile automatically.</p>"
+            "<p id='resume-link' hidden><a href='resume.html'>"
+            "Review automatic sign-in resume</a></p>"
             "</main><script type='module' src='startup.mjs'></script></html>\n"
         ).encode(),
+        "extension/resume.mjs": (
+            "import {connectResumePage} from './browser_device_resume.mjs';\n"
+            "connectResumePage({document,window,runtime:chrome.runtime});\n"
+        ).encode("ascii"),
+        "extension/resume.html": (
+            "<!doctype html><html lang='en'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>SDSCTL resume automatic sign-in</title><link rel='stylesheet' href='setup.css'>"
+            "<main><h1>Resume automatic sign-in</h1><p>Experimental managed display</p><dl>"
+            f"<dt>Server</dt><dd>{html.escape(config.origin)}</dd>"
+            f"<dt>Device</dt><dd>{html.escape(config.device_id)}</dd>"
+            f"<dt>Extension</dt><dd>{key.extension_id}</dd></dl>"
+            "<p>An administrator must already allow this device on the server. This page "
+            "cannot undo server-side pause or revocation, replace credentials, or repair "
+            "an interrupted approval. No password or credential should be entered here.</p>"
+            "<button id='review' type='button'>Review this display</button>"
+            "<p id='reviewed'></p><form id='resume-form'><label>"
+            "<input type='checkbox' id='confirm' required disabled>"
+            " I have checked this server and device. Resume automatic sign-in on this display, "
+            "including future browser starts.</label><p><button id='resume' type='submit' disabled>"
+            "Resume automatic sign-in</button></p></form><p id='notice' role='status'>"
+            "Opening this page does not resume automatic sign-in.</p>"
+            "<p><a href='startup.html'>Return to startup</a></p></main>"
+            "<script type='module' src='resume.mjs'></script></html>\n"
+        ).encode("ascii"),
         "extension/setup.html": (
             "<!doctype html><html lang='en'><meta charset='utf-8'>"
             "<meta name='viewport' content='width=device-width,initial-scale=1'>"
@@ -203,11 +222,14 @@ def _artifacts(
         "native_host.py": (
             "import os, sys\nfrom pathlib import Path\n"
             "from sds200.browser_device_native import run_browser_native\n"
+            "from sds200.browser_device_worker import BrowserWorkerSelection\n"
             "raise SystemExit(run_browser_native(\n"
             f"    Path({str(config.root)!r}), sys.argv[1:],\n"
             "    os.fdopen(os.dup(0), 'rb', buffering=0),\n"
             "    os.fdopen(os.dup(1), 'wb', buffering=0),\n"
-            f"    expected_identity={config.identity!r},\n))\n"
+            f"    expected_identity={config.identity!r},\n"
+            f"    worker=BrowserWorkerSelection(Path({str(root)!r}), "
+            f"Path({str(public_key)!r})),\n))\n"
         ).encode(),
         NATIVE_HOST + ".json": _json({
             "name": NATIVE_HOST, "description": "SDSCTL experimental device recovery",
@@ -233,7 +255,7 @@ def create_browser_bundle(
         if (config.extension_origin != f"chrome-extension://{key.extension_id}/"
                 or inspected.identity != config.identity):
             raise ValueError()
-        artifacts = _artifacts(root, config, key)
+        artifacts = _artifacts(root, config, key, public_key)
         receipt = _json({
             "version": 1, "experimental": True, "extension_id": key.extension_id,
             "identity": config.identity, "public_key_sha256": key.public_key_sha256,
@@ -248,6 +270,17 @@ def create_browser_bundle(
             "Check the private profile, matching extension public key and destination."
         ) from None
 
+    _write_bundle(root, artifacts, receipt)
+    return key
+
+
+def _write_bundle(root: Path, artifacts: dict[str, bytes], receipt: bytes,
+                  *, directories: tuple[str, ...] = ()) -> None:
+    """Exclusive private output, receipt last; retain partial files on any failure.
+
+    Callers validate their distinct canonical artifact contract before and after
+    writing. This is not registration and does not authorize a browser launch.
+    """
     parent_fd = root_fd = extension_fd = None
     try:
         flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -262,6 +295,10 @@ def create_browser_bundle(
         if (opened.st_dev, opened.st_ino) != (root.stat().st_dev, root.stat().st_ino):
             raise ValueError()
         os.mkdir("extension", 0o700, dir_fd=root_fd)
+        for name in directories:
+            if not name or Path(name).name != name or name in {".", "..", "extension"}:
+                raise ValueError()
+            os.mkdir(name, 0o700, dir_fd=root_fd)
         extension_fd = os.open("extension", flags, dir_fd=root_fd)
         for name, body in artifacts.items():
             if name.startswith("extension/"):
@@ -277,7 +314,6 @@ def create_browser_bundle(
         os.fsync(extension_fd)
         _write(root_fd, "bundle.json", receipt)  # Completion marker, not a signature.
         os.fsync(root_fd)
-        return key
     except Exception:
         raise BrowserBundleError(
             "Browser bundle creation could not be confirmed. Retain any created directory "
