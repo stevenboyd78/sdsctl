@@ -118,7 +118,8 @@ def test_no_fallthrough_to_authentication_or_legacy_writes(lab, candidate, dispa
     assert snap(lab) == before
 
 
-@pytest.mark.parametrize("action", ["continuation-current", "continuation-review"])
+@pytest.mark.parametrize("action", ["continuation-current", "continuation-review",
+                                    "continuation-verify-active"])
 @pytest.mark.parametrize("failure", ["unwrapped", "no-worker", "wrong-identity", "retirement",
     "selection", "missing-anchor", "unsafe-anchor"])
 def test_read_route_requires_bound_installed_continuation(
@@ -144,7 +145,8 @@ def test_read_route_requires_bound_installed_continuation(
     assert snap(lab) == before
 
 
-@pytest.mark.parametrize("action", ["continuation-current", "continuation-review"])
+@pytest.mark.parametrize("action", ["continuation-current", "continuation-review",
+                                    "continuation-verify-active"])
 @pytest.mark.parametrize("extra", [{"role": "normal"}, {"generation": 7}, {"directory": "/tmp"},
     {"origin": "https://other.example"}, {"identity": "f" * 64}, {"proof": {}},
     {"token": "secret"}])
@@ -153,7 +155,8 @@ def test_read_parser_never_accepts_caller_authority_or_selection(action, extra):
         parse_browser_device_request(json.dumps({"version": 1, "action": action, **extra}).encode())
 
 
-@pytest.mark.parametrize("action", ["continuation-current", "continuation-review"])
+@pytest.mark.parametrize("action", ["continuation-current", "continuation-review",
+                                    "continuation-verify-active"])
 def test_read_parser_is_exact_and_inert(action):
     result = parse_browser_device_request(json.dumps({"version": 1, "action": action}).encode())
     assert type(result) is BrowserContinuationReadRequest and result.action == action
@@ -364,6 +367,157 @@ def test_initial_framed_request_issues_once_without_persisting_a_token(
                 assert TOKEN.encode() not in path.read_bytes()
     assert CREDENTIAL not in json.dumps(response)
     blocked(lab)
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_framed_active_verification_is_fresh_and_read_only(
+        lab, candidate, dispatch, monkeypatch, active):
+    if active:
+        active_native(lab, candidate)
+    calls = []
+
+    def verify(config, record):
+        assert config == lab.configuration
+        assert record == BrowserDeviceRecord(config.device_id, 7, BrowserDeviceState.ACTIVE)
+        calls.append(record)
+        return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+    monkeypatch.setattr(transport, "verify_browser_device", verify)
+    before = snap(lab)
+    result = dispatch("continuation-verify-active")
+    assert snap(lab) == before
+    if active:
+        context = dispatch("continuation-current")
+        observed = context["continuation"]
+        assert result == dict(version=1, ok=True, build=worker.worker_graph()[0],
+            identity=lab.configuration.identity, epoch=observed["epoch"], mode="active",
+            binding=observed["binding"])
+        assert len(calls) == 1
+        # Another explicit read is fresh verification, not a cached proof or a
+        # session retry. No ordinary startup selects either request.
+        assert dispatch("continuation-verify-active") == result and len(calls) == 2
+    else:
+        assert result == FAILURE and calls == []
+    assert TOKEN not in json.dumps(result) and CREDENTIAL not in json.dumps(result)
+    blocked(lab)
+
+
+@pytest.mark.parametrize("failure", ["generation", "paused", "revoked", "undrained",
+                                    "lost-proof", "native-pause", "final-state-change"])
+def test_framed_active_verification_refuses_changed_authority_without_repair(
+        lab, candidate, dispatch, monkeypatch, failure):
+    from sds200 import browser_device_continuation_recheck as recheck
+    from tests.test_browser_device_continuation_current import native_step
+
+    active_native(lab, candidate)
+    retained = []
+    calls = []
+
+    def verify(config, record):
+        calls.append(record)
+        if failure == "native-pause":
+            native_step(lab, candidate, "pause")
+        retained.append(snap(lab))
+        if failure == "lost-proof":
+            raise RuntimeError("PRIVATE " + CREDENTIAL)
+        if failure == "generation":
+            record = replace(record, generation=8)
+        if failure in {"paused", "revoked"}:
+            record = replace(record, state=BrowserDeviceState(failure))
+        return transport.BrowserVerifiedRecord(config.identity, record, failure != "undrained")
+
+    monkeypatch.setattr(transport, "verify_browser_device", verify)
+    if failure == "final-state-change":
+        original = recheck._BrowserWorkerActiveVerification.run
+
+        def changed(operation, expected):
+            result = original(operation, expected)
+            native_step(lab, candidate, "pause")
+            retained[:] = [snap(lab)]
+            return result
+
+        monkeypatch.setattr(recheck._BrowserWorkerActiveVerification, "run", changed)
+    assert dispatch("continuation-verify-active") == FAILURE
+    assert len(calls) == 1 and snap(lab) == retained[0]
+    blocked(lab)
+
+
+@pytest.mark.parametrize("profile,server", [("dns", 0), ("ip", 0), ("ipv6", "ipv6")],
+                         indirect=True)
+def test_framed_active_verification_with_actual_verified_tls(
+        lab, candidate, dispatch, server, monkeypatch):
+    active_native(lab, candidate)
+    _, response, observed = server
+    response["body"] = json.dumps(dict(version=1, device_id="display", generation=7,
+                                        state="active", drained=True)).encode()
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:1")
+    monkeypatch.setenv("SSL_CERT_FILE", "/fictional/unreadable")
+    before = snap(lab)
+    result = dispatch("continuation-verify-active")
+    assert result["ok"] is True and result["binding"]["generation"] == 7
+    assert result["mode"] == "active" and snap(lab) == before
+    assert len(observed) == 1
+    path, headers, body = observed[0]
+    assert path == "/auth/device/verify" and json.loads(body) == {
+        "device_id": "display", "generation": 7}
+    assert headers["Authorization"] == "Bearer " + CREDENTIAL
+    assert not {"Cookie", "Origin"} & headers.keys()
+    assert "session" not in result
+    blocked(lab)
+
+
+@pytest.mark.parametrize("stage", ["verification", "output"])
+def test_real_supervisor_bounds_active_verification_and_output(
+        lab, candidate, dispatch, monkeypatch, stage):
+    active_native(lab, candidate)
+    assert native._TOTAL_SECONDS == 10
+    read_fd, write_fd = os.pipe()
+
+    def stall(*args):
+        os.write(write_fd, struct.pack("=I", os.getpid()))
+        time.sleep(30)  # Independent supervisor terminates this fixture child.
+        raise RuntimeError("Unreachable fictional active verification")
+
+    def verify(config, record):
+        return transport.BrowserVerifiedRecord(config.identity, record, True)
+
+    monkeypatch.setattr(transport, "verify_browser_device",
+                        stall if stage == "verification" else verify)
+    if stage == "output":
+        original = native.json.dumps
+
+        def serialize(value, *args, **kwargs):
+            if (type(value) is dict and value.get("mode") == "active"
+                    and value.get("ok") is True and "binding" in value):
+                stall()
+            return original(value, *args, **kwargs)
+
+        monkeypatch.setattr(native.json, "dumps", serialize)
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    request = {"version": 1, "action": "worker-request", "build": worker.worker_graph()[0],
+               "request": {"version": 1, "action": "continuation-verify-active"}}
+    before = snap(lab)
+    try:
+        with (tempfile.TemporaryFile(buffering=0) as source,
+              tempfile.TemporaryFile(buffering=0) as destination,
+              _launch_lock(candidate.root, create=False)):
+            source.write(frame(request))
+            source.seek(0)
+            started = time.monotonic()
+            code = native.run_browser_native(lab.args["profile"],
+                [lab.configuration.extension_origin], source, destination,
+                expected_identity=lab.configuration.identity, worker=selected)
+            assert code == 2 and 9.5 <= time.monotonic() - started < 13
+            os.set_blocking(read_fd, False)
+            child, = struct.unpack("=I", os.read(read_fd, 4))
+            with pytest.raises(ChildProcessError):
+                os.waitpid(child, os.WNOHANG)
+            destination.seek(0)
+            assert destination.read() == b""
+        assert snap(lab) == before
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)
 
 
 @pytest.mark.parametrize("failure", ["wrong-generation", "undrained", "revoked", "lost-proof",

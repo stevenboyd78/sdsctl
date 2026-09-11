@@ -95,6 +95,33 @@ installer, write a cookie or trigger another request. All failure messages are
 fixed and sanitized. These ports perform no cookie/storage/alarm mutation,
 sign-out, native pause, renewal, acceptance, state repair or physical-click check.
 
+## Native-only accepted-startup prerequisite
+
+The fixed build-bound `continuation-verify-active` read action is a prerequisite,
+not an enabled browser startup path. Its exact inner request has only `version`
+and `action`; it accepts no caller-selected generation, saved record, proof,
+credential, URL, role or cookie. The installed continuation wrapper independently
+reconstructs the current native ACTIVE observation and its generation. The
+existing one-use native verifier performs one authenticated generation-bound
+server verification, then reads the owned native state again. Dispatch also
+rechecks the exact observation and build before returning. SQLite scopes stay
+closed across network I/O; a concurrent native pause or changed private inputs
+must be preserved and refused, never repaired.
+
+The response carries only exact build/identity/epoch/ACTIVE binding fields. It
+contains no session, token, browser readiness or reusable proof. The independent
+native ten-second supervisor bounds verification and output. An explicit later
+read, if selected by a future trusted owner, performs a fresh verification; it
+does not recover or repeat session issuance. No browser graph asset currently
+requests this action.
+
+A future accepted-startup owner must still inspect the **whole** storage area,
+reject every stop marker or extra key, match the saved accepted binding and cookie
+fingerprint, independently verify current cookie lifetime and protected-page use,
+and recheck all observations before claiming readiness. Successful native
+verification does not authorize adopting `initial_pending` or an unknown browser
+record. It does not clear a guard, resume a device, renew a cookie or sign out.
+
 ## Why a separate stop key
 
 An outstanding Chrome storage write can complete after its caller times out.

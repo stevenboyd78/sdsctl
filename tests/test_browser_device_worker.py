@@ -119,6 +119,13 @@ def test_native_response_adapter_is_build_bound_but_not_selected_by_active_roles
     assert worker.worker_graph()[0] != digest
 
 
+def test_active_verification_wire_has_no_browser_requester():
+    # This native-only prerequisite must not enable accepted startup, a normal
+    # worker status tick, or any document message as a side effect.
+    _, graph = worker.worker_graph()
+    assert all(b"continuation-verify-active" not in body for body in graph.values())
+
+
 @pytest.mark.parametrize("action", ["worker-context", "worker-request"])
 def test_exact_worker_envelope(action):
     body = envelope(action, **({"request": {"version": 1, "action": "status"}}

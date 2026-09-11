@@ -22,10 +22,13 @@ from .browser_device_worker import BrowserWorkerSelection, worker_graph
 def continuation_read_request(configuration: BrowserNativeConfiguration,
                               selection: BrowserWorkerSelection,
                               request: BrowserContinuationReadRequest) -> dict[str, object]:
-    if type(request) is not BrowserContinuationReadRequest:
+    if (type(request) is not BrowserContinuationReadRequest
+            or type(request.action) is not str):
         raise ValueError()
     if request.action == "continuation-current":
         return _continuation_worker_context(configuration, selection)
+    if request.action == "continuation-verify-active":
+        return _continuation_verify_active(configuration, selection)
     if request.action != "continuation-review":
         raise ValueError()
     build = worker_graph()[0]
@@ -35,6 +38,50 @@ def continuation_read_request(configuration: BrowserNativeConfiguration,
     state = result.state
     return {"version": 1, "ok": True, "build": build, "identity": state.identity,
         "epoch": state.epoch, "mode": "paused",
+        "binding": {"fingerprint": state.state_fingerprint, "revision": state.native_revision,
+                    "generation": result.generation}}
+
+
+def _continuation_verify_active(configuration: BrowserNativeConfiguration,
+                                selection: BrowserWorkerSelection) -> dict[str, object]:
+    """One fresh owned ACTIVE verification, not browser acceptance or a session.
+
+    No browser-supplied record, generation, proof, credential or URL is accepted.
+    A future browser owner must compare this result with its whole saved state,
+    cookie and protected-page proof. Native ACTIVE alone never authorizes that
+    owner to adopt an interrupted installation or replay initial issuance.
+    """
+    from .browser_device_continuation_cancel import _Clock
+    from .browser_device_continuation_current import (
+        BrowserContinuationObservation,
+        _worker_current_scope,
+    )
+    from .browser_device_continuation_recheck import _BrowserWorkerActiveVerification
+    from .browser_device_recovery import RecoveryMode
+
+    timer = _Clock(time.time, time.monotonic)
+    build = worker_graph()[0]
+    with _worker_current_scope(configuration, selection) as reader:
+        expected = reader.observe()
+    timer.check()
+    if expected.state.mode is not RecoveryMode.ACTIVE:
+        raise ValueError()
+    # The owned verifier makes exactly one generation-bound HTTPS verification.
+    # All SQLite scopes are closed across I/O; its fresh read must observe any
+    # concurrent native pause, grant change or private-input replacement.
+    result = _BrowserWorkerActiveVerification(configuration, selection).run(expected)
+    timer.check()
+    if type(result) is not BrowserContinuationObservation or result != expected:
+        raise ValueError()
+    with _worker_current_scope(configuration, selection) as reader:
+        if reader.observe() != result:
+            raise ValueError()
+    if worker_graph()[0] != build:
+        raise ValueError()
+    timer.check()
+    state = result.state
+    return {"version": 1, "ok": True, "build": build, "identity": state.identity,
+        "epoch": state.epoch, "mode": "active",
         "binding": {"fingerprint": state.state_fingerprint, "revision": state.native_revision,
                     "generation": result.generation}}
 

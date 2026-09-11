@@ -180,7 +180,8 @@ def parse_browser_device_request(
             if isinstance(parsed, (BrowserWorkerContextRequest, BrowserWorkerRequest)):
                 raise _invalid()
             return BrowserWorkerRequest(value["build"], parsed)
-        if value["action"] in {"continuation-current", "continuation-review"}:
+        if value["action"] in {"continuation-current", "continuation-review",
+                               "continuation-verify-active"}:
             if set(value) != {"version", "action"}:
                 raise _invalid()
             return BrowserContinuationReadRequest(value["action"])
