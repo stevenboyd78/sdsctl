@@ -204,7 +204,7 @@ def test_tui_short_layout_summarizes_audio_and_status_and_restores_detail(
             assert "Playback device: ACTIVE" in detailed_audio
             assert "Output:" in detailed_audio
             assert "Playback underflow / dropped:" in detailed_audio
-            assert "Availability: AVAILABLE since" in detailed_status
+            assert "Health: AVAILABLE @" in detailed_status
             assert "PSI recovery A/S/F: 0 / 0 / 0" in detailed_status
             assert "Detail: Live PSI update received" in detailed_status
 

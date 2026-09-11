@@ -15,7 +15,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Resize
 from textual.timer import Timer
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Static
 
 from . import __version__
 from .audio_session import (
@@ -38,6 +38,7 @@ from .theme import (
 )
 from .transport import TransportDiagnostic
 from .tui_audio import SavedPlaybackStatus, TuiAudioSession
+from .tui_clock import ScannerTuiHeader, local_timestamp
 from .tui_controls import (
     ControlRequest,
     ControlWorker,
@@ -248,6 +249,18 @@ _SHARED_TUI_STYLESHEET = """
 
     Screen.-wide.-connection-target #connection {
         min-height: 6;
+    }
+
+    Screen.-wide.-tall #connection {
+        min-height: 6;
+    }
+
+    Screen.-wide.-tall.-connection-target #connection {
+        min-height: 7;
+    }
+
+    Screen.-wide.-tall #state {
+        min-height: 8;
     }
 
     Screen.hide-logs #logs {
@@ -539,7 +552,7 @@ class ScannerTuiApp(App[None]):
         self._clock = clock
         self._now = now
         self._transition_values: dict[str, str] = {}
-        self._transition_since: dict[str, datetime] = {}
+        self._transition_since: dict[str, str] = {}
         self._last_state_at = clock()
         self._degraded = False
         self._stale = False
@@ -615,7 +628,7 @@ class ScannerTuiApp(App[None]):
         return self._logs_visible
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield ScannerTuiHeader(self._now)
         with VerticalScroll(id="body"):
             yield _titled_panel(
                 "Keyboard Reference",
@@ -1628,17 +1641,19 @@ class ScannerTuiApp(App[None]):
         connection = self.query_one_optional("#connection", Static)
         if connection is None:
             return
+        connection_value = _state_label(presentation.connection.value)
+        connection_stamp = self._transition_stamp("connection", connection_value)
         connection_rows = [
             (
-                "Connection",
-                self._transition_display(
-                    "connection",
-                    _state_label(presentation.connection.value),
-                ),
-                roles.connection,
+                connection_value if self._uses_short_layout() else "Connection",
+                connection_stamp
+                if self._uses_short_layout() else connection_value,
+                ThemeRole.TEXT_PRIMARY if self._uses_short_layout() else roles.connection,
             ),
-            ("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY),
         ]
+        if not self._uses_short_layout():
+            connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
+        connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
         if self._identity.connection_target is not None:
             connection_rows.append(
                 (
@@ -1647,7 +1662,13 @@ class ScannerTuiApp(App[None]):
                     ThemeRole.TEXT_PRIMARY,
                 )
             )
-        connection.update(self._panel(*connection_rows))
+        connection_text = self._panel(*connection_rows)
+        if self._uses_short_layout():
+            # Keep even DISCONNECTED plus the full local timestamp on one row
+            # at 100x30, preserving both the status color and the remote target.
+            connection_text.stylize(rich_style(self._palette.resolve(roles.connection)),
+                                    0, len(connection_value))
+        connection.update(connection_text)
         self.query_one("#identity", Static).update(
             self._panel(
                 ("Model", self._identity.model, ThemeRole.TEXT_PRIMARY),
@@ -1749,7 +1770,8 @@ class ScannerTuiApp(App[None]):
 
         return self._panel(
             (
-                "Availability",
+                "Health" if self._uses_wide_dashboard_layout()
+                and self.screen.size.width < 132 else "Availability",
                 availability_transition,
                 roles.availability,
             ),
@@ -2295,11 +2317,16 @@ class ScannerTuiApp(App[None]):
         )
 
     def _transition_display(self, key: str, value: str) -> str:
+        return f"{value} @ {self._transition_stamp(key, value)}"
+
+    def _transition_stamp(self, key: str, value: str) -> str:
+        """When this TUI observed the displayed label, not measured link uptime."""
         if self._transition_values.get(key) != value:
             self._transition_values[key] = value
-            self._transition_since[key] = self._now()
-        since = self._transition_since[key]
-        return f"{value} since {since:%H:%M:%S}"
+            # Freeze the observation even when the clock is unavailable: a
+            # later refresh cannot invent a start time for an unchanged label.
+            self._transition_since[key] = local_timestamp(self._now)
+        return self._transition_since[key]
 
     def _panel(
         self, *rows: tuple[str, str, ThemeRole], separator: str = "\n"
