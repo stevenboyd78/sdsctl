@@ -38,7 +38,7 @@ from .theme import (
 )
 from .transport import TransportDiagnostic
 from .tui_audio import SavedPlaybackStatus, TuiAudioSession
-from .tui_clock import ScannerTuiHeader, utc_timestamp
+from .tui_clock import ScannerTuiHeader, local_timestamp
 from .tui_controls import (
     ControlRequest,
     ControlWorker,
@@ -1645,10 +1645,10 @@ class ScannerTuiApp(App[None]):
         connection_stamp = self._transition_stamp("connection", connection_value)
         connection_rows = [
             (
-                "Status" if self._uses_short_layout() else "Connection",
-                f"{connection_value} @ {connection_stamp}"
+                connection_value if self._uses_short_layout() else "Connection",
+                connection_stamp
                 if self._uses_short_layout() else connection_value,
-                roles.connection,
+                ThemeRole.TEXT_PRIMARY if self._uses_short_layout() else roles.connection,
             ),
         ]
         if not self._uses_short_layout():
@@ -1662,7 +1662,13 @@ class ScannerTuiApp(App[None]):
                     ThemeRole.TEXT_PRIMARY,
                 )
             )
-        connection.update(self._panel(*connection_rows))
+        connection_text = self._panel(*connection_rows)
+        if self._uses_short_layout():
+            # Keep even DISCONNECTED plus the full local timestamp on one row
+            # at 100x30, preserving both the status color and the remote target.
+            connection_text.stylize(rich_style(self._palette.resolve(roles.connection)),
+                                    0, len(connection_value))
+        connection.update(connection_text)
         self.query_one("#identity", Static).update(
             self._panel(
                 ("Model", self._identity.model, ThemeRole.TEXT_PRIMARY),
@@ -1764,7 +1770,8 @@ class ScannerTuiApp(App[None]):
 
         return self._panel(
             (
-                "Availability",
+                "Health" if self._uses_wide_dashboard_layout()
+                and self.screen.size.width < 132 else "Availability",
                 availability_transition,
                 roles.availability,
             ),
@@ -2318,7 +2325,7 @@ class ScannerTuiApp(App[None]):
             self._transition_values[key] = value
             # Freeze the observation even when the clock is unavailable: a
             # later refresh cannot invent a start time for an unchanged label.
-            self._transition_since[key] = utc_timestamp(self._now)
+            self._transition_since[key] = local_timestamp(self._now)
         return self._transition_since[key]
 
     def _panel(

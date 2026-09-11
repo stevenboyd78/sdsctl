@@ -11,6 +11,8 @@ import wave
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
+from email.utils import format_datetime
+from html import unescape
 from pathlib import Path
 
 from sds200.audio import AudioChunk, AudioChunkHandler, AudioStream
@@ -28,9 +30,7 @@ CHANNELS = 1
 
 FIXED_NOW = datetime(2026, 7, 30, 23, 15, tzinfo=UTC)
 _TERMINAL_NAMESPACE_PATTERN = re.compile(r"terminal-\d+")
-_CLOCK_TEXT_PATTERN = re.compile(
-    r"(<text\b[^>]*>)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(</text>)"
-)
+_CLOCK_TEXT_PATTERN = re.compile(r"(<text\b[^>]*>)([^<]*)(</text>)")
 
 DEMO_XML = """<?xml version="1.0" encoding="utf-8"?>
 <ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">
@@ -129,22 +129,26 @@ def normalize_svg(svg: str, *, namespace: str) -> str:
     if namespace_replacements == 0:
         raise RuntimeError("Textual screenshot did not contain a terminal namespace")
 
-    # Status observations now also contain full UTC timestamps. Only a clock
+    # Status observations also contain full local timestamps. Only a clock
     # rendered in Textual's header line counts as the header clock; do not hide
     # a missing/incorrect header behind a matching timestamp in a body panel.
     header_clip = f'clip-path="url(#terminal-{namespace}-line-0)"'
-    clocks = [match for match in _CLOCK_TEXT_PATTERN.findall(normalized)
-              if header_clip in match[0]]
+    clocks = [unescape(match[1]).replace("\u00a0", " ")
+              for match in _CLOCK_TEXT_PATTERN.findall(normalized)
+              if header_clip in match[0]
+              and re.fullmatch(r"[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} "
+                               r"\d{2}:\d{2}:\d{2} [+-]\d{4}",
+                               unescape(match[1]).replace("\u00a0", " "))]
     if len(clocks) != 1:
         raise RuntimeError(
             "Expected exactly one Textual header clock, "
             f"found {len(clocks)}"
         )
     # The header now consumes the injected demonstration clock. Validate its
-    # actual UTC output rather than rewriting a wrong/local value to look right.
-    fixed_clock = FIXED_NOW.isoformat(timespec="seconds").removesuffix("+00:00") + "Z"
-    if clocks[0][1] != fixed_clock:
-        raise RuntimeError("Textual header clock did not match the fixed UTC demonstration time")
+    # actual local output rather than rewriting an incorrect value to look right.
+    fixed_clock = format_datetime(FIXED_NOW.astimezone())
+    if clocks[0] != fixed_clock:
+        raise RuntimeError("Textual header clock did not match the fixed local demonstration time")
 
     normalized = "\n".join(
         line.rstrip() for line in normalized.splitlines()

@@ -779,7 +779,7 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
     asyncio.run(exercise())
 
 
-def test_tui_status_transitions_include_utc_since_timestamps() -> None:
+def test_tui_status_transitions_include_local_since_timestamps(local_timezone_utc) -> None:
     async def exercise() -> None:
         from datetime import UTC
         now = [datetime(2026, 7, 28, 4, 18, 32, tzinfo=UTC)]
@@ -797,18 +797,22 @@ def test_tui_status_transitions_include_utc_since_timestamps() -> None:
         async with app.run_test(size=(80, 32)) as pilot:
             connection = _plain(app.query_one("#connection", Static))
             status = _plain(app.query_one("#status", Static))
-            assert "Connection: CONNECTED\nStatus since: 2026-07-28T04:18:32Z" in connection
-            assert "AVAILABLE @ 2026-07-28T04:18:32Z" in status
-            assert "NORMAL @ 2026-07-28T04:18:32Z" in status
+            assert (
+                "Connection: CONNECTED\nStatus since: Tue, 28 Jul 2026 04:18:32 +0000"
+            ) in connection
+            assert "AVAILABLE @ Tue, 28 Jul 2026 04:18:32 +0000" in status
+            assert "NORMAL @ Tue, 28 Jul 2026 04:18:32 +0000" in status
 
             now[0] = datetime(2026, 7, 28, 4, 20, 5, tzinfo=UTC)
             app._apply_connection(False)
             await pilot.pause()
             connection = _plain(app.query_one("#connection", Static))
             status = _plain(app.query_one("#status", Static))
-            assert "Connection: DISCONNECTED\nStatus since: 2026-07-28T04:20:05Z" in connection
-            assert "UNAVAILABLE @ 2026-07-28T04:20:05Z" in status
-            assert "ERROR @ 2026-07-28T04:20:05Z" in status
+            assert (
+                "Connection: DISCONNECTED\nStatus since: Tue, 28 Jul 2026 04:20:05 +0000"
+            ) in connection
+            assert "UNAVAILABLE @ Tue, 28 Jul 2026 04:20:05 +0000" in status
+            assert "ERROR @ Tue, 28 Jul 2026 04:20:05 +0000" in status
 
     asyncio.run(exercise())
 

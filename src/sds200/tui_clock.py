@@ -1,33 +1,36 @@
-"""UTC date/time presentation for the TUI, not connection-uptime tracking."""
+"""Local RFC 2822 date/time presentation, not connection-uptime tracking."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
+from email.utils import format_datetime
 
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.widgets import Header, Static
 
 
-def utc_timestamp(now: Callable[[], datetime]) -> str:
+def local_timestamp(now: Callable[[], datetime]) -> str:
     """Format one aware observation; never guess a timezone or expose an error."""
     try:
         value = now()
         if not isinstance(value, datetime) or value.utcoffset() is None:
-            return "UTC time unavailable"
-        stamp = value.astimezone(UTC).isoformat(timespec="seconds")
-        return stamp.removesuffix("+00:00") + "Z"
+            return "Local time unavailable"
+        # Convert each instant with the host's timezone rules, including DST.
+        # format_datetime uses English weekday/month names independent of locale.
+        return format_datetime(value.astimezone())
     except Exception:
-        return "UTC time unavailable"
+        return "Local time unavailable"
 
 
-class UtcHeaderClock(Static):
-    """One-line aware UTC clock with no locale or host-timezone assumptions."""
+class LocalHeaderClock(Static):
+    """One-line local clock with an explicit numeric timezone offset."""
 
     DEFAULT_CSS = """
-    UtcHeaderClock {
+    LocalHeaderClock {
         dock: right;
-        width: 22;
+        width: 33;
         height: 1;
         content-align: center middle;
     }
@@ -38,10 +41,10 @@ class UtcHeaderClock(Static):
         self._now = now
 
     def on_mount(self) -> None:
-        self.set_interval(1, self.refresh, name="UTC header clock")
+        self.set_interval(1, self.refresh, name="Local header clock")
 
     def render(self) -> Text:
-        return Text(utc_timestamp(self._now))
+        return Text(local_timestamp(self._now))
 
 
 class ScannerTuiHeader(Header):
@@ -59,4 +62,4 @@ class ScannerTuiHeader(Header):
 
     def compose(self) -> ComposeResult:
         yield from super().compose()
-        yield UtcHeaderClock(self._now)
+        yield LocalHeaderClock(self._now)

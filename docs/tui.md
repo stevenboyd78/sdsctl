@@ -9,24 +9,39 @@ Milestone 19.10 adds explicit daemon-backed operation while preserving
 standalone scanner ownership as the default. Textual and PortAudio remain
 optional so the core installation stays lightweight.
 
-## Unreleased UTC date/time follow-up
+## Unreleased local date/time follow-up
 
 The development candidate replaces the header's time-only clock with the full
-UTC date and 24-hour time, for example `2026-09-11T04:03:27Z`. The `Z` means UTC,
-not the workstation's local time zone. The application name/version stays in
+local date and 24-hour time, for example `Fri, 11 Sep 2026 06:26:10 -0600`.
+This is RFC 2822-style formatting: English weekday/month names, a four-digit
+year and an explicit numeric UTC offset. Each display uses its own operating
+system's time zone, including daylight-saving changes—not the daemon's time
+zone. `-0600` means six hours behind UTC; `+0000` is shown on a UTC-configured
+host. The application name/version stays in
 the header and scanner model/firmware stays in the Scanner panel. The clock
 updates once per second; an unavailable or timezone-ambiguous clock is labeled
-`UTC time unavailable` rather than showing a fabricated timestamp.
+`Local time unavailable` rather than showing a fabricated timestamp.
 
 On taller screens the Connection panel keeps its connection label on one line
-and adds a separate `Status since: 2026-09-11T04:03:27Z` line. Short screens use
-`Status: CONNECTED @ 2026-09-11T04:03:27Z` on one line, preserving room for the
-other panels on the small Pi, including network audio. `@` means status since.
+and adds a separate `Status since: Fri, 11 Sep 2026 06:26:10 -0600` line.
+Short screens use `CONNECTED: Fri, 11 Sep 2026 06:26:10 -0600` on one line,
+preserving room for the other panels on the small Pi, including network audio.
+The compact timestamp and detailed `@` notation both mean status since.
 This is when this TUI first observed the current **displayed status**, not socket
 uptime or the original daemon/scanner connection time. It can change when a
 connection becomes degraded and resets when the TUI starts. Repeated frames,
 redraws, resizes and theme changes do not reset it. The taller Live PSI panel's
-availability/severity rows use `@` followed by the same full UTC date/time.
+availability/severity rows use `@` followed by the same full local date/time.
+An observation keeps the offset in effect when it was recorded, even across
+daylight-saving changes; the live header clock uses the offset for the current
+instant. On narrower two-column displays, `Health` abbreviates `Availability`
+to keep the longer timestamp visible.
+
+On a Raspberry Pi, `timedatectl` shows the configured time zone. To change it,
+use `sudo timedatectl set-timezone America/Denver`, substituting your local
+IANA time-zone name, then restart the display service. In an SSH session or a
+GUI terminal, the TUI uses the machine running the client, not the viewing
+computer. No console font change is involved.
 
 An unavailable timestamp stays unavailable for that status observation, even
 if the clock later recovers; the TUI does not invent the missing start time.
@@ -308,7 +323,7 @@ the shared direct and daemon-owned setter paths. The firmware returns `VOL,OK`
 and `SQL,OK`; completion uses matching scalar getters so it remains authoritative
 even when the current `GSI` screen omits the levels. The connection, availability,
 and severity timestamps track only when the displayed state changes. The
-unreleased follow-up above uses full UTC dates instead of local `HH:MM:SS`.
+unreleased follow-up above uses full local dates with offsets instead of `HH:MM:SS`.
 Repeated unchanged PSI frames
 still refresh data freshness, preventing an active but stable channel from aging
 into a false stale state. Only an actual absence of valid PSI frames triggers
