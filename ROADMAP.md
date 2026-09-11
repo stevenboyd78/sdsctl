@@ -9,6 +9,10 @@ The broader product direction, architectural constraints, deferred capabilities,
 and ideas that are not ready for scheduling are recorded in
 [the project vision](docs/project-vision.md).
 
+For independently preparable follow-ups, source findings and test gates, see
+[the next milestone work packets](docs/next-milestone-work-packets.md). These
+packets do not assign release versions or mark unfinished features complete.
+
 ## v0.29.5 maintenance release
 
 The focused managed-TUI waiting-screen patch is maintained on `release/0.29`
