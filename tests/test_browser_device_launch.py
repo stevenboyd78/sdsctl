@@ -56,7 +56,12 @@ assert os.readlink(bundle/'host-proc/self')!=str(os.getpid())
 identity=receipt['evidence']['identity']
 assert sys.argv[-1]=='about:blank'
 if kind=='ignore-stop':signal.signal(signal.SIGINT,signal.SIG_IGN)
-else:signal.signal(signal.SIGINT,lambda *_:sys.exit(0))
+else:
+    # This synthetic browser models process exit, not Python context cleanup.
+    # SystemExit can unwind an in-flight native subprocess context into an
+    # unbounded child wait after the ACK is already durable. The real PID-1
+    # supervisor owns/drains all remaining descendants before confirming stop.
+    signal.signal(signal.SIGINT,lambda *_:os._exit(0))
 def native(body):
     from sds200.browser_device_worker import worker_graph
     data=json.dumps({'version':1,'action':'worker-request','build':worker_graph()[0],
@@ -86,6 +91,26 @@ if kind not in {'no-ready','descendant'}:
         assert native(body)==result
         assert (root/'browser-launch-ready.json').stat().st_mtime_ns==before
         if kind not in {'no-ack'}:
+            if kind=='ack-child-wait':
+                # Keep a Python Popen context open across the durable native ACK.
+                # SIGINT must not get trapped in its context-manager __exit__ wait.
+                child_code="""
+import os,sys,time
+from pathlib import Path
+os.setsid()
+Path(sys.argv[1]).write_text(os.readlink(Path(sys.argv[2])/'self'))
+print('ready',flush=True)
+time.sleep(30)
+"""
+                with subprocess.Popen([sys.executable,'-I','-c',child_code,
+                        str(root/'waiter-pid'),str(bundle/'host-proc')],
+                        stdout=subprocess.PIPE) as waiting:
+                    assert waiting.stdout.readline()==b'ready\n'
+                    ack={'version':1,'action':'acknowledge-retirement',**receipt['evidence']}
+                    assert native(ack)=={
+                        'version':1,'ok':True,'mode':'retired_paused','acknowledged':True}
+                    waiting.wait()
+                raise AssertionError('Signal did not terminate fictional browser')
             assert native({'version':1,'action':'acknowledge-retirement',**receipt['evidence']})=={
                 'version':1,'ok':True,'mode':'retired_paused','acknowledged':True}
 while True:time.sleep(.05)
@@ -162,6 +187,20 @@ def test_real_namespace_handoff_and_exact_receipts_restore(lab, staged):
     assert snap(lab)["bundle"] == before["bundle"]
     with pytest.raises(BrowserStartupError):
         check_browser_startup(**lab.inputs)
+
+
+def test_fictional_shutdown_during_child_wait_confirms_and_drains_namespace(staged):
+    root, _, _, setup, _ = staged
+    obj, browser, bwrap = setup('ack-child-wait')
+    result = fixture_recovery(obj, browser=browser, bwrap=bwrap)
+    assert obj.confirm() == result
+    # The detached child belongs to the private namespace, not a discovered
+    # host process group. PID-1 exit must remove it before handoff confirmation.
+    pid = int((root / 'waiter-pid').read_text())
+    with pytest.raises((ProcessLookupError, FileNotFoundError, ValueError)):
+        launch._process_identity(pid)
+    assert obj.restore() == result
+    assert obj.confirm(restored=True) == result
 
 
 @pytest.mark.parametrize("kind", ["version-other", "version-large", "version-hang", "early-exit",
