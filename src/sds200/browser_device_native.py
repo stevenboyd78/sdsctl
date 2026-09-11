@@ -192,28 +192,31 @@ def _post_browser_device(
         connection.request("POST", path, json.dumps(payload).encode("ascii"),
                            {"Authorization": "Bearer " + credential,
                             "Content-Type": "application/json", "Accept": "application/json"})
-        response = connection.getresponse()
-        types = response.headers.get_all("Content-Type", [])
-        retries = response.headers.get_all("Retry-After", [])
-        if (len(types) > 1 or (response.status == 200 and len(types) != 1)
-                or len(retries) > 1 or response.headers.get_all("Set-Cookie")
-                or response.headers.get_all("Content-Encoding")):
-            raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
-        body = b""
-        if response.status == 200:
-            lengths = response.headers.get_all("Content-Length", [])
-            encodings = response.headers.get_all("Transfer-Encoding", [])
-            if (len(lengths) > 1 or len(encodings) > 1 or (lengths and encodings)
-                    or (encodings and encodings[0].lower() != "chunked")
-                    or (lengths and (re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None
-                                     or int(lengths[0]) > 4096))):
+        # A close-delimited/HTTP/1.0 response owns its socket after getresponse;
+        # closing only the connection leaves unread/error responses to GC.
+        # Close the response first on every path, including KeyboardInterrupt.
+        with connection.getresponse() as response:
+            types = response.headers.get_all("Content-Type", [])
+            retries = response.headers.get_all("Retry-After", [])
+            if (len(types) > 1 or (response.status == 200 and len(types) != 1)
+                    or len(retries) > 1 or response.headers.get_all("Set-Cookie")
+                    or response.headers.get_all("Content-Encoding")):
                 raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
-            body = response.read(4097)
-            # read(amt) may silently return a short Content-Length body at EOF.
-            # Do not persist a protocol error for a server interrupted mid-response.
-            if lengths and len(body) < int(lengths[0]):
-                raise ExchangeFailure()
-        return response.status, body, types[0] if types else "", retries[0] if retries else None
+            body = b""
+            if response.status == 200:
+                lengths = response.headers.get_all("Content-Length", [])
+                encodings = response.headers.get_all("Transfer-Encoding", [])
+                if (len(lengths) > 1 or len(encodings) > 1 or (lengths and encodings)
+                        or (encodings and encodings[0].lower() != "chunked")
+                        or (lengths and (re.fullmatch(r"[0-9]{1,10}", lengths[0]) is None
+                                         or int(lengths[0]) > 4096))):
+                    raise ExchangeFailure(RecoveryMode.PROTOCOL_ERROR)
+                body = response.read(4097)
+                # read(amt) may silently return a short Content-Length body at EOF.
+                # Do not persist a protocol error for a server interrupted mid-response.
+                if lengths and len(body) < int(lengths[0]):
+                    raise ExchangeFailure()
+            return response.status, body, types[0] if types else "", retries[0] if retries else None
     except ExchangeFailure:
         raise
     except (ssl.SSLEOFError, ssl.SSLZeroReturnError, http.client.IncompleteRead):

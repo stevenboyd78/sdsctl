@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import shutil
@@ -102,6 +103,7 @@ def server(root, certificates, request):
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
+            self.protocol_version = response.get("protocol", "HTTP/1.0")
             observed.append((self.path, dict(self.headers),
                              self.rfile.read(int(self.headers["Content-Length"]))))
             self.send_response(response["status"])
@@ -213,6 +215,76 @@ def test_native_verified_exchange_ignores_proxy_env(server, monkeypatch):
     assert json.loads(body) == {"device_id": "display"}
     assert not {"Origin", "Cookie"} & headers.keys()
     assert TOKEN.encode() not in (configuration.root / "recovery.sqlite").read_bytes()
+
+
+@pytest.mark.parametrize("outcome", [
+    "success", "rejected", "unavailable", "redirect", "headers", "framing",
+    "read-error", "interrupt", "close-error",
+])
+@pytest.mark.parametrize("protocol", ["HTTP/1.0", "HTTP/1.1"])
+def test_verified_exchange_closes_owned_http_response(server, monkeypatch, outcome, protocol):
+    """HTTP/1.0 hands the response off; connection.close() alone cannot close it."""
+    configuration, reply, observed = server
+    reply["protocol"] = protocol
+    responses = []
+
+    class TrackedResponse(http.client.HTTPResponse):
+        def __init__(self, *args, **kwargs):
+            self.close_calls = 0
+            super().__init__(*args, **kwargs)
+            responses.append(self)
+
+        def read(self, *args, **kwargs):
+            if outcome == "read-error":
+                raise http.client.IncompleteRead(b"", 1)
+            if outcome == "interrupt":
+                raise KeyboardInterrupt()
+            return super().read(*args, **kwargs)
+
+        def close(self):
+            self.close_calls += 1
+            super().close()
+            if outcome == "close-error" and self.close_calls == 1:
+                raise OSError("fictional private cleanup detail")
+
+    monkeypatch.setattr(http.client.HTTPSConnection, "response_class", TrackedResponse)
+    expected = RecoveryMode.PROTOCOL_ERROR
+    if outcome == "rejected":
+        reply["status"] = 401
+        expected = RecoveryMode.REJECTED
+    elif outcome == "unavailable":
+        reply["status"] = 503
+        expected = RecoveryMode.ACTIVE
+    elif outcome == "redirect":
+        reply.update(status=302, headers=[("Location", "https://not-used.invalid/")])
+    elif outcome == "headers":
+        reply["headers"] = [("Content-Encoding", "gzip")]
+    elif outcome == "framing":
+        reply["headers"] = [("Content-Length", "999999")]
+    elif outcome in {"read-error", "close-error"}:
+        expected = RecoveryMode.ACTIVE
+
+    try:
+        if outcome == "success":
+            assert exchange_browser_device(configuration).token == TOKEN
+        elif outcome == "interrupt":
+            with pytest.raises(KeyboardInterrupt):
+                exchange_browser_device(configuration)
+        else:
+            with pytest.raises(ExchangeFailure) as error:
+                exchange_browser_device(configuration)
+            assert error.value.mode is expected
+            assert "fictional private cleanup detail" not in str(error.value)
+        assert len(observed) == len(responses) == 1
+        assert responses[0].will_close is (protocol == "HTTP/1.0")
+        assert responses[0].closed
+        assert responses[0].fp is None
+    finally:
+        # Retain the response until the assertions so GC cannot hide a leak;
+        # also clean up the intentionally failing pre-fix regression run.
+        for response in responses:
+            if not response.closed:
+                response.close()
 
 
 def test_untrusted_tls_is_terminal_without_sending_credential(server, certificates):
