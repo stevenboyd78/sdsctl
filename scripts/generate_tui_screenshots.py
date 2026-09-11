@@ -29,7 +29,7 @@ CHANNELS = 1
 FIXED_NOW = datetime(2026, 7, 30, 23, 15, tzinfo=UTC)
 _TERMINAL_NAMESPACE_PATTERN = re.compile(r"terminal-\d+")
 _CLOCK_TEXT_PATTERN = re.compile(
-    r"(<text\b[^>]*>)(\d{2}:\d{2}:\d{2})(</text>)"
+    r"(<text\b[^>]*>)(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(</text>)"
 )
 
 DEMO_XML = """<?xml version="1.0" encoding="utf-8"?>
@@ -129,16 +129,17 @@ def normalize_svg(svg: str, *, namespace: str) -> str:
     if namespace_replacements == 0:
         raise RuntimeError("Textual screenshot did not contain a terminal namespace")
 
-    fixed_clock = FIXED_NOW.strftime("%H:%M:%S")
-    normalized, clock_replacements = _CLOCK_TEXT_PATTERN.subn(
-        lambda match: f"{match.group(1)}{fixed_clock}{match.group(3)}",
-        normalized,
-    )
-    if clock_replacements != 1:
+    clocks = _CLOCK_TEXT_PATTERN.findall(normalized)
+    if len(clocks) != 1:
         raise RuntimeError(
             "Expected exactly one Textual header clock, "
-            f"found {clock_replacements}"
+            f"found {len(clocks)}"
         )
+    # The header now consumes the injected demonstration clock. Validate its
+    # actual UTC output rather than rewriting a wrong/local value to look right.
+    fixed_clock = FIXED_NOW.isoformat(timespec="seconds").removesuffix("+00:00") + "Z"
+    if clocks[0][1] != fixed_clock:
+        raise RuntimeError("Textual header clock did not match the fixed UTC demonstration time")
 
     normalized = "\n".join(
         line.rstrip() for line in normalized.splitlines()

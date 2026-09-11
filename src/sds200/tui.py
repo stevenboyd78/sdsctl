@@ -15,7 +15,7 @@ from textual.binding import Binding, BindingType
 from textual.containers import VerticalScroll
 from textual.events import Resize
 from textual.timer import Timer
-from textual.widgets import Footer, Header, Static
+from textual.widgets import Footer, Static
 
 from . import __version__
 from .audio_session import (
@@ -38,6 +38,7 @@ from .theme import (
 )
 from .transport import TransportDiagnostic
 from .tui_audio import SavedPlaybackStatus, TuiAudioSession
+from .tui_clock import ScannerTuiHeader
 from .tui_controls import (
     ControlRequest,
     ControlWorker,
@@ -615,7 +616,7 @@ class ScannerTuiApp(App[None]):
         return self._logs_visible
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield ScannerTuiHeader(self._now)
         with VerticalScroll(id="body"):
             yield _titled_panel(
                 "Keyboard Reference",
