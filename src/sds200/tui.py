@@ -38,7 +38,7 @@ from .theme import (
 )
 from .transport import TransportDiagnostic
 from .tui_audio import SavedPlaybackStatus, TuiAudioSession
-from .tui_clock import ScannerTuiHeader
+from .tui_clock import ScannerTuiHeader, utc_timestamp
 from .tui_controls import (
     ControlRequest,
     ControlWorker,
@@ -540,7 +540,7 @@ class ScannerTuiApp(App[None]):
         self._clock = clock
         self._now = now
         self._transition_values: dict[str, str] = {}
-        self._transition_since: dict[str, datetime] = {}
+        self._transition_since: dict[str, str] = {}
         self._last_state_at = clock()
         self._degraded = False
         self._stale = False
@@ -1629,14 +1629,17 @@ class ScannerTuiApp(App[None]):
         connection = self.query_one_optional("#connection", Static)
         if connection is None:
             return
+        connection_value = _state_label(presentation.connection.value)
         connection_rows = [
             (
                 "Connection",
-                self._transition_display(
-                    "connection",
-                    _state_label(presentation.connection.value),
-                ),
+                connection_value,
                 roles.connection,
+            ),
+            (
+                "Status since",
+                self._transition_stamp("connection", connection_value),
+                ThemeRole.TEXT_PRIMARY,
             ),
             ("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY),
         ]
@@ -2296,11 +2299,16 @@ class ScannerTuiApp(App[None]):
         )
 
     def _transition_display(self, key: str, value: str) -> str:
+        return f"{value} @ {self._transition_stamp(key, value)}"
+
+    def _transition_stamp(self, key: str, value: str) -> str:
+        """When this TUI observed the displayed label, not measured link uptime."""
         if self._transition_values.get(key) != value:
             self._transition_values[key] = value
-            self._transition_since[key] = self._now()
-        since = self._transition_since[key]
-        return f"{value} since {since:%H:%M:%S}"
+            # Freeze the observation even when the clock is unavailable: a
+            # later refresh cannot invent a start time for an unchanged label.
+            self._transition_since[key] = utc_timestamp(self._now)
+        return self._transition_since[key]
 
     def _panel(
         self, *rows: tuple[str, str, ThemeRole], separator: str = "\n"

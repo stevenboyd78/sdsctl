@@ -1,4 +1,4 @@
-"""UTC date/time presentation for the TUI header, not connection-uptime tracking."""
+"""UTC date/time presentation for the TUI, not connection-uptime tracking."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -7,6 +7,18 @@ from datetime import UTC, datetime
 from rich.text import Text
 from textual.app import ComposeResult
 from textual.widgets import Header, Static
+
+
+def utc_timestamp(now: Callable[[], datetime]) -> str:
+    """Format one aware observation; never guess a timezone or expose an error."""
+    try:
+        value = now()
+        if not isinstance(value, datetime) or value.utcoffset() is None:
+            return "UTC time unavailable"
+        stamp = value.astimezone(UTC).isoformat(timespec="seconds")
+        return stamp.removesuffix("+00:00") + "Z"
+    except Exception:
+        return "UTC time unavailable"
 
 
 class UtcHeaderClock(Static):
@@ -29,18 +41,7 @@ class UtcHeaderClock(Static):
         self.set_interval(1, self.refresh, name="UTC header clock")
 
     def render(self) -> Text:
-        try:
-            value = self._now()
-            # A naive value has no known UTC instant. Do not interpret it using
-            # the machine's local timezone or fabricate a Z suffix for it.
-            if not isinstance(value, datetime) or value.utcoffset() is None:
-                return Text("UTC time unavailable")
-            stamp = value.astimezone(UTC).isoformat(timespec="seconds")
-            return Text(stamp.removesuffix("+00:00") + "Z")
-        except Exception:
-            # Clock-provider/overflow errors must not stop scanner rendering or
-            # expose exception details on a sustained-operation display.
-            return Text("UTC time unavailable")
+        return Text(utc_timestamp(self._now))
 
 
 class ScannerTuiHeader(Header):

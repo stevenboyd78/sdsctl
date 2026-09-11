@@ -129,7 +129,12 @@ def normalize_svg(svg: str, *, namespace: str) -> str:
     if namespace_replacements == 0:
         raise RuntimeError("Textual screenshot did not contain a terminal namespace")
 
-    clocks = _CLOCK_TEXT_PATTERN.findall(normalized)
+    # Status observations now also contain full UTC timestamps. Only a clock
+    # rendered in Textual's header line counts as the header clock; do not hide
+    # a missing/incorrect header behind a matching timestamp in a body panel.
+    header_clip = f'clip-path="url(#terminal-{namespace}-line-0)"'
+    clocks = [match for match in _CLOCK_TEXT_PATTERN.findall(normalized)
+              if header_clip in match[0]]
     if len(clocks) != 1:
         raise RuntimeError(
             "Expected exactly one Textual header clock, "

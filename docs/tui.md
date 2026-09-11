@@ -9,7 +9,7 @@ Milestone 19.10 adds explicit daemon-backed operation while preserving
 standalone scanner ownership as the default. Textual and PortAudio remain
 optional so the core installation stays lightweight.
 
-## Unreleased UTC header-clock follow-up
+## Unreleased UTC date/time follow-up
 
 The development candidate replaces the header's time-only clock with the full
 UTC date and 24-hour time, for example `2026-09-11T04:03:27Z`. The `Z` means UTC,
@@ -18,11 +18,20 @@ the header and scanner model/firmware stays in the Scanner panel. The clock
 updates once per second; an unavailable or timezone-ambiguous clock is labeled
 `UTC time unavailable` rather than showing a fabricated timestamp.
 
-This is only the header-clock slice. It does not change Connection's existing
-status-transition timestamp into actual socket uptime, add a remote-daemon
-version field, alter console fonts or change managed-display startup. Those
-are separate follow-ups. The previews below record the earlier accepted layout;
-the UTC-clock candidate still needs physical checks on both Pi displays before
+The Connection panel keeps its connection label on one line and adds a separate
+`Status since: 2026-09-11T04:03:27Z` line so the date fits on the small Pi.
+This is when this TUI first observed the current **displayed status**, not socket
+uptime or the original daemon/scanner connection time. It can change when a
+connection becomes degraded and resets when the TUI starts. Repeated frames,
+redraws, resizes and theme changes do not reset it. The taller Live PSI panel's
+availability/severity rows use `@` followed by the same full UTC date/time.
+
+An unavailable timestamp stays unavailable for that status observation, even
+if the clock later recovers; the TUI does not invent the missing start time.
+A new status uses the new clock reading. This does not add an elapsed-duration
+counter or remote-daemon version field, alter console fonts or change managed-
+display startup. The previews below record the earlier accepted layout; the
+date/time candidate still needs physical checks on both Pi displays before
 release acceptance.
 
 ## Interface previews
@@ -291,8 +300,9 @@ on color alone. SDS200 firmware 1.26.01 native-UDP testing physically accepted
 the shared direct and daemon-owned setter paths. The firmware returns `VOL,OK`
 and `SQL,OK`; completion uses matching scalar getters so it remains authoritative
 even when the current `GSI` screen omits the levels. The connection, availability,
-and severity labels include `since HH:MM:SS` using local time; the timestamp
-changes only when the displayed state changes. Repeated unchanged PSI frames
+and severity timestamps track only when the displayed state changes. The
+unreleased follow-up above uses full UTC dates instead of local `HH:MM:SS`.
+Repeated unchanged PSI frames
 still refresh data freshness, preventing an active but stable channel from aging
 into a false stale state. Only an actual absence of valid PSI frames triggers
 automatic recovery.

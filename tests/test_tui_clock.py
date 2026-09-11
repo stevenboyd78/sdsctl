@@ -18,16 +18,33 @@ from .test_tui import XML
 
 def test_screenshot_normalizer_preserves_actual_fixed_utc_clock():
     from scripts.generate_tui_screenshots import normalize_svg
-    source = '<svg id="terminal-123"><text>2026-07-30T23:15:00Z</text></svg>'
+    source = ('<svg id="terminal-123"><text clip-path="url(#terminal-123-line-0)">'
+              '2026-07-30T23:15:00Z</text></svg>')
     assert normalize_svg(source, namespace="demo") == source.replace("123", "demo") + "\n"
 
 
 @pytest.mark.parametrize("text", ["", "23:15:00", "2026-07-30T23:15:01Z",
-                                   "2026-07-30T23:15:00Z</text><text>2026-07-30T23:15:00Z"])
+                                   '2026-07-30T23:15:00Z</text><text '
+                                   'clip-path="url(#terminal-123-line-0)">2026-07-30T23:15:00Z'])
 def test_screenshot_normalizer_does_not_hide_a_missing_wrong_or_duplicate_clock(text):
     from scripts.generate_tui_screenshots import normalize_svg
     with pytest.raises(RuntimeError):
-        normalize_svg(f'<svg id="terminal-123"><text>{text}</text></svg>', namespace="demo")
+        normalize_svg('<svg id="terminal-123"><text '
+                      f'clip-path="url(#terminal-123-line-0)">{text}</text></svg>',
+                      namespace="demo")
+
+
+@pytest.mark.parametrize("header", ["", "2026-07-30T23:15:01Z", "2026-07-30T23:15:00Z"])
+def test_screenshot_status_timestamp_cannot_substitute_for_the_header(header):
+    from scripts.generate_tui_screenshots import normalize_svg
+    source = ('<svg id="terminal-123"><text clip-path="url(#terminal-123-line-0)">'
+              f'{header}</text><text clip-path="url(#terminal-123-line-4)">'
+              '2026-07-30T23:15:00Z</text></svg>')
+    if header == "2026-07-30T23:15:00Z":
+        assert normalize_svg(source, namespace="demo") == source.replace("123", "demo") + "\n"
+    else:
+        with pytest.raises(RuntimeError):
+            normalize_svg(source, namespace="demo")
 
 
 @pytest.mark.parametrize(("value", "expected"), [
