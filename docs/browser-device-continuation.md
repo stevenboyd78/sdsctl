@@ -1020,6 +1020,37 @@ browser restart, refusal of repeat initial installation, no saved bearer and no
 renewal alarm. These are browser-I/O checks, not real sign-in, verified TLS,
 generated-package, physical-display or power-loss acceptance.
 
+## Selected probe ingress (unconnected worker-gate capability)
+
+The experimental worker gate can now prepare a separate, fixed-origin probe
+channel after trusted native-context validation and before opening its event
+gate. This method is not called by the active worker or any native role. It
+does not select authority from page messages, issue a session or enable resume.
+
+The real Chrome listeners are still registered synchronously before the first
+native await. The selected channel delegates to one owned message listener and
+one navigation listener; a probe can attach/remove these delegates after the
+gate opens without late registration of actual Manifest V3 listeners. Ordinary
+role handlers do not receive probe results, and the default worker admits no
+probe messages. Selection is one-time and cannot change the fixed origin.
+
+The channel accepts only the exact selected/result schemas, a bounded ticket,
+the configured HTTPS origin and display route, and Chrome's active top-frame
+document/tab identity. The probe still performs its own ticket and selected
+document checks; ingress acceptance is not a successful protected-page proof.
+Navigation-away signals reach the owned probe without retaining unrelated tab
+URLs. Pending events share the existing 64-event bound and 12-second worker
+startup deadline. Failure disables dispatch; no late delegate can revive it.
+
+Node tests join the actual probe and gate, including late delegate attachment,
+wrong origin/document/schema, queue overflow, navigation, ownership removal and
+failure. The `gated-document-probe` scenario in the isolated browser recovery
+harness joins actual Chrome ingress with verified loopback TLS, the existing
+native/ASGI fixture and protected-page fetches. Its initial session still comes
+from the older fictional recovery fixture, including driver-seeded recovery
+state, not a new continuation grant. It is not installed continuation, consent,
+accepted-restart, physical-display or power-outage acceptance.
+
 ## Remaining selected successor path, not implemented end to end
 
 The next candidate must preserve the existing identity for same-device

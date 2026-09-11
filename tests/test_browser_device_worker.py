@@ -73,6 +73,17 @@ def test_inert_acceptance_core_does_not_expose_a_native_request(action):
             parse_browser_device_request(json.dumps(body).encode())
 
 
+def test_probe_event_channel_is_build_bound_but_not_selected_by_active_roles(monkeypatch):
+    digest, graph = worker.worker_graph()
+    gate = "browser_device_worker_gate.mjs"
+    assert b"prepareContinuationProbe" in graph["extension/" + gate]
+    for path, body in graph.items():
+        if path != "extension/" + gate:
+            assert b"prepareContinuationProbe" not in body, path
+    monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != gate))
+    assert worker.worker_graph()[0] != digest
+
+
 @pytest.mark.parametrize("action", ["worker-context", "worker-request"])
 def test_exact_worker_envelope(action):
     body = envelope(action, **({"request": {"version": 1, "action": "status"}}

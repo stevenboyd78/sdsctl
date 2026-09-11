@@ -16,14 +16,16 @@ import {initialBrowserRecoveryState} from "./browser_device_recovery.mjs";
 
 if (process.argv[2] === "--help") {
   console.log("Usage: node audit_browser_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL PYTHON [SCENARIO] [ip|dns|ipv6]");
-  console.log("Scenarios: deadline, truncated, tls-eof, server-restart, worker-restart, revoke, document-probe.");
+  console.log("Scenarios: deadline, truncated, tls-eof, server-restart, worker-restart, revoke, document-probe, gated-document-probe.");
   console.log("Private mode-0700 stage; five absolute paths. Actual ASGI/native/Chromium on loopback only.");
   console.log("Sandbox and TLS verification enabled. No cookie injection; real clocks and retry alarms.");
   process.exit(0);
 }
 const [stage, playwright, executable, certutil, python, scenario = "deadline", identityKind = "ip"] = process.argv.slice(2);
 assert([stage, playwright, executable, certutil, python].every(p => p && path.isAbsolute(p)));
-assert(["deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "document-probe"].includes(scenario));
+assert(["deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "document-probe", "gated-document-probe"].includes(scenario));
+const probeEnabled=["document-probe", "gated-document-probe"].includes(scenario);
+const gatedProbe=scenario === "gated-document-probe";
 assert(["ip", "dns", "ipv6"].includes(identityKind));
 const info = await lstat(stage);
 assert(info.isDirectory() && !info.isSymbolicLink() && info.uid === process.getuid() &&
@@ -95,23 +97,31 @@ try {
   const config = {origin, identity: ready.identity, nativeHost: "org.sdsctl.browser_device"};
   if (["deadline", "truncated"].includes(scenario)) await command(scenario);
   for (const name of ["browser_device_recovery.mjs", "browser_device_logout.mjs",
-    ...(scenario === "document-probe" ? ["browser_device_continuation_probe.mjs"] : [])])
+    ...(probeEnabled ? ["browser_device_continuation_probe.mjs"] : []),
+    ...(gatedProbe ? ["browser_device_worker_gate.mjs"] : [])])
     await copyFile(path.join(repo, "src/sds200/browser_assets", name), path.join(root, "extension", name));
   await put("extension/manifest.json", JSON.stringify({manifest_version: 3, version: "0.0.1",
     name: "SDSCTL FICTIONAL INTEGRATED RECOVERY", key: key.toString("base64"),
     permissions: ["nativeMessaging", "storage", "cookies", "alarms",
-      ...(scenario === "document-probe" ? ["tabs"] : [])], host_permissions: [`https://${hostname}/*`],
+      ...(probeEnabled ? ["tabs"] : [])], host_permissions: [`https://${hostname}/*`],
     background: {service_worker: "worker.mjs", type: "module"},
     content_scripts: [{matches: [`https://${hostname}/*`], js: ["content.js"], run_at: "document_start"}]}));
-  await put("extension/worker.mjs", `import {connectChromeRecovery} from './browser_device_recovery.mjs';
+  await put("extension/worker.mjs", (gatedProbe ?
+    `import {createWorkerEventGate} from './browser_device_worker_gate.mjs';
+// Fixture-selected origin, not an actual continuation role/consent decision.
+const gate=createWorkerEventGate(chrome);
+const probeChrome=gate.prepareContinuationProbe(${JSON.stringify(origin)});
+const selectedChrome=gate.chrome;\n` : "const selectedChrome=chrome; const probeChrome=chrome;\n")+
+    `import {connectChromeRecovery} from './browser_device_recovery.mjs';
 import {connectLogoutWorker} from './browser_device_logout.mjs';
-globalThis.fixtureController=connectChromeRecovery(chrome, ${JSON.stringify(config)});
-connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`+
-    (scenario === "document-probe" ? `import {createContinuationProbe} from './browser_device_continuation_probe.mjs';
-globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuationProbe(chrome,${JSON.stringify(origin)});return fixtureProbe.open();};\n` : ""));
+globalThis.fixtureController=connectChromeRecovery(selectedChrome, ${JSON.stringify(config)});
+connectLogoutWorker(selectedChrome, fixtureController, ${JSON.stringify(origin)});\n`+
+    (gatedProbe ? "gate.check();gate.open();\n" : "")+
+    (probeEnabled ? `import {createContinuationProbe} from './browser_device_continuation_probe.mjs';
+globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuationProbe(probeChrome,${JSON.stringify(origin)});return fixtureProbe.open();};\n` : ""));
   await put("extension/content.js", (await readFile(path.join(repo, "src/sds200/browser_assets/browser_device_logout.mjs"), "utf8"))
     .replaceAll("export ", "") + `\nif(location.href===${JSON.stringify(origin + "/")})connectLogoutContent({document,window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n`+
-    (scenario === "document-probe" ? '\n{\n'+(await readFile(path.join(repo,
+    (probeEnabled ? '\n{\n'+(await readFile(path.join(repo,
       "src/sds200/browser_assets/browser_device_continuation_probe.mjs"),"utf8")).replaceAll("export ","")+
       `\nconnectContinuationProbeContent({window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n}\n` : ""));
   await put("extension/control.html", "<!doctype html><title>Fictional recovery control</title>");
@@ -158,7 +168,7 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
   assert.equal(await page.evaluate(() => document.cookie), "");
   assert.equal(await page.evaluate(async () => (await fetch("/api/v1/control", {method: "POST"})).status), 403);
   let documentProbe=null;
-  if(scenario === "document-probe") {
+  if(probeEnabled) {
     step("document-probe-real-isolated-message-sender");
     const w=await worker(),before=await w.evaluate(()=>chrome.storage.local.get(null));
     const ledger=await readFile(path.join(root,"recovery.sqlite"));
@@ -199,7 +209,7 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     documentProbe={realSenderDocument:true,exactDocumentTarget:true,protectedFetch:true,
       replacementRefused:true,pendingCloseRefused:true,ownedTabsClosed:true,
       storageUnchanged:true,nativeUnchanged:true,cookieUnchanged:true,noSessionIssuance:true,
-      notContinuationControllerAcceptance:true,cookieDomain:cookies.find(c=>
+      notContinuationControllerAcceptance:true,throughSynchronousWorkerGate:gatedProbe,cookieDomain:cookies.find(c=>
         c.name==='__Host-sdsctl-device-session').domain};
   }
   if (scenario === "server-restart") {
@@ -272,7 +282,8 @@ globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuation
     "src/sds200/browser_device_native.py", "src/sds200/browser_device_recovery.py",
     "src/sds200/browser_assets/browser_device_recovery.mjs", "src/sds200/browser_assets/browser_device_logout.mjs",
     "scripts/experimental/browser_recovery_server.py", "scripts/experimental/audit_browser_recovery.mjs",
-    ...(scenario === "document-probe" ? ["src/sds200/browser_assets/browser_device_continuation_probe.mjs"] : []),
+    ...(probeEnabled ? ["src/sds200/browser_assets/browser_device_continuation_probe.mjs"] : []),
+    ...(gatedProbe ? ["src/sds200/browser_assets/browser_device_worker_gate.mjs"] : []),
   ].map(async name => [name, createHash("sha256").update(await readFile(path.join(repo, name))).digest("hex")])));
   await put("result.json", JSON.stringify(result, null, 2) + "\n"); console.log(JSON.stringify(result));
 } finally {
