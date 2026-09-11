@@ -133,4 +133,7 @@ def test_remote_timestamp_preserves_scanner_panel_with_audio_and_drawers(tmp_pat
                 if not app.key_help_visible:
                     assert "192.0.2.25:50443" in svg
                     assert "2027-01-01T00:00:00Z" in svg
+                    state = app.query_one("#state", Static)
+                    assert len(_plain(state).splitlines()) <= state.content_region.height
+                    assert "Scanner&#160;recording:" in svg
     asyncio.run(exercise())

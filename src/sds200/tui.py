@@ -259,6 +259,10 @@ _SHARED_TUI_STYLESHEET = """
         min-height: 7;
     }
 
+    Screen.-wide.-tall #state {
+        min-height: 8;
+    }
+
     Screen.hide-logs #logs {
         display: none;
     }
