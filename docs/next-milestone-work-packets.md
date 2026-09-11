@@ -98,6 +98,11 @@ tests. A formatter test is not a physical-display pass.
 
 ## 2. Renderer parity and waterfall
 
+The [current renderer work packet](renderer-parity-work-packet.md) traces four
+specific TUI omissions and separates them from existing Weather, recording and
+remote-waterfall foundations. It supplies fixture and layout acceptance cases;
+it does not change those renderers or claim new hardware support.
+
 Use the [capability/field parity audit](capability-field-parity-audit.md) as an
 evidence inventory, not a current unchecked to-do list. It contains an explicit
 older baseline. For each selected omission, record its current parser/model,
