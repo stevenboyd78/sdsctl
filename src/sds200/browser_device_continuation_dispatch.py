@@ -1,7 +1,7 @@
-"""Fixed continuation reads and one initial-session request; no ordinary UI route.
+"""Fixed continuation reads, initial issuance and native pause; no ordinary UI route.
 
 Only the identity/build-bound installed native wrapper selects this path. The
-normal startup guard is unchanged. A browser cannot choose a role or a path.
+legacy registration guard is unchanged. A browser cannot choose a role or a path.
 Initial issuance trusts the installed worker to own document-bound consent;
 comparison fields are NOT proof of a physical gesture or reusable authority.
 """
@@ -14,9 +14,69 @@ from .browser_device_continuation_review import _BrowserWorkerPausedReview
 from .browser_device_native import BrowserNativeConfiguration
 from .browser_device_protocol import (
     BrowserContinuationInitialRequest,
+    BrowserContinuationPauseRequest,
     BrowserContinuationReadRequest,
 )
 from .browser_device_worker import BrowserWorkerSelection, worker_graph
+
+
+def continuation_pause_request(configuration: BrowserNativeConfiguration,
+                               selection: BrowserWorkerSelection,
+                               request: BrowserContinuationPauseRequest) -> dict[str, object]:
+    """One owned native commit, not a saved browser stop or HTTP session revocation.
+
+    Compare with a fresh fixed-role view; never accept serialized state/paths.
+    A lost response is unconfirmed. A second request with the original binding
+    fails before another write, even when the first commit actually completed.
+    Later paused readback alone is not acknowledgement of the lost operation.
+    """
+    from .browser_device_continuation_cancel import (
+        BrowserCancellationState,
+        _BrowserWorkerCancellation,
+        _Clock,
+    )
+    from .browser_device_continuation_current import _worker_current_scope
+    from .browser_device_recovery import RecoveryMode
+
+    if type(request) is not BrowserContinuationPauseRequest:
+        raise ValueError()
+    request.__post_init__()
+    timer = _Clock(time.time, time.monotonic)
+    build = worker_graph()[0]
+    with _worker_current_scope(configuration, selection) as reader:
+        expected = reader.inspect()
+        if ((expected.epoch, expected.state_fingerprint, expected.native_revision)
+                != (request.epoch, request.fingerprint, request.revision)):
+            raise ValueError()
+    timer.check()
+    operation = _BrowserWorkerCancellation(configuration, selection)
+    result = operation.pause(expected)
+    timer.check()
+    if type(result) is not BrowserCancellationState or result.operation != "pause":
+        raise ValueError()
+    state = result.state
+    if (state.mode is not RecoveryMode.PAUSED
+            or (state.identity, state.origin, state.device_id, state.epoch, state.manifest_sha256)
+            != (expected.identity, expected.origin, expected.device_id,
+                expected.epoch, expected.manifest_sha256)
+            or state.native_revision not in {expected.native_revision + 1,
+                                             expected.native_revision + 2}
+            or state.state_fingerprint == expected.state_fingerprint
+            or operation.confirm() != result):
+        raise ValueError()
+    timer.check()
+    with _worker_current_scope(configuration, selection) as reader:
+        observed = reader.observe()
+        if observed.state != state or observed.generation is not None:
+            raise ValueError()
+    if worker_graph()[0] != build:
+        raise ValueError()
+    timer.check()
+    return {"version": 1, "ok": True, "build": build, "identity": state.identity,
+        "epoch": state.epoch, "mode": "paused",
+        "binding": {"fingerprint": state.state_fingerprint, "revision": state.native_revision,
+                    "generation": None},
+        "nativePauseConfirmed": True, "serverRevocationConfirmed": False}
 
 
 def continuation_read_request(configuration: BrowserNativeConfiguration,

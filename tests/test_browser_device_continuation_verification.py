@@ -35,7 +35,7 @@ from tests.test_browser_device_continuation_current import (
 from tests.test_browser_device_continuation_current import candidate as candidate
 from tests.test_browser_device_continuation_current import native_step
 from tests.test_browser_device_continuation_ownership import handoff as handoff
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import root as root
 from tests.test_browser_device_native import server as server
@@ -149,7 +149,7 @@ def test_owned_completion_keeps_sql_unlocked_during_proof_and_returns_no_session
         lab.clock[0] += 1000
         lab.elapsed[0] += 1000
         assert obj.confirm() == result and len(calls) == 1  # Not renewed server authority.
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["exception", "none", "identity", "device", "generation",
@@ -406,7 +406,7 @@ def test_real_tls_exact_generation_is_fixed_and_issues_no_session(
     assert json.loads(body) == {"device_id": "display", "generation": 7}
     assert headers["Authorization"] == "Bearer " + CREDENTIAL
     assert not {"Cookie", "Origin"} & headers.keys()
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("profile", ["dns"], indirect=True)

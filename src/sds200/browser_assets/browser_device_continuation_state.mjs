@@ -72,6 +72,39 @@ export function classifyContinuationStartup(settings,saved,observed) {
   }
 }
 
+// Ordinary-route prerequisite: classify the WHOLE observed storage area before
+// selecting any lifecycle. A STOP key (even malformed/undefined), extra key or
+// unknown container is terminal; do not reduce it to its recovery record first.
+// This is inert comparison only, not a storage read, acknowledgement of a saved
+// stop, freshness proof, session authority or permission to instantiate an owner.
+export function classifyContinuationStorage(settings,stored,observed) {
+  try {
+    if(stored===null||typeof stored!=='object'||Array.isArray(stored)||
+      ![Object.prototype,null].includes(Object.getPrototypeOf(stored)))refuse();
+    const keys=Reflect.ownKeys(stored),key='sdsctlDeviceRecovery';
+    if(keys.length!==1||keys[0]!==key)refuse();
+    const descriptor=Object.getOwnPropertyDescriptor(stored,key);
+    if(!descriptor||!Object.hasOwn(descriptor,'value')||descriptor.enumerable!==true)refuse();
+    const saved=descriptor.value,legacyKeys=['version','identity','paused','phase','nextAt'];
+    if(saved!==null&&typeof saved==='object'&&!Array.isArray(saved)&&
+      [Object.prototype,null].includes(Object.getPrototypeOf(saved))&&
+      Reflect.ownKeys(saved).length===legacyKeys.length&&legacyKeys.every(name=>{
+        const field=Object.getOwnPropertyDescriptor(saved,name);
+        return field&&field.enumerable===true&&Object.hasOwn(field,'value');
+      })) {
+      const config=selection(settings),legacy={version:1,identity:config.identity,
+        paused:true,phase:'clean',nextAt:0};
+      if(!legacyKeys.every(name=>Object.getOwnPropertyDescriptor(saved,name).value===legacy[name]))refuse();
+      if(native(observed,config,'paused',true).generation!==null)refuse();
+      // Recovery produces this exact legacy clean pause. Recognize it only as
+      // non-ready review status: do not migrate it, invent an epoch, or issue.
+      // The consent-bound installer alone changes it directly to initial_pending.
+      return Object.freeze({mode:'paused',sessionReady:false});
+    }
+    return classifyContinuationStartup(settings,descriptor.value,observed);
+  } catch {return Object.freeze({mode:'administrator_required',sessionReady:false});}
+}
+
 // Comparison only: even a matching hash proves neither browser provenance nor
 // current server/native permission, expiry, protected-page use or session readiness.
 // Never use this result as permission to delete a cookie: Chrome has no cookie CAS.

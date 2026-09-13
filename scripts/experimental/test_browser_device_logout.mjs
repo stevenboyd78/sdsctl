@@ -225,7 +225,7 @@ for (const change of [{frameId: 1}, {origin: "https://evil.example"}, {url: orig
 
 test("content handler stops repeated submits and waits for pause before fetch", async () => {
   let handler, fetches = 0; const prepared = deferred(), notices = [];
-  const win = {location: {href: origin + "/"}}; win.top = win;
+  const win = {location: {href: origin + "/"},addEventListener(){}}; win.top = win;
   const document = {addEventListener(_, fn, capture) { assert.equal(capture, true); handler = fn; },
     createElement() { return {setAttribute() {}, textContent: ""}; }};
   const runtime = {sendMessage: async message => {
@@ -243,4 +243,68 @@ test("content handler stops repeated submits and waits for pause before fetch", 
   await settle(); await settle();
   assert.equal(fetches, 1); assert.equal(notices.length, 1);
   assert.match(notices[0].textContent, /Server shutdown confirmed/);
+});
+
+function continuationContentFixture(value) {
+  const f={calls:[],notices:[],fetches:0,timers:new Set()};
+  f.window={location:{href:origin+'/device-display'},addEventListener:(name,fn)=>{
+    assert.equal(name,'pagehide');f.pagehide=fn;
+  }};f.window.top=f.window;
+  f.document={addEventListener:(name,fn,capture)=>{
+    assert.equal(name,'submit');assert.equal(capture,true);f.submit=fn;
+  },createElement:()=>({setAttribute(){},textContent:''})};
+  f.runtime={sendMessage:async message=>{f.calls.push(message);return value;}};
+  f.fetcher=async()=>{f.fetches++;throw Error('second sign-out POST forbidden');};
+  f.schedule=(fn,ms)=>{assert.equal(ms,60000);const t={fn};f.timers.add(t);return t;};
+  f.cancel=t=>f.timers.delete(t);
+  connectLogoutContent(f,origin);
+  f.event={isTrusted:true,preventDefault(){},stopImmediatePropagation(){},target:{tagName:'FORM',
+    method:'post',action:origin+'/auth/logout',append:notice=>f.notices.push(notice)}};
+  f.run=async()=>{f.submit(f.event);await settle();};return f;
+}
+const completeStop={mode:'continuation_stop_complete',browserStopSaved:true,nativePauseConfirmed:true,
+  localWritesDrained:true,serverRevocation:'drained',cookieCleared:true,
+  serverRevocationConfirmed:true,sessionReady:false};
+for(const [outcome,value,pattern] of [
+  ['complete',completeStop,/Sign-out complete.*server sessions closed/],
+  ['pending',{...completeStop,mode:'continuation_stop_pending',serverRevocation:'pending'},/sessions are still draining/],
+  ['unconfirmed',{...completeStop,mode:'continuation_stop_unconfirmed',nativePauseConfirmed:false,
+    cookieCleared:false,serverRevocation:'unconfirmed',serverRevocationConfirmed:false},/Native pause: unconfirmed/],
+])test('continuation '+outcome+' presents fixed separate facts with no content POST or finish',async()=>{
+  const f=continuationContentFixture(value);await f.run();await f.run();
+  assert.equal(f.notices.length,1);assert.match(f.notices[0].textContent,pattern);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.fetches,0);assert.equal(f.timers.size,0);
+});
+for(const field of ['browserStopSaved','nativePauseConfirmed','localWritesDrained','cookieCleared'])
+for(const mode of ['continuation_stop_complete','continuation_stop_pending'])
+test('false '+field+' cannot claim '+mode,async()=>{
+  const f=continuationContentFixture({...completeStop,mode,[field]:false,
+    serverRevocation:mode==='continuation_stop_pending'?'pending':'drained'});await f.run();
+  assert.match(f.notices[0].textContent,/could not be confirmed/);assert.equal(f.fetches,0);
+});
+for(const [name,value] of [
+  ['extra key',{...completeStop,secret:'private'}],['unsafe extra grant',{...completeStop,submit:true,ticket:'a'.repeat(36)}],
+  ['ready true',{...completeStop,sessionReady:true}],['missing facts',{mode:'continuation_stop_complete'}],
+  ['pending is not complete',{...completeStop,serverRevocation:'pending'}],
+  ['wrong server flag',{...completeStop,serverRevocationConfirmed:false}],
+  ['unknown revocation',{...completeStop,serverRevocation:'private'}],
+  ['nonboolean',{...completeStop,browserStopSaved:'true'}],
+])test('unknown continuation result '+name+' is fixed and cannot grant a second POST',async()=>{
+  const f=continuationContentFixture(value);await f.run();
+  assert.match(f.notices[0].textContent,/could not be confirmed/);
+  assert(!f.notices[0].textContent.includes('private'));assert.equal(f.fetches,0);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.timers.size,0);
+});
+for(const boundary of ['pagehide','location','timeout'])test(boundary+' cannot display late sign-out success or retry',async()=>{
+  const reply=deferred(),f=continuationContentFixture(reply.promise);await f.run();
+  if(boundary==='pagehide')f.pagehide();
+  if(boundary==='location')f.window.location.href=origin+'/';
+  if(boundary==='timeout'){[...f.timers][0].fn();await settle();}
+  const previous=f.notices[0].textContent;reply.resolve(completeStop);await settle();await f.run();
+  assert.equal(f.notices[0].textContent,previous);assert.equal(f.fetches,0);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.timers.size,0);
+});
+test('untrusted sign-out stays inert and does not consume the real gesture',async()=>{
+  const f=continuationContentFixture(completeStop);f.submit({...f.event,isTrusted:false});await settle();
+  assert.deepEqual(f.calls,[]);await f.run();assert.equal(f.calls.length,1);
 });

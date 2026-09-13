@@ -13,6 +13,7 @@ from contextlib import closing
 import pytest
 
 from sds200 import browser_device_guard_release as release
+from sds200.browser_device_continuation_history import _capture_owned_history as _real_history
 from sds200.browser_device_handoff import BrowserHandoffError
 from sds200.browser_device_profile_access import BrowserProfileAccessError, browser_profile_access
 from sds200.browser_device_recovery import BrowserDeviceRecovery, RecoveryMode
@@ -48,6 +49,27 @@ def attempt(handoff, callback=lambda review: review.confirmation, **kwargs):
 def blocked(lab):
     with pytest.raises(BrowserStartupError):
         check_browser_startup(**lab.inputs)
+
+
+def unmocked_launch_blocked(lab):
+    """Abbreviated portable histories are not complete public launch evidence.
+
+    Other tests explicitly simulate the full-chain reader to exercise isolated
+    current-state/dispatch contracts. Restore the actual reader here: those
+    abbreviated journals must still fail startup, as must legacy registration.
+    """
+    from sds200 import browser_device_continuation_history as history
+    from sds200.browser_device_registration import (
+        BrowserRegistrationError,
+        inspect_browser_registration,
+    )
+
+    with pytest.raises(BrowserRegistrationError):
+        inspect_browser_registration(lab.inputs["root"],
+            **{key: lab.inputs[key] for key in ("bundle", "profile", "public_key")})
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(history, "_capture_owned_history", _real_history)
+        blocked(lab)
 
 
 def state(lab, handoff):

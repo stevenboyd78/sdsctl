@@ -33,7 +33,7 @@ from tests.test_browser_device_continuation_current import candidate as candidat
 from tests.test_browser_device_continuation_ownership import handoff as handoff
 from tests.test_browser_device_continuation_verification import profile as profile
 from tests.test_browser_device_continuation_verification import proof
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import root as root
 from tests.test_browser_device_native import server as server
@@ -113,7 +113,7 @@ def test_review_keeps_native_paused_and_sql_closed_during_network(
         with pytest.raises(FrozenInstanceError):
             result.generation = 8
         no_replay(obj, lab)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["exception", "interrupt", "exit", "none", "identity",
@@ -290,7 +290,7 @@ def test_real_tls_reviews_current_generation_without_approval_or_session(
     assert path == "/auth/device/verify" and json.loads(body) == {"device_id": "display"}
     assert headers["Authorization"] == "Bearer " + CREDENTIAL
     assert not {"Cookie", "Origin"} & headers.keys()
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("profile", ["dns"], indirect=True)

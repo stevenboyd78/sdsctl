@@ -43,7 +43,7 @@ test('exact scoped inner request, full envelope, independent current read '+orig
   assert.deepEqual(await p.readCurrent(),{identity,...f.current.continuation});
   const count=f.calls.length;await assert.rejects(p.issueInitial(f.request),refusal);
   assert.equal(f.calls.length,count);assert.equal(f.timers.size,0);
-  assert.deepEqual(Object.keys(p).sort(),['invalidate','issueInitial','readCurrent','settings']);
+  assert.deepEqual(Object.keys(p).sort(),['invalidate','issueInitial','pauseContext','readCurrent','settings']);
 });
 
 const invalid=[null,undefined,[],{},true,1,'text'];
@@ -112,6 +112,7 @@ for(const [name,mutate] of badReplies)test('complete response '+name+' fails clo
   const f=fixture(),p=f.start();f.chrome.runtime.sendNativeMessage=async()=>{f.calls.push('issue');return mutate(clone(f.reply));};
   await assert.rejects(p.issueInitial(f.request),refusal);await assert.rejects(p.issueInitial(f.request),refusal);
   await assert.rejects(p.readCurrent(),refusal);assert.equal(f.calls.length,1);assert.equal(f.timers.size,0);
+  assert.deepEqual(p.pauseContext(),f.initial); // Unknown receipt never upgrades the comparison.
 });
 
 for(const clock of [0,1])for(const value of [NaN,Infinity,-1,Number.MAX_SAFE_INTEGER,'100',null])
@@ -220,4 +221,41 @@ test('elapsed lifetime includes the final validated return boundary',async()=>{
   f.options.wall=()=>100000+wall++*1000;f.options.monotonic=()=>50000+mono++*1000;
   const p=f.start(),result=await p.issueInitial(f.request);
   assert.equal(wall,mono);assert(result.session.expires_in<=300-(wall-1));
+});
+
+for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443'])
+test('retained pause context advances only with checked issuance '+origin,async()=>{
+  const f=fixture(origin),p=f.start(),before=p.pauseContext();
+  assert.deepEqual(before,f.initial);assert.deepEqual(f.calls,[]);
+  assert(Object.isFrozen(before)&&Object.isFrozen(before.config)&&Object.isFrozen(before.continuation.binding));
+  await p.readCurrent();assert.equal(p.pauseContext(),before);
+  await p.issueInitial(f.request);const after=p.pauseContext();
+  assert.deepEqual(after,{...f.initial,continuation:{epoch,mode:'active',binding:f.reply.binding}});
+  assert(Object.isFrozen(after)&&Object.isFrozen(after.continuation)&&Object.isFrozen(after.continuation.binding));
+  assert(!JSON.stringify(after).includes(token));assert(!JSON.stringify(after).includes(f.request.intent));
+  const count=f.calls.length;p.invalidate();f.initial.config.origin='https://wrong.test';
+  f.reply.binding.revision++;assert.equal(p.pauseContext(),after);assert.equal(f.calls.length,count);
+  assert.equal(after.continuation.binding.revision,7);
+});
+
+for(const cause of ['reject','invalidate','timeout'])test('unknown issuance keeps original pause context: '+cause,async()=>{
+  const f=fixture(),p=f.start(),held=deferred();f.before=()=>held.promise;const before=p.pauseContext();
+  const run=p.issueInitial(f.request);await settle();
+  if(cause==='reject')held.reject(Error('lost receipt'));
+  else if(cause==='invalidate')p.invalidate();else [...f.timers][0].fn();
+  await assert.rejects(run,refusal);assert.equal(p.pauseContext(),before);
+  held.resolve();await settle();assert.equal(p.pauseContext(),before);assert.equal(f.calls.length,1);
+});
+
+for(const cause of ['throw','invalidate','clock','expiry'])test('final cleanup cannot retain unknown context: '+cause,async()=>{
+  const f=fixture();if(cause==='expiry')f.reply.session.expires_in=31;
+  f.options.cancel=timer=>{
+    f.timers.delete(timer);
+    if(cause==='throw')throw Error('private cleanup');
+    if(cause==='invalidate')f.ports.invalidate();
+    if(cause==='clock')f.clock[1]+=12000;
+    if(cause==='expiry')f.clock[0]+=1000;
+  };
+  const p=f.start(),before=p.pauseContext();await assert.rejects(p.issueInitial(f.request),refusal);
+  assert.equal(p.pauseContext(),before);assert.equal(f.timers.size,0);assert.equal(f.calls.length,1);
 });

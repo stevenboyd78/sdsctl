@@ -2,7 +2,8 @@
 
 Stopped administration and a selected live native child have separate entrypoints.
 Neither caller can select a role through a browser message or an ignore-lock flag.
-Existing normal startup/request paths do not use this groundwork yet.
+The continuation foreground launcher uses stopped ownership through child exit;
+native helpers independently acquire the live-worker boundary for each request.
 """
 from __future__ import annotations
 

@@ -110,7 +110,8 @@ test("continuation retries stay bounded across all lifecycle events",async()=>{
 function page(response) {
   const f = {notice:{textContent:""}, resume:{hidden:false}, scheduled:[], messages:[], navigations:[]};
   f.document = {getElementById: id => {assert(["notice","resume-link"].includes(id));return id==="notice"?f.notice:f.resume;}};
-  f.window = {location:{href:extension+"startup.html", replace:url=>f.navigations.push(url)}};
+  f.window = {location:{href:extension+"startup.html", replace:url=>f.navigations.push(url)},
+    addEventListener:(name,fn)=>{assert.equal(name,'pagehide');f.pagehide=fn;}};
   f.window.top=f.window;
   f.runtime = {getURL:name=>extension+name, sendMessage:async message=>{
     f.messages.push(message); if(response instanceof Error) throw response; return response;
@@ -120,7 +121,8 @@ function page(response) {
 }
 
 for (const mode of ["starting","ready","active","waiting","paused","stopping","logout_pending",
-  "setup_required","setup_error","tls_error","credential_rejected","protocol_error","administrator_required"]) {
+  "setup_required","setup_error","tls_error","credential_rejected","protocol_error","administrator_required",
+  "continuation_verification_required"]) {
   test(`startup shows ${mode} without starting or initializing recovery`, async()=>{
     const f=page({mode,sessionReady:false}); connectBrowserStartupPage(f,origin); await settle();
     assert(f.notice.textContent.length>10); assert.deepEqual(f.navigations,[]);
@@ -128,6 +130,20 @@ for (const mode of ["starting","ready","active","waiting","paused","stopping","l
     await f.scheduled.shift()(); assert.equal(f.scheduled.length,1);
   });
 }
+
+for(const changed of ['pagehide','location'])test('startup '+changed+' fences a pending ready reply and polling',async()=>{
+  const f=page({mode:'active',sessionReady:true});let resolve;
+  f.runtime.sendMessage=()=>new Promise(r=>{resolve=r;});
+  connectBrowserStartupPage(f,origin);
+  if(changed==='pagehide')f.pagehide();else f.window.location.href=extension+'resume.html';
+  resolve({mode:'active',sessionReady:true});await settle();
+  assert.deepEqual(f.navigations,[]);assert.deepEqual(f.scheduled,[]);assert(f.resume.hidden);
+});
+test('an old scheduled startup poll cannot start another check after pagehide',async()=>{
+  const f=page({mode:'paused',sessionReady:false});connectBrowserStartupPage(f,origin);await settle();
+  f.pagehide();await f.scheduled.shift()();
+  assert.deepEqual(f.messages,[{action:'startup-status'}]);assert.deepEqual(f.scheduled,[]);
+});
 test("paused-only startup explains administrator boundary and keeps resume hidden",async()=>{
   const f=page({mode:"administrator_required",sessionReady:false});
   connectBrowserStartupPage(f,origin);assert(f.resume.hidden);await settle();
@@ -170,20 +186,35 @@ for(const invalid of ["http://192.0.2.1","https://example.com/path","https://use
 // scanner/graph rendering code. The real browser harness checks full-page wiring.
 const dashboard = await readFile(new URL("../../src/sds200/web_assets/dashboard.js",import.meta.url),"utf8");
 const functions = dashboard.slice(dashboard.indexOf("function requireNativeLogin()"),
-  dashboard.indexOf("async function initializeNativeSession()"));
+  dashboard.indexOf("function syncDisplayNavigation()"));
 function dashboardFixture(managed, reply) {
-  const f={timers:[],navigations:[],requests:[]}, banner={append(){},hidden:true};
+  const node=tag=>({tagName:tag.toUpperCase(),children:[],hidden:true,
+    append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},
+    setAttribute(){}});
+  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0}, banner=node('div');
   const scope={managedDeviceEntry:managed,nativeAccessMode:"display",displayOnly:true,
     authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},
-    document:{documentElement:{dataset:{}},getElementById:()=>null,createElement:()=>({})},
-    window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout(){},
+    document:{documentElement:{dataset:{}},getElementById:id=>id==='native-menu'?{close(){f.closed++;}}:null,
+      createElement:node},
+    window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout:id=>f.cleared.push(id),
+      addEventListener:(type,listener,capture)=>f.listeners.push({type,listener,capture}),
       location:{replace:url=>f.navigations.push(url)}},
-    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?{pause(){}}:banner,
-    stopEventStream(){},stopWaterfallStream(){},stopAudioPlayback(){},setScannerControls(){},
-    setOverallStatus(){},AbortSignal,
+    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?{pause(){f.stops.push('recording');}}:banner,
+    stopEventStream(){f.stops.push('events');},stopWaterfallStream(){f.stops.push('waterfall');},
+    stopAudioPlayback(){f.stops.push('audio');},setScannerControls(){f.stops.push('controls');},
+    initializeDisplayNavigation:form=>{f.form=form;},setOverallStatus(){},AbortSignal,
     fetch:async(url,options)=>{f.requests.push({url,options});
       if(reply instanceof Error) throw reply;
+      if(typeof reply==='function')return reply(url,options);
       return {status:reply.status??200,ok:(reply.status??200)===200,json:async()=>reply};},
+  };
+  f.submit=(event={isTrusted:true,target:f.form})=>{
+    for(const {type,listener,capture} of f.listeners)if(type==='submit') {
+      assert.equal(capture,true);listener(event);
+    }
+  };
+  f.transportIntent=(target=scope.window)=>{
+    for(const {type,listener} of f.listeners)if(type==='sdsctl-device-signout-intent')listener({target});
   };
   f.scope=scope;vm.createContext(scope);vm.runInContext(functions,scope);return f;
 }
@@ -213,3 +244,108 @@ test("manual display session retains its login flow",async()=>{
   assert.equal(f.requests.length,0);f.scope.requireNativeLogin();
   assert.equal(f.navigations.length,0);assert.equal(f.scope.authenticationRequired,true);
 });
+
+const enrolledSession={device_enrolled:true,display_only:true,remaining_seconds:150};
+for(const status of [401,500,202]) {
+  test(`owned logout document quiesces UI before delayed acknowledgement ${status}`,async()=>{
+    const f=dashboardFixture(true,enrolledSession);await f.scope.initializeNativeSession();
+    let release;
+    f.scope.fetch=url=>{f.requests.push({url});return new Promise(resolve=>{release=resolve;});};
+    const background=f.scope.dashboardFetch(origin+'/api/status');
+    f.transportIntent();
+    // A revoked background read must not navigate the selected logout document
+    // away while its separate, real same-origin POST awaits a drain response.
+    release({status,ok:status<400});
+    await assert.rejects(background,{message:'Login required.'});
+    f.scope.requireNativeLogin();
+    assert.deepEqual(f.navigations,[]);
+    assert.equal(f.scope.authenticationRequired,true);
+    assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
+    assert.equal(f.scope.nativeSessionTimer,null);assert.equal(f.closed,0);
+    assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.equal(f.requests.length,2); // Two GETs only; no POST, native call or cookie operation.
+    f.transportIntent();assert.equal(f.stops.length,5);
+  });
+}
+test('transport UI hint cannot quiesce manual login or unrelated event targets',async()=>{
+  for(const managed of [false,true]) {
+    const f=dashboardFixture(managed,enrolledSession);await f.scope.initializeNativeSession();
+    if(managed)f.transportIntent({});else f.transportIntent();
+    assert.equal(f.scope.authenticationRequired,false);assert.equal(f.stops.length,0);
+  }
+});
+for(const phase of ['complete','pending','unconfirmed']) {
+  test(`managed sign-out preserves its ${phase} result document after server revocation`,async()=>{
+    const f=dashboardFixture(true,enrolledSession);await f.scope.initializeNativeSession();
+    f.submit(); // Window capture must precede the extension's document capture.
+    f.scope.requireNativeLogin(); // The same call made when a concurrent read returns 401.
+    assert.deepEqual(f.navigations,[]);
+    assert.equal(f.closed,0); // Keep the menu/result visible; do not close or reload it.
+    assert.equal(f.scope.authenticationRequired,true);
+    assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
+    assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.deepEqual(f.cleared,[1]);
+    assert.equal(f.scope.nativeSessionTimer,null);
+    assert.equal(f.requests.length,1); // Session read only; no dashboard-owned POST.
+    assert.equal(f.requests[0].url,origin+'/auth/session');
+    const before=f.timers.length;await f.scope.refreshManagedNativeSession();
+    assert.equal(f.timers.length,before);assert.equal(f.requests.length,1);
+    f.submit();assert.equal(f.stops.length,5); // Repeated UI intent is not another operation.
+  });
+}
+for(const change of [e=>{e.isTrusted=false;},e=>{e.target={...e.target};},
+  e=>{e.target.action=origin+'/other';},e=>{e.target.method='get';}]) {
+  test('synthetic, unrelated or changed forms cannot freeze managed recovery',async()=>{
+    const f=dashboardFixture(true,enrolledSession);await f.scope.initializeNativeSession();
+    const event={isTrusted:true,target:f.form};change(event);f.submit(event);
+    assert.equal(f.scope.authenticationRequired,false);assert.equal(f.stops.length,0);
+    f.scope.requireNativeLogin();assert.deepEqual(f.navigations,[origin+'/device-display']);
+  });
+}
+test('manual display sign-out keeps normal form submission and expiry behavior',async()=>{
+  const f=dashboardFixture(false,enrolledSession);await f.scope.initializeNativeSession();
+  f.submit();assert.equal(f.scope.authenticationRequired,false);
+  f.scope.requireNativeLogin();assert.equal(f.closed,1);assert.deepEqual(f.navigations,[]);
+});
+for(const call of ['initializeNativeSession','refreshManagedNativeSession']) {
+  test(`late ${call} response cannot re-arm activity after trusted sign-out`,async()=>{
+    let release;const reply=new Promise(resolve=>{release=resolve;});
+    const f=dashboardFixture(true,()=>reply);
+    const initialization=f.scope.initializeNativeSession();
+    let running=initialization;
+    if(call!=='initializeNativeSession') {
+      release({status:200,ok:true,json:async()=>enrolledSession});await initialization;
+      f.scope.fetch=()=>new Promise(resolve=>{release=resolve;});
+      running=f.scope.refreshManagedNativeSession();
+    }
+    f.submit();const timers=f.timers.length;
+    release({status:200,ok:true,json:async()=>enrolledSession});await running;
+    assert.equal(f.timers.length,timers);assert.equal(f.scope.nativeSessionTimer,null);
+    assert.deepEqual(f.navigations,[]);
+  });
+}
+test('late session JSON cannot install a new expiry timer after sign-out',async()=>{
+  let release;const body=new Promise(resolve=>{release=resolve;});
+  const f=dashboardFixture(true,()=>({status:200,ok:true,json:()=>body}));
+  const running=f.scope.initializeNativeSession();await settle();f.submit();
+  release(enrolledSession);await running;
+  assert.equal(f.timers.length,0);assert.equal(f.scope.nativeSessionTimer,null);
+});
+for(const reject of [false,true]) {
+  test(`late status ${reject?'failure':'payload'} cannot replace sign-out presentation`,async()=>{
+    let resolve,rejection;const payload=new Promise((yes,no)=>{resolve=yes;rejection=no;});
+    const f=dashboardFixture(true,enrolledSession);await f.scope.initializeNativeSession();
+    let rendered=0,changed=0;
+    Object.assign(f.scope,{refreshInProgress:false,fetchStatusPayload:()=>payload,
+      renderStatus:()=>{rendered++;},setOverallStatus:()=>{changed++;},
+      setText:()=>{changed++;},scannerControlMutationInProgress:false});
+    vm.runInContext(dashboard.slice(dashboard.indexOf('async function refreshStatus()'),
+      dashboard.indexOf('function clearEventStreamRestartTimer()')),f.scope);
+    const running=f.scope.refreshStatus();f.submit();const before=changed;
+    if(reject)rejection(new Error('fixture unavailable'));else resolve({});
+    await running;
+    assert.equal(rendered,0);assert.equal(changed,before);
+    assert.equal(f.scope.refreshInProgress,false);
+    assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
+  });
+}

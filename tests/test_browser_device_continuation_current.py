@@ -31,7 +31,7 @@ from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
 from tests.test_browser_device_continuation_native import transaction
 from tests.test_browser_device_continuation_ownership import handoff as handoff
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_profile import CREDENTIAL, private
 from tests.test_browser_device_registration import source as source
@@ -179,7 +179,7 @@ def test_new_scope_sees_each_valid_current_state_but_never_grants_runtime(lab, c
             assert previous != result
             previous = result
         assert snap(lab) == before
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("name", ["manifest", "release", "intent", "ledger"])
@@ -496,7 +496,7 @@ def test_observation_is_owned_read_only_and_not_session_or_consent(
     with pytest.raises(ERROR):
         reader.observe()
     assert snap(lab) == before
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("field", ["credential_hash", "trust_hash"])
@@ -580,4 +580,4 @@ def test_worker_observation_reacquires_current_selected_scope(
         assert observed.generation == (7 if active else None)
         with current._worker_current_scope(lab.configuration, selection) as reader:
             assert observed == reader.observe()
-    blocked(lab)
+    unmocked_launch_blocked(lab)

@@ -1,6 +1,7 @@
 // Experimental document-bound confirmation and separately selected asynchronous
-// operation owner. Neither is selected by the active worker/page. Native/probe
-// ports are fixture boundaries, not native authority or reusable serialized grants.
+// operation owner. The canonical lifecycle uses the memory-only operation lanes;
+// the confirmation-only and legacy StopFence wrappers remain isolated fixtures.
+// Supplied ports are trusted composition boundaries, not serialized grants.
 import {createContinuationPausedReader} from './browser_device_continuation_worker.mjs';
 import {createContinuationInstallation} from './browser_device_continuation_install.mjs';
 import {createContinuationStopFence} from './browser_device_continuation_stop.mjs';
@@ -79,21 +80,60 @@ export function connectContinuationConsentWorker(chrome,initial,build,
 // native issuance, server sign-out and accepted startup are qualified together.
 export function connectContinuationOperationWorker(chrome,initial,build,
   {readCurrent,issueInitial,createProbe,invalidateNative=()=>{},wall,monotonic,schedule,cancel}) {
-  if([readCurrent,issueInitial,createProbe,invalidateNative].some(value=>typeof value!=='function'))throw refusal();
   const clocks={wall,monotonic,schedule,cancel};
-  let lane,installation,fence,stopping=false;
+  let lanes,fence,stopping=false;
   const stop=()=>{
     if(stopping)return Promise.reject(refusal());
     stopping=true;
-    // Never queue this behind installation or a native/Chrome promise.
-    installation?.invalidate();lane?.invalidate();
-    // Fence a separately composed native adapter without waiting for its reply.
-    // A broken private callback must not suppress the independent STOP write.
-    try {invalidateNative();} catch { /* No raw exception or native-pause claim. */ }
+    // This legacy qualification wrapper remains the sole writer of its STOP.
+    // A broken private callback must not suppress that independent attempt.
+    try {lanes.invalidate();} catch { /* No native-pause claim. */ }
     return fence.save();
   };
+  lanes=connectContinuationOperationLanes(chrome,initial,build,{...clocks,
+    readCurrent,issueInitial,createProbe,invalidateNative,
+    onStopRequested:()=>{void stop().catch(()=>{});}});
+  fence=createContinuationStopFence(chrome,lanes.settings,clocks);
+  return Object.freeze({stop,invalidate:()=>{void stop().catch(()=>{});}});
+}
+
+// Trusted canonical composition port, never a page-selected role. These lanes own
+// NO StopFence and never write a STOP marker. The terminal owner supplies one
+// onStopRequested callback; its invalidateLanes port calls memory-only invalidate
+// instead of the legacy wrapper's durable stop. Reentrant invalidation is inert.
+export function connectContinuationOperationLanes(chrome,initial,build,
+  {readCurrent,issueInitial,createProbe,invalidateNative=()=>{},onStopRequested,
+    wall,monotonic,schedule,cancel}) {
+  if([readCurrent,issueInitial,createProbe,invalidateNative,onStopRequested]
+    .some(value=>typeof value!=='function'))throw refusal();
+  const clocks={wall,monotonic,schedule,cancel};
+  let lane,installation,stopping=false,fenceUnconfirmed=false;
+  const invalidate=()=>{
+    if(!stopping) {
+      stopping=true; // Before callbacks: recursive invalidation cannot write/reissue.
+      // Attempt all invalidations even if a private port violates its contract.
+      for(const operation of [()=>installation?.invalidate(),()=>lane?.invalidate(),invalidateNative]) {
+        try {
+          const value=operation();
+          if(value!==undefined) {
+            fenceUnconfirmed=true;
+            if(value&&typeof value.then==='function')void Promise.resolve(value).catch(()=>{});
+          }
+        } catch {fenceUnconfirmed=true;}
+      }
+    }
+    if(fenceUnconfirmed)throw refusal();
+  };
+  const requestStop=()=>{
+    if(stopping)return;
+    try {invalidate();} catch { /* The independent terminal owner still runs. */ }
+    try {
+      const value=onStopRequested();
+      if(value&&typeof value.then==='function')void Promise.resolve(value).catch(()=>{});
+    } catch { /* Retain uncertainty; never select a second terminal owner. */ }
+  };
   lane=connectDocumentWorker(chrome,initial,build,{...clocks,asynchronous:true,
-    onInvalidate:()=>{void stop().catch(()=>{});},
+    onInvalidate:requestStop,
     complete:async(value,currentDocument)=>{
       if(stopping||installation)throw refusal();
       installation=createContinuationInstallation(chrome,value.settings,value.reviewed,
@@ -105,8 +145,19 @@ export function connectContinuationOperationWorker(chrome,initial,build,
         }});
       return installation.run();
     }});
-  fence=createContinuationStopFence(chrome,lane.settings,clocks);
-  return Object.freeze({stop,invalidate:()=>{void stop().catch(()=>{});}});
+  return Object.freeze({settings:lane.settings,invalidate,
+    // Include the consent reader's access-level mutation even before an
+    // installer exists. Observe underlying promises, not the enclosing races.
+    writeDrain:()=>{
+      if(fenceUnconfirmed)throw refusal();
+      const values=[lane.writeDrain(),...(installation?[installation.writeDrain()]:[])];
+      const fenced=stopping&&values.every(v=>v.fenced),
+        pendingWrites=values.reduce((total,v)=>total+v.pendingWrites,0),
+        unconfirmedWrite=values.some(v=>v.unconfirmedWrite);
+      return Object.freeze({fenced,pendingWrites,unconfirmedWrite,
+        localWritesDrained:fenced&&pendingWrites===0&&!unconfirmedWrite});
+    },
+    cookieFingerprint:()=>installation?.cookieFingerprint()??null});
 }
 
 function connectDocumentWorker(chrome,initial,build,
@@ -202,13 +253,17 @@ function connectDocumentWorker(chrome,initial,build,
         if(!exact(result,['mode','sessionReady'])||result.mode!=='accepted'||result.sessionReady!==true)
           throw refusal();
       }
-      check();cancel(timer);reviewed=null;
+      check();cancel(timer);check();reviewed=null;
+      // Acknowledged acceptance ends the consent document's ownership. Opening
+      // the verified display after this result must not cancel the session we
+      // just installed. Failed/lost replies still select stop via respondSafely.
+      if(asynchronous)phase='accepted';
       return result;
     });
   };
   const respondSafely=(respond,value)=>{try {respond(value);} catch {stop();}};
   chrome.tabs.onUpdated.addListener((tabId,change)=>{
-    if(selected&&tabId===selected.tabId&&
+    if(phase!=='accepted'&&selected&&tabId===selected.tabId&&
       (change?.navigating===true||change?.status==='loading'||Object.hasOwn(change||{},'url')))stop();
   });
   chrome.runtime.onMessage.addListener((message,sender,respond)=>{
@@ -222,7 +277,7 @@ function connectDocumentWorker(chrome,initial,build,
       exact(message,['action'])&&message.action==='logout-begin') {stop();return false;}
     if(!senderOK(sender))return false;
     if(exact(message,['action'])&&message.action==='continuation-cancel') {
-      if(selected&&same(target(sender),selected))stop();return false;
+      if(phase!=='accepted'&&selected&&same(target(sender),selected))stop();return false;
     }
     let operation;
     if(exact(message,['action'])&&message.action==='resume-review')operation=()=>review(sender);
@@ -235,5 +290,5 @@ function connectDocumentWorker(chrome,initial,build,
       ()=>respondSafely(respond,{mode:'administrator_required'}));
     return true;
   });
-  return Object.freeze({settings,invalidate:stop});
+  return Object.freeze({settings,invalidate:stop,writeDrain:reader.writeDrain});
 }

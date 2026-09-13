@@ -143,6 +143,22 @@ def test_pip_boy_inspired_theme_uses_stable_declarative_hooks() -> None:
         assert prohibited not in stylesheet.lower()
 
 
+def test_lcars_data_groups_keep_bounded_corners_without_removing_containment() -> None:
+    theme = built_in_web_theme_registry().require("lcars")
+    stylesheet = read_built_in_web_theme_stylesheet(theme).decode("utf-8")
+    match = re.search(r':root\[data-theme="lcars"\] \.radio-field-groups\s*\{([^}]+)\}',
+                      stylesheet)
+    assert match is not None
+    assert "border-radius: var(--radius-small);" in match[1]
+    assert "999px" not in match[1]
+    assert "overflow:" not in match[1] and "z-index:" not in match[1]
+    # Decorative curves remain elsewhere; data-bearing corners alone change.
+    assert "border-radius: 999px 0.3rem 0.3rem 999px;" in stylesheet
+    base = files("sds200.web_assets").joinpath("dashboard.css").read_text(encoding="utf-8")
+    groups = re.findall(r"(?m)^\.radio-field-groups\s*\{([^}]+)\}", base)
+    assert groups and "overflow: hidden;" in groups[-1]
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     (

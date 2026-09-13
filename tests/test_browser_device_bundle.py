@@ -30,6 +30,15 @@ pytestmark = pytest.mark.skipif(
 )
 
 
+@pytest.fixture(autouse=True)
+def fresh_public_conversion_cache():
+    # Each test models a fresh process. Dedicated cache tests cover repeated
+    # calls; failure injection here must exercise the actual OpenSSL invocation.
+    bundle._validate_extension_der.cache_clear()
+    yield
+    bundle._validate_extension_der.cache_clear()
+
+
 @pytest.fixture
 def public_key(tmp_path, certificates):
     result = subprocess.run(
@@ -273,16 +282,80 @@ assert.equal(response.mode, 'setup_error');
 const content = readFileSync(extension + '/content.js', 'utf8');
 for (const [href, child, count] of [[origin+'/',false,1], [origin+'/',true,0],
   [origin+'/device-display',false,1], [origin+'/device-display?extra',false,0],
+  [origin+'/device-display',true,0], [origin+'/device-display#fragment',false,0],
   [origin+'/?query',false,0], [origin+'/other',false,0], ['https://127.0.0.1:9443/',false,0],
   ['https://another.example/',false,0]]) {
-  let listeners=0;
-  const window={location:{href}};
+  let listeners=0,pagehide=0;
+  const before=handlers.length;
+  const window={location:{href},addEventListener:name=>{assert.equal(name,'pagehide');pagehide++;}};
   window.top=child ? {} : window;
-  vm.runInNewContext(content, {window, location:window.location, URL,
+  vm.runInNewContext(content, {window, location:window.location, URL,AbortController,
+    performance,setTimeout:forbidden,clearTimeout:forbidden,
     document:{addEventListener: () => listeners++}, chrome, fetch:forbidden});
   assert.equal(listeners,count);
+  const receiversSelected=!child&&href===origin+'/device-display';
+  // The existing legacy resume receiver always registers one inert listener.
+  assert.equal(handlers.length-before,1+(receiversSelected?2:0));
+  // The manual form owns an inert pagehide fence as well as the two selected
+  // private content receivers. Registration still performs no I/O or timers.
+  assert.equal(pagehide,count+(receiversSelected?2:0));
 }
 """, str(root / "extension")], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize("origin", [
+    "https://display.example", "https://192.0.2.18:8443", "https://[2001:db8::18]:8443",
+])
+def test_generated_probe_and_logout_receivers_are_inert_and_exactly_scoped(
+    tmp_path, public_key, origin,
+):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node generated protected-document entrypoint checks")
+    key = bundle.browser_extension_identity(public_key)
+    config = native.parse_browser_native_configuration(tmp_path, json.dumps({
+        "version": 1, "origin": origin, "device_id": "display",
+        "extension_origin": f"chrome-extension://{key.extension_id}/",
+    }).encode())
+    artifacts = bundle._artifacts(tmp_path, config, key, public_key)
+    content = tmp_path / "content.js"
+    private(content, artifacts["extension/content.js"])
+    result = subprocess.run([node, "--input-type=module", "-e", """
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const [filename,origin,id]=process.argv.slice(1),content=readFileSync(filename,'utf8');
+const forbidden=()=>assert.fail('Document receiver performed an authority action');
+for(const suffix of ['/','/device-display','/device-display?query',
+  '/device-display#fragment','/other']) {
+  for(const child of [false,true]) {
+    const handlers=[],window={location:{href:origin+suffix},addEventListener:()=>{}};
+    window.top=child?{}:window;
+    const runtime={id,onMessage:{addListener:fn=>handlers.push(fn)},sendMessage:forbidden,
+      sendNativeMessage:forbidden};
+    vm.runInNewContext(content,{window,location:window.location,URL,AbortController,
+      performance,setTimeout:forbidden,clearTimeout:forbidden,
+      chrome:{runtime},document:{addEventListener:()=>{}},fetch:forbidden});
+    // One existing legacy resume receiver, plus inert probe and logout only in
+    // the exact top-frame protected document. No authority action or timer.
+    assert.equal(handlers.length,1+(!child&&suffix==='/device-display'?2:0));
+    for(const handler of handlers) {
+      const respond=forbidden,ticket='f'.repeat(64);
+      assert.equal(handler({action:'continuation-probe-verify',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket},{id:'p'.repeat(32)},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket,extra:true},{id},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket:'invalid'},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-submit',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-confirm',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket},{id:'p'.repeat(32)},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket,extra:true},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket:'invalid'},{id},respond),false);
+    }
+  }
+}
+""", str(content), origin, key.extension_id], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""
 

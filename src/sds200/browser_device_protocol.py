@@ -105,11 +105,28 @@ class BrowserContinuationInitialRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class BrowserContinuationPauseRequest:
+    """One native-only pause comparison; no browser/server revocation authority."""
+
+    epoch: str = field(repr=False)
+    fingerprint: str = field(repr=False)
+    revision: int
+
+    def __post_init__(self) -> None:
+        if (any(type(v) is not str or re.fullmatch(r"[a-f0-9]{64}", v) is None
+                for v in (self.epoch, self.fingerprint))
+                # Native pause may also correct an observed wall-clock backstep.
+                or type(self.revision) is not int or not 1 <= self.revision < 2**53 - 3):
+            raise _invalid()
+
+
+@dataclass(frozen=True, slots=True)
 class BrowserWorkerRequest:
     build: str
     request: (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
               | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
-              | BrowserContinuationReadRequest | BrowserContinuationInitialRequest)
+              | BrowserContinuationReadRequest | BrowserContinuationInitialRequest
+              | BrowserContinuationPauseRequest)
 
 
 def _resume(value: dict[str, Any]) -> BrowserResumeRequest:
@@ -149,7 +166,7 @@ def parse_browser_device_request(
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
       | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
       | BrowserWorkerContextRequest | BrowserWorkerRequest | BrowserContinuationReadRequest
-      | BrowserContinuationInitialRequest):
+      | BrowserContinuationInitialRequest | BrowserContinuationPauseRequest):
     """Reject caller-provided URLs, paths, secrets, roles and unknown fields."""
     if type(payload) is not bytes or not 0 < len(payload) <= BROWSER_DEVICE_REQUEST_MAX_BYTES:
         raise _invalid()
@@ -192,6 +209,12 @@ def parse_browser_device_request(
                 raise _invalid()
             return BrowserContinuationInitialRequest(value["epoch"], value["intent"],
                 **value["binding"])
+        if value["action"] == "continuation-pause":
+            if (set(value) != {"version", "action", "epoch", "binding"}
+                    or type(value["binding"]) is not dict
+                    or set(value["binding"]) != {"fingerprint", "revision"}):
+                raise _invalid()
+            return BrowserContinuationPauseRequest(value["epoch"], **value["binding"])
         if value["action"] in {"review-resume", "prepare-resume", "commit-resume"}:
             return _resume(value)
         if value["action"] == "recovery-launch-ready":
@@ -251,7 +274,7 @@ def read_browser_device_request(
 ) -> (BrowserDeviceRequest | BrowserResumeRequest | BrowserRetirementRequest
       | BrowserRetirementAcknowledgement | BrowserRecoveryLaunchRequest
       | BrowserWorkerContextRequest | BrowserWorkerRequest | BrowserContinuationReadRequest
-      | BrowserContinuationInitialRequest | None):
+      | BrowserContinuationInitialRequest | BrowserContinuationPauseRequest | None):
     """Read one native-order frame; EOF is valid only between complete frames.
 
     The caller must separately enforce a read deadline and process lifetime.

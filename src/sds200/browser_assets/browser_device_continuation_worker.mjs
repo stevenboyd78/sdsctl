@@ -1,5 +1,6 @@
-// Native-selected continuation reader. No storage/cookie writes, initialization,
-// consent, session issuance, renewal or migration. Only explicit review goes online.
+// Native-selected continuation reader. Only the trusted-context access level is
+// written; no record/cookie mutation, initialization, consent, issuance, renewal
+// or migration. Only explicit review goes online.
 import {validateContinuationContext} from './browser_device_continuation_context.mjs';
 const KEY='sdsctlDeviceRecovery', HOST='org.sdsctl.browser_device';
 const COOKIE='__Host-sdsctl-device-session', ALARM='sdsctl-device-recovery';
@@ -26,9 +27,18 @@ export function createContinuationPausedReader(chrome,initial,build,
   // the fixed native context behind the synchronous MV3 event gate.
   const selected=validateContinuationContext(initial,build,chrome.runtime.id);
   const settings=selected.settings;
-  let busy=false,failed=false;
-  const access=Promise.resolve().then(()=>
-    chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}));
+  let busy=false,failed=false,pendingWrites=0,unconfirmedWrite=false;
+  const access=Promise.resolve().then(async()=>{
+    // A queued registration must not start a Chrome mutation after invalidation.
+    if(failed)return;
+    pendingWrites++;
+    try {
+      const actual=chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'});
+      if(actual===null||typeof actual!=='object'||typeof actual.then!=='function')throw refusal();
+      await actual;
+    } catch {unconfirmedWrite=true;throw refusal();}
+    finally {pendingWrites--;}
+  });
   access.catch(()=>{failed=true;});
   const send=action=>chrome.runtime.sendNativeMessage(HOST,{version:1,action});
   const context=async()=>{
@@ -95,7 +105,9 @@ export function createContinuationPausedReader(chrome,initial,build,
     } catch {failed=true;throw refusal();}
     finally {cancel(timer);}
   };
-  return Object.freeze({settings,inspect,invalidate:()=>{failed=true;}});
+  return Object.freeze({settings,inspect,invalidate:()=>{failed=true;},
+    writeDrain:()=>Object.freeze({fenced:failed,pendingWrites,unconfirmedWrite,
+      localWritesDrained:failed&&pendingWrites===0&&!unconfirmedWrite})});
 }
 
 export function connectContinuationBrowserWorker(chrome,initial,build,options={}) {

@@ -1,4 +1,4 @@
-"""Fixture-only owned native cancellation; no browser role, grant or network.
+"""Owned native cancellation; no browser role, grant or network.
 
 One explicit attempt owns fixed files/history and a dedicated native transaction.
 Exact same-process readback can describe its expected state after an uncertain
@@ -221,7 +221,7 @@ class BrowserStoppedCancellation(_Cancellation):
 
 
 class _BrowserWorkerCancellation(_Cancellation):
-    """Separate fixed-wrapper live boundary; not exposed by worker dispatch."""
+    """Fixed native-wrapper boundary; not selected by an ordinary browser route."""
 
     def __init__(self, configuration: BrowserNativeConfiguration, selection: BrowserWorkerSelection,
                  *, clock: Callable[[], float] = time.time,

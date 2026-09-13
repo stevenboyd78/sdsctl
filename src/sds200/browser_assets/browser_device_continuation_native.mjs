@@ -24,6 +24,12 @@ export function createContinuationNativePorts(chrome,initial,build,
       [wall,monotonic,schedule,cancel].some(v=>typeof v!=='function'))throw refusal();
   } catch {throw refusal();}
   const {settings}=selected;
+  const context=observed=>Object.freeze({version:1,ok:true,build,role:'continuation',
+    config:Object.freeze({origin:settings.origin,identity:settings.identity,nativeHost:HOST}),
+    extensionId:id,acknowledge:false,launch:null,
+    continuation:Object.freeze({epoch:settings.epoch,mode:observed.mode,
+      binding:Object.freeze({...observed.binding})})});
+  let retainedContext=context(selected.observed);
   let expected=selected.observed,used=false,busy=false,failed=false,last=null,rejectPending=null;
   const stop=()=>{failed=true;rejectPending?.(refusal());};
   const sample=()=>{
@@ -34,9 +40,13 @@ export function createContinuationNativePorts(chrome,initial,build,
   // Each native call has this outer 12s bound; native retains its own independent
   // 10s process supervisor. The owning installation/review keeps its original
   // 45s/60s whole-operation deadline. None is extended by a new or late response.
-  const run=async(request,parse,finish=value=>value)=>{
+  const run=async(request,parse,finish=value=>value,retain=()=>{})=>{
     if(failed||busy)throw refusal();
-    busy=true;let timer;
+    busy=true;let timer,cleaned=false;
+    const cleanup=()=>{
+      if(cleaned)return;cleaned=true;
+      try {cancel(timer);} catch {stop();throw refusal();}
+    };
     try {
       const started=sample();
       const check=()=>{
@@ -55,15 +65,21 @@ export function createContinuationNativePorts(chrome,initial,build,
         check();return raw;
       })();
       let raw=await Promise.race([work,interrupted]);check();
-      const value=parse(raw);raw=null;return finish(value,check());
+      const value=parse(raw);raw=null;
+      // A broken cleanup, queued invalidation or final clock change cannot
+      // retain a new pause comparison from an otherwise valid issuance reply.
+      cleanup();const result=finish(value,check());retain(result);return result;
     } catch {stop();throw refusal();}
     finally {
       rejectPending=null;busy=false;
-      try {cancel(timer);} catch {stop();throw refusal();}
+      cleanup();
     }
   };
   return Object.freeze({
     settings,invalidate:stop,
+    // A trusted in-memory comparison, not current-state adoption or authority.
+    // Unknown/late issuance retains the original selection; never a new binding.
+    pauseContext:()=>retainedContext,
     readCurrent:()=>run({version:1,action:'continuation-current'},value=>{
       const current=validateContinuationContext(value,build,id);
       if(!same(current.settings,settings)||!same(current.observed,expected))throw refusal();
@@ -99,7 +115,6 @@ export function createContinuationNativePorts(chrome,initial,build,
               !/^sdsctl-browser-session-v1\.[a-f0-9]{64}$/.test(result.session.token)||
               !finite(result.session.expires_in)||result.session.expires_in>3600)throw refusal();
             const after=Object.freeze({...result.binding});
-            expected=Object.freeze({identity:settings.identity,epoch:settings.epoch,mode:'active',binding:after});
             return Object.freeze({binding:after,session:Object.freeze({...result.session})});
           },(result,elapsed)=>{
             // Deduct through the final checked return boundary, AFTER response
@@ -109,8 +124,87 @@ export function createContinuationNativePorts(chrome,initial,build,
             if(remaining<=30)throw refusal();
             return Object.freeze({binding:result.binding,
               session:Object.freeze({token:result.session.token,expires_in:remaining})});
+          },result=>{
+            expected=Object.freeze({identity:settings.identity,epoch:settings.epoch,
+              mode:'active',binding:result.binding});
+            retainedContext=context(expected);
           });
       } catch {stop();return Promise.reject(refusal());}
+    },
+  });
+}
+
+// Separate one-use pause boundary. It grants no browser STOP acknowledgement,
+// cookie cleanup or server revocation. The ordinary worker does not select it.
+export function createContinuationNativePause(chrome,initial,build,
+  {wall=Date.now,monotonic=()=>performance.now(),schedule=setTimeout,cancel=clearTimeout}={}) {
+  const denied=()=>Error('Native pause is unconfirmed; retain saved state and do not retry.');
+  let selected,id;
+  try {
+    id=chrome.runtime.id;selected=validateContinuationContext(initial,build,id);
+    if(selected.observed.binding.revision>=Number.MAX_SAFE_INTEGER-2||
+      typeof chrome.runtime.sendNativeMessage!=='function'||
+      [wall,monotonic,schedule,cancel].some(v=>typeof v!=='function'))throw denied();
+  } catch {throw denied();}
+  let used=false,failed=false,rejectPending=null;
+  const stop=()=>{failed=true;rejectPending?.(denied());};
+  return Object.freeze({
+    invalidate:stop,
+    run:async(...args)=>{
+      if(used||failed)throw denied();
+      used=true;let timer,started,last,cleaned=false;
+      const cleanup=()=>{
+        if(cleaned)return;cleaned=true;
+        try {cancel(timer);} catch {stop();throw denied();}
+      };
+      const sample=()=>{
+        const pair=[wall(),monotonic()];
+        if(!pair.every(finite))throw denied();return pair;
+      };
+      const check=()=>{
+        const now=sample();
+        if(failed||chrome.runtime.id!==id||now.some((v,i)=>v<last[i]||v-started[i]>=30000))
+          throw denied();
+        last=now;
+      };
+      const send=async request=>{
+        check();const reply=await chrome.runtime.sendNativeMessage(HOST,request);check();return reply;
+      };
+      const current=async()=>validateContinuationContext(
+        await send({version:1,action:'continuation-current'}),build,id);
+      try {
+        // No caller-provided payload, comparison, role, origin or action.
+        if(args.length)throw denied();
+        started=sample();last=started;
+        const interrupted=new Promise((_,reject)=>{rejectPending=reject;});
+        void interrupted.catch(()=>{});
+        timer=schedule(stop,30000);
+        const work=(async()=>{
+          if(!same(await current(),selected))throw denied();
+          const {settings,observed}=selected,binding=observed.binding;
+          const reply=await send(Object.freeze({version:1,action:'continuation-pause',
+            epoch:settings.epoch,binding:Object.freeze({fingerprint:binding.fingerprint,
+              revision:binding.revision})}));
+          if(!exact(reply,['version','ok','build','identity','epoch','mode','binding',
+            'nativePauseConfirmed','serverRevocationConfirmed'])||reply.version!==1||reply.ok!==true||
+            reply.build!==build||reply.identity!==settings.identity||reply.epoch!==settings.epoch||
+            reply.mode!=='paused'||reply.nativePauseConfirmed!==true||reply.serverRevocationConfirmed!==false||
+            !exact(reply.binding,['fingerprint','revision','generation'])||
+            !hex(reply.binding.fingerprint)||reply.binding.fingerprint===binding.fingerprint||
+            !integer(reply.binding.revision)||
+            ![binding.revision+1,binding.revision+2].includes(reply.binding.revision)||
+            reply.binding.generation!==null)throw denied();
+          const expected={settings,observed:{identity:settings.identity,epoch:settings.epoch,
+            mode:'paused',binding:{...reply.binding}}};
+          if(!same(await current(),expected))throw denied();
+        })();
+        // All three calls share one deadline; native retains its independent
+        // 10-second supervisor. A timeout cannot cancel or replay a commit.
+        await Promise.race([work,interrupted]);cleanup();check();
+        return Object.freeze({mode:'native_paused',nativePauseConfirmed:true,
+          serverRevocationConfirmed:false,sessionReady:false});
+      } catch {stop();throw denied();}
+      finally {rejectPending=null;cleanup();}
     },
   });
 }

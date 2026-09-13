@@ -39,21 +39,68 @@ export function connectResumeWorker(chrome, controller, clock = Date.now, afterR
   });
 }
 
-export function connectResumePage({document,window,runtime}) {
-  if (window !== window.top || window.location.href !== runtime.getURL("resume.html")) throw new Error("setup");
+export function connectResumePage({document,window,runtime,wall=Date.now,
+  monotonic=()=>performance.now(),schedule=setTimeout,cancel=clearTimeout}, origin=null) {
+  const url=runtime.getURL('resume.html');
+  if (window !== window.top || window.location.href !== url ||
+      [wall,monotonic,schedule,cancel].some(fn=>typeof fn!=='function')) throw new Error("setup");
+  // This value is installed in the generated entrypoint, never a page payload,
+  // query parameter or response-selected destination. Legacy callers need none.
+  if(origin!==null) {
+    const selected=new URL(origin);
+    if(selected.protocol!=='https:'||selected.origin!==origin||selected.username||selected.password||
+      selected.pathname!=='/'||selected.search||selected.hash)throw new Error('setup');
+  }
   const review = document.getElementById("review"), form = document.getElementById("resume-form");
   const confirm = document.getElementById("confirm"), submit = document.getElementById("resume");
   const notice = document.getElementById("notice"), record = document.getElementById("reviewed");
-  let attempted = false, ticket = null, submitted = false;
+  let attempted=false,ticket=null,submitted=false,kind=null,alive=true,finished=false,
+    started=null,last=null,timer=null,cancelled=false;
+  confirm.disabled=true;submit.disabled=true;
+  const current=()=>alive&&window===window.top&&window.location.href===url;
+  const cleanup=()=>{const previous=timer;timer=null;cancel(previous);};
+  const abandon=()=>{
+    ticket=null;confirm.disabled=true;submit.disabled=true;
+    // Only the owned current resume document can cancel a continuation lane.
+    // Legacy roles ignore this message; no page-selected native request exists.
+    if(attempted&&kind!=='legacy'&&!finished&&!cancelled) {
+      cancelled=true;
+      try {void runtime.sendMessage({action:'continuation-cancel'}).catch(()=>{});} catch {/* Lost acknowledgement. */}
+    }
+  };
+  const check=()=>{
+    const now=[wall(),monotonic()];
+    if(!current()||finished||now.some((v,i)=>typeof v!=='number'||!Number.isFinite(v)||
+      v<0||v>=Number.MAX_SAFE_INTEGER||(last&&v<last[i])||(started&&v-started[i]>=60000)))
+      throw new Error('resume');
+    last=now;return now;
+  };
+  const uncertain=message=>{
+    abandon();finished=true;
+    try {cleanup();} catch {/* Retain fixed uncertainty. */}
+    if(current())notice.textContent=message;
+  };
+  window.addEventListener('pagehide',()=>{
+    alive=false;abandon();try {cleanup();} catch {/* Closing context. */}
+  });
+  const send=message=>{
+    check();return Promise.resolve(runtime.sendMessage(message)).then(value=>{check();return value;});
+  };
   review.addEventListener("click",event=>{
-    if (!event.isTrusted || attempted) return;
+    if (!event.isTrusted || attempted || !current()) return;
     attempted = true; review.disabled = true;
     notice.textContent = "Verifying this display with the configured server…";
-    void runtime.sendMessage({action:"resume-review"}).then(result=>{
+    void (async()=>{
+      started=check();
+      timer=schedule(()=>uncertain('The review or confirmation deadline expired. Keep saved state for administrator review; do not repeat this approval.'),60000);
+      if(finished){cleanup();throw new Error('resume');}
+      return send({action:'resume-review'});
+    })().then(result=>{
+      check();
       if(exact(result,["mode"])&&result.mode==='administrator_required') {
         confirm.disabled=true;submit.disabled=true;
         notice.textContent="Automatic sign-in is paused after completed recovery. A separate administrator continuation is required. Keep the saved profile and recovery evidence; do not repeat setup or remove the guard. No sign-in was attempted.";
-        return;
+        finished=true;cleanup();return;
       }
       if(exact(result,['mode','nativeRevision','serverGeneration'])&&
         result.mode==='continuation_reviewed'&&
@@ -62,29 +109,44 @@ export function connectResumePage({document,window,runtime}) {
         confirm.disabled=true;submit.disabled=true;
         record.textContent=`Native revision ${result.nativeRevision}; server generation ${result.serverGeneration}.`;
         notice.textContent='Server status was verified. This display remains paused. Continuation sign-in is not enabled yet; no permission was granted and no session was issued. Keep the saved profile and recovery evidence.';
-        return;
+        finished=true;cleanup();return;
       }
-      if (!exact(result,["mode","ticket","nativeRevision","serverGeneration"]) || result.mode !== "reviewed" ||
-          typeof result.ticket !== "string" || !/^[a-f0-9-]{36}$/.test(result.ticket) ||
-          ![result.nativeRevision,result.serverGeneration].every(n=>Number.isSafeInteger(n)&&n>0)) {
+      const continuation=result?.mode==='continuation_confirmation_reviewed';
+      if (!exact(result,["mode","ticket","nativeRevision","serverGeneration"]) ||
+          !(continuation?origin!==null:result.mode==='reviewed') || typeof result.ticket !== "string" ||
+          !(continuation?/^[a-f0-9]{64}$/:/^[a-f0-9-]{36}$/).test(result.ticket) ||
+          ![result.nativeRevision,result.serverGeneration].every(n=>
+            Number.isSafeInteger(n)&&n>0&&n<Number.MAX_SAFE_INTEGER)) {
         throw new Error("review");
       }
-      ticket = result.ticket;
+      kind=continuation?'continuation':'legacy';ticket=result.ticket;confirm.checked=false;
       record.textContent = `Native revision ${result.nativeRevision}; server generation ${result.serverGeneration}.`;
       confirm.disabled = false; submit.disabled = false;
-      notice.textContent = "Server permission verified. Confirm below within one minute to resume automatic sign-in on this display.";
-    }).catch(()=>{notice.textContent = "Review could not be confirmed. The server must already allow this device. Keep existing state for administrator review; no resume was attempted.";});
+      notice.textContent = continuation?
+        'Server permission verified. Confirm below within one minute of starting this review to install and verify one fresh display-only session. No sign-in has been attempted yet.':
+        "Server permission verified. Confirm below within one minute to resume automatic sign-in on this display.";
+    }).catch(()=>{if(!finished)uncertain("Review could not be confirmed. The server must already allow this device. Keep existing state for administrator review; no resume was attempted.");});
   });
   form.addEventListener("submit",event=>{
     event.preventDefault();
-    if (!event.isTrusted || !confirm.checked || !ticket || submitted) return;
-    submitted = true; confirm.disabled = true; submit.disabled = true;
+    if (!event.isTrusted || confirm.checked!==true || !ticket || submitted || !current() || finished) return;
+    submitted = true;const selected=ticket;ticket=null;confirm.disabled = true; submit.disabled = true;
     notice.textContent = "Saving consent and verifying a fresh display session…";
-    void runtime.sendMessage({action:"resume-confirm",ticket}).then(result=>{
-      notice.textContent = exact(result,["mode"]) && result.mode === "resumed"
-        ? "Automatic sign-in resumed. A fresh display-only session was verified. You may return to the startup page."
-        : "Resume could not be confirmed. Do not repeat the approval or delete saved state. Ask an administrator to review this display.";
-    }).catch(()=>{notice.textContent = "Resume acknowledgement was lost. Do not repeat the approval or reset saved state. Ask an administrator to review this display.";});
+    void (async()=>send({action:'resume-confirm',ticket:selected}))().then(result=>{
+      check();
+      const accepted=kind==='continuation'&&exact(result,['mode','sessionReady'])&&
+        result.mode==='accepted'&&result.sessionReady===true;
+      const resumed=kind==='legacy'&&exact(result,['mode'])&&result.mode==='resumed';
+      if(!accepted&&!resumed) {
+        uncertain('Resume could not be confirmed. Do not repeat the approval or delete saved state. Ask an administrator to review this display.');return;
+      }
+      cleanup();check();finished=true;
+      notice.textContent=accepted?'A fresh display-only session was verified. Opening the configured display…':
+        'Automatic sign-in resumed. A fresh display-only session was verified. You may return to the startup page.';
+      if(accepted)try {window.location.replace(origin+'/device-display');} catch {
+        notice.textContent='The display session was verified, but navigation failed. Keep this profile for administrator review; do not repeat the approval.';
+      }
+    }).catch(()=>{if(!finished)uncertain("Resume acknowledgement was lost. Do not repeat the approval or reset saved state. Ask an administrator to review this display.");});
   });
 }
 

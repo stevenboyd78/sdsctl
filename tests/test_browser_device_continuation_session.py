@@ -35,7 +35,7 @@ from tests.test_browser_device_continuation_current import native_step
 from tests.test_browser_device_continuation_ownership import handoff as handoff
 from tests.test_browser_device_continuation_verification import INTENT, phase, proof
 from tests.test_browser_device_continuation_verification import profile as profile
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import TOKEN
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import root as root
@@ -140,7 +140,7 @@ def test_one_initial_session_exact_owned_state_and_conservative_lifetime(
                 assert TOKEN.encode() not in path.read_bytes()
     with access() as other, pytest.raises(ERROR):
         run(other, result.state)  # Completed grant is not a reusable issuance ticket.
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["exception", "interrupt", "exit", "none", "dict", "subclass",
@@ -186,7 +186,7 @@ def test_uncertain_or_malformed_issuance_keeps_native_state_and_never_retries(
         assert lab.ledger.path.read_bytes() == after[0]
         no_replay(obj, state, lab)
         assert calls == [1]
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("lost", ["prepare", "claim", "proof", "complete", "return"])
@@ -236,7 +236,7 @@ def test_failed_or_lost_verification_acknowledgement_never_issues(
                 assert obj.confirm().phase == "failed"
         no_replay(obj, state, lab)
         assert len(proofs) == (0 if lost in {"prepare", "claim"} else 1)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 def mutate(change, lab, candidate, monkeypatch):
@@ -368,7 +368,7 @@ def test_actual_verified_tls_issues_exact_generation_once(lab, candidate, access
         assert json.loads(body) == dict(device_id="display", generation=7)
         assert headers["Authorization"] == "Bearer " + CREDENTIAL
         assert not {"Cookie", "Origin"} & headers.keys()
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("profile", ["dns"], indirect=True)
@@ -410,7 +410,7 @@ def test_actual_tls_issuance_refusal_not_retried(lab, candidate, access, server,
         assert obj.confirm().phase == "complete"
         no_replay(obj, state, lab)
     assert [call[0] for call in observed] == ["/auth/device/verify", "/auth/device/session"]
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["none", "copied", "failed", "inputs", "selection"])
@@ -596,4 +596,4 @@ def test_real_server_authority_rechecks_generation_and_preserves_other_display(
         asyncio.run(still_valid(issued[0].token))  # Lost reply is NOT remote revocation.
     for token in issued:
         assert token.token.encode() not in lab.ledger.path.read_bytes()
-    blocked(lab)
+    unmocked_launch_blocked(lab)

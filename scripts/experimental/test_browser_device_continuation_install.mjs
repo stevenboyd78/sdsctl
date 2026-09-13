@@ -5,7 +5,7 @@ import {createContinuationStopFence} from '../../src/sds200/browser_assets/brows
 import {pausedContinuationRecord,classifyContinuationStartup} from '../../src/sds200/browser_assets/browser_device_continuation_state.mjs';
 
 // Deterministic Chrome/native/probe contract doubles, NOT end-to-end native
-// consent or real-Chromium acceptance. The production dispatch remains read-only.
+// consent or real-Chromium acceptance. No ordinary worker selects this owner.
 const KEY='sdsctlDeviceRecovery', COOKIE='__Host-sdsctl-device-session';
 const STOP='sdsctlContinuationStop';
 const config={identity:'a'.repeat(64),epoch:'b'.repeat(64),build:'c'.repeat(64),
@@ -102,6 +102,34 @@ test('imports/construction are inert; one actual-I/O lane orders pending, issue,
   assert.equal(f.calls.length,count);await assert.rejects(f.make().run(),failure);
   assert.equal(f.issues,1);
 });
+
+test('trusted cookie comparison is retained in memory only after checked acknowledged install',async()=>{
+  const f=fixture();assert.equal(f.owner.cookieFingerprint(),null);assert.deepEqual(f.calls,[]);
+  await f.owner.run();const hash=f.owner.cookieFingerprint();assert.match(hash,/^[a-f0-9]{64}$/);
+  assert.equal(hash,f.saved[KEY].cookieFingerprint);const count=f.calls.length;
+  f.owner.invalidate();f.saved[KEY].cookieFingerprint='f'.repeat(64);f.cookie=null;
+  assert.equal(f.owner.cookieFingerprint(),hash);assert.equal(f.calls.length,count);
+});
+
+for(const stage of ['issue','cookie-set'])for(const when of ['before','after'])
+  test('lost '+stage+' acknowledgement '+when+' cannot create retained cookie comparison',async()=>{
+    const f=fixture();f[when]=name=>{if(name===stage)throw Error('private failure');};
+    await assert.rejects(f.owner.run(),failure);assert.equal(f.owner.cookieFingerprint(),null);
+    const count=f.calls.length;f[when]=null;
+    assert.equal(f.owner.cookieFingerprint(),null);assert.equal(f.calls.length,count);
+  });
+
+for(const stage of ['issue','cookie-set','probe-open','write-accepted'])
+  test('late '+stage+' completion cannot upgrade retained comparison after invalidation',async()=>{
+    const f=fixture(),entered=deferred(),held=deferred();
+    f.before=async name=>{if(name===stage){entered.resolve();await held.promise;}};
+    const run=f.owner.run();void run.catch(()=>{});await entered.promise;
+    const before=f.owner.cookieFingerprint();
+    if(['issue','cookie-set'].includes(stage))assert.equal(before,null);else assert.match(before,/^[a-f0-9]{64}$/);
+    f.owner.invalidate();await assert.rejects(run,failure);const count=f.calls.length;
+    held.resolve();await new Promise(resolve=>setImmediate(resolve));
+    assert.equal(f.owner.cookieFingerprint(),before);assert.equal(f.calls.length,count);
+  });
 
 for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443'])
   for(const legacy of [true,false])test('exact clean '+(legacy?'legacy':'v3')+' pause at '+origin,async()=>{
@@ -334,4 +362,79 @@ test('stop invalidation before save is inert; mutation of supplied settings cann
   await assert.rejects(fence.save(),stopFailure);assert.deepEqual(f.calls,[]);
   const next=stopFence(f);f.config.identity='f'.repeat(64);
   assert.deepEqual(await next.save(),stopped);assert.equal(f.saved[STOP].identity,config.identity);
+});
+
+const drain=(f,pendingWrites=0,unconfirmedWrite=false)=>({fenced:true,pendingWrites,unconfirmedWrite,
+  localWritesDrained:pendingWrites===0&&!unconfirmedWrite});
+test('drain observation is inert and never claims a still-open lane is fenced',()=>{
+  const f=fixture();assert.deepEqual(f.owner.writeDrain(),{fenced:false,pendingWrites:0,
+    unconfirmedWrite:false,localWritesDrained:false});
+  assert(Object.isFrozen(f.owner.writeDrain()));assert.deepEqual(f.calls,[]);
+  f.owner.invalidate();assert.deepEqual(f.owner.writeDrain(),drain(f));assert.deepEqual(f.calls,[]);
+});
+test('successful writes drain only after fencing, not a cookie-cleanup or revocation claim',async()=>{
+  const f=fixture();await f.owner.run();assert.equal(f.owner.writeDrain().localWritesDrained,false);
+  f.owner.invalidate();assert.deepEqual(f.owner.writeDrain(),drain(f));
+  assert.equal(f.cookie.value,token);assert.equal(f.saved[KEY].phase,'accepted');
+  assert(!JSON.stringify(f.owner.writeDrain()).includes(token));
+});
+for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443'])
+for(const name of ['access','write-initial_pending','cookie-set','write-accepted'])
+for(const when of ['before','after'])test('actual '+name+' '+when+' acknowledgement drains after STOP '+origin,async()=>{
+  const f=fixture({origin}),entered=deferred(),release=deferred();let held=false;
+  f[when]=async action=>{if(action===name&&!held){held=true;entered.resolve();await release.promise;}};
+  const running=f.owner.run();await entered.promise;
+  assert.equal(f.owner.writeDrain().pendingWrites,1);assert.equal(f.owner.writeDrain().fenced,false);
+  f.owner.invalidate();await assert.rejects(running,failure);
+  assert.deepEqual(f.owner.writeDrain(),drain(f,1));
+  assert.deepEqual(await stopFence(f).save(),stopped);const marker=clone(f.saved[STOP]);
+  assert.deepEqual(f.owner.writeDrain(),drain(f,1)); // STOP never waits behind the old write.
+  const count=f.calls.length;release.resolve();await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(f.owner.writeDrain(),drain(f));assert.equal(f.calls.length,count);
+  assert.deepEqual(f.saved[STOP],marker);await assert.rejects(f.owner.run(),failure);
+  assert.equal(f.calls.length,count);assert(!JSON.stringify(f.owner.writeDrain()).includes(token));
+  if(name==='cookie-set')assert.equal(f.cookie.value,token); // Drained does not mean deleted.
+  if(name==='write-accepted')assert.equal(f.saved[KEY].phase,'accepted'); // STOP wins on restart.
+  await assert.rejects(f.make().run(),failure);assert.deepEqual(f.saved[STOP],marker);
+});
+for(const name of ['access','write-initial_pending','cookie-set','write-accepted'])
+test('owner timeout is not underlying '+name+' completion',async()=>{
+  const f=fixture(),entered=deferred(),release=deferred();
+  f.before=async action=>{if(action===name){entered.resolve();await release.promise;}};
+  const running=f.owner.run();await entered.promise;for(const t of f.timers)t.fn();
+  await assert.rejects(running,failure);assert.deepEqual(f.owner.writeDrain(),drain(f,1));
+  for(let i=0;i<3;i++){await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(f.owner.writeDrain(),drain(f,1));}
+  release.resolve();await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(f.owner.writeDrain(),drain(f));
+});
+for(const name of ['access','write-initial_pending','cookie-set','write-accepted'])
+for(const when of ['before','after'])test('rejected '+name+' '+when+' stays unconfirmed',async()=>{
+  const f=fixture();f[when]=action=>{if(action===name)throw Error('PRIVATE '+token);};
+  await assert.rejects(f.owner.run(),failure);assert.deepEqual(f.owner.writeDrain(),drain(f,0,true));
+  f[when]=null;f.owner.invalidate();await new Promise(resolve=>setImmediate(resolve));
+  assert.deepEqual(f.owner.writeDrain(),drain(f,0,true));await assert.rejects(f.owner.run(),failure);
+  assert(!JSON.stringify(f.owner.writeDrain()).includes(token));
+});
+for(const name of ['access','write-initial_pending','cookie-set','write-accepted'])
+test('late failed '+name+' cannot become a successful drain',async()=>{
+  const f=fixture(),entered=deferred(),release=deferred();
+  f.after=async action=>{if(action===name){entered.resolve();await release.promise;throw Error('PRIVATE');}};
+  const running=f.owner.run();await entered.promise;f.owner.invalidate();await assert.rejects(running,failure);
+  assert.deepEqual(f.owner.writeDrain(),drain(f,1));release.resolve();
+  await new Promise(resolve=>setImmediate(resolve));assert.deepEqual(f.owner.writeDrain(),drain(f,0,true));
+});
+test('unknown native issuance is not a pending Chrome write or revocation result',async()=>{
+  const f=fixture(),entered=deferred(),release=deferred();
+  f.before=async name=>{if(name==='issue'){entered.resolve();await release.promise;}};
+  const running=f.owner.run();await entered.promise;f.owner.invalidate();await assert.rejects(running,failure);
+  assert.deepEqual(f.owner.writeDrain(),drain(f));release.resolve();await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(f.native.mode,'active');assert.equal(f.cookie,null);assert(!f.calls.includes('cookie-set'));
+  assert.deepEqual(f.owner.writeDrain(),drain(f)); // Only the owned Chrome-write lane, not native/server.
+});
+for(const value of [undefined,null,3,{}, {then:4}])for(const method of ['access','storage','cookie'])
+test('non-promise '+method+' acknowledgement stays uncertain '+String(value),async()=>{
+  const f=fixture();
+  if(method==='access')f.chrome.storage.local.setAccessLevel=()=>value;
+  if(method==='storage')f.chrome.storage.local.set=()=>value;
+  if(method==='cookie')f.chrome.cookies.set=()=>value;
+  await assert.rejects(f.owner.run(),failure);assert.deepEqual(f.owner.writeDrain(),drain(f,0,true));
 });

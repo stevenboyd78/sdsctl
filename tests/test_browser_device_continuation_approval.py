@@ -28,7 +28,7 @@ from tests.test_browser_device_continuation_current import candidate as candidat
 from tests.test_browser_device_continuation_current import native_step
 from tests.test_browser_device_continuation_native import transaction
 from tests.test_browser_device_continuation_ownership import handoff as handoff
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_profile import CREDENTIAL, private
 from tests.test_browser_device_registration import source as source
@@ -125,7 +125,7 @@ def test_owned_prepare_then_claim_pins_actual_inputs_without_grant_or_network(
         assert db.execute("SELECT active_grant FROM browser_epoch_state").fetchone() == (None,)
     assert NONCE.encode() not in lab.ledger.path.read_bytes()
     assert CREDENTIAL.encode() not in lab.ledger.path.read_bytes()
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 def test_fresh_callback_has_no_sql_transaction_and_is_not_a_serialized_receipt(
@@ -439,7 +439,7 @@ def test_all_stopped_modes_stay_stopped_after_claim(lab, candidate, access, mode
     with access() as obj:
         assert prepare(obj, state).state.mode is mode
         assert obj.claim().state.mode is mode
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("phase", ["prepared", "claimed", "active"])

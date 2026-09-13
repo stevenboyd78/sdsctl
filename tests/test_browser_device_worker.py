@@ -30,6 +30,7 @@ from tests.test_browser_device_registration import source as source
 from tests.test_browser_device_startup import inputs as inputs
 
 FAILURE = {"version": 1, "ok": False, "mode": "setup_error"}
+PRIVATE_LIFECYCLE = "extension/browser_device_continuation_lifecycle.mjs"
 
 
 def envelope(action="worker-context", **extra):
@@ -54,15 +55,19 @@ def test_acceptance_core_is_build_bound_but_not_imported_by_active_worker(monkey
     digest, graph = worker.worker_graph()
     assert "extension/" + name in graph
     adapters = {"extension/browser_device_continuation_install.mjs",
-                "extension/browser_device_continuation_stop.mjs"}
+                "extension/browser_device_continuation_stop.mjs",
+                "extension/browser_device_continuation_inspect.mjs",
+                "extension/browser_device_continuation_accepted.mjs"}
     for path, body in graph.items():
-        # The unselected operation owner may compose the two I/O adapters; only
-        # those adapters import the pure core. The separate consent-isolation
-        # test prevents any active role from reaching this entire composition.
+        # The unselected I/O adapters may import the pure core. Independent
+        # consent and accepted-owner isolation tests prevent an active role
+        # from reaching either composition.
         permitted = (path in adapters and name == "browser_device_continuation_state.mjs"
                      or path == "extension/browser_device_continuation_consent.mjs"
                      and name in {"browser_device_continuation_install.mjs",
-                                  "browser_device_continuation_stop.mjs"})
+                                  "browser_device_continuation_stop.mjs"}
+                     or path == PRIVATE_LIFECYCLE
+                     and name == "browser_device_continuation_stop.mjs")
         if path != "extension/" + name and not permitted:
             assert name.encode() not in body
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != name))
@@ -84,7 +89,7 @@ def test_probe_event_channel_is_build_bound_but_not_selected_by_active_roles(mon
     gate = "browser_device_worker_gate.mjs"
     assert b"prepareContinuationProbe" in graph["extension/" + gate]
     for path, body in graph.items():
-        if path != "extension/" + gate:
+        if path not in {"extension/" + gate, PRIVATE_LIFECYCLE}:
             assert b"prepareContinuationProbe" not in body, path
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != gate))
     assert worker.worker_graph()[0] != digest
@@ -96,12 +101,14 @@ def test_consent_component_is_build_bound_but_not_selected_by_active_roles(monke
     gate = "browser_device_worker_gate.mjs"
     assert "extension/" + consent in graph
     assert b"export function connectContinuationOperationWorker" in graph["extension/" + consent]
+    assert b"export function connectContinuationOperationLanes" in graph["extension/" + consent]
     assert b"prepareContinuationConsent" in graph["extension/" + gate]
     for path, body in graph.items():
-        if path != "extension/" + consent:
+        if path not in {"extension/" + consent, PRIVATE_LIFECYCLE}:
             assert consent.encode() not in body, path
             assert b"connectContinuationOperationWorker" not in body, path
-        if path != "extension/" + gate:
+            assert b"connectContinuationOperationLanes" not in body, path
+        if path not in {"extension/" + gate, PRIVATE_LIFECYCLE}:
             assert b"prepareContinuationConsent" not in body, path
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != consent))
     assert worker.worker_graph()[0] != digest
@@ -111,19 +118,108 @@ def test_native_response_adapter_is_build_bound_but_not_selected_by_active_roles
     digest, graph = worker.worker_graph()
     adapter = "browser_device_continuation_native.mjs"
     assert b"export function createContinuationNativePorts" in graph["extension/" + adapter]
+    assert b"export function createContinuationNativePause" in graph["extension/" + adapter]
     for path, body in graph.items():
-        if path != "extension/" + adapter:
-            assert adapter.encode() not in body, path
+        if path not in {"extension/" + adapter, PRIVATE_LIFECYCLE}:
             assert b"createContinuationNativePorts" not in body, path
+            # Only the separately exported, unselected Stop composition imports
+            # pause. No ordinary worker/page may construct either owner.
+            if path != "extension/browser_device_continuation_stop.mjs":
+                assert adapter.encode() not in body, path
+                assert b"createContinuationNativePause" not in body, path
     monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != adapter))
     assert worker.worker_graph()[0] != digest
 
 
-def test_active_verification_wire_has_no_browser_requester():
+def test_stop_composition_is_build_bound_but_not_selected_by_active_roles(monkeypatch):
+    digest, graph = worker.worker_graph()
+    adapter = "browser_device_continuation_stop.mjs"
+    assert b"export function createContinuationStopOwner" in graph["extension/" + adapter]
+    for path, body in graph.items():
+        if path not in {"extension/" + adapter, PRIVATE_LIFECYCLE}:
+            assert b"createContinuationStopOwner" not in body, path
+    monkeypatch.setattr(worker, "MODULES", tuple(n for n in worker.MODULES if n != adapter))
+    assert worker.worker_graph()[0] != digest
+
+
+def test_continuation_logout_owners_are_included_but_never_selected_by_worker():
+    _, graph = worker.worker_graph()
+    adapter = "extension/browser_device_logout.mjs"
+    body = graph[adapter]
+    assert b"export function connectContinuationLogoutContent" in body
+    assert b"export function createContinuationLogout" in body
+    assert body.count(b"connectContinuationLogoutContent") == 1
+    assert body.count(b"createContinuationLogout") == 1
+    assert b"import " not in body  # Also bundled into an isolated classic script.
+    assert all(b"connectContinuationLogoutContent" not in value
+               for name, value in graph.items() if name != adapter)
+    assert all(b"createContinuationLogout" not in value
+               for name, value in graph.items() if name not in {adapter, PRIVATE_LIFECYCLE})
+    gate = "extension/browser_device_worker_gate.mjs"
+    assert b"prepareContinuationLogout" in graph[gate]
+    assert all(b"prepareContinuationLogout" not in value
+               for name, value in graph.items() if name not in {gate, PRIVATE_LIFECYCLE})
+
+
+def test_active_verification_wire_has_no_selected_browser_requester():
     # This native-only prerequisite must not enable accepted startup, a normal
     # worker status tick, or any document message as a side effect.
     _, graph = worker.worker_graph()
-    assert all(b"continuation-verify-active" not in body for body in graph.values())
+    assert all(b"continuation-verify-active" not in body for name, body in graph.items()
+               if not name.endswith("/browser_device_continuation_accepted.mjs"))
+    assert all(b"browser_device_continuation_accepted.mjs" not in body
+               for name, body in graph.items()
+               if name not in {"extension/browser_device_continuation_accepted.mjs",
+                               PRIVATE_LIFECYCLE})
+
+
+def test_accepted_startup_owner_is_build_bound_but_unselected(monkeypatch):
+    digest, graph = worker.worker_graph()
+    name = "extension/browser_device_continuation_accepted.mjs"
+    assert name in graph
+    assert b"continuation-verify-active" in graph[name]
+    monkeypatch.setattr(worker, "MODULES", tuple(
+        name for name in worker.MODULES if name != "browser_device_continuation_accepted.mjs"))
+    assert worker.worker_graph()[0] != digest
+
+
+def test_lifecycle_is_build_bound_and_reachable_only_through_native_selected_worker(monkeypatch):
+    digest, graph = worker.worker_graph()
+    assert b"export function createContinuationLifecycle" in graph[PRIVATE_LIFECYCLE]
+    assert b"connectContinuationOperationLanes" in graph[PRIVATE_LIFECYCLE]
+    assert b"connectContinuationOperationWorker" not in graph[PRIVATE_LIFECYCLE]
+    assert all(b"createContinuationLifecycle" not in body and
+               b"browser_device_continuation_lifecycle.mjs" not in body
+               for name, body in graph.items()
+               if name not in {PRIVATE_LIFECYCLE, "extension/browser_device_worker.mjs"})
+    entry = graph["extension/browser_device_worker.mjs"]
+    guarded = (b"if(disposition.mode!=='administrator_required')"
+               b"lifecycle=createContinuationLifecycle")
+    assert guarded in entry
+    assert b"connectOrdinaryContinuation(gate,scoped,raw,build,clocks)" in entry
+    monkeypatch.setattr(worker, "MODULES", tuple(
+        name for name in worker.MODULES if name != "browser_device_continuation_lifecycle.mjs"))
+    assert worker.worker_graph()[0] != digest
+
+
+def test_startup_inspection_is_build_bound_read_only_and_selected_only_by_worker(monkeypatch):
+    digest, graph = worker.worker_graph()
+    name = "extension/browser_device_continuation_inspect.mjs"
+    body = graph[name]
+    assert b"export function createContinuationStartupInspection" in body
+    assert b"chrome.storage.local.get(null)" in body
+    assert b"classifyContinuationStorage" in body
+    assert b"action:'continuation-current'" in body
+    for forbidden in (b"setAccessLevel", b"storage.local.set", b"cookies.set",
+                      b"cookies.remove", b"fetch(", b"createContinuationLifecycle",
+                      b"continuation-verify-active", b"addListener"):
+        assert forbidden not in body
+    assert all(b"browser_device_continuation_inspect.mjs" not in content
+               for path, content in graph.items()
+               if path not in {name, "extension/browser_device_worker.mjs"})
+    monkeypatch.setattr(worker, "MODULES", tuple(
+        asset for asset in worker.MODULES if asset != "browser_device_continuation_inspect.mjs"))
+    assert worker.worker_graph()[0] != digest
 
 
 @pytest.mark.parametrize("action", ["worker-context", "worker-request"])

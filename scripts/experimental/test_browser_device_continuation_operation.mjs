@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {connectContinuationOperationWorker} from '../../src/sds200/browser_assets/browser_device_continuation_consent.mjs';
+import {connectContinuationOperationWorker,connectContinuationOperationLanes} from '../../src/sds200/browser_assets/browser_device_continuation_consent.mjs';
+import {createContinuationStopFence,createContinuationStopOwner} from '../../src/sds200/browser_assets/browser_device_continuation_stop.mjs';
+import {submitDeviceLogout} from '../../src/sds200/browser_assets/browser_device_logout.mjs';
 import {createWorkerEventGate} from '../../src/sds200/browser_assets/browser_device_worker_gate.mjs';
 import {classifyContinuationStartup} from '../../src/sds200/browser_assets/browser_device_continuation_state.mjs';
 import {createContinuationNativePorts} from '../../src/sds200/browser_assets/browser_device_continuation_native.mjs';
@@ -58,6 +60,13 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
           epoch,intent:f.saved[KEY].intent,binding:f.review.binding});
         f.native=clone(f.active);return {version:1,ok:true,build,...f.active,session:{token,expires_in:300}};
       });
+      if(request.action==='continuation-pause')return f.call('native-pause',()=>{
+        assert.deepEqual(request,{version:1,action:'continuation-pause',epoch,
+          binding:{fingerprint:f.native.binding.fingerprint,revision:f.native.binding.revision}});
+        f.native={identity,epoch,mode:'paused',binding:{fingerprint:'3'.repeat(64),
+          revision:f.native.binding.revision+1,generation:null}};
+        return {version:1,ok:true,build,...f.native,nativePauseConfirmed:true,serverRevocationConfirmed:false};
+      });
       assert.deepEqual(Object.keys(request).sort(),['action','version']);
       if(request.action==='continuation-current')return f.call('current',()=>({...f.initial,
         continuation:{epoch:f.native.epoch,mode:f.native.mode,binding:clone(f.native.binding)}}));
@@ -89,7 +98,7 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
         verify:()=>f.call('probe-verify',()=>({url:origin+'/device-display',...selection,
           displayOnly:true,deviceEnrolled:true,remainingSeconds:300})),close:()=>{f.closed++;}};
     },wall:()=>f.clock[0],monotonic:()=>f.clock[1],
-    schedule:(fn,ms)=>{assert([10000,12000,45000,60000].includes(ms));
+    schedule:(fn,ms)=>{assert([100,10000,12000,30000,45000,60000].includes(ms));
       const timer={fn,ms};f.timers.add(timer);return timer;},cancel:timer=>f.timers.delete(timer)};
   f.start=()=>{
     f.gate=createWorkerEventGate(f.chrome,()=>f.clock[1],f.options.schedule,f.options.cancel);
@@ -98,9 +107,12 @@ function fixture(origin='https://192.0.2.18:8443',legacy=false) {
       f.chrome.runtime.sendNativeMessage(host,{version:1,action:'worker-request',build,request})});
     f.scoped=Object.create(gated);Object.defineProperty(f.scoped,'runtime',{value:runtime});
     f.nativePorts=createContinuationNativePorts(f.scoped,f.initial,build,f.options);
-    f.owner=connectContinuationOperationWorker(f.scoped,f.initial,build,{...f.options,
+    const connect=f.memoryOnly?connectContinuationOperationLanes:connectContinuationOperationWorker;
+    f.stopRequests=0;
+    f.owner=connect(f.scoped,f.initial,build,{...f.options,
       readCurrent:f.nativePorts.readCurrent,issueInitial:f.nativePorts.issueInitial,
-      invalidateNative:f.nativePorts.invalidate});f.gate.open();
+      invalidateNative:()=>{f.nativePorts.invalidate();return f.onInvalidate?.();},
+      onStopRequested:()=>{f.stopRequests++;return f.onStop?.();}});f.gate.open();
     assert.deepEqual(Object.keys(f.events),['message','startup','installed','alarm','tab']);
   };
   f.ask=(message={action:'resume-review'},document=sender())=>new Promise(resolve=>{
@@ -250,3 +262,135 @@ test('test matrix covers document checks after installer acceptance, not only it
   assert(confirmStart>0);assert(baseline.calls.length>confirmStart);
   assert.deepEqual(baseline.calls.slice(-3),['contexts','tab','contexts']);
 });
+
+test('memory-only lanes never create a STOP writer or adopt a cookie before installation',async()=>{
+  const f=fixture();f.memoryOnly=true;f.start();assert.equal(f.owner.cookieFingerprint(),null);
+  assert.deepEqual(f.owner.writeDrain(),{fenced:false,pendingWrites:0,unconfirmedWrite:false,localWritesDrained:false});
+  assert.deepEqual(f.calls,[]);assert.equal(f.owner.invalidate(),undefined);assert.equal(f.owner.invalidate(),undefined);
+  assert.deepEqual(f.owner.writeDrain(),{fenced:true,pendingWrites:0,unconfirmedWrite:false,localWritesDrained:true});
+  assert.deepEqual(f.calls,[]);assert.equal(f.stopRequests,0);assert(!Object.hasOwn(f.saved,STOP));
+  assert.deepEqual(await f.ask(),refused);
+});
+
+test('memory-only lanes expose the exact installer drain and retained comparison without I/O',async()=>{
+  const f=fixture();f.memoryOnly=true;f.start();const r=await f.ask();
+  assert.deepEqual(await f.confirm(r.ticket),accepted);const hash=f.owner.cookieFingerprint();
+  assert.equal(hash,f.saved[KEY].cookieFingerprint);assert.match(hash,/^[a-f0-9]{64}$/);
+  const count=f.calls.length;f.owner.invalidate();f.owner.invalidate();assert.equal(f.owner.cookieFingerprint(),hash);
+  assert.deepEqual(f.owner.writeDrain(),{fenced:true,pendingWrites:0,unconfirmedWrite:false,localWritesDrained:true});
+  assert.equal(f.calls.length,count);assert.equal(f.stopRequests,0);assert(!Object.hasOwn(f.saved,STOP));
+});
+
+for(const trigger of ['cancel','navigation','logout','failure'])
+  test('single trusted terminal owner receives '+trigger+' once despite reentrant events',async()=>{
+    const f=fixture();f.memoryOnly=true;f.start();const reviewed=await f.ask();
+    let terminal;
+    f.onStop=()=>{
+      assert.equal(terminal,undefined);
+      terminal=createContinuationStopOwner(f.scoped,f.initial,build,{...f.options,
+        invalidateLanes:f.owner.invalidate,readWriteDrain:f.owner.writeDrain,
+        cookieFingerprint:f.owner.cookieFingerprint(),submitLogout:()=>assert.fail('No retained session')});
+      f.stopResult=terminal.run();return f.stopResult;
+    };
+    f.onInvalidate=()=>{
+      // Document invalidation recursively generates all of the same stop signals.
+      f.events.tab(7,{status:'loading'},f.tab);void f.ask({action:'continuation-cancel'});void f.logout();
+    };
+    if(trigger==='cancel')await f.ask({action:'continuation-cancel'});
+    else if(trigger==='navigation')f.events.tab(7,{status:'loading'},f.tab);
+    else if(trigger==='logout')await f.logout();
+    else {f.before=name=>{if(name==='contexts')throw Error('lost context');};
+      assert.deepEqual(await f.confirm(reviewed.ticket),refused);
+    }
+    const result=await f.stopResult;assert.equal(f.stopRequests,1);f.stopRecord();
+    assert.equal(f.writes.filter(v=>Object.hasOwn(v,STOP)).length,1);
+    assert.equal(result.browserStopSaved,true);assert.equal(result.nativePauseConfirmed,true);
+    assert.equal(result.serverRevocation,'unconfirmed');assert.equal(result.cookieCleared,false);
+    assert.equal(result.mode,'continuation_stop_unconfirmed');
+    assert.equal(f.issues,0);assert.equal(f.timers.size,0);
+    await assert.rejects(terminal.run());assert.equal(f.stopRequests,1);
+  });
+
+for(const value of [()=>Promise.resolve(),()=>Promise.reject(Error('private')),()=>true,()=>{throw Error('private');}])
+  test('broken synchronous invalidation remains unconfirmed without suppressing sole STOP',async()=>{
+    const f=fixture();f.memoryOnly=true;f.start();await f.ask();f.onInvalidate=value;
+    const terminal=createContinuationStopOwner(f.scoped,f.initial,build,{...f.options,
+      invalidateLanes:f.owner.invalidate,readWriteDrain:f.owner.writeDrain,cookieFingerprint:null,
+      submitLogout:()=>assert.fail('Unfenced lanes cannot select logout')});
+    const result=await terminal.run();assert.equal(result.browserStopSaved,true);
+    assert.equal(result.localWritesDrained,false);assert.equal(result.mode,'continuation_stop_unconfirmed');
+    assert.throws(f.owner.invalidate);assert.throws(f.owner.writeDrain);
+    assert.equal(f.stopRequests,0);assert.equal(f.writes.filter(v=>Object.hasOwn(v,STOP)).length,1);
+  });
+
+for(const stage of ['write-initial_pending','cookie-set','write-accepted'])
+  test('one terminal writer sees actual pending '+stage+' after memory-only invalidation',async()=>{
+    const f=fixture(),entered=deferred(),held=deferred();f.memoryOnly=true;f.start();const r=await f.ask();
+    f.before=async name=>{if(name===stage){entered.resolve();await held.promise;}};
+    const run=f.confirm(r.ticket);await entered.promise;
+    assert.equal(f.owner.writeDrain().pendingWrites,1);f.owner.invalidate();assert.deepEqual(await run,refused);
+    assert.equal(f.owner.writeDrain().pendingWrites,1);assert.equal(f.owner.writeDrain().localWritesDrained,false);
+    const fence=createContinuationStopFence(f.scoped,f.settings,f.options);await fence.save();
+    assert.equal(f.owner.writeDrain().pendingWrites,1);assert.equal(f.stopRequests,0);
+    assert.equal(f.writes.filter(v=>Object.hasOwn(v,STOP)).length,1);held.resolve();await settle();
+    assert.equal(f.owner.writeDrain().pendingWrites,0);assert.equal(f.owner.writeDrain().localWritesDrained,true);
+    assert.equal(f.writes.filter(v=>Object.hasOwn(v,STOP)).length,1);f.stopRecord();
+  });
+
+for(const when of ['before','after'])test('whole operation includes pending reader access write '+when+' acknowledgement',async()=>{
+  const f=fixture(),entered=deferred(),held=deferred();f.memoryOnly=true;
+  f[when]=async name=>{if(name==='access'){entered.resolve();await held.promise;}};
+  f.start();await entered.promise;f.owner.invalidate();
+  assert.deepEqual(f.owner.writeDrain(),{fenced:true,pendingWrites:1,unconfirmedWrite:false,localWritesDrained:false});
+  assert.equal(f.owner.cookieFingerprint(),null);held.resolve();await settle();
+  assert.deepEqual(f.owner.writeDrain(),{fenced:true,pendingWrites:0,unconfirmedWrite:false,localWritesDrained:true});
+  assert.equal(f.calls.filter(n=>n==='access').length,1);assert.equal(f.issues,0);
+});
+
+test('queued reader access never starts after synchronous lane invalidation',async()=>{
+  const f=fixture();f.memoryOnly=true;f.start();f.owner.invalidate();await settle();
+  assert.deepEqual(f.calls,[]);assert.equal(f.owner.writeDrain().localWritesDrained,true);
+});
+
+for(const when of ['before','after'])test('whole operation includes unknown reader access write '+when,async()=>{
+  const f=fixture();f.memoryOnly=true;f[when]=name=>{if(name==='access')throw Error('unknown write');};
+  f.start();await settle();f.owner.invalidate();
+  assert.deepEqual(f.owner.writeDrain(),{fenced:true,pendingWrites:0,unconfirmedWrite:true,localWritesDrained:false});
+  assert.equal(f.owner.cookieFingerprint(),null);assert.equal(f.issues,0);
+});
+
+for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443'])
+  for(const outcome of ['drained','pending'])test('owned native receipt and installer ports select complete terminal flow '+origin+' '+outcome,async()=>{
+    const f=fixture(origin);f.memoryOnly=true;f.start();const r=await f.ask();
+    assert.deepEqual(await f.confirm(r.ticket),accepted);
+    const original=f.initial.continuation.binding,known=f.nativePorts.pauseContext();
+    assert.notEqual(known.continuation.binding.fingerprint,original.fingerprint);
+    assert.equal(known.continuation.binding.revision,original.revision+2);
+    let terminal,posts=0,removed=0;
+    f.chrome.cookies.remove=async key=>{
+      assert.deepEqual(key,{url:origin+'/',name:'__Host-sdsctl-device-session',storeId:'0'});
+      assert.equal(posts,1);removed++;f.cookie=null;return key;
+    };
+    f.onStop=()=>{
+      assert.equal(terminal,undefined);
+      terminal=createContinuationStopOwner(f.scoped,f.nativePorts.pauseContext(),build,{...f.options,
+        invalidateLanes:f.owner.invalidate,readWriteDrain:f.owner.writeDrain,
+        cookieFingerprint:f.owner.cookieFingerprint(),submitLogout:({signal})=>
+          submitDeviceLogout(async(url,options)=>{
+            assert.equal(url,origin+'/auth/logout');assert.equal(options.credentials,'same-origin');
+            posts++;const response=new Response(JSON.stringify({version:1,device_logout:true,paused:true,
+              drained:outcome==='drained'}),{status:outcome==='drained'?200:202,
+              headers:{'content-type':'application/json'}});
+            Object.defineProperty(response,'url',{value:url});return response;
+          },origin,{signal})});
+      f.stopResult=terminal.run();return f.stopResult;
+    };
+    await f.logout();const result=await f.stopResult;
+    assert.equal(result.mode,'continuation_stop_'+(outcome==='drained'?'complete':'pending'));
+    assert.equal(result.nativePauseConfirmed,true);assert.equal(result.browserStopSaved,true);
+    assert.equal(result.localWritesDrained,true);assert.equal(result.cookieCleared,true);
+    assert.equal(result.serverRevocation,outcome);assert.equal(f.native.mode,'paused');
+    assert.equal(f.cookie,null);assert.equal(posts,1);assert.equal(removed,1);assert.equal(f.stopRequests,1);
+    assert.equal(f.writes.filter(v=>Object.hasOwn(v,STOP)).length,1);assert.equal(f.issues,1);
+    assert.equal(f.timers.size,0);assert.equal(f.nativePorts.pauseContext(),known);
+  });

@@ -19,6 +19,7 @@ from sds200 import browser_device_verification as transport
 from sds200 import browser_device_worker as worker
 from sds200.browser_device_protocol import (
     BrowserContinuationInitialRequest,
+    BrowserContinuationPauseRequest,
     BrowserContinuationReadRequest,
     BrowserDeviceProtocolError,
     parse_browser_device_request,
@@ -33,7 +34,7 @@ from tests.test_browser_device_continuation_current import active_native
 from tests.test_browser_device_continuation_current import candidate as candidate
 from tests.test_browser_device_continuation_ownership import handoff as handoff
 from tests.test_browser_device_continuation_verification import profile as profile
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import TOKEN, frame
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import root as root
@@ -106,7 +107,7 @@ def test_only_fixed_read_only_route_is_selected(
         assert result["role"] == "continuation" and calls == []
         assert result["continuation"]["mode"] == ("active" if active else "paused")
         assert result["acknowledge"] is False and result["launch"] is None
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("action", ["authenticate", "status", "suspend", "claim-browser",
@@ -366,7 +367,7 @@ def test_initial_framed_request_issues_once_without_persisting_a_token(
             if path.is_file() and not path.is_symlink():
                 assert TOKEN.encode() not in path.read_bytes()
     assert CREDENTIAL not in json.dumps(response)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("active", [False, True])
@@ -399,7 +400,7 @@ def test_framed_active_verification_is_fresh_and_read_only(
     else:
         assert result == FAILURE and calls == []
     assert TOKEN not in json.dumps(result) and CREDENTIAL not in json.dumps(result)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["generation", "paused", "revoked", "undrained",
@@ -439,7 +440,7 @@ def test_framed_active_verification_refuses_changed_authority_without_repair(
         monkeypatch.setattr(recheck._BrowserWorkerActiveVerification, "run", changed)
     assert dispatch("continuation-verify-active") == FAILURE
     assert len(calls) == 1 and snap(lab) == retained[0]
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("profile,server", [("dns", 0), ("ip", 0), ("ipv6", "ipv6")],
@@ -463,7 +464,7 @@ def test_framed_active_verification_with_actual_verified_tls(
     assert headers["Authorization"] == "Bearer " + CREDENTIAL
     assert not {"Cookie", "Origin"} & headers.keys()
     assert "session" not in result
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("stage", ["verification", "output"])
@@ -548,7 +549,7 @@ def test_initial_framed_failure_does_not_retry(lab, candidate, dispatch, monkeyp
     assert dispatch("continuation-initial-session", extra=payload) == FAILURE
     assert snap(lab) == before
     assert calls == (["verify", "exchange"] if failure == "lost-exchange" else ["verify"])
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("lost", ["before-write", "partial-write", "after-write", "flush"])
@@ -586,7 +587,7 @@ def test_lost_initial_native_output_never_reissues(
     context = dispatch("continuation-current")
     assert context["continuation"]["mode"] == "active"
     assert TOKEN not in json.dumps(context)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("stage", ["verify", "exchange", "output"])
@@ -640,7 +641,7 @@ def test_real_supervisor_bounds_initial_issuance_and_output(
         before = snap(lab)
         assert dispatch("continuation-initial-session", extra=payload) == FAILURE
         assert snap(lab) == before
-        blocked(lab)
+        unmocked_launch_blocked(lab)
     finally:
         os.close(read_fd)
         os.close(write_fd)
@@ -677,4 +678,347 @@ def test_initial_framed_dispatch_with_actual_verified_tls(
     before = snap(lab)
     assert dispatch("continuation-initial-session", extra=payload) == FAILURE
     assert len(observed) == 2 and snap(lab) == before
-    blocked(lab)
+    unmocked_launch_blocked(lab)
+
+
+def pause_payload(candidate):
+    state = current.inspect_stopped_continuation(candidate.root, **candidate.args)
+    return dict(epoch=state.epoch, binding=dict(fingerprint=state.state_fingerprint,
+                                               revision=state.native_revision))
+
+
+def fictional_pause_payload():
+    return dict(epoch="a" * 64, binding=dict(fingerprint="b" * 64, revision=3))
+
+
+def test_pause_parser_exact_envelope_has_no_server_or_browser_authority():
+    from sds200.browser_device_protocol import BrowserWorkerRequest
+
+    payload = dict(version=1, action="continuation-pause", **fictional_pause_payload())
+    inner = parse_browser_device_request(json.dumps(payload).encode())
+    assert type(inner) is BrowserContinuationPauseRequest
+    assert inner == BrowserContinuationPauseRequest("a" * 64, "b" * 64, 3)
+    wrapped = parse_browser_device_request(json.dumps(dict(version=1, action="worker-request",
+        build="f" * 64, request=payload)).encode())
+    assert type(wrapped) is BrowserWorkerRequest and wrapped.request == inner
+    assert "a" * 64 not in repr(inner) and "b" * 64 not in repr(inner)
+
+
+@pytest.mark.parametrize("field", ["epoch", "fingerprint", "revision"])
+@pytest.mark.parametrize("value", [None, True, "", [], {}, -1, 0, 1.0, 2**53, "A" * 64])
+def test_pause_parser_rejects_malformed_comparisons(field, value):
+    payload = fictional_pause_payload()
+    (payload if field == "epoch" else payload["binding"])[field] = value
+    with pytest.raises(BrowserDeviceProtocolError):
+        parse_browser_device_request(json.dumps(dict(version=1,
+            action="continuation-pause", **payload)).encode())
+
+
+@pytest.mark.parametrize("extra", ["role", "origin", "directory", "identity", "device_id",
+    "proof", "intent", "consent", "ticket", "token", "generation", "clock", "stopped"])
+@pytest.mark.parametrize("nested", [False, True])
+def test_pause_parser_rejects_authority_and_selection(extra, nested):
+    payload = fictional_pause_payload()
+    (payload["binding"] if nested else payload)[extra] = "PRIVATE"
+    with pytest.raises(BrowserDeviceProtocolError):
+        parse_browser_device_request(json.dumps(dict(version=1,
+            action="continuation-pause", **payload)).encode())
+
+
+@pytest.mark.parametrize("revision", [2**53 - 3, 2**53 - 2, 2**53 - 1])
+def test_pause_parser_reserves_clock_correction_and_pause_headroom(revision):
+    with pytest.raises(BrowserDeviceProtocolError):
+        BrowserContinuationPauseRequest("a" * 64, "b" * 64, revision)
+
+
+@pytest.mark.parametrize("field", ["epoch", "fingerprint", "revision"])
+def test_pause_parser_rejects_duplicate_comparisons(field):
+    payload = dict(version=1, action="continuation-pause", **fictional_pause_payload())
+    value = payload["epoch"] if field == "epoch" else payload["binding"][field]
+    token = json.dumps(field) + ": " + json.dumps(value)
+    with pytest.raises(BrowserDeviceProtocolError):
+        encoded = json.dumps(payload).replace(token, token + ", " + token).encode()
+        parse_browser_device_request(encoded)
+
+
+@pytest.mark.parametrize("failure", ["unwrapped", "no-worker", "wrong-identity", "retirement",
+    "selection", "missing-anchor", "unsafe-anchor", "wrong-build"])
+def test_pause_route_requires_exact_installed_selection(
+        lab, candidate, dispatch, monkeypatch, failure):
+    payload = pause_payload(candidate)
+    monkeypatch.setattr(transport, "verify_browser_device", lambda *a: pytest.fail("Network"))
+    changes = {}
+    if failure == "no-worker":
+        changes["worker"] = None
+    elif failure == "wrong-identity":
+        changes["expected_identity"] = "f" * 64
+    elif failure == "retirement":
+        changes["retirement"] = native.BrowserRetirementSelection(lab.args["archives"], "e" * 64)
+    elif failure == "selection":
+        changes["worker"] = worker.BrowserWorkerSelection(
+            lab.args["bundle"], lab.args["public_key"], directory=candidate.root)
+    elif failure == "missing-anchor":
+        path = candidate.paths["manifest"]
+        path.rename(path.with_name(path.name + ".retained"))
+    elif failure == "unsafe-anchor":
+        candidate.paths["manifest"].chmod(0o644)
+    elif failure == "wrong-build":
+        actual = native.worker_graph
+        monkeypatch.setattr(native, "worker_graph", lambda: ("f" * 64, actual()[1]))
+    before = snap(lab)
+    assert dispatch("continuation-pause", extra=payload,
+        unwrap=failure == "unwrapped", changes=changes) == FAILURE
+    assert snap(lab) == before
+
+
+@pytest.mark.parametrize("mode", ["paused", "prepared", "claimed", "active"])
+@pytest.mark.parametrize("backstep", [False, True])
+def test_pause_framed_commit_is_native_only_and_exact_replay_is_refused(
+        lab, candidate, dispatch, monkeypatch, mode, backstep):
+    from sds200 import browser_device_continuation_cancel as cancel
+    from tests.test_browser_device_continuation_cancel import seed, unrelated
+
+    expected = seed(lab, candidate, mode)
+    payload = pause_payload(candidate)
+    before = unrelated(lab)
+    monkeypatch.setattr(transport, "verify_browser_device", lambda *a: pytest.fail("Network"))
+    original = cancel._BrowserWorkerCancellation
+    now = lab.clock[0] + (-50 if backstep else 50)
+    monkeypatch.setattr(cancel, "_BrowserWorkerCancellation", lambda *args:
+        original(*args, clock=lambda: now, monotonic=lambda: lab.elapsed[0]))
+    result = dispatch("continuation-pause", extra=payload)
+    after = current.inspect_stopped_continuation(candidate.root, **candidate.args)
+    assert result == dict(version=1, ok=True, build=worker.worker_graph()[0],
+        identity=expected.identity, epoch=expected.epoch, mode="paused",
+        binding=dict(fingerprint=after.state_fingerprint, revision=after.native_revision,
+                     generation=None), nativePauseConfirmed=True, serverRevocationConfirmed=False)
+    assert after.native_revision == expected.native_revision + (2 if backstep else 1)
+    assert after.state_fingerprint != expected.state_fingerprint
+    assert unrelated(lab) == before
+    stable = snap(lab)
+    assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert snap(lab) == stable
+    assert TOKEN not in json.dumps(result) and CREDENTIAL not in json.dumps(result)
+    unmocked_launch_blocked(lab)
+
+
+@pytest.mark.parametrize("field", ["epoch", "fingerprint", "revision", "claimed-same-revision"])
+def test_pause_stale_comparison_never_mutates(lab, candidate, dispatch, monkeypatch, field):
+    from tests.test_browser_device_continuation_current import native_step
+
+    if field == "claimed-same-revision":
+        native_step(lab, candidate, "prepare")
+    payload = pause_payload(candidate)
+    if field == "claimed-same-revision":
+        native_step(lab, candidate, "claim")
+    else:
+        target = payload if field == "epoch" else payload["binding"]
+        target[field] = target[field] + 1 if field == "revision" else "f" * 64
+    monkeypatch.setattr(transport, "verify_browser_device", lambda *a: pytest.fail("Network"))
+    before = snap(lab)
+    assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert snap(lab) == before
+
+
+@pytest.mark.parametrize("when", ["before-commit", "after-commit", "after-confirmation"])
+def test_pause_uncertain_commit_is_not_adopted_or_replayed(
+        lab, candidate, dispatch, monkeypatch, when):
+    from sds200 import browser_device_continuation_cancel as cancel
+
+    active_native(lab, candidate)
+    payload = pause_payload(candidate)
+    before = snap(lab)
+    calls = []
+    commit = cancel._commit
+
+    def uncertain(db):
+        calls.append(True)
+        if when != "before-commit":
+            commit(db)
+        raise RuntimeError("PRIVATE lost acknowledgement " + CREDENTIAL)
+
+    with monkeypatch.context() as patch:
+        if when == "after-confirmation":
+            original = cancel._BrowserWorkerCancellation.confirm
+
+            def lost(operation):
+                original(operation)
+                calls.append(True)
+                raise RuntimeError("PRIVATE " + CREDENTIAL)
+
+            patch.setattr(cancel._BrowserWorkerCancellation, "confirm", lost)
+        else:
+            patch.setattr(cancel, "_commit", uncertain)
+        assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert calls == [True]
+    stable = snap(lab)
+    if when == "before-commit":
+        assert stable == before
+    else:
+        assert stable != before
+        assert dispatch("continuation-pause", extra=payload) == FAILURE
+        assert snap(lab) == stable
+        observed = dispatch("continuation-current")
+        assert observed["continuation"]["mode"] == "paused"
+        assert "nativePauseConfirmed" not in observed
+    unmocked_launch_blocked(lab)
+
+
+@pytest.mark.parametrize("lost", ["before-write", "partial-write", "after-write", "flush"])
+def test_pause_lost_native_output_never_replays(lab, candidate, dispatch, monkeypatch, lost):
+    active_native(lab, candidate)
+    payload = pause_payload(candidate)
+    request = dict(version=1, action="worker-request", build=worker.worker_graph()[0],
+        request=dict(version=1, action="continuation-pause", **payload))
+    delivered = bytearray()
+
+    class LostOutput:
+        def write(self, data):
+            if lost == "partial-write" and not delivered:
+                delivered.extend(data[:8])
+                return 8
+            if lost in {"before-write", "partial-write"}:
+                raise OSError("Fictional lost output")
+            delivered.extend(data)
+            if lost == "after-write":
+                raise OSError("Fictional lost acknowledgement")
+            return len(data)
+
+        def flush(self):
+            raise OSError("Fictional lost flush acknowledgement")
+
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    with _launch_lock(candidate.root, create=False):
+        assert native._native_request(lab.args["profile"], [lab.configuration.extension_origin],
+            io.BytesIO(frame(request)), LostOutput(), expected_identity=lab.configuration.identity,
+            worker=selected) == 1
+    stable = snap(lab)
+    assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert snap(lab) == stable
+    assert dispatch("continuation-current")["continuation"]["mode"] == "paused"
+    assert TOKEN.encode() not in delivered and CREDENTIAL.encode() not in delivered
+    unmocked_launch_blocked(lab)
+
+
+@pytest.mark.parametrize("change", ["type", "epoch", "fingerprint", "revision"])
+def test_pause_direct_internal_entry_revalidates_before_ownership(monkeypatch, change):
+    from sds200 import browser_device_continuation_dispatch as route
+
+    request = BrowserContinuationPauseRequest("a" * 64, "b" * 64, 3)
+    if change == "type":
+        request = BrowserContinuationReadRequest("continuation-pause")
+    else:
+        object.__setattr__(request, change, True)
+    monkeypatch.setattr(current, "_worker_current_scope", lambda *a: pytest.fail("Ownership"))
+    with pytest.raises(ValueError):
+        route.continuation_pause_request(None, None, request)
+
+
+@pytest.mark.parametrize("change", ["result-type", "operation", "mode", "identity", "epoch",
+    "revision", "fingerprint", "final-state", "final-build"])
+def test_pause_changed_final_confirmation_never_claims_success_or_repairs(
+        lab, candidate, dispatch, monkeypatch, change):
+    from sds200 import browser_device_continuation_cancel as cancel
+    from sds200 import browser_device_continuation_dispatch as route
+    from tests.test_browser_device_continuation_current import native_step
+
+    active_native(lab, candidate)
+    payload = pause_payload(candidate)
+    original = cancel._BrowserWorkerCancellation.pause
+    retained = []
+
+    def changed(operation, expected):
+        result = original(operation, expected)
+        if change == "final-state":
+            # A separate native writer invalidates the just-completed snapshot.
+            lab.clock[0] = time.time() + 50
+            native_step(lab, candidate, "pause")
+        elif change == "final-build":
+            actual = route.worker_graph
+            monkeypatch.setattr(route, "worker_graph", lambda: ("f" * 64, actual()[1]))
+        retained[:] = [snap(lab)]
+        if change == "result-type":
+            return {}
+        if change == "operation":
+            return replace(result, operation="clock-correction")
+        if change in {"mode", "identity", "epoch", "revision", "fingerprint"}:
+            field = {"revision": "native_revision", "fingerprint": "state_fingerprint"}.get(
+                change, change)
+            value = (result.state.mode.value if change == "mode" else
+                result.state.native_revision + 1 if change == "revision" else "f" * 64)
+            return replace(result, state=replace(result.state, **{field: value}))
+        return result
+
+    monkeypatch.setattr(cancel._BrowserWorkerCancellation, "pause", changed)
+    assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert snap(lab) == retained[0]
+    assert dispatch("continuation-pause", extra=payload) == FAILURE
+    assert snap(lab) == retained[0]
+    unmocked_launch_blocked(lab)
+
+
+@pytest.mark.parametrize("stage", ["before-commit", "after-commit", "output"])
+def test_pause_real_supervisor_bounds_native_commit_and_output(
+        lab, candidate, dispatch, monkeypatch, stage):
+    from sds200 import browser_device_continuation_cancel as cancel
+
+    active_native(lab, candidate)
+    payload = pause_payload(candidate)
+    request = dict(version=1, action="worker-request", build=worker.worker_graph()[0],
+        request=dict(version=1, action="continuation-pause", **payload))
+    selected = worker.BrowserWorkerSelection(lab.args["bundle"], lab.args["public_key"])
+    read_fd, write_fd = os.pipe()
+
+    def stall():
+        os.write(write_fd, struct.pack("=I", os.getpid()))
+        time.sleep(30)  # Actual independent 10s supervisor must reap this child.
+        raise RuntimeError("Unreachable fictional pause output")
+
+    if stage == "output":
+        original = native.json.dumps
+
+        def serialize(value, *args, **kwargs):
+            if type(value) is dict and value.get("nativePauseConfirmed") is True:
+                stall()
+            return original(value, *args, **kwargs)
+
+        monkeypatch.setattr(native.json, "dumps", serialize)
+    else:
+        commit = cancel._commit
+
+        def stalled_commit(db):
+            if stage == "after-commit":
+                commit(db)
+            stall()
+
+        monkeypatch.setattr(cancel, "_commit", stalled_commit)
+    before = snap(lab)
+    try:
+        with (tempfile.TemporaryFile(buffering=0) as source,
+              tempfile.TemporaryFile(buffering=0) as destination,
+              _launch_lock(candidate.root, create=False)):
+            source.write(frame(request))
+            source.seek(0)
+            started = time.monotonic()
+            assert native.run_browser_native(lab.args["profile"],
+                [lab.configuration.extension_origin], source, destination,
+                expected_identity=lab.configuration.identity, worker=selected) == 2
+            assert 9.5 <= time.monotonic() - started < 13
+            os.set_blocking(read_fd, False)
+            child, = struct.unpack("=I", os.read(read_fd, 4))
+            with pytest.raises(ChildProcessError):
+                os.waitpid(child, os.WNOHANG)
+            destination.seek(0)
+            assert destination.read() == b""
+        after = snap(lab)
+        if stage == "before-commit":
+            # Abrupt termination may leave an uncertain SQLite journal; never
+            # repair or adopt it. The preceding ledger itself was not committed.
+            assert after["profile"]["recovery.sqlite"] == before["profile"]["recovery.sqlite"]
+        else:
+            assert dispatch("continuation-pause", extra=payload) == FAILURE
+            assert snap(lab) == after
+        unmocked_launch_blocked(lab)
+    finally:
+        os.close(read_fd)
+        os.close(write_fd)

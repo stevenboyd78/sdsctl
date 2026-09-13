@@ -125,13 +125,7 @@ function requireNativeLogin() {
   if (!nativeAccessMode || authenticationRequired) return;
   authenticationRequired = true;
   document.getElementById("native-menu")?.close();
-  if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
-  stopEventStream();
-  stopWaterfallStream({status: "Sign in to resume Waterfall. Last data is stale."});
-  stopAudioPlayback();
-  element("saved-recording-player").pause();
-  currentDaemonHello = {};
-  setScannerControls();
+  stopNativeSessionActivity("Sign in to resume Waterfall. Last data is stale.");
   document.documentElement.dataset.sessionState = "login-required";
   if (managedDeviceEntry) {
     // The fixed server entry rechecks device authority and otherwise waits.
@@ -149,6 +143,17 @@ function requireNativeLogin() {
   setOverallStatus("offline", "Login required", "Sign in again. Displayed data is stale.");
 }
 
+function stopNativeSessionActivity(waterfallStatus) {
+  if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
+  nativeSessionTimer = null;
+  stopEventStream();
+  stopWaterfallStream({status: waterfallStatus});
+  stopAudioPlayback();
+  element("saved-recording-player").pause();
+  currentDaemonHello = {};
+  setScannerControls();
+}
+
 async function dashboardFetch(url, options) {
   if (authenticationRequired) throw new Error("Login required.");
   if (nativeAccessMode && (options?.method ?? "GET") === "GET" && !options?.signal) {
@@ -157,6 +162,7 @@ async function dashboardFetch(url, options) {
     options = {...options, signal: AbortSignal.timeout(5000)};
   }
   const response = await fetch(url, options);
+  if (authenticationRequired) throw new Error("Login required.");
   if (nativeAccessMode && response.status === 401) requireNativeLogin();
   return response;
 }
@@ -170,6 +176,7 @@ async function refreshManagedNativeSession() {
     });
     if (response.ok) {
       const session = await response.json();
+      if (authenticationRequired) return;
       if (session.device_enrolled !== true || session.display_only !== true ||
           !Number.isFinite(session.remaining_seconds) || session.remaining_seconds <= 0) {
         requireNativeLogin();
@@ -181,6 +188,35 @@ async function refreshManagedNativeSession() {
   if (!authenticationRequired) {
     nativeSessionTimer = window.setTimeout(refreshManagedNativeSession, delay);
   }
+}
+
+function connectManagedSignOut(logout) {
+  if (!managedDeviceEntry) return;
+  const quiesce = () => {
+    if (authenticationRequired) return;
+    authenticationRequired = true;
+    stopNativeSessionActivity("Sign-out requested. Last data is stale.");
+    document.documentElement.dataset.sessionState = "signing-out";
+    setOverallStatus("offline", "Sign-out requested", "Updates stopped. Await the sign-out result; displayed data is stale.");
+  };
+  // The selected, hidden same-origin logout document has no physical form
+  // submission. Its isolated receiver asks this document to stop background
+  // reads before POST, so a revoked read cannot erase a pending drain reply.
+  // This deliberately untrusted, payload-free hint controls UI ONLY. It cannot
+  // authorize HTTP/native work, prove Stop or supply an acknowledgement.
+  window.addEventListener("sdsctl-device-signout-intent", event => {
+    if (event.target === window) quiesce();
+  }, true);
+  // Window capture precedes the extension's isolated-world document receiver,
+  // which stops propagation while its single Stop owner handles the request.
+  // This is UI intent only, never a pause, logout ACK or authorization signal.
+  window.addEventListener("submit", event => {
+    if (!event.isTrusted || event.target !== logout || authenticationRequired ||
+        logout.method.toLowerCase() !== "post" || logout.action !== webUrl("auth/logout")) return;
+    quiesce();
+    // Leave the menu and document in place for complete/pending/unconfirmed
+    // results. Do not prevent submission, send a POST, read cookies or retry.
+  }, true);
 }
 
 async function initializeNativeSession() {
@@ -202,12 +238,14 @@ async function initializeNativeSession() {
   banner.append(logout);
   element("main-content").prepend(banner);
   if (displayOnly) initializeDisplayNavigation(logout);
+  connectManagedSignOut(logout);
   try {
     const response = await dashboardFetch(webUrl("auth/session"), {
       credentials: "same-origin", cache: "no-store", redirect: "error",
     });
-    if (!response.ok) return;
+    if (!response.ok || authenticationRequired) return;
     const session = await response.json();
+    if (authenticationRequired) return;
     if (session.device_enrolled === true) {
       button.textContent = "Sign out and pause automatic login";
     }
@@ -2464,8 +2502,11 @@ async function refreshStatus() {
   refreshInProgress = true;
 
   try {
-    renderStatus(await fetchStatusPayload());
+    const payload = await fetchStatusPayload();
+    if (authenticationRequired) return;
+    renderStatus(payload);
   } catch (error) {
+    if (authenticationRequired) return;
     const message =
       error instanceof Error
         ? error.message

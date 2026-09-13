@@ -1,216 +1,323 @@
 # Continuation operation ownership and stop boundary
 
-Status: **development design and unselected asynchronous operation owner, not an enabled
-sign-in/sign-out route or administrator runbook**. Read the
-[continuation boundary](browser-device-continuation.md) first. Existing deployed
-profiles must not be edited, replayed or cleared to exercise this work.
+Status: **private development candidate with ordinary continuation routing;
+not released, physically accepted, or an administrator deployment runbook**.
+Read the [continuation boundary](browser-device-continuation.md) first. Existing
+profiles must not be edited, replayed or cleared to exercise this candidate.
 
-## Selected operation and request ownership
+## Foreground launcher validation
 
-One trusted worker must own review, confirmation, pending persistence, one native
-issuance request, installation, probe and acceptance. Its selected identity,
-epoch, build and origin come from the fixed installed native context, never a
-page-supplied path or role. A page ticket remains local to that exact document;
-it must not be forwarded as native authority. The existing synchronous fixture
-callback remains confirmation-only and must not start installation covertly.
+The private launcher candidate extends the existing experimental
+`sdsctl browser-device-start` command without an ignore-guard flag. It does not
+create a continuation, activate an intent, clear STOP, initialize setup again,
+or decide that a server session is authenticated.
 
-The separately exported `connectContinuationOperationWorker` now composes the
-document-confirmation lane, initial installation and independent stop adapter.
-It is **not selected by the active worker or page**. Its isolated tests now use
-the separate native-response adapter against a modeled fixed native wire.
-Native execution, Chrome APIs and protected-page proof in those tests remain
-fictional boundaries, not installed end-to-end acceptance or click proof.
+With no continuation artifacts, the original strict registration path remains.
+Any intent/activation artifact or sidecar instead selects full continuation
+validation, with no fallback to ordinary registration after a failure. Completed
+intent alone is insufficient. The launcher reconstructs the original retained
+chain and canonical installed files, verifies the immutable activation and
+current native epoch, and permits only PAUSED or ACTIVE state without prepared
+or claimed approvals. An ACTIVE grant must match the original private inputs.
 
-Only the confirmed document may begin installation, at most once. After exact
-pending persistence the owner rechecks that document immediately before selecting
-the issuance callback. It checks the document again after installation acceptance
-before returning readiness. The original one-minute review budget spans the
-asynchronous operation; installation has its separate 45-second budget. Neither
-clock budget is renewed by confirmation, a late reply or a duplicate message.
-The final pre-issuance document check runs inside the installer's checked I/O
-boundary, separately from issuance. If that document read crosses the 45-second
-installation deadline, the native issuance callback is never selected, even
-while the one-minute confirmation budget has not yet expired.
+`--check` performs this offline inspection without probing the browser, opening
+network connections or changing state. Foreground launch independently validates
+again while acquiring its own existing launch lock; it does not reuse the check
+result as authority. Launch ownership and shared private-input locks remain held
+until its browser child exits. The read-only SQLite transaction closes before
+launch so native workers can commit approval and pause operations normally.
+Missing locks, existing Chromium singletons and uncertain state are retained,
+never deleted or adopted. `--setup` is refused for continuation profiles.
 
-The fixed native initial request has only comparison inputs: the selected
-epoch, fresh random intent, reviewed native fingerprint/revision, and reviewed
-server generation, inside the existing build-bound worker envelope. It carries
-no credential, browser cookie, arbitrary URL/path, role, supplied proof, reusable
-approval or browser readiness. The inner action is
-`continuation-initial-session`, with exact `epoch`, `intent` and
-`binding: {fingerprint, revision, generation}` fields. The fixed wrapper accepts
-it only in the existing build-bound worker envelope for an independently selected
-continuation installation; ordinary, unwrapped and retirement routes reject it.
-Native reconstructs the owned current state and private inputs,
-performs its own verification, and consumes one same-process issuance attempt.
+The fixed `startup.html` remains the only continuation launch destination.
+Browser STOP, document consent, online verification and session acceptance are
+still enforced by the installed worker. Opening the startup page after sign-out
+can display its administrator-review notice; it does not resume automatic sign-in.
+Legacy registration and native routes retain their strict continuation refusal.
 
-The installed worker owns document-bound consent. Native does **not** treat the
-message, a boolean or the private acknowledgement callback as evidence of a
-physical click. That callback only compares the reconstructed review with this
-one fixed request. The unchanged same-process owner independently verifies
-private inputs and current server generation before issuance. Response fields
-bind the transient session to the current build, identity, epoch and resulting
-native state, never browser readiness. No ordinary browser page/worker selects
-this request yet; real installed end-to-end acceptance remains outstanding.
+Local tests cover actual installed CLI invocation with complete retained history
+and a synthetic recovery browser. Real Chromium and physical acceptance of this
+launcher change remain separate gates; earlier private-v9 physical results must
+not be represented as acceptance of this changed native build.
 
-Before dispatch the owner must observe the exact pending browser record and a
-still-current confirmed document. Native keeps its independent ten-second
-process deadline; the installation keeps its bounded wall/monotonic budget.
-Neither restarts a consumed page confirmation or supplies a fresh budget after
-uncertainty. A received token remains transient; no status/readback recovers it.
+## Ordinary startup selection
 
-## Unselected native-response adapter
+The MV3 entrypoint selects continuation only from the fixed installed native
+`worker-context`. No page, query parameter, stored field or event payload selects
+the role, server, profile or native host. Actual Chrome receivers are registered
+synchronously before the first native await. Subsequent native requests carry
+the executing graph's build identity in exactly one `worker-request` envelope.
 
-`createContinuationNativePorts` is included in the canonical build graph but is
-not imported or constructed by any active role. It takes only a validated paused
-continuation context, fixed build/extension identity and the installed worker's
-scoped Chrome facade. That facade already supplies the outer build-bound
-`worker-request` envelope. The adapter sends the exact inner native action to
-the fixed host; it never accepts or adds another caller-selected envelope.
+`createContinuationStartupInspection` runs before any lifecycle is constructed.
+It reads the whole storage area and compares two observations with two fresh
+fixed-native context reads. Exactly one own enumerable recovery data property is
+allowed. A STOP key with **any** value, extra key, accessor, unknown container,
+pending record, changed identity/epoch/build or mismatched native binding is
+terminal. A rejected first storage read does not call native again, restrict
+storage access, construct authentication lanes, pause, issue, probe, remove
+cookies or submit HTTP. Saved state is retained.
 
-One instance consumes its issuance attempt before validating or awaiting the
-comparison request. Missing/extra fields, changed state, unsafe revision
-headroom, native refusal, lost output and cancellation cannot authorize a second
-request. It validates the **entire** native success envelope before projecting
-the installer's narrower `binding` and `session` values: exact version/ok/build,
-identity/epoch, ACTIVE mode, revision +2, same generation, new fingerprint and a
-bounded session shape/lifetime. Stripping unknown fields before checking the
-full response would hide a protocol mismatch and is not permitted.
+The exact version-1 clean-pause record produced by completed recovery is also a
+non-ready review state, but only alongside matching fixed native paused context.
+Startup does not convert that record, invent an epoch or persist a version-3
+pause. After explicit document-bound consent, the existing installer transitions
+it directly to `initial_pending`. Incomplete legacy records, extra keys, STOP,
+active-native/legacy mismatches and accessor-backed fields remain terminal.
 
-Fresh `readCurrent` calls validate the full fixed native context and require the
-same selected state before issuance, or the exact returned ACTIVE state after
-issuance. Reads never retrieve a token or resume a failed instance. Each native
-call has a 12-second outer browser deadline in addition to the unchanged native
-10-second process supervisor. The original 45-second installer and one-minute
-review deadlines still span the operation; no adapter call renews them. Both
-wall and monotonic clocks must remain finite, safe and nondecreasing, including
-between reads. The larger elapsed interval is conservatively deducted from the
-returned lifetime, in addition to native and installer deductions.
+Clean pause additionally requires absent cookies and empty alarms on both sides
+of inspection. Accepted state requires the separate fresh verifier described
+below. The classifier never returns readiness. Inspection is read-only, not an
+atomic permission, a readiness lease or acknowledgement of an existing STOP.
 
-Invalidation fences immediately, without waiting for a native promise. The
-composing operation owner forwards invalidation before attempting its separate
-STOP write. Late native completion may have committed ACTIVE state or issued an
-unreturned token, but cannot revive the adapter, expose that reply to the
-installer, write a cookie or trigger another request. All failure messages are
-fixed and sanitized. These ports perform no cookie/storage/alarm mutation,
-sign-out, native pause, renewal, acceptance, state repair or physical-click check.
+Both clocks must remain finite, safe and nondecreasing. Inspection has a
+12-second budget but cannot renew the original 12-second MV3 gate, which starts
+before the initial native request. A failed gate fences late inspection replies.
+There is no await between lifecycle construction and replay of queued events;
+a queued sign-out fences acceptance before its next asynchronous step.
 
-## Native-only accepted-startup prerequisite
+The paused route returns freshly inspected non-ready status until the owned
+resume document completes review and confirmation. The document lane separately
+rechecks state and authority before issuance. A later STOP race cannot use the
+earlier inspection to bypass those checks.
 
-The fixed build-bound `continuation-verify-active` read action is a prerequisite,
-not an enabled browser startup path. Its exact inner request has only `version`
-and `action`; it accepts no caller-selected generation, saved record, proof,
-credential, URL, role or cookie. The installed continuation wrapper independently
-reconstructs the current native ACTIVE observation and its generation. The
-existing one-use native verifier performs one authenticated generation-bound
-server verification, then reads the owned native state again. Dispatch also
-rechecks the exact observation and build before returning. SQLite scopes stay
-closed across network I/O; a concurrent native pause or changed private inputs
-must be preserved and refused, never repaired.
+The active route binds one fresh verification to its requesting startup
+tab/document, using actual context and tab readbacks. Navigation before delivery
+fences the operation. Only the immediate verifier result can return readiness
+to that request. Repeated polls return a fresh-verification-required message;
+they do not reuse an earlier result, issue a session or select another verifier.
+This candidate does not add renewal or profile repair.
 
-The response carries only exact build/identity/epoch/ACTIVE binding fields. It
-contains no session, token, browser readiness or reusable proof. The independent
-native ten-second supervisor bounds verification and output. An explicit later
-read, if selected by a future trusted owner, performs a fresh verification; it
-does not recover or repeat session issuance. No browser graph asset currently
-requests this action.
+## Document-bound initial consent
 
-A future accepted-startup owner must still inspect the **whole** storage area,
-reject every stop marker or extra key, match the saved accepted binding and cookie
-fingerprint, independently verify current cookie lifetime and protected-page use,
-and recheck all observations before claiming readiness. Successful native
-verification does not authorize adopting `initial_pending` or an unknown browser
-record. It does not clear a guard, resume a device, renew a cookie or sign out.
+One canonical lifecycle owns review, confirmation, pending persistence, one
+native issuance request, cookie installation, protected-document proof and
+acceptance. Its fixed identity, epoch, build and origin are copied and frozen.
+A page ticket is local to the exact current document and is never forwarded
+as native authority.
 
-## Why a separate stop key
+The generated resume page receives its fixed origin from the installed bundle.
+It requires trusted review and submit events plus an explicitly checked consent
+box. Legacy UUID-shaped tickets and `reviewed`/`resumed` responses remain distinct
+from continuation's 64-hex document ticket,
+`continuation_confirmation_reviewed`, and exact `accepted` readiness response.
+A malformed or crossed contract cannot enable confirmation or navigation.
 
-An outstanding Chrome storage write can complete after its caller times out.
-Writing a pause into the same key as a pending/accepted installation therefore
-does not make cancellation win: an older late accepted write could replace it.
+The page consumes one opportunity. Its original one-minute budget starts at
+review, not the reply or confirmation. Page hiding, changed location, rollback,
+timeout and lost replies keep controls disabled and show fixed uncertainty.
+No reply body, exception, token or arbitrary server-selected URL is rendered.
+A successfully returned acceptance permits handoff to the fixed display URL
+without treating that navigation as a new cancellation. Pending acceptance
+remains navigation/cancellation-fenced; a lost reply is never replay permission.
 
-The unselected `createContinuationStopFence` writes **only** the fixed local key
-`sdsctlContinuationStop`, containing version 1, selected identity/epoch/build and
-`stopped: true`. There is no token, ticket, clock, URL or caller payload. The
-original `sdsctlDeviceRecovery` record is retained untouched. Chrome's
-[StorageArea.set contract](https://developer.chrome.com/docs/extensions/reference/api/storage/StorageArea#method-set)
-updates the supplied keys without replacing unrelated keys. Thus a late write
-to the recovery key cannot by itself erase this separate marker. This is not a
-multi-key transaction, compare-and-swap, defense against a hostile same-account
-writer, or guarantee about sudden power-loss persistence.
+The worker obtains identity from Chrome MessageSender, not a message field.
+It checks the current extension document, tab and context before and after
+review. Confirmation consumes its ticket before asynchronous work. After exact
+pending persistence it rechecks the same document immediately before issuance,
+inside the installer's checked I/O boundary, and checks it again before returning
+acceptance. Native does not treat the request or a boolean as physical-click
+proof: the fixed native owner independently reconstructs authority and state.
 
-The unselected asynchronous owner first invalidates its consent, installation and
-separately composed native-response lanes
-**synchronously**, then attempts one marker save. The adapter restricts storage
-access, refuses any pre-existing marker (including an identical one), writes
-once, and requires exact readback within ten seconds on both clocks. Lost,
-late, malformed, quota-failed or unavailable replies remain unconfirmed. There
-is no retry, adoption, token retrieval, marker-clear or recovery-repair method.
+`connectContinuationOperationLanes` owns memory-only cancellation and its
+installation. It writes no STOP marker. The older
+`connectContinuationOperationWorker` is retained as an isolated qualification
+wrapper with its own StopFence; the ordinary route never composes that wrapper
+with another terminal owner. The confirmation-only page/worker fixture likewise
+does not covertly enable installation.
 
-Any present stop key is terminal for ordinary continuation, including an unknown
-or malformed value. Existing paused readers and initial installers already
-require the entire storage area to contain exactly their recovery key, so they
-refuse a stop marker. A future accepted-startup owner must preserve this complete
-storage check **before** passing a single record to the pure classifier; that
-classifier cannot see other keys. Reopening the browser or resuming a device at
-the server must not clear the marker. A reviewed later recovery transition is a
-separate design, not provided here.
+## Fixed native requests and transient session ownership
 
-## Cancellation and acknowledgement table
+The initial inner action is `continuation-initial-session`, with exact epoch,
+fresh random intent and reviewed `{fingerprint, revision, generation}` binding.
+The installed wrapper accepts it only for an independently selected continuation
+installation inside the build-bound envelope. Non-continuation, unwrapped and
+retirement routes reject it. No browser message selects a credential, path,
+origin, native role, reusable approval or replacement token.
 
-| Cut | Immediate worker action | Possible retained state | Permitted claim |
-| --- | --- | --- | --- |
-| Before initial pending write | Fence the attempt; save stop marker | Original pause plus stop | Browser stop saved only after exact readback |
-| Pending write outstanding | Fence now, do not queue cancellation behind a hung promise | A late pending record plus stop | No initial request after invalidation |
-| Native issuance outstanding | Fence now; save marker independently | Native ACTIVE and possibly an unreturned server token | No native pause or server-revocation claim |
-| Cookie write outstanding | Fence now; keep marker independent of cookie completion | Late cookie plus pending and stop | No claim that the cookie was removed or the session revoked |
-| Accepted write outstanding | Fence now; stop key must survive the late recovery-key write | Accepted record plus stop | No readiness or accepted-restart adoption |
-| Stop write/reply uncertain | Keep in-memory fence; never repeat the save | Marker may be absent or committed later | Browser stop remains unconfirmed |
-| Worker/browser disappears | Next owner reads all persisted keys before work | Pending/stop/uncertain or accepted record | No initial replay; accepted state still requires fresh verification |
+`createContinuationNativePorts` consumes one issuance attempt before validating
+or awaiting its comparison request. It validates the entire success envelope
+before projecting the installer's binding/session: version, ok, build, identity,
+epoch, ACTIVE mode, revision +2, unchanged generation, new fingerprint and bounded
+session shape/lifetime. Extra fields cannot be stripped away to hide a mismatch.
 
-These outcomes are deliberately separate:
+Fresh current reads must match the original paused selection before issuance,
+or the exact fully acknowledged ACTIVE receipt afterward. The read-only
+`pauseContext()` starts with the original selection and advances only after the
+complete issue reply, deadline/lifetime checks and timer cleanup pass. It has no
+token or intent. Unknown issuance and later observations cannot replace it.
 
-1. In-memory invalidation prevents later work in this worker.
-2. A checked stop marker prevents ordinary successor work in this profile.
-3. Owned native pause cancels native approvals; it does **not** revoke HTTP sessions.
-4. Server compare-and-pause advances this device's generation; the separate drain
-   acknowledgement covers older requests in the selected web owner.
-5. Local cookie cleanup is neither server pause nor drain acknowledgement.
+A late native result may have committed ACTIVE state or issued an unreturned
+token. Invalidation fences it immediately: it cannot revive the installer,
+write a cookie, reconstruct a comparison or authorize another issuance.
+All diagnostics are fixed and sanitized.
 
-The existing HTTP sign-out requires the actual same-origin authenticated browser
-request. If issuance has an unknown outcome and no usable cookie, the client
-cannot fabricate that request or report server shutdown. It must retain the
-uncertainty and request administrator review, not pause unrelated devices or
-retry issuance to obtain a logout cookie. A future owner may use the existing
-device-scoped path only with its independently verified authority and response.
+## Fresh accepted-startup verification
 
-Explicit owner stop, selected-document cancellation/navigation, exact-origin
-sign-out and operation failure all invalidate the operation before attempting
-the separate marker. A content-message cancellation receives no saved-stop
-acknowledgement. Only the owner's awaited `stop()` can report checked browser
-storage, and it always reports native pause and server revocation as unconfirmed.
-An uncertain marker save remains terminal; a second stop never retries or adopts
-an existing marker. Stopping after acceptance retains the original accepted
-record and cookie alongside the marker. This is not session revocation.
+`createContinuationAcceptedStartup` is a one-use owner selected by the canonical
+lifecycle. Construction validates and copies its fixed ACTIVE context without
+I/O. Running it tracks the actual trusted-storage access-level write and reads
+the whole local storage area before online verification. Exactly one accepted
+recovery record is required; pending, paused, STOP and unknown state is retained
+and refused, never migrated.
 
-## Qualification and remaining integration
+The stored binding and cookie fingerprint are only prerequisites. The owner
+reads and validates the actual host-only, secure, HttpOnly, strict-same-site
+device cookie, its store/path and remaining lifetime. It compares native context
+and performs one `continuation-verify-active` request. That native action accepts
+no saved record, generation, credential, URL, cookie or proof: its owner reconstructs
+the ACTIVE generation, verifies the server, and rechecks native state/build.
+SQLite scopes stay closed across network I/O.
 
-The owner and its adapters are in the canonical graph but no ordinary page,
-worker or native dispatch selects them. Tests compose the actual synchronous
-event gate, document checks, strict native-response adapter, installation and stop adapter using modeled Chrome,
-native and probe calls. Every asynchronous boundary is tested on both sides of
-its potential side effect for cancellation and acknowledgement failure, including
-late pending/issuance/cookie/accepted completions and the final document check.
-Additional cases cover sender isolation, exact document replacement, duplicate
-confirmation, stop uncertainty and independent review/installation deadlines.
-The separate adapter tests retain clock-fault, pre-existing-marker and wrong-readback coverage.
-The model now uses Chrome's key-update semantics rather than whole-area
-replacement. Simulated browser/native callbacks are not installed acceptance.
+The native result contains exact binding fields, not a token, session, browser
+readiness or reusable proof. The browser then owns an isolated top-frame
+`/device-display` probe and requires its actual tab/document/ticket identity.
+Storage, cookie, native binding, alarm absence and remaining lifetimes are checked
+again through final cleanup and return. A cookie hash or native success alone
+is insufficient. Invalidation aborts the owned probe and fences late replies.
 
-Before enabling the route, qualify the composed owner and response adapter with
-the actual fixed native request, generation-aware server sign-out,
-accepted-startup verification and whole-storage marker checks. Native-only TLS
-qualification for DNS, IPv4 and IPv6 does not prove actual Chrome cookie domain,
-host-only, path, store, expiry or restart behavior for those origins.
-Real Chromium persistence/restart and physical display tests remain
-separate from deterministic callback tests. Do not infer sudden-power-loss or
-complete unattended-recovery guarantees from a resolved storage promise.
+The accepted owner never issues a session, rewrites recovery state, repairs a
+cookie, creates a renewal alarm, or signs out by itself. It exposes a retained
+in-memory cookie comparison only after all verification and cleanup succeeds.
+A stored comparison is never adopted as trusted logout ownership.
+
+## Independent Stop and write draining
+
+One `createContinuationLifecycle.stop()` promise is selected **before** callbacks
+can reenter it. Concurrent stops, manual sign-out and failure paths join that same
+attempt. The lifecycle invalidates memory-only consent/installation/native work
+and its probe synchronously before browser/native Stop I/O. A broken or asynchronous
+invalidation callback remains unconfirmed but does not suppress the independent
+marker/pause attempts.
+
+The Stop owner uses the exact lane's retained cookie comparison and write-drain
+observations plus the original native selection or acknowledged issue receipt.
+It never calls the legacy wrapper's durable invalidation or adopts a replacement
+comparison after unknown issuance.
+
+`createContinuationStopFence` writes only `sdsctlContinuationStop`: version 1,
+selected identity/epoch/build and `stopped: true`. There is no token, ticket,
+clock, URL or page payload. It refuses every pre-existing marker, including an
+identical one, and requires exact readback of its own single write. It never
+retries, clears or adopts another marker.
+
+The separate key matters because a late `storage.local.set` of the recovery
+record must not overwrite Stop. This is key-update behavior, not a multi-key
+transaction, compare-and-swap, hostile-same-account defense or sudden-power-loss
+persistence guarantee. The original pending/accepted recovery evidence remains.
+
+The lane's `writeDrain()` follows underlying access-level, storage-set and
+cookie-set promises, not only timeout races. Once fenced, it reports drained
+only after every started write settles successfully. A queued access-level write
+does not start after invalidation. Missing/rejected acknowledgements stay
+unconfirmed. Local pending writes block logout/cookie removal without blocking
+independent STOP persistence or native pause.
+
+`createContinuationNativePause` accepts no page payload. It checks one fixed
+context, sends one epoch/revision/fingerprint comparison, validates the entire
+pause acknowledgement and rechecks the resulting paused context. Native pause
+cancels approvals and removes the active native grant; it does **not** revoke
+HTTP sessions. A later paused status does not acknowledge an earlier lost reply.
+
+## Owned same-origin logout and presentation
+
+Browser logout requires the trusted lane's retained cookie comparison, matching
+actual cookie readbacks/lifetime, and successful local write draining. No owned
+cookie after unknown issuance means no fabricated logout, unrelated-device pause,
+or repeated issuance to obtain a logout token.
+
+`createContinuationLogout` owns one inactive temporary `/device-display` tab.
+Its isolated `connectContinuationLogoutContent` receiver is inert at registration.
+Selection and results bind Chrome MessageSender to the exact extension, origin,
+active top frame, non-incognito owned tab and document. Messages never substitute
+body-supplied identity or page-provided proof for those checks.
+
+One document ticket selects one same-origin POST through `submitDeviceLogout`.
+The browser supplies the real Origin/Fetch Metadata and HttpOnly cookie. The
+parser checks exact status, URL, redirect policy, content type, bounded body and
+strict duplicate-free acknowledgement. HTTP 200 confirms drained; HTTP 202
+confirms pause with draining still pending. A lost response is unconfirmed, not
+permission to submit again. The final confirm checks the same current document.
+
+After an acknowledged server result the Stop owner rechecks write drain. It
+observes cookie absence or removes only the still-matching device cookie in store
+`0`, requiring removal acknowledgement and absence afterward. A replaced or
+unexpected cookie is retained. Tab cleanup is best-effort and is not proof of
+server revocation or cancellation of an already-sent POST.
+
+For the exact managed dashboard sign-out form, a trusted window-capture handler
+stops dashboard streams, polling and expiry navigation before the extension's
+document-capture handler starts Stop. This is presentation-only intent: it neither
+submits another POST nor confirms browser/native/server cleanup. The menu and
+document remain available for the actual complete, pending or unconfirmed result.
+Late session/status reads cannot re-arm timers, reload the result away or label
+stale data as newly live. Synthetic submits, unrelated forms and manual dashboard
+sessions do not select this presentation path. Normal unexpected session expiry
+still returns a managed display to its fixed guarded entry.
+
+The worker-owned hidden logout document does not have a physical form submit.
+After its isolated receiver's selection is acknowledged by the worker, it emits
+the fixed, payload-free `sdsctl-device-signout-intent` event on its own window,
+before selecting POST. The managed dashboard treats this as a UI-only request
+to stop background reads and expiry navigation, preserving the document while
+the real server drain response is pending. The event is deliberately untrusted:
+it cannot select native/HTTP work, prove consent, clear a cookie, change saved
+state, supply a result or authorize another request. Its return value is ignored.
+The existing exact document, sender, one-use and deadline checks still govern
+selection/submission/confirmation; loss or replacement remains unconfirmed.
+Manual non-device dashboards do not register this presentation listener.
+
+The ordinary isolated manual form joins the same terminal promise. Its response
+channel binds to the first requesting tab/document/URL. Another document cannot
+adopt that response. The form receives no legacy `submit: true` grant and sends
+no second POST or `logout-finish`. Its pagehide/location and reply-timeout fences
+prevent late results from reviving the UI. Messages project only fixed facts:
+
+| Result | Required acknowledgements | User-facing meaning |
+| --- | --- | --- |
+| Complete | Browser STOP, native pause, local writes drained, server drained, cookie cleared | Sign-out complete; automatic sign-in remains paused |
+| Pending | All local acknowledgements plus server pause, but server drain pending | Keep state; do not repeat sign-out |
+| Unconfirmed | Any missing, failed or late acknowledgement | Show each separate fact; retain profile for administrator review |
+
+Browser stop, native pause, server pause/drain and cookie cleanup must never be
+collapsed into one inferred success. Unknown outcomes retain evidence. No method
+in this route clears a guard, repairs a profile, resets setup or silently retries
+a consumed approval.
+
+## Deadline ownership
+
+| Owner | Unrenewed budget |
+| --- | --- |
+| Initial MV3 native selection plus startup arbitration | 12 seconds |
+| Read-only inspection / individual native browser call | 12 seconds each, within enclosing budgets |
+| Native process supervisor | 10 seconds per native operation |
+| Review and confirmation, including installation | 60 seconds |
+| Initial installation / accepted verification / complete Stop | 45 seconds each |
+| STOP marker / native pause adapter | 10 / 30 seconds |
+| Owned logout document/channel / HTTP parser | 20 / 10 seconds |
+
+Wall and monotonic deadlines are checked across asynchronous boundaries; the
+larger elapsed interval is deducted conservatively from session lifetimes.
+Timeout is not cancellation of an already-started Chrome/native/HTTP operation.
+Late replies cannot select another action, renew a budget or upgrade a terminal
+result. Stopping a worker cannot prove whether an uncertain server action committed.
+
+## Qualification and remaining work
+
+The predecessor's canonical lifecycle passed a private installed real-Chromium
+matrix covering DNS, IPv4 and IPv6, initial acceptance and accepted restart,
+same-origin sign-out, and retained stopped restart. Its consent was synthetic:
+that matrix is **not** ordinary-route or physical-click acceptance of this
+successor. Preserve those frozen artifacts and all uncertain/failed profiles.
+
+Current deterministic tests compose the actual ordinary worker gate, native
+response parsers, consent/installation and accepted lanes, probe/logout channels
+and HTTP parsers with modeled Chrome/native/HTTP I/O. Separate page tests cover
+trusted-event gating, ticket/completion separation, original deadlines, fixed
+navigation, lost replies and persistent sign-out facts. These are model tests,
+not evidence of real MessageSender, hardware appearance or 100% project coverage.
+
+Before publication: complete source/installed regression and exact package
+parity, then fresh ordinary Chromium trusted-input, idle/wake, accepted/stopped
+restart and origin/cookie tests, followed by focused small-Pi and HDMI-Pi visual
+acceptance. No existing Home Assistant installation, credential, Pi display,
+global trust store or published release is changed by this source qualification.

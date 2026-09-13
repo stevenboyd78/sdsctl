@@ -23,7 +23,9 @@ export function createContinuationInstallation(chrome,settings,reviewed,
   const paused=pausedContinuationRecord(config);
   createInitialInstallation(config,paused,review,{wall,monotonic}).invalidate();
   const offline={...review,binding:{...review.binding,generation:null}};
-  let used=false,failed=false,attempt=null,probe=null,rejectPending=null;
+  let used=false,failed=false,attempt=null,probe=null,rejectPending=null,unconfirmedWrite=false,
+    retainedFingerprint=null;
+  const writes=new Set();
   const abort=new AbortController();
   const stop=()=>{
     failed=true;attempt?.invalidate();abort.abort();
@@ -31,8 +33,26 @@ export function createContinuationInstallation(chrome,settings,reviewed,
     // The future owner must separately serialize durable sign-out/cancellation.
     rejectPending?.(refusal());
   };
+  const write=async operation=>{
+    if(failed)throw refusal();
+    const pending={};writes.add(pending);
+    try {
+      const actual=operation();
+      // Retain the underlying Chrome operation, not the owner's timed race.
+      // Missing/failed acknowledgements remain uncertain even after rejection.
+      if(actual===null||typeof actual!=='object'||typeof actual.then!=='function')throw refusal();
+      return await actual;
+    } catch {unconfirmedWrite=true;throw refusal();}
+    finally {writes.delete(pending);}
+  };
   return Object.freeze({
     invalidate:stop,
+    writeDrain:()=>Object.freeze({fenced:failed,pendingWrites:writes.size,unconfirmedWrite,
+      localWritesDrained:failed&&!unconfirmedWrite&&writes.size===0}),
+    // Trusted in-memory comparison only, never a storage/readback adoption port.
+    // Retain after an acknowledged install and checked cookie identity. A lost
+    // set acknowledgement or late completion cannot populate this comparison.
+    cookieFingerprint:()=>retainedFingerprint,
     run:async()=>{
       if(used||failed)throw refusal();
       used=true;let timer,started,last;
@@ -68,7 +88,7 @@ export function createContinuationInstallation(chrome,settings,reviewed,
       };
       const save=async(before,after)=>{
         await savedAs(before);
-        await io(()=>chrome.storage.local.set({[KEY]:structuredClone(after)}));
+        await io(()=>write(()=>chrome.storage.local.set({[KEY]:structuredClone(after)})));
         return savedAs(after); // A resolved set alone is NOT acceptance.
       };
       try {
@@ -76,7 +96,7 @@ export function createContinuationInstallation(chrome,settings,reviewed,
         const interrupted=new Promise((_,reject)=>{rejectPending=reject;
           timer=schedule(stop,45000);});
         const work=(async()=>{
-          await io(()=>chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'}));
+          await io(()=>write(()=>chrome.storage.local.setAccessLevel({accessLevel:'TRUSTED_CONTEXTS'})));
           const values=await read();
           if(!exact(values,[KEY]))throw refusal();
           const before=values[KEY];
@@ -101,11 +121,12 @@ export function createContinuationInstallation(chrome,settings,reviewed,
           let details=attempt.sessionReturned(issued,active);issued=null;
           await savedAs(pending);await noSession();
           // Refuse an unexpected cookie rather than overwrite/adopt/delete it.
-          await io(()=>chrome.cookies.set(details));details=null;
+          await io(()=>write(()=>chrome.cookies.set(details)));details=null;
           const installed=structuredClone(await cookie());
           attempt.cookieInstalled(installed);
           const installedHash=await io(()=>fingerprintContinuationCookie(config.origin,installed));
           if(!same(await cookie(),installed))throw refusal();
+          check();retainedFingerprint=installedHash;
           await currentAs(active);await savedAs(pending);
           check();probe=createProbe({signal:abort.signal});check();
           attempt.probeStarted(await io(()=>probe.open()));

@@ -2,9 +2,9 @@
 
 Fixed installed paths select complete journals and the immutable manifest. Full
 history, actual owner/private files and current epoch SQL are verified together.
-Results describe one read point, never a permission lease. Normal startup/native
-dispatch still refuse continuation markers and schema 3. Do not use this reader
-as a substitute for the unfinished owned mutation and online proof adapters.
+Results describe one read point, never a permission lease. Foreground startup
+uses a separate owned validation scope; legacy native routes still refuse this
+state. Do not use this reader as a substitute for mutation or online proof.
 """
 from __future__ import annotations
 

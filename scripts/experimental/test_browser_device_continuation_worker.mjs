@@ -40,16 +40,19 @@ function fixture(origin,wrap=false) {
       assert.deepEqual(key,{url:f.context.config.origin+'/',name:'__Host-sdsctl-device-session'});
       return f.cookie;
     },set:forbidden('cookie.set'),remove:forbidden('cookie.remove')},
-    alarms:{onAlarm:event(),get:async name=>{assert.equal(name,'sdsctl-device-recovery');return f.alarm;},
+    alarms:{onAlarm:event(),getAll:async()=>f.alarm===undefined?[]:[f.alarm],
+      get:async name=>{assert.equal(name,'sdsctl-device-recovery');return f.alarm;},
       create:forbidden('alarm.create'),clear:forbidden('alarm.clear')},
     tabs:{onUpdated:event(),query:forbidden('tabs.query'),create:forbidden('tabs.create'),
       update:forbidden('tabs.update'),remove:forbidden('tabs.remove')}};
-  f.sender=page=>({id,url:f.chrome.runtime.getURL(page),frameId:0,documentLifecycle:'active',
+  f.sender=page=>({id,origin:`chrome-extension://${id}`,url:f.chrome.runtime.getURL(page),frameId:0,documentLifecycle:'active',
     documentId:'document-1',tab:{id:7,incognito:false}});
   f.start=()=>connectContinuationBrowserWorker(f.chrome,f.context,build,{
     wall:()=>f.clock[0],monotonic:()=>f.clock[1],
     schedule:(fn,ms)=>{assert.equal(ms,12000);const key=f.nextTimer++;f.timers.set(key,fn);return key;},
     cancel:key=>f.timers.delete(key)});
+  f.workerOptions={wall:()=>f.clock[0],monotonic:()=>f.clock[1],
+    schedule:fn=>{const key=f.nextTimer++;f.timers.set(key,fn);return key;},cancel:key=>f.timers.delete(key)};
   f.ask=(action='startup-status',sender=f.sender(action==='resume-review'?'resume.html':'startup.html'),
     extra={})=>new Promise(resolve=>{
       const handler=f.chrome.runtime.onMessage.listeners[0];
@@ -182,14 +185,18 @@ test('overlapping explicit review cannot start a second native operation',async(
   assert.deepEqual(f.unexpected,[]);
 });
 
-test('actual worker gate selects only readonly continuation capabilities and envelopes',async()=>{
+test('actual worker gate binds continuation review to the document and fixed envelope without issuance',async()=>{
   const f=fixture(undefined,true);
   f.chrome.tabs.query=async filter=>{
     assert.deepEqual(filter,{url:[f.chrome.runtime.getURL('startup.html')]});return [];
   };
-  await startBrowserWorker(f.chrome,build);
+  f.chrome.runtime.getContexts=async()=>[{contextType:'TAB',contextId:'context-1',
+    documentId:'document-1',documentOrigin:`chrome-extension://${id}`,
+    documentUrl:f.chrome.runtime.getURL('resume.html'),tabId:7,frameId:0,incognito:false}];
+  f.chrome.tabs.get=async()=>({id:7,url:f.chrome.runtime.getURL('resume.html'),incognito:false,status:'complete'});
+  await startBrowserWorker(f.chrome,build,f.workerOptions);
   assert.deepEqual(await f.ask(),{mode:'paused',sessionReady:false});
-  assert.equal((await f.ask('resume-review')).mode,'continuation_reviewed');
+  assert.equal((await f.ask('resume-review')).mode,'continuation_confirmation_reviewed');
   for(const action of ['initialize','start','suspend','resume-confirm'])
     assert.deepEqual(await f.ask(action,f.sender('resume.html')),{mode:'setup_error'});
   for(const event of [f.chrome.runtime.onStartup,f.chrome.runtime.onInstalled])event.listeners[0]();
@@ -211,13 +218,13 @@ test('continuation entry is inert until native validation and never opens setup'
   f.chrome.tabs.get=async id=>{assert.equal(id,7);return target;};
   f.chrome.runtime.getContexts=async()=>[];
   f.chrome.tabs.reload=async id=>{reloads.push(id);};
-  const started=startBrowserWorker(f.chrome,build);
+  const started=startBrowserWorker(f.chrome,build,f.workerOptions);
   f.chrome.runtime.onStartup.listeners[0]();
   f.chrome.tabs.onUpdated.listeners[0](7,{status:'complete'},target);
   await settle();assert.equal(queries,0);assert.deepEqual(reloads,[]);
   held.resolve(f.context);await started;await settle();
   assert.deepEqual(reloads,[7]);assert.deepEqual(f.unexpected,[]);
-  assert.deepEqual(f.calls.map(r=>r.action),['worker-context']);
+  assert.deepEqual(f.calls.map(r=>r.action),['worker-context','worker-request','worker-request']);
 });
 
 test('refused continuation context never starts local entry retry',async()=>{

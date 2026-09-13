@@ -29,7 +29,7 @@ from tests.test_browser_device_continuation_current import candidate as candidat
 from tests.test_browser_device_continuation_ownership import handoff as handoff
 from tests.test_browser_device_continuation_verification import profile as profile
 from tests.test_browser_device_continuation_verification import proof
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import root as root
 from tests.test_browser_device_native import server as server
@@ -107,7 +107,7 @@ def test_exact_active_verification_is_native_read_only_and_keeps_sql_closed(
         for field in ("token", "session", "session_ready", "proof", "accepted"):
             assert not hasattr(result, field)
         no_replay(obj, expected, lab)
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("change", ["none", "dict", "bool-generation", "null-generation",
@@ -268,7 +268,7 @@ def test_real_tls_uses_only_fixed_origin_and_exact_generation(
     assert json.loads(body) == {"device_id": "display", "generation": 7}
     assert headers["Authorization"] == "Bearer " + CREDENTIAL
     assert not {"Cookie", "Origin"} & headers.keys()
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("profile", ["dns"], indirect=True)

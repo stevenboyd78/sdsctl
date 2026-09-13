@@ -86,20 +86,126 @@ test("lost or refused worker review is not silently retried",async()=>{
 });
 
 function pageFixture() {
-  const f={calls:[],elements:{}};
+  const f={calls:[],elements:{},clock:[1000000,500000],timers:new Set(),navigations:[]};
   for(const name of ["review","resume-form","confirm","resume","notice","reviewed"]) {
     const handlers={};
     f.elements[name]={disabled:["confirm","resume"].includes(name),checked:false,textContent:"",
       addEventListener:(kind,handler)=>{handlers[kind]=handler;},
       emit:(kind,trusted=true)=>handlers[kind]({isTrusted:trusted,preventDefault(){}})};
   }
-  f.window={location:{href:url}};f.window.top=f.window;
+  f.window={location:{href:url,replace:target=>f.navigations.push(target)},
+    addEventListener:(name,fn)=>{assert.equal(name,'pagehide');f.pagehide=fn;}};f.window.top=f.window;
+  f.wall=()=>f.clock[0];f.monotonic=()=>f.clock[1];
+  f.schedule=(fn,ms)=>{assert.equal(ms,60000);const timer={fn};f.timers.add(timer);return timer;};
+  f.cancel=timer=>f.timers.delete(timer);
   f.runtime={getURL:name=>"chrome-extension://"+id+"/"+name,sendMessage:async message=>{
     f.calls.push(message);return message.action==="resume-review"?{...reviewed,ticket}:{mode:"resumed"};
   }};
   f.document={getElementById:name=>f.elements[name]};
-  f.start=()=>connectResumePage(f);return f;
+  f.start=()=>connectResumePage(f,origin);return f;
 }
+
+function continuationPage() {
+  const f=pageFixture();f.ticket='1'.repeat(64);
+  f.reviewResult={mode:'continuation_confirmation_reviewed',ticket:f.ticket,nativeRevision:7,serverGeneration:19};
+  f.confirmResult={mode:'accepted',sessionReady:true};
+  f.runtime.sendMessage=async message=>{
+    f.calls.push(message);
+    if(message.action==='resume-review')return f.reviewResult;
+    if(message.action==='resume-confirm')return f.confirmResult;
+    assert.equal(message.action,'continuation-cancel');return {mode:'setup_error'};
+  };
+  f.review=async()=>{f.elements.review.emit('click');await settle();};
+  f.confirm=async()=>{f.elements.confirm.checked=true;f.elements['resume-form'].emit('submit');await settle();};
+  return f;
+}
+
+test('ordinary page keeps continuation ticket and completion distinct from legacy resume',async()=>{
+  const f=continuationPage();f.start();assert.deepEqual(f.calls,[]);
+  f.elements.confirm.checked=true;await f.review();assert.equal(f.elements.confirm.checked,false);
+  assert.match(f.elements.notice.textContent,/one fresh display-only session/);
+  await f.confirm();assert.deepEqual(f.calls,[{action:'resume-review'},{action:'resume-confirm',ticket:f.ticket}]);
+  assert.deepEqual(f.navigations,[origin+'/device-display']);assert.equal(f.timers.size,0);
+  f.pagehide();assert.equal(f.calls.length,2); // Acknowledged handoff is not cancellation.
+  await f.confirm();await f.review();assert.equal(f.calls.length,2);
+});
+for(const bad of [
+  {mode:'reviewed',ticket:'1'.repeat(64),nativeRevision:7,serverGeneration:19},
+  {mode:'continuation_confirmation_reviewed',ticket,nativeRevision:7,serverGeneration:19},
+  {mode:'continuation_confirmation_reviewed',ticket:'1'.repeat(64),nativeRevision:Number.MAX_SAFE_INTEGER,serverGeneration:19},
+  {mode:'continuation_confirmation_reviewed',ticket:'1'.repeat(64),nativeRevision:7,serverGeneration:19,extra:'private'},
+])test('page never cross-accepts ticket contract '+JSON.stringify(bad),async()=>{
+  const f=continuationPage();f.reviewResult=bad;f.start();await f.review();await f.confirm();
+  assert(f.elements.resume.disabled);assert.deepEqual(f.navigations,[]);
+  assert(!f.calls.some(v=>v.action==='resume-confirm'));assert.equal(f.timers.size,0);
+});
+for(const bad of [null,{mode:'resumed'},{mode:'accepted'},{mode:'accepted',sessionReady:false},
+  {mode:'accepted',sessionReady:true,token:'private'}, {mode:'active',sessionReady:true}])
+test('continuation confirmation refuses wrong completion '+JSON.stringify(bad),async()=>{
+  const f=continuationPage();f.confirmResult=bad;f.start();await f.review();await f.confirm();
+  assert.deepEqual(f.navigations,[]);assert.match(f.elements.notice.textContent,/could not be confirmed/);
+  assert(!f.elements.notice.textContent.includes('private'));assert.equal(f.timers.size,0);
+  assert.equal(f.calls.filter(v=>v.action==='continuation-cancel').length,1);
+});
+test('legacy ticket cannot consume continuation acceptance response',async()=>{
+  const f=continuationPage();f.reviewResult={...reviewed,ticket};f.start();await f.review();await f.confirm();
+  assert.deepEqual(f.navigations,[]);assert.match(f.elements.notice.textContent,/could not be confirmed/);
+});
+test('continuation confirmation needs an installed fixed origin',async()=>{
+  const f=continuationPage();connectResumePage(f);await f.review();await f.confirm();
+  assert(f.elements.resume.disabled);assert.deepEqual(f.navigations,[]);
+});
+for(const selected of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443'])
+test('continuation navigates only to fixed configured origin '+selected,async()=>{
+  const f=continuationPage();connectResumePage(f,selected);await f.review();await f.confirm();
+  assert.deepEqual(f.navigations,[selected+'/device-display']);
+});
+for(const selected of ['http://display.test','https://user@display.test','https://display.test/path',
+  'https://display.test/?query','https://display.test/#fragment'])test('unsafe fixed resume origin '+selected+' refused',()=>{
+  const f=continuationPage();assert.throws(()=>connectResumePage(f,selected));assert.deepEqual(f.calls,[]);
+});
+for(const action of ['resume-review','resume-confirm'])for(const change of ['pagehide','same-url pagehide',
+  'location','timeout','wall rollback','mono rollback','wall deadline','mono deadline'])
+test(change+' during '+action+' cannot deliver late success',async()=>{
+  const f=continuationPage(),pending=deferred(),original=f.runtime.sendMessage;
+  f.runtime.sendMessage=message=>{
+    if(message.action===action){f.calls.push(message);return pending.promise;}
+    return original(message);
+  };
+  f.start();await f.review();if(action==='resume-confirm')await f.confirm();
+  if(change.endsWith('pagehide'))f.pagehide();
+  if(change==='location')f.window.location.href=url+'?changed';
+  if(change==='timeout')[...f.timers][0].fn();
+  if(change==='wall rollback')f.clock[0]--;
+  if(change==='mono rollback')f.clock[1]--;
+  if(change==='wall deadline')f.clock[0]+=60000;
+  if(change==='mono deadline')f.clock[1]+=60000;
+  const previous=f.elements.notice.textContent;
+  pending.resolve(action==='resume-review'?f.reviewResult:f.confirmResult);await settle();
+  assert.deepEqual(f.navigations,[]);assert(f.elements.resume.disabled);assert.equal(f.timers.size,0);
+  if(change==='timeout'||change.endsWith('pagehide'))assert.equal(f.elements.notice.textContent,previous);
+  const count=f.calls.length;await f.review();await f.confirm();assert.equal(f.calls.length,count);
+  assert.equal(f.calls.filter(v=>v.action==='continuation-cancel').length,1);
+});
+test('review reply does not renew the original consent deadline',async()=>{
+  const f=continuationPage();f.start();await f.review();f.clock[0]+=60000;await f.confirm();
+  assert(!f.calls.some(v=>v.action==='resume-confirm'));assert.deepEqual(f.navigations,[]);
+});
+test('synchronous timer expiry does not leave a timer or request behind',async()=>{
+  const f=continuationPage();f.schedule=fn=>{fn();const timer={fn};f.timers.add(timer);return timer;};
+  f.start();await f.review();assert(!f.calls.some(v=>v.action==='resume-review'));assert.equal(f.timers.size,0);
+});
+test('lost continuation confirmation cancels once and never reissues',async()=>{
+  const f=continuationPage(),original=f.runtime.sendMessage;
+  f.runtime.sendMessage=message=>{
+    if(message.action==='resume-confirm'){f.calls.push(message);throw Error('private credential');}
+    return original(message);
+  };
+  f.start();await f.review();await f.confirm();await f.confirm();f.pagehide();
+  assert.match(f.elements.notice.textContent,/acknowledgement was lost/);assert.deepEqual(f.navigations,[]);
+  assert.equal(f.calls.filter(v=>v.action==='resume-confirm').length,1);
+  assert.equal(f.calls.filter(v=>v.action==='continuation-cancel').length,1);
+});
 test("page opening is inert; two trusted gestures and checked consent produce one attempt",async()=>{
   const f=pageFixture();f.start();
   assert.deepEqual(f.calls,[]);assert(f.elements.resume.disabled);

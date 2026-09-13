@@ -49,8 +49,16 @@ def check_browser_startup(
         # Chromium's comma-separated extension flags cannot represent a comma in a path.
         if "," in str(bundle):
             raise ValueError()
+        from .browser_device_continuation_intent import has_continuation_intent
+
+        if has_continuation_intent(root):
+            from .browser_device_continuation_startup import _continuation_startup_scope
+
+            with _continuation_startup_scope(root, bundle=bundle, profile=profile,
+                                             public_key=public_key) as registered:
+                return registered
         return inspect_browser_registration(root, bundle=bundle, profile=profile,
-                                            public_key=public_key)
+                                             public_key=public_key)
     except Exception:
         raise BrowserStartupError(
             "Managed browser setup is invalid or unsafe; nothing was changed. "
@@ -101,6 +109,10 @@ def run_browser_startup(
 ) -> int:
     """Run only this child; clean user close/signal returns 0, crash returns 75."""
     try:
+        from .browser_device_continuation_intent import has_continuation_intent
+
+        if setup and has_continuation_intent(root):
+            raise ValueError()
         check_browser_startup(root, browser=browser, bundle=bundle, profile=profile,
                               public_key=public_key)
         if (threading.current_thread() is not threading.main_thread()
@@ -113,9 +125,9 @@ def run_browser_startup(
         match = re.match(rb"Chromium ([0-9]{1,4})\.", version.stdout)
         if version.returncode != 0 or match is None or int(match[1]) < 120:
             raise ValueError()
-        with _launch_lock(root):
-            registered = check_browser_startup(root, browser=browser, bundle=bundle,
-                                                profile=profile, public_key=public_key)
+        with _startup_registration_scope(root, browser=browser, bundle=bundle,
+                                          profile=profile, public_key=public_key,
+                                          setup=setup) as registered:
             command = browser_startup_command(root, browser=browser, bundle=bundle,
                                               registration=registered, setup=setup)
             previous = signal.getsignal(signal.SIGTERM)
@@ -158,3 +170,30 @@ def run_browser_startup(
             "Managed browser launch could not be confirmed. Review Chromium, graphical "
             "session and profile ownership; no state was reset or locks removed."
         ) from None
+
+
+@contextmanager
+def _startup_registration_scope(
+    root: Path, *, browser: Path, bundle: Path, profile: Path, public_key: Path,
+    setup: bool,
+) -> Iterator[BrowserRegistration]:
+    """Own the selected launch path; never fall back after continuation refusal."""
+    from .browser_device_continuation_intent import has_continuation_intent
+
+    if has_continuation_intent(root):
+        if setup:
+            raise ValueError()
+        from .browser_device_continuation_startup import _continuation_startup_scope
+
+        with _continuation_startup_scope(root, bundle=bundle, profile=profile,
+                                         public_key=public_key) as registered:
+            yield registered
+    else:
+        with _launch_lock(root):
+            registered = check_browser_startup(root, browser=browser, bundle=bundle,
+                                                profile=profile, public_key=public_key)
+            # A marker introduced while acquiring ownership cannot select a
+            # different route under an already-held ordinary launch lock.
+            if has_continuation_intent(root):
+                raise ValueError()
+            yield registered

@@ -30,7 +30,7 @@ from tests.test_browser_device_continuation_current import (
 from tests.test_browser_device_continuation_current import active_native
 from tests.test_browser_device_continuation_current import candidate as candidate
 from tests.test_browser_device_continuation_ownership import handoff as handoff
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_profile import CREDENTIAL
 from tests.test_browser_device_registration import source as source
@@ -88,7 +88,7 @@ console.log(JSON.stringify(result));
     assert result["observed"]["mode"] == ("active" if active else "paused")
     assert result["observed"]["binding"]["generation"] == (7 if active else None)
     assert set(result) == {"settings", "observed"}
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("failure", ["exit", "graph", "second-read", "credential"])

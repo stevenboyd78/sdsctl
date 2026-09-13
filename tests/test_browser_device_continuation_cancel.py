@@ -25,7 +25,7 @@ from tests.test_browser_device_continuation_current import (
 from tests.test_browser_device_continuation_current import candidate as candidate
 from tests.test_browser_device_continuation_current import native_step
 from tests.test_browser_device_continuation_ownership import handoff as handoff
-from tests.test_browser_device_guard_release import blocked
+from tests.test_browser_device_guard_release import unmocked_launch_blocked
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_profile import CREDENTIAL, private
 from tests.test_browser_device_registration import source as source
@@ -118,7 +118,7 @@ def test_one_owned_commit_cancels_without_grant_or_session(
         grant = db.execute("SELECT active_grant FROM browser_epoch_state").fetchone()[0]
         assert bool(grant) is (mode == "active" and operation == "correct_clock")
     assert current.inspect_stopped_continuation(candidate.root, **candidate.args) == result.state
-    blocked(lab)
+    unmocked_launch_blocked(lab)
 
 
 @pytest.mark.parametrize("change", ["revision", "same-revision-phase", "epoch", "fingerprint",

@@ -19,6 +19,7 @@ import stat
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from .browser_device_native import BrowserNativeConfiguration, _private_read
@@ -43,11 +44,39 @@ class BrowserExtensionIdentity:
     manifest_key: str
 
 
+@lru_cache(maxsize=8)
+def _validate_extension_der(der: bytes, openssl: str) -> None:
+    """Bounded process-local reuse of a pure public-key conversion, not authority.
+
+    Callers must freshly read/validate the private file and select the installed
+    executable. Only successful validation of these exact public bytes is reused.
+    No path, file metadata, native state, permission or mutable result is cached.
+    The installed Python/OpenSSL runtime remains a trusted prerequisite.
+    """
+    checked = subprocess.run(
+        [openssl, "pkey", "-pubin", "-inform", "DER", "-noout", "-pubcheck"],
+        input=der, capture_output=True, timeout=5, check=False,
+        env={"PATH": os.defpath, "OPENSSL_CONF": os.devnull, "LC_ALL": "C"},
+    )
+    # Validate separately so pubcheck's diagnostic is never part of the DER.
+    if checked.returncode != 0:
+        raise ValueError()
+    normalized = subprocess.run(
+        [openssl, "pkey", "-pubin", "-inform", "DER", "-outform", "DER"],
+        input=der, capture_output=True, timeout=5, check=False,
+        env={"PATH": os.defpath, "OPENSSL_CONF": os.devnull, "LC_ALL": "C"},
+    )
+    if normalized.returncode != 0 or normalized.stdout != der:
+        raise ValueError()
+
+
 def browser_extension_identity(public_key: Path) -> BrowserExtensionIdentity:
     """Validate one public SPKI PEM with OpenSSL, derive Chromium's key-based ID.
 
     Public identity is not proof of signing-key ownership or trusted distribution.
-    OpenSSL is used only during preparation, with bounded input and wall time.
+    File safety/content is checked on every call. Repeated canonical reconstruction
+    may reuse only OpenSSL's validation of identical public DER in this process.
+    Input, cache size and subprocess wall time are bounded.
     """
     try:
         _platform()
@@ -65,21 +94,7 @@ def browser_extension_identity(public_key: Path) -> BrowserExtensionIdentity:
         openssl = shutil.which("openssl", path=os.defpath)
         if openssl is None:
             raise ValueError()
-        checked = subprocess.run(
-            [openssl, "pkey", "-pubin", "-inform", "DER", "-noout", "-pubcheck"],
-            input=der, capture_output=True, timeout=5, check=False,
-            env={"PATH": os.defpath, "OPENSSL_CONF": os.devnull, "LC_ALL": "C"},
-        )
-        # Validate separately so pubcheck's diagnostic is never part of the DER.
-        if checked.returncode != 0:
-            raise ValueError()
-        normalized = subprocess.run(
-            [openssl, "pkey", "-pubin", "-inform", "DER", "-outform", "DER"],
-            input=der, capture_output=True, timeout=5, check=False,
-            env={"PATH": os.defpath, "OPENSSL_CONF": os.devnull, "LC_ALL": "C"},
-        )
-        if normalized.returncode != 0 or normalized.stdout != der:
-            raise ValueError()
+        _validate_extension_der(der, openssl)
         digest = hashlib.sha256(der).hexdigest()
         identity = "".join(chr(ord("a") + int(nibble, 16)) for nibble in digest[:32])
         return BrowserExtensionIdentity(identity, digest, encoded.decode("ascii"))
@@ -113,11 +128,28 @@ def _artifacts(
     content += ("\nif (window === window.top && ['/', '/device-display'].some(p => "
                 f"location.href === {origin} + p)) "
                 "connectLogoutContent({document, window, runtime: chrome.runtime, "
-                f"fetcher: fetch.bind(globalThis)}}, {origin});\n}})();\n")
+                f"fetcher: fetch.bind(globalThis)}}, {origin});\n")
+    # Inert, document-side sign-out receiver only. The trusted worker still must
+    # select an owned document after its STOP/native/write-drain checks. This
+    # registration neither requests sign-out nor enables continuation startup.
+    content += ("\nif (window === window.top && location.href === "
+                f"{origin} + '/device-display') "
+                "connectContinuationLogoutContent({window,runtime:chrome.runtime,"
+                f"fetcher:fetch.bind(globalThis)}}, {origin});\n}})();\n")
     resume_content = result["extension/browser_device_resume.mjs"].decode("utf-8")
     content += "\n(() => {\n" + re.sub(r"^export (?=(?:async )?function )", "", resume_content,
                                         flags=re.MULTILINE)
     content += ("\nconnectResumeContent({window,runtime:chrome.runtime,"
+                f"fetcher:fetch.bind(globalThis)}}, {origin});\n}})();\n")
+    probe_content = result["extension/browser_device_continuation_probe.mjs"].decode("utf-8")
+    content += "\n(() => {\n" + re.sub(r"^export (?=(?:async )?function )", "", probe_content,
+                                        flags=re.MULTILINE)
+    # Register only the inert document-side receiver. Its message sender is the
+    # same extension; the native-selected worker still owns probe selection.
+    # No registration-time fetch, native action, cookie or storage mutation.
+    content += ("\nif (window === window.top && location.href === "
+                f"{origin} + '/device-display') "
+                "connectContinuationProbeContent({window,runtime:chrome.runtime,"
                 f"fetcher:fetch.bind(globalThis)}}, {origin});\n}})();\n")
     result.update({
         "extension/manifest.json": _json({
@@ -166,7 +198,7 @@ def _artifacts(
         ).encode(),
         "extension/resume.mjs": (
             "import {connectResumePage} from './browser_device_resume.mjs';\n"
-            "connectResumePage({document,window,runtime:chrome.runtime});\n"
+            f"connectResumePage({{document,window,runtime:chrome.runtime}}, {origin});\n"
         ).encode("ascii"),
         "extension/resume.html": (
             "<!doctype html><html lang='en'><meta charset='utf-8'>"

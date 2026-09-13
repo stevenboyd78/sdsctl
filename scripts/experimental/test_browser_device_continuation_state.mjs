@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {pausedContinuationRecord,classifyContinuationStartup,createInitialInstallation} from
+import {pausedContinuationRecord,classifyContinuationStartup,classifyContinuationStorage,createInitialInstallation} from
   '../../src/sds200/browser_assets/browser_device_continuation_state.mjs';
 
 const config={identity:'a'.repeat(64),epoch:'b'.repeat(64),build:'c'.repeat(64),
@@ -309,4 +309,102 @@ for(const cut of [0,1,6])test('cookie binding has an exact phase-specific schema
   delete missing.cookieFingerprint;
   for(const bad of [missing,{...f.saved,cookieFingerprint:cut===6?null:cookieFingerprint}])
     assert.deepEqual(classifyContinuationStartup(config,bad,cut===6?after:before),stopped);
+});
+
+for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443']) {
+  for(const cut of [0,1,6]) {
+    const label=origin+' phase '+cut;
+    test('whole storage classifies only one retained record '+label,()=>{
+      const f=fixture({...config,origin}).advance(cut),stored={sdsctlDeviceRecovery:clone(f.saved)};
+      const native=cut===0?{...f.before,binding:{...f.before.binding,generation:null}}:f.after;
+      const expected=cut===0?{mode:'paused',sessionReady:false}:cut===6?verifiedLater:stopped;
+      const prior=clone(stored),actual=classifyContinuationStorage(f.settings,stored,native);
+      assert.deepEqual(actual,expected);assert(Object.isFrozen(actual));
+      assert.deepEqual(stored,prior);assert.equal(actual.sessionReady,false);
+      const nullPrototype=Object.assign(Object.create(null),stored);
+      assert.deepEqual(classifyContinuationStorage(f.settings,nullPrototype,native),expected);
+    });
+    for(const value of [undefined,null,false,0,'',{stopped:false},{version:1,stopped:true}]) {
+      test('any STOP key stays terminal without adopting it '+label+' '+JSON.stringify(value),()=>{
+        const f=fixture({...config,origin}).advance(cut);
+        const stored={sdsctlDeviceRecovery:clone(f.saved),sdsctlContinuationStop:value},prior=clone(stored);
+        assert.deepEqual(classifyContinuationStorage(f.settings,stored,cut===0?f.before:f.after),stopped);
+        assert.deepEqual(stored,prior);
+      });
+    }
+    for(const extra of ['unknown','__proto__',Symbol('unknown')]) {
+      test('whole storage rejects enumerable or hidden extra key '+label+' '+String(extra),()=>{
+        const f=fixture({...config,origin}).advance(cut),stored={sdsctlDeviceRecovery:f.saved};
+        Object.defineProperty(stored,extra,{value:true,enumerable:false});
+        assert.deepEqual(classifyContinuationStorage(f.settings,stored,cut===0?f.before:f.after),stopped);
+      });
+    }
+  }
+}
+for(const [label,container] of [['missing',undefined],['null',null],['boolean',false],
+  ['number',0],['string',''],['array',[]],['empty',{}],['date',new Date(0)]]) {
+  test('unknown whole-storage container is terminal '+label,()=>{
+    assert.deepEqual(classifyContinuationStorage(config,container,before),stopped);
+  });
+}
+test('whole storage does not invoke accessor or inherited recovery fields',()=>{
+  const saved=pausedContinuationRecord(config);
+  const getter={get sdsctlDeviceRecovery(){assert.fail('Accessor must not run');}};
+  assert.deepEqual(classifyContinuationStorage(config,getter,before),stopped);
+  assert.deepEqual(classifyContinuationStorage(config,Object.create({sdsctlDeviceRecovery:saved}),before),stopped);
+  const hidden=Object.defineProperty({},'sdsctlDeviceRecovery',{value:saved});
+  assert.deepEqual(classifyContinuationStorage(config,hidden,before),stopped);
+  const withStop={sdsctlDeviceRecovery:saved};
+  Object.defineProperty(withStop,'sdsctlContinuationStop',{get(){assert.fail('STOP getter must not run');}});
+  assert.deepEqual(classifyContinuationStorage(config,withStop,before),stopped);
+});
+for(const origin of ['https://display.example.test','https://192.0.2.18:8443','https://[2001:db8::18]:8443']) {
+  test('recovery-produced clean pause reaches review without migration '+origin,()=>{
+    const settings={...config,origin},saved={version:1,identity:config.identity,paused:true,phase:'clean',nextAt:0};
+    const stored={sdsctlDeviceRecovery:saved},prior=clone(stored);
+    const offline={...before,binding:{...before.binding,generation:null}};
+    assert.deepEqual(classifyContinuationStorage(settings,stored,offline),{mode:'paused',sessionReady:false});
+    assert.deepEqual(stored,prior);
+    // The legacy record is NOT a schema-3 installation or accepted record.
+    assert.deepEqual(classifyContinuationStartup(settings,saved,offline),stopped);
+    assert.deepEqual(classifyContinuationStorage(settings,stored,after),stopped);
+    for(const value of [undefined,null,false,0,{},true])
+      assert.deepEqual(classifyContinuationStorage(settings,{...stored,sdsctlContinuationStop:value},offline),stopped);
+  });
+}
+for(const [field,value] of [['version',2],['version','1'],['identity','9'.repeat(64)],
+  ['paused',false],['paused',1],['phase','resume_pending'],['phase','accepted'],['nextAt',1],['nextAt','0']])
+test('legacy pause refuses changed field '+field+' '+value,()=>{
+  const stored={sdsctlDeviceRecovery:{version:1,identity:config.identity,paused:true,phase:'clean',nextAt:0,[field]:value}};
+  const offline={...before,binding:{...before.binding,generation:null}};
+  assert.deepEqual(classifyContinuationStorage(config,stored,offline),stopped);
+});
+for(const field of ['version','identity','paused','phase','nextAt'])
+test('legacy pause never reads accessor or hidden field '+field,()=>{
+  const offline={...before,binding:{...before.binding,generation:null}};
+  for(const descriptor of [{get:()=>assert.fail('Legacy getter must not run'),enumerable:true},
+    {value:0,enumerable:false}]) {
+    const saved={version:1,identity:config.identity,paused:true,phase:'clean',nextAt:0};
+    Object.defineProperty(saved,field,descriptor);
+    assert.deepEqual(classifyContinuationStorage(config,{sdsctlDeviceRecovery:saved},offline),stopped);
+  }
+});
+test('legacy pause requires whole-record shape and native identity/epoch/paused binding',()=>{
+  const saved={version:1,identity:config.identity,paused:true,phase:'clean',nextAt:0};
+  const offline={...before,binding:{...before.binding,generation:null}};
+  for(const bad of [Object.create(saved),{...saved,extra:true},{...saved,[Symbol('extra')]:true}])
+    assert.deepEqual(classifyContinuationStorage(config,{sdsctlDeviceRecovery:bad},offline),stopped);
+  for(const bad of [null,{...offline,identity:'9'.repeat(64)},{...offline,epoch:'9'.repeat(64)},
+    {...offline,binding:{...offline.binding,revision:0}},before])
+    assert.deepEqual(classifyContinuationStorage(config,{sdsctlDeviceRecovery:saved},bad),stopped);
+});
+
+test('whole storage still requires exact native/identity/build binding',()=>{
+  const f=fixture().advance(6),stored={sdsctlDeviceRecovery:f.saved};
+  for(const changed of [{...config,identity:'9'.repeat(64)},{...config,epoch:'9'.repeat(64)},
+    {...config,build:'9'.repeat(64)},null])
+    assert.deepEqual(classifyContinuationStorage(changed,stored,after),stopped);
+  for(const changed of [before,null,{...after,binding:{...after.binding,revision:after.binding.revision+1}},
+    {...after,binding:{...after.binding,generation:after.binding.generation+1}}])
+    assert.deepEqual(classifyContinuationStorage(config,stored,changed),stopped);
 });

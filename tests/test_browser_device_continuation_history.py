@@ -25,9 +25,13 @@ from sds200.browser_device_handoff import BrowserHandoffError
 from sds200.browser_device_profile import BrowserProfileError, inspect_browser_profile
 from sds200.browser_device_profile_access import browser_profile_access
 from sds200.browser_device_recovery import RecoveryMode
-from sds200.browser_device_registration import MAINTENANCE_MARKER
+from sds200.browser_device_registration import (
+    MAINTENANCE_MARKER,
+    BrowserRegistrationError,
+    inspect_browser_registration,
+)
 from sds200.browser_device_resume_maintenance import BrowserResumeRetirementEvidence
-from sds200.browser_device_startup import _launch_lock
+from sds200.browser_device_startup import _launch_lock, check_browser_startup
 from sds200.browser_device_worker import BrowserWorkerSelection
 from tests import test_browser_device_launch as launch_fixture
 from tests.test_browser_device_bundle import profile as profile
@@ -155,6 +159,20 @@ def inspect(chain):
     return history.inspect_continuation_history(h, release_id=r.release_id, intent_id=i.intent_id)
 
 
+def launchable_without_permission(lab, handoff):
+    """Full valid current history permits offline launch, not legacy permission.
+
+    No history reader or ownership check is mocked. Browser STOP, consent and
+    authentication are separately enforced; this check must not mutate any state.
+    """
+    before = state(lab, handoff)
+    with pytest.raises(BrowserRegistrationError):
+        inspect_browser_registration(lab.inputs["root"],
+            **{key: lab.inputs[key] for key in ("bundle", "profile", "public_key")})
+    assert check_browser_startup(**lab.inputs).identity == lab.configuration.identity
+    assert state(lab, handoff) == before
+
+
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
 def test_owned_activation_workflow_with_complete_retained_chain(lab, chain):
     from sds200.browser_device_continuation_activation import (
@@ -182,7 +200,7 @@ def test_owned_activation_workflow_with_complete_retained_chain(lab, chain):
         release.BrowserPausedGuardRelease(h).confirm(release_id=r.release_id)
     with pytest.raises(intent.BrowserContinuationIntentError):
         intent.BrowserContinuationIntent(h, release_id=r.release_id).confirm(intent_id=i.intent_id)
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -233,12 +251,17 @@ def test_epoch_core_preserves_complete_history_without_enabling_runtime(lab, cha
         assert current_state.native_revision == result.revision
         assert current_state.state_fingerprint == result.fingerprint
         assert state(lab, h) == before_read
-        blocked(lab)  # Even a verified active epoch is not a normal runtime role.
+        if operation == "pause":
+            launchable_without_permission(lab, h)
+        else:
+            # Prepared/claimed approvals are incomplete; this core-only ACTIVE
+            # fixture also has fabricated private-input hashes, not a live grant.
+            blocked(lab)
     assert result.mode is RecoveryMode.PAUSED
     assert inspect(chain) == retained and path.read_bytes() == raw
     with pytest.raises(activation.BrowserPausedActivationError):
         core.confirm(epoch=activated.epoch)
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -288,11 +311,12 @@ def test_owned_activation_interruptions_keep_evidence_and_never_replay(
     assert (lab.args["directory"] / activation.ACTIVATION_MANIFEST).exists()
     if failure == "late-ack":
         assert core.confirm(epoch=epochs[0]).native_revision == r.revision + 1
+        launchable_without_permission(lab, h)
     else:
         assert lab.ledger.path.read_bytes() == before
         with pytest.raises(activation.BrowserPausedActivationError):
             core.confirm(epoch=epochs[0])
-    blocked(lab)
+        blocked(lab)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -782,7 +806,7 @@ def test_fixed_live_current_read_selects_complete_chain_without_runtime_role(
         finally:
             (root / "SingletonLock").unlink()  # Fixture-owned marker only.
     assert state(lab, h) == before
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -862,7 +886,7 @@ def test_owned_paused_server_review_complete_chain_never_grants_a_session(
     after["profile"].pop("recovery.sqlite")
     before["profile"].pop("recovery.sqlite")
     assert after == before and inspect(chain) == retained
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("change", ["archive", "release", "credential", "runtime"])
@@ -938,7 +962,7 @@ def test_owned_cancellation_preserves_complete_history_and_blocks_stale_grants(l
         corrector.confirm()  # A later pause is not the exact earlier after-state.
     with pytest.raises(epoch.BrowserContinuationEpochError):
         native_step(lab, candidate, "complete")  # Cancelled/completed old claim is not reusable.
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("failure", ["archive", "runtime", "commit-before", "commit-after",
@@ -998,7 +1022,10 @@ def test_owned_cancellation_full_chain_interruptions_retain_state(
         with pytest.raises(cancel.BrowserContinuationCancellationError):
             pauser.confirm()
     assert state(lab, h) == after
-    blocked(lab)
+    if failure in {"commit-before", "commit-after"}:
+        launchable_without_permission(lab, h)
+    else:
+        blocked(lab)
 
 
 def test_live_owned_cancellation_uses_complete_chain_without_ordinary_dispatch(
@@ -1027,7 +1054,7 @@ def test_live_owned_cancellation_uses_complete_chain_without_ordinary_dispatch(
         finally:
             (root / "SingletonLock").unlink()  # Fixture-only marker.
     assert current.inspect_stopped_continuation(root, **paths) == result.state
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -1073,7 +1100,7 @@ def test_live_owned_approval_retains_complete_history_and_pause_wins(lab, chain,
     after = state(lab, h)
     after["profile"].pop("recovery.sqlite")
     assert after == before and inspect(chain) == retained
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("failure", ["prepare-before", "prepare-after", "claim-before",
@@ -1146,7 +1173,10 @@ def test_owned_approval_complete_chain_uncertainty_never_permits_claim(
         with pytest.raises(approval.BrowserContinuationApprovalError):
             obj.claim()
         assert state(lab, h) == stable
-    blocked(lab)
+    if failure == "prepare-before":
+        launchable_without_permission(lab, h)
+    else:
+        blocked(lab)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -1224,7 +1254,7 @@ def test_owned_verification_complete_chain_keeps_history_and_cancellation(
     after = state(lab, h)
     after["profile"].pop("recovery.sqlite")
     assert after == before and inspect(chain) == retained
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -1322,7 +1352,7 @@ def test_owned_initial_session_complete_chain_preserves_history_and_pause(
     after["profile"].pop("recovery.sqlite")
     assert after == before and inspect(chain) == retained
     assert TOKEN.encode() not in lab.ledger.path.read_bytes()
-    blocked(lab)
+    launchable_without_permission(lab, h)
 
 
 @pytest.mark.parametrize("chain", ["retire", "reconcile"], indirect=True)
@@ -1419,4 +1449,4 @@ def test_owned_active_recheck_complete_chain_never_mutates_the_native_grant(
         finally:
             (root / "SingletonLock").unlink()  # Fresh fictional fixture only.
     assert inspect(chain) == retained
-    blocked(lab)
+    launchable_without_permission(lab, h)

@@ -4,10 +4,10 @@ import re
 from dataclasses import fields
 from pathlib import Path
 
+import sds200
 from sds200.state import RadioStateSnapshot
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-ASSET_ROOT = REPOSITORY_ROOT / "src" / "sds200" / "web_assets"
+ASSET_ROOT = Path(sds200.__file__).resolve().parent / "web_assets"
 
 
 def _asset(name: str) -> str:
@@ -47,7 +47,9 @@ def test_dashboard_renders_every_authoritative_radio_state_as_one_projection() -
     # Initial status, ordered event updates, polling fallback, and periodic
     # reconciliation all converge on renderSnapshot's complete projection.
     for authoritative_boundary in (
-        "renderStatus(await fetchStatusPayload())",
+        "const payload = await fetchStatusPayload();\n"
+        "    if (authenticationRequired) return;\n"
+        "    renderStatus(payload);",
         'kind === "stream.snapshot"',
         'kind === "scanner.psi"',
         'kind === "radio.state"',
