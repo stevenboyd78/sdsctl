@@ -298,6 +298,16 @@
     padding: clamp(0.35rem, 1.2vh, 0.85rem) !important;
   }
 
+  /* Keep compact content inside the built-in LCARS decorative edges. */
+  :root[data-theme="lcars"] .site-header {
+    padding-left: 2.2rem !important;
+  }
+
+  :root[data-theme="lcars"] .panel-header {
+    /* Compact recordings otherwise reset this to zero beneath the end caps. */
+    margin-right: 4.2rem !important;
+  }
+
   .brand,
   .overview > div,
   .workspace-tabs,

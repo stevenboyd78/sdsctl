@@ -244,6 +244,7 @@ def test_event_lease_filters_recording_and_redacts_private_fields() -> None:
     )
     observed = lease.get(0)
 
+    assert observed.sequence == snapshot.sequence + 1
     assert observed.kind == DaemonEventKind.SCANNER_CONNECTION
     assert observed.payload == {"connected": True}
     rendered = observed.to_json_line().decode()
@@ -253,6 +254,48 @@ def test_event_lease_filters_recording_and_redacts_private_fields() -> None:
 
     lease.close()
     assert events.subscriber_count == 0
+
+
+def test_event_filter_offset_survives_timeout_but_resets_for_new_lease() -> None:
+    events = EventSource()
+    broker = _broker(event_source=events)
+    first = broker.subscribe_events(_peer("first-display"))
+    assert first.get(0).sequence == 0
+    for status in ("recording", "stopped"):
+        events.publisher.publish(DaemonEventKind.RECORDING_STATE, {"status": status})
+    with pytest.raises(queue.Empty):
+        first.get(0)
+    second = broker.subscribe_events(_peer("second-display"))
+    assert second.get(0).sequence == 2
+    source = events.publisher.publish(
+        DaemonEventKind.SCANNER_CONNECTION, {"connected": True},
+    )
+    assert source.sequence == 3
+    assert first.get(0).sequence == 1
+    assert second.get(0).sequence == 3
+    first.close()
+    second.close()
+
+
+def test_event_filter_does_not_hide_queue_loss_even_when_private_event_was_lost() -> None:
+    events = EventSource(queue_capacity=2)
+    broker = _broker(event_source=events)
+    lease = broker.subscribe_events(_peer())
+    assert lease.get(0).sequence == 0
+    events.publisher.publish(DaemonEventKind.RECORDING_STATE, {"status": "recording"})
+    with pytest.raises(queue.Empty):
+        lease.get(0)
+    # Drop source events2(private) and3(public) before this peer consumes them.
+    for kind in (
+        DaemonEventKind.RECORDING_STATE, DaemonEventKind.SCANNER_CONNECTION,
+        DaemonEventKind.RECORDING_STATE, DaemonEventKind.SCANNER_CONNECTION,
+    ):
+        events.publisher.publish(kind, {})
+    observed = lease.get(0)
+    assert observed.sequence == 3  # source5 minus two actually filtered events
+    assert observed.sequence > 1  # still a gap after the checkpoint at0
+    assert broker.snapshot().filtered_events == 2
+    lease.close()
 
 
 def test_slow_event_peer_cannot_delay_or_overflow_another_peer() -> None:

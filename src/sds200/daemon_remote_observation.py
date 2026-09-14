@@ -325,6 +325,7 @@ class DaemonRemoteEventLease(_DaemonRemoteObservationLease):
             subscription.close,
         )
         self._subscription = subscription
+        self._filtered_event_count = 0
 
     def get(self, timeout: float | None = None) -> DaemonEvent:
         deadline = _optional_deadline(timeout)
@@ -335,9 +336,12 @@ class DaemonRemoteEventLease(_DaemonRemoteObservationLease):
                 _remaining_timeout(deadline),
             )
             if event.kind == DaemonEventKind.RECORDING_STATE:
+                self._filtered_event_count += 1
                 self._broker._record_filtered_event()
                 continue
-            return _sanitize_event(event)
+            # Discount only events actually consumed and intentionally omitted.
+            # Renumbering every delivery consecutively would hide queue loss.
+            return _sanitize_event(event, sequence_offset=self._filtered_event_count)
 
 
 class DaemonRemoteWaterfallLease(_DaemonRemoteObservationLease):
@@ -695,11 +699,11 @@ class DaemonRemoteObservationBroker:
             self._filtered_events += 1
 
 
-def _sanitize_event(event: DaemonEvent) -> DaemonEvent:
+def _sanitize_event(event: DaemonEvent, *, sequence_offset: int = 0) -> DaemonEvent:
     payload = _sanitize_remote_value(event.payload)
     assert isinstance(payload, dict)
     return DaemonEvent(
-        sequence=event.sequence,
+        sequence=event.sequence - sequence_offset,
         observed_at=event.observed_at,
         kind=event.kind,
         payload=payload,

@@ -40,7 +40,7 @@
 :root[data-theme="first-responder"] .site-header::after {
   position: absolute;
   right: 0;
-  bottom: -0.22rem;
+  bottom: 0;
   left: 0;
   height: 0.22rem;
   border-radius: 999px;
@@ -52,6 +52,10 @@
   );
   content: "";
   opacity: 0.9;
+}
+
+:root[data-theme="first-responder"] .overview {
+  padding-top: 0.5rem;
 }
 
 :root[data-theme="first-responder"] .site-header h1,

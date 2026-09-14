@@ -1,6 +1,7 @@
 # v0.30.0 release preparation — display improvements and experimental browser foundations
 
-Status: **targeted, not published; artifact and installed-release gates pending**.
+Status: **private candidate acceptance complete; final-source CI, publication
+and installed-published-release gates pending**.
 This is a release scope, not a new milestone or an installation guide. The
 [milestone/release index](release-tracking.md) and [release process](releasing.md)
 retain the distinction between integration, acceptance and publication.
@@ -12,8 +13,10 @@ retain the distinction between integration, acceptance and publication.
 - Source baseline: `417f9d14283f7afc1a4060ce68956468a071b3e1`, with the reviewed
   documentation policy at `b9ec344305e83d7efb8797d73d719a969c09cdaf` (PR #254).
   Verify that PR's merge and exact-head checks before release closure.
-- New release commit, artifact hashes and installed-version receipts: pending.
-  Earlier private `0.29.5` wheels are not release artifacts and must not be reused.
+- Final release commit and public artifact identities: pending. The private
+  candidate artifact identities and installed-version acceptance are recorded
+  below; they are not proof of publication. Earlier private `0.29.5` wheels are
+  not release artifacts and must not be reused.
 - This is a feature release because it adds opt-in experimental commands and
   capabilities, not only fixes to the 0.29 maintenance line.
 - The release-preparation branch is not the public Home Assistant catalog.
@@ -23,9 +26,10 @@ retain the distinction between integration, acceptance and publication.
 
 | Slice | Included behavior | Acceptance boundary |
 | --- | --- | --- |
-| [TUI date presentation](../ROADMAP.md#low-priority-tui-usability-follow-up), PR #253 | Local RFC-style dates, numeric offset and 24-hour time in the header and observed status changes | Both Pi layouts previously accepted; new versioned-client smoke remains pending; not socket uptime |
-| [Diagnostics connection ages](web-dashboard.md) | `HH:MM:SS` or `Nd HH:MM:SS` for the oldest still-open remote connection | Preserve unavailable/invalid values; installed App smoke pending |
-| LCARS layering, PR #250 | Keep scanner field text clear of decorative shapes | Both Pi LCARS observations retained; installed App/theme smoke pending |
+| [TUI date presentation](../ROADMAP.md#low-priority-tui-usability-follow-up), PR #253 | Local RFC-style dates, numeric offset and 24-hour time in the header and observed status changes | Private versioned-client visual checks passed on both Pi layouts; not socket uptime |
+| [Diagnostics connection ages](web-dashboard.md) | `HH:MM:SS` or `Nd HH:MM:SS` for the oldest still-open remote connection | Private installed App smoke passed; preserve unavailable/invalid values |
+| LCARS layering, PR #250 and acceptance corrections | Keep scanner field text and header controls clear of decorative shapes; separate First Responder/Amateur Radio header dividers from text | Private installed theme recheck passed after the spacing corrections |
+| Remote recording-event continuity | Keep remote TUIs live while private recording transitions are filtered from their event stream; preserve real-loss detection and private-field rejection | Two-client router regression and private installed recording start/stop/finalization passed; neither Pi service restarted |
 | Deferred public API loading, PR #250 | Focused native helpers avoid loading unrelated public APIs until used | Preserve export identity and compatibility; clean-wheel import/native-helper tests required |
 | [Experimental browser continuation/sign-out](browser-device-continuation-acceptance.md), PR #250 and its foundations | Explicit experimental preparation/start/maintenance commands, document-bound resume, durable pause and bounded same-origin sign-out | Fresh isolated profiles and the recorded scope only; not automatic adoption or unattended-production qualification |
 | [Release tracking](release-tracking.md), PR #254 | Independent milestone/version identifiers and explicit release scope | Documentation, not a new runtime capability |
@@ -110,8 +114,43 @@ Required scoped human checks, once an exact candidate and restoration plan exist
 | --- | --- | --- |
 | Both bench Pi consoles | Correct local header/status dates, model/firmware separation, no clipping on 100x30 and 160x45 | Existing fonts, normal TUI services and independent credentials |
 | Managed TUI outage/recovery | Waiting screen and fresh automatic live recovery on an App restart | Normal release/configuration; no credential rotation |
+| Recording with both remote TUIs connected | Both TUIs remain live throughout browser recording start, stop and finalization; no protocol failure or forced service restart | Same observe-only profiles, separate candidate recording library |
 | Home Assistant candidate | Scanner state, human-readable Diagnostics age and LCARS metadata, controls/Waterfall, audio start/stop, recording finalization/play/download and restart persistence | Single scanner owner, recording library, mappings, MQTT and installed configuration |
 | Experimental browser, only if required by an actual artifact/claim change | Exact fresh-profile paused/resume/sign-out/stopped-restart sequence | Separate fictional/private fixture; never reuse retained uncertain profiles |
+
+### Private candidate acceptance — September 14, 2026
+
+The attended checks above passed on both bench Pi consoles and the isolated
+Home Assistant App. The release-preparation source is based on `846bd4f`, with
+the separately tested theme-spacing and remote recording-event corrections.
+The final reviewed commit and its CI results still need to be recorded.
+
+- Both Pi clients used the private `0.30.0` wheel with SHA-256
+  `8b1cbb1802a54d71077a046c6ce87c63416a9723843f4da11d08bec86d92791c`.
+  Version, local dates, model/firmware separation, compact/HDMI layouts and
+  live updates passed. Existing client credentials and fonts were preserved.
+- The final private App used the corrected `0.30.0` wheel with SHA-256
+  `eea2c501a3057fb793bd371aa764d43dd74405d1ef85ed458a32f020b4ace4a1`.
+  All 322 installed runtime files matched that wheel. The remote-client fix is
+  server-side; neither Pi needed a replacement package for this retest.
+- Theme spacing, Diagnostics, scanner controls and Waterfall passed. Browser
+  audio and recording finalization/playback/download passed. The initial
+  recording check exposed filtered-event sequence gaps that stopped both TUIs;
+  that failed attempt remains part of the evidence, not a successful test.
+- After the server correction, recording was independently observed active,
+  then stopped with a new finalized file. Both remote TUIs stayed connected
+  throughout, with unchanged processes and zero service restarts.
+- One subsequent App restart produced both disconnected/retrying screens and
+  automatic live recovery. The browser reconnected without reloading. The
+  complete recording library and new test WAV/metadata checksums were unchanged;
+  the user confirmed saved-recording playback and browser audio play/stop after
+  recovery. Core, settings, ports and credentials were unchanged.
+
+These are private-candidate acceptance results, not an installed-public-release
+claim. Retain the candidate recordings and private evidence separately from the
+original library. Publish only after the exact final-source CI/artifact gates
+and approved ordering above; still verify upgrades from the published package
+and App catalog before GitHub Release/Latest promotion.
 
 Do not ask for every old browser fault scenario again when the artifact's tested
 graph and support claim are unchanged. Any additional test must state what

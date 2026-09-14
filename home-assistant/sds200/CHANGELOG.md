@@ -7,6 +7,10 @@
 - Show connected-client ages in Diagnostics as hours/minutes/seconds and elapsed
   days instead of a raw seconds count; retain the oldest-current-connection meaning.
 - Correct the LCARS scanner metadata decoration so it cannot cover field text.
+- Keep header text and controls clear of LCARS decorations and separate the
+  First Responder and Amateur Radio overview labels from their header dividers.
+- Keep remote TUI clients live while another interface starts or stops a
+  recording, without exposing private recording events or hiding real event loss.
 - Include the opt-in experimental managed-browser implementation and its scoped
   continuation/sign-out fixes. The repository App keeps the existing seven-field
   option schema and disabled-by-default advanced access; it does not expose

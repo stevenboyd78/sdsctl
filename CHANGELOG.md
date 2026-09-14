@@ -197,6 +197,11 @@ foundations are not a claim of unattended-production support.
 
 ### Fixed
 
+- Keep authenticated remote TUI clients connected when another interface starts
+  or stops a recording. Discount intentionally filtered private recording events
+  from each remote lease's sequence without masking genuine queue loss or
+  relaxing private-field validation.
+
 - Keep experimental managed-display sign-out working after extension worker
   inactivity. Reconstruct only a Stop-specific accepted-cookie comparison after
   this attempt's checked browser Stop/native pause; retain unknown state and
@@ -204,6 +209,9 @@ foundations are not a claim of unattended-production support.
 - Keep complete, pending and unconfirmed managed-display sign-out messages
   visible instead of letting background session refresh navigate them away.
 - Prevent the LCARS field-group decoration from clipping scanner metadata.
+- Keep LCARS header text and controls clear of decorative rails and curves,
+  and separate First Responder and Amateur Radio dashboard labels from their
+  header dividers, including compact layouts.
 
 - Request normal Chromium closure with `SIGINT` when stopping the experimental
   managed-browser launcher. Let the launcher finish that bounded shutdown before

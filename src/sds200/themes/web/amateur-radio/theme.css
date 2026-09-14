@@ -50,7 +50,7 @@
 :root[data-theme="amateur-radio"] .site-header::after {
   position: absolute;
   right: 0.8rem;
-  bottom: -0.18rem;
+  bottom: 0;
   left: 0.8rem;
   height: 0.18rem;
   background: repeating-linear-gradient(
@@ -60,6 +60,10 @@
   );
   content: "";
   opacity: 0.72;
+}
+
+:root[data-theme="amateur-radio"] .overview {
+  padding-top: 0.5rem;
 }
 
 :root[data-theme="amateur-radio"] .site-header h1,

@@ -622,6 +622,51 @@ def test_router_serves_sanitized_events_through_shared_event_client() -> None:
         router.stop()
 
 
+def test_remote_clients_survive_filtered_recording_start_and_stop() -> None:
+    """Private recording transitions must not look like lost public events."""
+    events = _event_source()
+    # Exercise a nonzero checkpoint, not just a new publisher at zero.
+    events.publish(DaemonEventKind.RECORDING_STATE, {"path": "/private/old.wav"})
+    broker = _empty_broker(event_stream=events)
+    listener = ScriptedListener()
+    router = DaemonRemoteServiceRouter(
+        listener, broker, accept_poll_interval=0.01,
+    ).start()
+    local = events.subscribe()
+    clients: list[DaemonEventClient] = []
+    try:
+        for identifier in ("display-small", "display-hdmi"):
+            stream = _open_selected_client(
+                listener, DaemonRemoteService.EVENTS, client_id=identifier,
+            )
+            client = DaemonEventClient(ConnectedTransport(stream))
+            clients.append(client)
+            assert client.receive().sequence == 1
+        assert local.get(0).sequence == 1
+        for index, status in enumerate(("recording", "stopped"), start=1):
+            private = events.publish(
+                DaemonEventKind.RECORDING_STATE,
+                {"status": status, "path": "/private/test.wav"},
+            )
+            public = events.publish(
+                DaemonEventKind.SCANNER_CONNECTION, {"connected": True},
+            )
+            assert local.get(0) == private
+            assert local.get(0) == public
+            for client in clients:
+                event = client.receive()
+                assert event.kind == DaemonEventKind.SCANNER_CONNECTION
+                assert event.sequence == 1 + index
+                assert event.payload == {"connected": True}
+                assert client.connected
+        assert broker.snapshot().filtered_events == 4
+    finally:
+        for client in clients:
+            client.close()
+        local.close()
+        router.stop()
+
+
 def test_connected_inventory_groups_services_and_removes_closed_clients(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
