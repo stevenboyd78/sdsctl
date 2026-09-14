@@ -447,6 +447,41 @@ def test_total_deadline_bounds_slow_https_body(server):
     assert after["retry_after"] > 0  # Saved claim survives a killed exchange; no immediate retry.
 
 
+def native_worker_has_exited(pid):
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().split(")", 1)[1].split()[0]
+    except (FileNotFoundError, ProcessLookupError):
+        # The process can vanish before open (ENOENT) or during read (ESRCH).
+        return True
+    return state == "Z"
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError, ProcessLookupError])
+def test_native_worker_exit_observation_accepts_disappearance(monkeypatch, error):
+    def disappeared(path):
+        assert path == Path("/proc/123/stat")
+        raise error("Worker disappeared")
+
+    monkeypatch.setattr(Path, "read_text", disappeared)
+    assert native_worker_has_exited(123)
+
+
+@pytest.mark.parametrize("state", ["R", "S", "D", "T", "Z"])
+def test_native_worker_exit_observation_requires_dead_state(monkeypatch, state):
+    monkeypatch.setattr(Path, "read_text", lambda path: f"123 (worker) {state} 1")
+    assert native_worker_has_exited(123) is (state == "Z")
+
+
+@pytest.mark.parametrize("error", [PermissionError, OSError])
+def test_native_worker_exit_observation_propagates_unrelated_errors(monkeypatch, error):
+    def unreadable(path):
+        raise error("Process status could not be read")
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    with pytest.raises(error):
+        native_worker_has_exited(123)
+
+
 def test_parent_death_kills_stalled_worker(root):
     initialize(root)
     with subprocess.Popen(
@@ -466,11 +501,7 @@ def test_parent_death_kills_stalled_worker(root):
         process.wait(timeout=2)
         until = time.monotonic() + 2
         while time.monotonic() < until:
-            try:
-                state = Path(f"/proc/{child}/stat").read_text().split(")", 1)[1].split()[0]
-            except FileNotFoundError:
-                break
-            if state == "Z":
+            if native_worker_has_exited(child):
                 break
             time.sleep(0.02)
         else:
