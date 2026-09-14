@@ -59,6 +59,7 @@ class CollectingPlaybackSink:
     def __init__(self) -> None:
         self._running = False
         self.received: list[bytes] = []
+        self._received_condition = threading.Condition()
         self.start_calls = 0
         self.stop_calls = 0
 
@@ -81,7 +82,15 @@ class CollectingPlaybackSink:
 
     def submit_pcm(self, data: bytes) -> None:
         assert self._running
-        self.received.append(data)
+        with self._received_condition:
+            self.received.append(data)
+            self._received_condition.notify_all()
+
+    def wait_for_chunks(self, count: int) -> bool:
+        with self._received_condition:
+            return self._received_condition.wait_for(
+                lambda: len(self.received) >= count, timeout=2.0,
+            )
 
     def stop(self) -> None:
         self._running = False
@@ -201,39 +210,81 @@ def test_tui_audio_starts_live_playback_and_records_repeatedly(tmp_path: Path) -
         now=now,
     )
 
-    session.open_audio()
-    assert transport.start_calls == 1
-    assert not playback.running
-    assert not session.live_playback_active
+    try:
+        session.open_audio()
+        assert transport.start_calls == 1
+        assert not playback.running
+        assert not session.live_playback_active
 
-    session.start_live_playback()
-    assert playback.running
-    assert session.live_playback_active
+        session.start_live_playback()
+        assert playback.running
+        assert session.live_playback_active
 
-    session.start()
-    transport.feed(bytes((0xFF, 0x80)))
-    session.stop()
-    session.start()
-    transport.feed(bytes((0x00, 0x7F)))
-    session.stop()
+        session.start()
+        transport.feed(bytes((0xFF, 0x80)))
+        session.stop()
+        session.start()
+        transport.feed(bytes((0x00, 0x7F)))
+        session.stop()
 
-    assert session.completed_recordings == 2
-    assert {entry.path.name for entry in session.recordings} == {
-        "sds200-20260729-025501.wav",
-        "sds200-20260729-025501-2.wav",
-    }
-    assert len(playback.received) == 2
-    assert list(tmp_path.glob("*.json")) == []
-    for entry in session.recordings:
-        with wave.open(str(entry.path), "rb") as recording:
-            assert recording.getnchannels() == 1
-            assert recording.getsampwidth() == 2
-            assert recording.getframerate() == 8000
-            assert recording.getnframes() == 2
-
-    session.close()
+        assert session.completed_recordings == 2
+        assert {entry.path.name for entry in session.recordings} == {
+            "sds200-20260729-025501.wav",
+            "sds200-20260729-025501-2.wav",
+        }
+        # Recording finalization drains its own sink, not the independent live
+        # playback worker. Observe delivery before asserting the exact count.
+        assert playback.wait_for_chunks(2), "Live playback did not receive both chunks"
+        assert len(playback.received) == 2
+        assert playback.running and session.live_playback_active
+        assert list(tmp_path.glob("*.json")) == []
+        for entry in session.recordings:
+            with wave.open(str(entry.path), "rb") as recording:
+                assert recording.getnchannels() == 1
+                assert recording.getsampwidth() == 2
+                assert recording.getframerate() == 8000
+                assert recording.getnframes() == 2
+    finally:
+        session.close()
     assert transport.stop_calls == 1
     assert not playback.running
+
+
+def test_recording_finalization_does_not_wait_for_live_playback_delivery(tmp_path: Path) -> None:
+    entered, release = threading.Event(), threading.Event()
+
+    class HeldPlayback(CollectingPlaybackSink):
+        def submit_pcm(self, data: bytes) -> None:
+            entered.set()
+            if not release.wait(timeout=2.0):
+                raise RuntimeError("Fictional playback was not released")
+            super().submit_pcm(data)
+
+    transport = CountingAudioTransport()
+    playback = HeldPlayback()
+    session = TuiAudioSession(AudioStream(transport), RecordingPathPolicy(directory=tmp_path),
+                              live_playback=True, playback_sink=playback)
+    try:
+        session.open_audio()
+        session.start_live_playback()
+        session.start()
+        transport.feed(bytes((0xFF, 0x80)))
+        assert entered.wait(timeout=1.0)
+        session.stop()
+        session.start()
+        transport.feed(bytes((0x00, 0x7F)))
+        session.stop()
+        # Reproduces the ordering that made an immediate count assertion racy:
+        # both recordings are complete while playback legitimately remains queued.
+        assert session.completed_recordings == 2
+        assert playback.received == []
+        assert playback.running and session.live_playback_active
+        release.set()
+        assert playback.wait_for_chunks(2)
+        assert len(playback.received) == 2
+    finally:
+        release.set()
+        session.close()
 
 
 def test_tui_audio_organizes_new_recording_from_start_boundary(

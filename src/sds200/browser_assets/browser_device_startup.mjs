@@ -1,9 +1,19 @@
 // Fixed trusted extension page. No credential/token reads, repair, claim or resume.
 export function connectBrowserEntry(chrome, schedule = setTimeout) {
+  connectEntry(chrome, ["startup.html", "setup.html"], schedule);
+}
+
+// A native-validated continuation can repair only its already-selected local
+// status entry. It cannot select setup, create a tab or open a server page.
+export function connectContinuationEntry(chrome, schedule = setTimeout) {
+  connectEntry(chrome, ["startup.html"], schedule);
+}
+
+function connectEntry(chrome, pages, schedule) {
   // Chromium can navigate a command-line extension URL before loading that
   // unpacked extension. Retry only an explicitly selected own entry that has
   // finished without an extension document; never create tabs or reset state.
-  const urls = [chrome.runtime.getURL("startup.html"), chrome.runtime.getURL("setup.html")];
+  const urls = pages.map(page => chrome.runtime.getURL(page));
   const attempted = new Map(), busy = new Set();
   const eligible = tab => Number.isSafeInteger(tab?.id) && tab.id >= 0 &&
     tab.incognito === false && tab.status === "complete" && urls.includes(tab.url) &&
@@ -44,12 +54,19 @@ export function connectBrowserStartupPage({document, window, runtime, schedule =
   if (window !== window.top || window.location.href !== runtime.getURL("startup.html") ||
       new URL(origin).origin !== origin || !origin.startsWith("https://")) throw new Error("startup");
   const notice = document.getElementById("notice");
+  const resume = document.getElementById("resume-link");
+  let alive=true;
+  const current=()=>alive&&window===window.top&&window.location.href===runtime.getURL('startup.html');
+  window.addEventListener('pagehide',()=>{alive=false;if(resume)resume.hidden=true;});
+  if(resume)resume.hidden=true;
   const messages = {
     starting: "Starting managed display…",
     ready: "Waiting for a verified device session…",
     active: "Waiting for a verified device session…",
     waiting: "Server not ready or renewal is waiting. Automatic recovery remains enabled.",
     paused: "Automatic sign-in is paused. Ask your administrator to review before resuming.",
+    administrator_required: "This startup check cannot authorize sign-in. A separate administrator continuation or review is required. Keep the saved profile and recovery evidence; do not repeat setup or remove the guard.",
+    continuation_verification_required: "This worker has already used its startup verification. No earlier session result will be reused. Restart this managed browser for a fresh check; do not repeat setup or remove saved state.",
     stopping: "Saving pause intent…",
     logout_pending: "Sign-out cleanup is pending. Automatic sign-in remains paused.",
     setup_required: "First-run setup is required. Use the explicitly selected setup page; nothing was initialized.",
@@ -59,8 +76,11 @@ export function connectBrowserStartupPage({document, window, runtime, schedule =
     protocol_error: "The server response was invalid. Administrator review is required.",
   };
   async function poll() {
+    if(!current())return;
+    if(resume)resume.hidden=true;
     try {
       const result = await runtime.sendMessage({action: "startup-status"});
+      if(!current())return;
       if (!result || Object.keys(result).sort().join(",") !== "mode,sessionReady" ||
           !Object.hasOwn(messages, result.mode) || typeof result.sessionReady !== "boolean") throw new Error("status");
       if (result.sessionReady && ["active", "waiting"].includes(result.mode)) {
@@ -69,10 +89,11 @@ export function connectBrowserStartupPage({document, window, runtime, schedule =
         return;
       }
       notice.textContent = messages[result.mode];
+      if(resume)resume.hidden=!["paused","credential_rejected","tls_error","protocol_error"].includes(result.mode);
     } catch {
-      notice.textContent = "Managed startup could not be confirmed. Keep this profile for administrator review.";
+      if(current())notice.textContent = "Managed startup could not be confirmed. Keep this profile for administrator review.";
     }
-    schedule(poll, 5000); // Sequential, redacted status only; never drives authentication.
+    if(current())schedule(poll, 5000); // Sequential status; never reuses a readiness result.
   }
   void poll();
 }

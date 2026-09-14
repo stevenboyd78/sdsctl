@@ -13,6 +13,7 @@ from sds200 import cli
 from sds200.browser_device_bundle import NATIVE_HOST
 from sds200.browser_device_native import load_browser_native_configuration
 from sds200.browser_device_recovery import BrowserDeviceRecovery
+from sds200.exceptions import ConfigurationError
 from tests.test_browser_device_bundle import create
 from tests.test_browser_device_bundle import profile as profile
 from tests.test_browser_device_bundle import public_key as public_key
@@ -100,6 +101,8 @@ def test_edited_or_unsafe_bundle_is_rejected_before_creation(
         document = json.loads((profile / "client.json").read_bytes())
         document["device_id"] = "different"
         private(profile / "client.json", json.dumps(document))
+    with pytest.raises((ValueError, RuntimeError, OSError, ConfigurationError)):
+        registration._canonical_bundle_files(source, profile, public_key)
     with pytest.raises(registration.BrowserRegistrationError, match="invalid or unsafe") as error:
         register(tmp_path, source, profile, public_key)
     assert "private-do-not-echo" not in str(error.value)

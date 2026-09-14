@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import shutil
@@ -81,7 +82,7 @@ def certificates(tmp_path_factory):
         pytest.skip("OpenSSL TLS fixture")
     root = tmp_path_factory.mktemp("native-tls")
     pairs = []
-    for name, san in [("right", "DNS:localhost,IP:127.0.0.1"),
+    for name, san in [("right", "DNS:localhost,IP:127.0.0.1,IP:::1"),
                       ("wrong", "DNS:not-the-server.invalid")]:
         cert, key = root / f"{name}.pem", root / f"{name}.key"
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
@@ -102,6 +103,7 @@ def server(root, certificates, request):
 
     class Handler(BaseHTTPRequestHandler):
         def do_POST(self):
+            self.protocol_version = response.get("protocol", "HTTP/1.0")
             observed.append((self.path, dict(self.headers),
                              self.rfile.read(int(self.headers["Content-Length"]))))
             self.send_response(response["status"])
@@ -129,13 +131,19 @@ def server(root, certificates, request):
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
-    selected = certificates[getattr(request, "param", 0)]
+    ipv6 = getattr(request, "param", 0) == "ipv6"
+    selected = certificates[0 if ipv6 else getattr(request, "param", 0)]
     context.load_cert_chain(*selected)
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    class IPv6Server(ThreadingHTTPServer):
+        address_family = socket.AF_INET6
+
+    httpd = (IPv6Server(("::1", 0), Handler) if ipv6
+             else ThreadingHTTPServer(("127.0.0.1", 0), Handler))
     httpd.socket = context.wrap_socket(httpd.socket, server_side=True)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
-    configure(root, f"https://localhost:{httpd.server_port}")
+    hostname = "[::1]" if ipv6 else "localhost"
+    configure(root, f"https://{hostname}:{httpd.server_port}")
     private(root / "ca.pem", selected[0].read_bytes())
     configuration = initialize(root)
     try:
@@ -215,6 +223,76 @@ def test_native_verified_exchange_ignores_proxy_env(server, monkeypatch):
     assert TOKEN.encode() not in (configuration.root / "recovery.sqlite").read_bytes()
 
 
+@pytest.mark.parametrize("outcome", [
+    "success", "rejected", "unavailable", "redirect", "headers", "framing",
+    "read-error", "interrupt", "close-error",
+])
+@pytest.mark.parametrize("protocol", ["HTTP/1.0", "HTTP/1.1"])
+def test_verified_exchange_closes_owned_http_response(server, monkeypatch, outcome, protocol):
+    """HTTP/1.0 hands the response off; connection.close() alone cannot close it."""
+    configuration, reply, observed = server
+    reply["protocol"] = protocol
+    responses = []
+
+    class TrackedResponse(http.client.HTTPResponse):
+        def __init__(self, *args, **kwargs):
+            self.close_calls = 0
+            super().__init__(*args, **kwargs)
+            responses.append(self)
+
+        def read(self, *args, **kwargs):
+            if outcome == "read-error":
+                raise http.client.IncompleteRead(b"", 1)
+            if outcome == "interrupt":
+                raise KeyboardInterrupt()
+            return super().read(*args, **kwargs)
+
+        def close(self):
+            self.close_calls += 1
+            super().close()
+            if outcome == "close-error" and self.close_calls == 1:
+                raise OSError("fictional private cleanup detail")
+
+    monkeypatch.setattr(http.client.HTTPSConnection, "response_class", TrackedResponse)
+    expected = RecoveryMode.PROTOCOL_ERROR
+    if outcome == "rejected":
+        reply["status"] = 401
+        expected = RecoveryMode.REJECTED
+    elif outcome == "unavailable":
+        reply["status"] = 503
+        expected = RecoveryMode.ACTIVE
+    elif outcome == "redirect":
+        reply.update(status=302, headers=[("Location", "https://not-used.invalid/")])
+    elif outcome == "headers":
+        reply["headers"] = [("Content-Encoding", "gzip")]
+    elif outcome == "framing":
+        reply["headers"] = [("Content-Length", "999999")]
+    elif outcome in {"read-error", "close-error"}:
+        expected = RecoveryMode.ACTIVE
+
+    try:
+        if outcome == "success":
+            assert exchange_browser_device(configuration).token == TOKEN
+        elif outcome == "interrupt":
+            with pytest.raises(KeyboardInterrupt):
+                exchange_browser_device(configuration)
+        else:
+            with pytest.raises(ExchangeFailure) as error:
+                exchange_browser_device(configuration)
+            assert error.value.mode is expected
+            assert "fictional private cleanup detail" not in str(error.value)
+        assert len(observed) == len(responses) == 1
+        assert responses[0].will_close is (protocol == "HTTP/1.0")
+        assert responses[0].closed
+        assert responses[0].fp is None
+    finally:
+        # Retain the response until the assertions so GC cannot hide a leak;
+        # also clean up the intentionally failing pre-fix regression run.
+        for response in responses:
+            if not response.closed:
+                response.close()
+
+
 def test_untrusted_tls_is_terminal_without_sending_credential(server, certificates):
     configuration, response, observed = server
     private(configuration.root / "ca.pem", certificates[1][0].read_bytes())
@@ -273,6 +351,41 @@ def test_exchange_failure_persists_recovery_state(server, status, mode):
     assert first["mode"] == second["mode"] == mode
     assert "session" not in first and "session" not in second
     assert len(observed) == 1
+
+
+@pytest.mark.parametrize("mode", [
+    RecoveryMode.PAUSED, RecoveryMode.REJECTED, RecoveryMode.TLS_ERROR,
+    RecoveryMode.SETUP_ERROR, RecoveryMode.PROTOCOL_ERROR,
+])
+def test_valid_credential_file_replacement_does_not_resume_native_helper(server, mode):
+    configuration, _, observed = server
+    ledger = BrowserDeviceRecovery(configuration.root / "recovery.sqlite", configuration.identity)
+    if mode is RecoveryMode.PAUSED:
+        stopped = ledger.suspend()
+    else:
+        def failure():
+            raise ExchangeFailure(mode)
+
+        stopped = ledger.authenticate(failure).status
+    before = ledger.path.read_bytes()
+    # Controlled fixture write only, NOT an implemented credential installer.
+    replacement = "sdsctl-browser-v1." + "d" * 64
+    private(configuration.root / "device.secret", replacement)
+    assert load_browser_native_configuration(configuration.root).identity == configuration.identity
+    for _ in range(2):
+        result = invoke(configuration.root)
+        assert result["mode"] == mode.value and "session" not in result
+        assert replacement not in json.dumps(result)
+    assert observed == []
+    assert ledger.path.read_bytes() == before
+
+    # A separate trusted reset allows verified loopback HTTPS. The synthetic
+    # server records the new credential but is not the real authority adapter.
+    ledger.resume(stopped.revision)
+    result = invoke(configuration.root)
+    assert result["mode"] == "active" and result["session"]["token"] == TOKEN
+    assert len(observed) == 1
+    assert observed[0][1]["Authorization"] == "Bearer " + replacement
 
 
 def test_status_and_offline_suspend_need_no_secret_or_ca(root):
@@ -334,6 +447,41 @@ def test_total_deadline_bounds_slow_https_body(server):
     assert after["retry_after"] > 0  # Saved claim survives a killed exchange; no immediate retry.
 
 
+def native_worker_has_exited(pid):
+    try:
+        state = Path(f"/proc/{pid}/stat").read_text().split(")", 1)[1].split()[0]
+    except (FileNotFoundError, ProcessLookupError):
+        # The process can vanish before open (ENOENT) or during read (ESRCH).
+        return True
+    return state == "Z"
+
+
+@pytest.mark.parametrize("error", [FileNotFoundError, ProcessLookupError])
+def test_native_worker_exit_observation_accepts_disappearance(monkeypatch, error):
+    def disappeared(path):
+        assert path == Path("/proc/123/stat")
+        raise error("Worker disappeared")
+
+    monkeypatch.setattr(Path, "read_text", disappeared)
+    assert native_worker_has_exited(123)
+
+
+@pytest.mark.parametrize("state", ["R", "S", "D", "T", "Z"])
+def test_native_worker_exit_observation_requires_dead_state(monkeypatch, state):
+    monkeypatch.setattr(Path, "read_text", lambda path: f"123 (worker) {state} 1")
+    assert native_worker_has_exited(123) is (state == "Z")
+
+
+@pytest.mark.parametrize("error", [PermissionError, OSError])
+def test_native_worker_exit_observation_propagates_unrelated_errors(monkeypatch, error):
+    def unreadable(path):
+        raise error("Process status could not be read")
+
+    monkeypatch.setattr(Path, "read_text", unreadable)
+    with pytest.raises(error):
+        native_worker_has_exited(123)
+
+
 def test_parent_death_kills_stalled_worker(root):
     initialize(root)
     with subprocess.Popen(
@@ -353,11 +501,7 @@ def test_parent_death_kills_stalled_worker(root):
         process.wait(timeout=2)
         until = time.monotonic() + 2
         while time.monotonic() < until:
-            try:
-                state = Path(f"/proc/{child}/stat").read_text().split(")", 1)[1].split()[0]
-            except FileNotFoundError:
-                break
-            if state == "Z":
+            if native_worker_has_exited(child):
                 break
             time.sleep(0.02)
         else:

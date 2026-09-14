@@ -13,8 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .browser_device_bundle import NATIVE_HOST, _artifacts, _json, browser_extension_identity
-from .browser_device_native import load_browser_native_configuration
-from .browser_device_profile import _platform, _write, inspect_browser_profile
+from .browser_device_profile import _platform, _profile_inputs, _write, inspect_browser_profile
 from .browser_device_recovery import RecoveryMode
 from .browser_device_store import BrowserDeviceStore
 from .exceptions import ConfigurationError
@@ -50,18 +49,35 @@ def _matches(path: Path, expected: bytes, mode: int = 0o600) -> None:
 def _validated_bundle(
     bundle: Path, profile: Path, public_key: Path, *, fresh: bool = True,
 ) -> tuple[BrowserRegistration, bytes]:
-    key = browser_extension_identity(public_key)
+    """Canonical files AND current native state; ordinary callers stay strict."""
     inspected = inspect_browser_profile(profile)
-    config = load_browser_native_configuration(profile)
-    if (inspected.identity != config.identity
-            or config.extension_origin != f"chrome-extension://{key.extension_id}/"
-            or (fresh and (inspected.mode is not RecoveryMode.ACTIVE or inspected.revision != 1))):
+    if fresh and (inspected.mode is not RecoveryMode.ACTIVE or inspected.revision != 1):
         raise ValueError()
-    artifacts = _artifacts(bundle, config, key)
+    result, manifest, trust_sha256 = _canonical_bundle_files(bundle, profile, public_key)
+    if inspected.identity != result.identity or inspected.trust_sha256 != trust_sha256:
+        raise ValueError()
+    return result, manifest
+
+
+def _canonical_bundle_files(
+    bundle: Path, profile: Path, public_key: Path,
+) -> tuple[BrowserRegistration, bytes, str]:
+    """Private-input and installed-runtime byte checks ONLY, not a runnable grant.
+
+    This internal representation never opens or validates recovery.sqlite. A
+    historical reader independently checks retained commit anchors and ownership;
+    normal registration/inspection must use _validated_bundle with live checks.
+    The final value is the validated trust digest, never a credential.
+    """
+    key = browser_extension_identity(public_key)
+    config, trust_sha256 = _profile_inputs(profile)
+    if config.extension_origin != f"chrome-extension://{key.extension_id}/":
+        raise ValueError()
+    artifacts = _artifacts(bundle, config, key, public_key)
     receipt = _json({
         "version": 1, "experimental": True, "extension_id": key.extension_id,
         "identity": config.identity, "public_key_sha256": key.public_key_sha256,
-        "trust_sha256": inspected.trust_sha256,
+        "trust_sha256": trust_sha256,
         "files": {name: hashlib.sha256(body).hexdigest() for name, body in artifacts.items()},
     })
     # Do not trust a caller-edited receipt/hash to authorize arbitrary executable
@@ -77,7 +93,8 @@ def _validated_bundle(
         raise ValueError()
     for name, value in artifacts.items():
         _matches(bundle / name, value, 0o700 if name == "native-host" else 0o600)
-    return BrowserRegistration(key.extension_id, config.identity), artifacts[NATIVE_HOST + ".json"]
+    return (BrowserRegistration(key.extension_id, config.identity),
+            artifacts[NATIVE_HOST + ".json"], trust_sha256)
 
 
 def _receipt(result: BrowserRegistration, bundle: Path, profile: Path) -> bytes:
@@ -98,20 +115,41 @@ def inspect_browser_registration(
     """
     try:
         _platform()
-        if (root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink():
+        # Lazy import avoids the internal handoff/startup dependency cycle. There
+        # is no public ignore-guard flag: every proof is revalidated read-only.
+        from .browser_device_continuation_intent import has_continuation_intent
+        from .browser_device_guard_release import check_paused_guard_release, has_guard_release
+
+        # A recorded intent is not successor activation, even when complete.
+        if has_continuation_intent(root):
             raise ValueError()
-        result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
-        _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
-        hosts = root / "NativeMessagingHosts"
-        _matches(hosts / (NATIVE_HOST + ".json"), manifest)
-        if {entry.name for entry in hosts.iterdir()} != {NATIVE_HOST + ".json"}:
-            raise ValueError()
-        return result
+        if ((root / MAINTENANCE_MARKER).exists() or (root / MAINTENANCE_MARKER).is_symlink()
+                or has_guard_release(root)):
+            check_paused_guard_release(root, bundle=bundle, profile=profile, public_key=public_key)
+        return _inspect_registration_files(root, bundle=bundle, profile=profile,
+                                            public_key=public_key)
     except Exception:
         raise BrowserRegistrationError(
             "Browser registration is invalid or unsafe; nothing was changed. "
             "Review its original runtime, canonical bundle, private profile and registration."
         ) from None
+
+
+def _inspect_registration_files(
+    root: Path, *, bundle: Path, profile: Path, public_key: Path,
+) -> BrowserRegistration:
+    """Canonical files only; callers MUST separately enforce maintenance guards.
+
+    Internal stopped maintenance can inspect files behind its exact retained
+    guard. Normal inspection/startup must always use inspect_browser_registration.
+    """
+    result, manifest = _validated_bundle(bundle, profile, public_key, fresh=False)
+    _matches(root / ".sdsctl-browser-registration.json", _receipt(result, bundle, profile))
+    hosts = root / "NativeMessagingHosts"
+    _matches(hosts / (NATIVE_HOST + ".json"), manifest)
+    if {entry.name for entry in hosts.iterdir()} != {NATIVE_HOST + ".json"}:
+        raise ValueError()
+    return result
 
 
 def register_browser_directory(

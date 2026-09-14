@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from sds200 import browser_device_native as native
 from sds200 import cli
 from sds200.browser_device_profile import create_browser_profile
 from sds200.browser_device_recovery import BrowserDeviceRecovery, ExchangeFailure, RecoveryMode
+from sds200.browser_device_worker import worker_graph
 from tests.test_browser_device_native import certificates as certificates
 from tests.test_browser_device_native import frame
 from tests.test_browser_device_profile import CREDENTIAL, issuance, private, snapshot
@@ -26,6 +28,15 @@ from tests.test_browser_device_profile import CREDENTIAL, issuance, private, sna
 pytestmark = pytest.mark.skipif(
     sys.platform != "linux" or os.geteuid() == 0, reason="Non-root Linux browser bundle",
 )
+
+
+@pytest.fixture(autouse=True)
+def fresh_public_conversion_cache():
+    # Each test models a fresh process. Dedicated cache tests cover repeated
+    # calls; failure injection here must exercise the actual OpenSSL invocation.
+    bundle._validate_extension_der.cache_clear()
+    yield
+    bundle._validate_extension_der.cache_clear()
 
 
 @pytest.fixture
@@ -60,7 +71,9 @@ def create(tmp_path, public_key, profile, name="review bundle's $(no-shell)"):
 
 def invoke(root, origin, action="status", **kwargs):
     result = subprocess.run([str(root / "native-host"), origin],
-                            input=frame({"version": 1, "action": action}),
+                            input=frame({"version": 1, "action": "worker-request",
+                                "build": worker_graph()[0],
+                                "request": {"version": 1, "action": action}}),
                             capture_output=True, timeout=13, **kwargs)
     assert result.returncode == 0 and result.stderr == b""
     size = struct.unpack("=I", result.stdout[:4])[0]
@@ -191,9 +204,19 @@ def test_manifest_assets_receipt_and_no_secret_copy(tmp_path, public_key, profil
         mode = 0o700 if path.is_dir() or path.name == "native-host" else 0o600
         assert path.stat().st_mode & 0o777 == mode
     for name in bundle.MODULES:
-        canonical = bundle.files("sds200.browser_assets").joinpath(name).read_bytes()
+        canonical = files("sds200.browser_assets").joinpath(name).read_bytes()
         assert actual["extension/" + name] == canonical
     assert "initialBrowserRecoveryState" not in (extension / "worker.mjs").read_text()
+    assert not (extension / "recovery.html").exists()
+    assert (extension / "browser_device_retirement_ui.mjs").exists()
+    assert "connectRetirementWorker" not in (extension / "worker.mjs").read_text()
+    denied = subprocess.run([str(root / "native-host"), config.extension_origin],
+        input=frame({"version": 1, "action": "confirm-retirement",
+                     "identity": config.identity, "intent": "f" * 64}),
+        capture_output=True, timeout=13)
+    assert denied.returncode == 0 and denied.stderr == b""
+    assert json.loads(denied.stdout[4:]) == {"version": 1, "ok": False, "mode": "setup_error"}
+    assert snapshot(profile) == before
     assert "window === window.top && ['/', '/device-display']" in (
         extension / "content.js"
     ).read_text()
@@ -210,7 +233,8 @@ def test_generated_scope_supports_dns_and_ip(public_key, tmp_path, origin, patte
         "version": 1, "origin": origin, "device_id": "display",
         "extension_origin": f"chrome-extension://{key.extension_id}/",
     }).encode())
-    manifest = json.loads(bundle._artifacts(tmp_path, config, key)["extension/manifest.json"])
+    manifest = json.loads(bundle._artifacts(
+        tmp_path, config, key, tmp_path / "public.pem")["extension/manifest.json"])
     assert manifest["host_permissions"] == [pattern + "*"]
     assert manifest["content_scripts"][0]["matches"] == [pattern, pattern + "device-display"]
 
@@ -235,7 +259,12 @@ const forbidden = () => assert.fail('Unprovisioned worker attempted native I/O o
 globalThis.chrome = {
   runtime: {id, getURL: name => `chrome-extension://${id}/${name}`,
     onStartup: {addListener: () => {}}, onInstalled: {addListener: () => {}},
-    onMessage: {addListener: fn => handlers.push(fn)}, sendNativeMessage: forbidden},
+    onMessage: {addListener: fn => handlers.push(fn)}, sendNativeMessage: async (host,request) => {
+      assert.equal(request.action,'worker-context');
+      return {version:1,ok:true,build:request.build,role:'normal',extensionId:id,
+        config:{origin,identity:JSON.parse(readFileSync(extension + '/../bundle.json')).identity,
+          nativeHost:host},acknowledge:false,launch:null};
+    }},
   storage: {local: {setAccessLevel: async level =>
     assert.deepEqual(level,{accessLevel:'TRUSTED_CONTEXTS'}),
     get: async () => ({}), set: forbidden}},
@@ -247,21 +276,86 @@ await import(pathToFileURL(extension + '/worker.mjs'));
 await new Promise(resolve => setTimeout(resolve, 0));
 let response;
 for (const handler of handlers) handler({action:'status'},
-  {id, url:chrome.runtime.getURL('control.html')}, result => { response=result; });
+  {id, url:chrome.runtime.getURL('control.html'),frameId:0,documentLifecycle:'active',
+   documentId:'doc-1',tab:{id:1,incognito:false}}, result => { response=result; });
 assert.equal(response.mode, 'setup_error');
 const content = readFileSync(extension + '/content.js', 'utf8');
 for (const [href, child, count] of [[origin+'/',false,1], [origin+'/',true,0],
   [origin+'/device-display',false,1], [origin+'/device-display?extra',false,0],
+  [origin+'/device-display',true,0], [origin+'/device-display#fragment',false,0],
   [origin+'/?query',false,0], [origin+'/other',false,0], ['https://127.0.0.1:9443/',false,0],
   ['https://another.example/',false,0]]) {
-  let listeners=0;
-  const window={location:{href}};
+  let listeners=0,pagehide=0;
+  const before=handlers.length;
+  const window={location:{href},addEventListener:name=>{assert.equal(name,'pagehide');pagehide++;}};
   window.top=child ? {} : window;
-  vm.runInNewContext(content, {window, location:window.location, URL,
+  vm.runInNewContext(content, {window, location:window.location, URL,AbortController,
+    performance,setTimeout:forbidden,clearTimeout:forbidden,
     document:{addEventListener: () => listeners++}, chrome, fetch:forbidden});
   assert.equal(listeners,count);
+  const receiversSelected=!child&&href===origin+'/device-display';
+  // The existing legacy resume receiver always registers one inert listener.
+  assert.equal(handlers.length-before,1+(receiversSelected?2:0));
+  // The manual form owns an inert pagehide fence as well as the two selected
+  // private content receivers. Registration still performs no I/O or timers.
+  assert.equal(pagehide,count+(receiversSelected?2:0));
 }
 """, str(root / "extension")], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize("origin", [
+    "https://display.example", "https://192.0.2.18:8443", "https://[2001:db8::18]:8443",
+])
+def test_generated_probe_and_logout_receivers_are_inert_and_exactly_scoped(
+    tmp_path, public_key, origin,
+):
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node generated protected-document entrypoint checks")
+    key = bundle.browser_extension_identity(public_key)
+    config = native.parse_browser_native_configuration(tmp_path, json.dumps({
+        "version": 1, "origin": origin, "device_id": "display",
+        "extension_origin": f"chrome-extension://{key.extension_id}/",
+    }).encode())
+    artifacts = bundle._artifacts(tmp_path, config, key, public_key)
+    content = tmp_path / "content.js"
+    private(content, artifacts["extension/content.js"])
+    result = subprocess.run([node, "--input-type=module", "-e", """
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import vm from 'node:vm';
+const [filename,origin,id]=process.argv.slice(1),content=readFileSync(filename,'utf8');
+const forbidden=()=>assert.fail('Document receiver performed an authority action');
+for(const suffix of ['/','/device-display','/device-display?query',
+  '/device-display#fragment','/other']) {
+  for(const child of [false,true]) {
+    const handlers=[],window={location:{href:origin+suffix},addEventListener:()=>{}};
+    window.top=child?{}:window;
+    const runtime={id,onMessage:{addListener:fn=>handlers.push(fn)},sendMessage:forbidden,
+      sendNativeMessage:forbidden};
+    vm.runInNewContext(content,{window,location:window.location,URL,AbortController,
+      performance,setTimeout:forbidden,clearTimeout:forbidden,
+      chrome:{runtime},document:{addEventListener:()=>{}},fetch:forbidden});
+    // One existing legacy resume receiver, plus inert probe and logout only in
+    // the exact top-frame protected document. No authority action or timer.
+    assert.equal(handlers.length,1+(!child&&suffix==='/device-display'?2:0));
+    for(const handler of handlers) {
+      const respond=forbidden,ticket='f'.repeat(64);
+      assert.equal(handler({action:'continuation-probe-verify',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket},{id:'p'.repeat(32)},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket,extra:true},{id},respond),false);
+      assert.equal(handler({action:'continuation-probe-select',ticket:'invalid'},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-submit',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-confirm',ticket},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket},{id:'p'.repeat(32)},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket,extra:true},{id},respond),false);
+      assert.equal(handler({action:'continuation-logout-select',ticket:'invalid'},{id},respond),false);
+    }
+  }
+}
+""", str(content), origin, key.extension_id], capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stdout + result.stderr
     assert result.stderr == ""
 
@@ -280,24 +374,30 @@ def test_creation_never_resets_profile_or_overwrites(tmp_path, public_key, profi
     before = snapshot(profile)
     root = create(tmp_path, public_key, profile)
     assert snapshot(profile) == before
-    assert invoke(root, config.extension_origin)["mode"] == mode.value
+    # A generated normal host now requires its live managed browser owner on
+    # every request, not only on a separate worker-context call.
+    assert invoke(root, config.extension_origin)["mode"] == "setup_error"
+    assert recovery.inspect().mode is mode
+    assert snapshot(profile) == before
     saved = {p: snapshot(p) for p in (root, root / "extension", profile)}
     with pytest.raises(bundle.BrowserBundleError, match="already exists"):
         bundle.create_browser_bundle(root, profile=profile, public_key=public_key)
     assert {p: snapshot(p) for p in saved} == saved
 
 
-def test_launcher_isolated_quoting_and_exact_caller(tmp_path, public_key, profile):
+def test_launcher_isolated_quoting_exact_caller_and_missing_owner(tmp_path, public_key, profile):
     root = create(tmp_path, public_key, profile)
     config = native.load_browser_native_configuration(profile)
     shadow = tmp_path / "sds200"
     shadow.mkdir()
     (shadow / "__init__.py").write_text("raise RuntimeError('UNTRUSTED IMPORT')")
     env = {**os.environ, "PYTHONPATH": str(tmp_path), "PYTHONHOME": str(tmp_path)}
-    assert invoke(root, config.extension_origin, cwd=tmp_path, env=env)["mode"] == "active"
+    before = snapshot(profile)
+    assert invoke(root, config.extension_origin, cwd=tmp_path, env=env)["mode"] == "setup_error"
     assert invoke(root, "chrome-extension://" + "a" * 32 + "/")["ok"] is False
-    assert invoke(root, config.extension_origin, action="suspend")["mode"] == "paused"
-    assert invoke(root, config.extension_origin)["mode"] == "paused"
+    assert invoke(root, config.extension_origin, action="suspend")["mode"] == "setup_error"
+    assert invoke(root, config.extension_origin)["mode"] == "setup_error"
+    assert snapshot(profile) == before
 
 
 @pytest.mark.parametrize("action", ["status", "authenticate", "suspend", "claim-browser"])

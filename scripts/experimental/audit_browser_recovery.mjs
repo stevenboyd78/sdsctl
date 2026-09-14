@@ -15,16 +15,18 @@ import {fileURLToPath, pathToFileURL} from "node:url";
 import {initialBrowserRecoveryState} from "./browser_device_recovery.mjs";
 
 if (process.argv[2] === "--help") {
-  console.log("Usage: node audit_browser_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL PYTHON [SCENARIO] [ip|dns]");
-  console.log("Scenarios: deadline, truncated, tls-eof, server-restart, worker-restart, revoke.");
+  console.log("Usage: node audit_browser_recovery.mjs STAGE PLAYWRIGHT CHROMIUM CERTUTIL PYTHON [SCENARIO] [ip|dns|ipv6]");
+  console.log("Scenarios: deadline, truncated, tls-eof, server-restart, worker-restart, revoke, document-probe, gated-document-probe.");
   console.log("Private mode-0700 stage; five absolute paths. Actual ASGI/native/Chromium on loopback only.");
   console.log("Sandbox and TLS verification enabled. No cookie injection; real clocks and retry alarms.");
   process.exit(0);
 }
 const [stage, playwright, executable, certutil, python, scenario = "deadline", identityKind = "ip"] = process.argv.slice(2);
 assert([stage, playwright, executable, certutil, python].every(p => p && path.isAbsolute(p)));
-assert(["deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke"].includes(scenario));
-assert(["ip", "dns"].includes(identityKind));
+assert(["deadline", "truncated", "tls-eof", "server-restart", "worker-restart", "revoke", "document-probe", "gated-document-probe"].includes(scenario));
+const probeEnabled=["document-probe", "gated-document-probe"].includes(scenario);
+const gatedProbe=scenario === "gated-document-probe";
+assert(["ip", "dns", "ipv6"].includes(identityKind));
 const info = await lstat(stage);
 assert(info.isDirectory() && !info.isSymbolicLink() && info.uid === process.getuid() &&
   (info.mode & 0o777) === 0o700 && await realpath(stage) === stage);
@@ -40,10 +42,10 @@ run("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
   "-subj", "/CN=Fictional recovery acceptance CA", "-keyout", "ca.key", "-out", "ca.pem",
   "-addext", "keyUsage=critical,keyCertSign,cRLSign"]);
 await chmod(path.join(root, "ca.pem"), 0o600);
-const hostname = identityKind === "ip" ? "127.0.0.1" : "localhost";
+const hostname = {ip:"127.0.0.1",dns:"localhost",ipv6:"[::1]"}[identityKind];
 run("openssl", ["req", "-new", "-newkey", "rsa:2048", "-nodes", "-subj", `/CN=${hostname}`,
   "-keyout", "server.key", "-out", "server.csr"]);
-await put("server.ext", `subjectAltName=${identityKind === "ip" ? "IP:127.0.0.1" : "DNS:localhost"}\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n`);
+await put("server.ext", `subjectAltName=${{ip:"IP:127.0.0.1",dns:"DNS:localhost",ipv6:"IP:::1"}[identityKind]}\nbasicConstraints=CA:FALSE\nextendedKeyUsage=serverAuth\n`);
 run("openssl", ["x509", "-req", "-in", "server.csr", "-CA", "ca.pem", "-CAkey", "ca.key",
   "-CAcreateserial", "-days", "1", "-extfile", "server.ext", "-out", "server.pem"]);
 const nss = path.join(root, "nssdb");
@@ -66,7 +68,7 @@ const proxy = net.createServer(client => {
   upstream.on("close", () => client.destroy());
   client.pipe(upstream).pipe(client); // TLS terminates only at the real Python server.
 });
-await new Promise(resolve => proxy.listen(0, "127.0.0.1", resolve));
+await new Promise(resolve => proxy.listen(0, identityKind === "ipv6" ? "::1" : "127.0.0.1", resolve));
 const origin = `https://${hostname}:${proxy.address().port}`;
 const key = generateKeyPairSync("rsa", {modulusLength: 2048}).publicKey.export({type: "spki", format: "der"});
 const id = [...createHash("sha256").update(key).digest("hex").slice(0, 32)]
@@ -94,19 +96,34 @@ try {
   const ready = await receive(); assert(ready.ready); backendPort = ready.port;
   const config = {origin, identity: ready.identity, nativeHost: "org.sdsctl.browser_device"};
   if (["deadline", "truncated"].includes(scenario)) await command(scenario);
-  for (const name of ["browser_device_recovery.mjs", "browser_device_logout.mjs"])
+  for (const name of ["browser_device_recovery.mjs", "browser_device_logout.mjs",
+    ...(probeEnabled ? ["browser_device_continuation_probe.mjs"] : []),
+    ...(gatedProbe ? ["browser_device_worker_gate.mjs"] : [])])
     await copyFile(path.join(repo, "src/sds200/browser_assets", name), path.join(root, "extension", name));
   await put("extension/manifest.json", JSON.stringify({manifest_version: 3, version: "0.0.1",
     name: "SDSCTL FICTIONAL INTEGRATED RECOVERY", key: key.toString("base64"),
-    permissions: ["nativeMessaging", "storage", "cookies", "alarms"], host_permissions: [`https://${hostname}/*`],
+    permissions: ["nativeMessaging", "storage", "cookies", "alarms",
+      ...(probeEnabled ? ["tabs"] : [])], host_permissions: [`https://${hostname}/*`],
     background: {service_worker: "worker.mjs", type: "module"},
     content_scripts: [{matches: [`https://${hostname}/*`], js: ["content.js"], run_at: "document_start"}]}));
-  await put("extension/worker.mjs", `import {connectChromeRecovery} from './browser_device_recovery.mjs';
+  await put("extension/worker.mjs", (gatedProbe ?
+    `import {createWorkerEventGate} from './browser_device_worker_gate.mjs';
+// Fixture-selected origin, not an actual continuation role/consent decision.
+const gate=createWorkerEventGate(chrome);
+const probeChrome=gate.prepareContinuationProbe(${JSON.stringify(origin)});
+const selectedChrome=gate.chrome;\n` : "const selectedChrome=chrome; const probeChrome=chrome;\n")+
+    `import {connectChromeRecovery} from './browser_device_recovery.mjs';
 import {connectLogoutWorker} from './browser_device_logout.mjs';
-globalThis.fixtureController=connectChromeRecovery(chrome, ${JSON.stringify(config)});
-connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
+globalThis.fixtureController=connectChromeRecovery(selectedChrome, ${JSON.stringify(config)});
+connectLogoutWorker(selectedChrome, fixtureController, ${JSON.stringify(origin)});\n`+
+    (gatedProbe ? "gate.check();gate.open();\n" : "")+
+    (probeEnabled ? `import {createContinuationProbe} from './browser_device_continuation_probe.mjs';
+globalThis.openFixtureProbe=async()=>{globalThis.fixtureProbe=createContinuationProbe(probeChrome,${JSON.stringify(origin)});return fixtureProbe.open();};\n` : ""));
   await put("extension/content.js", (await readFile(path.join(repo, "src/sds200/browser_assets/browser_device_logout.mjs"), "utf8"))
-    .replaceAll("export ", "") + `\nif(location.href===${JSON.stringify(origin + "/")})connectLogoutContent({document,window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n`);
+    .replaceAll("export ", "") + `\nif(location.href===${JSON.stringify(origin + "/")})connectLogoutContent({document,window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n`+
+    (probeEnabled ? '\n{\n'+(await readFile(path.join(repo,
+      "src/sds200/browser_assets/browser_device_continuation_probe.mjs"),"utf8")).replaceAll("export ","")+
+      `\nconnectContinuationProbeContent({window,runtime:chrome.runtime,fetcher:fetch.bind(globalThis)},${JSON.stringify(origin)});\n}\n` : ""));
   await put("extension/control.html", "<!doctype html><title>Fictional recovery control</title>");
   await put("native-host", `#!${python}\nimport os,sys\nfrom pathlib import Path\nsys.path.insert(0,${JSON.stringify(path.join(repo, "src"))})\nfrom sds200.browser_device_native import run_browser_native\nraise SystemExit(run_browser_native(Path(${JSON.stringify(root)}),sys.argv[1:],os.fdopen(os.dup(0),'rb',buffering=0),os.fdopen(os.dup(1),'wb',buffering=0)))\n`, 0o700);
   await put("profile/NativeMessagingHosts/org.sdsctl.browser_device.json", JSON.stringify({name: config.nativeHost,
@@ -150,6 +167,51 @@ connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
   assert.equal(await sessionStatus(), 200);
   assert.equal(await page.evaluate(() => document.cookie), "");
   assert.equal(await page.evaluate(async () => (await fetch("/api/v1/control", {method: "POST"})).status), 403);
+  let documentProbe=null;
+  if(probeEnabled) {
+    step("document-probe-real-isolated-message-sender");
+    const w=await worker(),before=await w.evaluate(()=>chrome.storage.local.get(null));
+    const ledger=await readFile(path.join(root,"recovery.sqlite"));
+    const cookies=await context.cookies(origin),exchanges=(await command("status")).exchanges;
+    const selected=await w.evaluate(()=>openFixtureProbe());
+    assert.match(selected.documentId,/^[a-zA-Z0-9-]{1,128}$/);
+    assert.match(selected.ticket,/^[a-f0-9]{64}$/);
+    const verdict=await w.evaluate(()=>fixtureProbe.verify());
+    assert.deepEqual({...verdict,remainingSeconds:null},{url:origin+'/device-display',...selected,
+      displayOnly:true,deviceEnrolled:true,remainingSeconds:null});
+    assert(verdict.remainingSeconds>30&&verdict.remainingSeconds<=80);
+    await w.evaluate(()=>fixtureProbe.close());
+    await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
+    step("document-probe-replacement-refusal");
+    await w.evaluate(()=>openFixtureProbe());
+    const replaced=context.pages().find(p=>p.url()===origin+'/device-display');assert(replaced);
+    await replaced.reload().catch(()=>{}); // A loading replacement closes only this owned tab.
+    assert.equal(await w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+      catch(error){return error?.message==='Browser display verification is unconfirmed.';}}),true);
+    await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
+    step("document-probe-pending-close");
+    await w.evaluate(()=>openFixtureProbe());
+    const held=context.pages().find(p=>p.url()===origin+'/device-display');assert(held);
+    let entered,release;
+    const reached=new Promise(resolve=>{entered=resolve;}),unblock=new Promise(resolve=>{release=resolve;});
+    await held.route(origin+'/auth/session',async route=>{entered();await unblock;await route.continue().catch(()=>{});});
+    const stopped=w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+      catch(error){return error?.message==='Browser display verification is unconfirmed.';}});
+    try {
+      await Promise.race([reached,new Promise((_,reject)=>setTimeout(()=>reject(Error('Probe request missing')),5000))]);
+      await w.evaluate(()=>fixtureProbe.close());assert.equal(await stopped,true);
+    } finally {release();await stopped;}
+    await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
+    assert.deepEqual(await w.evaluate(()=>chrome.storage.local.get(null)),before);
+    assert.deepEqual(await readFile(path.join(root,"recovery.sqlite")),ledger);
+    assert.deepEqual(await context.cookies(origin),cookies);
+    assert.equal((await command("status")).exchanges,exchanges);
+    documentProbe={realSenderDocument:true,exactDocumentTarget:true,protectedFetch:true,
+      replacementRefused:true,pendingCloseRefused:true,ownedTabsClosed:true,
+      storageUnchanged:true,nativeUnchanged:true,cookieUnchanged:true,noSessionIssuance:true,
+      notContinuationControllerAcceptance:true,throughSynchronousWorkerGate:gatedProbe,cookieDomain:cookies.find(c=>
+        c.name==='__Host-sdsctl-device-session').domain};
+  }
   if (scenario === "server-restart") {
     await command("restart");
     assert.equal(await sessionStatus(), 401);
@@ -174,11 +236,36 @@ connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
     assert.equal(await sessionStatus(), 401);
     await until(async () => await mode() === "credential_rejected", 100000);
   } else {
+    if(documentProbe!==null) {
+      step("document-probe-selected-before-sign-out");
+      await (await worker()).evaluate(()=>openFixtureProbe());
+    }
     step("explicit-sign-out");
     await page.getByRole("button", {name: "Open dashboard menu", exact: true}).click();
     await page.getByRole("button", {name: "Sign out and pause automatic login", exact: true}).click();
     await until(async () => (await command("status")).state === "paused");
     await until(async () => !(await context.cookies(origin)).some(c => c.name === "__Host-sdsctl-device-session"));
+    if(documentProbe!==null) {
+      // Native pause and cookie absence precede the final browser save. Wait for
+      // the actual completed flow before testing that the probe changes nothing.
+      await until(async () => (await page.getByRole("status").allTextContents()).includes(
+        "Signed out. Server shutdown confirmed; automatic sign-in remains paused."));
+      const w=await worker(),storedBefore=await w.evaluate(()=>chrome.storage.local.get(null));
+      assert.deepEqual(storedBefore,{sdsctlDeviceRecovery:{version:1,identity:config.identity,
+        paused:true,phase:"clean",nextAt:0}});
+      const ledgerBefore=await readFile(path.join(root,"recovery.sqlite"));
+      const exchangesBefore=(await command("status")).exchanges;
+      assert.equal(await sessionStatus(),401);
+      assert.equal(await w.evaluate(async()=>{try{await fixtureProbe.verify();return false;}
+        catch(error){return error?.message==='Browser display verification is unconfirmed.';}}),true);
+      await until(()=>!context.pages().some(p=>p.url()===origin+'/device-display'));
+      assert.deepEqual(await w.evaluate(()=>chrome.storage.local.get(null)),storedBefore);
+      assert.deepEqual(await readFile(path.join(root,"recovery.sqlite")),ledgerBefore);
+      assert(!(await context.cookies(origin)).some(c=>c.name==='__Host-sdsctl-device-session'));
+      assert.equal((await command("status")).exchanges,exchangesBefore);
+      documentProbe.signOutInvalidationRefused=true;
+      documentProbe.pausePreserved=true;
+    }
   }
   const beforeRestart = (await command("status")).exchanges;
   await context.close(); context = await launch();
@@ -190,11 +277,13 @@ connectLogoutWorker(chrome, fixtureController, ${JSON.stringify(origin)});\n`);
   assert(!JSON.stringify(stored).includes(secret) && !JSON.stringify(stored).includes("sdsctl-browser-session-v1."));
   const result = {passed: true, scenario, identityKind, realASGI: true, realNative: true,
     sandbox: true, verifiedTLS: true, cookieInjection: false, realAlarms: true,
-    browser: context.browser().version(), exchanges: beforeRestart};
+    browser: context.browser().version(), exchanges: beforeRestart,documentProbe};
   result.sourceHashes = Object.fromEntries(await Promise.all([
     "src/sds200/browser_device_native.py", "src/sds200/browser_device_recovery.py",
     "src/sds200/browser_assets/browser_device_recovery.mjs", "src/sds200/browser_assets/browser_device_logout.mjs",
     "scripts/experimental/browser_recovery_server.py", "scripts/experimental/audit_browser_recovery.mjs",
+    ...(probeEnabled ? ["src/sds200/browser_assets/browser_device_continuation_probe.mjs"] : []),
+    ...(gatedProbe ? ["src/sds200/browser_assets/browser_device_worker_gate.mjs"] : []),
   ].map(async name => [name, createHash("sha256").update(await readFile(path.join(repo, name))).digest("hex")])));
   await put("result.json", JSON.stringify(result, null, 2) + "\n"); console.log(JSON.stringify(result));
 } finally {

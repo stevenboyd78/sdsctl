@@ -253,5 +253,7 @@ qualify arbitrary desktop wiring or unattended production startup. Before releas
 complete the remaining physical/production checks, including both Pi geometries,
 secure keyring handling and combined display/server outage recovery. Explicit device
 replacement/resume, trusted production extension distribution and abrupt-crash
-profile ownership remain separate security gates. Keep both production TUIs
+profile ownership remain separate security gates. The
+[replacement/resume boundary guide](browser-device-resume.md) records isolated
+prerequisite tests and the still-unimplemented coordinated workflow. Keep both production TUIs
 unchanged until a separately approved deployment and restoration plan exists.

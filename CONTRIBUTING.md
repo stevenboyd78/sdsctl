@@ -47,6 +47,51 @@ python -m twine check dist/*
 
 The automated test suite must run without scanner hardware.
 
+### Linux browser process-isolation checks
+
+The browser recovery-launch, paused-guard-release, continuation-intent and retained-history
+tests use real Linux PID
+namespaces with a fictional browser executable. They require a non-root test
+user, Linux `pidfd` support, and working `bubblewrap` (`bwrap`). They do not
+authenticate to a dashboard or replace real Chromium/display acceptance.
+
+On a compatible Debian/Ubuntu development machine, install `bubblewrap` with
+the system package manager. The tests may skip when these platform prerequisites
+are unavailable locally. Separate GitHub namespace jobs for Python 3.11–3.14
+install `bubblewrap` and require all four modules to execute without skips; a green
+result must not depend on silently omitting these checks. Reproduce this gate with:
+
+```bash
+namespace_evidence=$(mktemp -d /tmp/sdsctl-namespace-check.XXXXXX)
+python scripts/run_browser_namespace_tests.py --report="$namespace_evidence/results.xml"
+python scripts/check_browser_namespace_results.py "$namespace_evidence/results.xml"
+```
+
+The runner launches two independent pytest processes on the same machine: the
+launch, guard-release and continuation-intent modules form one batch, and retained
+history forms the other. Every module still runs in full. Both batches must exit
+successfully, with no skipped, failed, duplicate or missing-module results, before
+the runner publishes the combined report. It preserves individual logs and reports
+in the printed evidence directory and never overwrites an earlier report. Leave
+`PYTEST_ADDOPTS` unset; hidden selection options are refused.
+
+This scheduling keeps the existing 25-minute CI job limit, with a 23-minute limit
+for the two batches together. It does not extend test deadlines or weaken the
+namespace prerequisite checks. The separate result check must follow a successful
+runner invocation and use that invocation's report.
+If namespace creation is blocked by host policy, report the prerequisite failure;
+do not disable AppArmor, relax kernel settings, run the tests as root, or bypass
+browser sandboxing to make the gate pass. This execution requirement is separate
+from the project's coverage-percentage target.
+
+The full-suite/coverage jobs remain on `ubuntu-latest`. Its current hosted image
+refuses unprivileged `bwrap` UID mapping even after the package is installed, so
+the dedicated namespace gate uses `ubuntu-22.04` without policy overrides. This is
+a bounded runner choice, not a production OS recommendation: [GitHub's runner
+notice](https://github.com/actions/runner-images/issues/14254) schedules brownouts
+from 2027-03-23 and removal on 2027-04-17. Qualify a replacement before the first
+brownout rather than removing the gate or weakening the runner's security policy.
+
 ## Project structure
 
 - `src/sds200/transport.py`: transport contract and USB serial transport
