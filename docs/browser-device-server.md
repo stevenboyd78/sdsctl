@@ -190,12 +190,15 @@ ownership; it retains the lock file. Do not delete that file while troubleshooti
 
 ## Home Assistant App candidate
 
-These options belong to the **unreleased candidate runtime**, not the published
-0.29.4 App. Do not add them to the public App catalog while its `version` selects
-the 0.29.4 image: that release's strict parser rejects even disabled/empty values.
+These options belong to the **experimental candidate runtime**, not the published
+0.29.4/0.29.5 App. Do not add them to the public App catalog while its `version`
+selects either image: those releases' strict parsers reject even disabled/empty values.
 Supervisor reads the catalog from the repository branch independently of the
 versioned container, so advertising newer defaults can prevent the published App
 from starting. Keep the public schema/defaults compatible with the selected image.
+The v0.30.0 App also retains that seven-field catalog
+schema: publishing the experimental runtime does not expose these options or
+qualify a production enrollment workflow.
 
 An approved isolated Local App built from matching candidate source can add this
 pair to its own staging manifest's `options` and corresponding `schema` (`bool`

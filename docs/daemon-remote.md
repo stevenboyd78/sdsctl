@@ -315,9 +315,17 @@ The three lease kinds retain these source-specific contracts:
 
 | Kind | Remote boundary |
 | --- | --- |
-| Events | Preserves the authoritative snapshot and global event sequence, recursively removes endpoint, path, token, credential, secret, and recording fields, and omits every `recording.state` event. |
+| Events | Preserves the authoritative snapshot and event order, recursively removes endpoint, path, token, credential, secret, and recording fields, and omits every `recording.state` event. Each lease subtracts only the events it actually filters from subsequent sequence numbers, so intentional omissions do not look like data loss. |
 | Waterfall | Acquires one lease on the existing demand-driven `WaterfallSession`; overlapping clients share its single GST/PWF/GWF lifecycle, and only the final lease release stops scanner publication. |
 | Audio | Preserves accepted PCMU payload and RTP continuity and queue-loss metadata while replacing the scanner RTSP endpoint with the constant `sdsctl-remote-daemon`. |
+
+The remote snapshot retains the publisher's checkpoint sequence. Later sequence
+numbers are relative to that lease's filtered history, not comparable with a
+local stream or another lease. Dropped queue entries are not subtracted, even
+if they were private recording events: real loss still produces a sequence gap
+and the existing client fails closed. A newly connected lease starts with a
+fresh authoritative checkpoint and no prior filtering offset. Private recording
+events and fields remain unavailable to remote clients.
 
 Each source already supplies an independent bounded queue per subscription.
 The broker adds no unbounded intermediary. A slow event, Waterfall, or audio

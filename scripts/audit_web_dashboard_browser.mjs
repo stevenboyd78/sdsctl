@@ -1466,8 +1466,43 @@ function browserAuditLibrary() {
     return failures;
   }
 
+  function decorativeClearanceFailures(theme) {
+    const failures = [];
+    const header = document.querySelector(".site-header");
+    const brand = header?.querySelector(".brand");
+    if (theme === "lcars" && rendered(header) && rendered(brand)) {
+      const railWidth = 1.4 * Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+      if (brand.getBoundingClientRect().left < header.getBoundingClientRect().left + railWidth + 4) {
+        failures.push("LCARS brand intrudes into the decorative left rail");
+      }
+      for (const panelHeader of document.querySelectorAll(".panel-header")) {
+        if (!rendered(panelHeader)) continue;
+        const rect = panelHeader.getBoundingClientRect();
+        const style = getComputedStyle(panelHeader);
+        const radius = Math.min(Number.parseFloat(style.borderBottomRightRadius), rect.height, rect.width);
+        for (const child of panelHeader.children) {
+          if (rendered(child) && child.getBoundingClientRect().right > rect.right - radius + tolerance) {
+            failures.push(`${label(child)} intrudes into the LCARS header curve`);
+          }
+        }
+      }
+    }
+    if (["first-responder", "amateur-radio"].includes(theme) && rendered(header)) {
+      const eyebrow = document.querySelector(".overview .eyebrow");
+      if (rendered(eyebrow)) {
+        const decoration = getComputedStyle(header, "::after");
+        const outsideEdge = header.getBoundingClientRect().bottom + Math.max(0, -Number.parseFloat(decoration.bottom));
+        if (textRect(eyebrow).top < outsideEdge + 4) {
+          failures.push(`${theme} overview label crowds the header divider`);
+        }
+      }
+    }
+    return failures;
+  }
+
   function normal(expectedPane, expectedTheme) {
     const failures = paneState(expectedPane);
+    failures.push(...decorativeClearanceFailures(expectedTheme));
     failures.push(...subpanelButtonGeometry(expectedPane));
     failures.push(...overviewStatusLayout(expectedTheme));
     const html = document.documentElement;
@@ -3757,7 +3792,11 @@ async function run(options) {
     await stopChild(chromeProcess);
     await stopChild(demoServer);
     if (temporaryRoot !== null) {
-      await rm(temporaryRoot, {force: true, recursive: true});
+      // Chrome helpers can finish a profile write just after the parent exits.
+      // Retry only this audit-owned mkdtemp directory, with a bounded delay.
+      await rm(temporaryRoot, {
+        force: true, recursive: true, maxRetries: 3, retryDelay: 100,
+      });
     }
   }
 }

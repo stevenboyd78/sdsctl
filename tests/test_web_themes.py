@@ -159,6 +159,52 @@ def test_lcars_data_groups_keep_bounded_corners_without_removing_containment() -
     assert groups and "overflow: hidden;" in groups[-1]
 
 
+def test_lcars_header_content_reserves_space_for_decorative_edges() -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require("lcars")
+    ).decode("utf-8")
+    header = re.search(
+        r':root\[data-theme="lcars"\] \.panel-header\s*\{([^}]+)\}',
+        stylesheet,
+    )
+    assert header is not None
+    assert "padding-right: 1.6rem;" in header[1]
+    assert "border-radius: 0 0 1.4rem 0;" in header[1]
+    refresh = re.search(
+        r':root\[data-theme="lcars"\] #recordings-refresh\s*\{([^}]+)\}',
+        stylesheet,
+    )
+    assert refresh is not None and "flex-shrink: 0;" in refresh[1]
+    assert ".recording-library-header > div {\n  min-width: 0;" in stylesheet
+    viewport = files("sds200.web_assets").joinpath(
+        "dashboard-viewport.css"
+    ).read_text(encoding="utf-8")
+    rail = re.search(
+        r':root\[data-theme="lcars"\] \.site-header\s*\{([^}]+)\}',
+        viewport,
+    )
+    assert rail is not None
+    assert "padding-left: 2.2rem !important;" in rail[1]
+    panels = re.search(
+        r':root\[data-theme="lcars"\] \.panel-header\s*\{([^}]+)\}',
+        viewport,
+    )
+    assert panels is not None
+    assert "margin-right: 4.2rem !important;" in panels[1]
+
+
+@pytest.mark.parametrize("theme_id", ("first-responder", "amateur-radio"))
+def test_overview_label_clears_the_header_divider(theme_id: str) -> None:
+    stylesheet = read_built_in_web_theme_stylesheet(
+        built_in_web_theme_registry().require(theme_id)
+    ).decode("utf-8")
+    divider = re.search(r"\.site-header::after\s*\{([^}]+)\}", stylesheet)
+    overview = re.search(r"\.overview\s*\{([^}]+)\}", stylesheet)
+    assert divider is not None and overview is not None
+    assert "bottom: 0;" in divider[1]
+    assert "padding-top: 0.5rem;" in overview[1]
+
+
 @pytest.mark.parametrize(
     ("field", "value", "message"),
     (

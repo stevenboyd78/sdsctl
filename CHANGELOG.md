@@ -6,6 +6,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-09-14
+
+Display improvements, remote TUI recording continuity, and explicitly opt-in
+experimental browser foundations. See the [release scope and acceptance
+record](docs/release-0.30.0.md). Experimental browser foundations are not a
+claim of unattended-production support.
+
 ### Added
 
 - Compose the experimental browser continuation route with its foreground public
@@ -163,6 +170,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Show full local RFC 2822-style dates, 24-hour time and a numeric UTC offset in
+  the TUI header and observed status transitions. Preserve the original offset
+  of a status transition across DST changes. These timestamps are not measured
+  client-to-daemon or daemon-to-scanner connection uptime.
+- Defer public API loading until an exported object is used, so focused
+  short-lived native helpers do not load unrelated audio or Favorites modules.
+  Preserve the public export names and their original object identities.
 - Document independent milestone and release numbering, a forward-looking
   pre-1.0 feature/maintenance version convention, and a milestone-to-release
   index. Require explicit included/deferred/experimental release scope and
@@ -184,6 +198,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Keep authenticated remote TUI clients connected when another interface starts
+  or stops a recording. Discount intentionally filtered private recording events
+  from each remote lease's sequence without masking genuine queue loss or
+  relaxing private-field validation.
+
 - Keep experimental managed-display sign-out working after extension worker
   inactivity. Reconstruct only a Stop-specific accepted-cookie comparison after
   this attempt's checked browser Stop/native pause; retain unknown state and
@@ -191,6 +210,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 - Keep complete, pending and unconfirmed managed-display sign-out messages
   visible instead of letting background session refresh navigate them away.
 - Prevent the LCARS field-group decoration from clipping scanner metadata.
+- Keep LCARS header text and controls clear of decorative rails and curves,
+  and separate First Responder and Amateur Radio dashboard labels from their
+  header dividers, including compact layouts.
 
 - Request normal Chromium closure with `SIGINT` when stopping the experimental
   managed-browser launcher. Let the launcher finish that bounded shutdown before
@@ -2117,7 +2139,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3

@@ -320,8 +320,12 @@ Milestone 32.1 adds an explicit-construction
 and [service router](daemon-remote.md#service-selection-and-shared-client-transport)
 over this same publisher. The existing event client can consume either the
 private Unix socket or an explicitly constructed remote transport. Remote
-delivery preserves snapshot and sequence ordering but omits `recording.state`
-and recursively removes recording, scanner endpoint, filesystem, credential,
+delivery preserves the snapshot checkpoint and event ordering but omits
+`recording.state`. Each lease subtracts only its actually filtered events from
+subsequent sequence numbers. This keeps intentional privacy filtering gap-free
+without hiding real queue loss; remote sequence values after filtering are not
+global publisher offsets or comparable between leases. The remote boundary
+also recursively removes recording, scanner endpoint, filesystem, credential,
 token, secret, and last-error fields; the client fails closed if required
 private fields reappear. Milestone 32.2 packages this path only for an explicitly
 enabled daemon listener and an explicitly selected client profile. A transport

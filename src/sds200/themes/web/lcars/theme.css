@@ -196,13 +196,23 @@
 
 :root[data-theme="lcars"] .panel-header {
   margin-right: 4.2rem;
+  /* Reserve the curved end for decoration, not text or controls. */
+  padding-right: 1.6rem;
   border-bottom: 0.35rem solid var(--lcars-panel);
-  border-radius: 0 0 999px 0;
+  border-radius: 0 0 1.4rem 0;
 }
 
 :root[data-theme="lcars"] .panel-header h2,
 :root[data-theme="lcars"] .panel-header .panel-kicker {
   color: var(--text);
+}
+
+:root[data-theme="lcars"] .recording-library-header > div {
+  min-width: 0;
+}
+
+:root[data-theme="lcars"] #recordings-refresh {
+  flex-shrink: 0;
 }
 
 :root[data-theme="lcars"] #radio-activity-panel {

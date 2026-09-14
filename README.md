@@ -63,10 +63,11 @@ Podman, audio servers, or FFmpeg. Linux local playback also needs a working
 PortAudio runtime; Debian and Raspberry Pi OS users normally install
 `libportaudio2`.
 
-Published container users can pull the current exact release image:
+For a container installation, select a published version rather than a source
+checkout. The version-specific image for this release is:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.5
+docker pull theboyd78/sdsctl:0.30.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release.
@@ -204,22 +205,20 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.29.5` keeps managed remote TUI displays on a clean waiting screen
-while the daemon is unavailable, then restores live data automatically after
-fresh authorization. Existing 0.29.4 daemons and client credentials remain
-compatible; the waiting-screen improvement requires upgrading the TUI client.
-It retains the transport-aware security and usability features for deployments:
-an opt-in native display login with
-separate operator/display credentials, a hardened browser kiosk HTTPS launch flow,
-and tighter split-screen layout behavior on constrained displays. The `/dev/tty1`
-managed TUI flow keeps observe-only preflight, bounded recovery, private
-credentials, and exact cleanup while preserving compatibility with existing
-daemon versions.
-Unattended browser-device enrollment remains experimental: the packaged
-production launchers do not enable it. Browser kiosks still require manual
-sign-in after session expiry or a server restart.
-The 0.29.5 maintenance release comes from `release/0.29`; newer experimental
-browser-enrollment code on `main` is not part of that published package.
+Version `0.30.0` includes local-date TUI headers/status timestamps, readable
+Diagnostics connection ages, dashboard theme corrections, and remote TUI
+continuity while recordings start and stop. It also includes opt-in experimental
+managed-browser foundations. See the [release scope](docs/release-0.30.0.md)
+for included changes, acceptance evidence and deferred work.
+
+The transport-aware Raspberry Pi TUI retains observe-only preflight and managed
+outage waiting/recovery. Scanner model/firmware presentation, ordinary
+Ingress and manual dashboard login remain separate from experimental browser
+enrollment. An upgrade does not enable automatic sign-in in existing
+installations. Secure unattended keyring, abrupt power-loss, cross-build and
+alternative-engine acceptance are not claimed. The repository App retains its
+existing option schema; experimental App activation remains an isolated lab
+workflow, not a production upgrade step.
 See the
 [latest GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/latest),
 [CHANGELOG.md](CHANGELOG.md), [ROADMAP.md](ROADMAP.md), and

@@ -495,12 +495,12 @@ authentication failures and an operator's intentional quit into a retry loop.
 
 Upgrade only after reviewing the target version. Stop the display before
 replacing its package, install the exact published release, check dependencies,
-then start it again. Once v0.29.5 is published:
+then start it again. After verifying that v0.30.0 is published:
 
 ```bash
 sudo systemctl stop sdsctl-display@CLIENT_ID.service
 sudo /opt/sdsctl-display/bin/python -m pip install --upgrade \
-  "sds200[tui,playback]==0.29.5"
+  "sds200[tui,playback]==0.30.0"
 sudo /opt/sdsctl-display/bin/python -m pip check
 sudo systemctl start sdsctl-display@CLIENT_ID.service
 ```
@@ -508,11 +508,14 @@ sudo systemctl start sdsctl-display@CLIENT_ID.service
 If installation or the dependency check fails, keep the service stopped and
 restore the previously reviewed package version before starting it. The existing
 client profile, credential, certificate, recording directory, console font,
-and service enablement do not need to change for this recovery-screen update.
+and service enablement do not need to change for this client update.
 Reuse the existing virtual environment; do not rerun `python3 -m venv` for an
 ordinary package upgrade. If this environment uses all optional interfaces,
-use `"sds200[all]==0.29.5"` in the install command instead. A successful package
-upgrade needs a display-service restart, not a reboot or daemon/App upgrade.
+use `"sds200[all]==0.30.0"` in the install command instead. A successful client
+package upgrade needs a display-service restart, not a Pi reboot. Separately
+upgrade the daemon or Home Assistant App to receive server-side corrections,
+including v0.30.0's remote TUI continuity fix during recording. Updating only
+the client cannot install a correction on its connected daemon.
 
 To return `/dev/tty1` to its ordinary login prompt:
 
