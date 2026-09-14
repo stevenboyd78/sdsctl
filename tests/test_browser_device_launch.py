@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 import traceback
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 import pytest
@@ -88,6 +88,15 @@ if kind not in {'no-ready','descendant'}:
     else:
         assert result=={'version':1,'ok':True,'binding':receipt['launch_binding']}
         before=(root/'browser-launch-ready.json').stat().st_mtime_ns
+        # The fictional browser sends a duplicate and consent immediately. Wait
+        # for the test supervisor's completed observation first; a native request
+        # during its shared read lock correctly fails closed, not idempotently.
+        (root/'fixture-readiness-waiting').touch()
+        until=time.monotonic()+5
+        while not (root/'fixture-readiness-observed').exists():
+            assert time.monotonic()<until,'Supervisor did not observe readiness'
+            time.sleep(.01)
+        (root/'fixture-duplicate-started').touch()
         assert native(body)==result
         assert (root/'browser-launch-ready.json').stat().st_mtime_ns==before
         if kind not in {'no-ack'}:
@@ -135,6 +144,21 @@ def staged(lab, tmp_path, monkeypatch):
     monkeypatch.setenv("DISPLAY", ":fictional")
     monkeypatch.setattr(launch, "_START_SECONDS", 3)
     monkeypatch.setattr(launch, "_TOTAL_SECONDS", 8)
+
+    actual_access = launch.browser_profile_access
+
+    @contextmanager
+    def observed_access(path, *, exclusive):
+        with actual_access(path, exclusive=exclusive) as identity:
+            yield identity
+        # A test-only scheduling receipt, written after the real lock and all
+        # post-read checks succeed. It is not browser consent or runtime evidence.
+        observed = root / "fixture-readiness-observed"
+        if (path == root and not exclusive and (root / launch._LAUNCH).exists()
+                and not observed.exists()):
+            private(observed, b"observed")
+
+    monkeypatch.setattr(launch, "browser_profile_access", observed_access)
 
     def run(kind="success"):
         browser = tmp_path / ("fictional-browser-" + kind)
@@ -201,6 +225,34 @@ def test_fictional_shutdown_during_child_wait_confirms_and_drains_namespace(stag
         launch._process_identity(pid)
     assert obj.restore() == result
     assert obj.confirm(restored=True) == result
+
+
+def test_fictional_duplicate_readiness_waits_for_supervisor_reader(staged, monkeypatch):
+    root, _, _, setup, _ = staged
+    obj, browser, bwrap = setup()
+    observed_access = launch.browser_profile_access
+    held = []
+
+    @contextmanager
+    def hold_first_observation(path, *, exclusive):
+        with observed_access(path, exclusive=exclusive) as identity:
+            yield identity
+            if path == root and not exclusive and not held:
+                held.append(True)
+                until = time.monotonic() + 3
+                while not (root / "fixture-readiness-waiting").exists():
+                    assert time.monotonic() < until
+                    time.sleep(.01)
+                # The synthetic duplicate cannot run until this shared reader
+                # and its post-read validation have released ownership.
+                assert not (root / "fixture-readiness-observed").exists()
+                assert not (root / "fixture-duplicate-started").exists()
+
+    monkeypatch.setattr(launch, "browser_profile_access", hold_first_observation)
+    result = fixture_recovery(obj, browser=browser, bwrap=bwrap)
+    assert held == [True]
+    assert (root / "fixture-duplicate-started").exists()
+    assert obj.confirm() == result
 
 
 @pytest.mark.parametrize("kind", ["version-other", "version-large", "version-hang", "early-exit",
@@ -306,6 +358,14 @@ def test_absent_browser_markers_do_not_allow_confirmation_while_supervisor_lives
             assert scope.message(launch.time.monotonic() + 5) == {"event": "running"}
             limit = launch.time.monotonic() + 8
             while launch.time.monotonic() < limit:
+                if ((root / launch._LAUNCH).exists()
+                        and not (root / "fixture-readiness-observed").exists()):
+                    try:
+                        with launch.browser_profile_access(root, exclusive=False):
+                            launch._matches(root / launch._LAUNCH,
+                                            obj._launch_body(record, live=True))
+                    except BrowserProfileAccessError:
+                        pass
                 if (root / launch._ACK).exists():
                     try:
                         with browser_profile_access(root, exclusive=False):
