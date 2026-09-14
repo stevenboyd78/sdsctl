@@ -145,7 +145,8 @@ def test_roadmap_records_active_milestone_and_completed_release_boundaries() -> 
     for required in (
         "first-time private native-profile import and read-only offline check",
         "rotation handoffs without clearing a saved pause or terminal error",
-        "merged but unreleased",
+        "ship as experimental v0.30.0 foundations",
+        "This closes the release, not the remaining managed-browser milestone",
         "public-key-derived extension ID and identity-pinned native wrapper",
         "Preparation does not register an extension/native host, initialize browser storage",
         "Registration accepts only a new dedicated Chromium directory",

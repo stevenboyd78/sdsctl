@@ -1,7 +1,9 @@
 # v0.30.0 release scope — display improvements and experimental browser foundations
 
-Status: **private candidate acceptance complete; final-source CI, publication
-and installed-published-release gates pending**.
+Status: **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)**
+on September 14, 2026. Final-source CI, Python/container publication and the
+scoped installed-published-release acceptance gates passed; GitHub Latest was
+verified. Experimental support limits below remain unchanged.
 This is a release scope, not a new milestone or an installation guide. The
 [milestone/release index](release-tracking.md) and [release process](releasing.md)
 retain the distinction between integration, acceptance and publication.
@@ -169,16 +171,84 @@ At runtime commit `dbdf3585797ef57f063eae487810c79f2a1846e2`:
   as failed evidence, not a pass. Qualification used a separate environment
   with the exact corrected wheel and verified parent/child import identity.
 
-Later documentation/metadata changes require a fresh final commit, artifact
-build and that commit's hosted checks. The runtime results above are explicit
-provenance, not a claim that a different final revision already passed.
+The later documentation/metadata finalization received a fresh final commit,
+artifact build and hosted checks, recorded below. The runtime results above
+remain explicit provenance rather than substitutes for final-source checks.
 
 These are private-candidate acceptance results, not an installed-public-release
 claim. Retain the candidate recordings and private evidence separately from the
-original library. Publish only after the exact final-source CI/artifact gates
-and approved ordering above; still verify upgrades from the published package
-and App catalog before GitHub Release/Latest promotion.
+original library. The separate publication and installed-release results below
+completed the exact final-source and upgrade gates before GitHub Release/Latest
+promotion; they do not replace or erase the private acceptance history.
 
 Do not ask for every old browser fault scenario again when the artifact's tested
 graph and support claim are unchanged. Any additional test must state what
 changed, what evidence is missing and its exact expected observation.
+
+### Published release and installed-upgrade acceptance — September 14, 2026
+
+The [GitHub Release](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)
+was published at `2026-09-14T23:44:21Z` and independently verified as Latest,
+with the exact reviewed notes, not a draft or prerelease.
+
+- Annotated tag object: `1123a881d68dc3c31945188771659215b1da0e41`.
+- Final tagged commit: `233757b47a641fd1282538e752567adbeff11d69`.
+- [PR #255](https://github.com/stevenboyd78/sdsctl/pull/255) merged at
+  `d15aaf434505908222799e50363551246fa326fe`; its tree exactly matched the
+  reviewed tagged tree. The catalog changed only after both matching image
+  architectures were published. Only the two changed, reviewed installation
+  wiki pages needed publication.
+
+Actual public distributions were downloaded and verified, not inferred from
+local builds. Their bytes matched the reviewed final distributions; all 322
+runtime files and the final source-documentation scope were checked.
+
+| Published artifact | SHA-256 |
+| --- | --- |
+| [PyPI wheel, `sds200-0.30.0-py3-none-any.whl`](https://pypi.org/project/sds200/0.30.0/#files) | `e65b4fbac5dbbea3e0aa05e00ebea050df426df7e0ab5b7e1e077a3c638a8ad9` |
+| [PyPI source archive, `sds200-0.30.0.tar.gz`](https://pypi.org/project/sds200/0.30.0/#files) | `5452fe419408860cbc80db960951e6994e85beb729b52f005397b1d6bf0590ca` |
+| Generic `theboyd78/sdsctl:0.30.0` multi-architecture index | `2c9100e02d09c3200564f5f2e6847dc9b5c824993c964e7fabb95794cee5fec0` |
+| Home Assistant `ghcr.io/stevenboyd78/sds200-home-assistant:0.30.0` multi-architecture index | `3efea068dcf4c8cbb645cad9a4864c8ae195ef843e2999faaaae0664ec8c6412` |
+
+Both image indexes include `linux/amd64` and `linux/arm64`. The
+[Python publication](https://github.com/stevenboyd78/sdsctl/actions/runs/34858826535),
+[generic image publication](https://github.com/stevenboyd78/sdsctl/actions/runs/34858826604),
+[App image publication](https://github.com/stevenboyd78/sdsctl/actions/runs/34858826526)
+and [tag CI](https://github.com/stevenboyd78/sdsctl/actions/runs/34858826479)
+all passed. A tag documentation job initially timed out starting Chrome before
+UI assertions; its retained failure was followed by one successful targeted
+rerun. The independent Python-publication browser audit also passed.
+
+All final-source and [post-merge CI](https://github.com/stevenboyd78/sdsctl/actions/runs/34863751305)
+gates passed. Each Python 3.11–3.14 ordinary job passed 10,673 tests with the
+expected 298 environment-dependent skips and 86.84–86.86 percent coverage;
+each separate namespace job passed 301 tests with no skips, failures or errors.
+Documentation, security, image validation, the complete 144-case browser matrix
+and supplementary browser checks passed. These counts are not additive.
+
+Installed-public-release acceptance, separate from the private candidate:
+
+- Both bench Pi displays were upgraded from published `sds200[all]==0.30.0`
+  into their existing normal virtual environments. Package dependency checks,
+  CLI versions and all 322 runtime-file hashes passed, including reads by the
+  actual service account. Temporary acceptance overrides were retired into
+  private rollback backups; existing fonts, profiles and credentials remained.
+  The user confirmed both physical layouts, version headers and live updates.
+- The regular Home Assistant App upgraded to the published `0.30.0` image after
+  an App-only partial backup. Its exact image identity and all 322 runtime-file
+  hashes were verified. Both remote TUI processes automatically recovered
+  without service restarts. Core, App data, credentials, options and port
+  mappings were unchanged. All 15 existing recordings and their sidecars
+  retained their pre-upgrade checksums; the separate private library was kept.
+- The user confirmed live browser audio play/stop, a new recording's finalization,
+  audible playback and download, continuous live updates on both TUIs through
+  recording start/stop, and audible playback of an older pre-upgrade recording.
+  The new recording was independently verified as a finalized 23.24-second
+  mono, 16-bit, 8 kHz WAV. Both remote connection ages remained continuous and
+  neither TUI service restarted.
+
+The published release closes these scoped gates. It does not qualify the
+deferred endpoint-version/duration feature, secure unattended browser keyring,
+abrupt power-loss or cross-build recovery, Firefox/WPE managed enrollment, or
+v1.0 coverage. Retained uncertain browser profiles and private acceptance
+evidence were not deleted, replayed or relabeled as production qualification.
