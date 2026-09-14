@@ -63,8 +63,8 @@ Podman, audio servers, or FFmpeg. Linux local playback also needs a working
 PortAudio runtime; Debian and Raspberry Pi OS users normally install
 `libportaudio2`.
 
-This preparation branch targets the following image. Do not pull it until its
-publication is verified; use the latest verified release in the meantime:
+For a container installation, select a published version rather than a source
+checkout. The version-specific image for this release is:
 
 ```bash
 docker pull theboyd78/sdsctl:0.30.0
@@ -205,18 +205,16 @@ workflow. Hardware-independent tests must not require a physical scanner.
 
 ## Project status
 
-Version `0.30.0` is a **release-preparation candidate, not yet published**.
-It targets local-date TUI headers/status timestamps, readable Diagnostics
-connection ages, the LCARS layering correction and opt-in experimental
+Version `0.30.0` includes local-date TUI headers/status timestamps, readable
+Diagnostics connection ages, dashboard theme corrections, and remote TUI
+continuity while recordings start and stop. It also includes opt-in experimental
 managed-browser foundations. See the [release scope](docs/release-0.30.0.md)
-for acceptance gates and deferred work. Version-pinned examples on this
-preparation branch target 0.30.0; the public catalog and wiki remain on the
-published `0.29.5` release until the new artifacts are verified.
+for included changes, acceptance evidence and deferred work.
 
 The transport-aware Raspberry Pi TUI retains observe-only preflight and managed
 outage waiting/recovery. Scanner model/firmware presentation, ordinary
 Ingress and manual dashboard login remain separate from experimental browser
-enrollment. The candidate does not enable automatic sign-in in existing
+enrollment. An upgrade does not enable automatic sign-in in existing
 installations. Secure unattended keyring, abrupt power-loss, cross-build and
 alternative-engine acceptance are not claimed. The repository App retains its
 existing option schema; experimental App activation remains an isolated lab

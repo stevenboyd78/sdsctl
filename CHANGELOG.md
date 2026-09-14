@@ -6,11 +6,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
-## [0.30.0] - Unreleased
+## [0.30.0] - 2026-09-14
 
-Release-preparation candidate, not a published version. See the
-[scope and remaining gates](docs/release-0.30.0.md). Experimental browser
-foundations are not a claim of unattended-production support.
+Display improvements, remote TUI recording continuity, and explicitly opt-in
+experimental browser foundations. See the [release scope and acceptance
+record](docs/release-0.30.0.md). Experimental browser foundations are not a
+claim of unattended-production support.
 
 ### Added
 
@@ -2140,7 +2141,6 @@ First planned GitHub prerelease.
 
 [Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...HEAD
 [0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0
-[0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3

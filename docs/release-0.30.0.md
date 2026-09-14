@@ -1,4 +1,4 @@
-# v0.30.0 release preparation — display improvements and experimental browser foundations
+# v0.30.0 release scope — display improvements and experimental browser foundations
 
 Status: **private candidate acceptance complete; final-source CI, publication
 and installed-published-release gates pending**.
@@ -8,18 +8,20 @@ retain the distinction between integration, acceptance and publication.
 
 ## Identity and scope
 
-- Target package/App version: `0.30.0`; proposed title:
+- Package/App version: `0.30.0`; release title:
   **sdsctl v0.30.0 — Display improvements and experimental browser foundations**.
 - Source baseline: `417f9d14283f7afc1a4060ce68956468a071b3e1`, with the reviewed
-  documentation policy at `b9ec344305e83d7efb8797d73d719a969c09cdaf` (PR #254).
-  Verify that PR's merge and exact-head checks before release closure.
-- Final release commit and public artifact identities: pending. The private
-  candidate artifact identities and installed-version acceptance are recorded
-  below; they are not proof of publication. Earlier private `0.29.5` wheels are
-  not release artifacts and must not be reused.
+  documentation policy from PR #254 merged at
+  `cdd81f70c242393789a8eca849542b298291ae3c`. The accepted runtime corrections
+  are committed at `dbdf3585797ef57f063eae487810c79f2a1846e2`.
+- The genuine version tag and publication receipts must identify the final
+  release commit and public artifacts. Private candidate artifact identities
+  and installed-version acceptance are recorded below; they are not proof of
+  publication. Earlier private `0.29.5` wheels are not release artifacts and
+  must not be reused.
 - This is a feature release because it adds opt-in experimental commands and
   capabilities, not only fixes to the 0.29 maintenance line.
-- The release-preparation branch is not the public Home Assistant catalog.
+- The release branch is not the public Home Assistant catalog.
   Do not merge its changed App version into main before matching images exist.
 
 ### Included user-facing changes
@@ -65,7 +67,7 @@ the built image's strict parser, not just the current source checkout.
 
 The ordinary main-first release recipe would advertise the new App version
 before tag-triggered image publication. Use a separately reviewed release-branch
-ordering for this preparation; this document does not authorize a tag push or
+ordering for this release; this document does not authorize a tag push or
 silently change the general release process:
 
 1. Review/freeze the versioned release branch and its exact full CI/security and
@@ -83,12 +85,11 @@ silently change the general release process:
    Release/Latest promotion and `Released in` closure. Installation behavior
    must be observed; publication or image availability alone is not acceptance.
 
-Before tagging, also finalize candidate wording and the release date, verify
-the staged changelog comparison links against the exact release tag, synchronize public
-installation examples, and recheck all modified artifacts/metadata. These
-preparation-only labels and old public install pins must not ship as final notes.
-The staged `v0.30.0` comparison links do not create a tag or establish publication;
-they will resolve only after the separately approved tag exists.
+Before tagging, verify the release date and changelog comparison links against
+the exact release tag, synchronize public installation examples, and recheck
+all modified artifacts/metadata. Version-pinned examples and comparison links
+in source do not create artifacts or establish publication. Keep the live wiki
+on verified installation instructions until the matching publication succeeds.
 
 ## Validation and physical test plan
 
@@ -121,9 +122,9 @@ Required scoped human checks, once an exact candidate and restoration plan exist
 ### Private candidate acceptance — September 14, 2026
 
 The attended checks above passed on both bench Pi consoles and the isolated
-Home Assistant App. The release-preparation source is based on `846bd4f`, with
-the separately tested theme-spacing and remote recording-event corrections.
-The final reviewed commit and its CI results still need to be recorded.
+Home Assistant App. The accepted runtime corrections are recorded at
+`dbdf3585797ef57f063eae487810c79f2a1846e2`, following the `846bd4f`
+versioned candidate and its theme-spacing and remote recording-event retests.
 
 - Both Pi clients used the private `0.30.0` wheel with SHA-256
   `8b1cbb1802a54d71077a046c6ce87c63416a9723843f4da11d08bec86d92791c`.
@@ -145,6 +146,32 @@ The final reviewed commit and its CI results still need to be recorded.
   complete recording library and new test WAV/metadata checksums were unchanged;
   the user confirmed saved-recording playback and browser audio play/stop after
   recovery. Core, settings, ports and credentials were unchanged.
+
+### Automated runtime qualification — September 14, 2026
+
+At runtime commit `dbdf3585797ef57f063eae487810c79f2a1846e2`:
+
+- The corrected full local suite passed **10,971 tests**, with no skips,
+  **87.66 percent** statement coverage and one existing dependency deprecation
+  warning. The shared required floor remains 86 percent.
+- The [push CI](https://github.com/stevenboyd78/sdsctl/actions/runs/34847292362)
+  passed on Python 3.11–3.14. Each ordinary Python job passed 10,673 tests with
+  298 environment-dependent skips and coverage between 86.84 and 86.86 percent.
+  Each separate namespace job ran all **301 tests with no skips, failures or
+  errors**. Do not add these overlapping job counts together.
+- CodeQL, generic and Home Assistant image validation, documentation/package
+  checks and the complete real-Chrome dashboard audit passed. The image jobs
+  were validation-only, not publication.
+- All 322 runtime files matched the corrected installed private App wheel.
+  The browser worker/native graph and dependencies were unchanged.
+- An earlier local invocation mixed current source imports with an older
+  editable package in isolated subprocesses. That invalid attempt is retained
+  as failed evidence, not a pass. Qualification used a separate environment
+  with the exact corrected wheel and verified parent/child import identity.
+
+Later documentation/metadata changes require a fresh final commit, artifact
+build and that commit's hosted checks. The runtime results above are explicit
+provenance, not a claim that a different final revision already passed.
 
 These are private-candidate acceptance results, not an installed-public-release
 claim. Retain the candidate recordings and private evidence separately from the

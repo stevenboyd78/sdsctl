@@ -1,8 +1,5 @@
 # Containers
 
-> Release-preparation source only: the 0.30.0 examples below must not be
-> published to the live wiki or used for installation before release verification.
-
 Use the published generic image when a Linux Docker or Podman host should run
 the daemon and optional web client without installing the Python package on the
 host. Home Assistant OS users should install the [Home Assistant App](Home-Assistant)

@@ -23,8 +23,8 @@ complete. Existing historical milestone IDs remain unchanged.
 
 ## Next release — targeted for v0.30.0
 
-The [release-preparation scope](release-0.30.0.md) targets the integrated changes
-below for v0.30.0. This is not a published release. The low-priority endpoint
+The [release scope and acceptance record](release-0.30.0.md) targets the reviewed
+changes below for v0.30.0. This is not a published release. The low-priority endpoint
 identity/duration follow-up stays deferred. Earlier private validation wheels
 carrying `0.29.5` metadata remain distinct from both public and new candidate
 artifacts.
@@ -32,8 +32,10 @@ artifacts.
 | Work item | Development status | Release/support boundary |
 | --- | --- | --- |
 | [TUI local date/time presentation](../ROADMAP.md#low-priority-tui-usability-follow-up) | Merged, unreleased; PR #253 | Local RFC-style header/status dates accepted on both Pi geometries; not measured connection uptime |
-| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#0300---unreleased) | Merged, unreleased | Human-readable elapsed time, preserving the oldest-current-connection meaning |
+| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#0300---2026-09-14) | Merged, unreleased | Human-readable elapsed time, preserving the oldest-current-connection meaning |
 | [LCARS content layering](../ROADMAP.md#managed-display-enrollment-and-unattended-recovery) | Merged, unreleased; PR #250 | Scoped presentation fix; does not qualify browser enrollment |
+| [Recording-event continuity and theme spacing](release-0.30.0.md#private-candidate-acceptance--september-14-2026) | Accepted release candidate; PR #255 | Remote TUIs stay live during recording; corrected dashboard header spacing |
+| [Deferred public API loading](../CHANGELOG.md#0300---2026-09-14) | Merged, unreleased; PR #250 | Preserve exports while focused helpers avoid loading unrelated APIs |
 | [Managed-browser continuation and sign-out](browser-device-continuation-acceptance.md) | Merged, unreleased; PR #250 | Experimental; scoped acceptance does not qualify secure unattended keyring, abrupt power-loss or cross-build recovery |
 | [Remote daemon version and actual connection duration](next-milestone-work-packets.md#1-tui-time-and-endpoint-identity) | Planned follow-ups | No release target; separate metadata/lifecycle and physical-layout gates |
 

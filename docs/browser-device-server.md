@@ -196,7 +196,7 @@ selects either image: those releases' strict parsers reject even disabled/empty 
 Supervisor reads the catalog from the repository branch independently of the
 versioned container, so advertising newer defaults can prevent the published App
 from starting. Keep the public schema/defaults compatible with the selected image.
-The v0.30.0 release-preparation candidate also retains that seven-field catalog
+The v0.30.0 App also retains that seven-field catalog
 schema: publishing the experimental runtime does not expose these options or
 qualify a production enrollment workflow.
 

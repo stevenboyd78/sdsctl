@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## 0.30.0 — release preparation, not yet published
+## 0.30.0
 
 - Show connected-client ages in Diagnostics as hours/minutes/seconds and elapsed
   days instead of a raw seconds count; retain the oldest-current-connection meaning.
