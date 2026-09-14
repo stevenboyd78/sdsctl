@@ -45,6 +45,7 @@ from .web_auth import (
 
 BROWSER_DEVICE_COOKIE = "__Host-sdsctl-device-session"
 BROWSER_DEVICE_EXCHANGE_PATH = "/auth/device/session"
+BROWSER_DEVICE_VERIFY_PATH = "/auth/device/verify"
 BROWSER_DEVICE_DISPLAY_PATH = "/device-display"
 _BODY_TIMEOUT_SECONDS = 3
 _READ_OUTSTANDING_LIMIT = 32  # Two running readers plus at most 30 queued acquisitions.
@@ -306,7 +307,7 @@ class BrowserDeviceHTTP:
         if conflict:
             await self._error(400, scope, receive, send)
             return
-        if scope["path"] == BROWSER_DEVICE_EXCHANGE_PATH:
+        if scope["path"] in {BROWSER_DEVICE_EXCHANGE_PATH, BROWSER_DEVICE_VERIFY_PATH}:
             await self._exchange(scope, receive, send, headers)
             return
         managed = scope["path"] == BROWSER_DEVICE_DISPLAY_PATH
@@ -417,15 +418,38 @@ class BrowserDeviceHTTP:
             try:
                 body = await asyncio.wait_for(_body(receive), timeout=_BODY_TIMEOUT_SECONDS)
                 payload = json.loads(body.decode("utf-8"), object_pairs_hook=_unique_object)
-                if (type(payload) is not dict or set(payload) != {"device_id"}
-                        or type(payload["device_id"]) is not str):
+                if (type(payload) is not dict
+                        or set(payload) not in ({"device_id"}, {"device_id", "generation"})
+                        or type(payload["device_id"]) is not str
+                        or ("generation" in payload and (
+                            type(payload["generation"]) is not int
+                            or not 1 <= payload["generation"] < 2**53 - 1))):
                     raise ValueError()
             except (ValueError, UnicodeError, RecursionError, TimeoutError):
                 await self._error(400, scope, receive, send)
                 return
+            if scope["path"] == BROWSER_DEVICE_VERIFY_PATH:
+                try:
+                    record = await self._workers.run(lambda: self._devices.verify_for_resume(
+                        payload["device_id"], authorization[7:],
+                        expected_generation=payload.get("generation"),
+                    ))
+                except (_Busy, BrowserSessionUnavailable):
+                    await self._error(503, scope, receive, send)
+                    return
+                if record is None:
+                    await self._error(401, scope, receive, send)
+                    return
+                verified = JSONResponse({"version": 1, "device_id": record.device_id,
+                    "generation": record.generation, "state": record.state.value, "drained": True})
+                _secure_response(verified)
+                await verified(scope, receive, send)
+                return
             try:
                 issued = await self._workers.run(
-                    lambda: self._devices.issue_or_raise(payload["device_id"], authorization[7:]),
+                    lambda: self._devices.issue_or_raise(payload["device_id"], authorization[7:],
+                        **({"expected_generation": payload["generation"]}
+                           if "generation" in payload else {})),
                     lambda value: self._devices.revoke_session(value.token)
                     if value is not None else None,
                 )
@@ -435,7 +459,8 @@ class BrowserDeviceHTTP:
             if issued is None:
                 await self._error(401, scope, receive, send)
                 return
-            response = JSONResponse({"token": issued.token, "expires_in": issued.lifetime_seconds})
+            response = JSONResponse({"token": issued.token, "expires_in": issued.lifetime_seconds,
+                **({"generation": payload["generation"]} if "generation" in payload else {})})
             _secure_response(response)
             try:
                 await response(scope, receive, send)

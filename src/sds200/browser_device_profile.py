@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .browser_device_native import (
+    BrowserNativeConfiguration,
     _private_read,
     load_browser_native_configuration,
     parse_browser_native_configuration,
@@ -67,13 +68,22 @@ def _trust(body: bytes) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
+def _profile_inputs(root: Path) -> tuple[BrowserNativeConfiguration, str]:
+    """Validate fixed private inputs only, not native state or current permission.
+
+    Shared byte reconstruction must not open a current ledger or recurse into a
+    future epoch selector. Public profile inspection still validates that ledger.
+    """
+    _platform()
+    config = load_browser_native_configuration(root)
+    _credential(_private_read(root, "device.secret", 128))
+    return config, _trust(_private_read(root, "ca.pem", 128 * 1024))
+
+
 def inspect_browser_profile(root: Path) -> BrowserProfileInspection:
     """Offline and read-only: validity is not server reachability or authentication."""
     try:
-        _platform()
-        config = load_browser_native_configuration(root)
-        _credential(_private_read(root, "device.secret", 128))
-        trust_sha256 = _trust(_private_read(root, "ca.pem", 128 * 1024))
+        config, trust_sha256 = _profile_inputs(root)
         status = BrowserDeviceRecovery(root / "recovery.sqlite", config.identity).inspect()
         return BrowserProfileInspection(config.identity, trust_sha256, status.mode, status.revision)
     except Exception:

@@ -63,6 +63,9 @@ export function createBrowserRecovery(ports, settings) {
   let failure = false, inFlight = null, pauseSaved = false;
   let holdForLogout = false, logoutStart = null;
   let missing = false, setupAttempted = false;
+  let resumeAttempted = false;
+  let reviewedResume = null;
+  let retirementAttempted = false, retirementReviewAttempted = false, reviewedRetirement = null;
   let readyUntil = 0; // Process-local proof of a completed verified installation, never persisted.
   const now = () => {
     const value = ports.now();
@@ -76,6 +79,15 @@ export function createBrowserRecovery(ports, settings) {
     return result;
   };
   const native = async action => nativeResult(await ports.native({version: 1, action}));
+  const retirementEvidence = (value, intent) => {
+    if (!exact(value,["identity","intent","retirement","mode","revision"]) ||
+        value.identity !== config.identity || value.intent !== intent ||
+        typeof value.retirement !== "string" || !/^[a-f0-9]{64}$/.test(value.retirement) ||
+        value.mode === "active" || !MODES.has(value.mode) ||
+        !Number.isSafeInteger(value.revision) || value.revision < 1 ||
+        value.revision >= Number.MAX_SAFE_INTEGER) throw new Error("retirement");
+    return {...value}; // Snapshot the trusted response before another await.
+  };
   const arm = async seconds => ports.schedule(now() + Math.max(30, seconds) * 1000);
   const holding = () => holdForLogout || (state?.phase === "logout_pending" && state.nextAt > now());
   const clear = async (force = false) => {
@@ -86,11 +98,14 @@ export function createBrowserRecovery(ports, settings) {
   let ready = (async () => {
     state = await ports.load();
     missing = state === undefined; // Only a successful read of ABSENT state is eligible.
-    if (!exact(state, ["version", "identity", "paused", "phase", "nextAt"]) ||
-        state.version !== 1 || state.identity !== config.identity ||
-        typeof state.paused !== "boolean" || !["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) ||
-        (state.phase === "logout_pending" && !state.paused) ||
-        !finite(state.nextAt, Number.MAX_SAFE_INTEGER)) throw new Error("state");
+    const pendingResume = exact(state, ["version", "identity", "paused", "phase", "nextAt", "intent"]) &&
+      state.version === 2 && state.phase === "resume_pending" && state.paused === true &&
+      state.nextAt === 0 && typeof state.intent === "string" && /^[a-f0-9]{64}$/.test(state.intent);
+    const ordinary = exact(state, ["version", "identity", "paused", "phase", "nextAt"]) &&
+      state.version === 1 && typeof state.paused === "boolean" &&
+      ["clean", "installing", "logout_pending", "native_retry"].includes(state.phase) &&
+      (state.phase !== "logout_pending" || state.paused) && finite(state.nextAt, Number.MAX_SAFE_INTEGER);
+    if ((!pendingResume && !ordinary) || state.identity !== config.identity) throw new Error("state");
     state = {...state};
     pauseSaved = state.paused;
     view = "ready";
@@ -141,7 +156,8 @@ export function createBrowserRecovery(ports, settings) {
     }
     try { await clear(); cookieCleared = true; } catch { /* Retry later. */ }
     state.paused = true;
-    state.phase = "clean";
+    // An interrupted approval is retained, never reset or automatically replayed.
+    if (state.phase !== "resume_pending") state.phase = "clean";
     state.nextAt = 0;
     await save();
     pauseSaved = true;
@@ -256,6 +272,175 @@ export function createBrowserRecovery(ports, settings) {
   }
 
   return Object.freeze({
+    ...(ports.retirement ? {
+    reviewPendingRetirement: () => {
+      // Trusted internal caller only. The fixed native adapter can CONFIRM an
+      // already reviewed retirement, never choose/modify files from page input.
+      if (retirementReviewAttempted || retirementAttempted) return Promise.resolve({mode:"retirement_refused"});
+      retirementReviewAttempted = true;
+      const generation = epoch;
+      const operation = operations.then(async()=>{
+        await ready;
+        if (failure || holdForLogout || epoch !== generation || state.version !== 2 ||
+            state.phase !== "resume_pending" || !state.paused ||
+            typeof ports.retirement.confirm !== "function") throw new Error("retirement");
+        const intent = state.intent;
+        const started = now();
+        const proof = retirementEvidence(await ports.retirement.confirm({identity:config.identity,intent}),intent);
+        if (epoch !== generation || failure || holdForLogout || state.intent !== intent ||
+            state.phase !== "resume_pending" || !state.paused ||
+            now() < started || now() >= started+60000) throw new Error("retirement");
+        reviewedRetirement = {proof,epoch:generation,started,deadline:started+60000};
+        return {mode:"retirement_reviewed",nativeRevision:proof.revision,nativeMode:proof.mode};
+      }).catch(()=>({mode:"retirement_refused"}));
+      operations = operation.then(()=>{});
+      return operation;
+    },
+    retirePending: review => {
+      // Consuming this review only resolves interrupted intent; it is NEVER
+      // consent to authenticate or to replay the retired resume approval.
+      const reviewed = reviewedRetirement;
+      if (retirementAttempted || !reviewed ||
+          !exact(review,["nativeRevision","nativeMode"]) ||
+          review.nativeRevision !== reviewed.proof.revision || review.nativeMode !== reviewed.proof.mode) {
+        return Promise.resolve({mode:"retirement_refused"});
+      }
+      retirementAttempted = true;
+      reviewedRetirement = null;
+      reviewedResume = null;
+      resumeAttempted = true; // Any later resume requires a new worker and fresh review.
+      return queue(async()=>{
+        await ready;
+        const intent = reviewed.proof.intent;
+        const current = () => !failure && !holdForLogout && epoch === reviewed.epoch &&
+          state.version === 2 && state.phase === "resume_pending" && state.paused && state.intent === intent &&
+          now() >= reviewed.started && now() < reviewed.deadline;
+        if (!current()) return {mode:"retirement_refused"};
+        const check = () => {if (!current()) throw new Error("retirement");};
+        const pending = {...state};
+        await clear(true); check();
+        await ports.cancel(); check();
+        // Fresh proof follows cleanup; cached review alone cannot clear intent.
+        const proof = retirementEvidence(await ports.retirement.confirm({identity:config.identity,intent}),intent);
+        check();
+        if (Object.keys(proof).some(key=>proof[key] !== reviewed.proof[key])) throw new Error("retirement");
+        const stored = await ports.load(); check();
+        if (!exact(stored,Object.keys(pending)) ||
+            Object.keys(pending).some(key=>stored[key] !== pending[key])) throw new Error("storage");
+        state = {...initialBrowserRecoveryState(config),paused:true};
+        try {await save();} // Pending BEFORE this write, clean-but-paused AFTER it.
+        catch (error) {state=pending;throw error;} // Keep in-memory uncertainty too.
+        if (epoch !== reviewed.epoch || holdForLogout || failure ||
+            now() < reviewed.started || now() >= reviewed.deadline) return {mode:"retirement_refused"};
+        pauseSaved = true;
+        stopRequested = true;
+        readyUntil = 0;
+        return {mode:"retired_paused",localPauseSaved:true,sessionReady:false};
+      });
+    },
+    } : {}),
+    ...(ports.resume ? {
+    reviewResume: () => {
+      reviewedResume = null;
+      const generation = epoch;
+      const result = operations.then(async () => {
+        await ready;
+        if (failure || retirementAttempted || holdForLogout || state.version !== 1 || state.phase !== "clean" ||
+            epoch !== generation || typeof ports.resume.review !== "function") throw new Error("review");
+        const value = await ports.resume.review();
+        if (epoch !== generation || !exact(value, ["version","ok","mode","revision","generation"]) ||
+            value.version !== 1 || value.ok !== true || value.mode === "active" || !MODES.has(value.mode) ||
+            ![value.revision,value.generation].every(n=>Number.isSafeInteger(n)&&n>0&&n<Number.MAX_SAFE_INTEGER)) {
+          throw new Error("review");
+        }
+        reviewedResume = {nativeRevision:value.revision,serverGeneration:value.generation,
+          epoch:generation,deadline:now()+60000};
+        return {mode:"reviewed",nativeRevision:value.revision,serverGeneration:value.generation};
+      }).catch(()=>({mode:"resume_refused"}));
+      operations = result.then(()=>{});
+      return result;
+    },
+    resume: review => {
+      // Only the document-bound trusted resume adapter supplies this review.
+      // Ordinary dashboard messages, control actions and startup cannot call it.
+      // This same-worker queue must own recovery AND consent; a second controller
+      // or a direct browser-storage write cannot safely coordinate this operation.
+      if (resumeAttempted || !ports.resume || typeof ports.resume.prepare !== "function" ||
+          typeof ports.resume.commit !== "function" || typeof ports.resume.verifySession !== "function" ||
+          typeof ports.intent !== "function" || !exact(review, ["nativeRevision", "serverGeneration"]) ||
+          ![review.nativeRevision, review.serverGeneration].every(n => Number.isSafeInteger(n) && n > 0 && n < Number.MAX_SAFE_INTEGER)) {
+        return Promise.resolve({mode: "resume_refused"});
+      }
+      if (ports.resume.review && (!reviewedResume || reviewedResume.epoch !== epoch ||
+          reviewedResume.deadline <= now() || reviewedResume.deadline > now()+60000 ||
+          reviewedResume.nativeRevision !== review.nativeRevision ||
+          reviewedResume.serverGeneration !== review.serverGeneration)) {
+        return Promise.resolve({mode:"resume_refused"});
+      }
+      reviewedResume = null;
+      resumeAttempted = true; // Repeated clicks never replay, even after a lost response.
+      const {nativeRevision, serverGeneration} = review; // Snapshot the reviewed values before awaits.
+      const consentEpoch = epoch;
+      return queue(async () => {
+        await ready;
+        if (failure || holdForLogout || epoch !== consentEpoch || state.version !== 1 ||
+            state.phase !== "clean") return {mode: "resume_refused"};
+        const intent = ports.intent();
+        if (typeof intent !== "string" || !/^[a-f0-9]{64}$/.test(intent)) throw new Error("intent");
+        state = {version: 2, identity: config.identity, paused: true,
+          phase: "resume_pending", nextAt: 0, intent};
+        readyUntil = 0;
+        await save(); // Consent + crash marker BEFORE any approval/network request.
+        pauseSaved = true;
+        const current = () => epoch === consentEpoch && state.phase === "resume_pending" && state.intent === intent;
+        const check = () => { if (!current()) throw new Error("cancelled"); };
+        await clear(true); check();
+        await ports.cancel(); check();
+        const approval = await ports.resume.prepare({intent,
+          nativeRevision, serverGeneration});
+        check();
+        if (!exact(approval, ["ticket", "revision", "expires_at"]) ||
+            typeof approval.ticket !== "string" || !/^[a-f0-9]{64}$/.test(approval.ticket) ||
+            approval.revision !== nativeRevision + 1 ||
+            !finite(approval.expires_at, Number.MAX_SAFE_INTEGER / 1000) ||
+            approval.expires_at * 1000 <= now() || approval.expires_at * 1000 > now() + 120000) {
+          throw new Error("approval");
+        }
+        const started = now();
+        const result = nativeResult(await ports.resume.commit({intent, approval}));
+        check();
+        if (!result.session || result.mode !== "active" || result.revision !== approval.revision + 2) {
+          throw new Error("session");
+        }
+        const expiry = started + result.session.expires_in * 1000;
+        if (now() < started || now() >= approval.expires_at * 1000 || expiry <= now() + 30000) throw new Error("expiry");
+        const before = await native("status"); check();
+        if (before.session || before.mode !== "active" || before.revision !== result.revision) throw new Error("revision");
+        await ports.setCookie({url: config.origin + "/", name: DEVICE_COOKIE,
+          value: result.session.token, path: "/", secure: true, httpOnly: true,
+          sameSite: "strict", expirationDate: expiry / 1000});
+        check();
+        // Trusted adapter must verify the installed cookie and protected display
+        // access using the real browser; native ACTIVE alone is not session proof.
+        if (await ports.resume.verifySession() !== true) throw new Error("verification");
+        check();
+        const after = await native("status"); check();
+        if (after.session || after.mode !== "active" || after.revision !== result.revision ||
+            now() < started || expiry <= now() + 30000) throw new Error("revision");
+        state = {...initialBrowserRecoveryState(config),
+          nextAt: Math.min(started + result.renew_after * 1000, expiry - 30000)};
+        await save(); // Final browser consent commit only AFTER verified installation.
+        if (epoch !== consentEpoch) return pausedCleanup();
+        stopRequested = false;
+        pauseSaved = false;
+        logoutStart = null;
+        await arm(Math.max(0, (state.nextAt - now()) / 1000));
+        if (epoch !== consentEpoch) return pausedCleanup();
+        readyUntil = expiry;
+        return {mode: "active"};
+      });
+    },
+    } : {}),
     readiness: () => ({
       mode: missing && !setupAttempted ? "setup_required" : failure ? "setup_error" :
         stopRequested || state?.paused ? "paused" : view,
@@ -365,11 +550,13 @@ export function createBrowserRecovery(ports, settings) {
 
 // Adapter is opt-in. Do not register until the dashboard sign-out bridge, trusted
 // configuration provisioning and real MV3 lifecycle tests have passed review.
-export function connectChromeRecovery(chrome, settings) {
+export function connectChromeRecovery(chrome, settings, resumePorts = null) {
   const config = configuration(settings);
   const cookieKey = {url: config.origin + "/", name: DEVICE_COOKIE};
   const privateStorage = chrome.storage.local.setAccessLevel({accessLevel: "TRUSTED_CONTEXTS"});
   const controller = createBrowserRecovery({
+    ...(resumePorts ? {resume:resumePorts, intent:()=>Array.from(crypto.getRandomValues(new Uint8Array(32)),
+      n=>n.toString(16).padStart(2,"0")).join("")} : {}),
     now: Date.now,
     load: async () => { await privateStorage; return (await chrome.storage.local.get(STATE_KEY))[STATE_KEY]; },
     save: async state => { await privateStorage; await chrome.storage.local.set({[STATE_KEY]: state}); },

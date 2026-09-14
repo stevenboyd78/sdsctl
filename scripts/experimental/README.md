@@ -23,6 +23,111 @@ implementation.
 - `SDSCTL_PROBE_CHROMIUM=/absolute/path/to/chromium` selects an already installed
   Chromium (used for the ARM64 Pi test), without installing another package.
 
+## Exact headed first-start qualification
+
+`qualify_browser_first_start.py` checks the ordinary installed foreground CLI on
+a private virtual display with a fictional profile. Unlike the server-connected
+Playwright fixtures below, it uses the distribution Chromium directly: no extra
+browser flags, debugging endpoint, seed extension or manual refresh. Do not run
+it against a real browser directory or a user's graphical session.
+
+Required: Linux, a candidate installed into its own virtual environment, Chromium
+120+, OpenSSL, Xvfb with `xvfb-run`/Xauthority, `libX11`, `libXtst`, `dbus-run-session`,
+`gdbus` and `gnome-keyring-daemon`. No Node, Playwright or NSS trust installation is
+needed for this matrix. Keep `browser_recovery_x11.py` and
+`qualify_browser_recovery.py` next to the script; they supply test helpers only.
+
+Create a **new empty private directory for each run**, using absolute paths
+without whitespace for this argument-capture fixture, then run:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' \
+  /absolute/candidate-venv/bin/python -I \
+  scripts/experimental/qualify_browser_first_start.py \
+  /absolute/new-private-case-directory /usr/bin/chromium
+```
+
+The script creates private XDG paths, an isolated D-Bus session and an encrypted
+disposable keyring. It captures visible fictional page text via the private X11
+clipboard, without inspecting browser storage or exposing a debugging port.
+Its loopback listener only counts and closes connections; it implements no TLS
+or authentication server, and success requires zero connections.
+
+The matrix checks fresh startup, setup without consent, uninitialized restart,
+explicit one-time setup confirmation, deliberate native pause and persisted
+paused restart. Before setup confirmation it waits **55 seconds without browser
+or native interaction**, allowing the worker to idle naturally. The first click
+must succeed without a retry or manual reload; a warm worker alone is insufficient
+acceptance. The [startup guide](../../docs/browser-device-startup.md#exact-headed-first-start-qualification)
+defines the assertions and limits. Success writes `qualification-result.json`,
+visible text, screenshots, and expected/observed browser arguments. An uncertain
+or failed run is retained for review, never replayed over the same profile.
+`private-runtime-path.txt` records the retained disposable runtime directory.
+Only owned test processes are stopped; no production service is involved.
+
+The separate September 9 small-Pi
+[physical recovery and paused-restart acceptance record](../../docs/browser-device-recovery-acceptance.md)
+documents two user-observed ordinary starts and a later persisted-state readback.
+It keeps failed attempts, seeded pending state and the observer-only reload
+distinct from normal startup acceptance. A five-second loading/error frame is
+not sufficient evidence of persistent failure; inspect a settled bounded capture
+before requesting physical confirmation. Do not replay a populated fixture,
+preseed human-pass markers, or weaken product timers to obtain a result.
+
+The same [acceptance record](../../docs/browser-device-recovery-acceptance.md#genuine-ordinary-resume-interruption-and-paused-recovery)
+also records a later fresh ordinary setup/sign-out/resume case with a measured
+lost-response fault, real paused recovery and two normal restarts on each side
+of maintenance. That private qualification uses no seeded pending state; do not
+substitute the synthetic harness above for it. Its readback uses GET-only APIs
+in a read-only evidence sandbox, with full stopped-process/host/release proof in
+the actual host namespace before and after. Later online session establishment
+and credential replacement are still separate gates. Retain failed cases and
+consumed operations; never replay them to obtain a pass.
+
+### Internal paused-continuation reader qualification
+
+The test-only `continuation-read` scenario of `qualify_browser_recovery.py`
+extends its synthetic-pending-state recovery and guard-release fixture. Keep
+`qualify_browser_continuation_read.py` alongside the existing helpers. Run with
+a new empty private case directory, private authenticated Xvfb and the installed
+candidate interpreter, followed by absolute Chromium and bwrap paths:
+
+```sh
+xvfb-run -a -s '-screen 0 1280x1024x24' \
+  /absolute/candidate-venv/bin/python -I \
+  scripts/experimental/qualify_browser_recovery.py \
+  /absolute/new-private-case-directory /usr/bin/chromium /usr/bin/bwrap continuation-read
+```
+
+After actual recovery acknowledgement and release, explicit **fictional fixture
+consent** records the internal continuation intent and paused authorization epoch.
+A separate test launcher then owns the existing launch lock and starts Chromium
+twice with the fixed managed arguments. The installed native helper must discover
+the actual browser ancestry and complete retained history; no browser parent,
+role, result or saved browser pause is simulated for these later reads.
+
+The ordinary product launcher must still refuse the continuation profile. This
+fixture is **not a product continuation-start command**, an online review, a new
+session, renewal or physical-display acceptance. Its listener requires zero
+authentication connections, both screens must settle paused without a manual
+reload, and all native/bundle/archive bytes must remain unchanged **after the
+explicit activation**. The result distinguishes that deliberate activation from
+unchanged reader inputs. Final browser-API readback still requires the exact
+recovery-produced clean pause, no cookie and no recovery alarm. Failed fixtures
+are retained and never replayed; forced test-process cleanup is not a pass.
+The reader uses the same SIGINT shutdown request as the ordinary product
+launcher, allowing Chromium to remove its own Singleton markers. It never
+deletes profile locks to manufacture a stopped-state result.
+
+For a separate **diagnostic** run, an administrator may set
+`SDSCTL_READER_PLAYWRIGHT=/absolute/existing/playwright/index.mjs` and provide
+Node plus the adjacent `diagnose_browser_continuation_read.mjs`. Only the later
+test-launched reader gets a temporary loopback CDP endpoint. A read-only observer
+records the actual fixed native context's mode/role and current page URLs, never
+credentials or browser state. The diagnostic flags are identified in the result;
+this does not replace an uninstrumented start/restart UI pass. It does not supply
+a role, simulate ancestry, navigate pages, initialize state or attempt login.
+
 ## Installed server-command wiring
 
 `audit_browser_server_wiring.py` tests the installed `sdsctl web` entry point,
@@ -110,6 +215,30 @@ forbidden hosts, protocol errors and invalid responses still fail closed. See
 Native retry state survives worker recreation and clock rollback; explicit
 suspend/sign-out always takes precedence.
 
+## Document-bound page verification fixture
+
+The same `audit_browser_recovery.mjs` command accepts `document-probe` with
+`ip`, `dns` or `ipv6`. Each run creates a fresh fictional profile and private
+loopback server; it never reuses a real display profile. It needs the existing
+Playwright module, Chromium, certutil and Python paths shown above, with normal
+browser sandboxing and verified TLS. Do not disable either if a prerequisite
+fails. The fixture's temporary CA is confined to its browser mount namespace,
+not imported into the user's trust database.
+
+The existing native authentication fixture—not the automation driver—obtains
+and installs the fictional session. The new probe then verifies the exact
+Chromium-supplied document identity, refuses a replacement document, and closes
+its owned tab when interrupted during a pending protected-page request. Success
+requires unchanged native ledger bytes, browser storage, cookie and session
+issuance count across the probe checks. Another probe is selected before the
+ordinary fixture sign-out; it must refuse afterwards, with the protected route
+returning 401 and paused native/browser state, absent cookie and issuance count
+unchanged by that refusal. Negative cases require the probe's exact sanitized
+error, not any unrelated JavaScript exception. Restart must remain paused.
+Results distinguish this browser I/O test from
+new continuation-controller or installed-wheel acceptance. No new normal
+worker role, Home Assistant access or physical display test is enabled.
+
 ## Earlier native-message proof
 
 ```sh
@@ -191,8 +320,25 @@ the five absolute paths: a private existing stage, Playwright module, Chromium,
 `certutil`, and the matching installed candidate Python (with `web` dependencies).
 The server script must remain beside the harness. Optional scenario and identity
 arguments select `healthy`, `deadline`, `truncated`, `tls-eof`, `server-restart`,
-`worker-restart`, `revoke`, `bad-ca` or `bad-name`, and `ip`, `dns` or `ipv6`.
+`worker-restart`, `revoke`, `bad-ca`, `bad-name`, `resume` or `resume-stale`,
+and `ip`, `dns` or `ipv6`.
 All network listeners bind only to loopback, including the IPv6 identity case.
+
+The new resume scenarios use the actual generated two-step review page after
+sign-out and confirmed administrator server resume. The happy case must verify a
+fresh protected display-only session, retire the probe tab, and sign out again;
+the stale case pauses server authority after review and must retain pending local
+pause without a cookie or automatic retry. Eight isolated cases passed on both
+ARM64 Pis using Chromium 152.0.7977.75 and 151.0.7922.173: `resume` over `ip`,
+`dns` (`localhost`) and `ipv6`, plus `resume-stale` over `ip` on each host, all
+through the installed foreground launcher (`startup`). Each case had zero setup
+authentication exchanges and ended paused after browser restart. The happy cases
+also verified protected access, exact probe-tab closure and a second sign-out.
+Real-browser testing caught a harness that counted the original dashboard as a
+probe, then a runtime bug retaining the first logout ticket after resume. The
+final passes use page-identity checks and verified-resume logout-ticket retirement.
+Earlier workstation sandbox failures remain blocked attempts, not passes.
+These are headless fixture results, not physical-display or cold-boot acceptance.
 
 The Linux browser sandbox and TLS verification stay enabled. `bwrap` mounts the
 fictional NSS trust database only inside the browser's isolated mount namespace;
@@ -262,6 +408,9 @@ node --test scripts/experimental/test_browser_device_recovery.mjs
 node --test scripts/experimental/test_browser_device_logout.mjs
 node --test scripts/experimental/test_browser_device_setup.mjs
 node --test scripts/experimental/test_browser_device_startup.mjs
+node --test scripts/experimental/test_browser_device_worker.mjs scripts/experimental/test_browser_device_worker_gate.mjs
+node --test scripts/experimental/test_browser_device_retirement.mjs
+node --test scripts/experimental/test_browser_device_retirement_ui.mjs
 ```
 
 The pytest wrapper `tests/test_browser_device_extension.py` includes those tests
@@ -270,13 +419,62 @@ browser, device credential or Home Assistant connection is used. The coordinator
 tests cover alarms, ordered cookie installation/removal, persisted sign-out intent,
 generation races, unsafe state and the Chrome adapter's message/cookie checks.
 
+The optional internal retired-intent coordinator has no installed Chrome/native
+adapter or page binding. Its deterministic tests cover one-use explicit review,
+fresh matching native evidence, unchanged pending state, newer sign-out and
+clean-but-paused persistence. `tests/test_browser_device_retirement.py` also joins
+real native history/archive confirmation through a test-only Python subprocess
+adapter. DNS/IPv4/IPv6 are identity inputs there, not network/TLS acceptance.
+Neither suite can establish physical-display or production recovery readiness.
+
+The joined fixture also tests explicit no-matching-record reconciliation against
+existing schema-1 and schema-2 native ledgers. It uses a separately reviewed,
+archived stopped revision fence, not an approval borrowed from older history.
+`tests/test_browser_device_resume_reconciliation.py` covers preserved history and
+errors, unsafe/stale state, delayed prepares, competing reconciliations and real
+process death before/after commit. All remain local synthetic tests; there is no
+installed native action, browser adapter or automatic reconciliation caller.
+
+`tests/test_browser_device_resume_boundary.py` adds fixed local profile/archive
+selection, private-input change detection, native-process lock contention and
+process-death ownership release. Its joined browser fixtures select only opaque
+operation IDs through a test-owned adapter; browser requests never choose file
+paths. Both maintenance paths remain paused and preserve evidence across lost
+replies. Advisory locks coordinate only participating runtimes/writers; this is
+not a supported credential replacement or installed browser maintenance flow.
+
+`tests/test_browser_device_retirement_bridge.py` joins the confirmation-only
+native endpoint to the candidate trusted page/worker, strict Chromium port and
+paused acknowledgement coordinator. Native profile/archive/operation selection
+is fixed by test-owned wrapper code, never page messages. Read-only confirmation
+runs under the real process supervisor and verifies actual SQLite/archive
+evidence; incomplete commits, changed inputs and lost browser write replies stay
+paused. The Node UI tests cover document/gesture checks and one-use consent.
+DOM/storage/cookies remain controlled fixtures. These adapters are not included
+in generated extensions or registered as native hosts; this is not real-browser,
+Firefox/WPE, Pi-screen or production acceptance.
+
+`tests/test_browser_device_resume_workflow.py` covers a trusted local
+stopped-browser maintenance session against real generated registration files,
+Linux launch locks and native SQLite/archive evidence. Review holds launcher
+ownership, exact per-session consent expires, and a durable marker blocks normal
+startup before native execution. Real process-loss cases distinguish review,
+guard-only and committed outcomes. Confirmation never replays execution or
+releases that guard. This internal callback-based candidate has no CLI or
+installed handoff, does not stop services, and never opens a real browser or
+production display. Keep all markers/evidence for a future qualified handoff.
+
 See the [enrollment design](../../docs/managed-display-enrollment-design.md) for
 the exact limits. `browser_device_logout.mjs` adds an opt-in two-stage sign-out
 bridge and document-bound completion tickets. The registered experimental bundle
 connects the display-only dashboard sign-out form in the isolated installed-wheel
 fixtures above; released manual kiosks and production services are unchanged.
 Real-browser interruption evidence is recorded below. Local pause and cookie
-removal are not proof of server-side stream revocation. No resume message exists.
+removal are not proof of server-side stream revocation. Ordinary control messages
+cannot resume sign-in. The separately gated
+[trusted resume candidate](../../docs/browser-device-resume.md) now adds exact
+document-bound review/confirmation and supervised native actions; it is not a
+production-accepted workflow.
 
 ## Real-browser logout harness (isolated fixture)
 
@@ -363,3 +561,36 @@ not claim instantaneous invalidation merely because the worker stopped.
 The six additional deterministic hook/parser tests verify fixed operation names,
 real-API result/rejection forwarding and exact process-argument token matching.
 They complement, rather than replace, the physical host's real-browser runs.
+
+## Continuation installation I/O qualification
+
+`test_browser_device_continuation_operation.mjs` deterministically composes the
+actual worker event gate, document consent, installation and separate stop-key
+owner. Run it with `node --test`; it is also included in the Python extension
+test wrapper. It checks cancellation and failed acknowledgements before and
+after each modeled asynchronous boundary, including the final document check,
+without selecting the active browser route. Native issuance and protected-page
+proof remain fictional callbacks; these tests do not qualify a real session,
+installed native wire protocol, server sign-out or physical display.
+
+`audit_browser_continuation_install.mjs` exercises actual sandbox-enabled Chromium
+storage and cookie APIs with **modeled native and protected-page observations**.
+It does not sign in, contact a server, install a native host, or touch a user
+profile. The driver seeds a fictional clean pause in a fresh private profile;
+this is not browser consent or complete continuation acceptance.
+
+Run `node scripts/experimental/audit_browser_continuation_install.mjs --help`
+for the exact four absolute-path arguments. The scenarios are `healthy`,
+`pending-late`, `cookie-late`, and `accepted-late`. Each invocation creates a new
+case inside an already-existing private mode-0700 stage, preserves its observed
+result and checks actual browser restart. Failed profiles must be retained,
+not reset or replayed for a passing result. The installed Chrome sandbox remains
+enabled; unavailable sandbox support is a failed prerequisite, never permission
+to use `--no-sandbox`.
+
+The late-operation cases defer one actual Chrome write/cookie call, invalidate
+the owner, and then allow that same operation to finish. They require no
+follow-on issuance, no saved-state/cookie repair, and no repeat initial attempt
+after browser restart. The healthy case uses the unwrapped Chrome API object.
+All cases still use modeled native authority and page proof; do not report them
+as real-session or physical-Pi acceptance.

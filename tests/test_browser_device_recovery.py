@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from types import SimpleNamespace
 
 import pytest
@@ -337,7 +338,7 @@ def test_unsafe_state_refused(ledger, change):
     "DELETE FROM recovery", "PRAGMA user_version=2"])
 def test_corrupt_state_fails_closed(ledger, sql):
     state, clock = ledger
-    with sqlite3.connect(state.path) as db:
+    with closing(sqlite3.connect(state.path)) as db, db:
         db.execute(sql)
     with pytest.raises(BrowserRecoveryError):
         state.authenticate(lambda: pytest.fail("Corrupt state attempted network"))

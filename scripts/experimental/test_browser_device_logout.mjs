@@ -47,6 +47,33 @@ test("lost POST result retains pause but never claims server drain", async () =>
   assert.equal(f.cookie, null); assert.equal(f.state.paused, true);
 });
 
+test("native pause and absent cookie can precede the final clean browser save", async () => {
+  const f=fixture(),c=f.make(),entered=deferred(),release=deferred();
+  await c.beginLogout();
+  // The successful same-origin server response expires its authentication
+  // cookie before the worker processes logout-finish and saves clean pause.
+  f.cookie=null;
+  f.ports.save=async value=>{
+    if(value.phase==="clean"){entered.resolve();await release.promise;}
+    f.state=structuredClone(value);
+  };
+  let completed=false;
+  const finished=c.finishLogout("drained").then(value=>{completed=true;return value;});
+  try {
+    await entered.promise;
+    assert.equal(f.nativeMode,"paused");
+    assert.equal(f.cookie,null);
+    assert.equal(f.state.paused,true);
+    assert.equal(f.state.phase,"logout_pending");
+    assert.equal(completed,false);
+  } finally {release.resolve();}
+  const result=await finished;
+  assert.equal(result.serverRevocation,"drained");
+  assert.equal(result.cookieCleared,true);
+  assert.equal(completed,true);
+  assert.deepEqual(f.state,{version:1,identity:config.identity,paused:true,phase:"clean",nextAt:0});
+});
+
 test("worker restart during pending logout preserves bounded cookie hold", async () => {
   const f = fixture(); await f.make().beginLogout();
   f.time += 30000; await f.make().tick(); assert.equal(f.cookie, token);
@@ -131,13 +158,39 @@ function worker(controller) {
   const chrome = {runtime: {id: "a".repeat(32), onMessage: {addListener(fn) { listener = fn; }}}};
   const sender = {id: chrome.runtime.id, url: origin + "/", origin, frameId: 0,
     documentId: "fictional-document", documentLifecycle: "active", tab: {id: 7, incognito: false}};
-  connectLogoutWorker(chrome, controller, origin);
+  const lifecycle=connectLogoutWorker(chrome, controller, origin);
   const send = (message, from = sender) => new Promise(resolve => {
     let called = false;
     const accepted = listener(message, from, value => { called = true; resolve(value); });
     if (!accepted && !called) resolve(null);
   });
-  return {send, sender};
+  return {send, sender, lifecycle};
+}
+
+test("only verified active resume retires the old logout ticket",async()=>{
+  let ready=false,begins=0,finishes=0;
+  const c={readiness:()=>({mode:ready?"active":"paused",sessionReady:ready}),
+    beginLogout:async()=>{ready=false;begins++;return {mode:"logout_pending",localPauseSaved:true};},
+    finishLogout:async()=>{finishes++;return {mode:"paused"};}};
+  const w=worker(c), first=await w.send({action:"logout-begin"});
+  const oldFinish={action:"logout-finish",ticket:first.ticket,outcome:"unconfirmed"};
+  await w.send(oldFinish);
+  assert.equal(w.lifecycle.retireAfterResume(),false);
+  assert.deepEqual(await w.send({action:"logout-begin"}),{mode:"busy"});
+  ready=true;assert.equal(w.lifecycle.retireAfterResume(),true);
+  assert.equal(await w.send({...oldFinish,outcome:"drained"}),null);
+  const second=await w.send({action:"logout-begin"},{...w.sender,documentId:"new-document"});
+  assert(second.submit);assert.notEqual(second.ticket,first.ticket);
+  assert.equal(await w.send(oldFinish),null);
+  await w.send({action:"logout-finish",ticket:second.ticket,outcome:"drained"},
+    {...w.sender,documentId:"new-document"});
+  assert.equal(begins,2);assert.equal(finishes,2);
+});
+for(const state of [{mode:"active",sessionReady:false},{mode:"paused",sessionReady:true},
+  {mode:"waiting",sessionReady:true},{mode:"setup_error",sessionReady:false}]) {
+  test("incomplete or superseded readiness cannot retire logout: "+JSON.stringify(state),()=>{
+    assert.equal(worker({readiness:()=>state}).lifecycle.retireAfterResume(),false);
+  });
 }
 
 test("document-bound single-use completion cannot be replayed to upgrade outcome", async () => {
@@ -172,7 +225,7 @@ for (const change of [{frameId: 1}, {origin: "https://evil.example"}, {url: orig
 
 test("content handler stops repeated submits and waits for pause before fetch", async () => {
   let handler, fetches = 0; const prepared = deferred(), notices = [];
-  const win = {location: {href: origin + "/"}}; win.top = win;
+  const win = {location: {href: origin + "/"},addEventListener(){}}; win.top = win;
   const document = {addEventListener(_, fn, capture) { assert.equal(capture, true); handler = fn; },
     createElement() { return {setAttribute() {}, textContent: ""}; }};
   const runtime = {sendMessage: async message => {
@@ -190,4 +243,68 @@ test("content handler stops repeated submits and waits for pause before fetch", 
   await settle(); await settle();
   assert.equal(fetches, 1); assert.equal(notices.length, 1);
   assert.match(notices[0].textContent, /Server shutdown confirmed/);
+});
+
+function continuationContentFixture(value) {
+  const f={calls:[],notices:[],fetches:0,timers:new Set()};
+  f.window={location:{href:origin+'/device-display'},addEventListener:(name,fn)=>{
+    assert.equal(name,'pagehide');f.pagehide=fn;
+  }};f.window.top=f.window;
+  f.document={addEventListener:(name,fn,capture)=>{
+    assert.equal(name,'submit');assert.equal(capture,true);f.submit=fn;
+  },createElement:()=>({setAttribute(){},textContent:''})};
+  f.runtime={sendMessage:async message=>{f.calls.push(message);return value;}};
+  f.fetcher=async()=>{f.fetches++;throw Error('second sign-out POST forbidden');};
+  f.schedule=(fn,ms)=>{assert.equal(ms,60000);const t={fn};f.timers.add(t);return t;};
+  f.cancel=t=>f.timers.delete(t);
+  connectLogoutContent(f,origin);
+  f.event={isTrusted:true,preventDefault(){},stopImmediatePropagation(){},target:{tagName:'FORM',
+    method:'post',action:origin+'/auth/logout',append:notice=>f.notices.push(notice)}};
+  f.run=async()=>{f.submit(f.event);await settle();};return f;
+}
+const completeStop={mode:'continuation_stop_complete',browserStopSaved:true,nativePauseConfirmed:true,
+  localWritesDrained:true,serverRevocation:'drained',cookieCleared:true,
+  serverRevocationConfirmed:true,sessionReady:false};
+for(const [outcome,value,pattern] of [
+  ['complete',completeStop,/Sign-out complete.*server sessions closed/],
+  ['pending',{...completeStop,mode:'continuation_stop_pending',serverRevocation:'pending'},/sessions are still draining/],
+  ['unconfirmed',{...completeStop,mode:'continuation_stop_unconfirmed',nativePauseConfirmed:false,
+    cookieCleared:false,serverRevocation:'unconfirmed',serverRevocationConfirmed:false},/Native pause: unconfirmed/],
+])test('continuation '+outcome+' presents fixed separate facts with no content POST or finish',async()=>{
+  const f=continuationContentFixture(value);await f.run();await f.run();
+  assert.equal(f.notices.length,1);assert.match(f.notices[0].textContent,pattern);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.fetches,0);assert.equal(f.timers.size,0);
+});
+for(const field of ['browserStopSaved','nativePauseConfirmed','localWritesDrained','cookieCleared'])
+for(const mode of ['continuation_stop_complete','continuation_stop_pending'])
+test('false '+field+' cannot claim '+mode,async()=>{
+  const f=continuationContentFixture({...completeStop,mode,[field]:false,
+    serverRevocation:mode==='continuation_stop_pending'?'pending':'drained'});await f.run();
+  assert.match(f.notices[0].textContent,/could not be confirmed/);assert.equal(f.fetches,0);
+});
+for(const [name,value] of [
+  ['extra key',{...completeStop,secret:'private'}],['unsafe extra grant',{...completeStop,submit:true,ticket:'a'.repeat(36)}],
+  ['ready true',{...completeStop,sessionReady:true}],['missing facts',{mode:'continuation_stop_complete'}],
+  ['pending is not complete',{...completeStop,serverRevocation:'pending'}],
+  ['wrong server flag',{...completeStop,serverRevocationConfirmed:false}],
+  ['unknown revocation',{...completeStop,serverRevocation:'private'}],
+  ['nonboolean',{...completeStop,browserStopSaved:'true'}],
+])test('unknown continuation result '+name+' is fixed and cannot grant a second POST',async()=>{
+  const f=continuationContentFixture(value);await f.run();
+  assert.match(f.notices[0].textContent,/could not be confirmed/);
+  assert(!f.notices[0].textContent.includes('private'));assert.equal(f.fetches,0);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.timers.size,0);
+});
+for(const boundary of ['pagehide','location','timeout'])test(boundary+' cannot display late sign-out success or retry',async()=>{
+  const reply=deferred(),f=continuationContentFixture(reply.promise);await f.run();
+  if(boundary==='pagehide')f.pagehide();
+  if(boundary==='location')f.window.location.href=origin+'/';
+  if(boundary==='timeout'){[...f.timers][0].fn();await settle();}
+  const previous=f.notices[0].textContent;reply.resolve(completeStop);await settle();await f.run();
+  assert.equal(f.notices[0].textContent,previous);assert.equal(f.fetches,0);
+  assert.deepEqual(f.calls,[{action:'logout-begin'}]);assert.equal(f.timers.size,0);
+});
+test('untrusted sign-out stays inert and does not consume the real gesture',async()=>{
+  const f=continuationContentFixture(completeStop);f.submit({...f.event,isTrusted:false});await settle();
+  assert.deepEqual(f.calls,[]);await f.run();assert.equal(f.calls.length,1);
 });

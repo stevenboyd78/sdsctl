@@ -258,38 +258,61 @@ async function findExecutable(explicit, candidates, description) {
   throw new Error(`${description} was not found; provide its explicit path`);
 }
 
-function captureChildOutput(child) {
-  const chunks = [];
+export function captureChildOutput(child, clock = () => performance.now()) {
+  const started = clock();
+  let tail = "";
   const append = (chunk) => {
-    chunks.push(String(chunk));
-    while (chunks.join("").length > 16_000) {
-      chunks.shift();
-    }
+    tail = (tail + `[+${Math.round(clock() - started)}ms] ${String(chunk)}`).slice(-16_000);
   };
   child.stdout?.on("data", append);
   child.stderr?.on("data", append);
-  return () => chunks.join("");
+  child.on("spawn", () => append("process spawned\n"));
+  child.on("exit", (code, signal) => append(`process exit=${code} signal=${signal}\n`));
+  child.on("error", (error) => append(`process error=${error.code ?? error.name}\n`));
+  return () => tail;
 }
 
-async function waitForHttp(url, timeoutMs, child = null) {
-  const deadline = Date.now() + timeoutMs;
+export async function waitForHttp(url, timeoutMs, child = null, {
+  now = Date.now, fetcher = fetch, sleep = delay,
+} = {}) {
+  const started = now();
+  const deadline = started + timeoutMs;
   let lastError = null;
-  while (Date.now() < deadline) {
-    if (child !== null && child.exitCode !== null) {
-      throw new Error(`process exited before ${url} became ready`);
+  let attempts = 0;
+  const outcomes = new Map();
+  const record = (outcome) => {
+    const elapsedMs = now() - started;
+    const previous = outcomes.get(outcome);
+    if (previous !== undefined) {
+      previous.count += 1;
+      previous.lastMs = elapsedMs;
+    } else if (outcomes.size < 8) {
+      outcomes.set(outcome, {count: 1, firstMs: elapsedMs, lastMs: elapsedMs});
     }
+  };
+  const diagnostic = () => JSON.stringify({elapsedMs: now() - started, timeoutMs,
+    attempts, outcomes: Object.fromEntries(outcomes),
+    exitCode: child?.exitCode ?? null, signalCode: child?.signalCode ?? null});
+  while (now() < deadline) {
+    if (child !== null && child.exitCode !== null) {
+      throw new Error(`process exited before ${url} became ready; readiness=${diagnostic()}`);
+    }
+    attempts += 1;
     try {
-      const response = await fetch(url, {signal: AbortSignal.timeout(750)});
+      const response = await fetcher(url, {signal: AbortSignal.timeout(750)});
       if (response.ok) {
         return response;
       }
       lastError = new Error(`HTTP ${response.status}`);
+      record(`HTTP ${response.status}`);
     } catch (error) {
       lastError = error;
+      const code = error?.cause?.code ?? error?.code;
+      record(String(typeof code === "string" ? code : error?.name ?? "unknown").slice(0, 80));
     }
-    await delay(100);
+    await sleep(100);
   }
-  throw new Error(`timed out waiting for ${url}: ${String(lastError)}`);
+  throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
 async function stopChild(child) {

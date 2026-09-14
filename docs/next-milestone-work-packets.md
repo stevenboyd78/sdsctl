@@ -11,10 +11,12 @@ Initial inspection baseline: `ffb3e101de7014d7513daef49d454c81bdc7c59b`
 (`main`, including the merged connected-client age presentation). The TUI time
 packet below was updated after [PR #253](https://github.com/stevenboyd78/sdsctl/pull/253)
 merged as `6f8c1b2ea606368c793a0136ff38d1463440a991`; unrelated source findings
-still name the initial baseline. Browser continuation is separately under review in
-[draft PR #250](https://github.com/stevenboyd78/sdsctl/pull/250). Recheck both
-baselines before implementing a packet; this is not a claim that the draft is
-merged or that its installed recovery path is complete.
+still name the initial baseline. [PR #250](https://github.com/stevenboyd78/sdsctl/pull/250)
+has since merged as `d2bc159c59ba8bec070f2eabb21a8aa4b4e30c91`, including the
+reviewed continuation route, idle sign-out correction and LCARS layering fix.
+Its [acceptance record](browser-device-continuation-acceptance.md) preserves the
+scope of each test. Recheck the implementation baseline before starting a packet;
+merging this development does not publish it or qualify unattended production use.
 
 ## Dependency map
 
@@ -28,7 +30,7 @@ merged or that its installed recovery path is complete.
 | Audio client and playback follow-ups | Yes | Bounded fanout and failure-isolation test design | One scanner stream and physical audio acceptance |
 | Favorites follow-ups | Yes for copied data | Reconcile remaining gaps with the existing editor and provenance workflows | Exact backup, stale-target and restore evidence before writes |
 | Alternative kiosk engines/platforms | Manual rendering only | Engine capability matrix and fixture-based visual checks | Engine-specific security, lifecycle and physical acceptance |
-| Unattended browser continuation | No: active dependency chain | Complete the current security and failure-state gates | Installed end-to-end, outage, logout and physical acceptance |
+| Unattended browser continuation | Builds on merged, unreleased foundations | Preserve scoped continuation/logout acceptance; prepare missing lifecycle gates | Secure unattended keyring, abrupt power loss, cross-build state and exact installed-release acceptance |
 | v1.0 quality and release hardening | Planning only | Maintain a coverage/acceptance scope and reproducible release matrix | Separately reviewed release-candidate criteria |
 
 These are work packets, not ten new features to implement simultaneously. Keep
@@ -185,6 +187,39 @@ visible. Automated coverage does not replace real browser, scanner, Pi,
 upgrade, power-loss or recovery acceptance. Release qualification follows
 [the release guide](releasing.md); it must name the exact commit, artifacts,
 checks and acceptance boundaries rather than infer success from a version tag.
+
+### Release-readiness sequence after continuation integration
+
+1. **Qualify the merged source.** Verify the exact main commit, its relation to
+   the reviewed candidate, full Python and namespace execution gates, browser
+   checks, packaging/container validations and open security alerts. Passing
+   analysis is not proof that alerts are absent. Keep prior-head and merged-head
+   results separate, even when their source trees are identical.
+2. **Choose and document release scope.** Separate shipping opt-in experimental
+   code from claiming unattended-production support. Do not advertise secure
+   keyring, power-loss, alternative-engine or cross-build acceptance without its
+   own evidence. The reviewed browser acceptance does not qualify new TUI fields.
+3. **Prepare one new version consistently.** Follow the release guide for
+   package/CLI, App catalog, changelogs, README and reviewed wiki source. Never
+   reuse 0.29.5 or deploy a private validation wheel as the published artifact.
+   Keep the public App catalog compatible with its advertised image, including
+   disabled options; do not repeat the experimental-option startup mismatch.
+4. **Test new release artifacts.** Build from the exact release candidate, verify
+   wheel/sdist contents and clean installation, run image validation and freeze
+   the candidate before asking for its scoped physical acceptance. Reuse prior
+   evidence only when the tested surface and claim still match; never rerun a
+   completed or uncertain browser profile to manufacture another pass.
+5. **Publish and accept the installed release in order.** Use the release guide's
+   reviewed wiki/tag/artifact/catalog ordering, then verify public package/image
+   identities and the actual installed-release behavior before the final GitHub
+   Release/Latest promotion. A failed publication is partial publication, not
+   permission to move a tag. Retained evidence and unrelated user data are outside
+   ordinary branch cleanup.
+
+The next human check must name an exact candidate, fresh test profile if needed,
+specific expected observation and restoration plan. Until that check is prepared,
+source/documentation/package work can proceed without stopping the bench TUIs or
+using scanner/audio/credential operations to fill an unrelated checklist.
 
 ## Review handoff
 

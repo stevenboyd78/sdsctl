@@ -237,7 +237,8 @@
 
 :root[data-theme="lcars"] .radio-field-groups {
   border-color: var(--lcars-violet);
-  border-radius: 0.3rem 999px 999px 0.3rem;
+  /* Keep the rectangular data grid inside its rounded clipping boundary. */
+  border-radius: var(--radius-small);
   background: rgb(183 129 209 / 0.07);
 }
 
