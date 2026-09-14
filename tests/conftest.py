@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,32 @@ from sds200.configuration import (
     ResolvedApplicationConfiguration,
     resolve_configuration_paths,
 )
+
+
+@pytest.fixture
+def host_timezone(monkeypatch):
+    """Select and then restore the process's real local timezone for TUI tests."""
+
+    @contextmanager
+    def selected(zone):
+        if not hasattr(time, "tzset"):
+            pytest.skip("Selecting the host timezone requires time.tzset")
+        with monkeypatch.context() as patch:
+            patch.setenv("TZ", zone)
+            time.tzset()
+            try:
+                yield
+            finally:
+                patch.undo()
+                time.tzset()
+
+    return selected
+
+
+@pytest.fixture
+def local_timezone_utc(host_timezone):
+    with host_timezone("UTC"):
+        yield
 
 
 @pytest.fixture(autouse=True)
