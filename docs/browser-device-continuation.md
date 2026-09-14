@@ -1,5 +1,14 @@
 # Post-recovery continuation: design boundary
 
+Current composition status: the unreleased candidate now selects ordinary
+continuation through the fixed native role and foreground public launcher.
+Read the [operation boundary](browser-device-continuation-operation.md) and
+[scoped acceptance record](browser-device-continuation-acceptance.md) for the
+current implementation. The incremental design/qualification sections below
+preserve earlier prerequisite boundaries; their unselected/fixture-only status
+describes those earlier increments, not the final composed route. This remains
+experimental and is not an administrator deployment runbook.
+
 Status: **development design, read-only preflight/history, internal intent journal,
 fixture-only owned paused activation, current-epoch transactions, owned current-state reads,
 controlled native cancellation, owned prepare/claim, verification and initial-session core;

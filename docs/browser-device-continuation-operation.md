@@ -1,9 +1,11 @@
 # Continuation operation ownership and stop boundary
 
-Status: **private development candidate with ordinary continuation routing;
-not released, physically accepted, or an administrator deployment runbook**.
+Status: **unreleased development candidate with ordinary continuation routing
+and scoped Chromium/physical acceptance; not an administrator deployment runbook**.
 Read the [continuation boundary](browser-device-continuation.md) first. Existing
 profiles must not be edited, replayed or cleared to exercise this candidate.
+The [acceptance record](browser-device-continuation-acceptance.md) distinguishes
+modeled, automated Pi and human-observed results from remaining release gates.
 
 ## Foreground launcher validation
 
@@ -36,9 +38,10 @@ can display its administrator-review notice; it does not resume automatic sign-i
 Legacy registration and native routes retain their strict continuation refusal.
 
 Local tests cover actual installed CLI invocation with complete retained history
-and a synthetic recovery browser. Real Chromium and physical acceptance of this
-launcher change remain separate gates; earlier private-v9 physical results must
-not be represented as acceptance of this changed native build.
+and a synthetic recovery browser. Separate real Chromium tests exercise the
+installed public CLI on both Pi hosts, and a fresh physical HDMI case covers
+initial resume, delayed sign-out and signed-out restart. Earlier private-v9
+results are not acceptance of this changed native build.
 
 ## Ordinary startup selection
 
@@ -178,7 +181,9 @@ is insufficient. Invalidation aborts the owned probe and fences late replies.
 The accepted owner never issues a session, rewrites recovery state, repairs a
 cookie, creates a renewal alarm, or signs out by itself. It exposes a retained
 in-memory cookie comparison only after all verification and cleanup succeeds.
-A stored comparison is never adopted as trusted logout ownership.
+A stored comparison alone is never trusted as logout ownership. The manual
+cold-worker Stop exception below independently revalidates its accepted record,
+native binding, actual cookie and this attempt's pause acknowledgements.
 
 ## Independent Stop and write draining
 
@@ -219,6 +224,35 @@ cancels approvals and removes the active native grant; it does **not** revoke
 HTTP sessions. A later paused status does not acknowledge an earlier lost reply.
 
 ## Owned same-origin logout and presentation
+
+### Manual sign-out after worker inactivity
+
+A newly created ACTIVE lifecycle has no in-memory cookie comparison until its
+accepted-startup verifier runs. A dashboard can remain open while the extension
+worker is terminated and recreated, so manual logout must not depend on that
+earlier process's memory.
+
+Only the exact validated manual logout receiver may request a Stop-only
+comparison reconstruction, and only for a native-selected ACTIVE lifecycle whose
+accepted verifier has not started. Generic Stop, startup failure, cancellation,
+paused selection and unknown issuance keep the no-reconstruction path.
+
+Reconstruction waits for this attempt's own durable STOP write/readback and
+independent native pause acknowledgement, then drains tracked writes. Whole
+storage must contain exactly the matching accepted recovery record plus this
+attempt's STOP. Identity, epoch, build and original ACTIVE native binding must
+match; alarms must be empty. Repeated whole-state and actual strict-cookie
+readbacks must agree, including cookie fingerprint, store, shape and lifetime.
+Changed or missing state, pre-existing STOP and lost acknowledgement are retained
+and refused. This comparison cannot authorize startup, issue a session, create
+an alarm, repair a profile or replay a request. The existing one-use same-origin
+logout and exact-cookie cleanup remain unchanged.
+
+These repeated browser API comparisons are not atomic compare-and-swap and do
+not provide a security boundary against hostile software running as the same
+OS account.
+
+### Logout exchange
 
 Browser logout requires the trusted lane's retained cookie comparison, matching
 actual cookie readbacks/lifetime, and successful local write draining. No owned
@@ -316,8 +350,9 @@ trusted-event gating, ticket/completion separation, original deadlines, fixed
 navigation, lost replies and persistent sign-out facts. These are model tests,
 not evidence of real MessageSender, hardware appearance or 100% project coverage.
 
-Before publication: complete source/installed regression and exact package
-parity, then fresh ordinary Chromium trusted-input, idle/wake, accepted/stopped
-restart and origin/cookie tests, followed by focused small-Pi and HDMI-Pi visual
-acceptance. No existing Home Assistant installation, credential, Pi display,
-global trust store or published release is changed by this source qualification.
+The [current acceptance record](browser-device-continuation-acceptance.md)
+documents the completed installed-package regression, package parity, automated
+Chromium cases and focused physical HDMI check. Source integration and hosted CI
+must qualify the combined PR head separately. A versioned release still requires
+the normal package, container, documentation and installed-release gates; an
+accepted private fixture does not publish or upgrade any installation.

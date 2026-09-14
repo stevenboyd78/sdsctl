@@ -8,6 +8,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Compose the experimental browser continuation route with its foreground public
+  launcher, explicit document-bound resume, fresh accepted-session verification,
+  durable Stop/native pause and one-use same-origin logout. Record scoped private
+  Chromium and physical HDMI acceptance without enabling a production runbook,
+  changing existing installations or clearing retained recovery evidence.
+
 - Add exact headed first-start qualification on private Pi displays using the
   ordinary installed CLI and distribution Chromium. Check fresh/no-consent setup,
   explicit initialization and paused restarts, with observed argument capture,
@@ -172,6 +178,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
   acceptance notes; do not install it or change production TUI/kiosk services.
 
 ### Fixed
+
+- Keep experimental managed-display sign-out working after extension worker
+  inactivity. Reconstruct only a Stop-specific accepted-cookie comparison after
+  this attempt's checked browser Stop/native pause; retain unknown state and
+  lost acknowledgements without retries or new session issuance.
+- Keep complete, pending and unconfirmed managed-display sign-out messages
+  visible instead of letting background session refresh navigate them away.
+- Prevent the LCARS field-group decoration from clipping scanner metadata.
 
 - Request normal Chromium closure with `SIGINT` when stopping the experimental
   managed-browser launcher. Let the launcher finish that bounded shutdown before
