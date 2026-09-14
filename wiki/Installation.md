@@ -1,5 +1,9 @@
 # Installation
 
+> Release-preparation source only: v0.30.0 is not yet published. Keep using the
+> latest verified release; do not publish these draft upgrade instructions to
+> the live wiki before release verification.
+
 > [!IMPORTANT]
 > Choose the target that matches how you want to run `sdsctl`. Home Assistant
 > and container users do not need to install the Python package on the host.
@@ -175,9 +179,22 @@ Home Assistant OS users should follow [Home Assistant](Home-Assistant). The
 published App does not require `pip`, a source checkout, or a Local App under
 `/addons`.
 
-## Upgrade to v0.29.5
+## Upgrade to v0.30.0
 
-v0.29.5 keeps a managed remote TUI on one clean waiting screen while its daemon
+The candidate adds local dates, a numeric timezone offset and 24-hour time to
+the TUI header and status changes. The timezone is the TUI host's; `Status since`
+is an observed label transition, not a measured socket connection start. Upgrade
+each TUI client to get the new presentation. Scanner model/firmware stays in its
+own panel, and the connected daemon's application version is not yet displayed.
+
+Web Diagnostics shows connected-client ages as hours/minutes/seconds with elapsed
+days, and the LCARS theme keeps scanner field text clear of its decoration.
+Experimental browser-device commands and continuation/sign-out foundations stay
+opt-in; an upgrade does not enable enrollment, migrate existing profiles or
+qualify unattended production sign-in. The repository App's seven-field schema,
+credentials, mappings, cards and recording locations remain unchanged.
+
+It retains v0.29.5's managed remote TUI waiting screen while its daemon
 is unavailable. It shows the target and retry countdown, then returns to live
 data after fresh authorization. Upgrade each TUI client to get this improvement;
 an existing 0.29.4 daemon and client credentials remain compatible. The patch
@@ -219,14 +236,14 @@ The compatibility-sensitive Python distribution and import package remain
 `sds200`, while the command remains `sdsctl`. Upgrade the base package with:
 
 ```bash
-python -m pip install --upgrade "sds200==0.29.5"
+python -m pip install --upgrade "sds200==0.30.0"
 sdsctl --version
 ```
 
 Install or upgrade every optional Python runtime interface with:
 
 ```bash
-python -m pip install --upgrade "sds200[all]==0.29.5"
+python -m pip install --upgrade "sds200[all]==0.30.0"
 python -m pip check
 sdsctl --version
 ```
@@ -238,7 +255,7 @@ package and verification procedure.
 For the generic container, prefer the exact release image:
 
 ```bash
-docker pull theboyd78/sdsctl:0.29.5
+docker pull theboyd78/sdsctl:0.30.0
 ```
 
 `theboyd78/sdsctl:latest` follows the newest successfully published release,
@@ -248,7 +265,7 @@ source-built and local-only. The separate `compose.remote.yaml` topology is
 documented in [Containers](Containers) and requires deliberate private-LAN TLS,
 identity, address, port, and firewall configuration.
 
-The Home Assistant App version tracks 0.29.5 while preserving its
+The Home Assistant App candidate version tracks 0.30.0 while preserving its
 compatibility-sensitive `sds200` name, slug, GHCR image identity, MQTT entity
 identities, persistent recordings, aggregate and individual card resource
 paths, and independently versioned card modules. Upgrade the repository-managed

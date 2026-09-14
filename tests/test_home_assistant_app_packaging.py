@@ -146,17 +146,18 @@ def test_home_assistant_app_manifest_uses_ingress_and_required_mqtt_service() ->
     assert "host_network: true\n" not in manifest
 
 
-def test_published_0_29_catalog_does_not_advertise_unreleased_options() -> None:
+def test_catalog_retains_reviewed_seven_field_option_contract() -> None:
     """Supervisor reads main's catalog even when its image is an older release.
 
     Match the strict loader in v0.29.4 and its v0.29.5 maintenance backport,
-    not the newer source-tree loader.
+    not just the newer source-tree loader. The v0.30.0 release scope deliberately
+    retains these same seven public options despite its experimental runtime.
     Keep this contract while advertising that image; a version bump can select
     a different published contract, but merely merging runtime code cannot.
     """
     manifest = _APP_MANIFEST.read_text(encoding="utf-8")
-    if _quoted_scalar(manifest, "version") not in {"0.29.4", "0.29.5"}:
-        return  # These two releases share the same immutable option contract.
+    if _quoted_scalar(manifest, "version") not in {"0.29.4", "0.29.5", "0.30.0"}:
+        return  # Keep each release's explicitly reviewed catalog contract.
     released = {
         "scanner_host", "mqtt_topic_prefix", "recording_directory",
         "remote_daemon_enabled", "native_dashboard_enabled",

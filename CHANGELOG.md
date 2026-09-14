@@ -6,6 +6,12 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+## [0.30.0] - Unreleased
+
+Release-preparation candidate, not a published version. See the
+[scope and remaining gates](docs/release-0.30.0.md). Experimental browser
+foundations are not a claim of unattended-production support.
+
 ### Added
 
 - Compose the experimental browser continuation route with its foreground public
@@ -163,6 +169,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Show full local RFC 2822-style dates, 24-hour time and a numeric UTC offset in
+  the TUI header and observed status transitions. Preserve the original offset
+  of a status transition across DST changes. These timestamps are not measured
+  client-to-daemon or daemon-to-scanner connection uptime.
+- Defer public API loading until an exported object is used, so focused
+  short-lived native helpers do not load unrelated audio or Favorites modules.
+  Preserve the public export names and their original object identities.
 - Document independent milestone and release numbering, a forward-looking
   pre-1.0 feature/maintenance version convention, and a milestone-to-release
   index. Require explicit included/deferred/experimental release scope and
@@ -2118,6 +2131,7 @@ First planned GitHub prerelease.
   examples, tests, and CI.
 
 [Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
+[0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4
 [0.29.3]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.2...v0.29.3

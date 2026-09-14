@@ -21,7 +21,8 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The next release version is unassigned until its scope review.
+selection. The [v0.30.0 preparation scope](docs/release-0.30.0.md) selects the
+next feature-release target, not a published version or completed release gate.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
 implementation or successful test is not itself a publication, and an

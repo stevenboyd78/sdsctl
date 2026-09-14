@@ -21,23 +21,26 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
-## Next release — version unassigned
+## Next release — targeted for v0.30.0
 
-These integrated changes are inputs to the next scope review, not a selected
-release or a promise that every item will ship together. Do not infer a release
-from the development tree's retained `0.29.5` package metadata.
+The [release-preparation scope](release-0.30.0.md) targets the integrated changes
+below for v0.30.0. This is not a published release. The low-priority endpoint
+identity/duration follow-up stays deferred. Earlier private validation wheels
+carrying `0.29.5` metadata remain distinct from both public and new candidate
+artifacts.
 
 | Work item | Development status | Release/support boundary |
 | --- | --- | --- |
 | [TUI local date/time presentation](../ROADMAP.md#low-priority-tui-usability-follow-up) | Merged, unreleased; PR #253 | Local RFC-style header/status dates accepted on both Pi geometries; not measured connection uptime |
-| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#unreleased) | Merged, unreleased | Human-readable elapsed time, preserving the oldest-current-connection meaning |
+| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#0300---unreleased) | Merged, unreleased | Human-readable elapsed time, preserving the oldest-current-connection meaning |
 | [LCARS content layering](../ROADMAP.md#managed-display-enrollment-and-unattended-recovery) | Merged, unreleased; PR #250 | Scoped presentation fix; does not qualify browser enrollment |
 | [Managed-browser continuation and sign-out](browser-device-continuation-acceptance.md) | Merged, unreleased; PR #250 | Experimental; scoped acceptance does not qualify secure unattended keyring, abrupt power-loss or cross-build recovery |
 | [Remote daemon version and actual connection duration](next-milestone-work-packets.md#1-tui-time-and-endpoint-identity) | Planned follow-ups | No release target; separate metadata/lifecycle and physical-layout gates |
 
-The next release-preparation review selects the included slices, records deferred
-work and support limits, and assigns a new version. It must not reuse `0.29.5`
-or relabel private validation artifacts as a public release.
+The release scope records included slices, deferred work and support limits.
+Each included row is targeted for v0.30.0 but remains unreleased until the
+publication gates pass. Never reuse `0.29.5` or relabel private validation
+artifacts as a public release.
 
 ## Recent milestone-to-release history
 
