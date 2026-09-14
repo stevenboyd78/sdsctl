@@ -2130,7 +2130,8 @@ First planned GitHub prerelease.
 - Added serial discovery, transport, packet framing, core responses, CLI tools,
   examples, tests, and CI.
 
-[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
+[Unreleased]: https://github.com/stevenboyd78/sdsctl/compare/v0.30.0...HEAD
+[0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...v0.30.0
 [0.30.0]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.5...HEAD
 [0.29.5]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.4...v0.29.5
 [0.29.4]: https://github.com/stevenboyd78/sdsctl/compare/v0.29.3...v0.29.4

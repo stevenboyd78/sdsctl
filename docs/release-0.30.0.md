@@ -79,10 +79,12 @@ silently change the general release process:
    Release/Latest promotion and `Released in` closure. Installation behavior
    must be observed; publication or image availability alone is not acceptance.
 
-Before tagging, also finalize candidate wording and the release date, convert
-the changelog comparison links to the exact release tag, synchronize public
+Before tagging, also finalize candidate wording and the release date, verify
+the staged changelog comparison links against the exact release tag, synchronize public
 installation examples, and recheck all modified artifacts/metadata. These
 preparation-only labels and old public install pins must not ship as final notes.
+The staged `v0.30.0` comparison links do not create a tag or establish publication;
+they will resolve only after the separately approved tag exists.
 
 ## Validation and physical test plan
 
