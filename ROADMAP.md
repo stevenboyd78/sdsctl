@@ -9,6 +9,10 @@ The broader product direction, architectural constraints, deferred capabilities,
 and ideas that are not ready for scheduling are recorded in
 [the project vision](docs/project-vision.md).
 
+For independently preparable follow-ups, source findings and test gates, see
+[the next milestone work packets](docs/next-milestone-work-packets.md). These
+packets do not assign release versions or mark unfinished features complete.
+
 ## Proposed v1.0 quality gate — comprehensive coverage
 
 Defer the dedicated push to 100 percent test coverage until late-project
@@ -53,27 +57,42 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
   handle unavailable version information explicitly. Direct USB connections
   should not gain this remote-only field. This is a future improvement, not part
   of the active browser-device review or the released 0.29.5 behavior.
-- Make connection timing and the header clock unambiguous across midnight and
-  long-running sessions. The current Connection value is a presentation-state
-  transition timestamp (`CONNECTED since HH:MM:SS`), not measured connection
-  uptime. Distinguish that state-change time from an actual connection start;
-  do not reset connection uptime merely because a stale/degraded label changes.
-  Use explicit labels and full ISO 8601 UTC timestamps in 24-hour form for
-  `Connected since` and the current header date/time, for example
-  `2026-09-09T06:59:40Z`. Keep the application name/version in the header.
-  If elapsed connection time is shown, label it `Connected for` and use a
+- **Completed in development:** PR #253 added the user-selected local RFC
+  2822-style dates to the header and observed status transitions, for example
+  `Fri, 11 Sep 2026 08:06:34 -0600`. Use the TUI host's local timezone, English
+  weekday/month names, a 24-hour clock and numeric UTC offset. The header follows
+  the current clock; `Status since` retains the observed transition's date and
+  offset. This supersedes the earlier ISO 8601 UTC-only proposal. Both 100x30
+  and 160x45 bench displays passed visual acceptance, along with user-observed
+  App restart recovery. The application name/version stays in the header and
+  scanner model/firmware stay in the Scanner panel. This is merged, unreleased
+  work, not a measured connection-start or socket-uptime feature.
+- **Remaining:** if elapsed connection time is shown, label it `Connected for`
+  only after identifying the actual successful connection events. Use a
   compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
   variable-length calendar months/years as fixed durations. Derive elapsed time
   from a monotonic clock, distinguish it from process uptime, and define which
   connection it measures (client-to-daemon versus daemon-to-scanner). Reset it
   only for a new connection and do not present disconnected time as connected
-  uptime. Apply consistent timestamp formatting to the related status-since
-  fields. Verify UTC conversion, midnight/day rollover, reconnects, wall-clock
-  adjustments, and header/panel fit on both 100x30 and 160x45 Pi consoles without
-  introducing wrapping or panel shifts. This is a low-priority follow-up, not a
-  change to the active browser-device acceptance scope or released behavior.
+  uptime. Do not relabel an observed status transition as `Connected since` or
+  reset duration merely because a stale/degraded label changes. Apply the
+  accepted local-date presentation to any genuine connection-start timestamp.
+  Verify midnight/day rollover, reconnects, wall-clock/DST adjustments, and
+  header/panel fit on both Pi geometries without wrapping or panel shifts.
+  This is a separate low-priority follow-up, not a change to browser-device
+  acceptance or already-released behavior.
 
 ### Managed-display enrollment and unattended recovery
+
+**Current integration checkpoint:** [PR #250](https://github.com/stevenboyd78/sdsctl/pull/250)
+merged the reviewed continuation candidate, idle sign-out correction and LCARS
+content-layering fix. The [acceptance record](docs/browser-device-continuation-acceptance.md)
+separates automated private-Pi cases from the focused physical HDMI sequence.
+Merged development is not a published release or unattended-production approval.
+Secure unattended keyring, abrupt power-loss, cross-build browser-state handling
+and any new installed-release claims need their own scoped evidence; preserve
+failed and completed profiles rather than replaying them. The detailed foundation
+entries below retain their individual implementation and acceptance boundaries.
 
 The released manual-login kiosk and isolated recovery foundations are followed
 by explicit, per-device unattended-browser setup. Preserve the existing TUI
