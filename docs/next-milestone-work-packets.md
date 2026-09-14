@@ -199,6 +199,9 @@ checks and acceptance boundaries rather than infer success from a version tag.
    code from claiming unattended-production support. Do not advertise secure
    keyring, power-loss, alternative-engine or cross-build acceptance without its
    own evidence. The reviewed browser acceptance does not qualify new TUI fields.
+   Use the [milestone-to-release index](release-tracking.md) and the release
+   guide's scope record to distinguish included, deferred and experimental
+   slices. Milestone numbers do not select package versions.
 3. **Prepare one new version consistently.** Follow the release guide for
    package/CLI, App catalog, changelogs, README and reviewed wiki source. Never
    reuse 0.29.5 or deploy a private validation wheel as the published artifact.

@@ -13,6 +13,20 @@ For independently preparable follow-ups, source findings and test gates, see
 [the next milestone work packets](docs/next-milestone-work-packets.md). These
 packets do not assign release versions or mark unfinished features complete.
 
+## Milestones and release versions
+
+Milestone numbers identify work and acceptance goals, not package versions.
+A release may contain several milestones or only a named slice; maintenance
+fixes do not require a new milestone number. See the
+[milestone-to-release index](docs/release-tracking.md) for published history,
+partial publications and merged-but-unreleased work, and the
+[release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
+selection. The next release version is unassigned until its scope review.
+
+Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
+implementation or successful test is not itself a publication, and an
+experimental feature's release does not qualify broader production use.
+
 ## Proposed v1.0 quality gate — comprehensive coverage
 
 Defer the dedicated push to 100 percent test coverage until late-project
@@ -38,6 +52,9 @@ post-write state mismatch and an out-of-window archived completion time in
 threshold change is scheduled as the next active task.
 
 ## v0.29.5 maintenance release
+
+**Released in [v0.29.5](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.5):**
+the focused managed-TUI outage waiting screen, not the active browser work.
 
 The focused managed-TUI waiting-screen patch is maintained on `release/0.29`
 from the published v0.29.4 base. It does not include the newer browser-enrollment
@@ -305,6 +322,10 @@ changes separate from isolated synthetic-credential tests. See the
 
 #### Closed Milestone 34.1 — Display-only native browser kiosk
 
+**Release mapping:** partial publication in v0.29.3; fully published recovery in
+[v0.29.4](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.4). The manual-login
+scope and separate 34.2 HDMI acceptance limits below remain in force.
+
 The operator approved building and testing the display-only direction after
 the initial design and documentation only review. The candidate adds a separate
 display password and server-side permissions for status, events, themes and
@@ -341,6 +362,8 @@ outside this first implementation.
 
 #### Closed v0.29.2 — TUI application header and production acceptance
 
+**Released in [v0.29.2](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.2).**
+
 The header change merged through PR 230 and the release preparation through
 PR 231, at `16d46890e64fafbbbd6de6dc9e85e36ed363280f`. Published v0.29.2 on
 September 4, 2026 after Python 3.11 through 3.14, documentation, browser,
@@ -356,6 +379,8 @@ not a repeat of audio, scanner-control, revocation or cold-boot acceptance.
 Home Assistant and the smaller Pi were not upgraded or restarted.
 
 #### Closed v0.29.1 — Wide TUI production-display follow-up
+
+**Released in [v0.29.1](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.1).**
 
 The wide-layout follow-up merged through PR 229 at
 `12ba1b6aa6db68db4cd6a18f86f1e80ca7cce1b8` and was published on September 4,
@@ -379,6 +404,9 @@ automated geometry validation separately from the operator's physical-display
 confirmation; the native HTTPS browser kiosk remains deferred.
 
 #### Closed Milestone 33.3 — v0.29.0 release and publication closure
+
+**Released in [v0.29.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.0):**
+the Milestones 33.1 and 33.2 scope described below.
 
 Milestone 33.3 closed through PR 228 and merge commit
 `4717eacefeaf3228fb13de49acafa7cb6098e8eb`. The v0.29.0 release was published
@@ -458,6 +486,9 @@ Measure its actual terminal geometry rather than assuming the small display's
 100-by-30 layout, and record any beginner-facing documentation gaps.
 
 #### Closed Milestone 33.2 — Managed Raspberry Pi remote TUI display
+
+**Released in [v0.29.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.0);**
+publication and release acceptance closed under Milestone 33.3.
 
 Milestone 33.2 closed through reviewed pull request 227 and merge commit
 `f4ee89fa35e46b0ab61ea1256405e3ddba4855eb`. All branch and post-merge CI,
@@ -542,6 +573,9 @@ Keyboard Reference remains intentionally scrollable because its help content is
 taller than the physical viewport.
 
 #### Closed Milestone 33.1 — Transport-aware compact TUI
+
+**Released in [v0.29.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.0);**
+publication and release acceptance closed under Milestone 33.3.
 
 Milestone 33.1 closed through reviewed pull request 226 and merge commit
 `c9f9e6517d84ce30ee27b0cbe4a07ca270e474b3`. All branch and post-merge checks
