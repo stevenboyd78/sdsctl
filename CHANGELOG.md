@@ -163,6 +163,11 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Changed
 
+- Document independent milestone and release numbering, a forward-looking
+  pre-1.0 feature/maintenance version convention, and a milestone-to-release
+  index. Require explicit included/deferred/experimental release scope and
+  verified `Released in` links without renumbering history or selecting the
+  next release version.
 - Document experimental device replacement/resume boundaries and add isolated
   cross-layer regression coverage for server generations, native revisions,
   credential-file replacement and persistent browser sign-out. Preserve separate

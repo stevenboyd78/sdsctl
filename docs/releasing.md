@@ -1,7 +1,57 @@
 # Release process
 
-This checklist prepares a GitHub release. Set `VERSION` to the intended package
-version before starting.
+This checklist prepares a GitHub release. First agree the scope and version
+below, then set `VERSION` to that exact package version before running commands.
+
+## 0. Choose release scope and version
+
+Milestone numbers identify development and acceptance work; release versions
+identify installable artifacts. They are independent: one release can include
+several milestones or named slices, and one milestone can span several releases.
+Do not renumber milestones or skip release numbers just to make them match.
+
+For new pre-1.0 releases, use this project convention:
+
+- Increment the minor version for a feature release and reset the patch to zero.
+- Increment the patch version for focused fixes or maintenance of that release
+  line; an urgent fix need not wait for the active milestone to finish.
+- Describe compatibility, configuration migration and experimental-feature
+  limits explicitly. A `0.y.z` version does not promise a stable public API.
+- Treat v1.0 readiness and its separately agreed acceptance criteria as a
+  stability decision, not a milestone-number target. From v1.0 onward, follow
+  [Semantic Versioning](https://semver.org/) for public-API compatibility.
+
+This is a forward-looking convention, not a reason to relabel historical
+releases. Never move a published tag or replace the contents of a published
+version. The Python package/import/CLI and Home Assistant App versions must
+remain aligned as checked below; separately versioned Core integration and card
+artifacts retain their own reviewed version contracts.
+
+Maintain the [milestone-to-release index](release-tracking.md) alongside the
+roadmap and changelog. Before a version bump, prepare a reviewed scope record:
+
+```text
+Release version: unassigned until scope/version review
+Release title: sdsctl vVERSION — short user-facing summary
+Candidate commit: exact revision once prepared
+Included: roadmap milestone or named slice, PR, and user-visible change
+Deferred: remaining slices and any acceptance gates not met
+Experimental: shipped code whose support claims remain limited
+Validation: required automated, artifact and physical acceptance
+Publication: pending, partial, or verified, with artifact/evidence links
+```
+
+Use `Unreleased` until a release is selected. A target version is a plan, not
+proof of publication. A completed slice or merged PR does not close an entire
+milestone unless its remaining acceptance gates are also complete. Code may
+ship as explicitly experimental without qualifying its production use.
+
+In release preparation, carry the included/deferred/experimental scope into
+the versioned changelog and release notes. Once required publication and
+installed-release acceptance succeed, record **Released in vX.Y.Z** with a
+release link against the applicable roadmap items and update the index. If
+publication is partial, record exactly which artifacts are available and what
+failed; do not mark full release closure or erase that history after recovery.
 
 ## 1. Prepare the repository
 
@@ -27,6 +77,9 @@ App image that does not exist yet. No version tag may be moved or reused.
 - Confirm the Home Assistant App changelog contains that release version.
 - Confirm `sdsctl -V` and `sdsctl --version` report that same version.
 - Update `CHANGELOG.md` and leave a fresh `Unreleased` section.
+- Reconcile the milestone-to-release index with the reviewed scope. Keep
+  unshipped slices `Unreleased` or deferred; do not infer their release version
+  from the current package metadata or the milestone number.
 - Audit every repository Markdown file for stale release, milestone, installation,
   security, and deferred-feature wording.
 - Update reviewed wiki source under `wiki/` whenever a user-facing workflow changed.
@@ -373,15 +426,22 @@ the development installation before replacing it.
 ## 8. Create the GitHub release
 
 - Create a release from tag `vVERSION`.
-- Title it `sdsctl vVERSION`.
+- Title it `sdsctl vVERSION — short user-facing summary`, keeping the tag
+  exactly `vVERSION`. A maintenance summary should identify the focused fix.
 - For a normal versioned release, leave **pre-release** and **draft** unchecked.
 - Mark a release as a pre-release only when the version is intentionally being
   published for prerelease testing.
 - Use the matching version section of `CHANGELOG.md` as the starting release notes.
+- Include links to the included milestone items or named slices, and retain
+  deferred work and experimental-support limits from the scope record. Never
+  describe a partly delivered milestone as fully released.
 - State that the API is alpha and may change before 1.0.
 - Include the tested scanner firmware and transports.
 - Attach the wheel and source distribution from `dist/` if desired.
 - Confirm GitHub marks the newest normal release as **Latest**.
+- After the required artifact and installed-release checks pass, complete the
+  roadmap's `Released in` links and the milestone-to-release index. A GitHub
+  Release page alone does not prove that every required artifact was published.
 
 ## 9. Verify the published package
 
