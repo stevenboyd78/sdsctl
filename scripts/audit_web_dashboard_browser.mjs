@@ -207,7 +207,7 @@ function requireNode24() {
   }
 }
 
-async function availablePort() {
+export async function availablePort() {
   const listener = net.createServer();
   await new Promise((resolve, reject) => {
     listener.once("error", reject);
@@ -315,7 +315,7 @@ export async function waitForHttp(url, timeoutMs, child = null, {
   throw new Error(`timed out waiting for ${url}: ${String(lastError)}; readiness=${diagnostic()}`);
 }
 
-async function stopChild(child) {
+export async function stopChild(child) {
   if (child === null || child.exitCode !== null) {
     return;
   }
@@ -341,7 +341,7 @@ async function websocketText(data) {
   return Buffer.from(data).toString("utf8");
 }
 
-class CdpClient {
+export class CdpClient {
   constructor(socket, timeoutMs) {
     this.socket = socket;
     this.timeoutMs = timeoutMs;
@@ -467,7 +467,7 @@ class CdpClient {
   }
 }
 
-async function evaluate(cdp, expression, {awaitPromise = true} = {}) {
+export async function evaluate(cdp, expression, {awaitPromise = true} = {}) {
   const response = await cdp.send("Runtime.evaluate", {
     awaitPromise,
     expression,
@@ -3320,7 +3320,7 @@ async function auditDisplayKiosk(cdp, baseUrl, timeoutMs, pageFailures) {
   }
 }
 
-async function openChrome(chrome, profileDirectory, remotePort) {
+export async function openChrome(chrome, profileDirectory, remotePort) {
   const child = spawn(
     chrome,
     [
@@ -3340,7 +3340,7 @@ async function openChrome(chrome, profileDirectory, remotePort) {
   return {child, output: captureChildOutput(child)};
 }
 
-async function pageWebSocketUrl(remotePort, timeoutMs, chrome) {
+export async function pageWebSocketUrl(remotePort, timeoutMs, chrome) {
   await waitForHttp(`http://127.0.0.1:${remotePort}/json/version`, timeoutMs, chrome);
   const response = await fetch(`http://127.0.0.1:${remotePort}/json/list`);
   const targets = await response.json();

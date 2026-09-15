@@ -1,8 +1,8 @@
 # Mimic-SDS: profile-driven screens and front-panel controls
 
 Status: offline parser, import state, screen/value foundations, single-owner
-observation adapter and synthetic SVG preview implemented locally; no user-facing
-support or release. Source review
+observation adapter, synthetic SVG preview and interactive frame preview
+implemented locally; no installed user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
 [independent work packets](next-milestone-work-packets.md); it does not assign a
@@ -350,9 +350,62 @@ missing import does not invent a default scanner profile. Cross-endpoint binding
 are refused. These are local consistency contracts, not authentication or proof
 that a manually selected profile came from the physical scanner.
 
-The next delivery boundary is wiring these frames into a development renderer
-with visible connection/import/layout status, then adding the actual single-owner
-event/transport integration. Current tests do not constitute hardware acceptance.
+The development renderer described below now consumes these frames. Actual
+single-owner event/transport integration remains a later delivery boundary.
+Current tests do not constitute hardware acceptance.
+
+### Offline interactive frame preview
+
+`src/sds200/scanner_display_frame_preview.py` renders qualified
+`ScannerDisplayFrame` objects as escaped, scoped HTML fragments. It independently
+refuses live values in non-current frames, checks canonical region geometry and
+matching imported-profile revisions, and exposes three separate status lines:
+sample/connection health, import status, and presentation-selection basis.
+Unknown/menu/popup states never silently fall back to current scanning content.
+Missing profiles do not invent a default layout; failed refreshes can retain the
+last good import with the failure clearly indicated.
+
+Simple/Detail is a local presentation choice, not a scanner control. A manual
+physical toggle does not by itself prove that its resulting state is unreported;
+the limit here is that the reviewed sources have not established a live
+Simple/Detail flag. The default is therefore explicitly labelled an unconfirmed
+imported preference. Qualified operating data remains available in either layout.
+
+The gallery uses the actual parser, profile-import lifecycle and observation
+adapter with invented data. Nineteen transition scenarios include conventional
+and trunk scanning, special families, missing/failed imports, stale samples,
+disconnect/reconnect, overlays, unknown/conflicting screens, literal HTML-like
+text and disappearing fields. Each has profile/Simple/Detail variants. Two
+independent preview panels demonstrate that a consumer's choice does not mutate
+the other consumer, scanner or imported profile. Controls only select precomputed
+frames: no scanner/network access, polling, credentials, profile upload or storage.
+The document's CSP denies network resources and permits only its hashed script.
+
+Generate a new local directory using the development environment, then open its
+`index.html`. The generator refuses to overwrite an existing file:
+
+```bash
+PYTHONPATH=src python scripts/render_scanner_display_frames.py --output-dir /tmp/mimic-frame-preview
+node scripts/audit_scanner_display_frames.mjs /tmp/mimic-frame-preview/index.html /tmp/mimic-frame-audit
+```
+
+The browser audit requires Node.js 24+ and Chrome (an optional third argument
+selects the Chrome executable). It reuses the existing browser-audit protocol
+helpers with a new isolated profile; it never controls a user's browser session.
+It validates all 171 scenario/style/viewport combinations at 800x480, 1920x1080
+and 390x844, including stable grid heights, region containment/non-overlap,
+independent consumers, keyboard selection/focus, enlarged controls and absence of
+page network requests. It writes screenshots and structured evidence to a new
+output location, terminates only its own browser and retains that test profile.
+
+This is a developer inspection page, not the final kiosk viewport. Its status
+controls and complete 20-row grid intentionally scroll vertically at 800x480;
+it does not claim the whole final small-Pi interface fits without scrolling.
+Long field text is visually clipped within its canonical region and remains
+available in the title and expandable field table. Units/code conversions,
+unqualified icons, BLACK/WHITE transforms and ambiguous small-field colors remain
+explicitly unresolved. No live route, TUI layout, HA card, profile-acquisition
+hook or front-panel control is installed by this preview.
 
 Handle temporary messages, popups, holds and unknown screens without inventing
 screen content or hiding safety-relevant state. Menu/dialog visibility is a

@@ -14,7 +14,7 @@ from sds200.scanner_display_values import scanner_display_values
 from sds200.state import RadioStateSnapshot
 
 
-def synthetic_profile():
+def synthetic_profile_bytes() -> bytes:
     records = ["DisplayOption\t\t\t\t\t\tDEC\t\t\t\t\tOff\tDEC\tCOLOR"]
     for mode in ScannerDisplayMode:
         layout, color = mode.layout_ids
@@ -65,7 +65,11 @@ def synthetic_profile():
                     ]
                 )
             )
-    return parse_scanner_display_profile("\r\n".join(records).encode("ascii"))
+    return "\r\n".join(records).encode("ascii")
+
+
+def synthetic_profile():
+    return parse_scanner_display_profile(synthetic_profile_bytes())
 
 
 def main() -> None:
