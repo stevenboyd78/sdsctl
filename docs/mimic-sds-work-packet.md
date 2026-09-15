@@ -1,7 +1,8 @@
 # Mimic-SDS: profile-driven screens and front-panel controls
 
-Status: offline parser, import state, screen/value foundations and synthetic SVG
-preview implemented locally; no user-facing support or release. Source review
+Status: offline parser, import state, screen/value foundations, single-owner
+observation adapter and synthetic SVG preview implemented locally; no user-facing
+support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
 [independent work packets](next-milestone-work-packets.md); it does not assign a
@@ -241,8 +242,11 @@ be mapped without silently guessing these colors.
 
 `src/sds200/scanner_display_values.py` projects only allowlisted shared snapshot
 fields into raw-source values. It requires explicit freshness and an independently
-qualified matching source mode; defaults, stale samples, unknown modes and mode
-mismatches emit no source values. It caches nothing, so a new empty sample cannot
+qualified matching operating data family or exact source mode. Defaults, stale
+samples, unknown families and mismatches emit no source values. Exact-mode callers
+retain their stricter check; supplying both qualifications is rejected. Conventional
+and trunk families each support Simple and Detail presentation without asserting
+which layout is physically selected. It caches nothing, so a new empty sample cannot
 retain an old channel, tone or one half of combined Volume/Squelch. All displayed
 data is classified `raw_source`, not a claim of LCD-format parity. Numeric zero
 and text prefixes/leading zeroes are preserved; no TGID, unit, color, clock or
@@ -259,11 +263,11 @@ Text is bounded and rejects terminal controls, Unicode control/format characters
 and lone surrogates. Raw text is not markup: renderers must use escaping or
 `textContent`, including for configured names containing angle brackets.
 
-These modules are internal offline foundations, not public APIs or user-facing
-renderers. They do not certify a profile's scanner identity or current mode.
-The next adapter must carry the selected endpoint/provenance contract through
-to the values, establish real mode qualification, and validate a synthetic-data
-preview before any live hook. Current tests validate source-table positions,
+These modules are internal foundations, not public APIs or user-facing renderers.
+They do not certify a profile's physical scanner identity. The observation adapter
+below carries endpoint/provenance and operating-screen qualification through to
+the values; actual owner subscription/transport hooks and user-facing rendering
+remain unimplemented. Current tests validate source-table positions,
 complete nonoverlapping grids, missing/extra groups, unsupported fields, safe
 text, numeric bounds, freshness/mode refusal and stateless transitions.
 
@@ -285,6 +289,70 @@ paths. Tests cover all seven grids, exact region coverage, XML-safe text and
 metadata, invalid colors, exact value matching and non-overwrite behavior.
 This preview is only a development aid; a live renderer still requires the
 endpoint/provenance, actual mode/freshness and user-facing accessibility contracts.
+
+### Single-owner observation adapter and manual layout choice
+
+`src/sds200/scanner_display_adapter.py` consumes complete parsed PSI/GSI from an
+existing scanner owner. It does not open a scanner connection, subscribe to events,
+add polling, expose an API, persist data or enable commands. Synthetic tests use
+the actual XML parser and shared snapshot conversion rather than a second field
+parser. A later owner integration must explicitly start a session on connection,
+feed every complete observation (including unchanged PSI), and invalidate the
+session on disconnect. Scalar getters and state-change-only events cannot refresh
+scanner-display freshness. The caller must serialize ordered owner observations
+and use a common monotonic clock; wall-clock source timestamps are not freshness.
+
+Root `ScannerInfo Mode` identifies operating context, while `V_Screen` identifies
+the visual screen family (Remote Command Specification V1.02 pages 17-18).
+The user confirmed that physical Simple/Detail selection is manually toggled.
+The reviewed table does not establish a live Simple/Detail selector, so the
+adapter separates **operating data family** from **presentation layout**:
+
+- Exact `conventional_scan` and `trunk_scan` select their corresponding data
+  families. Start Simple/Detail from the last imported profile, with layout basis
+  `profile_preference_unconfirmed`; do not claim the choice is synchronized.
+- An explicit Simple/Detail presentation choice overrides that default for the
+  requesting consumer only, with basis `explicit_presentation_choice`. It neither
+  changes the imported profile nor sends a scanner keypress. Valid live values
+  remain available in both layouts; uncertainty about presentation is not treated
+  as loss of valid operating data.
+- Exact `custom_search`, `quick_search`, `close_call`, `cc_searching`, `wx_alert`
+  and `tone_out` use their documented special-screen family. A Simple/Detail
+  choice cannot convert these into scanning screens.
+- Known contradictory operating-mode/screen pairs, incompatible channel nodes,
+  duplicate source records and the currently ambiguous dual WX frequency sources
+  are explicitly refused. Unknown screen IDs, menus, combined search-with-scan,
+  discovery/analyze, direct-entry and Waterfall do not silently fall back to scan.
+
+The adapter isolates each screen's allowed source records before the existing
+snapshot conversion. Old System/Site records cannot populate Weather, and a new
+sample missing a field does not keep the previous value. Only the reviewed value
+projection is cached, with bounded text; raw XML, unrelated records, source paths,
+credentials, popup content and arbitrary root mode text are not retained.
+
+`PopupScreen`, `OverWrite`, `PlainText`, replay markers and menu/replay operating
+states yield an explicit override state without normal live fields. Ordinary
+InfoArea records alone do not suppress the screen. This follows the distinction
+on specification pages 23-24; it is not an implementation of scanner menus,
+popup text/buttons, replay or soft-key controls.
+
+Session tickets are identity-bound, so old, foreign, copied and disconnected
+tickets cannot repopulate the frame. Sequence order and receipt timestamps are
+checked; repeated observations with new sequence numbers refresh freshness even
+when the fields are unchanged. Delayed delivery keeps its original monotonic
+receipt age, expires at the explicit stale threshold, and cannot become fresh
+through a backwards clock. Reconnect starts without old data. Stale frames may
+retain layout geometry but contain no source values.
+
+Frame status, layout basis and import provenance are independent. A last-good
+matching import survives pending/failed refresh with that status visible; a
+missing import does not invent a default scanner profile. Cross-endpoint bindings
+are refused. These are local consistency contracts, not authentication or proof
+that a manually selected profile came from the physical scanner.
+
+The next delivery boundary is wiring these frames into a development renderer
+with visible connection/import/layout status, then adding the actual single-owner
+event/transport integration. Current tests do not constitute hardware acceptance.
 
 Handle temporary messages, popups, holds and unknown screens without inventing
 screen content or hiding safety-relevant state. Menu/dialog visibility is a

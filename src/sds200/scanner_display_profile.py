@@ -40,6 +40,16 @@ class ScannerDisplayProfileError(ValueError):
         super().__init__(f"Scanner display profile{where}: {message}")
 
 
+class ScannerDisplayDataFamily(StrEnum):
+    """Operating data context, independent of the manual Simple/Detail layout."""
+
+    CONVENTIONAL = "conventional"
+    TRUNK = "trunk"
+    SEARCH_CLOSE_CALL = "search_close_call"
+    WEATHER = "weather"
+    TONE_OUT = "tone_out"
+
+
 class ScannerDisplayMode(StrEnum):
     SIMPLE_CONVENTIONAL = "simple_conventional"
     SIMPLE_TRUNK = "simple_trunk"
@@ -48,6 +58,19 @@ class ScannerDisplayMode(StrEnum):
     SEARCH_CLOSE_CALL = "search_close_call"
     WEATHER = "weather"
     TONE_OUT = "tone_out"
+
+    @property
+    def data_family(self) -> ScannerDisplayDataFamily:
+        """Simple and Detail use the same qualified operating data context."""
+        return {
+            ScannerDisplayMode.SIMPLE_CONVENTIONAL: ScannerDisplayDataFamily.CONVENTIONAL,
+            ScannerDisplayMode.DETAIL_CONVENTIONAL: ScannerDisplayDataFamily.CONVENTIONAL,
+            ScannerDisplayMode.SIMPLE_TRUNK: ScannerDisplayDataFamily.TRUNK,
+            ScannerDisplayMode.DETAIL_TRUNK: ScannerDisplayDataFamily.TRUNK,
+            ScannerDisplayMode.SEARCH_CLOSE_CALL: ScannerDisplayDataFamily.SEARCH_CLOSE_CALL,
+            ScannerDisplayMode.WEATHER: ScannerDisplayDataFamily.WEATHER,
+            ScannerDisplayMode.TONE_OUT: ScannerDisplayDataFamily.TONE_OUT,
+        }[self]
 
     @property
     def layout_ids(self) -> tuple[int, int]:

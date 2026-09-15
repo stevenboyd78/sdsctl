@@ -5,7 +5,11 @@ from dataclasses import replace
 import pytest
 
 from sds200.scanner_display_layout import resolve_scanner_display_screen
-from sds200.scanner_display_profile import ScannerDisplayMode, parse_scanner_display_profile
+from sds200.scanner_display_profile import (
+    ScannerDisplayDataFamily,
+    ScannerDisplayMode,
+    parse_scanner_display_profile,
+)
 from sds200.scanner_display_values import (
     MAX_DISPLAY_VALUE_LENGTH,
     scanner_display_values,
@@ -14,6 +18,49 @@ from sds200.scanner_display_values import ScannerDisplayValueStatus as Status
 from sds200.state import RadioStateSnapshot
 
 MODE = ScannerDisplayMode.SIMPLE_CONVENTIONAL
+
+
+@pytest.mark.parametrize("family", list(ScannerDisplayDataFamily))
+@pytest.mark.parametrize("mode", list(ScannerDisplayMode))
+def test_data_family_must_match_but_does_not_assert_manual_simple_detail_layout(family, mode):
+    original = screen_for("Frequency")
+    screen = replace(original, layout=replace(original.layout, requested_mode=mode))
+    values = scanner_display_values(
+        screen, RadioStateSnapshot(frequency="00949000"), source_family=family, current=True
+    )
+    region_id = next(slot.region.id for slot in screen.regions if slot.token == "Frequency")
+    frequency = next(value for value in values if value.region_id == region_id)
+    if family is mode.data_family:
+        assert frequency.status is Status.RAW_SOURCE and frequency.text == "00949000"
+    else:
+        assert frequency.status is Status.MODE_MISMATCH and frequency.text is None
+
+
+def test_family_qualification_still_clears_stale_values():
+    values = scanner_display_values(
+        screen_for("Frequency"),
+        RadioStateSnapshot(frequency="00949000"),
+        source_family=ScannerDisplayDataFamily.CONVENTIONAL,
+    )
+    assert all(value.text is None for value in values)
+    assert any(value.status is Status.NOT_CURRENT for value in values)
+
+
+@pytest.mark.parametrize("family", [True, "conventional", 1])
+def test_family_qualification_requires_enum_not_user_text(family):
+    with pytest.raises(ValueError, match="source family"):
+        scanner_display_values(screen_for("Frequency"), RadioStateSnapshot(), source_family=family)
+
+
+def test_exact_mode_and_family_cannot_be_combined_to_bypass_mismatch():
+    with pytest.raises(ValueError, match="not both"):
+        scanner_display_values(
+            screen_for("Frequency"),
+            RadioStateSnapshot(),
+            source_mode=MODE,
+            source_family=ScannerDisplayDataFamily.TRUNK,
+            current=True,
+        )
 
 
 def screen_for(token, group=2):

@@ -1,8 +1,9 @@
 """Conservative raw-source values for the offline Mimic-SDS descriptor.
 
 This is not an LCD-format renderer or a live-mode detector. Callers must supply
-an independently qualified matching mode and freshness before any sample value
-is projected. No fields are cached or filled from daemon runtime state.
+an independently qualified matching data family (or exact mode) and freshness
+before any sample value is projected. Family qualification does not attest to
+the manually selected Simple/Detail layout. No daemon runtime fields are used.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from .scanner_display_layout import DisplaySlotSelection, ScannerDisplayScreen
-from .scanner_display_profile import ScannerDisplayMode
+from .scanner_display_profile import ScannerDisplayDataFamily, ScannerDisplayMode
 from .state import RadioStateSnapshot
 
 MAX_DISPLAY_VALUE_LENGTH = 256
@@ -145,6 +146,7 @@ def scanner_display_values(
     snapshot: RadioStateSnapshot,
     *,
     source_mode: ScannerDisplayMode | None = None,
+    source_family: ScannerDisplayDataFamily | None = None,
     current: bool = False,
 ) -> tuple[ScannerDisplayValue, ...]:
     """Project one immutable snapshot; stale/unknown/mismatched modes emit no data.
@@ -157,12 +159,18 @@ def scanner_display_values(
         raise ValueError("An explicit scanner snapshot and boolean freshness are required.")
     if source_mode is not None and not isinstance(source_mode, ScannerDisplayMode):
         raise ValueError("A qualified source mode must use a supported scanner mode.")
+    if source_family is not None and not isinstance(source_family, ScannerDisplayDataFamily):
+        raise ValueError("A qualified source family must use a supported data family.")
+    if source_mode is not None and source_family is not None:
+        raise ValueError("Supply either an exact source mode or a data family, not both.")
     gate = None
     if not current:
         gate = ScannerDisplayValueStatus.NOT_CURRENT
-    elif source_mode is None:
+    elif source_mode is None and source_family is None:
         gate = ScannerDisplayValueStatus.MODE_UNQUALIFIED
-    elif source_mode is not screen.layout.requested_mode:
+    elif (source_mode is not None and source_mode is not screen.layout.requested_mode) or (
+        source_family is not None and source_family is not screen.layout.requested_mode.data_family
+    ):
         gate = ScannerDisplayValueStatus.MODE_MISMATCH
 
     values: list[ScannerDisplayValue] = []
