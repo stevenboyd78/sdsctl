@@ -44,7 +44,9 @@ class ScannerDisplayValue:
 
 
 # File Specification V1.08 p.57 (huge), p.60 (large and small).
-# Icon membership is not established by those tables and remains unqualified.
+# The owner's manual pp.39-41 supplies field sizes and icon membership; the
+# file specification supplies exact saved-token spelling. These are placement
+# rules, not proof that a current value/glyph is available to this projection.
 _HUGE = frozenset(
     {
         "CTCSS/DCS",
@@ -102,7 +104,10 @@ _SMALL = frozenset(
         "WxPRI",
     }
 )
-_GROUP_TOKENS = {1: _HUGE, 2: _LARGE, 3: _SMALL}
+_ICONS = frozenset(
+    {"PRI", "CC", "WxPRI", "REC", "IFX", "GPS", "SCR", "REP", "LVL", "Modulation", "P_Ch"}
+)
+_GROUP_TOKENS = {1: _HUGE, 2: _LARGE, 3: _SMALL, 4: _ICONS}
 
 # Explicit allowlist, not getattr(snapshot, user_profile_token). These fields
 # preserve source spelling/zeroes. Unit conversion, code labels, graph scales
@@ -194,15 +199,16 @@ def scanner_display_values(
             if field is not None:
                 status, text = _text(getattr(snapshot, field))
                 fields = (field,)
-        elif region.option.group == 4:
-            # The slot geometry is known; an icon's data/glyph behavior is not.
-            status = ScannerDisplayValueStatus.UNQUALIFIED
         elif token not in _GROUP_TOKENS[region.option.group]:
             status = (
                 ScannerDisplayValueStatus.INVALID_REGION
-                if token in _HUGE | _LARGE | _SMALL
+                if token in _HUGE | _LARGE | _SMALL | _ICONS
                 else ScannerDisplayValueStatus.UNKNOWN_TOKEN
             )
+        elif region.option.group == 4:
+            # Valid icon selection (owner's manual p.41), but do not substitute
+            # raw On/Off text for a qualified active/absent icon or glyph yet.
+            status = ScannerDisplayValueStatus.UNQUALIFIED
         elif token in _TEXT_FIELDS:
             field = _TEXT_FIELDS[token]
             status, text = _text(getattr(snapshot, field))

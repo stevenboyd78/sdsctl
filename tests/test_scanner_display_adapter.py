@@ -9,8 +9,10 @@ import pytest
 from sds200.exceptions import ProtocolError
 from sds200.scanner_display_adapter import (
     DisplayLayoutBasis,
+    ScannerAlertLed,
     ScannerDisplayAdapter,
     ScannerDisplayAdapterError,
+    ScannerDisplayIndicators,
     ScannerDisplayStyle,
 )
 from sds200.scanner_display_adapter import DisplayObservationStatus as Status
@@ -28,6 +30,72 @@ from sds200.xml_protocol import ScannerInfoParser
 ENDPOINT = UUID(int=11)
 BINDING = DisplayProfileBinding(ENDPOINT, UUID(int=12), DisplayProfileSourceKind.MANUAL_IMPORT)
 NOW = datetime(2026, 9, 15, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("led", list(ScannerAlertLed))
+@pytest.mark.parametrize("command", ["PSI", "GSI"])
+def test_alert_led_is_exact_allowlisted_complete_observation_data(led, command):
+    adapter, _ = live_adapter(info(content=f'<Property A_Led="{led.value}"/>', command=command))
+    assert adapter.frame(store_for().snapshot(ENDPOINT), now=11).indicators.alert_led is led
+
+
+@pytest.mark.parametrize("led", [None, "", "Orange", "yellow", "Yellow ", "url(x)", "x" * 500])
+def test_missing_or_unrecognized_alert_led_is_not_off_or_css(led):
+    content = "<Property/>" if led is None else f'<Property A_Led="{led}"/>'
+    adapter, _ = live_adapter(info(content=content))
+    assert adapter.frame(store_for().snapshot(ENDPOINT), now=11).indicators.alert_led is None
+
+
+@pytest.mark.parametrize("trunk", [False, True])
+def test_name_holds_are_independent_and_only_current_reported_values(trunk):
+    screen, node = ("trunk_scan", "TGID") if trunk else ("conventional_scan", "ConvFrequency")
+    sample = info(
+        screen,
+        '<System Hold="On"/><Department Hold="Off"/>'
+        f'<{node} Hold="Maybe"/><Property A_Led="Yellow"/>',
+    )
+    adapter, session = live_adapter(sample)
+    profile = store_for().snapshot(ENDPOINT)
+    assert adapter.frame(profile, now=11).indicators == ScannerDisplayIndicators(
+        ScannerAlertLed.YELLOW, True, False, None
+    )
+    adapter.observe(session, info(screen, ""), sequence=2, received_at=12, now=12)
+    assert adapter.frame(profile, now=12).indicators == ScannerDisplayIndicators()
+
+
+@pytest.mark.parametrize(
+    "transition", ["stale", "disconnect", "reconnect", "popup", "unknown", "duplicate"]
+)
+def test_led_and_holds_do_not_survive_loss_of_qualification(transition):
+    sample = info("trunk_scan", '<System Hold="On"/><TGID Hold="On"/><Property A_Led="Red"/>')
+    adapter, session = live_adapter(sample)
+    profile = store_for().snapshot(ENDPOINT)
+    now = 12
+    if transition == "stale":
+        now = 16
+    elif transition in {"disconnect", "reconnect"}:
+        adapter.disconnect(session)
+        if transition == "reconnect":
+            adapter.begin_session(now=12)
+    else:
+        next_sample = {
+            "popup": info("trunk_scan", '<Property A_Led="Red"/><PopupScreen/>'),
+            "unknown": info("waterfall", '<Property A_Led="Red"/>'),
+            "duplicate": info("trunk_scan", '<Property A_Led="Red"/><Property A_Led="Green"/>'),
+        }[transition]
+        adapter.observe(session, next_sample, sequence=2, received_at=12, now=12)
+    assert adapter.frame(profile, now=now).indicators == ScannerDisplayIndicators()
+
+
+def test_special_family_can_show_led_but_not_old_scanning_holds():
+    adapter, _ = live_adapter(
+        info(
+            content='<System Hold="On"/><Department Hold="On"/><WxChannel/><Property A_Led="Cyan"/>'
+        )
+    )
+    assert adapter.frame(store_for().snapshot(ENDPOINT), now=11).indicators == (
+        ScannerDisplayIndicators(ScannerAlertLed.CYAN)
+    )
 
 
 def profile_bytes(simple=False):

@@ -9,6 +9,7 @@ from sds200.scanner_display_layout import (
     DisplayProfilePosition,
     DisplayRegionKind,
     DisplaySlotSelection,
+    DisplayTextAlignment,
     resolve_scanner_display_screen,
     scanner_display_layout,
 )
@@ -26,6 +27,29 @@ DETAIL_OPTIONS = {1: 3, 2: 12, 3: 6, 4: 10}
 DETAIL_COLORS = {1: 9, 2: 3, 3: 6, 4: 12, 5: 10, 6: 5, 7: 5}
 SPECIAL_OPTIONS = {2: 8, 3: 6, 4: 10}
 SPECIAL_COLORS = {1: 11, 3: 6, 4: 8, 5: 10, 6: 5, 7: 5}
+
+
+@pytest.mark.parametrize("mode", list(ScannerDisplayMode))
+def test_source_html_alignment_and_photographed_name_line_counts(mode):
+    regions = {region.id: region for region in scanner_display_layout(mode).regions}
+    simple = mode.layout_ids[0] <= 2
+    scan = mode.layout_ids[0] <= 4
+    for name in ("function", "signal", "battery", "key_lock", "direction", "option_1", "option_8"):
+        assert regions[name].alignment is DisplayTextAlignment.CENTER
+    for name in ("option_a_1", "option_b_1"):
+        assert regions[name].alignment is (
+            DisplayTextAlignment.CENTER if simple else DisplayTextAlignment.LEFT
+        )
+    if scan:
+        for name in ("system", "department", "channel"):
+            assert regions[name].alignment is DisplayTextAlignment.LEFT
+            assert regions[name].name_lines == (2 if simple else 1)
+            assert regions[f"{name}_option"].alignment is DisplayTextAlignment.CENTER
+    if not simple:
+        for name in ("information_1", "information_2", "information_3", "option_c_1"):
+            assert regions[name].alignment is DisplayTextAlignment.LEFT
+    for name in ("soft_key_1", "soft_key_2", "soft_key_3", "icon_1"):
+        assert regions[name].alignment is DisplayTextAlignment.CENTER
 
 
 def synthetic_profile():

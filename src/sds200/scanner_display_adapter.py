@@ -60,6 +60,29 @@ class ScannerDisplayStyle(StrEnum):
     DETAIL = "detail"
 
 
+class ScannerAlertLed(StrEnum):
+    """Exact Property.A_Led values, V1.02 page 18. No blink-rate semantics."""
+
+    OFF = "Off"
+    BLUE = "Blue"
+    RED = "Red"
+    MAGENTA = "Magenta"
+    GREEN = "Green"
+    CYAN = "Cyan"
+    YELLOW = "Yellow"
+    WHITE = "White"
+
+
+@dataclass(frozen=True, slots=True)
+class ScannerDisplayIndicators:
+    """Only confirmed observation values; None is unknown, not Off/released."""
+
+    alert_led: ScannerAlertLed | None = None
+    system_hold: bool | None = None
+    department_hold: bool | None = None
+    channel_hold: bool | None = None
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class DisplayObservationSession:
     """Identity ticket issued by the adapter; a copied ticket is not valid."""
@@ -89,6 +112,7 @@ class ScannerDisplayFrame:
     age_seconds: float | None
     screen: ScannerDisplayScreen | None
     values: tuple[ScannerDisplayValue, ...]
+    indicators: ScannerDisplayIndicators = ScannerDisplayIndicators()
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +122,7 @@ class _Observation:
     status: DisplayObservationStatus
     screen_id: str | None
     snapshot: RadioStateSnapshot
+    indicators: ScannerDisplayIndicators = ScannerDisplayIndicators()
 
 
 # Remote Command Specification V1.02 pp.17-18 defines V_Screen, not a
@@ -213,6 +238,24 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         received_at=info.received_at,
     )
     snapshot = snapshot_from_scanner_info(selected)
+    property_node = selected.node("Property")
+    raw_led = None if property_node is None else property_node.get("A_Led")
+    try:
+        alert_led = None if raw_led is None else ScannerAlertLed(raw_led)
+    except ValueError:
+        alert_led = None
+    # Only scanning name bands have qualified hold-driven inversion. Exact
+    # On/Off values are independent; missing/invalid attributes never mean Off.
+    indicators = ScannerDisplayIndicators(
+        alert_led=alert_led,
+        system_hold={"On": True, "Off": False}.get(snapshot.system_hold or ""),
+        department_hold={"On": True, "Off": False}.get(snapshot.department_hold or ""),
+        channel_hold=(
+            {"On": True, "Off": False}.get(snapshot.channel_hold or "")
+            if screen_id in {"conventional_scan", "trunk_scan"}
+            else None
+        ),
+    )
     # Cache only fields used by the reviewed value projector, with bounded
     # text. Unrelated scanner fields, raw root mode text and XML are discarded.
     snapshot = RadioStateSnapshot(
@@ -231,7 +274,7 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         squelch=_bounded_level(snapshot.squelch),
         rssi=_bounded_rssi(snapshot.rssi),
     )
-    return _Observation(sequence, received_at, status, screen_id, snapshot)
+    return _Observation(sequence, received_at, status, screen_id, snapshot, indicators)
 
 
 class ScannerDisplayAdapter:
@@ -399,4 +442,9 @@ class ScannerDisplayAdapter:
                 age_seconds=age,
                 screen=screen,
                 values=values,
+                indicators=(
+                    observation.indicators
+                    if observation is not None and status is DisplayObservationStatus.CURRENT
+                    else ScannerDisplayIndicators()
+                ),
             )

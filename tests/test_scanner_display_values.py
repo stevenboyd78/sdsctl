@@ -92,6 +92,33 @@ def value_for(token, snapshot, *, group=2, current=True, source_mode=MODE):
 
 
 @pytest.mark.parametrize(
+    "token", ["PRI", "CC", "WxPRI", "REC", "IFX", "GPS", "SCR", "REP", "LVL", "Modulation", "P_Ch"]
+)
+def test_documented_icon_membership_does_not_claim_live_glyph_support(token):
+    value = value_for(token, RadioStateSnapshot(recording="On"), group=4)
+    assert value.status is Status.UNQUALIFIED and value.text is None
+    assert value.source_fields == ()
+
+
+@pytest.mark.parametrize(
+    "token", ["Volume", "Squelch", "Time", "Day", "ATT", "P25Status", "Frequency"]
+)
+def test_non_icon_tokens_cannot_populate_icon_area(token):
+    value = value_for(token, RadioStateSnapshot(volume=5, p25_status="P25"), group=4)
+    assert value.status is Status.INVALID_REGION and value.text is None
+
+
+def test_owner_manual_sample_ref_is_not_a_saved_token_alias():
+    value = value_for("REF", RadioStateSnapshot(), group=4)
+    assert value.status is Status.UNKNOWN_TOKEN and value.text is None
+
+
+def test_icon_membership_does_not_bypass_freshness_gate():
+    value = value_for("REC", RadioStateSnapshot(recording="On"), group=4, current=False)
+    assert value.status is Status.NOT_CURRENT and value.text is None
+
+
+@pytest.mark.parametrize(
     ("token", "group", "field", "raw"),
     [
         ("SiteName", 1, "site", "Demo North"),

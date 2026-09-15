@@ -10,6 +10,7 @@ from pathlib import Path
 from uuid import UUID
 
 from sds200.scanner_display_adapter import (
+    ScannerAlertLed,
     ScannerDisplayAdapter,
     ScannerDisplayFrame,
     ScannerDisplayStyle,
@@ -67,17 +68,16 @@ def build_scenarios() -> dict[str, dict[str, ScannerDisplayFrame]]:
     preview = store.prepare(ticket, profile_bytes, acquired_at=stamp)
     store.commit(preview, imported_at=stamp)
     capture("conventional", 2)
-    observe(
-        "trunk_scan",
-        (
-            '<System Name="Demo Regional Radio"/><Department Name="North Dispatch"/>'
-            '<Site Name="Metro Simulcast"/><SiteFrequency Freq="07694312"/>'
-            '<TGID Name="Dispatch 2 (Demo)" TGID="00101" U_Id="00042" SvcType="002" SAD="NAC:012"/>'
-            '<Property VOL="5" SQL="2" Rec="On" Rssi="-71.0" P25Status="P25"/>'
-        ),
-        3,
-        "Trunk Scan Hold",
+    trunk = (
+        '<System Name="Demo Regional Communications Authority - Northern Division (P25)" '
+        'Hold="Off"/>'
+        '<Department Name="North Dispatch" Hold="Off"/>'
+        '<Site Name="Metro Simulcast"/><SiteFrequency Freq="07694312"/>'
+        '<TGID Name="Dispatch 2 (Demo)" Hold="Off" TGID="00101" U_Id="00042" '
+        'SvcType="002" SAD="NAC:012"/>'
+        '<Property VOL="5" SQL="2" Rec="On" Rssi="-71.0" P25Status="P25" A_Led="Off"/>'
     )
+    observe("trunk_scan", trunk, 3, "Trunk Scan")
     capture("trunk", 3)
     capture("stale", 8)
     adapter.disconnect(session)
@@ -119,6 +119,22 @@ def build_scenarios() -> dict[str, dict[str, ScannerDisplayFrame]]:
     capture("safe_text", 18)
     observe("conventional_scan", "", 19)
     capture("fields_cleared", 19)
+    held = trunk.replace('Hold="Off"', 'Hold="On"').replace('A_Led="Off"', 'A_Led="Yellow"')
+    observe("trunk_scan", held, 20, "Trunk Scan Hold")
+    capture("held_trunk", 20)
+    capture("held_stale", 25)
+    observe("trunk_scan", trunk, 26, "Trunk Scan")
+    capture("released_trunk", 26)
+    partial = trunk.replace('Name="North Dispatch" Hold="Off"', 'Name="North Dispatch" Hold="On"')
+    observe("trunk_scan", partial, 27, "Trunk Scan Hold")
+    capture("department_held", 27)
+    observe("trunk_scan", trunk.replace(' A_Led="Off"', ""), 28)
+    capture("led_missing", 28)
+    observe("trunk_scan", trunk.replace('A_Led="Off"', 'A_Led="Orange"'), 29)
+    capture("led_invalid", 29)
+    for moment, led in enumerate(ScannerAlertLed, start=30):
+        observe("trunk_scan", trunk.replace('A_Led="Off"', f'A_Led="{led.value}"'), moment)
+        capture(f"led_{led.value.lower()}", moment)
     return scenarios
 
 

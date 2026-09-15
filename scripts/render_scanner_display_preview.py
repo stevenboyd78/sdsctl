@@ -55,13 +55,20 @@ def synthetic_profile_bytes() -> bytes:
             counts[2] = 3
         for group, count in counts.items():
             text = {1: "ffd600", 2: "ff8800", 4: "a5d8ff"}.get(group, "ffffff")
+            # Invented demo colors echo the red/green/blue name bands in the
+            # user's reference photos; no private profile content is read.
+            name_colors = {0: "ff3030", 2: "40f040", 4: "4477ff"} if scan and group == 1 else {}
             records.append(
                 "\t".join(
                     [
                         "DispColors",
                         f"DispColorId={group}",
                         f"ColorLayoutId={color}",
-                        *[part for _ in range(count) for part in (text, "000000")],
+                        *[
+                            part
+                            for i in range(count)
+                            for part in (name_colors.get(i, text), "000000")
+                        ],
                     ]
                 )
             )

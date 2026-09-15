@@ -15,7 +15,9 @@ from html import escape
 from .scanner_display_adapter import (
     DisplayLayoutBasis,
     DisplayObservationStatus,
+    ScannerAlertLed,
     ScannerDisplayFrame,
+    ScannerDisplayIndicators,
 )
 from .scanner_display_layout import DisplayRegionKind, scanner_display_layout
 from .scanner_display_profile_state import DisplayProfileStatus
@@ -49,6 +51,49 @@ _PROFILES = {
         "Profile refresh failed - last good import retained if available"
     ),
 }
+
+# Presentation accents, not calibrated physical LED RGB measurements.
+_LED_COLORS = {
+    ScannerAlertLed.OFF: "151a20",
+    ScannerAlertLed.BLUE: "0066ff",
+    ScannerAlertLed.RED: "ff2424",
+    ScannerAlertLed.MAGENTA: "ff30df",
+    ScannerAlertLed.GREEN: "38ed4a",
+    ScannerAlertLed.CYAN: "28e5ff",
+    ScannerAlertLed.YELLOW: "ffe132",
+    ScannerAlertLed.WHITE: "ffffff",
+}
+_CAPTIONS = {
+    "Volume": "VOL",
+    "Squelch": "SQL",
+    "Volume&Squelch": "VOL/SQL",
+    "TGID": "TGID",
+    "UnitId": "UID",
+    "SystemId": "Sys ID",
+    "SysSubID": "RFSS ID",
+    "SiteId": "Site ID",
+    "WACN": "WACN",
+    "Rssi": "RSSI",
+    "BattVoltage": "Battery",
+    "Filter": "Filter",
+    "Lcn": "LCN",
+    "Noise": "Noise",
+    "USB1_vbus": "USB1",
+    "USB2_vbus": "USB2",
+}
+
+
+def _caption(region_id: str, token: str | None) -> str | None:
+    # Only useful value prefixes, never generic System/Channel/Option A tags.
+    # A/B/C fields can need labels; self-describing Frequency/ServiceType/tone
+    # fields do not. The top volume/squelch fields also retain their prefixes.
+    if token is None:
+        return None
+    if region_id.startswith(("option_a_", "option_b_", "option_c_")) or (
+        region_id.startswith("option_") and token in {"Volume", "Squelch", "Volume&Squelch"}
+    ):
+        return _CAPTIONS.get(token)
+    return None
 
 
 def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
@@ -95,7 +140,24 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
         raise ValueError("Frame values must match the selected regions exactly once.")
     values = {value.region_id: value for value in frame.values}
     mode = screen.layout.requested_mode.value
+    indicators = (
+        frame.indicators
+        if frame.status is DisplayObservationStatus.CURRENT
+        else ScannerDisplayIndicators()
+    )
+    led = indicators.alert_led
+    if not isinstance(led, ScannerAlertLed):
+        led = None
+    led_state = "unknown" if led is None else led.value.lower()
+    led_label = "Unavailable" if led is None else led.value
+    led_color = "3b4654" if led is None else _LED_COLORS[led]
+    holds = {
+        name: getattr(indicators, f"{name}_hold") for name in ("system", "department", "channel")
+    }
     parts.append(f'<div class="screen-caption">{escape(mode.replace("_", " ").title())}</div>')
+    parts.append(
+        f'<div class="scanner-surround" data-led="{led_state}" style="--alert-color:#{led_color}">'
+    )
     parts.append(
         f'<div class="scanner-grid" data-mode="{mode}" aria-label="Synthetic scanner regions">'
     )
@@ -116,18 +178,24 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
         empty = state in {ScannerDisplayValueStatus.EMPTY, ScannerDisplayValueStatus.BLANK}
         foreground, background = "cbd5e1", "18212d"
         color = slot.stored_color
+        held = holds.get(region.id)
         if (
             screen.color_mode == "COLOR"
             and color is not None
             and (_COLOR.fullmatch(color.text) and _COLOR.fullmatch(color.background))
         ):
             foreground, background = color.text, color.background
-            if region.reverse_colors:
+            if region.reverse_colors or held is True:
                 foreground, background = background, foreground
-        classes = "cell" + (" single-line" if region.rows == 1 else "")
+        classes = f"cell align-{region.alignment.value}"
         if region.kind is DisplayRegionKind.NAME:
             classes += " name-cell"
+            if region.name_lines == 2:
+                classes += " two-line"
         title = f"{label}: {state.value}" + (f"; raw source: {text}" if raw else "")
+        hold_state = "on" if held is True else "off" if held is False else "unknown"
+        if region.id in holds:
+            title += f"; hold: {hold_state}"
         style = (
             f"grid-area:{region.row + 1}/{region.column + 1}/"
             f"span {region.rows}/span {region.columns};"
@@ -135,29 +203,32 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
         )
         parts.append(
             f'<div class="{classes}" data-region="{region.id}" data-value-status="{state.value}" '
-            f'style="{style}" title="{escape(title, quote=True)}">'
+            f'data-hold="{hold_state}" style="{style}" '
+            f'title="{escape(title, quote=True)}" aria-label="{escape(title, quote=True)}">'
         )
         if not empty and region.kind is not DisplayRegionKind.SPACER:
-            parts.extend(
-                [
-                    f'<span class="field-label">{escape(label)}</span>',
-                    f'<strong class="field-value">{escape(text)}</strong>',
-                ]
-            )
+            caption = _caption(region.id, slot.token)
+            if caption is not None:
+                parts.append(f'<span class="field-label">{escape(caption)}:</span>')
+            parts.append(f'<strong class="field-value">{escape(text)}</strong>')
             details.append(
                 f"<tr><th>{escape(label)}</th><td>{escape(text)}</td><td>{state.value}</td></tr>"
             )
         parts.append("</div>")
     parts.extend(
         [
-            "</div>",
+            "</div></div>",
+            f'<p class="alert-status">Scanner alert LED: {led_label}. '
+            "Reported color only; blink timing is not reproduced.</p>",
             '<p class="legend">Raw source values only; '
             "no inferred units, scanner clock or icon behavior. "
             "-- means unavailable or unqualified. Intentionally empty slots remain blank.</p>",
             f'<details class="field-details"><summary>Field details and mapping limits '
             f"({len(screen.issues)} mapping issues)</summary>",
             "<p>Neutral colors mark unqualified mappings. BLACK/WHITE transforms and ambiguous "
-            "small-field colors are not applied.</p><table><thead><tr><th>Field</th><th>Value</th>"
+            "small-field colors are not applied. Name bands invert only for a current "
+            "reported hold; unknown hold state is not a confirmed release.</p>"
+            "<table><thead><tr><th>Field</th><th>Value</th>"
             "<th>Qualification</th></tr></thead><tbody>",
             *details,
             "</tbody></table></details></section>",
@@ -170,7 +241,7 @@ _CSS = """
 * { box-sizing:border-box } :root { color-scheme:dark }
 body { margin:0; padding:16px; background:#0c121c; color:#edf4fc;
 font:15px system-ui,sans-serif }
-main { max-width:1240px; margin:auto } h1 { margin:0; font-size:26px }
+main { width:100%; margin:auto } h1 { margin:0; font-size:26px }
 .intro { color:#b9c7d8; margin:8px 0 14px; line-height:1.45 }
 .consumer { padding:12px; border:1px solid #55687f; border-radius:10px; margin-bottom:16px }
 .toolbar { display:flex; flex-wrap:wrap; gap:12px; align-items:end; margin-bottom:10px }
@@ -183,19 +254,27 @@ button,select,summary { cursor:pointer }
 .provenance { display:flex; gap:4px 24px; flex-wrap:wrap; font-size:12px;
 padding:8px 0; color:#c6d2e2 }
 .screen-caption { margin:0 0 6px; font-size:14px; font-weight:600 }
+.scanner-surround { --alert-color:#3b4654; border:6px solid transparent;
+border-top-color:var(--alert-color); border-bottom-color:var(--alert-color); background:#000 }
+.consumer[data-led-treatment=border] .scanner-surround { border-color:var(--alert-color) }
+.scanner-surround[data-led=unknown] { border-top-style:dashed; border-bottom-style:dashed }
+.consumer[data-led-treatment=border] .scanner-surround[data-led=unknown] { border-style:dashed }
+.alert-status { font-size:12px; color:#b9c7d8; margin:8px 0 }
 .scanner-grid { display:grid; grid-template-columns:repeat(30,minmax(0,1fr));
 grid-template-rows:repeat(20,minmax(0,1fr)); height:clamp(460px,54vw,620px);
 background:#000; overflow:hidden }
-.cell { min-width:0; min-height:0; overflow:hidden; padding:2px 4px; border:1px solid #364452;
-display:flex; flex-direction:column; justify-content:center; gap:1px }
-.field-label { font-size:10px; line-height:1.2; text-overflow:ellipsis;
-overflow:hidden; white-space:nowrap }
-.field-value { font-size:15px; line-height:1.2; text-overflow:ellipsis;
-overflow:hidden; white-space:nowrap }
-.single-line { flex-direction:row; justify-content:space-between; align-items:center; gap:4px }
-.single-line .field-label { flex:1 1 auto }
-.single-line .field-value { flex:0 1 auto; font-size:12px }
-.name-cell .field-value { font-size:clamp(22px,3vw,34px) }
+.cell { min-width:0; min-height:0; overflow:hidden; padding:1px 4px;
+display:flex; align-items:center; gap:5px; font-family:monospace }
+.align-left { justify-content:flex-start; text-align:left }
+.align-center { justify-content:center; text-align:center }
+.field-label,.field-value { font-size:clamp(12px,1.4vw,19px); line-height:1.15;
+text-overflow:ellipsis; overflow:hidden; white-space:nowrap }
+.field-label { flex:0 1 auto; font-weight:bold }
+.field-value { min-width:0 }
+.name-cell .field-value { width:100%; font-size:clamp(24px,3.2vw,36px); font-weight:normal }
+.name-cell.two-line .field-value { font-size:clamp(28px,3.6vw,40px);
+display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
+white-space:normal; overflow-wrap:anywhere }
 .empty-screen { display:grid; place-items:center; min-height:460px;
 background:#18212d; padding:24px }
 .legend,.field-details { font-size:12px; line-height:1.45; color:#b9c7d8 }
@@ -211,6 +290,8 @@ for (const panel of document.querySelectorAll('.consumer')) {
   const scenario = panel.querySelector('.scenario');
   const style = panel.querySelector('.style');
   const target = panel.querySelector('.frame-target');
+  const ledStyle = panel.querySelector('.led-style');
+  ledStyle.addEventListener('change', () => { panel.dataset.ledTreatment = ledStyle.value; });
   function show() {
     const template = document.getElementById('frame-' + scenario.value + '-' + style.value);
     if (!template) throw new Error('Missing synthetic preview variant');
@@ -255,13 +336,17 @@ def render_scanner_display_gallery(
     panels = []
     for index in (1, 2):
         panels.append(
-            f'<section class="consumer" id="consumer-{index}" aria-label="Preview display {index}">'
+            f'<section class="consumer" id="consumer-{index}" data-led-treatment="strips" '
+            f'aria-label="Preview display {index}">'
             '<div class="toolbar"><label>Sample scenario<select class="scenario">'
             + options
             + '</select></label><label>Simple / Detail presentation<select class="style">'
             '<option value="profile">Use imported preference</option>'
             '<option value="simple">Simple</option>'
             '<option value="detail">Detail</option></select></label>'
+            '<label>LED treatment<select class="led-style">'
+            '<option value="strips">Light strips</option><option value="border">Border</option>'
+            "</select></label>"
             '<button class="next" type="button">'
             'Next scenario</button></div><div class="frame-target"></div></section>'
         )
@@ -281,7 +366,8 @@ def render_scanner_display_gallery(
             '<p class="intro">Invented samples, no scanner connection. '
             "This is a development preview, not an installed theme "
             "or a claim of LCD-format parity. "
-            "Controls below select sample frames only.</p>",
+            "Controls below select sample frames only. Scanner field widths are a baseline, "
+            "not character caps; the layout expands with the available display width.</p>",
             "<noscript>Enable JavaScript to select these offline synthetic frames.</noscript>",
             panels[0],
             '<details class="compare"><summary>Compare a second independent display</summary>',

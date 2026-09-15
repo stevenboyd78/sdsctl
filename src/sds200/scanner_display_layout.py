@@ -27,6 +27,11 @@ class DisplayRegionKind(StrEnum):
     SPACER = "spacer"
 
 
+class DisplayTextAlignment(StrEnum):
+    LEFT = "left"
+    CENTER = "center"
+
+
 class DisplaySlotSelection(StrEnum):
     FIXED = "fixed"
     CONFIGURED = "configured"
@@ -60,6 +65,8 @@ class ScannerDisplayRegion:
     option: DisplayProfilePosition | None = None
     color: DisplayProfilePosition | None = None
     reverse_colors: bool = False
+    alignment: DisplayTextAlignment = DisplayTextAlignment.LEFT
+    name_lines: int = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -123,6 +130,8 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
         option: tuple[int, int] | None = None,
         color: tuple[int, int] | None = None,
         reverse: bool = False,
+        center: bool = False,
+        name_lines: int = 1,
     ) -> None:
         regions.append(
             ScannerDisplayRegion(
@@ -135,12 +144,14 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 None if option is None else DisplayProfilePosition(*option),
                 None if color is None else DisplayProfilePosition(*color),
                 reverse,
+                DisplayTextAlignment.CENTER if center else DisplayTextAlignment.LEFT,
+                name_lines,
             )
         )
 
     indicator, option_kind = DisplayRegionKind.INDICATOR, DisplayRegionKind.OPTION
     information, spacer = DisplayRegionKind.INFORMATION, DisplayRegionKind.SPACER
-    add("function", indicator, 0, 0, 2, color=(6, 1), reverse=True)
+    add("function", indicator, 0, 0, 2, color=(6, 1), reverse=True, center=True)
     for index in range(1, 5):
         add(
             f"option_{index}",
@@ -150,9 +161,10 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
             6,
             option=(3, index),
             color=(3, index) if simple else None,
+            center=True,
         )
-    add("signal", indicator, 0, 26, 2, color=(6, 2))
-    add("battery", indicator, 0, 28, 2, color=(6, 3))
+    add("signal", indicator, 0, 26, 2, color=(6, 2), center=True)
+    add("battery", indicator, 0, 28, 2, color=(6, 3), center=True)
     if simple:
         add("spacer_0", spacer, 1, 0, 2, color=(6, 4))
         for index in range(5, 9):
@@ -164,11 +176,20 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 6,
                 option=(3, index),
                 color=(3, index),
+                center=True,
             )
     else:
         add("information_1", information, 1, 0, 14, color=(1, 7 if scan else 9))
         for position, index in enumerate((7, 8), start=5):
-            add(f"option_{index}", option_kind, 1, 14 + (index - 7) * 6, 6, option=(3, position))
+            add(
+                f"option_{index}",
+                option_kind,
+                1,
+                14 + (index - 7) * 6,
+                6,
+                option=(3, position),
+                center=True,
+            )
         for index in (1, 2):
             add(
                 f"information_{index + 1}",
@@ -188,13 +209,22 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 option=(2, position),
                 color=(4, position),
             )
-    add("key_lock", indicator, 1, 26, 2, color=(6, 5 if simple else 4))
-    add("direction", indicator, 1, 28, 2, color=(6, 6 if simple else 5))
+    add("key_lock", indicator, 1, 26, 2, color=(6, 5 if simple else 4), center=True)
+    add("direction", indicator, 1, 28, 2, color=(6, 6 if simple else 5), center=True)
 
     if scan:
         for index, name in enumerate(("system", "department", "channel")):
             row, height = (2 + index * 5, 4) if simple else (4 + index * 3, 2)
-            add(name, DisplayRegionKind.NAME, row, 0, 30, rows=height, color=(1, 1 + index * 2))
+            add(
+                name,
+                DisplayRegionKind.NAME,
+                row,
+                0,
+                30,
+                rows=height,
+                color=(1, 1 + index * 2),
+                name_lines=2 if simple else 1,
+            )
             add(
                 f"{name}_option",
                 option_kind,
@@ -203,15 +233,24 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 26,
                 option=(1, index + 1),
                 color=(2, index + 1),
+                center=True,
             )
-            add(f"{name}_avoid", indicator, row + height, 26, 4, color=(1, 2 + index * 2))
+            add(
+                f"{name}_avoid",
+                indicator,
+                row + height,
+                26,
+                4,
+                color=(1, 2 + index * 2),
+                center=True,
+            )
     else:
         for index in range(1, 4):
             add(f"primary_{index}", information, 2 + index * 2, 0, 30, rows=2, color=(1, index))
         add("sub_information", information, 10, 0, 16, color=(1, 4))
         add("modulation", information, 10, 16, 6, color=(1, 5))
-        add("avoid", indicator, 10, 22, 4, color=(1, 6))
-        add("hold", indicator, 10, 26, 4, color=(1, 7), reverse=True)
+        add("avoid", indicator, 10, 22, 4, color=(1, 6), center=True)
+        add("hold", indicator, 10, 26, 4, color=(1, 7), reverse=True, center=True)
         add("detail_information", information, 11, 0, 30, rows=4, color=(1, 8))
 
     large_rows = 1 if simple else (5 if scan else 3)
@@ -226,6 +265,7 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 15,
                 option=(2, position),
                 color=(4, position),
+                center=simple,
             )
     for index in range(1, 11):
         add(
@@ -236,6 +276,7 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
             3,
             option=(4, index),
             color=(5, index),
+            center=True,
         )
     for index, (column, width) in enumerate(((0, 9), (10, 10), (21, 9)), start=1):
         add(
@@ -246,6 +287,7 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
             width,
             color=(7, index * 2 - 1),
             reverse=True,
+            center=True,
         )
     add("spacer_1", spacer, 19, 9, 1, color=(7, 2))
     add("spacer_2", spacer, 19, 20, 1, color=(7, 4))

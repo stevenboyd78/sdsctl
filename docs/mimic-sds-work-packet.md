@@ -39,14 +39,22 @@ The September 14, 2026 review used these user-supplied references read-only:
   horizontally continued tables), and color/item codes (PDF pages 57-60).
 - `SDS200_RemoteCommand_Specification_V1_02.pdf`: `KEY` syntax on page 4,
   PSI/GSI screen information, and the complete key-code table on page 35.
-- `SDS200om.pdf`: printed pages 37-40 (PDF pages 43-46), customizing the display,
-  fixed versus configurable regions, Simple/Detail and Search/Weather/Tone-Out.
+- `SDS200om.pdf`: printed pages 37-41 (PDF pages 43-47), customizing the display,
+  fixed versus configurable regions, Simple/Detail, Search/Weather/Tone-Out,
+  field-size eligibility and the explicit Icon Area item list.
 - `Display Table Layouts.html`: the user's three screen-family grids, including
   option slots, name/primary regions, icons and soft keys. This is a layout
   reference, not executable application code. It intentionally omits Waterfall.
 - `profile.cfg`: inspected locally for display records, structure and model
   metadata only. It contains 25 option-group and 46 color-group records covering
   the seven documented modes. The original file is not a public fixture.
+
+The September 15 follow-up also reviewed the supplied Simple/Detail trunk photos,
+HTML cell alignment, remote-specification `Property.A_Led` and individual name
+holds (pages 18-19), and file-specification Alert Light Color/Pattern (pages 9-10),
+channel/talkgroup alert fields (page 17) and Unit ID alerts (page 14). Photos are
+visual evidence, not substitutes for live XML or permission to publish private
+scanner names/profile content as fixtures.
 
 The [current vendor V2.00 remote specification][remote-v2] also retains the
 `KEY,[KEY_CODE],[KEY_MODE]` form. Neither the inspected V1.02 nor V2.00 command
@@ -254,14 +262,60 @@ radio-graph conversion is applied. Raw frequency and code values must be labelle
 as such in the development preview until their display formatting is qualified.
 
 Option membership follows the Huge table on PDF page 57 and Large/Small tables
-on page 60. A known token in the wrong region is not presented. Icon membership
-and glyph behavior are not established by those tables and stay unqualified.
+on page 60, cross-checked against the owner's manual printed pages 39-40. A known
+token in the wrong region is not presented. The owner's manual printed page 41
+establishes icon membership; active-state/glyph rendering remains unqualified.
 Scanner REC uses only shared scanner `recording`, never daemon recording. Battery
 voltage, modulation with ambiguous fallback provenance, RSSI bars, scanner date
 and time, and other unsupported fields remain unqualified rather than invented.
 Text is bounded and rejects terminal controls, Unicode control/format characters
 and lone surrogates. Raw text is not markup: renderers must use escaping or
 `textContent`, including for configured names containing angle brackets.
+
+### Field capacities and icon choices
+
+The owner's table labels Huge as 22 characters, Large as 16/14 characters and
+Short as 5 characters. These describe the scanner baseline, **not hard character
+limits for Mimic-SDS**. Per user direction, preserve relative regions and their
+minimum intended capacity where space permits, and allow them to grow on larger
+displays. Do not truncate source data to 22, 16, 14 or 5 characters, infer token
+eligibility from the length of a value, or expand one field independently in a way
+that moves its neighbors. The offline HTML grid now expands with its container,
+including beyond 1920 pixels; constrained viewports clip/wrap visually within
+the layout, with complete bounded text available in the field-details view.
+This is not a guarantee that every minimum fits an arbitrarily narrow viewport.
+Final TUI adaptation will use terminal cell counts, not CSS pixel assumptions.
+
+The fixed name bands are different from configurable Huge option fields: printed
+page 38 shows 24 characters x 2 lines in Simple and 24 x 1 in Detail. The supplied
+photos corroborate two-line Simple names and one-line Detail names. Mimic uses
+those line counts as layout behavior without imposing a 24-character cap.
+
+Icon placement uses these exact file tokens, with the manual's item descriptions:
+
+| Saved token | Icon-area item |
+| --- | --- |
+| `PRI` | Priority scan |
+| `CC` | Close Call |
+| `WxPRI` | Weather priority |
+| `REC` | Scanner recording |
+| `IFX` | IF exchange |
+| `GPS` | GPS |
+| `SCR` | Broadcast screen |
+| `REP` | Repeater find |
+| `LVL` | Volume offset |
+| `Modulation` | Modulation |
+| `P_Ch` | Priority channel |
+
+The page-41 Repeater Find sample says `REF`; the file specification and the
+page-40 sample use `REP`. Accept the saved token `REP`, not an invented `REF`
+configuration alias. A permitted icon selection still produces `unqualified`
+until its source, active/absent semantics and glyph are implemented. In particular,
+do not replace the REC icon with raw On/Off text or daemon recording status.
+Known non-icon tokens are invalid placements; unknown tokens remain unknown.
+Blank cells in one manual table do not silently remove choices explicitly listed
+in the file specification. Weather/Tone-Out share the special-family layout but
+do not gain unverified item-customization support from that shared geometry.
 
 These modules are internal foundations, not public APIs or user-facing renderers.
 They do not certify a profile's physical scanner identity. The observation adapter
@@ -372,10 +426,11 @@ Simple/Detail flag. The default is therefore explicitly labelled an unconfirmed
 imported preference. Qualified operating data remains available in either layout.
 
 The gallery uses the actual parser, profile-import lifecycle and observation
-adapter with invented data. Nineteen transition scenarios include conventional
+adapter with invented data. Thirty-three transition scenarios include conventional
 and trunk scanning, special families, missing/failed imports, stale samples,
 disconnect/reconnect, overlays, unknown/conflicting screens, literal HTML-like
-text and disappearing fields. Each has profile/Simple/Detail variants. Two
+text, disappearing fields, independent name holds, all eight documented A_Led
+values and missing/invalid/stale indicators. Each has profile/Simple/Detail variants. Two
 independent preview panels demonstrate that a consumer's choice does not mutate
 the other consumer, scanner or imported profile. Controls only select precomputed
 frames: no scanner/network access, polling, credentials, profile upload or storage.
@@ -392,10 +447,12 @@ node scripts/audit_scanner_display_frames.mjs /tmp/mimic-frame-preview/index.htm
 The browser audit requires Node.js 24+ and Chrome (an optional third argument
 selects the Chrome executable). It reuses the existing browser-audit protocol
 helpers with a new isolated profile; it never controls a user's browser session.
-It validates all 171 scenario/style/viewport combinations at 800x480, 1920x1080
-and 390x844, including stable grid heights, region containment/non-overlap,
+It validates all 396 scenario/style/viewport combinations at 800x480, 1920x1080,
+390x844 and 2560x1440, including stable grid heights, region containment/non-overlap,
 independent consumers, keyboard selection/focus, enlarged controls and absence of
-page network requests. It writes screenshots and structured evidence to a new
+page network requests. It also checks source-based text alignment, hold inversion,
+Simple/Detail name line behavior, expanding field widths and geometry-preserving
+LED treatment changes. It writes screenshots and structured evidence to a new
 output location, terminates only its own browser and retains that test profile.
 
 This is a developer inspection page, not the final kiosk viewport. Its status
@@ -406,6 +463,55 @@ available in the title and expandable field table. Units/code conversions,
 unqualified icons, BLACK/WHITE transforms and ambiguous small-field colors remain
 explicitly unresolved. No live route, TUI layout, HA card, profile-acquisition
 hook or front-panel control is installed by this preview.
+
+### Photo-informed presentation and alert-light contract
+
+Normal screen content no longer carries generic field tags such as System,
+Department, Channel or Option A. Full field identities remain in accessible
+labels, titles and the expandable details table. Useful prefixes such as VOL,
+SQL, TGID and RSSI remain in their applicable option fields. Raw values and their
+qualification status are still explicit in the details; no LCD units/code
+formatting is invented by merely removing a generic tag.
+
+Region descriptors preserve the supplied HTML's explicit alignment: top short
+options, under-name option rows, Simple A/B fields, icons and soft keys centered;
+name bands, Detail/special A/B/C and information fields left-aligned. Simple names
+can wrap to two lines; Detail names remain one line. Longer text never changes
+the canonical row geometry. The synthetic profile uses invented red/green/blue
+name colors to make the photo-described inversion easy to inspect.
+
+Current `System.Hold`, `Department.Hold`, and `ConvFrequency.Hold` or `TGID.Hold`
+independently invert their own qualified name-band foreground/background colors.
+Site hold must not be treated as department hold. Missing/invalid holds are
+unknown, not released. Stale, disconnected, unknown or overridden observations
+clear hold indications and live LED color in both adapter and renderer.
+
+Current `Property.A_Led` accepts only Off, Blue, Red, Magenta, Green, Cyan, Yellow
+or White. The preview offers full-width top/bottom strips and an all-around
+border, outside the field grid, with identical reserved geometry. Missing or
+unrecognized A_Led is shown as unavailable, not Off. These RGB accents are
+illustrative, not calibrated physical LED measurements, and are separate from
+connection-health colors. The preview is static and does not claim blink parity.
+
+The user's scanner menu and file-specification pages 9-10 agree on Alert Pattern:
+`On`, `Slow Blink`, `Fast Blink`. Color and pattern are separately saved in
+conventional channel and TGID records; Unit ID and other alert sources also have
+settings. Therefore display-only `profile.cfg` is not sufficient to recover every
+active channel's pattern. Future favorites synchronization needs to preserve
+these settings with source/revision and stable record identity, separately from
+the display-profile color/layout data. Before enabling animation:
+
+1. Match the current alert to the correct synchronized record and alert source;
+   never use only a duplicated name or carry the previous channel's pattern.
+2. Establish whether live A_Led reports an instantaneous lit state or a sustained
+   alert color, so a local animation does not contradict or double-blink it.
+3. Qualify slow/fast period, duty cycle and alert precedence with observation;
+   the reviewed pattern table gives names, not numeric timing. Do not claim
+   scanner-accurate timing from arbitrary CSS durations.
+4. Clear animation on stale/mismatched data or explicit Off, retain unknown as
+   unknown, and provide a reduced-motion/static alternative. Until qualified,
+   report current color without inventing a pattern or silently mapping unknown
+   to steady On.
 
 Handle temporary messages, popups, holds and unknown screens without inventing
 screen content or hiding safety-relevant state. Menu/dialog visibility is a

@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from sds200.scanner_display_adapter import DisplayObservationStatus
+from sds200.scanner_display_adapter import (
+    DisplayObservationStatus,
+    ScannerAlertLed,
+    ScannerDisplayIndicators,
+)
 from sds200.scanner_display_frame_preview import (
     render_scanner_display_frame,
     render_scanner_display_gallery,
@@ -44,9 +48,78 @@ def scenarios():
     ]()
 
 
+def region_elements(source):
+    return {
+        attrs["data-region"]: attrs
+        for _, attrs in Document(source).elements
+        if "data-region" in attrs
+    }
+
+
+@pytest.mark.parametrize("style", ["simple", "detail"])
+def test_clean_names_alignment_and_current_hold_inversion(scenarios, style):
+    held = region_elements(render_scanner_display_frame(scenarios["held_trunk"][style]))
+    released = region_elements(render_scanner_display_frame(scenarios["released_trunk"][style]))
+    for name, color in (("system", "ff3030"), ("department", "40f040"), ("channel", "4477ff")):
+        assert held[name]["data-hold"] == "on"
+        assert f"color:#000000;background:#{color}" in held[name]["style"]
+        assert released[name]["data-hold"] == "off"
+        assert f"color:#{color};background:#000000" in released[name]["style"]
+        assert "align-left" in held[name]["class"]
+        assert ("two-line" in held[name]["class"]) == (style == "simple")
+    assert "align-center" in held["system_option"]["class"]
+    assert f"align-{'center' if style == 'simple' else 'left'}" in held["option_a_1"]["class"]
+    source = render_scanner_display_frame(scenarios["held_trunk"][style])
+    assert '<span class="field-label">system</span>' not in source
+    assert '<span class="field-label">channel</span>' not in source
+    assert '<span class="field-label">SiteName</span>' not in source
+    if style == "detail":
+        assert '<span class="field-label">TGID:</span>' in source
+
+
+def test_partial_and_stale_hold_colors(scenarios):
+    partial = region_elements(render_scanner_display_frame(scenarios["department_held"]["detail"]))
+    assert partial["department"]["data-hold"] == "on"
+    assert partial["system"]["data-hold"] == partial["channel"]["data-hold"] == "off"
+    stale = region_elements(render_scanner_display_frame(scenarios["held_stale"]["detail"]))
+    assert all(
+        stale[name]["data-hold"] == "unknown" for name in ("system", "department", "channel")
+    )
+    assert "color:#ff3030;background:#000000" in stale["system"]["style"]
+
+
+@pytest.mark.parametrize("led", list(ScannerAlertLed))
+def test_named_led_colors_not_animation_or_field_colors(scenarios, led):
+    source = render_scanner_display_frame(scenarios[f"led_{led.value.lower()}"]["detail"])
+    assert f'data-led="{led.value.lower()}"' in source
+    assert f"Scanner alert LED: {led.value}" in source
+    assert "blink timing is not reproduced" in source
+    assert "animation" not in source
+    regions = region_elements(source)
+    assert "color:#ff3030;background:#000000" in regions["system"]["style"]
+
+
+def test_missing_invalid_and_stale_led_never_mean_off(scenarios):
+    for name in ("led_missing", "led_invalid", "held_stale"):
+        source = render_scanner_display_frame(scenarios[name]["detail"])
+        assert 'data-led="unknown"' in source and 'data-led="off"' not in source
+    for invalid in ('Red" onclick="bad', "url(https://invalid.test)", "Yellow"):
+        frame = replace(
+            scenarios["held_trunk"]["detail"], indicators=ScannerDisplayIndicators(invalid)
+        )
+        source = render_scanner_display_frame(frame)
+        assert 'data-led="unknown"' in source and invalid not in source
+
+
+def test_renderer_independently_clears_forged_stale_indicators(scenarios):
+    frame = replace(scenarios["held_trunk"]["detail"], status=DisplayObservationStatus.STALE)
+    source = render_scanner_display_frame(frame)
+    assert 'data-led="unknown"' in source and 'data-hold="on"' not in source
+
+
 @pytest.mark.parametrize("style", ["profile", "simple", "detail"])
 def test_all_transitions_are_passive_fragments_with_exact_regions(scenarios, style):
-    assert len(scenarios) == 19
+    assert len(scenarios) == 33
     for variants in scenarios.values():
         frame = variants[style]
         source = render_scanner_display_frame(frame)
@@ -202,7 +275,7 @@ def test_gallery_csp_hash_and_independent_controls(scenarios):
     source = render_scanner_display_gallery(scenarios)
     document = Document(source)
     templates = [attrs["id"] for tag, attrs in document.elements if tag == "template"]
-    assert len(set(templates)) == len(templates) == 57
+    assert len(set(templates)) == len(templates) == 99
     policy = next(
         attrs["content"]
         for tag, attrs in document.elements

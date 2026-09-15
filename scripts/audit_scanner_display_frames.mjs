@@ -30,7 +30,20 @@ const geometry = `(() => {
       }
     }
   }
+  for (const cell of cells) {
+    const css = getComputedStyle(cell);
+    const expected = cell.classList.contains('align-center') ? 'center' : 'left';
+    if (css.textAlign !== expected) issues.push('incorrect alignment: ' + cell.dataset.region);
+    if (cell.classList.contains('name-cell') && cell.querySelector('.field-label')) {
+      issues.push('generic label in name band');
+    }
+  }
+  const surround = target.querySelector('.scanner-surround');
+  if (surround && getComputedStyle(surround).animationName !== 'none') {
+    issues.push('unqualified LED animation');
+  }
   return {issues, mode: grid?.dataset.mode ?? null, height: box?.height ?? null,
+    width: box?.width ?? null,
     state: target.querySelector('.mimic-frame').dataset.state,
     raw: target.querySelectorAll('[data-value-status=raw_source]').length,
     details: !!target.querySelector('.field-details')};
@@ -71,8 +84,9 @@ async function audit(source, output, chrome) {
     assert.equal(await evaluate(cdp, 'document.documentElement.dataset.previewReady'), 'true');
     const scenarios = await evaluate(cdp,
       '[...document.querySelector(".scenario").options].map(option => option.value)');
-    assert.equal(scenarios.length, 19);
-    for (const [width, height] of [[800, 480], [1920, 1080], [390, 844]]) {
+    assert.equal(scenarios.length, 33);
+    const expansion = [];
+    for (const [width, height] of [[800, 480], [1920, 1080], [390, 844], [2560, 1440]]) {
       await cdp.send('Emulation.setDeviceMetricsOverride', {
         width, height, deviceScaleFactor: 1, mobile: false,
       });
@@ -91,9 +105,65 @@ async function audit(source, output, chrome) {
           results.push({width, height, scenario, style, ...result});
         }
       }
+      // Saved LCD character counts do not cap the width of fields on larger displays.
+      await select(cdp, 'consumer-1', 'held_trunk', 'simple');
+      const widths = await evaluate(cdp, `(() => {
+        const panel = document.querySelector('#consumer-1');
+        const cell = id => panel.querySelector('[data-region="' + id + '"]');
+        return Object.fromEntries(['system', 'option_a_1', 'option_1'].map(id =>
+          [id, cell(id).getBoundingClientRect().width]));
+      })()`);
+      expansion.push({width, ...widths});
+      for (const style of ['simple', 'detail']) {
+        await select(cdp, 'consumer-1', 'held_trunk', style);
+        const names = await evaluate(cdp, `(() => {
+          const panel = document.querySelector('#consumer-1');
+          return ['system', 'department', 'channel'].map(id => {
+            const cell = panel.querySelector('[data-region="' + id + '"]');
+            const css = getComputedStyle(cell);
+            const text = getComputedStyle(cell.querySelector('.field-value'));
+            return {hold: cell.dataset.hold, color: css.color, background: css.backgroundColor,
+              whiteSpace: text.whiteSpace, lines: text.webkitLineClamp};
+          });
+        })()`);
+        assert.deepEqual(names.map(name => name.hold), ['on', 'on', 'on']);
+        assert.deepEqual(names.map(name => name.color), Array(3).fill('rgb(0, 0, 0)'));
+        assert.deepEqual(names.map(name => name.background),
+          ['rgb(255, 48, 48)', 'rgb(64, 240, 64)', 'rgb(68, 119, 255)']);
+        for (const name of names) {
+          assert.equal(name.whiteSpace, style === 'simple' ? 'normal' : 'nowrap');
+          assert.equal(name.lines, style === 'simple' ? '2' : 'none');
+        }
+      }
+      // LED treatment changes neither geometry nor the precomputed frame nor the other consumer.
+      const beforeLed = await evaluate(cdp, geometry);
+      const frameBeforeLed = await evaluate(cdp,
+        'document.querySelector("#consumer-1 .frame-target").innerHTML');
+      const secondBeforeLed = await evaluate(cdp,
+        'document.querySelector("#consumer-2").outerHTML');
+      for (const treatment of ['border', 'strips']) {
+        await evaluate(cdp, `(() => {
+          const control = document.querySelector('#consumer-1 .led-style');
+          control.value = ${JSON.stringify(treatment)};
+          control.dispatchEvent(new Event('change', {bubbles: true}));
+        })()`);
+        assert.deepEqual(await evaluate(cdp, geometry), beforeLed);
+        assert.equal(await evaluate(cdp,
+          'document.querySelector("#consumer-1 .frame-target").innerHTML'), frameBeforeLed);
+        assert.equal(await evaluate(cdp,
+          'document.querySelector("#consumer-2").outerHTML'), secondBeforeLed);
+        const colors = await evaluate(cdp, `(() => {
+          const css = getComputedStyle(document.querySelector('#consumer-1 .scanner-surround'));
+          return [css.borderTopColor, css.borderRightColor];
+        })()`);
+        assert.equal(colors[0], 'rgb(255, 225, 50)');
+        assert.equal(colors[1], treatment === 'border' ? colors[0] : 'rgba(0, 0, 0, 0)');
+      }
       for (const [scenario, style] of [
         ['conventional', 'simple'], ['trunk', 'detail'], ['stale', 'detail'],
         ['profile_refresh_failed', 'detail'], ['weather', 'profile'],
+        ['held_trunk', 'simple'], ['held_trunk', 'detail'], ['department_held', 'detail'],
+        ['held_stale', 'detail'],
       ]) {
         await select(cdp, 'consumer-1', scenario, style);
         await evaluate(cdp, 'scrollTo(0, 0)');
@@ -134,11 +204,19 @@ async function audit(source, output, chrome) {
       await evaluate(cdp, `document.body.style.fontSize = '';
         document.querySelector('#consumer-1 .field-details').open = false`);
     }
+    const narrow = expansion.find(item => item.width === 800);
+    const hdmi = expansion.find(item => item.width === 1920);
+    const wide = expansion.find(item => item.width === 2560);
+    for (const field of ['system', 'option_a_1', 'option_1']) {
+      assert.ok(hdmi[field] > narrow[field] * 2, 'field did not expand at HDMI width');
+      assert.ok(wide[field] > hdmi[field] * 1.25, 'field capped at desktop width');
+    }
     assert.deepEqual(failures, [], 'browser exceptions');
     assert.deepEqual([...new Set(requests)], [url], 'unexpected resource or network requests');
     await writeFile(path.join(output, 'audit.json'), JSON.stringify({
       status: 'passed', cases: results.length, profile, results,
       independentConsumers: true, keyboard: true, enlargedControls: true,
+      expandingFields: expansion, holdInversion: true, ledTreatments: true, alignment: true,
       requests: requests.length, exceptions: failures,
     }, null, 2), {flag: 'wx'});
     console.log(`PASS ${results.length} frame/viewport cases; independent consumers, keyboard, ` +
