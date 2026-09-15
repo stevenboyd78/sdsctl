@@ -14,10 +14,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from .scanner_display_layout import DisplaySlotSelection, ScannerDisplayScreen
+from .scanner_display_live import ScannerDisplayLiveValues
 from .scanner_display_profile import ScannerDisplayDataFamily, ScannerDisplayMode
 from .state import RadioStateSnapshot
 
 MAX_DISPLAY_VALUE_LENGTH = 256
+_NO_LIVE_VALUES = ScannerDisplayLiveValues()
 
 
 class ScannerDisplayValueStatus(StrEnum):
@@ -153,6 +155,7 @@ def scanner_display_values(
     source_mode: ScannerDisplayMode | None = None,
     source_family: ScannerDisplayDataFamily | None = None,
     current: bool = False,
+    live_values: ScannerDisplayLiveValues = _NO_LIVE_VALUES,
 ) -> tuple[ScannerDisplayValue, ...]:
     """Project one immutable snapshot; stale/unknown/mismatched modes emit no data.
 
@@ -179,6 +182,7 @@ def scanner_display_values(
         gate = ScannerDisplayValueStatus.MODE_MISMATCH
 
     values: list[ScannerDisplayValue] = []
+    live_tokens, live_regions = dict(live_values.tokens), dict(live_values.regions)
     for slot in screen.regions:
         region, token = slot.region, slot.token
         status, text = ScannerDisplayValueStatus.UNQUALIFIED, None
@@ -194,6 +198,10 @@ def scanner_display_values(
             status = ScannerDisplayValueStatus.CONFIGURATION_UNAVAILABLE
         elif gate is not None:
             status = gate
+        elif region.id in live_regions:
+            raw = live_regions[region.id]
+            status, text = (ScannerDisplayValueStatus.BLANK, None) if raw == "" else _text(raw)
+            fields = (region.id,)
         elif region.option is None:
             field = _NAME_FIELDS.get(region.id)
             if field is not None:
@@ -205,9 +213,11 @@ def scanner_display_values(
                 if token in _HUGE | _LARGE | _SMALL | _ICONS
                 else ScannerDisplayValueStatus.UNKNOWN_TOKEN
             )
+        elif token in live_tokens and (token != "REC" or region.option.group == 4):
+            raw = live_tokens[token]
+            status, text = (ScannerDisplayValueStatus.BLANK, None) if raw == "" else _text(raw)
+            fields = (token,)
         elif region.option.group == 4:
-            # Valid icon selection (owner's manual p.41), but do not substitute
-            # raw On/Off text for a qualified active/absent icon or glyph yet.
             status = ScannerDisplayValueStatus.UNQUALIFIED
         elif token in _TEXT_FIELDS:
             field = _TEXT_FIELDS[token]

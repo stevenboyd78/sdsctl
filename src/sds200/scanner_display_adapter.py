@@ -18,6 +18,7 @@ from uuid import UUID
 
 from .models import ScannerInfo
 from .scanner_display_layout import ScannerDisplayScreen, resolve_scanner_display_screen
+from .scanner_display_live import ScannerDisplayLiveValues, project_live_values
 from .scanner_display_profile import ScannerDisplayDataFamily, ScannerDisplayMode
 from .scanner_display_profile_state import (
     DisplayProfileProvenance,
@@ -81,6 +82,7 @@ class ScannerDisplayIndicators:
     system_hold: bool | None = None
     department_hold: bool | None = None
     channel_hold: bool | None = None
+    site_hold: bool | None = None
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -123,6 +125,7 @@ class _Observation:
     screen_id: str | None
     snapshot: RadioStateSnapshot
     indicators: ScannerDisplayIndicators = ScannerDisplayIndicators()
+    live_values: ScannerDisplayLiveValues = ScannerDisplayLiveValues()
 
 
 # Remote Command Specification V1.02 pp.17-18 defines V_Screen, not a
@@ -159,19 +162,50 @@ _CHANNEL_TAGS = frozenset(
     {"ConvFrequency", "TGID", "SrchFrequency", "CcHitsChannel", "WxChannel", "ToneOutChannel"}
 )
 _ALLOWED_TAGS = {
-    "conventional_scan": frozenset({"System", "Department", "ConvFrequency", "Property"}),
-    "trunk_scan": frozenset({"System", "Department", "Site", "SiteFrequency", "TGID", "Property"}),
-    "custom_search": frozenset({"SrchFrequency", "Property"}),
-    "quick_search": frozenset({"SrchFrequency", "Property"}),
-    "close_call": frozenset({"SrchFrequency", "Property"}),
-    "cc_searching": frozenset({"Property"}),
+    "conventional_scan": frozenset(
+        {
+            "MonitorList",
+            "System",
+            "Department",
+            "ConvFrequency",
+            "Property",
+            "DualWatch",
+            "UnitID",
+            "InfoArea1",
+            "InfoArea2",
+            "OverWrite",
+        }
+    ),
+    "trunk_scan": frozenset(
+        {
+            "MonitorList",
+            "System",
+            "Department",
+            "Site",
+            "SiteFrequency",
+            "TGID",
+            "Property",
+            "DualWatch",
+            "UnitID",
+            "InfoArea1",
+            "InfoArea2",
+            "OverWrite",
+        }
+    ),
+    "custom_search": frozenset(
+        {"SrchFrequency", "Property", "DualWatch", "InfoArea1", "InfoArea2"}
+    ),
+    "quick_search": frozenset({"SrchFrequency", "Property", "DualWatch", "InfoArea1", "InfoArea2"}),
+    "close_call": frozenset({"SrchFrequency", "Property", "DualWatch", "InfoArea1", "InfoArea2"}),
+    "cc_searching": frozenset({"Property", "DualWatch", "InfoArea1", "InfoArea2"}),
     "wx_alert": frozenset({"WxChannel", "SrchFrequency", "WxMode", "Property"}),
     "tone_out": frozenset({"ToneOutChannel", "Property"}),
 }
 # ViewDescription itself also carries ordinary InfoArea entries, so it does
-# not imply an overlay. These child tags and replay markers do (pp.23-24).
+# not imply an overlay. OverWrite replaces only the scan channel name (p.23),
+# whereas these child tags and replay markers obscure the screen (pp.23-24).
 _OVERRIDE_TAGS = frozenset(
-    {"OverWrite", "PopupScreen", "PlainText", "ReplayDescription", "ReplayMode", "Button"}
+    {"PopupScreen", "PlainText", "ReplayDescription", "ReplayMode", "Button"}
 )
 
 
@@ -206,7 +240,12 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
     status = DisplayObservationStatus.CURRENT
     screen_id = info.screen if info.screen in _ALLOWED_TAGS else None
     mode_words = (info.mode or "").casefold().split()
-    if tags & _OVERRIDE_TAGS or "menu" in mode_words or "replay" in mode_words:
+    if (
+        tags & _OVERRIDE_TAGS
+        or "menu" in mode_words
+        or "replay" in mode_words
+        or ("OverWrite" in tags and screen_id not in {"conventional_scan", "trunk_scan"})
+    ):
         status = DisplayObservationStatus.OVERRIDE
     elif screen_id is None:
         status = DisplayObservationStatus.UNSUPPORTED_SCREEN
@@ -238,6 +277,7 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         received_at=info.received_at,
     )
     snapshot = snapshot_from_scanner_info(selected)
+    live_values = project_live_values(selected)
     property_node = selected.node("Property")
     raw_led = None if property_node is None else property_node.get("A_Led")
     try:
@@ -250,6 +290,9 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         alert_led=alert_led,
         system_hold={"On": True, "Off": False}.get(snapshot.system_hold or ""),
         department_hold={"On": True, "Off": False}.get(snapshot.department_hold or ""),
+        site_hold={"On": True, "Off": False}.get(snapshot.site_hold or "")
+        if screen_id == "trunk_scan"
+        else None,
         channel_hold=(
             {"On": True, "Off": False}.get(snapshot.channel_hold or "")
             if screen_id in {"conventional_scan", "trunk_scan"}
@@ -274,7 +317,7 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         squelch=_bounded_level(snapshot.squelch),
         rssi=_bounded_rssi(snapshot.rssi),
     )
-    return _Observation(sequence, received_at, status, screen_id, snapshot, indicators)
+    return _Observation(sequence, received_at, status, screen_id, snapshot, indicators, live_values)
 
 
 class ScannerDisplayAdapter:
@@ -436,6 +479,7 @@ class ScannerDisplayAdapter:
                         observation.snapshot,
                         source_family=source_family,
                         current=status is DisplayObservationStatus.CURRENT,
+                        live_values=observation.live_values,
                     )
             return ScannerDisplayFrame(
                 status=status,

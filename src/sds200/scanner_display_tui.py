@@ -83,7 +83,8 @@ def render_mimic_terminal(
         pair = region["stored_color"]
         if screen["color_mode"] == "COLOR" and pair is not None:
             foreground, background = pair["text"], pair["background"]
-            if region["reverse_colors"] or frame["indicators"].get(region["id"] + "_hold") is True:
+            hold_key = "site_hold" if region["token"] == "SiteName" else region["id"] + "_hold"
+            if region["reverse_colors"] or frame["indicators"].get(hold_key) is True:
                 foreground, background = background, foreground
         style = Style(
             color=f"#{foreground}", bgcolor=f"#{background}", bold=region["kind"] == "name"

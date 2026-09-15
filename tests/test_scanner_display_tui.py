@@ -247,6 +247,28 @@ def test_renderer_wide_unicode_and_markup_are_literal(packets):
     assert safe_terminal_text("one\n\x1b[31m\u200b") == "one\n?[31m?"
 
 
+@pytest.mark.parametrize("held", [True, False, None])
+def test_renderer_site_hold_is_independent_and_uses_profile_color(packets, held):
+    packet = copy.deepcopy(packets["held_trunk"])
+    frame = packet["frames"]["detail"]
+    for variant in packet["frames"].values():
+        variant["indicators"]["site_hold"] = held
+    regions = [r for r in frame["screen"]["regions"] if r["token"] == "SiteName"]
+    assert regions
+    # Unique synthetic labels allow exact checks for every configured site slot.
+    for index, region in enumerate(regions):
+        region["text"] = f"Site{index}"
+    frozen = decode_display_packet(packet)["frames"]["detail"]
+    rendered = render_mimic_terminal(frozen, width=160, height=41)
+    console = Console(width=160, color_system="truecolor")
+    for region in regions:
+        style = rendered.get_style_at_offset(console, rendered.plain.index(region["text"]))
+        pair = region["stored_color"]
+        reversed_colors = region["reverse_colors"] or held is True
+        assert style.color.name == "#" + pair["background" if reversed_colors else "text"]
+        assert style.bgcolor.name == "#" + pair["text" if reversed_colors else "background"]
+
+
 def test_unicode_limit_matches_server_and_browser(packets):
     packet = copy.deepcopy(packets["held_trunk"])
     name = next(

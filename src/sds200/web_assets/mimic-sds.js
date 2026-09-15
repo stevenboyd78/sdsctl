@@ -42,9 +42,9 @@
           require(text(frame.source[key], 40) && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?\+00:00$/.test(frame.source[key]) && Number.isFinite(Date.parse(frame.source[key])));
         }
       }
-      require(keys(frame.indicators, ["alert_led", "system_hold", "department_hold", "channel_hold"]));
+      require(keys(frame.indicators, ["alert_led", "system_hold", "department_hold", "channel_hold", "site_hold"]));
       require(nullable(frame.indicators.alert_led, value => Object.hasOwn(contract.leds, value)));
-      for (const name of ["system_hold", "department_hold", "channel_hold"]) require(nullable(frame.indicators[name], value => typeof value === "boolean"));
+      for (const name of ["system_hold", "department_hold", "channel_hold", "site_hold"]) require(nullable(frame.indicators[name], value => typeof value === "boolean"));
       if (frame.status !== "current") require(Object.values(frame.indicators).every(value => value === null));
       if (frame.status === "current") require(data.session_id !== null && frame.sequence !== null);
       if (frame.status === "disconnected") require(data.session_id === null && frame.screen === null);
@@ -123,7 +123,7 @@
       cell.dataset.alignment = region.alignment;
       cell.dataset.valueStatus = region.value_status;
       cell.style.gridArea = `${region.row + 1} / ${region.column + 1} / span ${region.rows} / span ${region.columns}`;
-      const held = frame.indicators[`${region.id}_hold`];
+      const held = frame.indicators[region.token === "SiteName" ? "site_hold" : `${region.id}_hold`];
       cell.dataset.hold = held === true ? "on" : held === false ? "off" : "unknown";
       if (frame.screen.color_mode === "COLOR" && region.stored_color !== null) {
         let {text: foreground, background} = region.stored_color;

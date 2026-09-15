@@ -37,6 +37,7 @@ function harness() {
   const raw = () => nodes(host).filter(node => node.dataset.valueStatus === 'raw_source');
   return {
     host, document, controller, find, choose, context, raw, response,
+    cells: () => nodes(host).filter(node => node.dataset.region),
     get frame() { return frame; }, get calls() { return calls; },
     set request(fn) { nextResponse = fn; },
     async start() { context(); assert.equal(calls, 0); choose('mimic-presentation', 'mimic'); await flush(); },
@@ -54,6 +55,10 @@ function harness() {
 }
 (async () => {
   const h = harness(); await h.start(); assert.ok(h.raw().length);
+  // Ordinary status/events must not restart polling or clear an unchanged view.
+  const originalCells = h.cells(), originalCalls = h.calls;
+  for (let i = 0; i < 50; i++) h.context();
+  assert.deepEqual(h.cells(), originalCells); assert.equal(h.calls, originalCalls);
   // A repeated sequence with age reset to zero must expire, and stay expired.
   await h.tick(5250); assert.equal(h.raw().length, 0);
   await h.tick(1000); assert.equal(h.raw().length, 0);
@@ -95,5 +100,32 @@ function harness() {
   const k = harness();
   for (const f of Object.values(k.frame.display.frames)) f.age_seconds = 5;
   await k.start(); assert.equal(k.raw().length, 0); // Deadline exactly zero.
+  // Site hold applies to configured SiteName cells, independently of other holds.
+  const s = harness();
+  for (const f of Object.values(s.frame.display.frames)) f.indicators.site_hold = true;
+  await s.start(); s.choose('mimic-mode', 'detail');
+  function checkSite(held) {
+    const frame = s.frame.display.frames.detail;
+    for (const region of frame.screen.regions.filter(r => r.token === 'SiteName')) {
+      const cell = s.cells().find(c => c.dataset.region === region.id);
+      assert.ok(cell); assert.equal(cell.dataset.hold, held ? 'on' : 'off');
+      const reversed = region.reverse_colors || held;
+      assert.equal(cell.style.color, '#' + region.stored_color[reversed ? 'background' : 'text']);
+      assert.equal(cell.style.backgroundColor, '#' + region.stored_color[reversed ? 'text' : 'background']);
+    }
+  }
+  checkSite(true);
+  for (const f of Object.values(s.frame.display.frames)) f.indicators.site_hold = false;
+  s.newer(); await s.tick(250); checkSite(false);
+  // Confirmed off icons contain no placeholder dash; missing sources still do.
+  const icon = s.frame.display.frames.detail.screen.regions.find(r => r.id === 'icon_1');
+  assert.ok(icon); icon.token = 'REC'; icon.value_status = 'raw_source'; icon.text = 'REC';
+  s.newer(); await s.tick(250);
+  const iconCell = () => s.cells().find(c => c.dataset.region === icon.id);
+  assert.equal(iconCell().children[0].textContent, 'REC');
+  icon.value_status = 'blank'; icon.text = null;
+  s.newer(); await s.tick(250); assert.equal(iconCell().children.length, 0);
+  icon.value_status = 'data_unavailable';
+  s.newer(); await s.tick(250); assert.equal(iconCell().children[0].textContent, '—');
   console.log('controller freshness, identity, demand, stop and recovery passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

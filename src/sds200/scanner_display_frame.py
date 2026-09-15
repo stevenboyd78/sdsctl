@@ -52,6 +52,7 @@ def project_scanner_display_frame(frame: ScannerDisplayFrame) -> dict[str, objec
             "system_hold": frame.indicators.system_hold if current else None,
             "department_hold": frame.indicators.department_hold if current else None,
             "channel_hold": frame.indicators.channel_hold if current else None,
+            "site_hold": frame.indicators.site_hold if current else None,
         },
     }
     screen = frame.screen

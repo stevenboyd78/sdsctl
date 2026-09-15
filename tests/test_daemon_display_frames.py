@@ -165,6 +165,7 @@ def test_stream_has_independent_presentations_no_private_source_or_scanner_comma
         "system_hold": True,
         "department_hold": False,
         "channel_hold": True,
+        "site_hold": None,
     }
     rendered = json.dumps(snapshot, allow_nan=False)
     for forbidden in ("PRIVATE_SENTINEL", str(tmp_path), TARGET, "<ScannerInfo", "source_path"):

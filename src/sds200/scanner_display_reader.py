@@ -129,11 +129,12 @@ def decode_display_packet(value: object) -> Mapping[str, Any]:
                 except ValueError:
                     raise DisplayWireError("Invalid Mimic-SDS frame.") from None
         indicators = _object(
-            frame["indicators"], ["alert_led", "system_hold", "department_hold", "channel_hold"]
+            frame["indicators"],
+            ["alert_led", "system_hold", "department_hold", "channel_hold", "site_hold"],
         )
         color = indicators["alert_led"]
         _require(color is None or (type(color) is str and color in _CONTRACT["leds"]))
-        for key in ("system_hold", "department_hold", "channel_hold"):
+        for key in ("system_hold", "department_hold", "channel_hold", "site_hold"):
             _require(indicators[key] is None or type(indicators[key]) is bool)
         if frame["status"] != "current":
             _require(all(item is None for item in indicators.values()))

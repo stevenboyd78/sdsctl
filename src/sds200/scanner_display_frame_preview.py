@@ -178,7 +178,7 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
         empty = state in {ScannerDisplayValueStatus.EMPTY, ScannerDisplayValueStatus.BLANK}
         foreground, background = "cbd5e1", "18212d"
         color = slot.stored_color
-        held = holds.get(region.id)
+        held = indicators.site_hold if slot.token == "SiteName" else holds.get(region.id)
         if (
             screen.color_mode == "COLOR"
             and color is not None

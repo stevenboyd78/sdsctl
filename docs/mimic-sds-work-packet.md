@@ -485,10 +485,12 @@ as such in the development preview until their display formatting is qualified.
 Option membership follows the Huge table on PDF page 57 and Large/Small tables
 on page 60, cross-checked against the owner's manual printed pages 39-40. A known
 token in the wrong region is not presented. The owner's manual printed page 41
-establishes icon membership; active-state/glyph rendering remains unqualified.
-Scanner REC uses only shared scanner `recording`, never daemon recording. Battery
-voltage, modulation with ambiguous fallback provenance, RSSI bars, scanner date
-and time, and other unsupported fields remain unqualified rather than invented.
+establishes icon membership. The live-source qualification below adds a bounded
+subset of active/absent text indicators, not scanner-pixel glyph reproduction.
+Scanner REC uses only scanner `Property.Rec`, never daemon recording. Battery
+voltage, RSSI bars, scanner date and time, and other unsupported fields remain
+unqualified rather than invented. Modulation uses an explicit selected-node
+`Mod` attribute, never the shared snapshot's ambiguous P25-status fallback.
 Text is bounded and rejects terminal controls, Unicode control/format characters
 and lone surrogates. Raw text is not markup: renderers must use escaping or
 `textContent`, including for configured names containing angle brackets.
@@ -531,8 +533,10 @@ Icon placement uses these exact file tokens, with the manual's item descriptions
 The page-41 Repeater Find sample says `REF`; the file specification and the
 page-40 sample use `REP`. Accept the saved token `REP`, not an invented `REF`
 configuration alias. A permitted icon selection still produces `unqualified`
-until its source, active/absent semantics and glyph are implemented. In particular,
-do not replace the REC icon with raw On/Off text or daemon recording status.
+unless its source and active/absent semantics are implemented. The live adapter
+now provides the supported text labels listed below. In particular, the REC icon
+is `REC` when scanner recording is On and blank when Off, not raw On/Off text or
+daemon recording status. Exact proprietary glyph/flash parity is not claimed.
 Known non-icon tokens are invalid placements; unknown tokens remain unknown.
 Blank cells in one manual table do not silently remove choices explicitly listed
 in the file specification. Weather/Tone-Out share the special-family layout but
@@ -605,11 +609,15 @@ sample missing a field does not keep the previous value. Only the reviewed value
 projection is cached, with bounded text; raw XML, unrelated records, source paths,
 credentials, popup content and arbitrary root mode text are not retained.
 
-`PopupScreen`, `OverWrite`, `PlainText`, replay markers and menu/replay operating
-states yield an explicit override state without normal live fields. Ordinary
-InfoArea records alone do not suppress the screen. This follows the distinction
-on specification pages 23-24; it is not an implementation of scanner menus,
-popup text/buttons, replay or soft-key controls.
+`PopupScreen`, `PlainText`, replay markers and menu/replay operating states yield
+an explicit override state without normal live fields. Ordinary InfoArea records
+do not suppress the screen. `OverWrite` is different: specification page 23 says
+it replaces the channel-name area. For conventional/trunk scanning, show that
+message in the channel region and retain only the other fields from the same
+current observation. Normal `ID Scanning...` must not clear the whole screen.
+An OverWrite on other screen families remains an explicit override until its
+placement is qualified. This is not an implementation of scanner menus, popup
+text/buttons, replay or soft-key actions.
 
 Session tickets are identity-bound, so old, foreign, copied and disconnected
 tickets cannot repopulate the frame. Sequence order and receipt timestamps are
@@ -770,6 +778,49 @@ renderer implementation. Recheck each path when adding the actual projection.
 | `SystemId`, `SysSubID`, `SiteId`, `WACN`, `ATT` | Raw `SystemStatusProjection` has related attributes | Not in the 35-field shared snapshot; select/qualify authoritative records and extend shared transport before rendering, without a second scanner owner |
 | `Day`, `Time` | No verified scanner-clock field in shared state | Do not use the application header clock and imply it is scanner time |
 | Other configured fields, icons and soft-key labels | Not established by this initial shared-state audit | Keep an explicit unavailable/unsupported state pending per-field source, transport and model/mode qualification; never fill from unrelated runtime data |
+
+### September 15 live-field qualification follow-up
+
+The first SDS200 comparison exposed missing source mappings and an incorrect
+full-screen interpretation of ordinary `OverWrite` messages. These are local
+candidate corrections, **not yet a passed physical retest or published release**.
+The [bounded live projection](../src/sds200/scanner_display_live.py) supplements
+the shared snapshot only inside the already-qualified observation adapter. It
+does not add scanner polling, a second owner, retained raw XML, profile editing,
+or fields to unrelated clients' shared snapshots. All values still expire and
+clear on invalid, unsupported, disconnected or stale observations.
+
+| Region / configured item | Qualified current source and absence behavior |
+| --- | --- |
+| Information areas | `InfoArea1.Text` / `InfoArea2.Text`; missing optional record means blank, not a popup. Observed `SITE HOLD` is displayed here. |
+| Channel scan message | `OverWrite.Text` replaces only the conventional/trunk channel-name region; other current fields remain. |
+| Site hold | `Site.Hold` On/Off independently reverses each configured `SiteName` cell using its profile colors, in WebUI, TUI and the shared HA renderer. Missing/invalid is unknown; stale clears it. |
+| Favorites name / system type | `MonitorList.Name` / `System.SystemType`, without a configured/database fallback. |
+| Number tags | Current `MonitorList`, `System` and channel `N_Tag`; the literal scanner sentinel `None` becomes `--`, `--`, `---`. Numeric text/leading zeroes are preserved; missing attributes are not interpreted as unassigned tags. |
+| Unit ID / unit name | The observed separate `UnitID.U_Id` / `UnitID.Name` record; legacy selected channel `U_Id` is used only when no UnitID node exists. An empty UnitID record clears the prior caller. |
+| Digital status / DATA | `Property.P25Status`; `Data` renders `DATA`, `None` is blank, other bounded reported text is preserved. |
+| Modulation | Selected screen node's literal `Mod` value (for trunk scanning, `Site.Mod`), including the observed `NFM`; no inference from digital status. |
+| Priority / Close Call / weather priority icons | `DualWatch.PRI`, `CC`, `WX`; known active states render `PRI`, `CC`, `WX`; confirmed Off is blank. Text labels do not claim exact scanner glyphs. |
+| Scanner recording / IFX / priority channel icons | `Property.Rec`, selected frequency `IFX`, selected channel `P_Ch`; known On renders `REC`, `IFX`, `P`, Off is blank. |
+| Volume offset icon | Selected channel `LVL`: zero blank, documented nonzero -3 through +3 rendered as `V-3` through `V+3`. |
+| Bottom scanning soft-key labels | `SYSTEM`, `DEPT`, `CHANNEL` for conventional/trunk scan families only; these remain read-only labels, not implemented key actions. |
+
+Unsupported or missing sources are not reported as confirmed Off. GPS, broadcast
+screen and repeater-find icons remain unqualified. System ID, RFSS/System Sub ID,
+WACN and Site ID were **not present** in the sampled ordinary trunk PSI messages.
+The related `SystemStatus` attributes are documented in the Analyze/system-status
+section (remote specification page 21), which does not establish their availability
+during ordinary scanning. Do not enter Analyze to fill a cosmetic display, reuse
+old Analyze values, substitute saved record IDs/indexes, or infer them from NAC.
+More source qualification is needed before these fields can match the scanner.
+
+The regression suite distinguishes known inactive icons, unavailable sources and
+invalid values; covers empty UnitID changes, duplicate records, full-screen
+overlays versus channel overwrite, site-hold On/Off/stale transitions, ordinary
+browser context updates, paired Python/JavaScript wire validation and renderer
+color inversion. The first passive live sample verifies parsing and projection,
+not visual acceptance. Keep the existing freshness thresholds; one observed
+clearing cause does not prove every intermittent waiting message is resolved.
 
 The audit follows [shared state](../src/sds200/state.py),
 [scanner model projections](../src/sds200/models.py), and the existing
