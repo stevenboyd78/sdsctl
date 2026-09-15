@@ -203,7 +203,8 @@ def test_hello_negotiates_version_and_lists_capabilities(
             for operation in DaemonApiOperation
             if operation not in DAEMON_API_RECORDING_OPERATIONS
             and operation not in (
-                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
+                DaemonApiOperation.DISPLAY_FRAME,
             )
         ],
         "read_only": False,
@@ -211,7 +212,9 @@ def test_hello_negotiates_version_and_lists_capabilities(
             operation.value
             for operation in DAEMON_API_READ_ONLY_OPERATIONS
             if operation not in DAEMON_API_RECORDING_OPERATIONS
-            and operation is not DaemonApiOperation.DISPLAY_PROFILE
+            and operation not in (
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME
+            )
         ],
         "control_operations": [
             operation.value
@@ -246,7 +249,7 @@ def test_capabilities_and_ping_do_not_read_runtime_snapshot(
         operation.value
         for operation in DAEMON_API_READ_ONLY_OPERATIONS
         if operation not in DAEMON_API_RECORDING_OPERATIONS
-        and operation is not DaemonApiOperation.DISPLAY_PROFILE
+        and operation not in (DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME)
     ]
     assert ping.result == {"pong": True}
     assert runtime.snapshot_calls == 0

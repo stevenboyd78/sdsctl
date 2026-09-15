@@ -3,7 +3,8 @@
 Status: offline parser, in-memory and durable manual-import state, screen/value
 foundations, single-owner observation adapter, synthetic SVG preview and
 interactive frame preview, explicit daemon configuration, local import commands
-and disabled-by-default administrator browser Upload/Refresh adapter
+and disabled-by-default administrator browser Upload/Refresh adapter,
+App startup wiring and passive shared live-frame API
 implemented locally; no installed user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
@@ -890,8 +891,11 @@ programming, power-off, mass-storage switching or speculative key sequences.
    The optional App configuration/launcher wiring and administrator-only browser
    Upload/Refresh adapter are also implemented locally, with read-only startup
    preflight and an end-to-end Unix-socket acceptance test. The published catalog
-   deliberately does not advertise the candidate option to older images. Next:
-   shared live consumer integration and the paired candidate catalog/upgrade
+   deliberately does not advertise the candidate option to older images. The
+   [shared live-frame API](scanner-display-frame-api.md) now joins the cached
+   accepted profile with the existing owner's complete PSI observations,
+   including independent presentation choices and stale/reconnect invalidation.
+   Next: actual renderer/consumer integration and paired candidate catalog/upgrade
    checks. Preserve raw-source privacy and the distinction between source and
    accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
@@ -917,6 +921,6 @@ programming, power-off, mass-storage switching or speculative key sequences.
 
 Preparation can proceed without hardware. Physical visual/control acceptance
 requires the user and must name the exact candidate, mode and expected result.
-The offline parser adds no runtime integration hook, scanner command, theme,
-card, sync job, credential, port, service, firmware-support claim or installed
-change. The existing user interfaces and scanner connection owners are unchanged.
+The candidate adds opt-in runtime integration, but no new scanner owner, theme,
+card, sync job, credential, port, firmware-support claim or installed change.
+Existing user interfaces and the published App catalog remain unchanged.

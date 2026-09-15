@@ -177,6 +177,10 @@ class DaemonApiClient:
             raise
         return result
 
+    def display_frame(self) -> dict[str, object]:
+        """Read independent Mimic-SDS presentations; never imports or controls."""
+        return self.request(DaemonApiOperation.DISPLAY_FRAME)
+
     def remote_clients(self) -> dict[str, object]:
         """Return operator-only live connections through the local daemon API."""
 

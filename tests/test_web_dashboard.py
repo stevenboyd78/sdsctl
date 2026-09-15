@@ -1023,6 +1023,7 @@ def test_web_dashboard_api_index_advertises_endpoints() -> None:
     assert response.json()["links"] == {
         "audio": "/api/v1/audio",
         "dashboard": "/",
+        "display_frame": "/api/v1/display-frame",
         "docs": "/api/v1/docs",
         "events": "/api/v1/events",
         "health": "/healthz",

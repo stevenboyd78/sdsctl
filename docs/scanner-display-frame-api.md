@@ -1,0 +1,137 @@
+# Mimic-SDS shared live frame contract
+
+Status: **local candidate only**, not a published feature or an installed theme.
+This is the shared read-only data path for the planned WebUI, TUI and additional
+Home Assistant card; it does not activate those renderers. See the
+[work packet](mimic-sds-work-packet.md) and
+[profile administration guide](scanner-display-profile-import.md) for the
+separate profile, deployment and physical-acceptance boundaries.
+
+## One scanner owner
+
+An explicitly configured daemon attaches `DaemonDisplayFrames` to its existing
+scanner's connection and complete PSI callbacks. The feed sends **no scanner
+commands**, starts no polling thread or connection, and takes no audio or
+Waterfall subscription. Normal daemon startup still owns scanner connection and
+PSI acquisition. No profile configuration means no display-feed subscriptions.
+Only bounded display fields are retained, not raw XML. Scalar state updates and
+API reads cannot refresh receipt time. This version does not issue GSI polls.
+
+- Each feed has a new opaque `stream_id`; each connection has a new opaque
+  `session_id`. Disconnect clears the current session and observation.
+- Reconnect starts in `waiting`, with no old values or indicators. Already
+  copied callbacks from a prior session are ignored, even for the same endpoint.
+- Equal newly received complete PSI observations refresh the monotonic receipt
+  time. Requesting the same frame does not.
+- At five seconds without a complete observation, the default feed marks it
+  `stale` and clears live values/indicators. This is observation freshness, not
+  an assertion that the transport socket has disconnected.
+- Unsupported screens (including Waterfall), overlays and ambiguous records
+  clear live values instead of combining previous and current screens.
+- Startup failure and process shutdown unsubscribe the feed. A closed feed
+  cannot be restarted or revived by a late callback.
+
+## Accepted profile and current data remain separate
+
+Every response joins one immutable cached accepted profile with one observation
+and one monotonic time. Frame reads never read or import `profile.cfg`. Source
+edits have no effect until explicit administrator acceptance and daemon reload.
+No file watcher or automatic import is introduced.
+
+The profile lock is acquired before the observation lock. A slow administrator
+disk reload may delay a frame request, but does not block incoming PSI callbacks.
+An observed endpoint mismatch or failed accepted-state reload invalidates old
+data, even if failure and repair happen between frame requests. The next read
+clears old values and a subsequent complete PSI is required. A successful
+ordinary profile refresh may immediately apply new assignments/colors to the
+still-current observation.
+
+`profile_status`, `source_status`, `profile_refresh_pending` and observation
+`status` describe different things. Current live data can accompany a last-good
+profile whose selected source is missing. Source status reflects the last
+explicit inspection, not ongoing filesystem monitoring. Missing accepted
+configuration must not be replaced with a made-up scanner profile.
+
+## Read-only interfaces
+
+The daemon operation is `display.frame`, with **no parameters**. Capabilities
+advertise it only when configured; otherwise it returns `unsupported_operation`.
+Remote observe clients may read it. Scanner-control dispatch cannot turn it
+into a write; remote profile reload and administration remain unavailable.
+
+The WebUI route is `GET /api/v1/display-frame`, with no query parameters. Its
+response contains the existing `sdsctl.web` version-1 envelope plus `display`.
+The daemon operation returns that `display` object directly. It contains:
+
+| Field | Meaning |
+| --- | --- |
+| `schema_version` | Frame contract version, currently 1 |
+| `endpoint_id` | Configured opaque endpoint UUID |
+| `stream_id`, `session_id` | Feed and connection identities; session null when disconnected |
+| `failure` | Fixed failure category or null; no raw exception text |
+| `source_status` | Status from the accepted-profile owner, or null |
+| `frames` | Three entries: `preferred`, `simple`, `detail` |
+
+Web responses use `Cache-Control: no-store`. Native display-only and managed
+display sessions can read through existing authentication. Unauthenticated
+access, non-read methods and administrator actions remain denied. Unsupported
+daemon capability is HTTP 503, not a fabricated current screen. The API-index
+link describes route existence, not daemon capability or health.
+
+There is no new listener, port, cookie, credential or recording route. Existing
+bounded daemon server limits apply. Raw source bytes, unrelated settings, host
+paths and raw XML are absent. Source and endpoint UUIDs are identities, not
+connection addresses or credentials.
+
+## Frame and region fields
+
+All three presentations share profile revision, provenance, observation sequence
+and age. `preferred` uses the profile preference; `simple` and `detail` are local
+presentation choices. Neither detects or changes the physical manual toggle.
+Search/Close Call, Weather and Tone-Out select their documented family layout
+in all three entries. Waterfall remains separate.
+
+Each frame carries observation `status`, `layout_basis`, profile revision/status/
+refresh flag, accepted source provenance, `sequence`, `age_seconds`, a canonical
+`screen` or null, and `indicators`. Acquisition/import timestamps are not the
+scanner clock. Indicators are exact live `alert_led`, `system_hold`,
+`department_hold`, `channel_hold`; null means unknown, not Off/released.
+
+Screen regions include canonical identifier, kind, row/column spans, alignment,
+name-line allowance and reverse-color flag; profile selection/token and optional
+stored text/background pair; and `value_status` plus `text`. Only qualified
+`raw_source` values carry text. Missing, unsupported, invalid, blank and explicitly
+empty selections remain distinct. Non-current frames cannot leak old text
+through the serializer. Matching revision, canonical geometry and region
+identities are checked before serialization.
+
+Colors are six hexadecimal digits, not arbitrary CSS. Values are bounded plain
+text, not HTML. Renderers must use text nodes, escape terminal control sequences
+and validate incoming wire data before using dimensions, colors or tokens.
+Output projection is not a substitute for consumer-side validation; actual
+renderer/decoder integration remains pending.
+
+Some fields still carry scanner-native notation, such as raw frequency digits.
+This API does not claim every value is already formatted exactly like the LCD.
+Shared formatting and field availability must be qualified before visual
+acceptance; do not infer missing values from a different mode.
+
+## Upcoming renderer requirements
+
+1. Select presentation locally; one display must not change another. Preserve
+   reference alignment and minimum widths while allowing wider screens to grow.
+2. Show observation health and profile/layout uncertainty independently. Discard
+   data on stream/session replacement. Failed, stopped or out-of-order fetches
+   must not leave cached data looking live. Advance age locally using a
+   monotonic clock, not the scanner clock.
+3. Apply profile colors and confirmed per-name hold inversion. Avoid generic
+   field tags except useful option captions; do not reuse previous screen names.
+4. Keep LED strips/border a local choice and use exact `A_Led` color without
+   invented blink periods. Favorites pattern/identity matching remains separate.
+5. Keep display choices and runtime drawers read-only. Additional front-panel
+   controls require separate capability/authorization qualification.
+
+Synthetic tests cover supported families, staleness, delayed callbacks, profile
+failure/repair, nonblocking observation during reload, real XML parsing,
+lifecycle cleanup and real local Unix-to-WebUI reads. They are not physical
+scanner, Pi or Home Assistant visual acceptance.

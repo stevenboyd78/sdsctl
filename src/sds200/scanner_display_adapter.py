@@ -325,6 +325,12 @@ class ScannerDisplayAdapter:
             self._session = None
             self._observation = None
 
+    def clear(self, session: DisplayObservationSession) -> None:
+        """Invalidate a rejected owner observation; never refresh its receipt time."""
+        with self._lock:
+            self._require_session(session)
+            self._observation = None
+
     def observe(
         self,
         session: DisplayObservationSession,

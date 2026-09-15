@@ -19,6 +19,7 @@ from sds200.daemon_remote_server import (
     DAEMON_REMOTE_OBSERVE_OPERATIONS,
 )
 from sds200.daemon_server import DaemonApiServer
+from sds200.events import EventBus
 from sds200.scanner_display_configuration import (
     MAX_DISPLAY_CONFIGURATION_BYTES,
     ScannerDisplayConfigurationError,
@@ -451,7 +452,12 @@ def test_daemon_cli_wires_cache_into_single_existing_api_owner(configured, monke
     from sds200.daemon_process import DaemonProcessResult
 
     captured = []
-    scanner = SimpleNamespace(endpoint=TARGET)
+    events = EventBus()
+    scanner = SimpleNamespace(
+        endpoint=TARGET, connected=False,
+        on_connection=lambda callback: events.subscribe("connection", callback),
+        on_psi=lambda callback: events.subscribe("psi", callback),
+    )
     monkeypatch.setattr(cli, "selected_radio", lambda *a, **k: scanner)
     monkeypatch.setattr(cli, "DaemonEventStream", lambda *a, **k: SimpleNamespace())
     monkeypatch.setattr(cli, "DaemonDestinationCoordinator", lambda *a, **k: SimpleNamespace())
@@ -479,5 +485,7 @@ def test_daemon_cli_wires_cache_into_single_existing_api_owner(configured, monke
     assert len(captured) == 1
     runtime, api = captured[0]
     assert api.runtime is runtime
+    assert api.display_frames is not None
+    assert not any(events._callbacks.values())
     result = api.handle_payload(request(Op.DISPLAY_PROFILE))
     assert result.result["accepted"]["descriptor"]["option_groups"]

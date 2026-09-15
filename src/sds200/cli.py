@@ -3833,7 +3833,20 @@ def _run_daemon(
             **cast(Any, live_audio_process_options),
             **cast(Any, waterfall_process_options),
         )
-    result = process.run()
+    # Attach only around the actual daemon lifecycle, after construction succeeds.
+    # It observes existing PSI; it never starts a scanner/audio session of its own.
+    if display_profile is None:
+        result = process.run()
+    else:
+        from .daemon_display_frames import DaemonDisplayFrames
+
+        display_frames = DaemonDisplayFrames(display_profile, scanner)
+        daemon_api.display_frames = display_frames
+        try:
+            display_frames.start()
+            result = process.run()
+        finally:
+            display_frames.close()
     logger.info(
         "foreground daemon stopped audio_host=%s socket=%s event_socket=%s "
         "pcmu_socket=%s live_audio_socket=%s recording_file_socket=%s "

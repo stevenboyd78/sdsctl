@@ -46,6 +46,7 @@ class DaemonApiOperation(StrEnum):
     RUNTIME_SNAPSHOT = "runtime.snapshot"
     REMOTE_CLIENTS = "remote.clients"
     DISPLAY_PROFILE = "display.profile"
+    DISPLAY_FRAME = "display.frame"
     DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
     AUDIO_HEALTH = "audio.health"
@@ -69,6 +70,7 @@ DAEMON_API_READ_ONLY_OPERATIONS = (
     DaemonApiOperation.RUNTIME_SNAPSHOT,
     DaemonApiOperation.REMOTE_CLIENTS,
     DaemonApiOperation.DISPLAY_PROFILE,
+    DaemonApiOperation.DISPLAY_FRAME,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
     DaemonApiOperation.RECORDING_STATUS,
@@ -126,6 +128,10 @@ class _DisplayProfileLike(Protocol):
     def snapshot(self) -> dict[str, object]: ...
 
     def reload(self) -> dict[str, object]: ...
+
+
+class _DisplayFramesLike(Protocol):
+    def snapshot(self) -> dict[str, object]: ...
 
 
 class _ControlResultLike(Protocol):
@@ -448,6 +454,7 @@ class DaemonReadOnlyApi:
         reconnect_available: bool = True,
         remote_clients_provider: Callable[[], Mapping[str, object]] | None = None,
         display_profile: _DisplayProfileLike | None = None,
+        display_frames: _DisplayFramesLike | None = None,
     ) -> None:
         if type(reconnect_available) is not bool:
             raise TypeError("Daemon reconnect availability must be a boolean.")
@@ -456,6 +463,7 @@ class DaemonReadOnlyApi:
         self.reconnect_available = reconnect_available
         self.remote_clients_provider = remote_clients_provider
         self.display_profile = display_profile
+        self.display_frames = display_frames
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
         return tuple(
@@ -674,6 +682,13 @@ class DaemonReadOnlyApi:
             return self._capabilities(allowed_operations=allowed_operations)
         if operation is DaemonApiOperation.PING:
             return {"pong": True}
+        if operation is DaemonApiOperation.DISPLAY_FRAME:
+            if self.display_frames is None:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.UNSUPPORTED_OPERATION,
+                    "Scanner display frames are not configured.",
+                )
+            return self.display_frames.snapshot()
         if operation in (
             DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD
         ):
@@ -890,6 +905,10 @@ class DaemonReadOnlyApi:
                 and (
                     allowed_operations is None
                     or operation is not DaemonApiOperation.DISPLAY_PROFILE_RELOAD
+                )
+                and (
+                    operation is not DaemonApiOperation.DISPLAY_FRAME
+                    or self.display_frames is not None
                 )
             )
         ]

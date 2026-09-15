@@ -269,6 +269,9 @@ class DaemonApiClientLike(Protocol):
     def runtime_snapshot(self) -> Mapping[str, object]:
         """Return one authoritative daemon runtime snapshot."""
 
+    def display_frame(self) -> Mapping[str, object]:
+        """Return the configured daemon's read-only Mimic-SDS presentations."""
+
     def remote_clients(self) -> Mapping[str, object]:
         """Return the local operator's remote-connection inventory."""
 
@@ -824,6 +827,7 @@ def create_web_dashboard_app(
             "scanner_previous_scope": "/api/v1/scanner/previous/{scope}",
             "scanner_reconnect": "/api/v1/scanner/reconnect",
             "snapshot": "/api/v1/snapshot",
+            "display_frame": "/api/v1/display-frame",
             "status": "/api/v1/status",
             "waterfall": "/api/v1/waterfall",
         }
@@ -1014,6 +1018,15 @@ def create_web_dashboard_app(
         return {
             **_api_envelope(),
             "snapshot": _query_daemon(api_client_factory, _daemon_snapshot),
+        }
+
+    @app.get("/api/v1/display-frame")
+    def display_frame(request: Request) -> dict[str, object]:
+        if request.query_params:
+            raise HTTPException(status_code=422, detail="Display frames do not accept parameters.")
+        return {
+            **_api_envelope(),
+            "display": _query_daemon(api_client_factory, _daemon_display_frame),
         }
 
     @app.post("/api/v1/scanner/hold/{scope}")
@@ -2451,6 +2464,11 @@ def _daemon_status(client: DaemonApiClientLike) -> Mapping[str, object]:
 def _daemon_snapshot(client: DaemonApiClientLike) -> Mapping[str, object]:
     client.hello()
     return client.runtime_snapshot()
+
+
+def _daemon_display_frame(client: DaemonApiClientLike) -> Mapping[str, object]:
+    client.hello()
+    return client.display_frame()
 
 
 __all__ = [

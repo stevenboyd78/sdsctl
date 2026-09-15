@@ -61,6 +61,7 @@ _SESSION_TOKEN_CHARACTERS = frozenset(
 )
 _DISPLAY_READ_PATHS = frozenset({
     "/", "/healthz", "/api/v1/status", "/api/v1/snapshot",
+    "/api/v1/display-frame",
     "/api/v1/events", "/api/v1/waterfall", WEB_DASHBOARD_SESSION_PATH,
     "/assets/dashboard.css", "/assets/dashboard-viewport.css",
     "/assets/system-palettes.css", "/assets/theme-bootstrap.js",
