@@ -21,28 +21,30 @@ Treat implementation, physical acceptance and publication as separate facts.
 When only a slice ships, name that slice instead of marking the parent milestone
 complete. Existing historical milestone IDs remain unchanged.
 
-## Next release — targeted for v0.30.0
+## Latest release — v0.30.0
 
-The [release scope and acceptance record](release-0.30.0.md) targets the reviewed
-changes below for v0.30.0. This is not a published release. The low-priority endpoint
+**Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)**
+on September 14, 2026. The [release scope and acceptance record](release-0.30.0.md)
+records verified Python/container publication and installed-release acceptance
+on both bench Pi displays and the Home Assistant App. The low-priority endpoint
 identity/duration follow-up stays deferred. Earlier private validation wheels
-carrying `0.29.5` metadata remain distinct from both public and new candidate
-artifacts.
+remain distinct from the published artifacts.
 
 | Work item | Development status | Release/support boundary |
 | --- | --- | --- |
-| [TUI local date/time presentation](../ROADMAP.md#low-priority-tui-usability-follow-up) | Merged, unreleased; PR #253 | Local RFC-style header/status dates accepted on both Pi geometries; not measured connection uptime |
-| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#0300---2026-09-14) | Merged, unreleased | Human-readable elapsed time, preserving the oldest-current-connection meaning |
-| [LCARS content layering](../ROADMAP.md#managed-display-enrollment-and-unattended-recovery) | Merged, unreleased; PR #250 | Scoped presentation fix; does not qualify browser enrollment |
-| [Recording-event continuity and theme spacing](release-0.30.0.md#private-candidate-acceptance--september-14-2026) | Accepted release candidate; PR #255 | Remote TUIs stay live during recording; corrected dashboard header spacing |
-| [Deferred public API loading](../CHANGELOG.md#0300---2026-09-14) | Merged, unreleased; PR #250 | Preserve exports while focused helpers avoid loading unrelated APIs |
-| [Managed-browser continuation and sign-out](browser-device-continuation-acceptance.md) | Merged, unreleased; PR #250 | Experimental; scoped acceptance does not qualify secure unattended keyring, abrupt power-loss or cross-build recovery |
+| [TUI local date/time presentation](../ROADMAP.md#low-priority-tui-usability-follow-up) | Released in v0.30.0; PR #253 | Local RFC-style header/status dates accepted on both Pi geometries; not measured connection uptime |
+| [Web Diagnostics remote-client connection ages](../CHANGELOG.md#0300---2026-09-14) | Released in v0.30.0 | Human-readable elapsed time, preserving the oldest-current-connection meaning |
+| [LCARS content layering](../ROADMAP.md#managed-display-enrollment-and-unattended-recovery) | Released in v0.30.0; PR #250 | Scoped presentation fix; does not qualify browser enrollment |
+| [Recording-event continuity and theme spacing](release-0.30.0.md#published-release-and-installed-upgrade-acceptance--september-14-2026) | Released in v0.30.0; PR #255 | Remote TUIs stay live during recording; corrected dashboard header spacing |
+| [Deferred public API loading](../CHANGELOG.md#0300---2026-09-14) | Released in v0.30.0; PR #250 | Preserve exports while focused helpers avoid loading unrelated APIs |
+| [Managed-browser continuation and sign-out](browser-device-continuation-acceptance.md) | Released in v0.30.0; PR #250 | Experimental; scoped acceptance does not qualify secure unattended keyring, abrupt power-loss or cross-build recovery |
 | [Remote daemon version and actual connection duration](next-milestone-work-packets.md#1-tui-time-and-endpoint-identity) | Planned follow-ups | No release target; separate metadata/lifecycle and physical-layout gates |
 
 The release scope records included slices, deferred work and support limits.
-Each included row is targeted for v0.30.0 but remains unreleased until the
-publication gates pass. Never reuse `0.29.5` or relabel private validation
-artifacts as a public release.
+Publication closes only the included slices, not the remaining managed-browser
+qualification or the parent milestone. No next release version is assigned.
+Never reuse a published tag or relabel private validation artifacts as a public
+release.
 
 ## Recent milestone-to-release history
 
@@ -65,6 +67,7 @@ milestone number.
 | [34.1 manual-login kiosk and scoped 34.2 HDMI qualification](../ROADMAP.md#closed-milestone-341--display-only-native-browser-kiosk) | [v0.29.3](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.3) | Partial publication: containers and GitHub Release published, Python publication failed; not a complete Python release |
 | [Manual-login kiosk publication recovery](../ROADMAP.md#closed-milestone-341--display-only-native-browser-kiosk) | [v0.29.4](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.4) | Released; does not qualify unattended production browser login |
 | [Managed-TUI outage waiting screen](../ROADMAP.md#v0295-maintenance-release) | [v0.29.5](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.29.5) | Released from the maintenance line; newer browser enrollment on main is excluded |
+| [Display improvements, recording continuity and experimental browser foundations](release-0.30.0.md) | [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0) | Released; published Pi/App upgrades and audio/recording acceptance passed; unattended browser qualification remains separate |
 
 ## Keeping the mapping current
 

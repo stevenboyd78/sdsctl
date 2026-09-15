@@ -21,8 +21,9 @@ fixes do not require a new milestone number. See the
 [milestone-to-release index](docs/release-tracking.md) for published history,
 partial publications and merged-but-unreleased work, and the
 [release policy](docs/releasing.md#0-choose-release-scope-and-version) for version
-selection. The [v0.30.0 release scope](docs/release-0.30.0.md) selects the
-next feature-release target, not a published version or completed release gate.
+selection. The [v0.30.0 release record](docs/release-0.30.0.md) records the
+published feature slices and their completed installed-release acceptance;
+its deferred work and experimental support limits remain explicit.
 
 Keep `Released in vX.Y.Z` links on the applicable completed items. A closed
 implementation or successful test is not itself a publication, and an
@@ -66,6 +67,16 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 ## Active milestone
 
+### v0.30.0 release closure
+
+**Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
+local TUI date presentation, readable web connection ages, dashboard theme
+corrections, remote-TUI recording continuity, deferred API loading and explicitly
+experimental browser foundations. The [release record](docs/release-0.30.0.md#published-release-and-installed-upgrade-acceptance--september-14-2026)
+contains the immutable source/artifact identities and separate published-upgrade
+acceptance for both Pi displays and the Home Assistant App. This closes the
+release, not the remaining managed-browser milestone or its unattended-use gates.
+
 ### Low-priority TUI usability follow-up
 
 - For remote-daemon connections, show the connected daemon's reported application
@@ -74,8 +85,9 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
   endpoint metadata rather than assuming the daemon matches the client version;
   handle unavailable version information explicitly. Direct USB connections
   should not gain this remote-only field. This is a future improvement, not part
-  of the active browser-device review or the released 0.29.5 behavior.
-- **Completed in development:** PR #253 added the user-selected local RFC
+  of v0.30.0 or the active browser-device qualification.
+- **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
+  PR #253 added the user-selected local RFC
   2822-style dates to the header and observed status transitions, for example
   `Fri, 11 Sep 2026 08:06:34 -0600`. Use the TUI host's local timezone, English
   weekday/month names, a 24-hour clock and numeric UTC offset. The header follows
@@ -83,8 +95,9 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
   offset. This supersedes the earlier ISO 8601 UTC-only proposal. Both 100x30
   and 160x45 bench displays passed visual acceptance, along with user-observed
   App restart recovery. The application name/version stays in the header and
-  scanner model/firmware stay in the Scanner panel. This is merged, unreleased
-  work, not a measured connection-start or socket-uptime feature.
+  scanner model/firmware stay in the Scanner panel. Published-client acceptance
+  also passed on both layouts. This is not a measured connection-start or
+  socket-uptime feature.
 - **Remaining:** if elapsed connection time is shown, label it `Connected for`
   only after identifying the actual successful connection events. Use a
   compact duration such as `2d 04:17:36`, without wrapping at 24 hours or treating
@@ -102,15 +115,19 @@ in the versioned release notes; these TUI checks do not qualify browser enrollme
 
 ### Managed-display enrollment and unattended recovery
 
-**Current integration checkpoint:** [PR #250](https://github.com/stevenboyd78/sdsctl/pull/250)
+**Released foundation checkpoint:** [PR #250](https://github.com/stevenboyd78/sdsctl/pull/250)
 merged the reviewed continuation candidate, idle sign-out correction and LCARS
 content-layering fix. The [acceptance record](docs/browser-device-continuation-acceptance.md)
 separates automated private-Pi cases from the focused physical HDMI sequence.
-Merged development is not a published release or unattended-production approval.
+These scoped foundations and the presentation fix are **Released in
+[v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0)**, with the
+browser workflow still explicitly experimental, not unattended-production approval.
 Secure unattended keyring, abrupt power-loss, cross-build browser-state handling
 and any new installed-release claims need their own scoped evidence; preserve
 failed and completed profiles rather than replaying them. The detailed foundation
 entries below retain their individual implementation and acceptance boundaries.
+Historical candidate/test descriptions are not new qualification claims; only
+the release record identifies the completed publication and upgrade gates.
 
 The released manual-login kiosk and isolated recovery foundations are followed
 by explicit, per-device unattended-browser setup. Preserve the existing TUI
@@ -118,17 +135,17 @@ credential protocol, USB behavior, operator/manual login and disabled advanced
 network defaults. Support verified private-IP HTTPS as well as optional DNS;
 neither internal DNS nor a proxy is a product requirement.
 
-The first-time private native-profile import and read-only offline check are
-merged but unreleased. They reject unsafe inputs, existing profiles and rotation
-handoffs without clearing a saved pause or terminal error. See the
+The first-time private native-profile import and read-only offline check ship
+as experimental v0.30.0 foundations. They reject unsafe inputs, existing profiles
+and rotation handoffs without clearing a saved pause or terminal error. See the
 [experimental setup guide](docs/browser-device-profile.md). The
-[private review bundle](docs/browser-device-bundle.md) is also merged but
-unreleased, with a public-key-derived extension ID and identity-pinned native wrapper.
+[private review bundle](docs/browser-device-bundle.md) also ships experimentally,
+with a public-key-derived extension ID and identity-pinned native wrapper.
 Preparation does not register an extension/native host, initialize browser storage, enable
 production enrollment or start an unattended display.
 
 [Controlled registration and explicit first-run](docs/browser-device-first-run.md)
-are merged but unreleased.
+ship as experimental v0.30.0 foundations.
 Registration accepts only a new dedicated Chromium directory and the canonical
 reviewed bundle. Browser initialization requires explicit confirmation, a pending
 marker and a one-time pristine-native-profile claim. Neither step authenticates,
@@ -141,7 +158,7 @@ retry and worker renewal, server restart, terminal revocation/TLS rejection and
 sign-out persistence, without seeded recovery state or injected cookies. See the
 [acceptance boundaries](docs/browser-device-first-run.md#acceptance-and-remaining-limits).
 
-[Managed browser startup](docs/browser-device-startup.md) is merged but unreleased:
+[Managed browser startup](docs/browser-device-startup.md) ships experimentally in v0.30.0:
 read-only registration inspection, explicit setup versus startup, a guarded
 foreground Chromium child and a server-checked device-only display entry. Saved
 pauses/errors remain intact and recovery permission is not treated as session
@@ -149,14 +166,14 @@ readiness. No service, browser trust or production server configuration is chang
 
 Explicit opt-in
 [server and Home Assistant App configuration](docs/browser-device-server.md)
-is merged but unreleased.
+ships as an experimental v0.30.0 foundation, not new public App catalog options.
 It selects one precreated private authority, separates native HTTPS from Ingress
 administrator origins, validates before launch, and retains disabled defaults.
 It does not provision credentials, repair authority, publish ports or deploy to
 production displays.
 
-Offline `browser-device-server --experimental create/check` is merged but
-unreleased: explicit new-directory preparation of an empty authority and
+Offline `browser-device-server --experimental create/check` ships experimentally
+in v0.30.0: explicit new-directory preparation of an empty authority and
 private JSON, and read-only checking of existing configuration. It shares the
 server parser, preserves existing/partial outputs and device state, and never
 enrolls a display or enables a service. IP, DNS and IPv6 remain first-class.
