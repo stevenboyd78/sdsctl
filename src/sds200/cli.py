@@ -1845,6 +1845,14 @@ def build_parser(
         help="Existing private server JSON; requires --experimental-browser-devices",
     )
     web.add_argument(
+        "--scanner-display-admin-config", type=Path, metavar="PATH",
+        help="Explicit display-profile deployment TOML; Home Assistant Ingress only",
+    )
+    web.add_argument(
+        "--scanner-display-recording-directory", type=Path, metavar="PATH",
+        help="Actual daemon recording root; required with --scanner-display-admin-config",
+    )
+    web.add_argument(
         "--lan-listen-address",
         type=_authenticated_lan_listen_address,
         metavar="ADDRESS",
@@ -5196,6 +5204,20 @@ def _run_web(
     _reject_daemon_client_scanner_options(args)
     paths = configuration_paths or resolve_configuration_paths(environ=environ)
 
+    display_admin_config = args.scanner_display_admin_config
+    display_recordings = args.scanner_display_recording_directory
+    if (display_admin_config is None) != (display_recordings is None):
+        raise ValueError(
+            "Display-profile administration requires both configuration and recording root."
+        )
+    if display_admin_config is not None and (
+        not args.home_assistant_ingress or args.authenticated_lan or args.container_exposure
+        or not display_recordings.is_absolute()
+    ):
+        raise ValueError(
+            "Display-profile administration requires Ingress and an absolute recording root."
+        )
+
     if args.experimental_browser_devices != (args.browser_device_config is not None):
         raise ValueError(
             "--experimental-browser-devices and --browser-device-config are required together."
@@ -5436,6 +5458,33 @@ def _run_web(
         )
 
     browser_options: dict[str, Any] = {}
+    if display_admin_config is not None:
+        from .scanner_display_admin import ScannerDisplayProfileAdmin
+        from .scanner_display_deployment import load_scanner_display_deployment
+        from .scanner_display_ingress import ScannerDisplayIngress
+
+        display_deployment = load_scanner_display_deployment(display_admin_config)
+        display_configuration = display_deployment.preflight(display_recordings)
+        # Verify the selected local API before exposing administrator actions.
+        # This is read-only: browser startup must never import or reload state.
+        with api_client_factory() as display_client:
+            display_current = display_client.request(DaemonApiOperation.DISPLAY_PROFILE)
+        if (
+            display_current.get("endpoint_id") != str(display_configuration.binding.endpoint_id)
+            or display_current.get("configured") is not True
+            or display_current.get("failure") is not None
+        ):
+            raise ValueError(
+                "The local daemon does not match the configured display-profile endpoint."
+            )
+        browser_options["scanner_display_admin_ingress"] = ScannerDisplayIngress(
+            ScannerDisplayProfileAdmin(
+                display_configuration, recording_directory=display_recordings,
+                daemon_socket_path=api_location.path,
+                allow_upload=display_deployment.allow_upload,
+            ),
+            display_deployment.ingress_origin, display_deployment.admin_user_ids,
+        )
     if args.experimental_browser_devices:
         from .browser_device_admin import BrowserDeviceAdmin
         from .browser_device_ingress import BrowserDeviceIngress

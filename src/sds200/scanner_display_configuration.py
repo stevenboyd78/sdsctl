@@ -117,8 +117,8 @@ def parse_scanner_display_configuration(data: bytes) -> ScannerDisplayConfigurat
         raise ScannerDisplayConfigurationError() from None
 
 
-def load_scanner_display_configuration(path: Path) -> ScannerDisplayConfiguration:
-    """Read a bounded regular config, owned by root/service and not writable by others."""
+def _read_configuration(path: Path) -> bytes:
+    """Pinned bounded read shared by the profile and private deployment manifests."""
     directory = None
     try:
         path = _path(path)
@@ -130,13 +130,18 @@ def load_scanner_display_configuration(path: Path) -> ScannerDisplayConfiguratio
         mode, owner = file.identity[5:7]
         if owner not in (0, os.geteuid()) or stat.S_IMODE(mode) & 0o022:
             raise ScannerDisplayConfigurationError()
-        config = parse_scanner_display_configuration(file.data)
-        if path == config.source_path or path.is_relative_to(config.state_directory):
-            raise ScannerDisplayConfigurationError()
         _same_directory(path.parent, directory)
-        return config
+        return file.data
     except (OSError, DisplayProfileStorageError):
         raise ScannerDisplayConfigurationError() from None
     finally:
         if directory is not None:
             os.close(directory)
+
+
+def load_scanner_display_configuration(path: Path) -> ScannerDisplayConfiguration:
+    """Read a bounded regular config, owned by root/service and not writable by others."""
+    config = parse_scanner_display_configuration(_read_configuration(path))
+    if path == config.source_path or path.is_relative_to(config.state_directory):
+        raise ScannerDisplayConfigurationError()
+    return config

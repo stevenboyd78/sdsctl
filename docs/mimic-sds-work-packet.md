@@ -886,10 +886,14 @@ programming, power-off, mass-storage switching or speculative key sequences.
    fixtures for all seven modes, source/freshness metadata, documented ambiguous
    source differences and a per-option data-availability matrix. The local
    durable manual-import engine, explicit daemon configuration, local admin
-   commands and cached read-only API projection are implemented locally. Next:
-   App configuration/launcher wiring for the now-local administrator-only browser
-   Upload/Refresh adapter, plus shared consumer integration. Preserve raw-source
-   privacy and the distinction between source and accepted state.
+   commands and cached read-only API projection are implemented locally.
+   The optional App configuration/launcher wiring and administrator-only browser
+   Upload/Refresh adapter are also implemented locally, with read-only startup
+   preflight and an end-to-end Unix-socket acceptance test. The published catalog
+   deliberately does not advertise the candidate option to older images. Next:
+   shared live consumer integration and the paired candidate catalog/upgrade
+   checks. Preserve raw-source privacy and the distinction between source and
+   accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
    configured color mode; state transitions, empty/unknown fields, popup handling,
    stable sizing and hostile/long input. Reuse existing shared daemon data.

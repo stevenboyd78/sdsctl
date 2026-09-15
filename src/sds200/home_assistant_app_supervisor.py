@@ -57,6 +57,7 @@ from .home_assistant_app_runtime import (
 from .home_assistant_lovelace import (
     install_home_assistant_lovelace_cards,
 )
+from .network import DEFAULT_UDP_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -536,6 +537,21 @@ def prepare_home_assistant_app_launch_plan(
             "Home Assistant App launch plan requires App runtime paths."
         )
 
+    display_config: Path | None = None
+    display_profile_config: Path | None = None
+    if options.scanner_display_config:
+        from .scanner_display_deployment import load_scanner_display_deployment
+
+        display_config = Path(options.scanner_display_config)
+        display_deployment = load_scanner_display_deployment(display_config)
+        display_profile = display_deployment.preflight(selected_paths.recording_directory)
+        # The App's single scanner owner uses the default UDP command endpoint.
+        # The daemon repeats this check against the actual selected radio.
+        display_profile.require_scanner_target(
+            f"udp://{options.scanner_host}:{DEFAULT_UDP_PORT}"
+        )
+        display_profile_config = display_deployment.profile_config
+
     selected_info = (
         fetch_home_assistant_app_supervisor_info(environ=source_environment)
         if supervisor_info is None
@@ -657,9 +673,11 @@ def prepare_home_assistant_app_launch_plan(
             options,
             selected_paths,
             remote_configuration=remote_configuration,
+            scanner_display_profile_config=display_profile_config,
         ),
         web_command=build_home_assistant_web_command(
             selected_paths, browser_device_config=browser_device_config,
+            scanner_display_config=display_config,
         ),
         daemon_environment=daemon_environment,
         web_environment=web_environment,
