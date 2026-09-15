@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -232,11 +233,13 @@ def test_default_app_and_published_catalog_do_not_enable_feature(tmp_path):
     assert "scanner_display_config" not in catalog.read_text()
 
 
-def launch(configured, tmp_path, monkeypatch, *, host="192.0.2.25"):
+def launch(configured, tmp_path, monkeypatch, *, host="192.0.2.25", display=True):
     deployment, _ = configured
     options = tmp_path / "options.json"
     options.write_text(
-        json.dumps({"scanner_host": host, "scanner_display_config": str(deployment)})
+        json.dumps(
+            {"scanner_host": host, "scanner_display_config": str(deployment) if display else ""}
+        )
     )
     runtime = tmp_path / "run"
     paths = HomeAssistantAppRuntimePaths(
@@ -291,6 +294,68 @@ def test_wrong_scanner_stops_launch_before_runtime_side_effects(configured, tmp_
     assert not (tmp_path / "run").exists()
     assert not (tmp_path / "advanced").exists()
     assert not (tmp_path / "recordings").exists()
+
+
+def test_candidate_enable_restart_disable_reenable_preserves_reviewed_import(
+    configured, tmp_path, monkeypatch
+):
+    """Launch-plan/reconstructed-owner test, not a claim of live Supervisor upgrade."""
+    _, config = configured
+    repository = config.repository()
+    preview = repository.prepare(config.binding, acquired_at=datetime.now(UTC))
+    repository.commit(preview, imported_at=datetime.now(UTC))
+    accepted = contents(config.state_directory)
+    revision = repository.inspect().profile.last_good.profile.revision
+    recordings = tmp_path / "recordings"
+    recordings.mkdir()
+    (recordings / "keep.wav").write_bytes(b"synthetic recording sentinel")
+    recording_files = contents(recordings)
+
+    for enabled in (False, True, True, False, True):
+        plan = launch(configured, tmp_path, monkeypatch, display=enabled)
+        assert ("--scanner-display-profile-config" in plan.daemon_command) is enabled
+        assert ("--scanner-display-admin-config" in plan.web_command) is enabled
+        assert not plan.native_web_command and not plan.advanced_exposure.enabled
+        if enabled:
+            # Model a fresh daemon owner: accepted state, never an implicit import.
+            owner = DaemonDisplayProfile(config, lambda: TARGET)
+            assert owner.snapshot()["accepted"]["revision"] == revision
+        assert contents(config.state_directory) == accepted
+        assert contents(recordings) == recording_files
+        assert config.source_path.read_bytes() == SOURCE
+
+
+@pytest.mark.parametrize("edit", [SOURCE.replace(b"ffffff", b"123456"), b"invalid profile"])
+def test_restart_does_not_accept_changed_or_invalid_managed_source(
+    configured, tmp_path, monkeypatch, edit
+):
+    _, config = configured
+    repository = config.repository()
+    preview = repository.prepare(config.binding, acquired_at=datetime.now(UTC))
+    repository.commit(preview, imported_at=datetime.now(UTC))
+    accepted = contents(config.state_directory)
+    prior = DaemonDisplayProfile(config, lambda: TARGET).snapshot()["accepted"]
+    config.source_path.write_bytes(edit)
+    launch(configured, tmp_path, monkeypatch)
+    restored = DaemonDisplayProfile(config, lambda: TARGET).snapshot()
+    assert restored["accepted"] == prior
+    expected_status = "invalid_source" if edit == b"invalid profile" else "changed_since_import"
+    assert restored["source_status"] == expected_status
+    assert contents(config.state_directory) == accepted
+    assert config.source_path.read_bytes() == edit
+
+
+def test_disabled_launch_does_not_require_or_repair_candidate_state(
+    configured, tmp_path, monkeypatch
+):
+    _, config = configured
+    config.state_directory.rename(tmp_path / "preserved-for-review")
+    before = contents(tmp_path / "preserved-for-review")
+    plan = launch(configured, tmp_path, monkeypatch, display=False)
+    assert "--scanner-display-profile-config" not in plan.daemon_command
+    assert "--scanner-display-admin-config" not in plan.web_command
+    assert not config.state_directory.exists()
+    assert contents(tmp_path / "preserved-for-review") == before
 
 
 @pytest.mark.parametrize(

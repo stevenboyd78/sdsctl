@@ -896,9 +896,12 @@ programming, power-off, mass-storage switching or speculative key sequences.
    [shared live-frame API](scanner-display-frame-api.md) now joins the cached
    accepted profile with the existing owner's complete PSI observations,
    including independent presentation choices and stale/reconnect invalidation.
-   Next: paired candidate catalog/upgrade
-   checks. Preserve raw-source privacy and the distinction between source and
-   accepted state.
+   A [source-pinned Local App staging procedure](mimic-sds-candidate-app.md)
+   pairs the candidate schema/runtime without changing that catalog. Local
+   launch-plan tests cover enable/restart/disable/re-enable while preserving
+   accepted state and recordings. Built-image and live Supervisor qualification
+   are separate gates; staging is not installation. Preserve raw-source privacy
+   and the distinction between source and accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
    configured color mode; state transitions, empty/unknown fields, popup handling,
    stable sizing and hostile/long input. Reuse existing shared daemon data.

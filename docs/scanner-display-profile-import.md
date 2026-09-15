@@ -4,8 +4,9 @@ Status: **development candidate, not available in the published release yet**.
 These commands connect the Mimic-SDS import engine to the standalone daemon.
 They do not install a Mimic theme/card. A separate, disabled-by-default browser
 Upload/Refresh adapter is implemented in this development branch, as described
-below. Home Assistant App option/launcher wiring remains separate work; do not
-add guessed fields to the installed App's options.
+below. Explicit App/launcher wiring is implemented in the local candidate; use
+the [paired candidate procedure](mimic-sds-candidate-app.md), not guessed fields
+in the installed App's options.
 
 ## What is stored where?
 
@@ -146,8 +147,9 @@ This does not restart the scanner, daemon, Home Assistant Core or Pi displays.
 No new daemon push event is introduced: clients using the read operation see
 the accepted revision on their next request. The optional
 [candidate Mimic-SDS WebUI](scanner-display-frame-api.md#candidate-webui-presentation)
-uses the shared live-frame read. TUI/additional HA-card consumers remain pending;
-none of this candidate support has been installed or published.
+uses the shared live-frame read, as do the local candidate's daemon-backed TUI
+and [additional HA card](home-assistant-mimic-card.md). None of this candidate
+support has been installed or published.
 
 ## 5. Check status and handle failures
 
