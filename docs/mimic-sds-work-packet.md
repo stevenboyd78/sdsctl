@@ -1,7 +1,8 @@
 # Mimic-SDS: profile-driven screens and front-panel controls
 
-Status: offline parser, import state, screen/value foundations, single-owner
-observation adapter, synthetic SVG preview and interactive frame preview
+Status: offline parser, in-memory and durable manual-import state, screen/value
+foundations, single-owner observation adapter, synthetic SVG preview and
+interactive frame preview
 implemented locally; no installed user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
@@ -103,8 +104,10 @@ group. This does **not** certify a complete screen: missing groups stay missing,
 and the parser does not synthesize defaults or equate display IDs with color IDs.
 The revision is a normalized content digest, not scanner identity or evidence
 that settings are current. The in-memory binding/refresh foundation below adds
-selection and acquisition metadata; durable acquisition, per-region completeness
-and live-data qualification are still required before a renderer consumes it.
+selection and acquisition metadata. The separate local-file storage foundation
+below now retains accepted manual imports across process restarts; installed
+acquisition, per-region completeness and live-data qualification are still
+required before the user-facing renderers consume it.
 The descriptor schema is an internal version-1 foundation, not a public API route.
 
 ### In-memory binding and refresh foundation
@@ -136,9 +139,81 @@ Malformed input, unavailable acquisition or a source changed during a read can
 record a sanitized failure category plus the attempted source and start time.
 Failure/cancellation retains the last good import; no defaults are synthesized.
 An initial failure leaves the profile unavailable. Cancelled/failed/completed
-tickets cannot be replayed. These safeguards currently exist **in memory only**:
-there is no disk persistence, background sync, acquisition adapter, CLI/API route,
-automatic profile selection, renderer hook or scanner write.
+tickets cannot be replayed. This module remains **in memory only**; the separate
+durable manual-import adapter below reuses its validation/review contract rather
+than adding file access to the pure store. Neither module creates background
+sync, a CLI/API route, automatic profile selection or a scanner write.
+
+### Durable manual-file import foundation
+
+`src/sds200/scanner_display_profile_storage.py` adds an internal POSIX/Linux
+local-file adapter. It is not yet wired into a daemon configuration, an upload
+screen, an installed command or Favorites sync. It requires three explicit inputs:
+the selected endpoint UUID, an existing operator-selected source `profile.cfg`,
+and a separate private accepted-state directory. It does not discover paths or
+create the planned installation paths listed below.
+
+The source file is read-only to this adapter. A service can import an
+administrator-managed read-only file without receiving permission to replace it.
+The accepted-state directory must be writable by the service account, owned by
+that account and mode `0700`; its `accepted-profile.json` is mode `0600`.
+`initialize_display_profile_storage` creates exactly one new directory below an
+existing parent. It refuses existing directories, including empty or partially
+initialized ones, and does not repair permissions or erase failed state.
+
+The lifecycle is explicit:
+
+1. `prepare(binding, acquired_at=...)` validates the bounded source and returns
+   a display-only preview, without writing either source or accepted state.
+2. The caller reviews that exact preview; a changed source identity needs the
+   existing explicit source-change confirmation. `cancel` discards the review.
+3. `commit(preview, imported_at=...)` verifies that the reviewed source and
+   previous accepted state are unchanged, then atomically replaces one private
+   document containing the original accepted bytes, normalized revision, source
+   binding and acquisition/import timestamps.
+4. A newly constructed adapter's `inspect()` validates/restores that document
+   and separately reports whether the source still matches, has changed, is
+   invalid, unavailable or unsafe. It never silently imports an external edit.
+   With no accepted import, it reports `not_imported` and does not adopt a file.
+
+An invalid/incomplete source edit, missing source, failed refresh or failed write
+before replacement leaves the previous accepted import usable. Last accepted
+does not mean scanner-synchronized, and a valid parsed profile does not prove
+complete field support. Source-copy status must be shown separately in the future
+management UI; it does not change the live observation adapter's freshness rules.
+Disk inspection is an import/status operation, not work for each rendered frame.
+
+The private document contains a byte-for-byte copy of the accepted source,
+including unrelated settings, encoded as base64. **This is not encryption.**
+Protect it like the original file, include both configured paths in the operator's
+backup plan, and never expose that document via client payloads, diagnostics,
+static files or recording downloads. Public previews/snapshots retain only the
+existing display projection and opaque provenance; no raw source or path is
+added. The original source file is never edited by this adapter.
+
+Filesystem access rejects symlinks at every path component, hard-linked or
+nonregular files, loose private permissions, and unsupported platforms rather
+than weakening protection. Cooperative process locks and full file-identity
+checks prevent simultaneous reviewed imports from silently overwriting each
+other. These checks are not a security boundary against root or arbitrary code
+running as the same service account.
+
+The atomic writer flushes and checks its temporary file before replacement,
+then flushes the directory and verifies the accepted record. A failure after
+replacement is `outcome_unconfirmed`, not a successful save or guaranteed rollback.
+The review is consumed; reopen/inspect and have an administrator reconcile it
+before preparing a new import. Missing/corrupt accepted state fails closed and
+is preserved for review, never silently rebuilt from an unreviewed source.
+An abrupt process exit may leave a private temporary file; restart does not
+purge those artifacts. Ordinary pre-replacement failure cleans only that
+transaction's positively identified temporary file.
+
+Synthetic regression tests cover explicit import/review/restart, changed and
+invalid sources, provenance, read-only sources, concurrent processes, partial
+writes, unsafe paths, file/directory sync failures, and abrupt subprocess exits
+on either side of replacement. They also feed a restored profile into the
+existing frame adapter/HTML renderer and check private data is absent. This is
+not physical power-loss or Home Assistant backup/restore qualification.
 
 ### Remaining acquisition and synchronization contract
 
@@ -258,8 +333,10 @@ partially written, mismatched and externally replaced files; read-only paths;
 safe path boundaries; coherent concurrent refresh; and multiple remote clients.
 Verify recording operations cannot alter profiles and profile refresh cannot
 alter recordings, scanner programming, connection credentials or display-local
-presentation choices. Actual durable storage and upload integration remain a
-future slice; the current parser/store/preview does not read or write these paths.
+presentation choices. The internal durable manual-file adapter implements the
+accepted-state portion locally. Upload staging, installation path/configuration
+wiring, live owner/subscriber refresh and Favorites acquisition remain future
+integration work; none of the planned paths above has been created or activated.
 
 ## 2. Shared screen descriptor and live-data mapping
 
@@ -743,7 +820,10 @@ programming, power-off, mass-storage switching or speculative key sequences.
 
 1. **Profile and mapping foundation:** bounded read-only parser, synthetic
    fixtures for all seven modes, source/freshness metadata, documented ambiguous
-   source differences and a per-option data-availability matrix.
+   source differences and a per-option data-availability matrix. The local
+   durable manual-import engine is implemented; next connect trusted daemon
+   path/endpoint configuration and administrator-only Upload/Refresh, preserving
+   raw-source privacy and the distinction between source and accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
    configured color mode; state transitions, empty/unknown fields, popup handling,
    stable sizing and hostile/long input. Reuse existing shared daemon data.
