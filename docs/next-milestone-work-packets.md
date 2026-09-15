@@ -20,9 +20,19 @@ merging this development does not publish it or qualify unattended production us
 
 ## Dependency map
 
+September 14, 2026 addition: the v0.30.0 release closure is complete. The immediate
+maintenance priority is the separately reported Home Assistant Waterfall-card
+height issue. The requested [Mimic-SDS work packet](mimic-sds-work-packet.md)
+adds profile-driven TUI/WebUI layouts, an additional Home Assistant card, a TUI
+runtime drawer and the full documented front-panel key inventory. Keep its
+feature slices separate from that maintenance correction and from browser-device
+authorization. Older baseline/publication wording elsewhere in this packet is
+historical; consult the [release record](release-0.30.0.md) for current status.
+
 | Work packet | Can start without browser continuation? | Safe preparation now | Gate before claiming support |
 | --- | --- | --- | --- |
 | TUI endpoint identity and connection duration | Yes | Build on the accepted local-date presentation; trace actual endpoint metadata and link ownership | Exact endpoint semantics and both Pi layouts |
+| Mimic-SDS and full front-panel controls | Yes for offline foundations | Read-only profile parser, shared slot/color/live-data map and typed key inventory | Profile acquisition, all three renderers and model-specific supervised control acceptance |
 | Renderer field parity | Yes | Reconcile the existing audit against current models and synthetic fixtures | Per-field provenance and targeted physical observations |
 | TUI waterfall | Yes, but use the existing daemon data plane | Read-only renderer design, bounded history and fake-stream tests | Subscription cleanup, resizing and scanner-mode acceptance |
 | Weather/alert presentation and recording | Partly | Define unknown/unavailable states and sanitized fixture requirements | Genuine alert evidence and reviewed recording lifecycle |

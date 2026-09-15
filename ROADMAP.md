@@ -77,6 +77,37 @@ contains the immutable source/artifact identities and separate published-upgrade
 acceptance for both Pi displays and the Home Assistant App. This closes the
 release, not the remaining managed-browser milestone or its unattended-use gates.
 
+### Immediate maintenance follow-up: Home Assistant Waterfall sizing
+
+Correct the independently reported Waterfall-card height growth with an external
+theme and `grid_options.rows: auto`. Preserve the valid duration/history YAML,
+explicit grid sizing, existing themes and bounded canvas rendering. Add browser
+regressions for stable height over repeated redraws, density and theme changes,
+and automatic versus fixed grid rows. Keep this isolated from new renderer or
+control features; v0.30.0 acceptance remains complete.
+
+### Requested feature: Mimic-SDS screens and full front-panel controls
+
+Add optional **Mimic-SDS** layouts/themes for the TUI and WebUI, plus an additional
+Home Assistant card. A user-provided scanner `profile.cfg`, or one acquired during
+an explicitly selected Favorites sync, supplies display slots and colors; shared
+live state supplies the values. Match the seven documented screen modes and the
+user's layout reference without replacing existing cards or themes. Keep daemon
+runtime data in a toggleable TUI drawer, and keep scanner-owned recording/status
+indicators distinct from daemon audio. Profile source/freshness must be explicit;
+an imported file does not guarantee detection of later scanner-setting changes.
+
+Include all 27 front-panel key codes listed on page 35 of the supplied SDS200
+remote-command specification, with model-specific capabilities, current soft-key
+context, typed bounded commands and server-enforced control permissions. Do not
+infer undefined long-press behavior, retry uncertain keys or enable writes for
+observe-only displays. See the [Mimic-SDS work packet](docs/mimic-sds-work-packet.md)
+for source findings, profile/privacy boundaries, layout mappings, the complete
+control inventory and staged acceptance. An offline display-only parser is the
+first foundation; user-facing layouts, acquisition and controls are not yet
+implemented or released support. No milestone/release number is assigned. Waterfall-screen
+fidelity needs its own layout evidence and remains a separate slice.
+
 ### Low-priority TUI usability follow-up
 
 - For remote-daemon connections, show the connected daemon's reported application
