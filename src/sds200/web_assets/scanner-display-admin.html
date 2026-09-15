@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="profile-csrf" content="__CSRF_TOKEN__">
+  <title>Scanner display profile — administration</title>
+  <style nonce="__CSP_NONCE__">
+    :root { color-scheme: light dark; font: 17px/1.5 system-ui, sans-serif; }
+    body { max-width: 70rem; margin: auto; padding: clamp(1rem, 3vw, 2.5rem); }
+    h1, h2 { line-height: 1.2; } h1 { font-size: 1.9rem; margin-bottom: .4rem; }
+    .eyebrow { font-size: .8rem; text-transform: uppercase; letter-spacing: .12em; }
+    .intro { max-width: 58rem; } .muted { opacity: .8; }
+    section { border: 1px solid #7a8795; border-radius: .7rem; padding: 1.2rem; margin: 1.3rem 0; }
+    h2 { margin-top: 0; font-size: 1.25rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: .7rem; align-items: center; }
+    button, input { font: inherit; } button { padding: .65rem 1rem; cursor: pointer; }
+    button:disabled { cursor: default; opacity: .55; }
+    input[type=file] { max-width: 100%; display: block; margin: .7rem 0; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; max-height: 24rem;
+      padding: 1rem; background: light-dark(#eef2f6, #17212d); border-radius: .4rem; font-size: .85rem; }
+    dl { display: grid; grid-template-columns: minmax(8rem, 1fr) 3fr; gap: .4rem 1rem; }
+    dt { font-weight: 650; } dd { margin: 0; overflow-wrap: anywhere; }
+    #message { border-left: .3rem solid #4b88b9; padding: .8rem 1rem; min-height: 1.5rem; }
+    #review { border-width: 2px; } #accept { font-weight: 700; }
+    #review-summary { overflow-wrap: anywhere; }
+    label { display: block; margin: .8rem 0; } [hidden] { display: none !important; }
+    @media (max-width: 36rem) { dl { grid-template-columns: 1fr; } dd { margin-bottom: .5rem; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Mimic-SDS · administrator workspace · development candidate</div>
+    <h1>Scanner display profile</h1>
+    <p class="intro">Review the scanner’s saved field assignments and colors before accepting them.
+      One accepted profile serves this daemon’s displays. This never changes scanner programming.</p>
+  </header>
+  <p id="message" role="status" aria-live="polite">Loading current import status…</p>
+  <section aria-labelledby="current-heading">
+    <h2 id="current-heading">1. Check the selected scanner and file</h2>
+    <dl>
+      <dt>Scanner target</dt><dd id="target">Not checked</dd>
+      <dt>Managed source</dt><dd id="source">Not checked</dd>
+      <dt>Accepted revision</dt><dd id="revision">Not checked</dd>
+      <dt>Source-copy status</dt><dd id="source-status">Not checked</dd>
+    </dl>
+    <p class="muted">File status does not prove that these settings still match the physical scanner.
+      Raw profiles can contain personal settings. Protect the selected folder and its backups.</p>
+    <div class="actions"><button id="status">Check status</button>
+      <button id="reload" data-mutation disabled>Reload accepted state in daemon</button></div>
+  </section>
+  <section aria-labelledby="prepare-heading">
+    <h2 id="prepare-heading">2. Upload a file or refresh the existing copy</h2>
+    <p id="upload-note">Upload availability is being checked.</p>
+    <label for="file">Choose your scanner’s profile.cfg (maximum 1 MiB)</label>
+    <input id="file" type="file" accept=".cfg" disabled>
+    <div class="actions"><button id="upload" data-mutation disabled>Preview selected upload</button>
+      <button id="refresh" data-mutation disabled>Preview existing file</button></div>
+    <p class="muted">Neither preview saves changes. Refresh reads the configured file after a copy
+      through your existing file access. Filenames never select a server path.</p>
+  </section>
+  <section id="review" hidden aria-labelledby="review-heading">
+    <h2 id="review-heading" tabindex="-1">3. Review and confirm</h2>
+    <p id="review-summary"></p>
+    <details open><summary>Validated display fields and colors</summary><pre id="descriptor"></pre></details>
+    <label id="source-change-label" hidden><input type="checkbox" id="source-change">
+      I approve changing the configured source identity.</label>
+    <p>Accept saves this exact reviewed profile. For uploads, it also replaces the managed source
+      copy. If either file changes during review, the action is refused. Reviews expire after five minutes.</p>
+    <div class="actions"><button id="accept" data-mutation>Accept reviewed profile</button>
+      <button id="cancel" data-mutation>Cancel review</button></div>
+  </section>
+  <p class="muted">No scanner restart or new connection is needed. A daemon reload is separate from
+    saving the accepted profile. Existing display renderers are not connected to Mimic-SDS yet.</p>
+  <noscript>This administrator page requires JavaScript. The local scanner-display-profile commands remain available.</noscript>
+  <script nonce="__CSP_NONCE__">
+    "use strict";
+    const base = location.pathname.replace(/\/$/, "");
+    const el = id => document.getElementById(id);
+    let csrf = document.querySelector('meta[name="profile-csrf"]').content;
+    let review = null, busy = false, stopped = false, checked = false, uploads = false, pending = false;
+    function controls() {
+      document.querySelectorAll("[data-mutation]").forEach(button => {
+        button.disabled = busy || stopped || !checked;
+      });
+      el("upload").disabled ||= !uploads || pending || !el("file").files.length;
+      el("refresh").disabled ||= pending;
+      el("file").disabled = busy || stopped || !checked || !uploads || pending;
+      el("accept").disabled ||= !review || (review.source_changed && !el("source-change").checked);
+      el("cancel").disabled ||= !review;
+    }
+    function say(message) { el("message").textContent = message; }
+    async function status() {
+      try {
+        const response = await fetch(base + "/status", { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000) });
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        el("target").textContent = data.scanner_target;
+        el("source").textContent = data.source_path;
+        el("revision").textContent = data.accepted ? data.accepted.revision : "No accepted profile";
+        el("source-status").textContent = data.source_status;
+        uploads = data.upload_enabled === true; pending = data.review_pending === true; checked = true;
+        el("upload-note").textContent = uploads
+          ? "Uploads are explicitly enabled for this private managed source."
+          : "Uploads are disabled. An administrator can copy a file to the selected path, then use Preview existing file.";
+        if (!stopped && !busy) say(pending
+          ? "A review is pending. Use its original page to accept or cancel, or wait for it to expire."
+          : "Status checked. No import or login was attempted.");
+      } catch (_) { checked = false; say("Status unavailable. No action was submitted. Ask an administrator to inspect the configuration."); }
+      controls();
+    }
+    async function send(action, payload = {}) {
+      if (busy || stopped) return;
+      busy = true; controls(); say("Processing this request once…");
+      try {
+        const upload = action === "upload";
+        const response = await fetch(base + "/" + action, {
+          method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10000),
+          headers: { "Content-Type": upload ? "application/octet-stream" : "application/json",
+                     "X-SDSCTL-Profile-CSRF": csrf },
+          body: upload ? payload : JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok || typeof data.csrf !== "string") throw new Error(data.detail || "Request not confirmed.");
+        csrf = data.csrf;
+        if (data.review_id) {
+          review = data; pending = true;
+          el("review").hidden = false;
+          el("review-summary").textContent = `Review ${data.kind}: ${data.previous_revision || "no previous revision"} → ${data.revision}`;
+          el("descriptor").textContent = JSON.stringify(data.descriptor, null, 2);
+          el("source-change-label").hidden = !data.source_changed;
+          el("source-change").checked = false;
+          el("review-heading").focus(); say("Preview ready. No file has changed.");
+        } else {
+          if (action !== "reload") { review = null; pending = false; el("review").hidden = true; el("file").value = ""; }
+          await status();
+          say(data.status === "cancelled" ? "Review cancelled. No files changed."
+            : data.daemon_reload !== "confirmed" ? data.message
+            : data.status === "accepted" ? "Profile accepted and daemon reload confirmed. Scanner unchanged."
+            : "Daemon reload confirmed. No source file was imported.");
+        }
+      } catch (error) {
+        stopped = true;
+        say(`${error.message} Request outcome is not confirmed. Do not repeat the submitted action. Check status; preserve files for administrator review. Reload this page only to inspect or begin a new reviewed action.`);
+      } finally { busy = false; controls(); }
+    }
+    el("status").addEventListener("click", status);
+    el("file").addEventListener("change", controls);
+    el("source-change").addEventListener("change", controls);
+    el("upload").addEventListener("click", () => {
+      const file = el("file").files[0];
+      if (!file || !file.size || file.size > 1048576) { say("Choose a non-empty profile file no larger than 1 MiB."); return; }
+      send("upload", file);
+    });
+    el("refresh").addEventListener("click", () => send("refresh"));
+    el("reload").addEventListener("click", () => send("reload"));
+    el("accept").addEventListener("click", () => review && send("commit", { review_id: review.review_id, confirm_source_change: el("source-change").checked }));
+    el("cancel").addEventListener("click", () => review && send("cancel", { review_id: review.review_id }));
+    status();
+  </script>
+</body>
+</html>

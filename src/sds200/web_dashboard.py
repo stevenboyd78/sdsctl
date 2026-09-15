@@ -52,6 +52,11 @@ from .home_assistant_integration_ingress import (
 )
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
+from .scanner_display_ingress import (
+    DISPLAY_PROFILE_ADMIN_PATH,
+    ScannerDisplayIngress,
+    ScannerDisplayIngressMiddleware,
+)
 from .state import RadioStateSnapshot
 from .tui_controls import HoldScope, hold_selection
 from .web_auth import (
@@ -462,6 +467,7 @@ def create_web_dashboard_app(
     lan_authentication: WebDashboardAuthentication | None = None,
     browser_device_sessions: BrowserDeviceSessions | None = None,
     browser_device_admin_ingress: BrowserDeviceIngress | None = None,
+    scanner_display_admin_ingress: ScannerDisplayIngress | None = None,
     managed_theme_root: Path | None = None,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
@@ -526,7 +532,15 @@ def create_web_dashboard_app(
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
     )
+    if scanner_display_admin_ingress is not None and (
+        not home_assistant_ingress
+        or not isinstance(scanner_display_admin_ingress, ScannerDisplayIngress)
+    ):
+        raise ValueError("Profile administration requires explicit private Ingress configuration.")
     if home_assistant_ingress:
+        if scanner_display_admin_ingress is not None:
+            app.add_middleware(ScannerDisplayIngressMiddleware,
+                               configuration=scanner_display_admin_ingress)
         if browser_device_admin_ingress is not None:
             app.add_middleware(BrowserDeviceIngressMiddleware,
                                configuration=browser_device_admin_ingress)
@@ -822,6 +836,8 @@ def create_web_dashboard_app(
             )
             if browser_device_admin_ingress is not None:
                 links["home_assistant_browser_devices"] = BROWSER_ADMIN_PATH
+            if scanner_display_admin_ingress is not None:
+                links["home_assistant_scanner_display_profile"] = DISPLAY_PROFILE_ADMIN_PATH
         return {
             "service": _service_metadata(),
             "links": links,

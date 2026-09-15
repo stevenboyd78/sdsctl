@@ -2,7 +2,8 @@
 
 Status: offline parser, in-memory and durable manual-import state, screen/value
 foundations, single-owner observation adapter, synthetic SVG preview and
-interactive frame preview, explicit daemon configuration and local import commands
+interactive frame preview, explicit daemon configuration, local import commands
+and disabled-by-default administrator browser Upload/Refresh adapter
 implemented locally; no installed user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
@@ -148,8 +149,9 @@ sync, a CLI/API route, automatic profile selection or a scanner write.
 
 `src/sds200/scanner_display_profile_storage.py` adds an internal POSIX/Linux
 local-file adapter. The local development branch now connects it to explicit
-daemon configuration and local administrator commands, described below; browser
-upload and Favorites sync remain unwired. It requires three explicit inputs:
+daemon configuration and local administrator commands, described below; the
+separate upload adapter does not alter this read-only import contract. Installed
+App wiring and Favorites sync remain pending. It requires three explicit inputs:
 the selected endpoint UUID, an existing operator-selected source `profile.cfg`,
 and a separate private accepted-state directory. It does not discover paths or
 create the planned installation paths listed below.
@@ -237,14 +239,43 @@ clears the cached projection until a local administrator revalidates it.
 `display.profile.reload` is local-only even if mistakenly included in a remote
 allowlist. The local command uses the existing private Unix API socket and checks
 the selected endpoint identity before notification. There is no general API
-upload/import/path parameter, new HTTP route or implicit operator-as-admin grant.
+upload/import/path parameter or implicit operator-as-admin grant. The separate
+private Ingress adapter described below does not extend the general daemon API.
 If persistence succeeds but notification fails, the command reports the two
 outcomes distinctly and directs the administrator to retry reload, not import.
 
 Existing renderers and event subscriptions do not consume the new projection
-yet. Browser Upload/Refresh needs explicit administrator authorization, bounded
-reviewed source staging and live UI integration next. No Home Assistant/Pi option,
-service, profile copy or installed display has changed as part of this local work.
+yet. No Home Assistant/Pi option, service, profile copy or installed display has
+changed as part of this local work.
+
+### Administrator browser Upload/Refresh adapter
+
+The [import guide](scanner-display-profile-import.md#browser-uploadrefresh-development-adapter)
+now describes a private, disabled-by-default Ingress adapter and browser page.
+Only the trusted Supervisor peer plus an explicitly allowlisted user ID can
+reach it. Exact HTTPS origin and single-use, user-bound CSRF checks protect
+actions. Operator/display cookies confer no administrator access. The existing
+application factory needs explicit private configuration; installed App options
+and launchers remain unchanged. Native standalone browser administration is not
+added; the local CLI remains its administrator workflow.
+
+One bounded, five-minute, administrator-bound review stages uploaded bytes in
+memory without saving. The page supports selected-file preview, existing-source
+Refresh, normalized descriptor review, separate source-change confirmation,
+Accept/Cancel and reload of already accepted state. Paths and identities are
+server-selected, filenames ignored, raw content excluded from responses.
+Uploads require a separately enabled private managed target with 0700 parent
+and 0600 existing file. Read-only source imports still work independently.
+
+Acceptance checks source/state conflicts, replaces a complete managed source
+copy, then publishes the single authoritative accepted document. These two
+replacements are not claimed to be one atomic transaction. A crash between them
+leaves the last accepted profile available and the source copy independently
+inspectable; uncertainty is explicit, with no rollback, retry or repair. Daemon
+reload failure or a concurrent different revision is reported separately.
+Browser restart never posts, and loss of an action response stops further writes
+pending review. Synthetic tests cover cancellation during commit and abrupt
+process exit as well as the browser UI and administrator boundaries.
 
 ### Remaining acquisition and synchronization contract
 
@@ -366,9 +397,10 @@ Verify recording operations cannot alter profiles and profile refresh cannot
 alter recordings, scanner programming, connection credentials or display-local
 presentation choices. The internal durable manual-file adapter implements the
 accepted-state portion locally, with explicit standalone manifest/command wiring
-and local daemon cache reload. Upload staging, App path/configuration wiring,
-renderer/subscriber refresh and Favorites acquisition remain future integration
-work; none of the planned paths above has been created or activated on live hosts.
+and local daemon cache reload. The private upload/Ingress adapter implements
+guarded staging locally; App path/configuration wiring, renderer/subscriber
+refresh and Favorites acquisition remain future integration work. None of the
+planned paths above has been created or activated on live hosts.
 
 ## 2. Shared screen descriptor and live-data mapping
 
@@ -855,8 +887,9 @@ programming, power-off, mass-storage switching or speculative key sequences.
    source differences and a per-option data-availability matrix. The local
    durable manual-import engine, explicit daemon configuration, local admin
    commands and cached read-only API projection are implemented locally. Next:
-   administrator-only browser Upload/Refresh and guarded source staging, preserving
-   raw-source privacy and the distinction between source and accepted state.
+   App configuration/launcher wiring for the now-local administrator-only browser
+   Upload/Refresh adapter, plus shared consumer integration. Preserve raw-source
+   privacy and the distinction between source and accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
    configured color mode; state transitions, empty/unknown fields, popup handling,
    stable sizing and hostile/long input. Reuse existing shared daemon data.

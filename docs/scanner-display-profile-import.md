@@ -2,9 +2,10 @@
 
 Status: **development candidate, not available in the published release yet**.
 These commands connect the Mimic-SDS import engine to the standalone daemon.
-They do not install a Mimic theme/card or provide a browser upload button.
-Home Assistant App option wiring and administrator-only browser Upload/Refresh
-remain separate work; do not add these fields to the installed App's options.
+They do not install a Mimic theme/card. A separate, disabled-by-default browser
+Upload/Refresh adapter is implemented in this development branch, as described
+below. Home Assistant App option/launcher wiring remains separate work; do not
+add guessed fields to the installed App's options.
 
 ## What is stored where?
 
@@ -181,6 +182,95 @@ invoke it, even if it is accidentally included in a remote operation allowlist.
 There is no profile write/import operation on the general daemon API.
 
 Neither native-dashboard operator login nor display-only login grants profile
-administration. The browser Upload/Refresh interface must add an explicit
-administrator boundary and guarded source staging before it can use this flow.
-See the [Mimic-SDS work packet](mimic-sds-work-packet.md) for the remaining scope.
+administration. See the [Mimic-SDS work packet](mimic-sds-work-packet.md) for the
+remaining renderer, App configuration and acquisition scope.
+
+## Browser Upload/Refresh development adapter
+
+This is **not an installed App option or a native-dashboard operator feature**.
+The internal application factory accepts an explicit `ScannerDisplayIngress`
+configuration through `scanner_display_admin_ingress`. Without it, the page and
+all profile-administration routes do not exist. There is no new exposed port.
+
+The adapter requires all of the following:
+
+- The existing Home Assistant Ingress boundary, with the actual trusted
+  Supervisor peer, not a client-supplied forwarded address.
+- Exactly one Supervisor-provided user ID, listed in a private, explicitly
+  configured administrator allowlist. Ordinary operator/display cookies, user
+  names and an unlisted Ingress user do not authorize access.
+- An exact HTTPS-facing Home Assistant origin, including its port when needed.
+  A valid HTTPS IP origin works too; internal DNS is not required. This origin
+  governs browser CSRF checks, not a new listener. Plain HTTP does not satisfy
+  this private administrator adapter's origin validation.
+- The explicit display manifest, actual recording directory (checked for
+  overlap), and matching local daemon socket. No caller selects a path, endpoint
+  or filename through HTTP.
+
+Managed uploads additionally require `allow_upload=True` in this private
+controller configuration. The default is false, leaving only read-only source
+refresh available. For uploads, the selected source's parent must already be a
+service-owned `0700` directory; an existing target must be a service-owned `0600`
+regular single-link file. A missing target file is allowed. Permissions are
+checked, not repaired. Read-only root-managed configuration remains suitable
+for the local import/Refresh flow, not managed upload. Do not loosen an entire
+configuration or media tree to enable uploads.
+
+The current page is at the Ingress-relative route
+`/api/v1/home-assistant/scanner-display-profile`. The factory's API index links
+to it only when explicitly configured. The installed dashboard has no new
+management tab yet; staged App/launcher wiring is still required.
+
+### What the administrator does
+
+1. **Check the selected scanner and file.** The page shows the configured target,
+   source path, accepted revision and source-copy status.
+2. **Preview a selected upload** or **Preview existing file**. A complete upload
+   is limited to 1 MiB and held in memory, not written during preview. The file
+   picker name is never used as a server path. Refresh reads the selected copy
+   without replacing it.
+3. **Review and confirm** the normalized display fields and colors. Changing
+   source identity requires a separate checkbox. Accept uses the exact one-use
+   review; Cancel changes no files. One pending review per endpoint is allowed,
+   bound to the administrator who created it, with a five-minute expiry.
+4. **Check the outcome.** Saving accepted state and reloading the daemon are
+   separate results. If a concurrent change means the daemon loaded a different
+   revision, that is reported rather than presented as confirmation of this one.
+
+Closing or restarting the page never imports or resumes a pending action.
+Returning to the original page permits its pending review to be accepted or
+cancelled; if that page is lost, wait for expiry before beginning a new review.
+Server shutdown drops uncommitted in-memory reviews. A request already committing
+may finish after the browser disconnects, so a lost response is not a rollback.
+The page stops further writes after an unconfirmed response and never retries
+an action automatically. Use status and administrator inspection to determine
+what happened. A failed daemon notification can be retried with **Reload accepted
+state in daemon**, without re-uploading or importing the source again.
+
+### Two-file recovery, not a false atomicity promise
+
+An upload checks that the reviewed source and accepted state have not changed,
+validates source-change confirmation, stages a complete private file and
+atomically replaces the managed source copy. It then atomically publishes one
+accepted document containing the exact bytes, normalized revision and provenance.
+Both writes are synced and checked. These are **two file replacements**, not a
+single atomic filesystem transaction spanning both paths.
+
+If a failure occurs between them, the source copy may contain the new upload
+while the old accepted profile remains authoritative and recoverable. It is
+reported as an unconfirmed outcome; preserve both files and inspect status.
+The daemon must not adopt the source copy merely because it changed. No automatic
+rollback, repeated upload, reinitialization or deletion is performed. A later
+explicitly reviewed Refresh can accept a valid copy after administrator review.
+
+Raw content never appears in the page, normal daemon projection, static assets,
+or a new download route. The administrator sees the normalized descriptor and
+trusted configured path. Local share/backup exposure is still governed by the
+deployment's existing filesystem access. The original file chosen on the
+administrator's workstation is not changed.
+
+Local tests cover authorization, body bounds, user-bound expiry, source/state
+conflicts, private permissions, cancellation and loss of acknowledgement,
+daemon-reload failure, and a process exit between source and accepted writes.
+Synthetic browser checks cover the review flow and responsive layout. This is
+not yet live Home Assistant/Pi acceptance or physical power-loss certification.
