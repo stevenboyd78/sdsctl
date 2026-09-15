@@ -6,6 +6,14 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep Home Assistant Waterfall cards at a stable density-based height when an
+  external theme applies generic percentage heights to an automatic grid row.
+  Account for the history canvas border when sizing its bitmap, and fill the
+  assigned Sections slot for default or explicitly fixed grid rows. Existing
+  duration/history YAML and palettes remain unchanged.
+
 ## [0.30.0] - 2026-09-14
 
 Display improvements, remote TUI recording continuity, and explicitly opt-in

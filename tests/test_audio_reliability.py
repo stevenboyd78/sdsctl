@@ -105,7 +105,15 @@ def test_sanitized_rtp_fixture_reports_reliability_statistics() -> None:
         for packet in fixture["packets"]:
             datagram.feed(make_rtp(packet))
         datagram.feed(bytes.fromhex(fixture["malformed_hex"]))
-        wait_until(lambda: transport.statistics.datagrams_received == 6)
+        # Receipt is counted before classification. Wait for the final malformed
+        # packet to be processed too, with a bounded CI scheduling allowance.
+        wait_until(
+            lambda: (
+                transport.statistics.datagrams_received == 6
+                and transport.statistics.malformed_packets == 1
+            ),
+            timeout=5.0,
+        )
     finally:
         transport.stop()
 
@@ -140,9 +148,11 @@ def test_receive_failure_is_counted_and_session_can_stop_cleanly() -> None:
     )
 
     transport.start(lambda _chunk: None)
-    datagram.feed(OSError("simulated receive failure"))
-    wait_until(lambda: transport.statistics.receive_errors == 1)
-    transport.stop()
+    try:
+        datagram.feed(OSError("simulated receive failure"))
+        wait_until(lambda: transport.statistics.receive_errors == 1, timeout=5.0)
+    finally:
+        transport.stop()
 
     assert datagram.closed
     assert rtsp.teardowns == 1

@@ -385,8 +385,8 @@ Home Assistant serves them to the frontend as:
 ```text
 /local/sds200/sds200-card.js?v=beb1c6f22d62655caf4fc541a0cabfa4ed273b8fe22d6b3fe4324f5dc88ab9d8
 /local/sds200/sds200-display-card.js?v=b2d47c2b7abd19a92b2ee61b6b3de00362366f8df828d7786c54ae35aa0ada72
-/local/sds200/sds200-waterfall-card.js?v=d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8
-/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad
+/local/sds200/sds200-waterfall-card.js?v=9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f
+/local/sds200/sds200-cards.js?v=f616e1be646237279372acbd46b3f4163024a467a8e429f2458ff09323526f9f
 ```
 
 The `v` value is the exact SHA-256 of the installed JavaScript module. Home
@@ -429,7 +429,7 @@ digest-confirmed activation. The App does not automatically discover, approve,
 install, execute, or replace managed modules.
 
 For a new installation, register only the complete aggregate
-`/local/sds200/sds200-cards.js?v=dffbeaa294773419eab0ce8dec4a32317c421faaba5cd74373b46829b6095cad`
+`/local/sds200/sds200-cards.js?v=f616e1be646237279372acbd46b3f4163024a467a8e429f2458ff09323526f9f`
 URL in **Settings > Dashboards > Resources** as a **JavaScript Module**. It
 loads all three cards in deterministic manifest order. The three complete
 individual URLs above remain supported when only selected cards are wanted and

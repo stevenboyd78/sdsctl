@@ -689,6 +689,8 @@ class Sds200WaterfallCard extends HTMLElement {
   constructor() {
     super();
     this._config = requireWaterfallCardConfig({});
+    this._autoGridRows = false;
+    this._layout = undefined;
     this._historyPolicy = waterfallHistoryPolicy(
       this._config.history_mode,
       this._config.history,
@@ -804,6 +806,7 @@ class Sds200WaterfallCard extends HTMLElement {
 
   setConfig(config) {
     this._config = requireWaterfallCardConfig(config);
+    this._autoGridRows = config.grid_options?.rows === "auto";
     this._historyPolicy = waterfallHistoryPolicy(
       this._config.history_mode,
       this._config.history_mode === "duration"
@@ -821,6 +824,22 @@ class Sds200WaterfallCard extends HTMLElement {
     }
     this._render();
     this._schedulePaint();
+  }
+
+  get layout() {
+    return this._layout;
+  }
+
+  set layout(value) {
+    // HA sets layout separately from setConfig, including when moving cards
+    // between views. Only definite Sections rows should fill their grid slot.
+    this._layout = value;
+    this._updateSizing();
+  }
+
+  _updateSizing() {
+    this._card.dataset.sizing =
+      this._layout === "grid" && !this._autoGridRows ? "grid" : "density";
   }
 
   getCardSize() {
@@ -842,6 +861,7 @@ class Sds200WaterfallCard extends HTMLElement {
     style.textContent = `
       :host {
         display: block;
+        height: 100%;
         min-width: 0;
         container-type: inline-size;
       }
@@ -849,13 +869,20 @@ class Sds200WaterfallCard extends HTMLElement {
         display: grid;
         grid-template-rows: auto minmax(0, 1fr) auto auto auto;
         gap: 0.75rem;
-        height: var(--sds200-waterfall-card-height);
         min-height: 0;
         padding: 1rem;
         overflow: hidden;
         box-sizing: border-box;
         background: var(--sds200-waterfall-surface, var(--ha-card-background, var(--card-background-color)));
         color: var(--sds200-waterfall-foreground, var(--primary-text-color));
+      }
+      /* Generic HA themes may inject a more-specific height:100% rule here.
+         Keep auto rows definite: canvas bitmap sizes must not size the card. */
+      :host > ha-card[data-density][data-sizing] {
+        height: var(--sds200-waterfall-card-height);
+      }
+      :host > ha-card[data-density][data-sizing="grid"] {
+        height: 100%;
       }
       ha-card[data-density="compact"] {
         --sds200-waterfall-card-height: min(22rem, calc(100dvh - 5rem));
@@ -935,6 +962,7 @@ class Sds200WaterfallCard extends HTMLElement {
       }
       canvas {
         display: block;
+        box-sizing: border-box;
         width: 100%;
         height: 100%;
         min-height: 0;
@@ -1585,6 +1613,7 @@ class Sds200WaterfallCard extends HTMLElement {
   }
 
   _render() {
+    this._updateSizing();
     this._card.dataset.density = this._config.density;
     this._card.dataset.palette = this._config.palette;
     applyWaterfallSystemPalette(this._card, this._config.palette);
