@@ -51,6 +51,7 @@ DAEMON_REMOTE_OBSERVE_OPERATIONS = (
     DaemonApiOperation.CAPABILITIES,
     DaemonApiOperation.PING,
     DaemonApiOperation.RUNTIME_SNAPSHOT,
+    DaemonApiOperation.DISPLAY_PROFILE,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
 )

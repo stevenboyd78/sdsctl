@@ -2,7 +2,7 @@
 
 Status: offline parser, in-memory and durable manual-import state, screen/value
 foundations, single-owner observation adapter, synthetic SVG preview and
-interactive frame preview
+interactive frame preview, explicit daemon configuration and local import commands
 implemented locally; no installed user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
@@ -147,8 +147,9 @@ sync, a CLI/API route, automatic profile selection or a scanner write.
 ### Durable manual-file import foundation
 
 `src/sds200/scanner_display_profile_storage.py` adds an internal POSIX/Linux
-local-file adapter. It is not yet wired into a daemon configuration, an upload
-screen, an installed command or Favorites sync. It requires three explicit inputs:
+local-file adapter. The local development branch now connects it to explicit
+daemon configuration and local administrator commands, described below; browser
+upload and Favorites sync remain unwired. It requires three explicit inputs:
 the selected endpoint UUID, an existing operator-selected source `profile.cfg`,
 and a separate private accepted-state directory. It does not discover paths or
 create the planned installation paths listed below.
@@ -214,6 +215,36 @@ writes, unsafe paths, file/directory sync failures, and abrupt subprocess exits
 on either side of replacement. They also feed a restored profile into the
 existing frame adapter/HTML renderer and check private data is absent. This is
 not physical power-loss or Home Assistant backup/restore qualification.
+
+### Daemon configuration and local administrator integration
+
+The [local import guide](scanner-display-profile-import.md) documents the new
+development-only `scanner-display-profile` init/status/preview/import/reload
+commands and `daemon --scanner-display-profile-config PATH`. There is no implicit
+manifest discovery, App option addition or initialization on daemon startup.
+The bounded manifest explicitly binds endpoint/source UUIDs, exact transport
+target, source path and private state directory. Invalid configuration, target
+mismatch and overlap with the configured recording directory are refused.
+
+One `DaemonDisplayProfile` supplies a cached immutable projection to the daemon's
+existing API owner. Explicit reload reads accepted state, not an unreviewed file
+edit. `display.profile` is a conditional read-only operation available to
+authorized observe/control clients; responses contain only normalized display
+data, opaque provenance, source-copy status and last-check time. It performs no
+per-request disk read, scanner command or new connection. An endpoint mismatch
+clears the cached projection until a local administrator revalidates it.
+
+`display.profile.reload` is local-only even if mistakenly included in a remote
+allowlist. The local command uses the existing private Unix API socket and checks
+the selected endpoint identity before notification. There is no general API
+upload/import/path parameter, new HTTP route or implicit operator-as-admin grant.
+If persistence succeeds but notification fails, the command reports the two
+outcomes distinctly and directs the administrator to retry reload, not import.
+
+Existing renderers and event subscriptions do not consume the new projection
+yet. Browser Upload/Refresh needs explicit administrator authorization, bounded
+reviewed source staging and live UI integration next. No Home Assistant/Pi option,
+service, profile copy or installed display has changed as part of this local work.
 
 ### Remaining acquisition and synchronization contract
 
@@ -334,9 +365,10 @@ safe path boundaries; coherent concurrent refresh; and multiple remote clients.
 Verify recording operations cannot alter profiles and profile refresh cannot
 alter recordings, scanner programming, connection credentials or display-local
 presentation choices. The internal durable manual-file adapter implements the
-accepted-state portion locally. Upload staging, installation path/configuration
-wiring, live owner/subscriber refresh and Favorites acquisition remain future
-integration work; none of the planned paths above has been created or activated.
+accepted-state portion locally, with explicit standalone manifest/command wiring
+and local daemon cache reload. Upload staging, App path/configuration wiring,
+renderer/subscriber refresh and Favorites acquisition remain future integration
+work; none of the planned paths above has been created or activated on live hosts.
 
 ## 2. Shared screen descriptor and live-data mapping
 
@@ -821,8 +853,9 @@ programming, power-off, mass-storage switching or speculative key sequences.
 1. **Profile and mapping foundation:** bounded read-only parser, synthetic
    fixtures for all seven modes, source/freshness metadata, documented ambiguous
    source differences and a per-option data-availability matrix. The local
-   durable manual-import engine is implemented; next connect trusted daemon
-   path/endpoint configuration and administrator-only Upload/Refresh, preserving
+   durable manual-import engine, explicit daemon configuration, local admin
+   commands and cached read-only API projection are implemented locally. Next:
+   administrator-only browser Upload/Refresh and guarded source staging, preserving
    raw-source privacy and the distinction between source and accepted state.
 2. **Mimic preview and WebUI:** scanner-free fixtures for every family and
    configured color mode; state transitions, empty/unknown fields, popup handling,

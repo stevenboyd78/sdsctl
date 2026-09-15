@@ -23,6 +23,8 @@ from .exceptions import (
     UnsupportedScannerFeatureError,
     UnsupportedScannerModelError,
 )
+from .scanner_display_configuration import ScannerDisplayConfigurationError
+from .scanner_display_profile_storage import DisplayProfileStorageError
 
 DAEMON_API_PROTOCOL = "sdsctl.daemon"
 DAEMON_API_VERSION = 1
@@ -43,6 +45,8 @@ class DaemonApiOperation(StrEnum):
     PING = "ping"
     RUNTIME_SNAPSHOT = "runtime.snapshot"
     REMOTE_CLIENTS = "remote.clients"
+    DISPLAY_PROFILE = "display.profile"
+    DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
     AUDIO_HEALTH = "audio.health"
     RECORDING_STATUS = "recording.status"
@@ -64,6 +68,7 @@ DAEMON_API_READ_ONLY_OPERATIONS = (
     DaemonApiOperation.PING,
     DaemonApiOperation.RUNTIME_SNAPSHOT,
     DaemonApiOperation.REMOTE_CLIENTS,
+    DaemonApiOperation.DISPLAY_PROFILE,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
     DaemonApiOperation.RECORDING_STATUS,
@@ -115,6 +120,12 @@ class _SnapshotLike(Protocol):
 
 class _RuntimeLike(Protocol):
     def snapshot(self) -> _SnapshotLike: ...
+
+
+class _DisplayProfileLike(Protocol):
+    def snapshot(self) -> dict[str, object]: ...
+
+    def reload(self) -> dict[str, object]: ...
 
 
 class _ControlResultLike(Protocol):
@@ -436,6 +447,7 @@ class DaemonReadOnlyApi:
         recording_manager: _RecordingManagerLike | None = None,
         reconnect_available: bool = True,
         remote_clients_provider: Callable[[], Mapping[str, object]] | None = None,
+        display_profile: _DisplayProfileLike | None = None,
     ) -> None:
         if type(reconnect_available) is not bool:
             raise TypeError("Daemon reconnect availability must be a boolean.")
@@ -443,6 +455,7 @@ class DaemonReadOnlyApi:
         self.recording_manager = recording_manager
         self.reconnect_available = reconnect_available
         self.remote_clients_provider = remote_clients_provider
+        self.display_profile = display_profile
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
         return tuple(
@@ -524,7 +537,11 @@ class DaemonReadOnlyApi:
 
         if (
             allowed_operations is not None
-            and operation not in allowed_operations
+            and (
+                operation not in allowed_operations
+                # Remote observe/control grants must NEVER become profile administration.
+                or operation is DaemonApiOperation.DISPLAY_PROFILE_RELOAD
+            )
         ):
             return DaemonApiResponse.failure(
                 request.request_id,
@@ -657,6 +674,24 @@ class DaemonReadOnlyApi:
             return self._capabilities(allowed_operations=allowed_operations)
         if operation is DaemonApiOperation.PING:
             return {"pong": True}
+        if operation in (
+            DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD
+        ):
+            if self.display_profile is None:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.UNSUPPORTED_OPERATION,
+                    "Scanner display profiles are not configured.",
+                )
+            try:
+                if operation is DaemonApiOperation.DISPLAY_PROFILE_RELOAD:
+                    return self.display_profile.reload()
+                return self.display_profile.snapshot()
+            except (ScannerDisplayConfigurationError, DisplayProfileStorageError):
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.INTERNAL_ERROR,
+                    "The accepted display profile could not be loaded. "
+                    "Local administrator review is required.",
+                ) from None
         if operation is DaemonApiOperation.REMOTE_CLIENTS:
             # Deliberately absent from remote peers' observe/control allowlists.
             # Never add identities to the shared runtime snapshot/event stream.
@@ -844,6 +879,17 @@ class DaemonReadOnlyApi:
                 and (
                     allowed_operations is None
                     or operation in allowed_operations
+                )
+                and (
+                    operation not in (
+                        DaemonApiOperation.DISPLAY_PROFILE,
+                        DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
+                    )
+                    or self.display_profile is not None
+                )
+                and (
+                    allowed_operations is None
+                    or operation is not DaemonApiOperation.DISPLAY_PROFILE_RELOAD
                 )
             )
         ]

@@ -63,6 +63,7 @@ from .daemon_destination_reload import DaemonDestinationReloader
 from .daemon_destinations import (
     load_daemon_destination_configuration,
 )
+from .daemon_display_profile import DaemonDisplayProfile
 from .daemon_event_client import (
     DaemonEventClient,
 )
@@ -775,6 +776,10 @@ def build_parser(
 
     subparsers = parser.add_subparsers(dest="action", required=True)
 
+    from .scanner_display_profile_cli import add_display_profile_parser
+
+    add_display_profile_parser(subparsers)
+
     discover = subparsers.add_parser(
         "discover",
         help="Find USB SDS-series scanners and LAN-connected SDS200 scanners",
@@ -948,6 +953,12 @@ def build_parser(
             "Explicit daemon destination manifest; otherwise use "
             "the user configuration directory"
         ),
+    )
+    daemon.add_argument(
+        "--scanner-display-profile-config",
+        type=Path,
+        metavar="PATH",
+        help="Opt in to an explicitly configured Mimic-SDS accepted profile (no auto-import)",
     )
     daemon.add_argument(
         "--mqtt-config",
@@ -3456,6 +3467,13 @@ def _run_daemon(
         if configuration_paths is not None
         else resolve_configuration_paths(environ=environ)
     )
+    from .scanner_display_configuration import load_scanner_display_configuration
+
+    display_config_path = getattr(args, "scanner_display_profile_config", None)
+    display_configuration = (
+        None if display_config_path is None
+        else load_scanner_display_configuration(display_config_path)
+    )
     destination_manifest_path = (
         args.destination_config
         if args.destination_config is not None
@@ -3492,10 +3510,21 @@ def _run_daemon(
         if args.recording_directory is not None
         else resolved_paths.daemon_recording_dir
     )
+    if display_configuration is not None:
+        display_configuration.require_separate_recordings(recording_directory)
 
     profile_store = ProfileStore(args.config) if args.profile is not None else None
     host = _daemon_host(args, profile_store=profile_store)
     scanner = selected_radio(args, profile_store=profile_store)
+    from .scanner_display_profile_storage import DisplayProfileStorageError
+
+    try:
+        display_profile = (
+            None if display_configuration is None
+            else DaemonDisplayProfile(display_configuration, lambda: scanner.endpoint)
+        )
+    except DisplayProfileStorageError as exc:
+        raise ValueError(str(exc)) from None
 
     socket_location = resolve_daemon_socket_location(
         args.socket_path,
@@ -3583,6 +3612,8 @@ def _run_daemon(
         recording_manager=recording_manager,
         reconnect_available=host is not None,
     )
+    if display_profile is not None:
+        daemon_api.display_profile = display_profile
     listener = DaemonSocketListener(socket_location)
     api_server = DaemonApiServer(
         listener,
@@ -6536,6 +6567,11 @@ def main(
 
         if args.action == "profile":
             return _manage_profile(args, ProfileStore(args.config))
+
+        if args.action == "scanner-display-profile":
+            from .scanner_display_profile_cli import run_display_profile_command
+
+            return run_display_profile_command(args)
 
         if args.action == "discover":
             return _run_discovery(args)
