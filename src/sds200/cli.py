@@ -5587,6 +5587,8 @@ def _run_tui(
             ) from exc
         raise
 
+    from .scanner_display_reader import MAX_DISPLAY_RESPONSE_BYTES, daemon_display_source
+
     theme_runtime, theme_asset = _selected_terminal_theme(
         args.theme,
         configuration_paths=configuration_paths,
@@ -5767,6 +5769,21 @@ def _run_tui(
                 metadata=args.audio_metadata,
                 scanner=initial.model,
             )
+            display_operations = hello.get("operations")
+            display_source = (
+                daemon_display_source(DaemonApiClient(
+                    api_endpoint,
+                    timeout=min(timeout, 2.0),
+                    max_response_bytes=min(
+                        MAX_DISPLAY_RESPONSE_BYTES,
+                        DAEMON_API_DEFAULT_MAX_RESPONSE_BYTES
+                        if args.daemon_max_response_bytes is None
+                        else args.daemon_max_response_bytes,
+                    ),
+                ))
+                if isinstance(display_operations, list) and "display.frame" in display_operations
+                else None
+            )
             run_tui(
                 endpoint=initial.endpoint,
                 model=initial.model,
@@ -5790,6 +5807,7 @@ def _run_tui(
                 psi_recover_after=args.psi_recover_after,
                 psi_recovery_cooldown=args.psi_recovery_cooldown,
                 connected=initial.connected,
+                display_source=display_source,
                 palette=palette,
                 screen_class=theme_asset.manifest.screen_class,
                 managed_stylesheet=managed_stylesheet,

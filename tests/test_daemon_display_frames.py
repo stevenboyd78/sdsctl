@@ -640,6 +640,31 @@ def test_real_unix_to_web_display_only_read_path(live, tmp_path, enabled):
         server.stop()
 
 
+def test_real_unix_display_source_negotiation_and_decode(live, tmp_path):
+    from sds200.scanner_display_reader import daemon_display_source, decode_display_packet
+
+    feed, _, scanner, _ = live
+    api = DaemonReadOnlyApi(SimpleNamespace(), display_frames=feed)
+    location = resolve_daemon_socket_location(tmp_path / "tui-s")
+    server = DaemonApiServer(DaemonSocketListener(location), api)
+    server.start()
+    source = daemon_display_source(
+        DaemonApiClient(location, timeout=1, max_response_bytes=256 * 1024)
+    )
+    try:
+        packet = decode_display_packet(source.read())
+        assert packet["frames"]["preferred"]["status"] == "current"
+        source.close()
+        scanner.connect_event(False)
+        # Re-opening the independent API session negotiates again before reading.
+        packet = decode_display_packet(source.read())
+        assert packet["frames"]["preferred"]["status"] == "disconnected"
+        assert packet["frames"]["preferred"]["screen"] is None
+    finally:
+        source.close()
+        server.stop()
+
+
 @pytest.mark.parametrize("failure", [False, True])
 def test_cli_attaches_feed_only_around_process_run_and_cleans_up(
     configured, tmp_path, monkeypatch, failure

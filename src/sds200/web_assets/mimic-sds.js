@@ -10,7 +10,8 @@
   const keys = (value, expected) => value !== null && typeof value === "object" &&
     !Array.isArray(value) && Object.keys(value).length === expected.length &&
     expected.every(key => Object.hasOwn(value, key));
-  const text = (value, limit) => typeof value === "string" && value.length <= limit && !BAD_TEXT.test(value);
+  // Match Python's bounded Unicode scalar count, not UTF-16 code-unit length.
+  const text = (value, limit) => typeof value === "string" && Array.from(value).length <= limit && !BAD_TEXT.test(value);
   const nullable = (value, predicate) => value === null || predicate(value);
   const number = value => Number.isFinite(value) && value >= 0;
   const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);

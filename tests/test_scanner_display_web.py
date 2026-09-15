@@ -113,6 +113,12 @@ vm.runInNewContext(input.script, {window});
 const {decode, presentValue} = window.sdsctlMimic;
 for (const payload of Object.values(input.scenarios)) assert.ok(decode(payload));
 const original = input.scenarios.held_trunk;
+const unicode = structuredClone(original);
+const name = unicode.display.frames.preferred.screen.regions.find(r => r.id === 'system');
+name.text = '\u{1f680}'.repeat(256);
+assert.ok(decode(unicode));
+name.text += '\u{1f680}';
+assert.throws(() => decode(unicode));
 let rejected = 0;
 for (const mutate of [
  p => p.version = 2,

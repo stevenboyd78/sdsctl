@@ -158,9 +158,11 @@ def test_tui_parser_accepts_explicit_daemon_client_options() -> None:
     assert args.daemon_pcmu_max_frame_bytes == 16384
 
 
+@pytest.mark.parametrize("display_capable", [False, True])
 def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    display_capable: bool,
 ) -> None:
     captured: dict[str, object] = {}
     output = tmp_path / "daemon-tui.wav"
@@ -185,7 +187,12 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
 
         def hello(self) -> dict[str, object]:
             self.hello_calls += 1
-            return {"operations": ["runtime.snapshot"]}
+            return {
+                "operations": ["runtime.snapshot"] + (["display.frame"] if display_capable else [])
+            }
+
+        def display_frame(self) -> dict[str, object]:
+            return {"test_frame": True}
 
         def runtime_snapshot(self) -> dict[str, object]:
             self.snapshot_calls += 1
@@ -351,6 +358,23 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
     assert api_client.hello_calls == 1
     assert api_client.snapshot_calls == 1
     assert api_client.closed is True
+
+    if display_capable:
+        from sds200.scanner_display_reader import DisplayFrameSource
+        source = captured["display_source"]
+        assert isinstance(source, DisplayFrameSource)
+        assert len(FakeApiClient.instances) == 2
+        display_client = FakeApiClient.instances[1]
+        assert display_client is not api_client
+        assert display_client.location is api_client.location
+        assert display_client.timeout == 1.5 and display_client.max_response_bytes == 8192
+        assert display_client.hello_calls == 0 and display_client.snapshot_calls == 0
+        assert source.read() == {"test_frame": True}
+        assert display_client.hello_calls == 1
+        source.close()
+        assert display_client.closed
+    else:
+        assert captured["display_source"] is None and len(FakeApiClient.instances) == 1
 
     assert event_client.location.path == Path("/tmp/sdsctl-events.sock")
     assert event_client.timeout == 1.5

@@ -166,7 +166,53 @@ available instead of overlapping cells or hiding controls.
 
 Synthetic browser and deterministic lifecycle tests do not establish real
 scanner LCD formatting, physical Pi acceptance, Firefox/WPE support or additional
-HA-card/TUI support. Those require their separate consumers and acceptance.
+HA-card support. The separate TUI candidate is described below.
+
+## Candidate TUI presentation
+
+The daemon-backed TUI now offers an optional **M** screen with the same canonical
+seven layouts and strict profile/field/value/indicator decoding. It is absent if
+the initial daemon hello does not advertise `display.frame`. The ordinary TUI
+remains the default. Direct-USB profile wiring and the additional HA card are not
+implemented by this consumer. Full keys and layout behavior are in the
+[TUI guide](tui.md#unreleased-mimic-sds-candidate).
+
+A lazy worker owns a separate API client using the already selected local socket
+or authenticated remote transport. It negotiates each new API session before
+reading, does not share the control client's request lock, and never touches
+scanner or RTSP transports. API timeout and response limits are capped at two
+seconds and 256 KiB; stricter user limits remain honored. Successful reads wait
+250 ms before the next request; failed reads wait two seconds. This is client
+poll cadence, not a scanner FPS guarantee. The worker is inactive until the view
+is opened, and the UI never blocks on a transport read or close.
+
+The Python decoder checks exact keys/types, canonical region order/geometry,
+source metadata, printable bounded Unicode, RGB pairs and coherent frame
+variants, then returns an immutable detached projection. JavaScript and Python
+both count Unicode scalar values for the 256-character text bound. The reader
+pins the endpoint, tracks stream/session and sequence, rejects replayed lower
+sequences, and retains the five-second monotonic deadline for a repeated sequence
+even after a clear or hidden view. Visibility generations discard late reads.
+Covering the screen clears live content immediately; the worker closes its
+connection after any pending finite read finishes. Only a new active-generation
+read can restore data. Quitting closes the worker without restarting it.
+
+Runtime/keyboard help is an opaque, scrollable modal drawer. Palette typing and
+drawer actions cannot activate scanner or audio controls. Profile metadata shown
+there is explicitly a snapshot from drawer-open time, while local TUI runtime
+and logs continue updating. Only reported fields are shown: it does not invent
+a daemon-version field or label client recordings as daemon-owned recordings.
+Ordinary TUI event updates continue underneath, so returning does not require a
+new scanner connection. Managed-display terminal failure/retry remains the
+existing outer lifecycle.
+
+Rich renders literal text and profile RGB values, with normal terminal color
+quantization and `NO_COLOR` support. No ANSI/markup from the wire is interpreted.
+The renderer preserves source frequency notation, useful option captions,
+Simple two-line names, Detail one-line names, alignment, and independent holds.
+The layout/LED selections are process-local and read-only. Synthetic renderer,
+real Textual, real Unix API and packaging tests do not replace physical Pi/Linux
+console or actual scanner LCD qualification.
 
 ## Shared renderer requirements
 
