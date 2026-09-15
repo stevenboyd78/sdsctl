@@ -1,7 +1,7 @@
 # Mimic-SDS: profile-driven screens and front-panel controls
 
-Status: offline parser foundation implemented locally; no user-facing support
-or release. Source review
+Status: offline parser, import state, screen/value foundations and synthetic SVG
+preview implemented locally; no user-facing support or release. Source review
 baseline: `ec17cf9d4cc3f41c57fd3a647990d5d2322b8719` (v0.30.0 release closure).
 This packet adds to the [roadmap](../ROADMAP.md) and
 [independent work packets](next-milestone-work-packets.md); it does not assign a
@@ -211,6 +211,80 @@ values. Deliberately empty and configured-but-unavailable are distinct states.
 Scanner date/time slots must use verified scanner time or clearly disclose a
 host-time substitute. The existing local RFC-style application clock belongs
 to application chrome/runtime details, not an invented scanner clock.
+
+### Offline region and raw-value foundation
+
+`src/sds200/scanner_display_layout.py` now describes all seven explicitly
+requested modes on a renderer-neutral 30-column, 20-row logical grid. The grid
+follows the supplied HTML's region proportions, cross-checked against PDF
+pages 31-39; these coordinates are not physical LCD pixels. Each cell belongs
+to exactly one region. Huge name regions, option regions, icons, information
+areas, spacers and soft keys remain distinct. There are no active controls.
+
+The descriptor maps one-based option and color positions in their separate
+namespaces. Simple layouts have eight small option slots; Detail and special
+layouts have positions 1, 2, 3, 4, 7, 8 backed by six ordered tokens. Detail
+large fields alternate A/B for five rows before C1/C2; special screens use
+three A/B rows before C1/C2. Special screens have no huge-option group.
+Group sizes must match the reviewed table before values are assigned. A missing,
+short or oversized group does not shift later positions or partially populate
+it. Unexpected groups are reported without deleting them from the parsed profile.
+Blank strings, explicit `Empty`, missing configuration and configured tokens are
+different states; a configured token alone does not prove live-data support.
+
+Stored color values and documented F/HOLD/soft-key reversal flags are retained
+separately. No COLOR/BLACK/WHITE transformation is invented. All Detail/special
+small-field colors remain explicitly unqualified because the printed eight-color
+table conflicts with the six-option grid and observed record size. Supplying
+eight color pairs does not resolve that ambiguity. Other qualified groups can
+be mapped without silently guessing these colors.
+
+`src/sds200/scanner_display_values.py` projects only allowlisted shared snapshot
+fields into raw-source values. It requires explicit freshness and an independently
+qualified matching source mode; defaults, stale samples, unknown modes and mode
+mismatches emit no source values. It caches nothing, so a new empty sample cannot
+retain an old channel, tone or one half of combined Volume/Squelch. All displayed
+data is classified `raw_source`, not a claim of LCD-format parity. Numeric zero
+and text prefixes/leading zeroes are preserved; no TGID, unit, color, clock or
+radio-graph conversion is applied. Raw frequency and code values must be labelled
+as such in the development preview until their display formatting is qualified.
+
+Option membership follows the Huge table on PDF page 57 and Large/Small tables
+on page 60. A known token in the wrong region is not presented. Icon membership
+and glyph behavior are not established by those tables and stay unqualified.
+Scanner REC uses only shared scanner `recording`, never daemon recording. Battery
+voltage, modulation with ambiguous fallback provenance, RSSI bars, scanner date
+and time, and other unsupported fields remain unqualified rather than invented.
+Text is bounded and rejects terminal controls, Unicode control/format characters
+and lone surrogates. Raw text is not markup: renderers must use escaping or
+`textContent`, including for configured names containing angle brackets.
+
+These modules are internal offline foundations, not public APIs or user-facing
+renderers. They do not certify a profile's scanner identity or current mode.
+The next adapter must carry the selected endpoint/provenance contract through
+to the values, establish real mode qualification, and validate a synthetic-data
+preview before any live hook. Current tests validate source-table positions,
+complete nonoverlapping grids, missing/extra groups, unsupported fields, safe
+text, numeric bounds, freshness/mode refusal and stateless transitions.
+
+`src/sds200/scanner_display_preview.py` and
+`scripts/render_scanner_display_preview.py` provide a **development-only SVG
+gallery**, not an installed WebUI/TUI/card theme. Run the script with `PYTHONPATH=src`
+and `--output-dir` pointing to a new scratch directory to generate seven offline
+screens. The script accepts no real profile path or network endpoint; all sample
+profile choices and values are invented. Special-screen samples do not carry
+scanning hierarchy or trunk IDs into unrelated modes. Files are created exclusively
+so an existing gallery is not overwritten.
+
+Every image states that it is an offline preview, labels the selected mode, and
+explains raw values and unavailable/unqualified placeholders. Neutral colors
+indicate unqualified color mappings. A region's SVG title records its exact
+status, and text is escaped and bounded within its region. The artifact contains
+no scripts, external resources, active controls, raw profile bytes or source
+paths. Tests cover all seven grids, exact region coverage, XML-safe text and
+metadata, invalid colors, exact value matching and non-overwrite behavior.
+This preview is only a development aid; a live renderer still requires the
+endpoint/provenance, actual mode/freshness and user-facing accessibility contracts.
 
 Handle temporary messages, popups, holds and unknown screens without inventing
 screen content or hiding safety-relevant state. Menu/dialog visibility is a
