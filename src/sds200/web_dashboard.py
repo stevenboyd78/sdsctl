@@ -611,6 +611,21 @@ def create_web_dashboard_app(
     def viewport_stylesheet() -> Response:
         return _asset_response("dashboard-viewport.css", media_type="text/css")
 
+    @app.get("/assets/mimic-sds.css", include_in_schema=False, response_class=Response)
+    def mimic_stylesheet() -> Response:
+        return _asset_response("mimic-sds.css", media_type="text/css")
+
+    @app.get("/assets/mimic-sds.js", include_in_schema=False, response_class=Response)
+    def mimic_script() -> Response:
+        from .scanner_display_web import scanner_display_browser_contract
+
+        return Response(
+            content=_read_web_asset("mimic-sds.js").replace(
+                "__SDSCTL_MIMIC_CONTRACT__", json.dumps(scanner_display_browser_contract())
+            ),
+            media_type="application/javascript", headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
     @app.get(
         "/assets/system-palettes.css",
         include_in_schema=False,

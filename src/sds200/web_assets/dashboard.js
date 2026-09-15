@@ -52,6 +52,8 @@ const RADIO_FIELD_GROUPS = Object.freeze([
 
 let currentSnapshot = {};
 let currentDaemonHello = {};
+let mimicDisplay = null;
+let mimicPageSuspended = false;
 let eventSource = null;
 let eventStreamRestartTimer = null;
 let eventStreamConnected = false;
@@ -144,6 +146,7 @@ function requireNativeLogin() {
 }
 
 function stopNativeSessionActivity(waterfallStatus) {
+  mimicDisplay?.stop();
   if (nativeSessionTimer !== null) window.clearTimeout(nativeSessionTimer);
   nativeSessionTimer = null;
   stopEventStream();
@@ -464,6 +467,14 @@ function normalizedWorkspacePane(value) {
     : "scanner";
 }
 
+function reconcileMimicDisplay() {
+  mimicDisplay?.context({
+    available: Array.isArray(currentDaemonHello.operations) && currentDaemonHello.operations.includes("display.frame"),
+    active: activeWorkspacePane === "scanner" && !mimicPageSuspended,
+    stopped: authenticationRequired,
+  });
+}
+
 function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
   const pane = normalizedWorkspacePane(value);
   activeWorkspacePane = pane;
@@ -488,6 +499,7 @@ function activateWorkspacePane(value, {focus = false, persist = true} = {}) {
     element(`pane-tab-${pane}`).focus();
   }
   reconcileWaterfallDemand();
+  reconcileMimicDisplay();
   if (pane === "diagnostics") {
     void refreshConnectedClients();
   }
@@ -2351,6 +2363,7 @@ function renderStatus(payload) {
   const daemon = record(payload.daemon);
   currentDaemonHello = record(daemon.hello);
   currentSnapshot = record(daemon.snapshot);
+  reconcileMimicDisplay();
   renderSnapshot(currentSnapshot);
   if (!scannerControlMutationInProgress) {
     element("scanner-control-status").textContent =
@@ -2520,6 +2533,7 @@ async function refreshStatus() {
     setText("audio-state", "Unavailable");
     setText("router-state", "Unavailable");
     currentDaemonHello = {};
+    reconcileMimicDisplay();
     setScannerControls();
     if (!scannerControlMutationInProgress) {
       element("scanner-control-status").textContent =
@@ -4262,6 +4276,7 @@ async function refreshConnectedClients() {
 }
 
 document.addEventListener("visibilitychange", () => {
+  reconcileMimicDisplay();
   if (document.hidden) {
     clearHomeAssistantBridgeKey();
     clearHomeAssistantAdvancedSecrets();
@@ -4278,12 +4293,19 @@ document.addEventListener("visibilitychange", () => {
 });
 
 window.addEventListener("pagehide", () => {
+  mimicPageSuspended = true;
+  reconcileMimicDisplay();
   clearHomeAssistantBridgeKey();
   clearHomeAssistantAdvancedSecrets();
   stopEventStream();
   stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
   element("saved-recording-player").pause();
+});
+
+window.addEventListener("pageshow", () => {
+  mimicPageSuspended = false;
+  reconcileMimicDisplay();
 });
 
 element("audio-play").addEventListener("click", () => {
@@ -4365,6 +4387,13 @@ window.setInterval(() => {
     void refreshConnectedClients();
   }
 }, 5000);
+
+if (window.sdsctlMimic) {
+  mimicDisplay = window.sdsctlMimic.create({
+    host: element("pane-scanner"), standard: element("radio-activity-panel"),
+    url: webUrl("api/v1/display-frame"), request: dashboardFetch,
+  });
+}
 
 void initializeNativeSession();
 initializeWaterfallWorkspace();

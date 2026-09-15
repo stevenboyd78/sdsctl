@@ -1,8 +1,8 @@
 # Mimic-SDS shared live frame contract
 
 Status: **local candidate only**, not a published feature or an installed theme.
-This is the shared read-only data path for the planned WebUI, TUI and additional
-Home Assistant card; it does not activate those renderers. See the
+This is the shared read-only data path for the candidate WebUI presentation and
+planned TUI and additional Home Assistant card. See the
 [work packet](mimic-sds-work-packet.md) and
 [profile administration guide](scanner-display-profile-import.md) for the
 separate profile, deployment and physical-acceptance boundaries.
@@ -108,15 +108,67 @@ identities are checked before serialization.
 Colors are six hexadecimal digits, not arbitrary CSS. Values are bounded plain
 text, not HTML. Renderers must use text nodes, escape terminal control sequences
 and validate incoming wire data before using dimensions, colors or tokens.
-Output projection is not a substitute for consumer-side validation; actual
-renderer/decoder integration remains pending.
+Output projection is not a substitute for consumer-side validation. The candidate
+WebUI validates canonical geometry, bounds, provenance, values and coherence
+across all three presentations before creating text nodes or applying RGB colors.
 
-Some fields still carry scanner-native notation, such as raw frequency digits.
+Some fields still carry scanner-native notation.
 This API does not claim every value is already formatted exactly like the LCD.
 Shared formatting and field availability must be qualified before visual
 acceptance; do not infer missing values from a different mode.
 
-## Upcoming renderer requirements
+## Candidate WebUI presentation
+
+The existing Scanner pane offers **Scanner presentation → Mimic-SDS** only when
+the configured daemon advertises `display.frame`. The ordinary Dashboard remains
+the initial presentation; its existing controls and themes are not replaced.
+No configured capability means no Mimic frame requests. This local candidate
+does not add a published App-catalog setting or install itself on any display.
+
+Visible **Mimic layout** and **Alert LED treatment** selectors choose profile
+preference/Simple/Detail and top-and-bottom strips/surrounding border. These are
+per-page presentation choices; reloading the page restores Dashboard, profile
+preference and strips. They neither write the scanner nor alter another client
+or the imported profile. Outer dashboard themes remain independent of profile
+field colors. Only supported COLOR mappings and confirmed individual name holds
+are applied; BLACK/WHITE transformations and icon glyphs remain unqualified.
+
+Fields use the canonical seven layouts and alignment, with two-line Simple name
+bands and single-line Detail names. Larger screens can grow beyond the reference
+field-width baselines. Useful option captions remain, but name bands do not gain
+generic field labels. The supplied V1.02 remote-command PDF describes PSI
+frequency fields as already unit-bearing `xxxx.xxxxMHz` text. The renderer
+preserves source notation and precision, including opaque digits if supplied;
+it does not borrow the unrelated Waterfall numeric-frequency conversion. TGID
+captions are not repeated when the source already includes `TGID:`.
+
+Only the selected, visible Scanner presentation polls, using one finite request
+at a time with a two-second timeout and a 256 KiB response limit. Successful reads
+are separated by 250 ms; failures retry after two seconds. This is not a promise
+of a higher scanner frame rate. Hiding the page, switching panes/presentation or
+signing out aborts the request, stops polling and clears live values. Late results
+cannot restart a signed-out renderer. Page-cache restoration can resume an
+otherwise active session, while retaining sequence freshness limits.
+
+The browser pins the endpoint for the page lifetime, tracks feed/session and
+sequence, rejects backwards sequences, and advances age with a monotonic clock.
+A repeated sequence cannot extend its five-second freshness deadline, even after
+an error or a hidden view cleared the display. Malformed, oversized, unavailable
+or failed responses clear live text and indicators; they do not leave an old
+screen looking current. The existing authenticated fetch/sign-out paths are
+reused; display-only access remains read-only, with no new session authority.
+
+On short displays, layout/LED qualifications move into **Profile, LED and field
+details** to leave room for the complete scanner grid. This disclosure includes
+unavailable/unqualified fields and accepted-profile status; it never includes raw
+profile bytes or paths. If a window is too small, internal scrolling remains
+available instead of overlapping cells or hiding controls.
+
+Synthetic browser and deterministic lifecycle tests do not establish real
+scanner LCD formatting, physical Pi acceptance, Firefox/WPE support or additional
+HA-card/TUI support. Those require their separate consumers and acceptance.
+
+## Shared renderer requirements
 
 1. Select presentation locally; one display must not change another. Preserve
    reference alignment and minimum widths while allowing wider screens to grow.

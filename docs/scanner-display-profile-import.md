@@ -143,9 +143,11 @@ sdsctl scanner-display-profile --manifest /srv/sdsctl/config/scanner-display.tom
 ```
 
 This does not restart the scanner, daemon, Home Assistant Core or Pi displays.
-No new daemon event or automatic renderer refresh is implemented in this slice:
-clients using the new read operation see the accepted revision on their next
-request. Existing WebUI/TUI/HA renderers do not consume it yet.
+No new daemon push event is introduced: clients using the read operation see
+the accepted revision on their next request. The optional
+[candidate Mimic-SDS WebUI](scanner-display-frame-api.md#candidate-webui-presentation)
+uses the shared live-frame read. TUI/additional HA-card consumers remain pending;
+none of this candidate support has been installed or published.
 
 ## 5. Check status and handle failures
 
