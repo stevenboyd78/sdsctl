@@ -102,6 +102,7 @@ Options:
   --python PATH       Python used for the demo server (repo .venv by default)
   --base-url URL      Audit an already-running demo server instead of starting one
   --timeout-ms N      Startup and CDP operation timeout (default: 20000)
+  --waterfall-only    Run only the Home Assistant waterfall-card regression/lifecycle audit
   --waterfall-screenshot-dir PATH
                       Write three sanitized waterfall-card reference PNGs
   --list              List the 144 matrix cases without opening Chrome
@@ -123,6 +124,7 @@ function parseArguments(argv) {
     python: null,
     timeoutMs: DEFAULT_TIMEOUT_MS,
     waterfallScreenshotDirectory: null,
+    waterfallOnly: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -131,6 +133,8 @@ function parseArguments(argv) {
       options.help = true;
     } else if (argument === "--list") {
       options.list = true;
+    } else if (argument === "--waterfall-only") {
+      options.waterfallOnly = true;
     } else if ([
       "--base-url",
       "--chrome",
@@ -2773,6 +2777,118 @@ function assertHomeAssistantWaterfallGeometry(state, context) {
   }
 }
 
+async function auditHomeAssistantWaterfallSizing(cdp, baseUrl, timeoutMs) {
+  await navigate(cdp, `${baseUrl}/__demo/home-assistant-waterfall/`, timeoutMs, {
+    installAuditLibrary: false,
+    waitForDashboardReady: false,
+  });
+  await waitForHomeAssistantWaterfall(cdp, timeoutMs, {
+    active: 1, cards: 1, statuses: ["live"],
+  });
+  await evaluate(cdp, `(() => {
+    const card = document.querySelector('sds200-waterfall-card');
+    const slot = document.createElement('div');
+    const wrapper = document.createElement('hui-card');
+    card.before(slot);
+    slot.append(wrapper);
+    wrapper.append(card);
+    slot.id = 'sizing-slot';
+    // Match HA Sections: a definite-height slot, an inline hui-card wrapper,
+    // and the custom element. Auto rows have no assigned slot height.
+    slot.style.cssText = 'width: min(500px, 100%); min-width: 0';
+    document.documentElement.style.fontSize = '14px';
+    const theme = document.createElement('style');
+    theme.id = 'external-sizing-theme';
+    theme.textContent = ':host, :host > ha-card { &:not(.type-undefined,.type-custom-grid-layout) { height:100%; } }';
+    card.shadowRoot.append(theme);
+    card.className = 'type-custom-sds200-waterfall-card';
+    return true;
+  })()`);
+  let cases = 0;
+  for (const viewport of [
+    {width: 1280, height: 720, dpr: 1},
+    {width: 800, height: 480, dpr: 1},
+    {width: 390, height: 844, dpr: 2},
+    {width: 1920, height: 1080, dpr: 1},
+  ]) {
+    await setViewport(cdp, viewport);
+    for (const density of ['standard', 'compact', 'tall']) {
+      for (const themed of [true, false]) {
+        for (const sizing of ['auto', 4, 10, 'default', 'masonry']) {
+          const context = `${viewport.width}x${viewport.height}@${viewport.dpr}/${density}/${themed ? 'theme' : 'plain'}/${sizing}`;
+          const options = {density, themed, sizing};
+          const result = await evaluate(cdp, `((options) => {
+            const card = document.querySelector('sds200-waterfall-card');
+            const slot = document.querySelector('#sizing-slot');
+            const defaults = {compact: 5, standard: 7, tall: 9};
+            const fixed = typeof options.sizing === 'number' || options.sizing === 'default';
+            const rows = typeof options.sizing === 'number' ? options.sizing : defaults[options.density];
+            // Include a non-default grid geometry to ensure we fill the
+            // assigned slot, rather than duplicating HA's pixel calculation.
+            const assignedHeight = rows * (60 + 6) - 6;
+            slot.style.height = fixed ? assignedHeight + 'px' : '';
+            card.shadowRoot.querySelector('#external-sizing-theme').sheet.disabled = !options.themed;
+            card.layout = options.sizing === 'masonry' ? 'masonry' : 'grid';
+            const config = {
+              type: 'custom:sds200-waterfall-card', density: options.density,
+              palette: 'theme', history: 120, history_mode: 'duration',
+              history_seconds: 30, show_scale: options.sizing !== 4,
+              show_telemetry: options.sizing !== 4,
+              show_pointer: typeof options.sizing === 'number', start_paused: false,
+            };
+            if (!['default', 'masonry'].includes(options.sizing)) {
+              config.grid_options = {rows: options.sizing, columns: 'full'};
+            }
+            card.setConfig(config);
+            const natural = Math.min({compact: 22, standard: 31, tall: 42}[options.density] * 14, innerHeight - 70);
+            const expected = fixed ? assignedHeight : natural;
+            return new Promise(resolve => {
+              const samples = [];
+              const sample = () => {
+                const root = card.shadowRoot;
+                const box = root.querySelector('ha-card');
+                const surface = root.querySelector('.surface');
+                const br = box.getBoundingClientRect();
+                const sr = surface.getBoundingClientRect();
+                samples.push({
+                  height: card.getBoundingClientRect().height,
+                  boxHeight: br.height,
+                  overflow: box.scrollHeight > box.clientHeight + 1,
+                  surfaceOutside: sr.top < br.top || sr.bottom > br.bottom + 1,
+                  canvases: [...root.querySelectorAll('canvas')].map(canvas => ({
+                    bottom: canvas.getBoundingClientRect().bottom,
+                    cssHeight: canvas.getBoundingClientRect().height,
+                    width: canvas.width, height: canvas.height,
+                  })),
+                  surfaceBottom: sr.bottom,
+                });
+                card._schedulePaint();
+                if (samples.length < 32) requestAnimationFrame(sample);
+                else resolve({expected, first: samples[0], last: samples.at(-1),
+                  minimum: Math.min(...samples.map(s => s.height)),
+                  maximum: Math.max(...samples.map(s => s.height)),
+                  invalid: samples.find(s => Math.abs(s.height - expected) > 1 ||
+                    Math.abs(s.boxHeight - expected) > 1 || s.overflow || s.surfaceOutside ||
+                    s.canvases.some(c => c.cssHeight <= 0 || c.width <= 0 || c.height <= 0 ||
+                      c.width > 2048 || c.height > 1024 || c.bottom > s.surfaceBottom + 1)) ?? null});
+              };
+              // Allow configuration/ResizeObserver work to settle before
+              // checking every subsequent redraw, not just one screenshot.
+              requestAnimationFrame(() => requestAnimationFrame(sample));
+            });
+          })(${JSON.stringify(options)})`);
+          if (result.invalid !== null || result.maximum - result.minimum > 1) {
+            throw new Error(`Waterfall height regression ${context}: ${JSON.stringify(result)}`);
+          }
+          cases += 1;
+        }
+      }
+    }
+  }
+  console.log(`PASS: ${cases} waterfall height cases with 32 redraw samples each`);
+  return cases;
+}
+
 async function auditHomeAssistantWaterfallCard(
   cdp,
   baseUrl,
@@ -2781,6 +2897,7 @@ async function auditHomeAssistantWaterfallCard(
   screenshotDirectory,
 ) {
   const exceptionBaseline = pageFailures.length;
+  const sizingCases = await auditHomeAssistantWaterfallSizing(cdp, baseUrl, timeoutMs);
   const screenshotPaths = [];
   const desktopViewport = {width: 1920, height: 1080, dpr: 1};
   await setViewport(cdp, desktopViewport);
@@ -2984,7 +3101,7 @@ async function auditHomeAssistantWaterfallCard(
   ) {
     throw new Error(`final waterfall cleanup is invalid: ${JSON.stringify(state)}`);
   }
-  return {screenshotPaths, viewportCases: 3};
+  return {screenshotPaths, viewportCases: 3, sizingCases};
 }
 
 async function auditNativeLogin(cdp, baseUrl, timeoutMs, pageFailures) {
@@ -3728,6 +3845,14 @@ async function run(options) {
     } else {
       await mkdir(options.waterfallScreenshotDirectory, {recursive: true});
       console.log(`Waterfall card screenshots: ${options.waterfallScreenshotDirectory}`);
+    }
+    if (options.waterfallOnly) {
+      const result = await auditHomeAssistantWaterfallCard(
+        cdp, baseUrl, options.timeoutMs, pageFailures,
+        options.waterfallScreenshotDirectory,
+      );
+      console.log(`PASS: ${result.sizingCases} height cases, ${result.viewportCases} responsive viewports and complete waterfall lifecycle`);
+      return;
     }
     await auditNativeLogin(cdp, baseUrl, options.timeoutMs, pageFailures);
     await auditDisplayKiosk(cdp, baseUrl, options.timeoutMs, pageFailures);

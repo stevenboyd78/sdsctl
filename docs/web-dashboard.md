@@ -708,6 +708,16 @@ workspace or theme changes:
 node scripts/audit_web_dashboard_browser.mjs --timeout-ms 30000
 ```
 
+For a focused Home Assistant Waterfall-card check, add `--waterfall-only`.
+Both the focused command and full audit include 120 height-stability cases:
+four viewports/DPR transitions, all three densities, with and without a
+generic external-theme percentage-height rule, and automatic, fixed/default
+Sections rows or masonry layout. Each case checks 32 consecutive redraws for
+stable outer height, vertical overflow and bounded canvas geometry. The exact
+reported 30-second duration configuration is included; fixed-row cases also
+exercise optional pointer, scale and telemetry visibility. This fixture is not
+a claim of installed Home Assistant acceptance or a change to scanner cadence.
+
 The audit reuses the same fictional demo service and one isolated Chrome
 session. It resizes that session through all four reference CSS viewports and
 DPR transitions, exercises every built-in theme and all six panes, drives

@@ -70,7 +70,7 @@ global.window = {{
 def test_waterfall_card_resource_url_uses_home_assistant_local_path() -> None:
     assert HOME_ASSISTANT_LOVELACE_WATERFALL_CARD_RESOURCE_URL == (
         "/local/sds200/sds200-waterfall-card.js?v="
-        "d850fa81b04b1798dc7e7f947737525d3a58538f106202f66384eb4e028e62d8"
+        "9e696a9ed370a2b3c1aa1efa0422514658f98fccbbb2f3e0faf402e0edff672f"
     )
 
 
@@ -158,6 +158,37 @@ process.stdout.write(JSON.stringify({
     assert "not supported" in result["rejected"][0]
     assert 'history "60.0" is not supported' in result["rejected"][4]
     assert 'history " 60" is not supported' in result["rejected"][5]
+
+
+def test_waterfall_sizing_tracks_layout_and_auto_row_configuration() -> None:
+    result = run_waterfall_card_javascript(
+        """
+const card = Object.create(Sds200WaterfallCard.prototype);
+card._card = {dataset: {}};
+card._history = [];
+card._render = () => card._updateSizing();
+card._schedulePaint = () => {};
+const sizing = [];
+const remember = () => sizing.push(card._card.dataset.sizing);
+card.setConfig({}); remember();
+card.layout = "grid"; remember();
+card.setConfig({grid_options: {rows: "auto", columns: "full"}}); remember();
+card.setConfig({grid_options: {rows: 4}}); remember();
+card.layout = "masonry"; remember();
+card.setConfig({density: "tall"}); remember();
+card.layout = "grid"; remember();
+card.layout = undefined; remember();
+process.stdout.write(JSON.stringify({sizing, options: card.getGridOptions()}));
+"""
+    )
+
+    assert result["sizing"] == [
+        "density", "grid", "density", "grid",
+        "density", "density", "grid", "density",
+    ]
+    assert result["options"] == {
+        "rows": 9, "columns": 12, "min_rows": 4, "min_columns": 3,
+    }
 
 
 def test_waterfall_history_and_pointer_models_are_bounded() -> None:
