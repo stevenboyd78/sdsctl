@@ -18,6 +18,7 @@ BUILT_IN_HOME_ASSISTANT_THEME_IDS: Final = (
     "compact",
     "sds200-display",
     "waterfall",
+    "mimic-sds",
 )
 
 _MANIFEST_FIELDS: Final = frozenset(

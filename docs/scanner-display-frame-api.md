@@ -1,8 +1,8 @@
 # Mimic-SDS shared live frame contract
 
 Status: **local candidate only**, not a published feature or an installed theme.
-This is the shared read-only data path for the candidate WebUI presentation and
-planned TUI and additional Home Assistant card. See the
+This is the shared read-only data path for the candidate WebUI, TUI and
+additional [Home Assistant card](home-assistant-mimic-card.md). See the
 [work packet](mimic-sds-work-packet.md) and
 [profile administration guide](scanner-display-profile-import.md) for the
 separate profile, deployment and physical-acceptance boundaries.
@@ -165,8 +165,9 @@ profile bytes or paths. If a window is too small, internal scrolling remains
 available instead of overlapping cells or hiding controls.
 
 Synthetic browser and deterministic lifecycle tests do not establish real
-scanner LCD formatting, physical Pi acceptance, Firefox/WPE support or additional
-HA-card support. The separate TUI candidate is described below.
+scanner LCD formatting, physical Pi acceptance or Firefox/WPE support. The
+separate TUI candidate is described below; HA-specific packaging, sizing and
+Ingress lifecycle are described in the [card guide](home-assistant-mimic-card.md).
 
 ## Candidate TUI presentation
 

@@ -1511,6 +1511,7 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
         "home-assistant/compact",
         "home-assistant/sds200-display",
         "home-assistant/waterfall",
+        "home-assistant/mimic-sds",
         "tui/dark",
         "tui/light",
     )
