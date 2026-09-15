@@ -564,6 +564,43 @@ index-zipping the arrays or leaking raw XML/profile data to renderers.
 | WebUI | Optional Mimic-SDS layout/theme, shared field semantics and scoped styles | Responsive Simple/Detail/special screens, browser zoom, keyboards/touch and safe text rendering |
 | Additional Home Assistant card | Separate additive custom card consuming the same normalized profile/live state | Visual editor/YAML, multiple independent instances, auto/fixed grid height, external themes, reconnect and resource packaging |
 
+### Per-surface presentation controls
+
+The user accepted the direction of the refined preview and requested different
+affordances for the same consumer-local settings. This is the implementation
+contract for the future renderers, not a claim that those renderers are installed:
+
+| Surface | Simple/Detail choice | Alert LED treatment |
+| --- | --- | --- |
+| WebUI | Visible layout drop-down, including Use imported preference, Simple and Detail | Visible adjacent drop-down for Light strips or Border; do not bury it in the diagnostics/runtime drawer |
+| TUI | Local presentation action available through the command palette/key reference | One focus-safe key action cycles Light strips and Border; also expose it in the command palette and keyboard reference |
+| Additional Home Assistant card | Per-card visual-editor and YAML configuration | Per-card visual-editor and YAML choice of Light strips or Border; no extra live toolbar required |
+
+Use Light strips as the initial treatment, matching the current preview. Remember
+explicit choices as local presentation preferences: scoped to the selected
+source/display in the browser or TUI, and to each HA card instance through its
+configuration. Preference persistence belongs in the real renderer integration;
+the offline synthetic gallery deliberately does not write browser storage.
+Do not publish configuration keys or assign a TUI key until the corresponding
+schema and existing keymap have been checked and implemented.
+
+These controls change only the visual treatment. They never send a scanner key,
+change the saved profile's Simple/Detail preference, alter Alert Color/Pattern,
+or mutate another display's preferences. They remain available to observe-only
+clients because they do not exercise scanner-control authority. LED treatment
+does not override the reported color or select a blink pattern. Simple/Detail
+applies only to the conventional/trunk layouts; retain but do not apply the
+choice during Search/CC/Weather/Tone-Out, and keep Waterfall separate.
+
+Acceptance must cover independent browser views/TUIs/cards, saved preference
+restoration, invalid configuration values, special-family transitions, stable
+field geometry and preserved current data when changing treatment. For the TUI,
+show a brief local result such as "LED: Border", do not capture the shortcut
+while editing a text field, and ensure no action leaks through to the scanner.
+The local setting must still work when disconnected, without falsely presenting
+an active LED. Verify controls remain usable on both Pi sizes and with keyboard
+or touch input where applicable.
+
 TUI font sizes and exact LCD pixels cannot be promised on a character-cell
 console. Match region order, emphasis and values; use deterministic palette
 approximation where truecolor is unavailable. Do not change system fonts to
