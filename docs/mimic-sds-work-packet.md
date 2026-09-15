@@ -183,6 +183,84 @@ Requirements:
   committing the user's complete profile, PDF attachments, personal paths or
   location/owner values into public source or diagnostic exports.
 
+### Profile authority and accessible durable storage
+
+The user requested that actual scanner field assignments and field colors remain
+owned by the uploaded/acquired `profile.cfg`, not duplicated in separate Mimic
+color pickers or per-field configuration. The same accepted descriptor supplies
+WebUI, TUI and the additional HA card. Consumer-local Simple/Detail and LED
+treatment remain presentation preferences; they do not rewrite that profile.
+Current field values, holds and active LED state still come from qualified live
+scanner data, and alert patterns require the separate Favorites record contract
+below. Uploading a display profile does not create missing live-data support.
+
+Use a persistent, administrator-accessible file location consistent with the
+installation. These are planned defaults/examples, not currently implemented
+upload routes, App options or automatic file migrations:
+
+| Installation | Planned scanner display profile location | Relationship to existing files |
+| --- | --- | --- |
+| Home Assistant App, default media tree | `/media/sdsctl/profiles/profile.cfg` | Sibling of `/media/sdsctl/recordings`, not a WAV-library item |
+| Standalone system service using `/etc/sdsctl/config.toml` | `/etc/sdsctl/profile.cfg` | Beside the daemon's application configuration |
+| Standalone user service | `${XDG_CONFIG_HOME:-~/.config}/sdsctl/profile.cfg` | Beside the service account's `config.toml` and daemon manifests |
+| Custom/container deployment | Explicitly selected profile path beside the operator's daemon configuration, where suitable | Use the actual persistent host-backed configuration location, not the process working directory |
+
+Home Assistant already maps `/media` read/write for recordings. Reuse that
+persistent storage area, with a dedicated profile subdirectory and an explicit
+override when another location is wanted. Do not derive a profile path by
+blindly taking the parent of an arbitrary recording directory, move it when
+recording settings change, or add a new port/share for profile access. Show the
+selected path and import status in the App's administrator-facing profile UI.
+Samba/SSH access depends on the user's existing share/mount configuration; being
+under `/media` does not guarantee a particular file browser exposes it.
+
+For standalone services, "beside the configuration" means the selected daemon
+application/manifest configuration directory, not the directory containing the
+systemd `.service` unit. Resolve the location explicitly for the service account;
+do not select an unrelated interactive user's file from a different home or
+silently choose between multiple layered configurations. Root-owned `/etc`
+locations can be administrator-managed read-only imports. Upload or automatic
+sync needs an explicitly writable managed target; do not grant the daemon root
+or broaden write permissions on all of `/etc/sdsctl` to make replacement work.
+Allow a separately configured persistent writable profile path when needed.
+
+Durable import requirements:
+
+- Keep the uploaded/copied scanner file byte-for-byte as a data file. Validate
+  within the existing parser limits before accepting it; never execute its
+  content, honor embedded paths, or use an untrusted upload filename as a target.
+- Bind it to the selected scanner endpoint. One daemon-owned accepted profile
+  serves its remote consumers; do not require a copy on every Pi or in card YAML.
+  Multiple endpoints need explicit independent bindings/paths, not last-upload
+  wins against a shared `profile.cfg`.
+- Stage a complete upload or Favorites-sync read, then atomically accept its
+  file/revision/provenance with recoverable last-good state. A crash, partial copy,
+  bad permissions, malformed profile or failed refresh must not replace the
+  accepted descriptor with partial/default data. On restart, validate the bound
+  file and restore the accepted state/status consistently.
+- Provide an explicit Upload/Refresh workflow and a refresh after a successful
+  selected Favorites acquisition. A user replacing the file through SSH/Samba
+  can request Refresh without restarting Home Assistant Core or the scanner.
+  No implicit hot reload of partially written files is promised. Apply an
+  accepted revision coherently to the owner and subscribed displays.
+- Restrict upload/replacement to administrator/configuration authority. Raw
+  profiles may contain location or unrelated scanner settings: retain restricted
+  filesystem access, exclude them from diagnostics/public fixtures, do not add
+  a public static-file/media download route, and send only the validated display
+  projection to clients. Document exposure through any user-managed media share.
+- Keep profile and provenance files out of recording inventory, playback/download
+  endpoints, recording migration/retention and cleanup. Do not remove them when
+  recordings are cleared. Document which persistent paths a backup must include;
+  App persistence is not itself proof that every HA backup includes `/media`.
+
+Test upload/restart/refresh and Favorites acquisition against missing, invalid,
+partially written, mismatched and externally replaced files; read-only paths;
+safe path boundaries; coherent concurrent refresh; and multiple remote clients.
+Verify recording operations cannot alter profiles and profile refresh cannot
+alter recordings, scanner programming, connection credentials or display-local
+presentation choices. Actual durable storage and upload integration remain a
+future slice; the current parser/store/preview does not read or write these paths.
+
 ## 2. Shared screen descriptor and live-data mapping
 
 The two ID namespaces are different:
