@@ -93,10 +93,43 @@ A valid projection requires `DisplayOption` plus at least one option and color
 group. This does **not** certify a complete screen: missing groups stay missing,
 and the parser does not synthesize defaults or equate display IDs with color IDs.
 The revision is a normalized content digest, not scanner identity or evidence
-that settings are current. Endpoint binding, source/acquisition timestamps,
-last-good replacement, per-region completeness and live-data qualification are
-still required before any renderer or synchronization path consumes it. The
-descriptor schema is an internal version-1 foundation, not a public API route.
+that settings are current. The in-memory binding/refresh foundation below adds
+selection and acquisition metadata; durable acquisition, per-region completeness
+and live-data qualification are still required before a renderer consumes it.
+The descriptor schema is an internal version-1 foundation, not a public API route.
+
+### In-memory binding and refresh foundation
+
+`src/sds200/scanner_display_profile_state.py` implements one selected endpoint's
+review lifecycle: begin a refresh, prepare a parsed preview, then explicitly
+commit it. Endpoint and source identities are opaque UUIDs supplied by the
+integration layer, not model names, paths, passwords or network addresses. This
+does not require DNS and does not prevent IP-only or USB endpoint configurations.
+The caller must bind those IDs to the actual selected configuration; a manual
+file's contents cannot prove that it belongs to the chosen physical scanner.
+
+The envelope records manual import versus Favorites-sync source, acquisition
+time and accepted-import time. Aware timestamps are normalized to UTC internally;
+future presentation should use the user's local date/time convention. Acquisition
+time means when the input was obtained, not when its scanner settings were last
+changed. Successful state is `last_imported`, never an assertion of current
+scanner synchronization. File metadata still does not establish firmware support.
+
+Snapshots and accepted imports are immutable. Preparing a preview does not
+replace the last good import. A source-ID or source-kind change requires explicit
+confirmation even if the parsed bytes are equivalent. Only the exact current
+preview can be committed once. A later refresh supersedes earlier tickets; slow
+successes or failures cannot overwrite newer accepted state. Duplicate concurrent
+parses for one ticket are refused, and publication is protected by a lock.
+This is a local consistency contract, not server authorization or remote consent.
+
+Malformed input, unavailable acquisition or a source changed during a read can
+record a sanitized failure category plus the attempted source and start time.
+Failure/cancellation retains the last good import; no defaults are synthesized.
+An initial failure leaves the profile unavailable. Cancelled/failed/completed
+tickets cannot be replayed. These safeguards currently exist **in memory only**:
+there is no disk persistence, background sync, acquisition adapter, CLI/API route,
+automatic profile selection, renderer hook or scanner write.
 
 ### Remaining acquisition and synchronization contract
 
@@ -190,6 +223,39 @@ records, but neither their presence nor the HTML establishes a faithful
 Waterfall-screen layout. Do not reopen GW2 guessing or create another poller.
 
 ## 3. Renderer adapters
+
+### Initial live-data availability audit
+
+At the `ec17cf9` runtime baseline, the shared `RadioStateSnapshot` still has 35
+fields. A configured option name is not evidence that its value is available.
+The following is a development mapping, not a claim of LCD-format parity or a
+renderer implementation. Recheck each path when adding the actual projection.
+
+| Scanner option / region | Existing source candidate | Boundary before Mimic-SDS presentation |
+| --- | --- | --- |
+| System, Department, Channel names | `ScannerInfo` name properties -> shared `system`, `department`, `channel` | Fixed name regions, not arbitrary configured option slots; clear absent names on every authoritative update |
+| `SiteName` | `Site.Name` -> `site` | Use the selected live site, not Favorites metadata or a configured fallback name |
+| `Frequency` | Selected channel/site/search node `Freq` -> `frequency` text | Preserve source text until its frequency encoding and mode-specific LCD format are qualified; no guessed unit conversion |
+| `CTCSS/DCS` | Selected node `SAD` -> `sub_audio_detected` | Contains detected tone/digital-code text; no invented detection when absent, and selection/formatting needs mode evidence |
+| `ServiceType` | `ConvFrequency`/`TGID` `SvcType` -> `service_type` text | Qualify code-versus-label formatting rather than assuming every wire value is an LCD label |
+| `TGID`, `UnitId` | Selected node `TGID`, `U_Id` -> `talkgroup_id`, `unit_id` text | Preserve zeroes/prefixes; honor profile display-format settings only with a verified conversion contract |
+| `Volume`, `Squelch`, `Volume&Squelch` | `Property.VOL`/`SQL` or authoritative scalar getters -> `volume`, `squelch` | Zero is valid; combined display must not retain an old half when the other value disappears |
+| `P25Status` | `Property.P25Status` -> `p25_status` | Preserve raw scanner status; do not infer encryption, signal quality or analog/digital state |
+| `REC` | `Property.Rec` -> scanner `recording` | Never substitute daemon WAV recording or playback status, including on USB |
+| `Rssi` | `Property.Rssi` -> `rssi` | Validate finite telemetry and its units; `Rssi Bar` additionally needs the scanner's scale, not an invented percentage |
+| `Modulation` | Node `Mod` -> `modulation`, with an existing P25-status fallback | The shared value does not distinguish direct `Mod` from fallback; exact mimic rendering needs provenance rather than silently calling every fallback a scanner modulation label |
+| `BattVoltage` | Shared `battery` is only raw finite `Property.Battery` | No confirmed volts/percent meaning; do not label that value battery voltage without additional evidence |
+| `SystemId`, `SysSubID`, `SiteId`, `WACN`, `ATT` | Raw `SystemStatusProjection` has related attributes | Not in the 35-field shared snapshot; select/qualify authoritative records and extend shared transport before rendering, without a second scanner owner |
+| `Day`, `Time` | No verified scanner-clock field in shared state | Do not use the application header clock and imply it is scanner time |
+| Other configured fields, icons and soft-key labels | Not established by this initial shared-state audit | Keep an explicit unavailable/unsupported state pending per-field source, transport and model/mode qualification; never fill from unrelated runtime data |
+
+The audit follows [shared state](../src/sds200/state.py),
+[scanner model projections](../src/sds200/models.py), and the existing
+[35-field web parity test](../tests/test_web_dashboard_field_parity.py).
+The [renderer parity packet](renderer-parity-work-packet.md) remains useful for
+raw-ID, absent-value, mode-transition and safe-text tests. Slot-to-color ordering
+ambiguities noted above must be resolved separately; this table does not license
+index-zipping the arrays or leaking raw XML/profile data to renderers.
 
 | Surface | Implementation target | Acceptance boundary |
 | --- | --- | --- |
