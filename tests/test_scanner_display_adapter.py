@@ -252,6 +252,40 @@ def test_known_operating_mode_and_visual_screen_must_not_conflict(screen, mode, 
     assert frame.status is expected
 
 
+@pytest.mark.parametrize(
+    "screen,mode,channel,foreign",
+    [
+        ("conventional_scan", "Trunk Scan", "ConvFrequency", "TGID"),
+        ("trunk_scan", "Scan Mode", "TGID", "ConvFrequency"),
+    ],
+)
+def test_observed_scan_mode_lag_uses_matching_visual_screen_records(screen, mode, channel, foreign):
+    adapter, session = live_adapter()
+    profile = store_for().snapshot(ENDPOINT)
+    sample = replace(info(screen, f'<{channel} Name="Current transition"/>'), mode=mode)
+    assert adapter.observe(session, sample, sequence=2, received_at=12, now=12) is None
+    frame = adapter.frame(profile, now=12)
+    assert frame.status is Status.CURRENT and "Current transition" in texts(frame)
+    expected_family = "trunk" if screen == "trunk_scan" else "conventional"
+    assert frame.screen.layout.requested_mode.value.endswith(expected_family)
+    assert "Current transition" not in texts(adapter.frame(profile, now=17))
+    # No expected channel record is not qualified, nor is a mixed/duplicate one.
+    for seq, body in enumerate(("", f"<{channel}/><{foreign}/>", f"<{channel}/><{channel}/>"), 3):
+        rejected = replace(info(screen, body), mode=mode)
+        assert (
+            adapter.observe(session, rejected, sequence=seq, received_at=17 + seq, now=17 + seq)
+            is not None
+        )
+        bad = adapter.frame(profile, now=17 + seq)
+        assert bad.status is Status.AMBIGUOUS_RECORDS and not bad.values
+    # A held-mode discrepancy has not been qualified by this observation.
+    held = "Trunk Scan Hold" if mode == "Trunk Scan" else "Scan Hold"
+    assert (
+        adapter.observe(session, replace(sample, mode=held), sequence=6, received_at=23, now=23)
+        is not None
+    )
+
+
 def test_frame_and_foreign_adapter_tickets_cannot_substitute_for_current_session():
     first, first_session = live_adapter()
     second, second_session = live_adapter()

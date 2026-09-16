@@ -159,23 +159,58 @@ function harness() {
     d.request = request; await d.tick(250);
     assert.ok(note.textContent.includes('interruptions this page: 2'));
   }
+  // Slow but finite headers/body are accepted within the request budget. Time
+  // in transit still consumes the observation lease; it never starts on arrival.
+  for (const body of [false, true]) {
+    const slow = harness(); await slow.start();
+    let finish;
+    slow.newer();
+    const payload = structuredClone(slow.frame);
+    slow.request = () => body
+      ? new Response(new ReadableStream({start(c) {
+        finish = () => { c.enqueue(new TextEncoder().encode(JSON.stringify(payload))); c.close(); };
+      }}), {headers:{'content-type':'application/json'}})
+      : new Promise(resolve => { finish = () => resolve(slow.response(payload)); });
+    await slow.tick(2950); // Poll started at 250 ms; response takes 2.7 seconds.
+    assert.ok(slow.raw().length); assert.equal(slow.calls, 2);
+    finish(); await flush();
+    assert.ok(slow.raw().length);
+    assert.equal(slow.find('mimic-last-failure').hidden, true);
+    slow.request = () => new Promise(() => {});
+    await slow.tick(2299); assert.ok(slow.raw().length);
+    await slow.tick(1); assert.equal(slow.raw().length, 0); // 250 + 5000, not 2950 + 5000.
+    slow.controller.stop();
+  }
+  // A response inside the transport budget can already be too old to display.
+  const aged = harness(); await aged.start();
+  let finishAged;
+  aged.newer();
+  for (const frame of Object.values(aged.frame.display.frames)) frame.age_seconds = 1;
+  aged.request = () => new Promise(resolve => { finishAged = () => resolve(aged.response(aged.frame)); });
+  await aged.tick(4850); finishAged(); await flush();
+  assert.equal(aged.raw().length, 0);
+  assert.equal(aged.find('mimic-last-failure').hidden, true); // Stale, not a transport failure.
+  aged.controller.stop();
   // Timeouts distinguish waiting for headers from a stalled streamed body.
   for (const body of [false, true]) {
     const d = harness(); await d.start();
     d.request = (_url, {signal}) => body
       ? new Response(new ReadableStream({start(c) { signal.addEventListener('abort', () => c.error(new Error(privateText))); }}), {headers:{'content-type':'application/json'}})
       : new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error(privateText))));
-    await d.tick(2250); assert.equal(d.raw().length, 0);
+    await d.tick(4999); assert.ok(d.raw().length);
+    await d.tick(1); assert.equal(d.raw().length, 0); // Expiry, before timeout.
+    assert.equal(d.find('mimic-last-failure').hidden, true);
+    await d.tick(250);
     assert.equal(d.find('mimic-last-failure').dataset.reason, 'request_timeout');
     assert.equal(d.find('mimic-last-failure').dataset.phase, body ? 'response_body' : 'request');
-    assert.ok(d.find('mimic-last-failure').textContent.includes('elapsed 2000 ms'));
+    assert.ok(d.find('mimic-last-failure').textContent.includes('elapsed 5000 ms'));
     assert.ok(d.find('mimic-last-failure').textContent.includes(`headers: ${body ? '0 ms' : 'not reached'}`));
     assert.ok(d.find('mimic-last-failure').textContent.includes('first byte: not reached'));
     assert.ok(d.find('mimic-last-failure').textContent.includes('body complete: not reached; bytes read: 0'));
     d.controller.stop();
   }
   // Delayed headers and partial body progress are measured separately, without
-  // retaining any response text or resetting the original two-second deadline.
+  // retaining any response text or resetting the original five-second deadline.
   const partial = harness(); await partial.start();
   let acceptHeaders, bodyController;
   partial.request = (_url, {signal}) => new Promise(resolve => {
@@ -186,11 +221,11 @@ function harness() {
   });
   await partial.tick(650); acceptHeaders(); await flush();
   await partial.tick(300); bodyController.enqueue(new TextEncoder().encode('priv')); await flush();
-  await partial.tick(1300);
+  await partial.tick(4300);
   const partialNote = partial.find('mimic-last-failure');
   assert.equal(partialNote.dataset.phase, 'response_body');
   assert.ok(partialNote.textContent.includes('headers: 400 ms; first byte: 700 ms; body complete: not reached; bytes read: 4'));
-  assert.ok(partialNote.textContent.includes('elapsed 2000 ms'));
+  assert.ok(partialNote.textContent.includes('elapsed 5000 ms'));
   const savedPartial = partialNote.textContent;
   partial.request = () => partial.response(partial.frame); partial.newer();
   await partial.tick(2000);
@@ -212,7 +247,7 @@ function harness() {
   const late = harness(); await late.start();
   let lateResolve;
   late.request = () => new Promise(resolve => { lateResolve = resolve; });
-  await late.tick(3250); late.newer(); lateResolve(late.response(late.frame)); await flush();
+  await late.tick(6250); late.newer(); lateResolve(late.response(late.frame)); await flush();
   assert.equal(late.raw().length, 0);
   assert.equal(late.find('mimic-last-failure').dataset.reason, 'request_timeout');
   assert.equal(late.find('mimic-last-failure').dataset.phase, 'request');
@@ -222,7 +257,7 @@ function harness() {
   const lateBody = harness(); await lateBody.start();
   let finishBody;
   lateBody.request = () => new Response(new ReadableStream({start(c) { finishBody = c; }}), {headers:{'content-type':'application/json'}});
-  await lateBody.tick(3250);
+  await lateBody.tick(6250);
   assert.equal(lateBody.calls, 2);
   finishBody.enqueue(new TextEncoder().encode(JSON.stringify(lateBody.frame))); finishBody.close(); await flush();
   assert.equal(lateBody.raw().length, 0);

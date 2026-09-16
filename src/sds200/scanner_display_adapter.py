@@ -179,6 +179,14 @@ _OPERATING_FAMILIES = {
     "Close Call": ScannerDisplayDataFamily.SEARCH_CLOSE_CALL,
     "Tone-Out": ScannerDisplayDataFamily.TONE_OUT,
 }
+# Observed on SDS200 ordinary scanning: these two root labels can lag V_Screen
+# across a conventional/trunk transition. Use the exact V_Screen only when its
+# matching channel record is present. Foreign/duplicate records still refuse
+# the observation. This does not qualify held, search or other mode mismatches.
+_QUALIFIED_SCAN_TRANSITIONS = {
+    ("conventional_scan", "Trunk Scan"): "ConvFrequency",
+    ("trunk_scan", "Scan Mode"): "TGID",
+}
 _CHANNEL_TAGS = frozenset(
     {"ConvFrequency", "TGID", "SrchFrequency", "CcHitsChannel", "WxChannel", "ToneOutChannel"}
 )
@@ -280,7 +288,12 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         reasons = []
         if foreign:
             reasons.append(DisplayConflictReason.FOREIGN_CHANNEL)
-        if operating_family is not None and operating_family is not _DATA_FAMILIES[screen_id]:
+        transition_tag = _QUALIFIED_SCAN_TRANSITIONS.get((screen_id, info.mode or ""))
+        if (
+            operating_family is not None
+            and operating_family is not _DATA_FAMILIES[screen_id]
+            and transition_tag not in tags
+        ):
             reasons.append(DisplayConflictReason.MODE_SCREEN_MISMATCH)
         if duplicates:
             reasons.append(DisplayConflictReason.DUPLICATE_RECORDS)

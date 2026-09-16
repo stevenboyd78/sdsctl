@@ -251,9 +251,12 @@
       let timedOut = false, phase = "request", timeoutPhase = null;
       let headersMs = null, firstByteMs = null, bodyMs = null, bytes = 0;
       const elapsedMs = () => Math.min(300000, Math.max(0, Math.round(performance.now() - started)));
+      // Slow HA ingress responses may arrive after two seconds. The request
+      // budget is separate from the existing observation's expiry timer: a
+      // pending request never renews the display's five-second freshness lease.
       const timeout = window.setTimeout(() => {
         timedOut = true; timeoutPhase = phase; current.abort();
-      }, 2000);
+      }, 5000);
       let delay = 250;
       try {
         const response = await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"});

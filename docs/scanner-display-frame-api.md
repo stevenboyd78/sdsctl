@@ -50,6 +50,14 @@ Its count is the number of conflicting observations since the previous warning,
 not the number of browser interruptions. This is diagnostic evidence, not proof
 that the physical scanner stopped or that an ambiguity guard should be removed.
 
+One narrowly qualified exception covers observed SDS200 scan transitions:
+`Trunk Scan` with `conventional_scan`, and `Scan Mode` with `trunk_scan`.
+For those exact pairs, the renderer follows `V_Screen` only when its matching
+`ConvFrequency` or `TGID` record is present. It still rejects foreign channel
+records, duplicates, missing matching records, and unqualified held/search/other
+mode discrepancies. All data comes from the same complete observation; no prior
+channel is carried forward and the independent freshness limit is unchanged.
+
 ## Accepted profile and current data remain separate
 
 Every response joins one immutable cached accepted profile with one observation
@@ -265,12 +273,21 @@ it does not borrow the unrelated Waterfall numeric-frequency conversion. TGID
 captions are not repeated when the source already includes `TGID:`.
 
 Only the selected, visible Scanner presentation polls, using one finite request
-at a time with a two-second timeout and a 256 KiB response limit. Successful reads
+at a time with a five-second timeout and a 256 KiB response limit. Successful reads
 are separated by 250 ms; failures retry after two seconds. This is not a promise
 of a higher scanner frame rate. Hiding the page, switching panes/presentation or
 signing out aborts the request, stops polling and clears live values. Late results
 cannot restart a signed-out renderer. Page-cache restoration can resume an
 otherwise active session, while retaining sequence freshness limits.
+
+The request allowance tolerates a slow Home Assistant ingress response; it is
+not a longer freshness lease. A separate timer still clears displayed values
+at their existing five-second observation deadline, even while a
+request is pending. Response age includes time spent waiting for headers and
+reading the body, conservatively measured from request start. A response can
+arrive before the request timeout yet already be too old to display. This does
+not diagnose or fix Home Assistant host responsiveness, and does not change the
+TUI or Home Assistant card transport budgets.
 
 The browser pins the endpoint for the page lifetime, tracks feed/session and
 sequence, rejects backwards sequences, and advances age with a monotonic clock.
