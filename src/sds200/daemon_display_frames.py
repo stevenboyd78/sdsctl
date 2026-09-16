@@ -1,6 +1,8 @@
-"""Passive Mimic-SDS feed from the existing scanner owner's complete PSI events.
+"""Mimic-SDS feed from the existing scanner owner's complete PSI events.
 
-No scanner command, poller, thread, audio lease, raw capture or file watcher.
+Passive by default: no commands, threads, audio lease, raw capture or watcher.
+An explicitly injected quick-key cache opts into one background reader; daemon
+startup does not inject it. Bank values remain internal, not rendered or on wire.
 Per-connection callback tickets reject queued callbacks from previous sessions.
 Snapshots join one immutable accepted profile with one current observation.
 """
@@ -14,6 +16,13 @@ from typing import Protocol
 from uuid import uuid4
 
 from .daemon_display_profile import DaemonDisplayProfile
+from .daemon_quick_keys import (
+    DaemonQuickKeyCache,
+    DaemonQuickKeyWorker,
+    QuickKeySession,
+    QuickKeySnapshot,
+    QuickKeyWorkerStatus,
+)
 from .models import ScannerInfo
 from .scanner_display_adapter import (
     DisplayObservationSession,
@@ -46,6 +55,7 @@ class DaemonDisplayFrames:
         *,
         stale_after: float = DEFAULT_DISPLAY_STALE_SECONDS,
         clock: Callable[[], float] = monotonic,
+        quick_keys: DaemonQuickKeyCache | None = None,
     ) -> None:
         if not isinstance(profile, DaemonDisplayProfile) or not callable(clock):
             raise ValueError("An explicit daemon profile owner and clock are required.")
@@ -53,6 +63,15 @@ class DaemonDisplayFrames:
         self._profile, self._scanner, self._clock = profile, scanner, clock
         self._endpoint_id = cached.endpoint_id
         self._adapter = ScannerDisplayAdapter(self._endpoint_id, stale_after=stale_after)
+        if quick_keys is not None:
+            if not isinstance(quick_keys, DaemonQuickKeyCache):
+                raise ValueError("An explicit owner quick-key cache is required.")
+            quick_keys.attach_owner(scanner, self._endpoint_id, profile.scanner_target)
+        self._quick_keys = quick_keys
+        self._quick_key_session: QuickKeySession | None = None
+        self._quick_key_worker = (
+            None if quick_keys is None else DaemonQuickKeyWorker(quick_keys, self._allow_quick_keys)
+        )
         self._stream_id = str(uuid4())
         self._lock = threading.RLock()
         self._started = self._closed = False
@@ -79,17 +98,24 @@ class DaemonDisplayFrames:
             with self._lock:
                 if not self._closed and self._connection_events == event_count:
                     self._set_connection(connected)
+            if self._quick_key_worker is not None:
+                self._quick_key_worker.start()
         except BaseException:
             self.close()
             raise
 
     def _disconnect(self) -> None:
-        if self._psi_unsubscribe is not None:
-            self._psi_unsubscribe()
-            self._psi_unsubscribe = None
-        if self._session is not None:
-            self._adapter.disconnect(self._session)
-        self._session = self._session_id = None
+        unsubscribe, self._psi_unsubscribe = self._psi_unsubscribe, None
+        try:
+            if unsubscribe is not None:
+                unsubscribe()
+        finally:
+            if self._session is not None:
+                self._adapter.disconnect(self._session)
+            if self._quick_keys is not None and self._quick_key_session is not None:
+                self._quick_keys.disconnect(self._quick_key_session)
+            self._quick_key_session = None
+            self._session = self._session_id = None
 
     def _set_connection(self, connected: bool) -> None:
         if type(connected) is not bool:
@@ -103,6 +129,16 @@ class DaemonDisplayFrames:
             session = self._adapter.begin_session(now=self._clock())
             self._session, self._session_id = session, str(uuid4())
             try:
+                if (
+                    self._quick_keys is not None
+                    and self._quick_key_worker is not None
+                    and not self._quick_key_worker.status().stopped
+                ):
+                    try:
+                        self._quick_key_session = self._quick_keys.begin_session()
+                    except Exception:
+                        self._quick_key_worker.fail()
+                        self._quick_key_session = None
                 self._psi_unsubscribe = self._scanner.on_psi(
                     lambda info: self._observe(session, info)
                 )
@@ -125,6 +161,7 @@ class DaemonDisplayFrames:
                 return
             if target != self._profile.scanner_target:
                 self._adapter.clear(session)
+                self._suspend_quick_keys()
                 self._failure = "endpoint_mismatch"
                 return
             now = self._clock()
@@ -133,22 +170,87 @@ class DaemonDisplayFrames:
                 self._adapter.observe(
                     session, info, sequence=self._sequence, received_at=now, now=now
                 )
+                if self._quick_keys is not None and self._quick_key_session is not None:
+                    try:
+                        self._quick_keys.observe(
+                            self._quick_key_session,
+                            self._adapter.quick_key_selection(session, now=now),
+                            sequence=self._sequence,
+                        )
+                    except Exception:
+                        assert self._quick_key_worker is not None
+                        self._quick_key_worker.fail()
+                        self._quick_key_session = None
                 self._failure = None
             except ScannerDisplayAdapterError:
                 self._adapter.clear(session)
+                self._suspend_quick_keys()
                 self._failure = "invalid_observation"
+
+    def _suspend_quick_keys(self) -> None:
+        if self._quick_keys is not None and self._quick_key_session is not None:
+            self._quick_keys.suspend(self._quick_key_session)
+
+    def _profile_barrier(self, failure: str | None, invalidation: int) -> bool:
+        # Caller holds the feed lock, after obtaining the profile context.
+        if invalidation < self._profile_invalidation:
+            return False  # An older concurrent context cannot lower the barrier.
+        if (
+            failure is not None or invalidation != self._profile_invalidation
+        ) and self._session is not None:
+            self._adapter.clear(self._session)
+            self._suspend_quick_keys()
+        self._profile_invalidation = invalidation
+        return True
+
+    def _allow_quick_keys(self) -> bool:
+        # Slow administrator reload can delay this worker, never the PSI callback
+        # or a scanner control: no command/cache/feed lock held while obtaining it.
+        profile, failure, _, invalidation = self._profile.frame_context()
+        with self._lock:
+            if self._closed or not self._started or self._quick_keys is None:
+                return False
+            current = self._profile_barrier(failure, invalidation)
+            if not current or failure is not None or profile.last_good is None:
+                self._quick_keys.clear_demand()
+                return False
+            if (
+                self._session is None
+                or self._adapter.quick_key_selection(self._session, now=self._clock()) is None
+            ):
+                self._suspend_quick_keys()
+                return False
+            return True
+
+    def quick_key_snapshot(self) -> QuickKeySnapshot | None:
+        """Internal qualification only; no demand renewal, I/O or new API keys."""
+        return None if self._quick_keys is None else self._quick_keys.snapshot()
+
+    def quick_key_worker_status(self) -> QuickKeyWorkerStatus | None:
+        return None if self._quick_key_worker is None else self._quick_key_worker.status()
 
     def snapshot(self) -> dict[str, object]:
         # Administrator reload can block this API read, but never scanner callbacks.
         profile, profile_failure, source_status, invalidation = self._profile.frame_context()
         with self._lock:
             now = self._clock()
-            if (
-                profile_failure is not None or invalidation != self._profile_invalidation
-            ) and self._session is not None:
-                # Do not resurrect an old observation after an administrator reload.
-                self._adapter.clear(self._session)
-            self._profile_invalidation = invalidation
+            current = self._profile_barrier(profile_failure, invalidation)
+            if self._quick_keys is not None:
+                if (
+                    current
+                    and not self._closed
+                    and profile_failure is None
+                    and profile.last_good is not None
+                    and self._session is not None
+                    and self._adapter.quick_key_selection(self._session, now=now) is not None
+                ):
+                    try:
+                        self._quick_keys.request_refresh()
+                    except Exception:
+                        assert self._quick_key_worker is not None
+                        self._quick_key_worker.fail()
+                else:
+                    self._quick_keys.clear_demand()
             frames = {
                 name: project_scanner_display_frame(
                     self._adapter.frame(profile, now=now, style=style)
@@ -170,11 +272,19 @@ class DaemonDisplayFrames:
             }
 
     def close(self) -> None:
-        with self._lock:
-            if self._closed:
-                return
-            self._closed = True
-            self._disconnect()
-            if self._connection_unsubscribe is not None:
-                self._connection_unsubscribe()
-                self._connection_unsubscribe = None
+        try:
+            with self._lock:
+                if self._closed:
+                    return
+                self._closed = True
+                try:
+                    self._disconnect()
+                finally:
+                    unsubscribe, self._connection_unsubscribe = self._connection_unsubscribe, None
+                    if unsubscribe is not None:
+                        unsubscribe()
+        finally:
+            # Never join under the callback lock, even if unsubscription failed:
+            # an in-flight GET may deliver PSI before its transport returns.
+            if self._quick_key_worker is not None:
+                self._quick_key_worker.close()

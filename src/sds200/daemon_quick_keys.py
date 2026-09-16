@@ -1,9 +1,9 @@
-"""Opt-in owner-side quick-key cache, not yet wired to daemon startup or frames.
+"""Opt-in owner-side quick-key cache and finite-wait background worker.
 
 An owner supplies qualified PSI selections and connection tickets. Consumers
 renew one shared demand lease; snapshots never perform I/O. A background worker
 may call poll_once to perform at most one GET through the existing scanner.
-No thread, transport, profile reader, renderer, or API is started here.
+Construction starts nothing; ordinary daemon startup does not opt in.
 """
 
 from __future__ import annotations
@@ -99,6 +99,7 @@ class DaemonQuickKeyCache:
         self._sequence = -1
         self._epoch = 0
         self._closed = False
+        self._attached = False
         self._pending: object | None = None
         self._blocked: Failure | None = None
         self._demand_until = self._next_poll = self._latest_time = 0.0
@@ -121,6 +122,38 @@ class DaemonQuickKeyCache:
         self._failures.clear()
         self._due.clear()
         # An old in-flight request still occupies the one shared read slot.
+
+    def require_owner(self, scanner: object, endpoint_id: UUID, scanner_target: str) -> None:
+        """Reject attachment to another owner, even at the same address. No I/O."""
+        if (
+            self._closed
+            or scanner is not self._scanner
+            or endpoint_id != self._endpoint_id
+            or scanner_target != self._target
+        ):
+            raise ValueError("Quick-key cache must belong to this exact scanner owner.")
+
+    def attach_owner(self, scanner: object, endpoint_id: UUID, scanner_target: str) -> None:
+        """One lifetime attachment; two feeds cannot reset each other's session."""
+        with self._lock:
+            self.require_owner(scanner, endpoint_id, scanner_target)
+            if self._attached:
+                raise ValueError("Quick-key cache is already attached to a display feed.")
+            self._attached = True
+
+    def clear_demand(self) -> None:
+        """Invalidate pending/cached banks without lifting connection quarantine."""
+        with self._lock:
+            self._invalidate()
+            self._demand_until = 0.0
+
+    def suspend(self, session: QuickKeySession) -> None:
+        """Require a new qualified PSI after a profile/observation barrier."""
+        with self._lock:
+            if session is self._session:
+                self._invalidate()
+                self._selection = self._seen = None
+                self._demand_until = 0.0
 
     def begin_session(self) -> QuickKeySession:
         with self._lock:
@@ -319,3 +352,87 @@ class DaemonQuickKeyCache:
             self._invalidate()
             self._session = self._selection = self._seen = None
             self._demand_until = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class QuickKeyWorkerStatus:
+    started: bool
+    alive: bool
+    stopped: bool
+    failure: Literal["worker_start_failed", "worker_failed"] | None
+
+
+class DaemonQuickKeyWorker:
+    """One optional owner worker. Failures never escape into display rendering.
+
+    The gate runs before taking the scanner command lane. Closing invalidates
+    the cache immediately and waits at most 750 ms, never closing the shared
+    scanner. An unexpectedly blocked transport may outlive that wait, but its
+    result cannot be committed and this worker cannot restart itself.
+    """
+
+    def __init__(self, cache: DaemonQuickKeyCache, before_poll: Callable[[], bool]) -> None:
+        self._cache, self._before_poll = cache, before_poll
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._failure: Literal["worker_start_failed", "worker_failed"] | None = None
+
+    def start(self) -> bool:
+        with self._lock:
+            if self._stop.is_set():
+                return False
+            if self._thread is not None:
+                return self._thread.is_alive()
+            try:
+                self._thread = threading.Thread(
+                    target=self._run, name="sdsctl-quick-keys", daemon=True
+                )
+                self._thread.start()
+            except Exception:
+                self._failure = "worker_start_failed"
+                self._stop.set()
+                self._cache.close()
+                return False
+            return True
+
+    def _run(self) -> None:
+        try:
+            while not self._stop.wait(MIN_READ_GAP):
+                if self._before_poll() and not self._stop.is_set():
+                    self._cache.poll_once()
+        except BaseException:
+            # Do not emit raw exception/traceback data from a background thread.
+            self.fail()
+        finally:
+            self._stop.set()
+            self._cache.close()
+
+    def fail(self) -> None:
+        """Nonblocking fault isolation for callbacks and API readers."""
+        with self._lock:
+            self._failure = "worker_failed"
+        self._stop.set()
+        self._cache.close()
+
+    def status(self) -> QuickKeyWorkerStatus:
+        with self._lock:
+            return QuickKeyWorkerStatus(
+                self._thread is not None,
+                self._thread is not None and self._thread.is_alive(),
+                self._stop.is_set(),
+                self._failure,
+            )
+
+    def close(self) -> None:
+        self._stop.set()
+        self._cache.close()
+        with self._lock:
+            thread = self._thread
+        # An unstarted thread after start failure cannot be joined.
+        if (
+            thread is not None
+            and thread.ident is not None
+            and thread is not threading.current_thread()
+        ):
+            thread.join(timeout=0.75)

@@ -10,11 +10,12 @@ separate profile, deployment and physical-acceptance boundaries.
 ## One scanner owner
 
 An explicitly configured daemon attaches `DaemonDisplayFrames` to its existing
-scanner's connection and complete PSI callbacks. The feed sends **no scanner
-commands**, starts no polling thread or connection, and takes no audio or
+scanner's connection and complete PSI callbacks. By default the feed sends **no
+scanner commands**, starts no polling thread or connection, and takes no audio or
 Waterfall subscription. Normal daemon startup still owns scanner connection and
 PSI acquisition. No profile configuration means no display-feed subscriptions.
-Only bounded display fields are retained, not raw XML. Scalar state updates and
+The internal opt-in quick-key worker described below is not enabled by ordinary
+daemon startup. Only bounded display fields are retained, not raw XML. Scalar state updates and
 API reads cannot refresh receipt time. This version does not issue GSI polls.
 
 - Each feed has a new opaque `stream_id`; each connection has a new opaque
@@ -152,13 +153,23 @@ field count; its meaning and actual firmware reply must be hardware-qualified
 before using it as a display selector. A changed or unassigned scope must not
 silently become key 0, a scanner object index, or a previous system's bank.
 
-### Owner quick-key cache groundwork (not enabled)
+### Owner quick-key worker integration (internal opt-in only)
 
-The local `DaemonQuickKeyCache` component now separates bank freshness from PSI
-freshness. It is **not wired to daemon startup, display frames or a worker yet**:
-installing this candidate does not start bank reads or display F/S/D rows. It
-opens no transport, starts no thread, and retains at most three immutable
-100-state banks, without raw packets or exception text.
+The local `DaemonQuickKeyCache` separates bank freshness from PSI freshness.
+An internal caller can explicitly inject it into `DaemonDisplayFrames` to opt
+into one owner worker. Ordinary daemon startup does **not** inject a cache:
+installing this candidate starts no bank reads and displays no new F/S/D rows.
+There is no CLI flag, App option, remote operation or new display.frame field
+for enabling or reading it yet. The cache retains at most three immutable
+100-state banks, without raw packets or exception text. No extra scanner
+transport, audio subscription, profile watcher or per-client worker is created.
+
+Attachment checks the exact scanner object, endpoint UUID and configured target;
+one cache can attach to only one feed. The cache belongs to that scanner owner's
+lifetime, not to a browser connection. Do not replace a quarantined cache on the
+same live scanner connection to retry it. Connection callbacks create/invalidate
+its tickets, and qualified complete PSI supplies selection. Default passive
+operation remains unchanged.
 
 Only an already-qualified, current conventional/trunk observation supplies the
 Favorites and system `Q_Key` scope. Object `Index` values never supply quick
@@ -170,6 +181,11 @@ The component's initial, hardware-unqualified scheduling limits are:
 
 - One shared five-second demand lease for all consumers. Renewing demand,
   reading a snapshot and handling PSI perform no scanner I/O.
+  A qualified frame read with an accepted profile renews demand; internal bank
+  diagnostics do not. Closing one browser does not cancel another reader's
+  demand. After the last reader stops, bank requests cease when the lease expires,
+  not necessarily immediately. The single worker remains idle until renewed
+  demand or owner shutdown. A stricter display-freshness setting is honored too.
 - At most one GET in flight, with at least 500 ms between reads. Successful
   banks become eligible for refresh after two seconds; bank values and PSI
   selection each expire independently after five seconds. Bank age starts at
@@ -187,10 +203,21 @@ The component's initial, hardware-unqualified scheduling limits are:
   results. An old request keeps the shared in-flight slot until it exits; it
   cannot populate a newer session or revive a closed cache. A failed bank read
   does not modify or clear the otherwise-current PSI display frame.
+- Before each poll, the worker checks cached profile health/invalidation before
+  acquiring the scanner command lane. Slow administrator reload does not hold
+  the PSI callback lock or that lane. Profile failure/repair requires fresh PSI;
+  an older concurrent profile context cannot lower the invalidation barrier.
+- Worker startup/runtime faults are isolated from normal frame rendering and
+  scanner reconnection. Only fixed failure categories are retained, without raw
+  traceback text; the worker does not restart itself after a fault. Closing the
+  feed invalidates its cache and waits at most 750 ms, outside the callback lock.
+  A transport write that violates its own bound may outlive that wait, but cannot
+  commit its result or restart reads. The shared scanner is never force-closed
+  by this worker. Unsubscription failures still stop/invalidate the worker.
 
-Remaining work is explicit owner-worker integration and hardware qualification
-of actual replies, displayed decade/selection and glyph mapping. Those gates
-must be met before rendering bank rows. Transport write bounds, foreground
+Remaining work is hardware qualification of actual replies, displayed decade/
+selection and glyph mapping, followed by reviewed opt-in deployment and frame
+projection. Those gates must be met before rendering bank rows. Transport write bounds, foreground
 control latency, audio and Waterfall continuity also need qualification before
 enabling the reader; synthetic cache tests are not that acceptance.
 
