@@ -207,8 +207,31 @@
     failureNote.id = "mimic-last-failure";
     failureNote.hidden = true;
     let failures = 0;
+    const traceButton = make("button", "Trace request timing for 2 minutes");
+    traceButton.type = "button"; traceButton.id = "mimic-trace-start";
+    const traceNote = make("p", "Request tracing is off. It records opaque IDs and timing metadata in the App log, never scanner values or credentials.");
+    traceNote.id = "mimic-trace-status";
+    let tracePrefix = null, traceNumber = 0, traceUntil = 0, traceTimer = null;
+    function stopTrace(message) {
+      tracePrefix = null; traceUntil = 0;
+      window.clearTimeout(traceTimer); traceTimer = null;
+      traceButton.textContent = "Trace request timing for 2 minutes";
+      traceNote.textContent = message;
+    }
+    traceButton.addEventListener("click", () => {
+      if (tracePrefix !== null) { stopTrace("Request tracing stopped."); return; }
+      if (!demanded()) return;
+      try {
+        const bytes = window.crypto.getRandomValues(new Uint8Array(8));
+        tracePrefix = Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+      } catch { stopTrace("Request tracing is unavailable in this browser; display updates are unchanged."); return; }
+      traceNumber = 0; traceUntil = performance.now() + 120000;
+      traceButton.textContent = "Stop request timing trace";
+      traceNote.textContent = "Request tracing enabled for 2 minutes. The App has a bounded trace budget; missing entries do not prove a request never arrived.";
+      traceTimer = window.setTimeout(() => stopTrace("Request tracing finished. Existing App log entries remain; tracing is off."), 120000);
+    });
     const rows = make("ul");
-    details.append(detailText, failureNote, rows);
+    details.append(detailText, failureNote, traceButton, traceNote, rows);
     pane.append(status, basis, surround, ledStatus, details);
     host.prepend(toolbar, pane);
     function clear(message) {
@@ -241,6 +264,7 @@
     function demanded() { return selected && available && active && !stopped && !document.hidden; }
     function cancel(message) {
       generation++; controller?.abort(); controller = null;
+      stopTrace("Request tracing is off.");
       window.clearTimeout(timer); timer = null; clear(message);
     }
     async function poll(ticket) {
@@ -248,6 +272,9 @@
       controller = new AbortController();
       const current = controller;
       const started = performance.now();
+      const traceId = tracePrefix !== null && started < traceUntil && traceNumber < 999999
+        ? `${tracePrefix}-${++traceNumber}` : null;
+      let traceAcknowledged = false;
       let timedOut = false, phase = "request", timeoutPhase = null;
       let headersMs = null, firstByteMs = null, bodyMs = null, bytes = 0;
       const elapsedMs = () => Math.min(300000, Math.max(0, Math.round(performance.now() - started)));
@@ -259,12 +286,15 @@
       }, 5000);
       let delay = 250;
       try {
-        const response = await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"});
+        const options = {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"};
+        if (traceId !== null) options.headers = {"X-SDSCTL-Mimic-Trace": traceId};
+        const response = await request(url, options);
         // A transport that ignores abort must not read a late body or overwrite
         // the phase/timings recorded at the deadline.
         if (ticket !== generation || !demanded()) return;
         require(!timedOut);
         headersMs = elapsedMs();
+        traceAcknowledged = traceId !== null && response.headers.get("x-sdsctl-mimic-trace") === traceId;
         const data = await readResponse(response, value => {
           if (!timedOut) {
             phase = value;
@@ -300,6 +330,7 @@
         phase = "rendering";
         if (data.failure !== null) clear("Display configuration unavailable — administrator review required.");
         else render();
+        if (traceId !== null && tracePrefix !== null) traceNote.textContent = `Last traced update: ${traceId}; App acknowledgement: ${traceAcknowledged ? "received" : "not confirmed"}; elapsed ${elapsedMs()} ms. Tracing stops automatically after 2 minutes. IDs confer no access; missing entries or acknowledgements do not prove non-arrival.`;
       } catch {
         if (ticket === generation && demanded()) {
           const reason = timedOut ? "request_timeout" : phase;
@@ -313,6 +344,7 @@
           failureNote.dataset.phase = interruptedPhase;
           const timing = value => value === null ? "not reached" : `${value} ms`;
           failureNote.textContent = `Last interrupted update: ${reason}; phase: ${interruptedPhase}; elapsed ${elapsed} ms; headers: ${timing(headersMs)}; first byte: ${timing(firstByteMs)}; body complete: ${timing(bodyMs)}; bytes read: ${bytes}; interruptions this page: ${failures}. Timings are since request start, not proof of a particular network hop. No response content was retained.`;
+          if (traceId !== null) failureNote.textContent += ` Trace ID: ${traceId}; App acknowledgement: ${traceAcknowledged ? "received" : "not confirmed"}.`;
           clear(`Mimic-SDS data unavailable — retrying safely (${reason}).`);
         }
         delay = 2000;

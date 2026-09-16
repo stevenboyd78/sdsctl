@@ -314,6 +314,51 @@ response body, URL, credentials or scanner/profile values. A timeout's late
 response cannot be accepted as a successful update. These diagnostics identify
 the failed stage; they do not by themselves establish a network or scanner cause.
 
+### Optional request-path timing trace
+
+In **Profile, LED and field details**, **Trace request timing for 2 minutes**
+temporarily labels the existing frame reads with random, page-local correlation
+IDs. It is off by default, is not saved, creates no extra requests, and stops
+automatically after two minutes or when the page becomes inactive/hidden,
+changes presentation, or signs out. The same button stops it early. If random
+ID generation is unavailable, normal display updates continue without tracing.
+
+The App echoes an admitted ID and writes bounded INFO-level timing records:
+
+| Marker | Boundary measured inside the existing App access guards |
+| --- | --- |
+| `received` | The validated frame request entered the timing middleware |
+| `handler` | The synchronous route began, after any worker-pool wait |
+| `headers_sent` | ASGI response-start sending returned |
+| `body_sent` | ASGI final-body sending returned |
+| `interrupted` / `incomplete` | An exception interrupted the route or final-body sending did not finish |
+
+These records contain only the correlation ID, fixed marker, UTC timestamp,
+bounded elapsed milliseconds, HTTP status, byte count and dropped-record count.
+They never contain request URLs, client addresses, cookies, response bodies,
+exception messages, scanner values or raw profile data. IDs grant no access.
+Authentication and Ingress guards run first; denied requests are not traced.
+Only a single strictly validated header on a parameter-free frame GET is
+eligible. Ordinary requests are unchanged, and frame responses are explicitly
+non-cacheable through both local/Ingress and native access paths.
+
+Tracing admits at most 512 requests per App process, separated by at least
+100 ms. A separate log worker uses a 128-record nonblocking queue and exits
+after five idle seconds; it does not perform log I/O in the HTTP request or
+handler thread. A full queue, failed sink, rate limit or exhausted budget skips
+diagnostics without changing the normal response. Existing logging configuration
+and retention apply; a level above INFO suppresses these records.
+
+The page's last interrupted-update note includes that request's ID and whether
+the exact echo was received, allowing an administrator to compare it with App
+records. An acknowledgement means the App admitted the trace, not that every
+record was retained. **Missing records/acknowledgements do not prove non-arrival**:
+headers can be stripped, budgets exhausted, requests unfinished or records lost.
+Likewise, **`body_sent` does not prove browser receipt**; ASGI sending can finish
+before downstream proxies or the browser consume it. Compare the same request's
+boundaries, rather than inferring the cause from unrelated successful probes.
+Tracing does not extend request deadlines, observation freshness or authority.
+
 On short displays, layout/LED qualifications move into **Profile, LED and field
 details** to leave room for the complete scanner grid. This disclosure includes
 unavailable/unqualified fields and accepted-profile status; it never includes raw

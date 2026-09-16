@@ -52,6 +52,7 @@ from .home_assistant_integration_ingress import (
 )
 from .pcmu_protocol import encode_pcmu_delivery
 from .pcmu_subscriptions import PcmuPacketDelivery
+from .scanner_display_http_trace import MimicRequestTimingMiddleware, mark_display_handler
 from .scanner_display_ingress import (
     DISPLAY_PROFILE_ADMIN_PATH,
     ScannerDisplayIngress,
@@ -535,6 +536,8 @@ def create_web_dashboard_app(
         redoc_url=None,
         openapi_url="/api/v1/openapi.json",
     )
+    # Added first so authentication/Ingress middleware wraps this diagnostic.
+    app.add_middleware(MimicRequestTimingMiddleware)
     if scanner_display_admin_ingress is not None and (
         not home_assistant_ingress
         or not isinstance(scanner_display_admin_ingress, ScannerDisplayIngress)
@@ -1036,7 +1039,9 @@ def create_web_dashboard_app(
         }
 
     @app.get("/api/v1/display-frame")
-    def display_frame(request: Request) -> dict[str, object]:
+    def display_frame(request: Request, response: Response) -> dict[str, object]:
+        mark_display_handler(request.scope)
+        response.headers["Cache-Control"] = "no-store"
         if request.query_params:
             raise HTTPException(status_code=422, detail="Display frames do not accept parameters.")
         return {

@@ -18,25 +18,27 @@ class Element {
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 function harness() {
   let now = 0, nextTimer = 0, calls = 0, nextResponse = null;
+  const requests = [];
   const timers = new Map(), host = new Element('main'), standard = new Element('section');
   const document = {hidden: false, createElement: tag => new Element(tag)};
   let frame = structuredClone(input.scenarios.held_trunk);
   for (const item of Object.values(frame.display.frames)) { item.sequence = 100; item.age_seconds = 0; }
   const window = {
+    crypto: require('node:crypto').webcrypto,
     setTimeout(fn, delay) { timers.set(++nextTimer, {fn, at: now + Math.max(0, delay)}); return nextTimer; },
     clearTimeout(id) { timers.delete(id); },
   };
   vm.runInNewContext(input.script, {window, document, performance: {now: () => now}, AbortController, TextDecoder});
   const response = payload => new Response(JSON.stringify(payload), {headers: {'content-type': 'application/json'}});
   const controller = window.sdsctlMimic.create({host, standard, url: '/frame', request: async (...args) => {
-    calls++; if (nextResponse) return nextResponse(...args); return response(frame);
+    calls++; requests.push(args); if (nextResponse) return nextResponse(...args); return response(frame);
   }});
   const find = id => nodes(host).find(node => node.id === id);
   const choose = (id, value) => { const node = find(id); node.value = value; node.listeners.change(); };
   const context = (changes = {}) => controller.context({available: true, active: true, stopped: false, ...changes});
   const raw = () => nodes(host).filter(node => node.dataset.valueStatus === 'raw_source');
   return {
-    host, document, controller, find, choose, context, raw, response,
+    host, document, window, requests, controller, find, choose, context, raw, response,
     cells: () => nodes(host).filter(node => node.dataset.region),
     get frame() { return frame; }, get calls() { return calls; },
     set request(fn) { nextResponse = fn; },
@@ -273,5 +275,54 @@ function harness() {
   assert.equal(renderFailure.raw().length, 0);
   assert.equal(renderFailure.find('mimic-last-failure').dataset.reason, 'rendering');
   assert.ok(!nodes(renderFailure.host).some(node => (node.textContent ?? '').includes(privateText)));
+  // Timing traces are explicit, bounded and independent of auth/freshness.
+  const trace = harness(); await trace.start();
+  assert.equal(trace.requests[0][1].headers, undefined);
+  trace.request = (_url, options) => {
+    const response = trace.response(trace.frame);
+    if (options.headers) response.headers.set('x-sdsctl-mimic-trace', options.headers['X-SDSCTL-Mimic-Trace']);
+    return response;
+  };
+  trace.find('mimic-trace-start').listeners.click(); await trace.tick(250);
+  const firstLabel = trace.requests.at(-1)[1].headers['X-SDSCTL-Mimic-Trace'];
+  assert.match(firstLabel, /^[0-9a-f]{16}-1$/);
+  assert.equal(trace.requests.at(-1)[1].credentials, 'same-origin');
+  assert.ok(trace.find('mimic-trace-status').textContent.includes('App acknowledgement: received'));
+  await trace.tick(250);
+  assert.equal(trace.requests.at(-1)[1].headers['X-SDSCTL-Mimic-Trace'], firstLabel.replace(/-1$/, '-2'));
+  await trace.tick(120000);
+  assert.equal(trace.requests.at(-1)[1].headers, undefined);
+  assert.ok(trace.find('mimic-trace-status').textContent.includes('tracing is off'));
+  assert.equal(trace.raw().length, 0); // Tracing never renews repeated-sequence freshness.
+  trace.controller.stop();
+  for (const stop of ['button', 'inactive', 'hidden', 'signout']) {
+    const t = harness(); await t.start();
+    t.find('mimic-trace-start').listeners.click(); await t.tick(250);
+    if (stop === 'button') t.find('mimic-trace-start').listeners.click();
+    if (stop === 'inactive') t.context({active:false});
+    if (stop === 'hidden') { t.document.hidden = true; t.context(); }
+    if (stop === 'signout') t.controller.stop();
+    assert.ok(!t.find('mimic-trace-status').textContent.includes(firstLabel));
+    t.document.hidden = false; t.context(); await t.tick(250);
+    if (stop !== 'signout') assert.equal(t.requests.at(-1)[1].headers, undefined);
+    t.controller.stop();
+  }
+  const tracedFailure = harness(); await tracedFailure.start();
+  tracedFailure.find('mimic-trace-start').listeners.click();
+  tracedFailure.request = (_url, {signal}) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error(privateText))));
+  await tracedFailure.tick(5250);
+  const failureLabel = tracedFailure.requests.at(-1)[1].headers['X-SDSCTL-Mimic-Trace'];
+  assert.ok(tracedFailure.find('mimic-last-failure').textContent.includes(`Trace ID: ${failureLabel}; App acknowledgement: not confirmed`));
+  assert.equal(tracedFailure.raw().length, 0);
+  tracedFailure.controller.stop();
+  assert.equal(tracedFailure.find('mimic-last-failure').textContent, '');
+  const unavailableTrace = harness(); await unavailableTrace.start();
+  unavailableTrace.window.crypto = undefined;
+  unavailableTrace.find('mimic-trace-start').listeners.click();
+  await unavailableTrace.tick(250);
+  assert.equal(unavailableTrace.requests.at(-1)[1].headers, undefined);
+  assert.ok(unavailableTrace.raw().length);
+  assert.ok(unavailableTrace.find('mimic-trace-status').textContent.includes('unavailable'));
+  unavailableTrace.controller.stop();
   console.log('controller freshness, identity, demand, stop and recovery passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });
