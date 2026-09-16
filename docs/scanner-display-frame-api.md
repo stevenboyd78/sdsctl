@@ -32,6 +32,24 @@ API reads cannot refresh receipt time. This version does not issue GSI polls.
 - Startup failure and process shutdown unsubscribe the feed. A closed feed
   cannot be restarted or revived by a late callback.
 
+### Diagnosing a brief conflicting-data screen
+
+The owner retains only the latest conflict's allowlisted structural description
+and a bounded count. On a subsequent display read it can emit one journal warning
+per 30 seconds, even if scanning has already recovered. The warning distinguishes
+foreign channel records, a known Mode/V_Screen mismatch, duplicate permitted
+records, and simultaneous weather frequency sources. Multiple reasons can apply.
+Only recognized screen/mode labels and record tag names are included, never
+attributes, scanner names, raw XML, profile data or endpoint addresses.
+
+These diagnostics do not change the frame schema or permit conflicting values
+to render. Logging runs outside the feed lock and never on the scanner's PSI
+callback; a diagnostic sink failure does not fail the frame read. A warning
+describes a previously observed conflict, not necessarily the current response.
+Its count is the number of conflicting observations since the previous warning,
+not the number of browser interruptions. This is diagnostic evidence, not proof
+that the physical scanner stopped or that an ambiguity guard should be removed.
+
 ## Accepted profile and current data remain separate
 
 Every response joins one immutable cached accepted profile with one observation
@@ -265,7 +283,14 @@ reused; display-only access remains read-only, with no new session authority.
 When an update fails, **Profile, LED and field details** retains the last fixed
 failure phase (request/timeout, HTTP status, content type, body read/size,
 UTF-8/JSON decoding, frame validation, endpoint identity, sequence, or rendering),
-bounded elapsed milliseconds and an interruption count. This remains visible
+bounded elapsed milliseconds and an interruption count. Timeouts retain the
+phase reached at the deadline, distinguishing waiting for response headers from
+reading the response body. The note also records elapsed times to headers,
+first body bytes and body completion, plus a bounded byte count. An unreached
+stage is explicitly marked **not reached**, rather than reported as zero.
+All times are relative to request start; they do not isolate browser connection
+queuing, the Home Assistant proxy, network transit or backend processing.
+This remains visible
 after recovery so a transient failure can be inspected without repeating it.
 It is page-local, cleared on session stop/reload, and contains no exception text,
 response body, URL, credentials or scanner/profile values. A timeout's late

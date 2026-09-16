@@ -8,6 +8,7 @@ import pytest
 
 from sds200.exceptions import ProtocolError
 from sds200.scanner_display_adapter import (
+    DisplayConflictReason,
     DisplayLayoutBasis,
     ScannerAlertLed,
     ScannerDisplayAdapter,
@@ -334,6 +335,102 @@ def test_ambiguous_channel_and_duplicate_records_are_not_last_wins(nodes):
     adapter, _ = live_adapter(info(content=nodes))
     frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
     assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
+
+
+@pytest.mark.parametrize(
+    ("screen", "mode", "content", "reasons", "duplicates", "foreign"),
+    [
+        (
+            "trunk_scan",
+            "Trunk Scan",
+            "<TGID/><ConvFrequency/>",
+            ("foreign_channel",),
+            (),
+            ("ConvFrequency",),
+        ),
+        ("trunk_scan", "Quick Search", "<TGID/>", ("mode_screen_mismatch",), (), ()),
+        (
+            "trunk_scan",
+            "Trunk Scan",
+            "<Property/><Property/><TGID/><TGID/>",
+            ("duplicate_records",),
+            ("Property", "TGID"),
+            (),
+        ),
+        (
+            "wx_alert",
+            "unknown private mode",
+            "<WxChannel/><SrchFrequency/>",
+            ("weather_frequency_sources",),
+            (),
+            (),
+        ),
+        (
+            "wx_alert",
+            "Trunk Scan",
+            "<TGID/><Property/><Property/><WxChannel/><SrchFrequency/>",
+            (
+                "foreign_channel",
+                "mode_screen_mismatch",
+                "duplicate_records",
+                "weather_frequency_sources",
+            ),
+            ("Property",),
+            ("TGID",),
+        ),
+    ],
+)
+def test_conflict_diagnostic_preserves_all_reasons_but_no_values(
+    screen, mode, content, reasons, duplicates, foreign
+):
+    adapter, session = live_adapter()
+    sample = replace(info(screen, content), mode=mode, raw_xml="PRIVATE_XML_SENTINEL")
+    diagnostic = adapter.observe(session, sample, sequence=2, received_at=12, now=12)
+    assert diagnostic is not None
+    assert diagnostic.screen == screen
+    assert diagnostic.operating_mode == (None if mode.startswith("unknown") else mode)
+    assert diagnostic.reasons == tuple(DisplayConflictReason(reason) for reason in reasons)
+    assert diagnostic.duplicate_tags == duplicates
+    assert diagnostic.foreign_channel_tags == foreign
+    assert "private" not in repr(diagnostic).lower()
+    with pytest.raises(FrozenInstanceError):
+        diagnostic.screen = "changed"
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=12)
+    assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
+    assert frame.screen is None and frame.indicators == ScannerDisplayIndicators()
+    assert adapter.quick_key_selection(session, now=12) is None
+    assert adapter.observe(session, info(), sequence=3, received_at=13, now=13) is None
+    assert adapter._observation.conflict is None
+
+
+def test_unrecognized_structure_is_never_copied_into_conflict_diagnostic():
+    adapter, session = live_adapter()
+    sample = replace(
+        info(
+            "trunk_scan",
+            '<PRIVATE_TAG Text="PRIVATE_VALUE"/><PRIVATE_TAG/>'
+            '<TGID Name="PRIVATE_NAME"/><TGID/><Property A_Led="PRIVATE_LED"/>',
+        ),
+        mode="PRIVATE_MODE",
+    )
+    diagnostic = adapter.observe(session, sample, sequence=2, received_at=12, now=12)
+    assert diagnostic.duplicate_tags == ("TGID",)
+    assert diagnostic.operating_mode is None
+    assert "PRIVATE" not in repr(diagnostic) + repr(adapter._observation)
+
+
+@pytest.mark.parametrize(
+    "screen,content",
+    [("waterfall", "<TGID/><TGID/>"), ("trunk_scan", "<PopupScreen/><TGID/><TGID/>")],
+)
+def test_unsupported_and_overlay_classification_still_precedes_conflict(screen, content):
+    adapter, session = live_adapter()
+    assert (
+        adapter.observe(session, info(screen, content), sequence=2, received_at=12, now=12) is None
+    )
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=12)
+    assert frame.status in {Status.UNSUPPORTED_SCREEN, Status.OVERRIDE}
+    assert not frame.values
 
 
 def test_mode_specific_filter_drops_old_hierarchy_and_profile_does_not_supply_data():

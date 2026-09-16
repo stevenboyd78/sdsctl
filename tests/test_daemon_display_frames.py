@@ -175,6 +175,65 @@ def test_stream_has_independent_presentations_no_private_source_or_scanner_comma
     assert feed.snapshot()["frames"]["simple"]["screen"]["regions"]
 
 
+def test_conflict_logging_survives_recovery_and_is_bounded_and_sanitized(live, caplog):
+    feed, _, scanner, clock = live
+    sample = replace(
+        info(content='<TGID Name="PRIVATE_NAME"/><TGID/><PRIVATE_TAG/><PRIVATE_TAG/>'),
+        mode="PRIVATE_MODE",
+    )
+    scanner.sample(sample)
+    assert not caplog.records  # Never log from the scanner's PSI callback.
+    scanner.sample()  # A transient conflict can recover before the next read.
+    assert feed.snapshot()["frames"]["preferred"]["status"] == "current"
+    assert len(caplog.records) == 1
+    message = caplog.records[0].getMessage()
+    assert "conflicts=1 latest_screen=trunk_scan latest_mode=unrecognized" in message
+    assert "reasons=duplicate_records duplicate_tags=TGID foreign_channel_tags=none" in message
+    assert "PRIVATE" not in message and TARGET not in message
+    for _ in range(200):
+        scanner.sample(sample)
+        assert feed.snapshot()["frames"]["preferred"]["status"] == "ambiguous_records"
+    clock.now = 39.99
+    feed.snapshot()
+    assert len(caplog.records) == 1
+    clock.now = 40.0
+    feed.snapshot()
+    assert len(caplog.records) == 2
+    assert "conflicts=200 " in caplog.records[-1].getMessage()
+    clock.now = 70.0
+    feed.snapshot()
+    assert len(caplog.records) == 2  # No new observation, no repeated warning.
+
+
+def test_conflict_log_does_not_hold_feed_lock_or_break_a_read(live, monkeypatch):
+    from sds200 import daemon_display_frames as module
+
+    feed, _, scanner, _ = live
+    scanner.sample(info(content="<TGID/><TGID/>"))
+
+    def check_lock():
+        acquired = feed._lock.acquire(timeout=1)
+        if acquired:
+            feed._lock.release()
+        return acquired
+
+    calls = []
+
+    def failed_log(*args):
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            calls.append(executor.submit(check_lock).result(timeout=2))
+        raise RuntimeError("PRIVATE_LOG_SINK_ERROR")
+
+    monkeypatch.setattr(module._LOGGER, "warning", failed_log)
+    result = feed.snapshot()
+    assert calls == [True]
+    assert result["frames"]["preferred"]["status"] == "ambiguous_records"
+    assert not texts(result)
+    assert "conflict" not in json.dumps(result)  # No new public wire fields.
+    scanner.sample()
+    assert feed.snapshot()["frames"]["preferred"]["status"] == "current"
+
+
 def test_existing_radio_parser_supplies_only_complete_psi_without_commands(configured):
     transport = FakeTransport(TARGET)
     radio = SDS200.from_transport(transport, expected_model="SDS200")

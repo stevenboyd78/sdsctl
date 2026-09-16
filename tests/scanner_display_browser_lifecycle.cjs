@@ -95,6 +95,7 @@ function harness() {
   const stoppedCalls = h.calls; await h.tick(5000); assert.equal(h.calls, stoppedCalls);
   assert.equal(h.find('mimic-last-failure').textContent, '');
   assert.equal(h.find('mimic-last-failure').dataset.reason, undefined);
+  assert.equal(h.find('mimic-last-failure').dataset.phase, undefined);
   // Source failures, stale responses and rejected profile reloads erase values.
   const j = harness(); await j.start();
   j.frame.display.failure = 'invalid_profile'; await j.tick(250); assert.equal(j.raw().length, 0);
@@ -149,6 +150,7 @@ function harness() {
     assert.equal(d.raw().length, 0);
     const note = d.find('mimic-last-failure');
     assert.equal(note.dataset.reason, reason); assert.equal(note.hidden, false);
+    assert.equal(note.dataset.phase, reason);
     assert.ok(note.textContent.includes('interruptions this page: 1'));
     assert.ok(!nodes(d.host).some(node => (node.textContent ?? '').includes(privateText)));
     const recorded = note.textContent;
@@ -157,8 +159,7 @@ function harness() {
     d.request = request; await d.tick(250);
     assert.ok(note.textContent.includes('interruptions this page: 2'));
   }
-  // Fetch and streamed body timeouts use a fixed timeout reason; cancellation
-  // of an inactive/signed-out request must not create a spurious diagnostic.
+  // Timeouts distinguish waiting for headers from a stalled streamed body.
   for (const body of [false, true]) {
     const d = harness(); await d.start();
     d.request = (_url, {signal}) => body
@@ -166,15 +167,67 @@ function harness() {
       : new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error(privateText))));
     await d.tick(2250); assert.equal(d.raw().length, 0);
     assert.equal(d.find('mimic-last-failure').dataset.reason, 'request_timeout');
+    assert.equal(d.find('mimic-last-failure').dataset.phase, body ? 'response_body' : 'request');
     assert.ok(d.find('mimic-last-failure').textContent.includes('elapsed 2000 ms'));
+    assert.ok(d.find('mimic-last-failure').textContent.includes(`headers: ${body ? '0 ms' : 'not reached'}`));
+    assert.ok(d.find('mimic-last-failure').textContent.includes('first byte: not reached'));
+    assert.ok(d.find('mimic-last-failure').textContent.includes('body complete: not reached; bytes read: 0'));
     d.controller.stop();
   }
+  // Delayed headers and partial body progress are measured separately, without
+  // retaining any response text or resetting the original two-second deadline.
+  const partial = harness(); await partial.start();
+  let acceptHeaders, bodyController;
+  partial.request = (_url, {signal}) => new Promise(resolve => {
+    acceptHeaders = () => resolve(new Response(new ReadableStream({start(c) {
+      bodyController = c;
+      signal.addEventListener('abort', () => c.error(new Error(privateText)));
+    }}), {headers: {'content-type':'application/json'}}));
+  });
+  await partial.tick(650); acceptHeaders(); await flush();
+  await partial.tick(300); bodyController.enqueue(new TextEncoder().encode('priv')); await flush();
+  await partial.tick(1300);
+  const partialNote = partial.find('mimic-last-failure');
+  assert.equal(partialNote.dataset.phase, 'response_body');
+  assert.ok(partialNote.textContent.includes('headers: 400 ms; first byte: 700 ms; body complete: not reached; bytes read: 4'));
+  assert.ok(partialNote.textContent.includes('elapsed 2000 ms'));
+  const savedPartial = partialNote.textContent;
+  partial.request = () => partial.response(partial.frame); partial.newer();
+  await partial.tick(2000);
+  assert.ok(partial.raw().length); assert.equal(partialNote.textContent, savedPartial);
+  // A completed invalid JSON body records complete body time and byte count.
+  partial.request = () => new Response('bad', {headers:{'content-type':'application/json'}});
+  await partial.tick(250);
+  assert.equal(partialNote.dataset.phase, 'json_decode');
+  assert.ok(partialNote.textContent.includes('headers: 0 ms; first byte: 0 ms; body complete: 0 ms; bytes read: 3'));
+  // Inactivity abort is not a new interruption, and cannot replace retained data.
+  partial.request = (_url, {signal}) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(new Error(privateText)));
+  });
+  const beforeCancel = partialNote.textContent;
+  await partial.tick(2000); partial.context({active:false}); await flush();
+  assert.equal(partialNote.textContent, beforeCancel);
+  const cancelledCalls = partial.calls; await partial.tick(10000);
+  assert.equal(partial.calls, cancelledCalls);
   const late = harness(); await late.start();
   let lateResolve;
   late.request = () => new Promise(resolve => { lateResolve = resolve; });
   await late.tick(3250); late.newer(); lateResolve(late.response(late.frame)); await flush();
   assert.equal(late.raw().length, 0);
   assert.equal(late.find('mimic-last-failure').dataset.reason, 'request_timeout');
+  assert.equal(late.find('mimic-last-failure').dataset.phase, 'request');
+  assert.ok(late.find('mimic-last-failure').textContent.includes('headers: not reached'));
+  // An abort-ignoring body also cannot replace the phase/progress at timeout
+  // with late JSON validation or publishing. No new request overlaps this read.
+  const lateBody = harness(); await lateBody.start();
+  let finishBody;
+  lateBody.request = () => new Response(new ReadableStream({start(c) { finishBody = c; }}), {headers:{'content-type':'application/json'}});
+  await lateBody.tick(3250);
+  assert.equal(lateBody.calls, 2);
+  finishBody.enqueue(new TextEncoder().encode(JSON.stringify(lateBody.frame))); finishBody.close(); await flush();
+  assert.equal(lateBody.raw().length, 0);
+  assert.equal(lateBody.find('mimic-last-failure').dataset.phase, 'response_body');
+  assert.ok(lateBody.find('mimic-last-failure').textContent.includes('first byte: not reached; body complete: not reached; bytes read: 0'));
   const renderFailure = harness(); await renderFailure.start();
   const makeElement = renderFailure.document.createElement;
   renderFailure.document.createElement = () => {

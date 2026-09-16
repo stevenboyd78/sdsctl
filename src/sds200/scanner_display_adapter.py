@@ -48,6 +48,24 @@ class DisplayObservationStatus(StrEnum):
     AMBIGUOUS_RECORDS = "ambiguous_records"
 
 
+class DisplayConflictReason(StrEnum):
+    FOREIGN_CHANNEL = "foreign_channel"
+    MODE_SCREEN_MISMATCH = "mode_screen_mismatch"
+    DUPLICATE_RECORDS = "duplicate_records"
+    WEATHER_FREQUENCY_SOURCES = "weather_frequency_sources"
+
+
+@dataclass(frozen=True, slots=True)
+class ScannerDisplayConflict:
+    """Internal diagnostic: allowlisted structure only, never scanner values."""
+
+    screen: str
+    operating_mode: str | None
+    reasons: tuple[DisplayConflictReason, ...]
+    duplicate_tags: tuple[str, ...]
+    foreign_channel_tags: tuple[str, ...]
+
+
 class DisplayLayoutBasis(StrEnum):
     UNAVAILABLE = "unavailable"
     DOCUMENTED_SCREEN = "documented_screen"
@@ -128,6 +146,7 @@ class _Observation:
     indicators: ScannerDisplayIndicators = ScannerDisplayIndicators()
     live_values: ScannerDisplayLiveValues = ScannerDisplayLiveValues()
     quick_keys: QuickKeySelection | None = None
+    conflict: ScannerDisplayConflict | None = None
 
 
 # Remote Command Specification V1.02 pp.17-18 defines V_Screen, not a
@@ -242,6 +261,7 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
     status = DisplayObservationStatus.CURRENT
     screen_id = info.screen if info.screen in _ALLOWED_TAGS else None
     mode_words = (info.mode or "").casefold().split()
+    conflict = None
     if (
         tags & _OVERRIDE_TAGS
         or "menu" in mode_words
@@ -255,16 +275,31 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         allowed = _ALLOWED_TAGS[screen_id]
         counts = Counter(record.tag for record in info.records)
         operating_family = _OPERATING_FAMILIES.get(info.mode or "")
-        if (
-            (tags & _CHANNEL_TAGS) - allowed
-            or (operating_family is not None and operating_family is not _DATA_FAMILIES[screen_id])
-            or any(counts[tag] > 1 for tag in allowed)
-            # Do not choose between two simultaneous frequency sources in WX.
-            or (screen_id == "wx_alert" and {"WxChannel", "SrchFrequency"} <= tags)
-        ):
+        foreign = tuple(sorted((tags & _CHANNEL_TAGS) - allowed))
+        duplicates = tuple(sorted(tag for tag in allowed if counts[tag] > 1))
+        reasons = []
+        if foreign:
+            reasons.append(DisplayConflictReason.FOREIGN_CHANNEL)
+        if operating_family is not None and operating_family is not _DATA_FAMILIES[screen_id]:
+            reasons.append(DisplayConflictReason.MODE_SCREEN_MISMATCH)
+        if duplicates:
+            reasons.append(DisplayConflictReason.DUPLICATE_RECORDS)
+        # Do not choose between two simultaneous frequency sources in WX.
+        if screen_id == "wx_alert" and {"WxChannel", "SrchFrequency"} <= tags:
+            reasons.append(DisplayConflictReason.WEATHER_FREQUENCY_SOURCES)
+        if reasons:
             status = DisplayObservationStatus.AMBIGUOUS_RECORDS
+            conflict = ScannerDisplayConflict(
+                screen_id,
+                info.mode if info.mode in _OPERATING_FAMILIES else None,
+                tuple(reasons),
+                duplicates,
+                foreign,
+            )
     if status is not DisplayObservationStatus.CURRENT or screen_id is None:
-        return _Observation(sequence, received_at, status, None, RadioStateSnapshot())
+        return _Observation(
+            sequence, received_at, status, None, RadioStateSnapshot(), conflict=conflict
+        )
 
     # Build the existing shared snapshot from ONLY this screen's records. For
     # example a leftover System/Site cannot populate a weather option. This
@@ -393,7 +428,8 @@ class ScannerDisplayAdapter:
         sequence: int,
         received_at: float,
         now: float,
-    ) -> None:
+    ) -> ScannerDisplayConflict | None:
+        """Store one observation; return only a bounded structural conflict, if any."""
         if not isinstance(info, ScannerInfo) or info.command not in {"PSI", "GSI"}:
             raise ScannerDisplayAdapterError("A complete PSI or GSI observation is required.")
         if type(sequence) is not int or not 0 <= sequence < 2**63:
@@ -412,6 +448,7 @@ class ScannerDisplayAdapter:
                 raise ScannerDisplayAdapterError("Observation is duplicate or out of order.")
             self._advance_time(now)
             self._observation = _project(info, sequence, received_at)
+            return self._observation.conflict
 
     def quick_key_selection(
         self, session: DisplayObservationSession, *, now: float

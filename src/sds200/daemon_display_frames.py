@@ -9,8 +9,10 @@ Snapshots join one immutable accepted profile with one current observation.
 
 from __future__ import annotations
 
+import logging
 import threading
 from collections.abc import Callable
+from contextlib import suppress
 from time import monotonic
 from typing import Protocol
 from uuid import uuid4
@@ -28,11 +30,14 @@ from .scanner_display_adapter import (
     DisplayObservationSession,
     ScannerDisplayAdapter,
     ScannerDisplayAdapterError,
+    ScannerDisplayConflict,
     ScannerDisplayStyle,
 )
 from .scanner_display_frame import project_scanner_display_frame
 
 DEFAULT_DISPLAY_STALE_SECONDS = 5.0
+_LOGGER = logging.getLogger(__name__)
+_CONFLICT_LOG_INTERVAL_SECONDS = 30.0
 
 
 class _ScannerDisplaySource(Protocol):
@@ -81,6 +86,9 @@ class DaemonDisplayFrames:
         self._connection_unsubscribe: Callable[[], None] | None = None
         self._psi_unsubscribe: Callable[[], None] | None = None
         self._failure: str | None = None
+        self._pending_conflict: ScannerDisplayConflict | None = None
+        self._conflict_count = 0
+        self._next_conflict_log_at = 0.0
 
     def start(self) -> None:
         try:
@@ -167,9 +175,12 @@ class DaemonDisplayFrames:
             now = self._clock()
             self._sequence += 1
             try:
-                self._adapter.observe(
+                conflict = self._adapter.observe(
                     session, info, sequence=self._sequence, received_at=now, now=now
                 )
+                if conflict is not None:
+                    self._pending_conflict = conflict
+                    self._conflict_count = min(999999, self._conflict_count + 1)
                 if self._quick_keys is not None and self._quick_key_session is not None:
                     try:
                         self._quick_keys.observe(
@@ -261,7 +272,7 @@ class DaemonDisplayFrames:
                     ("detail", ScannerDisplayStyle.DETAIL),
                 )
             }
-            return {
+            result: dict[str, object] = {
                 "schema_version": 1,
                 "endpoint_id": str(self._endpoint_id),
                 "stream_id": self._stream_id,
@@ -270,6 +281,29 @@ class DaemonDisplayFrames:
                 "source_status": source_status,
                 "frames": frames,
             }
+            conflict = None
+            count = 0
+            if self._pending_conflict is not None and now >= self._next_conflict_log_at:
+                conflict, self._pending_conflict = self._pending_conflict, None
+                count, self._conflict_count = self._conflict_count, 0
+                self._next_conflict_log_at = now + _CONFLICT_LOG_INTERVAL_SECONDS
+        if conflict is not None:
+            # On a display read, outside the feed lock, never on the PSI callback.
+            # Remember the latest structure across recovery, without retaining
+            # XML, attributes, source paths, endpoint addresses or names.
+            # A failed diagnostic sink must not turn a valid read into 503.
+            with suppress(Exception):
+                _LOGGER.warning(
+                    "Mimic scanner observation conflicts=%d latest_screen=%s "
+                    "latest_mode=%s reasons=%s duplicate_tags=%s foreign_channel_tags=%s",
+                    count,
+                    conflict.screen,
+                    conflict.operating_mode or "unrecognized",
+                    ",".join(conflict.reasons),
+                    ",".join(conflict.duplicate_tags) or "none",
+                    ",".join(conflict.foreign_channel_tags) or "none",
+                )
+        return result
 
     def close(self) -> None:
         try:

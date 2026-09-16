@@ -141,7 +141,7 @@
 
   // Only these local phase identifiers enter diagnostics; never exception text,
   // response bodies, URLs, credentials or scanner/profile values.
-  async function readResponse(response, phase = () => {}) {
+  async function readResponse(response, phase = () => {}, progress = () => {}) {
     phase("http_status");
     require(response.ok);
     phase("content_type");
@@ -156,6 +156,7 @@
         if (done) break;
         size += value.byteLength;
         if (size > MAX_BYTES) { phase("response_size"); require(false); }
+        progress(size);
         chunks.push(value);
       }
     } catch (error) { await reader.cancel().catch(() => {}); throw error; }
@@ -246,12 +247,32 @@
       if (!demanded() || ticket !== generation) return;
       controller = new AbortController();
       const current = controller;
-      let timedOut = false, phase = "request";
-      const timeout = window.setTimeout(() => { timedOut = true; current.abort(); }, 2000);
       const started = performance.now();
+      let timedOut = false, phase = "request", timeoutPhase = null;
+      let headersMs = null, firstByteMs = null, bodyMs = null, bytes = 0;
+      const elapsedMs = () => Math.min(300000, Math.max(0, Math.round(performance.now() - started)));
+      const timeout = window.setTimeout(() => {
+        timedOut = true; timeoutPhase = phase; current.abort();
+      }, 2000);
       let delay = 250;
       try {
-        const data = await readResponse(await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"}), value => { phase = value; });
+        const response = await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"});
+        // A transport that ignores abort must not read a late body or overwrite
+        // the phase/timings recorded at the deadline.
+        if (ticket !== generation || !demanded()) return;
+        require(!timedOut);
+        headersMs = elapsedMs();
+        const data = await readResponse(response, value => {
+          if (!timedOut) {
+            phase = value;
+            if (value === "utf8_decode") bodyMs = elapsedMs();
+          }
+        }, size => {
+          if (!timedOut) {
+            bytes = size;
+            if (firstByteMs === null && size > 0) firstByteMs = elapsedMs();
+          }
+        });
         if (ticket !== generation || !demanded()) return;
         // Even a transport/body reader that ignores abort cannot publish a late
         // response as a successful update after this request's deadline.
@@ -279,13 +300,16 @@
       } catch {
         if (ticket === generation && demanded()) {
           const reason = timedOut ? "request_timeout" : phase;
+          const interruptedPhase = timeoutPhase ?? phase;
           failures = Math.min(failures + 1, 999999);
-          const elapsed = Math.min(300000, Math.max(0, Math.round(performance.now() - started)));
+          const elapsed = elapsedMs();
           // Kept across recovery so a short interruption can be inspected later.
           // In-memory only; a page reload/session stop removes this diagnostic.
           failureNote.hidden = false;
           failureNote.dataset.reason = reason;
-          failureNote.textContent = `Last interrupted update: ${reason}; elapsed ${elapsed} ms; interruptions this page: ${failures}. No response content was retained.`;
+          failureNote.dataset.phase = interruptedPhase;
+          const timing = value => value === null ? "not reached" : `${value} ms`;
+          failureNote.textContent = `Last interrupted update: ${reason}; phase: ${interruptedPhase}; elapsed ${elapsed} ms; headers: ${timing(headersMs)}; first byte: ${timing(firstByteMs)}; body complete: ${timing(bodyMs)}; bytes read: ${bytes}; interruptions this page: ${failures}. Timings are since request start, not proof of a particular network hop. No response content was retained.`;
           clear(`Mimic-SDS data unavailable — retrying safely (${reason}).`);
         }
         delay = 2000;
@@ -309,7 +333,7 @@
     led.addEventListener("change", () => { treatment = led.value === "border" ? "border" : "strips"; pane.dataset.ledTreatment = treatment; });
     return Object.freeze({
       context(value) { if (closed) return; available = value.available === true; active = value.active === true; stopped = value.stopped === true; reconcile(); },
-      stop() { closed = stopped = true; failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; cancel("Session stopped — scanner values cleared."); },
+      stop() { closed = stopped = true; failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; delete failureNote.dataset.phase; cancel("Session stopped — scanner values cleared."); },
     });
   }
   window.sdsctlMimic = Object.freeze({create, decode, presentValue});
