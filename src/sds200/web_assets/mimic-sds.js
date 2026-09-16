@@ -139,8 +139,14 @@
     target.replaceChildren(grid);
   }
 
-  async function readResponse(response) {
-    require(response.ok && (response.headers.get("content-type") ?? "").includes("application/json"));
+  // Only these local phase identifiers enter diagnostics; never exception text,
+  // response bodies, URLs, credentials or scanner/profile values.
+  async function readResponse(response, phase = () => {}) {
+    phase("http_status");
+    require(response.ok);
+    phase("content_type");
+    require((response.headers.get("content-type") ?? "").includes("application/json"));
+    phase("response_body");
     const reader = response.body.getReader();
     const chunks = [];
     let size = 0;
@@ -149,7 +155,7 @@
         const {value, done} = await reader.read();
         if (done) break;
         size += value.byteLength;
-        require(size <= MAX_BYTES);
+        if (size > MAX_BYTES) { phase("response_size"); require(false); }
         chunks.push(value);
       }
     } catch (error) { await reader.cancel().catch(() => {}); throw error; }
@@ -157,7 +163,12 @@
     const bytes = new Uint8Array(size);
     let position = 0;
     for (const value of chunks) { bytes.set(value, position); position += value.byteLength; }
-    return decode(JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes)));
+    phase("utf8_decode");
+    const source = new TextDecoder("utf-8", {fatal: true}).decode(bytes);
+    phase("json_decode");
+    const payload = JSON.parse(source);
+    phase("frame_validation");
+    return decode(payload);
   }
 
   function create({host, standard, url, request}) {
@@ -191,8 +202,12 @@
     const details = make("details", undefined, "mimic-details");
     details.append(make("summary", "Profile, LED and field details"));
     const detailText = make("p");
+    const failureNote = make("p");
+    failureNote.id = "mimic-last-failure";
+    failureNote.hidden = true;
+    let failures = 0;
     const rows = make("ul");
-    details.append(detailText, rows);
+    details.append(detailText, failureNote, rows);
     pane.append(status, basis, surround, ledStatus, details);
     host.prepend(toolbar, pane);
     function clear(message) {
@@ -231,15 +246,21 @@
       if (!demanded() || ticket !== generation) return;
       controller = new AbortController();
       const current = controller;
-      const timeout = window.setTimeout(() => current.abort(), 2000);
+      let timedOut = false, phase = "request";
+      const timeout = window.setTimeout(() => { timedOut = true; current.abort(); }, 2000);
       const started = performance.now();
       let delay = 250;
       try {
-        const data = await readResponse(await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"}));
+        const data = await readResponse(await request(url, {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"}), value => { phase = value; });
         if (ticket !== generation || !demanded()) return;
+        // Even a transport/body reader that ignores abort cannot publish a late
+        // response as a successful update after this request's deadline.
+        require(!timedOut);
+        phase = "endpoint_identity";
         require(endpoint === null || endpoint === data.endpoint_id);
         const identity = `${data.stream_id}/${data.session_id}`;
         const incoming = data.frames.preferred.sequence;
+        phase = "frame_sequence";
         require(identity !== session || incoming === null || sequence === null || incoming >= sequence);
         // Retain the freshness limit even while the screen is cleared or hidden.
         // A repeated sequence cannot renew its lease by reporting a younger age.
@@ -252,10 +273,21 @@
         latest = data; deadline = data.frames.preferred.status === "current" ? sequenceDeadline : null;
         window.clearTimeout(expiryTimer);
         if (deadline !== null) expiryTimer = window.setTimeout(() => clear(states.stale), Math.max(0, deadline - performance.now()));
+        phase = "rendering";
         if (data.failure !== null) clear("Display configuration unavailable — administrator review required.");
         else render();
       } catch {
-        if (ticket === generation && demanded()) clear("Mimic-SDS data unavailable — retrying safely.");
+        if (ticket === generation && demanded()) {
+          const reason = timedOut ? "request_timeout" : phase;
+          failures = Math.min(failures + 1, 999999);
+          const elapsed = Math.min(300000, Math.max(0, Math.round(performance.now() - started)));
+          // Kept across recovery so a short interruption can be inspected later.
+          // In-memory only; a page reload/session stop removes this diagnostic.
+          failureNote.hidden = false;
+          failureNote.dataset.reason = reason;
+          failureNote.textContent = `Last interrupted update: ${reason}; elapsed ${elapsed} ms; interruptions this page: ${failures}. No response content was retained.`;
+          clear(`Mimic-SDS data unavailable — retrying safely (${reason}).`);
+        }
         delay = 2000;
       } finally {
         window.clearTimeout(timeout);
@@ -277,7 +309,7 @@
     led.addEventListener("change", () => { treatment = led.value === "border" ? "border" : "strips"; pane.dataset.ledTreatment = treatment; });
     return Object.freeze({
       context(value) { if (closed) return; available = value.available === true; active = value.active === true; stopped = value.stopped === true; reconcile(); },
-      stop() { closed = stopped = true; cancel("Session stopped — scanner values cleared."); },
+      stop() { closed = stopped = true; failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; cancel("Session stopped — scanner values cleared."); },
     });
   }
   window.sdsctlMimic = Object.freeze({create, decode, presentValue});

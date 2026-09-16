@@ -188,12 +188,52 @@ def test_normal_scan_overwrite_updates_only_channel_area_and_remains_current():
     )
     frame = adapter.frame(profile, now=12)
     assert {v.region_id: v for v in frame.values}["channel"].text == "New"
-    assert {v.region_id: v for v in frame.values}["information_1"].status is ValueStatus.BLANK
+    assert (
+        {v.region_id: v for v in frame.values}["information_1"].status
+        is ValueStatus.DATA_UNAVAILABLE
+    )
     assert frame.indicators.site_hold is False
     assert (
         project_scanner_display_frame(adapter.frame(profile, now=18))["indicators"]["site_hold"]
         is None
     )
+
+
+@pytest.mark.parametrize("index", [1, 2])
+@pytest.mark.parametrize(
+    "content,expected,status",
+    [
+        (' Text="F0:01234-6*789"', "F0:01234-6*789", ValueStatus.RAW_SOURCE),
+        (' Text="S3:01234-6*---"', "S3:01234-6*---", ValueStatus.RAW_SOURCE),
+        (' Text=""', None, ValueStatus.BLANK),
+        ("", None, ValueStatus.DATA_UNAVAILABLE),
+    ],
+)
+def test_documented_info_text_preserves_quick_keys_and_explicit_blank(
+    index, content, expected, status
+):
+    adapter, _ = live_adapter(
+        info("trunk_scan", f"<ViewDescription><InfoArea{index}{content}/></ViewDescription>")
+    )
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    value = next(v for v in frame.values if v.region_id == f"information_{index}")
+    assert value.status is status and value.text == expected
+
+
+def test_absent_quick_key_rows_are_not_fabricated_from_current_selection():
+    adapter, _ = live_adapter(
+        info(
+            "trunk_scan",
+            '<MonitorList Q_Key="None"/><System Q_Key="None"/>'
+            '<Department Q_Key="None"/><ViewDescription/>',
+        )
+    )
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    values = {v.region_id: v for v in frame.values}
+    for index in (1, 2):
+        assert values[f"information_{index}"].status is ValueStatus.DATA_UNAVAILABLE
+        assert values[f"information_{index}"].text is None
+    assert values["information_3"].text is None  # No qualified third PSI source.
 
 
 @pytest.mark.parametrize(

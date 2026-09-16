@@ -148,6 +148,8 @@ def test_source_text_is_preserved_without_invented_lcd_format(token, group, fiel
         ("Volume&Squelch", 1, {"volume": 0, "squelch": 5}, "0 / 5", ("volume", "squelch")),
         ("Volume&Squelch", 2, {"volume": 7, "squelch": 0}, "7 / 0", ("volume", "squelch")),
         ("Rssi", 2, {"rssi": -67.5}, "-67.5", ("rssi",)),
+        ("Rssi", 2, {"rssi": -75.0}, "-75", ("rssi",)),
+        ("Rssi", 2, {"rssi": 0.0}, "0", ("rssi",)),
         ("Rssi", 2, {"rssi": 0}, "0", ("rssi",)),
     ],
 )
@@ -259,6 +261,13 @@ def test_rssi_rejects_nonfinite_or_invalid_source(bad):
 def test_huge_integer_rssi_is_rejected_without_float_conversion_overflow():
     value = value_for("Rssi", RadioStateSnapshot(rssi=10**400))
     assert value.status is Status.INVALID_SOURCE and value.text is None
+
+
+@pytest.mark.parametrize("sentinel", [-999, -999.0])
+def test_scanner_rssi_unavailable_sentinel_is_not_a_signal_measurement(sentinel):
+    value = value_for("Rssi", RadioStateSnapshot(rssi=sentinel))
+    assert value.status is Status.DATA_UNAVAILABLE and value.text is None
+    assert value.source_fields == ("rssi",)
 
 
 @pytest.mark.parametrize(

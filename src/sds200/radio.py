@@ -20,6 +20,7 @@ from .analysis_subscriptions import (
 from .commands import (
     Command,
     GetChargeStatus,
+    GetDepartmentQuickKeys,
     GetFavoritesQuickKeys,
     GetFirmware,
     GetGltFavorites,
@@ -29,6 +30,7 @@ from .commands import (
     GetScannerRecordingStatus,
     GetSquelch,
     GetStatus,
+    GetSystemQuickKeys,
     GetVolume,
     GetWaterfallStatus,
     HoldSelection,
@@ -68,6 +70,7 @@ from .models import (
     AnalysisMode,
     AnalysisResponse,
     ChargeStatus,
+    DepartmentQuickKeys,
     FavoritesQuickKeys,
     FavoritesQuickKeyState,
     FirmwareResponse,
@@ -85,6 +88,7 @@ from .models import (
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
     StatusResponse,
+    SystemQuickKeys,
 )
 from .network import (
     DEFAULT_UDP_PORT,
@@ -1193,6 +1197,18 @@ class SDSScanner:
         timeout: float = 2.0,
     ) -> None:
         self.execute(SetFavoritesQuickKeys(states), timeout=timeout)
+
+    def get_system_quick_keys(
+        self, favorites_quick_key: int, *, timeout: float = 2.0
+    ) -> SystemQuickKeys:
+        return self.execute(GetSystemQuickKeys(favorites_quick_key), timeout=timeout)
+
+    def get_department_quick_keys(
+        self, favorites_quick_key: int, system_quick_key: int, *, timeout: float = 2.0
+    ) -> DepartmentQuickKeys:
+        return self.execute(
+            GetDepartmentQuickKeys(favorites_quick_key, system_quick_key), timeout=timeout
+        )
 
     def get_scanner_recording_status(
         self, *, timeout: float = 2.0

@@ -28,8 +28,8 @@ function harness() {
   };
   vm.runInNewContext(input.script, {window, document, performance: {now: () => now}, AbortController, TextDecoder});
   const response = payload => new Response(JSON.stringify(payload), {headers: {'content-type': 'application/json'}});
-  const controller = window.sdsctlMimic.create({host, standard, url: '/frame', request: async () => {
-    calls++; if (nextResponse) return nextResponse(); return response(frame);
+  const controller = window.sdsctlMimic.create({host, standard, url: '/frame', request: async (...args) => {
+    calls++; if (nextResponse) return nextResponse(...args); return response(frame);
   }});
   const find = id => nodes(host).find(node => node.id === id);
   const choose = (id, value) => { const node = find(id); node.value = value; node.listeners.change(); };
@@ -67,12 +67,14 @@ function harness() {
   // Backwards sequences clear values; a genuinely new sequence recovers.
   for (const f of Object.values(h.frame.display.frames)) f.sequence -= 2;
   await h.tick(250); assert.equal(h.raw().length, 0);
+  assert.equal(h.find('mimic-last-failure').dataset.reason, 'frame_sequence');
   for (const f of Object.values(h.frame.display.frames)) f.sequence += 3;
   await h.tick(2000); assert.ok(h.raw().length);
   // Wrong endpoint is never adopted, even after clearing the current screen.
   const endpoint = h.frame.display.endpoint_id;
   h.frame.display.endpoint_id = '00000000-0000-0000-0000-000000000099';
   await h.tick(250); assert.equal(h.raw().length, 0);
+  assert.equal(h.find('mimic-last-failure').dataset.reason, 'endpoint_identity');
   h.frame.display.endpoint_id = endpoint; h.newer(); await h.tick(2000); assert.ok(h.raw().length);
   // New connection/feed identity permits a reset sequence, never old DOM.
   h.frame.display.stream_id = '00000000-0000-0000-0000-000000000098';
@@ -91,6 +93,8 @@ function harness() {
   h.context(); // A late status callback cannot undo terminal sign-out.
   assert.equal(h.raw().length, 0);
   const stoppedCalls = h.calls; await h.tick(5000); assert.equal(h.calls, stoppedCalls);
+  assert.equal(h.find('mimic-last-failure').textContent, '');
+  assert.equal(h.find('mimic-last-failure').dataset.reason, undefined);
   // Source failures, stale responses and rejected profile reloads erase values.
   const j = harness(); await j.start();
   j.frame.display.failure = 'invalid_profile'; await j.tick(250); assert.equal(j.raw().length, 0);
@@ -127,5 +131,59 @@ function harness() {
   s.newer(); await s.tick(250); assert.equal(iconCell().children.length, 0);
   icon.value_status = 'data_unavailable';
   s.newer(); await s.tick(250); assert.equal(iconCell().children[0].textContent, '—');
+  // Bounded, phase-only diagnostics survive recovery; private error/body text
+  // must never enter the DOM or replace existing validation/freshness checks.
+  const privateText = 'PRIVATE_BODY_URL_CREDENTIAL_SENTINEL';
+  for (const [reason, request] of [
+    ['request', () => { throw new Error(privateText); }],
+    ['http_status', () => new Response(privateText, {status:503})],
+    ['content_type', () => new Response(privateText, {headers:{'content-type':'text/html'}})],
+    ['response_body', () => new Response(new ReadableStream({start(c) { c.error(new Error(privateText)); }}), {headers:{'content-type':'application/json'}})],
+    ['response_size', () => new Response('x'.repeat(256 * 1024 + 1), {headers:{'content-type':'application/json'}})],
+    ['utf8_decode', () => new Response(new Uint8Array([0xff]), {headers:{'content-type':'application/json'}})],
+    ['json_decode', () => new Response(privateText, {headers:{'content-type':'application/json'}})],
+    ['frame_validation', () => new Response(JSON.stringify({private:privateText}), {headers:{'content-type':'application/json'}})],
+  ]) {
+    const d = harness(); await d.start(); d.request = request;
+    await d.tick(250);
+    assert.equal(d.raw().length, 0);
+    const note = d.find('mimic-last-failure');
+    assert.equal(note.dataset.reason, reason); assert.equal(note.hidden, false);
+    assert.ok(note.textContent.includes('interruptions this page: 1'));
+    assert.ok(!nodes(d.host).some(node => (node.textContent ?? '').includes(privateText)));
+    const recorded = note.textContent;
+    d.request = () => d.response(d.frame); d.newer(); await d.tick(2000);
+    assert.ok(d.raw().length); assert.equal(note.textContent, recorded);
+    d.request = request; await d.tick(250);
+    assert.ok(note.textContent.includes('interruptions this page: 2'));
+  }
+  // Fetch and streamed body timeouts use a fixed timeout reason; cancellation
+  // of an inactive/signed-out request must not create a spurious diagnostic.
+  for (const body of [false, true]) {
+    const d = harness(); await d.start();
+    d.request = (_url, {signal}) => body
+      ? new Response(new ReadableStream({start(c) { signal.addEventListener('abort', () => c.error(new Error(privateText))); }}), {headers:{'content-type':'application/json'}})
+      : new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error(privateText))));
+    await d.tick(2250); assert.equal(d.raw().length, 0);
+    assert.equal(d.find('mimic-last-failure').dataset.reason, 'request_timeout');
+    assert.ok(d.find('mimic-last-failure').textContent.includes('elapsed 2000 ms'));
+    d.controller.stop();
+  }
+  const late = harness(); await late.start();
+  let lateResolve;
+  late.request = () => new Promise(resolve => { lateResolve = resolve; });
+  await late.tick(3250); late.newer(); lateResolve(late.response(late.frame)); await flush();
+  assert.equal(late.raw().length, 0);
+  assert.equal(late.find('mimic-last-failure').dataset.reason, 'request_timeout');
+  const renderFailure = harness(); await renderFailure.start();
+  const makeElement = renderFailure.document.createElement;
+  renderFailure.document.createElement = () => {
+    renderFailure.document.createElement = makeElement;
+    throw new Error(privateText);
+  };
+  renderFailure.newer(); await renderFailure.tick(250);
+  assert.equal(renderFailure.raw().length, 0);
+  assert.equal(renderFailure.find('mimic-last-failure').dataset.reason, 'rendering');
+  assert.ok(!nodes(renderFailure.host).some(node => (node.textContent ?? '').includes(privateText)));
   console.log('controller freshness, identity, demand, stop and recovery passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

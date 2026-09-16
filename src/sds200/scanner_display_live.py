@@ -106,7 +106,10 @@ def project_live_values(info: ScannerInfo) -> ScannerDisplayLiveValues:
     regions: dict[str, str | None] = {}
     for index in (1, 2):
         tag = f"InfoArea{index}"
-        regions[f"information_{index}"] = "" if info.node(tag) is None else attr(tag, "Text")
+        # The SDS200 may omit these records while showing F/S/D quick-key
+        # rows on its LCD. Missing telemetry is not a confirmed blank, and
+        # current Q_Key selections cannot reconstruct a bank's full status.
+        regions[f"information_{index}"] = attr(tag, "Text")
     if info.screen in ("conventional_scan", "trunk_scan"):
         regions.update({"soft_key_1": "SYSTEM", "soft_key_2": "DEPT", "soft_key_3": "CHANNEL"})
         if info.node("OverWrite") is not None:

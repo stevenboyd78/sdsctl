@@ -140,8 +140,14 @@
     target.replaceChildren(grid);
   }
 
-  async function readResponse(response) {
-    require(response.ok && (response.headers.get("content-type") ?? "").includes("application/json"));
+  // Only these local phase identifiers enter diagnostics; never exception text,
+  // response bodies, URLs, credentials or scanner/profile values.
+  async function readResponse(response, phase = () => {}) {
+    phase("http_status");
+    require(response.ok);
+    phase("content_type");
+    require((response.headers.get("content-type") ?? "").includes("application/json"));
+    phase("response_body");
     const reader = response.body.getReader();
     const chunks = [];
     let size = 0;
@@ -150,7 +156,7 @@
         const {value, done} = await reader.read();
         if (done) break;
         size += value.byteLength;
-        require(size <= MAX_BYTES);
+        if (size > MAX_BYTES) { phase("response_size"); require(false); }
         chunks.push(value);
       }
     } catch (error) { await reader.cancel().catch(() => {}); throw error; }
@@ -158,7 +164,12 @@
     const bytes = new Uint8Array(size);
     let position = 0;
     for (const value of chunks) { bytes.set(value, position); position += value.byteLength; }
-    return decode(JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(bytes)));
+    phase("utf8_decode");
+    const source = new TextDecoder("utf-8", {fatal: true}).decode(bytes);
+    phase("json_decode");
+    const payload = JSON.parse(source);
+    phase("frame_validation");
+    return decode(payload);
   }
 
 // Inlined identically in both first-party Ingress cards by the asset generator.

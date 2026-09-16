@@ -247,7 +247,13 @@ def scanner_display_values(
                 or not math.isfinite(snapshot.rssi)
             ):
                 status = ScannerDisplayValueStatus.INVALID_SOURCE
+            elif snapshot.rssi == -999:
+                # SDS200 physical-display comparison: this telemetry sentinel
+                # corresponds to dashes, not a measured -999 dBm signal.
+                status = ScannerDisplayValueStatus.DATA_UNAVAILABLE
             else:
-                status, text = ScannerDisplayValueStatus.RAW_SOURCE, str(snapshot.rssi)
+                rssi = snapshot.rssi
+                text = str(int(rssi)) if rssi == int(rssi) else str(rssi)
+                status = ScannerDisplayValueStatus.RAW_SOURCE
         values.append(ScannerDisplayValue(region.id, status, text, fields))
     return tuple(values)

@@ -32,6 +32,28 @@ class FavoritesQuickKeys:
     packet: Packet
 
 
+@dataclass(frozen=True, slots=True)
+class SystemQuickKeys:
+    """V1.02 SQK GET fields, including its documented extra SYS_QK field.
+
+    The meaning of that returned system key is not yet hardware-qualified;
+    it must not be treated as a live LCD bank selector.
+    """
+
+    favorites_quick_key: int
+    reported_system_quick_key: int
+    states: tuple[FavoritesQuickKeyState, ...]
+    packet: Packet
+
+
+@dataclass(frozen=True, slots=True)
+class DepartmentQuickKeys:
+    favorites_quick_key: int
+    system_quick_key: int
+    states: tuple[FavoritesQuickKeyState, ...]
+    packet: Packet
+
+
 class ScannerRecordingStatus(IntEnum):
     STOPPED = 0
     RECORDING = 1

@@ -117,6 +117,48 @@ This API does not claim every value is already formatted exactly like the LCD.
 Shared formatting and field availability must be qualified before visual
 acceptance; do not infer missing values from a different mode.
 
+The SDS200 `Rssi=-999` telemetry sentinel is unavailable, not a signal-strength
+measurement; Mimic shows a placeholder. Integral RSSI values omit a redundant
+`.0`, while fractional readings are preserved. This does not infer signal bars
+or change the ordinary shared radio state.
+
+The documented `InfoArea1`/`InfoArea2` Text attributes are preserved when sent,
+including quick-key status strings and `SITE HOLD`. An explicit empty Text is
+blank; a missing record is **data unavailable**. Live SDS200 observations can
+omit these nodes while the physical LCD displays F/S/D quick-key rows. The
+current selection's `Q_Key` does not describe all 100 bank states. The third
+information row has no qualified PSI source yet.
+
+### Quick-key GET groundwork (not automatic polling)
+
+Remote Command Specification V1.02, page 6, provides the separate bank reads:
+
+| GET form | Scope | Result |
+| --- | --- | --- |
+| `FQK` | Favorites lists | 100 states |
+| `SQK,<FAV_QK>` | Systems in one Favorites quick key | Selectors plus 100 states |
+| `DQK,<FAV_QK>,<SYS_QK>` | Departments in that Favorites/system scope | Selectors plus 100 states |
+
+States are 0 (does not exist), 1 (disabled), and 2 (enabled). The existing
+`get_favorites_quick_keys()` and new read-only `get_system_quick_keys()` /
+`get_department_quick_keys()` use the scanner object's existing serialized
+command path; calling code must not open a second scanner connection. These
+methods are **not yet wired to the Mimic feed** or exposed as new remote commands.
+Nothing polls or changes quick keys automatically.
+
+The specification's SQK GET reply unusually includes both FAV_QK and SYS_QK.
+The parser preserves that reported SYS_QK separately and requires the documented
+field count; its meaning and actual firmware reply must be hardware-qualified
+before using it as a display selector. A changed or unassigned scope must not
+silently become key 0, a scanner object index, or a previous system's bank.
+
+Remaining owner integration must cache reads independently of PSI, qualify the
+displayed decade/selection and glyph mapping, expire stale results, and reject
+late replies after connection, endpoint or scope changes. Keep these slow reads
+out of PSI callbacks and browser refresh requests, coalesce demand across
+clients, and back off on unavailable/unsupported scopes. Read failures must not
+blank otherwise current scanner data or delay controls, audio and Waterfall.
+
 ## Candidate WebUI presentation
 
 The existing Scanner pane offers **Scanner presentation → Mimic-SDS** only when
@@ -157,6 +199,16 @@ an error or a hidden view cleared the display. Malformed, oversized, unavailable
 or failed responses clear live text and indicators; they do not leave an old
 screen looking current. The existing authenticated fetch/sign-out paths are
 reused; display-only access remains read-only, with no new session authority.
+
+When an update fails, **Profile, LED and field details** retains the last fixed
+failure phase (request/timeout, HTTP status, content type, body read/size,
+UTF-8/JSON decoding, frame validation, endpoint identity, sequence, or rendering),
+bounded elapsed milliseconds and an interruption count. This remains visible
+after recovery so a transient failure can be inspected without repeating it.
+It is page-local, cleared on session stop/reload, and contains no exception text,
+response body, URL, credentials or scanner/profile values. A timeout's late
+response cannot be accepted as a successful update. These diagnostics identify
+the failed stage; they do not by themselves establish a network or scanner cause.
 
 On short displays, layout/LED qualifications move into **Profile, LED and field
 details** to leave room for the complete scanner grid. This disclosure includes
