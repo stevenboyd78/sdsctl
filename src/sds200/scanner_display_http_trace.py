@@ -78,7 +78,9 @@ class _TraceSink:
             with self._lock:
                 dropped = self._dropped
             try:
-                logger.info(
+                # Explicit opt-in diagnostics must be visible at the App's
+                # default WARNING threshold without enabling general debug logs.
+                logger.warning(
                     "Mimic HTTP trace id=%s stage=%s utc=%s "
                     "elapsed_ms=%d status=%d bytes=%d dropped=%d",
                     event.identifier,

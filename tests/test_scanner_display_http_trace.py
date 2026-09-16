@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import threading
 from dataclasses import asdict
 
@@ -182,7 +183,7 @@ def test_slow_logger_is_off_request_thread_and_queue_is_bounded(monkeypatch):
         if len(thread_ids) == 129:
             drained.set()
 
-    monkeypatch.setattr(module.logger, "info", slow_log)
+    monkeypatch.setattr(module.logger, "warning", slow_log)
     sink = module._TraceSink()
     event = module._Event(LABEL.decode(), "received", "2026-09-16T00:00:00+00:00", 0, 0, 0)
     try:
@@ -197,6 +198,33 @@ def test_slow_logger_is_off_request_thread_and_queue_is_bounded(monkeypatch):
     finally:
         release.set()
     assert drained.wait(2) and all(value != threading.get_ident() for value in thread_ids)
+
+
+def test_requested_trace_is_visible_at_default_warning_level_without_private_data():
+    records = []
+    complete = threading.Event()
+
+    class Handler(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+            if "stage=body_sent " in record.getMessage():
+                complete.set()
+
+    handler = Handler(logging.WARNING)
+    old_level = module.logger.level
+    module.logger.addHandler(handler)
+    module.logger.setLevel(logging.WARNING)
+    try:
+        middleware = module.MimicRequestTimingMiddleware(response)
+        messages = asyncio.run(invoke(middleware))
+        assert messages[0]["status"] == 200 and complete.wait(2)
+        assert len(records) == 4
+        assert all(record.levelno == logging.WARNING for record in records)
+        assert all(PRIVATE not in record.getMessage() for record in records)
+        assert all("dropped=0" in record.getMessage() for record in records)
+    finally:
+        module.logger.removeHandler(handler)
+        module.logger.setLevel(old_level)
 
 
 @pytest.mark.parametrize("access", ["local", "ingress", "operator", "display"])

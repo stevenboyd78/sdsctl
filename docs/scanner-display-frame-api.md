@@ -323,7 +323,10 @@ automatically after two minutes or when the page becomes inactive/hidden,
 changes presentation, or signs out. The same button stops it early. If random
 ID generation is unavailable, normal display updates continue without tracing.
 
-The App echoes an admitted ID and writes bounded INFO-level timing records:
+The App echoes an admitted ID and writes bounded WARNING-level timing records
+labelled `Mimic HTTP trace`, so an explicit trace works with the App's default
+logging threshold without enabling general verbose logging. These requested
+timing records are not themselves scanner failure warnings:
 
 | Marker | Boundary measured inside the existing App access guards |
 | --- | --- |
@@ -347,7 +350,7 @@ Tracing admits at most 512 requests per App process, separated by at least
 after five idle seconds; it does not perform log I/O in the HTTP request or
 handler thread. A full queue, failed sink, rate limit or exhausted budget skips
 diagnostics without changing the normal response. Existing logging configuration
-and retention apply; a level above INFO suppresses these records.
+and retention apply; a level above WARNING suppresses these records.
 
 The page's last interrupted-update note includes that request's ID and whether
 the exact echo was received, allowing an administrator to compare it with App
