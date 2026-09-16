@@ -30,6 +30,7 @@ from .scanner_display_values import (
     ScannerDisplayValue,
     scanner_display_values,
 )
+from .scanner_quick_keys import QuickKeySelection, quick_key_selection
 from .state import RadioStateSnapshot, snapshot_from_scanner_info
 
 
@@ -126,6 +127,7 @@ class _Observation:
     snapshot: RadioStateSnapshot
     indicators: ScannerDisplayIndicators = ScannerDisplayIndicators()
     live_values: ScannerDisplayLiveValues = ScannerDisplayLiveValues()
+    quick_keys: QuickKeySelection | None = None
 
 
 # Remote Command Specification V1.02 pp.17-18 defines V_Screen, not a
@@ -317,7 +319,16 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
         squelch=_bounded_level(snapshot.squelch),
         rssi=_bounded_rssi(snapshot.rssi),
     )
-    return _Observation(sequence, received_at, status, screen_id, snapshot, indicators, live_values)
+    return _Observation(
+        sequence,
+        received_at,
+        status,
+        screen_id,
+        snapshot,
+        indicators,
+        live_values,
+        quick_key_selection(selected),
+    )
 
 
 class ScannerDisplayAdapter:
@@ -401,6 +412,22 @@ class ScannerDisplayAdapter:
                 raise ScannerDisplayAdapterError("Observation is duplicate or out of order.")
             self._advance_time(now)
             self._observation = _project(info, sequence, received_at)
+
+    def quick_key_selection(
+        self, session: DisplayObservationSession, *, now: float
+    ) -> QuickKeySelection | None:
+        """Internal owner context only; does not add fields to display.frame."""
+        with self._lock:
+            self._require_session(session)
+            now = self._advance_time(now)
+            observation = self._observation
+            if (
+                observation is None
+                or observation.status is not DisplayObservationStatus.CURRENT
+                or now - observation.received_at >= self._stale_after
+            ):
+                return None
+            return observation.quick_keys
 
     def frame(
         self,

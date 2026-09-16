@@ -152,12 +152,47 @@ field count; its meaning and actual firmware reply must be hardware-qualified
 before using it as a display selector. A changed or unassigned scope must not
 silently become key 0, a scanner object index, or a previous system's bank.
 
-Remaining owner integration must cache reads independently of PSI, qualify the
-displayed decade/selection and glyph mapping, expire stale results, and reject
-late replies after connection, endpoint or scope changes. Keep these slow reads
-out of PSI callbacks and browser refresh requests, coalesce demand across
-clients, and back off on unavailable/unsupported scopes. Read failures must not
-blank otherwise current scanner data or delay controls, audio and Waterfall.
+### Owner quick-key cache groundwork (not enabled)
+
+The local `DaemonQuickKeyCache` component now separates bank freshness from PSI
+freshness. It is **not wired to daemon startup, display frames or a worker yet**:
+installing this candidate does not start bank reads or display F/S/D rows. It
+opens no transport, starts no thread, and retains at most three immutable
+100-state banks, without raw packets or exception text.
+
+Only an already-qualified, current conventional/trunk observation supplies the
+Favorites and system `Q_Key` scope. Object `Index` values never supply quick
+keys. Explicit `None` is unassigned, distinct from key 0; missing, invalid,
+duplicate, overlaid and non-scan observations suspend scoped reads. The owner
+must renew the connection ticket only after an actual new scanner connection.
+
+The component's initial, hardware-unqualified scheduling limits are:
+
+- One shared five-second demand lease for all consumers. Renewing demand,
+  reading a snapshot and handling PSI perform no scanner I/O.
+- At most one GET in flight, with at least 500 ms between reads. Successful
+  banks become eligible for refresh after two seconds; bank values and PSI
+  selection each expire independently after five seconds. Bank age starts at
+  request dispatch, not response completion or browser refresh.
+- A worker uses `read_quick_keys_if_idle()` on the existing owner. It immediately
+  yields when a foreground command holds the command lane. A dispatched GET
+  occupies that lane until completion with a 250 ms response budget; this is
+  not hard preemption of a transport write or a promise of zero control latency.
+- A definite command rejection backs off that bank for 30 seconds. A timeout,
+  malformed reply or other uncertain read disables all automatic bank reads
+  for that connection, without reconnecting the scanner. These replies have no
+  request IDs: retrying on the same connection could mistake a late reply for
+  a new read. A changed scope or renewed demand does not lift that restriction.
+- Connection, endpoint, selection and demand-generation changes discard late
+  results. An old request keeps the shared in-flight slot until it exits; it
+  cannot populate a newer session or revive a closed cache. A failed bank read
+  does not modify or clear the otherwise-current PSI display frame.
+
+Remaining work is explicit owner-worker integration and hardware qualification
+of actual replies, displayed decade/selection and glyph mapping. Those gates
+must be met before rendering bank rows. Transport write bounds, foreground
+control latency, audio and Waterfall continuity also need qualification before
+enabling the reader; synthetic cache tests are not that acceptance.
 
 ## Candidate WebUI presentation
 

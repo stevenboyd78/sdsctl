@@ -1,5 +1,8 @@
 """Spec-derived GET fixtures only; not physical quick-key/LCD acceptance."""
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
 import pytest
 
 from sds200 import (
@@ -8,7 +11,8 @@ from sds200 import (
     GetSystemQuickKeys,
     SystemQuickKeys,
 )
-from sds200.exceptions import ProtocolError
+from sds200.commands import GetFavoritesQuickKeys, SetFavoritesQuickKeys
+from sds200.exceptions import CommandTimeoutError, ProtocolError
 from sds200.models import FavoritesQuickKeyState, Packet
 from sds200.radio import SDS200
 
@@ -118,3 +122,83 @@ def test_get_uses_existing_radio_transport_and_leaves_state_unchanged(kind):
         assert radio.state.snapshot == initial
     assert transport.writes == [expected]  # GET form only, no status list/set.
     assert result.states == tuple(FavoritesQuickKeyState(int(s)) for s in STATES)
+
+
+@pytest.mark.parametrize(
+    "command", [GetFavoritesQuickKeys(), GetSystemQuickKeys(1), GetDepartmentQuickKeys(1, 23)]
+)
+def test_idle_read_dispatches_only_the_whitelisted_get_on_existing_transport(command):
+    name = command.response_command
+    fields = STATES if name == "FQK" else ("1", "23", *STATES)
+
+    class ReplyingTransport(FakeTransport):
+        def write_command(self, wire):
+            super().write_command(wire)
+            self.feed_line(name + "," + ",".join(fields))
+
+    transport = ReplyingTransport()
+    radio = SDS200.from_transport(transport)
+    assert radio.read_quick_keys_if_idle(command) is None
+    assert transport.writes == []  # Does not connect as a side effect.
+    with radio:
+        before = radio.state.snapshot
+        result = radio.read_quick_keys_if_idle(command)
+        assert result.states == tuple(FavoritesQuickKeyState(int(s)) for s in STATES)
+        assert radio.state.snapshot == before
+    assert transport.writes == [command.wire]
+
+
+def test_background_read_yields_to_existing_control_without_queuing():
+    entered, release = Event(), Event()
+
+    class BusyTransport(FakeTransport):
+        def write_command(self, command):
+            super().write_command(command)
+            assert command == "VOL"
+            entered.set()
+            assert release.wait(2)
+            self.feed_line("VOL,3")
+
+    transport = BusyTransport()
+    radio = SDS200.from_transport(transport)
+    with radio, ThreadPoolExecutor(max_workers=2) as pool:
+        control = pool.submit(radio.get_volume, timeout=1.0)
+        try:
+            assert entered.wait(1)
+            # Completes while the foreground read is still blocked.
+            idle = pool.submit(radio.read_quick_keys_if_idle, GetFavoritesQuickKeys())
+            assert idle.result(timeout=0.25) is None
+            assert transport.writes == ["VOL"]
+        finally:
+            release.set()
+        assert control.result(timeout=1) == 3
+
+
+def test_background_read_times_out_and_releases_command_lane():
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    with radio:
+        with pytest.raises(CommandTimeoutError):
+            radio.read_quick_keys_if_idle(GetFavoritesQuickKeys(), timeout=0.01)
+        # Another thread can take the lane after timeout; this does not retry GET.
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(radio.send, "VER").result(timeout=0.5)
+    assert transport.writes == ["FQK", "VER"]
+
+
+@pytest.mark.parametrize("timeout", [0, -1, 0.51, 2, True, float("nan"), float("inf")])
+def test_background_read_budget_cannot_be_expanded_or_invalid(timeout):
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    with pytest.raises(TypeError if isinstance(timeout, bool) else ValueError):
+        radio.read_quick_keys_if_idle(GetFavoritesQuickKeys(), timeout=timeout)
+    assert transport.writes == []
+
+
+@pytest.mark.parametrize("command", [SetFavoritesQuickKeys([2] * 100), "FQK", object()])
+def test_background_read_rejects_sets_and_arbitrary_commands(command):
+    transport = FakeTransport()
+    radio = SDS200.from_transport(transport)
+    with pytest.raises(ValueError):
+        radio.read_quick_keys_if_idle(command)
+    assert transport.writes == []

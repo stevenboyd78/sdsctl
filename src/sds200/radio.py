@@ -1210,6 +1210,34 @@ class SDSScanner:
             GetDepartmentQuickKeys(favorites_quick_key, system_quick_key), timeout=timeout
         )
 
+    def read_quick_keys_if_idle(
+        self,
+        command: GetFavoritesQuickKeys | GetSystemQuickKeys | GetDepartmentQuickKeys,
+        *,
+        timeout: float = 0.25,
+    ) -> FavoritesQuickKeys | SystemQuickKeys | DepartmentQuickKeys | None:
+        """Bounded background GET on this owner; None means busy/disconnected.
+
+        Never queues behind an existing control operation or opens a connection.
+        Once dispatched, it occupies the shared command lane until completion;
+        the response wait has the supplied budget, but does not preempt a
+        transport write. Call from a worker, never a PSI callback.
+        """
+        if type(command) not in (GetFavoritesQuickKeys, GetSystemQuickKeys, GetDepartmentQuickKeys):
+            raise ValueError("Background quick-key reads require an exact GET command.")
+        timeout = _require_positive_timeout(timeout, label="Background quick-key timeout")
+        if timeout > 0.5:
+            raise ValueError("Background quick-key timeout must not exceed 0.5 seconds.")
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            if not self.connected:
+                return None
+            response = self._wait_for_response(command.response_command, command.wire, timeout)
+            return command.parse_response(response)
+        finally:
+            self._command_lock.release()
+
     def get_scanner_recording_status(
         self, *, timeout: float = 2.0
     ) -> ScannerRecordingStatusResponse:
