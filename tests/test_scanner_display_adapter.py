@@ -331,6 +331,112 @@ def test_unqualified_close_call_scan_conflict_clears_values_and_recovers(cc, scr
     assert current.indicators == ScannerDisplayIndicators()
 
 
+CC_DND_TRUNK_RECORDS = {
+    "System": '<System Name="New system" Hold="Off"/>',
+    "Department": '<Department Name="New department" Hold="Off"/>',
+    "Site": '<Site Name="New site" Mod="NFM"/>',
+    "SiteFrequency": '<SiteFrequency Freq="08511250"/>',
+    "TGID": '<TGID Name="New channel" Hold="Off"/>',
+    "Property": '<Property A_Led="Off" VOL="3" SQL="2"/>',
+    "DualWatch": '<DualWatch CC="DND" PRI="Off" WX="Off"/>',
+    "OverWrite": '<OverWrite Text="Scanning..."/>',
+}
+
+
+def cc_dnd_trunk_info(*, omit=None, extra="", dual_watch=None):
+    records = dict(CC_DND_TRUNK_RECORDS)
+    if omit is not None:
+        del records[omit]
+    if dual_watch is not None:
+        records["DualWatch"] = dual_watch
+    return replace(info("trunk_scan", "".join(records.values()) + extra), mode="Close Call")
+
+
+def test_observed_cc_dnd_trunk_reply_uses_current_records_and_keeps_freshness():
+    before = info("trunk_scan", '<System Name="Old system" Hold="On"/><Property A_Led="Red"/>')
+    adapter, session = live_adapter(before)
+    profile = store_for().snapshot(ENDPOINT)
+    assert "Old system" in texts(adapter.frame(profile, now=11))
+    assert adapter.observe(session, cc_dnd_trunk_info(), sequence=2, received_at=12, now=12) is None
+    current = adapter.frame(profile, now=12)
+    assert current.status is Status.CURRENT
+    assert current.screen.layout.requested_mode is ScannerDisplayMode.DETAIL_TRUNK
+    assert {"New system", "New department", "New site", "Scanning...", "08511250"} <= texts(current)
+    assert "Old system" not in texts(current) and "New channel" not in texts(current)
+    assert current.indicators == ScannerDisplayIndicators(ScannerAlertLed.OFF, False, False, False)
+    assert adapter.frame(profile, now=17).status is Status.STALE
+    assert not texts(adapter.frame(profile, now=17))
+    # A genuine detected-frequency view must replace the scan view immediately.
+    hit = replace(info("close_call", '<SrchFrequency Freq="00949000"/>'), mode="Close Call")
+    assert adapter.observe(session, hit, sequence=3, received_at=18, now=18) is None
+    actual_hit = adapter.frame(profile, now=18)
+    assert actual_hit.status is Status.CURRENT
+    assert actual_hit.screen.layout.requested_mode is ScannerDisplayMode.SEARCH_CLOSE_CALL
+    assert "New system" not in texts(actual_hit) and "00949000" in texts(actual_hit)
+
+
+@pytest.mark.parametrize("tag", CC_DND_TRUNK_RECORDS)
+@pytest.mark.parametrize("mutation", ["missing", "duplicate"])
+def test_cc_dnd_trunk_exception_requires_one_of_every_observed_record(tag, mutation):
+    sample = (
+        cc_dnd_trunk_info(omit=tag)
+        if mutation == "missing"
+        else cc_dnd_trunk_info(extra=f"<{tag}/>")
+    )
+    adapter, _ = live_adapter(sample)
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    assert frame.status is Status.AMBIGUOUS_RECORDS
+    assert frame.screen is None and not frame.values
+    assert frame.indicators == ScannerDisplayIndicators()
+
+
+@pytest.mark.parametrize("cc", [None, "", "Off", "Priority", "dnd", "DND "])
+def test_cc_dnd_trunk_exception_never_assumes_the_close_call_policy(cc):
+    dual_watch = "<DualWatch/>" if cc is None else f'<DualWatch CC="{cc}"/>'
+    adapter, _ = live_adapter(cc_dnd_trunk_info(dual_watch=dual_watch))
+    assert adapter.frame(store_for().snapshot(ENDPOINT), now=11).status is Status.AMBIGUOUS_RECORDS
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("mode", "Close Call Only"),
+        ("mode", "Quick Search"),
+        ("command", "GSI"),
+        ("screen", "conventional_scan"),
+    ],
+)
+def test_cc_dnd_exception_does_not_widen_other_mode_screen_command_pairs(field, value):
+    adapter, _ = live_adapter(replace(cc_dnd_trunk_info(), **{field: value}))
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
+
+
+@pytest.mark.parametrize(
+    "tag", ["ConvFrequency", "SrchFrequency", "WxChannel", "CcHitsChannel", "ToneOutChannel"]
+)
+def test_cc_dnd_trunk_exception_never_bypasses_foreign_channel_rejection(tag):
+    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f'<{tag} Name="Foreign"/>'))
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
+
+
+@pytest.mark.parametrize("tag", ["MonitorList", "UnitID", "InfoArea1", "InfoArea2"])
+def test_cc_dnd_trunk_exception_preserves_other_duplicate_guards(tag):
+    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f"<{tag}/><{tag}/>"))
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
+
+
+@pytest.mark.parametrize(
+    "tag", ["PopupScreen", "PlainText", "ReplayDescription", "ReplayMode", "Button"]
+)
+def test_cc_dnd_trunk_exception_preserves_full_screen_overrides(tag):
+    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f'<{tag} Text="private overlay"/>'))
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    assert frame.status is Status.OVERRIDE and not frame.values
+
+
 @pytest.mark.parametrize(
     "screen",
     [

@@ -187,6 +187,13 @@ _QUALIFIED_SCAN_TRANSITIONS = {
     ("conventional_scan", "Trunk Scan"): "ConvFrequency",
     ("trunk_scan", "Scan Mode"): "TGID",
 }
+# Observed during ordinary SDS200 scanning with CC DND: five complete scanner
+# replies retained this trunk-screen structure while Mode briefly said Close
+# Call. Require the observed structure and exact CC policy, not just a TGID or
+# V_Screen. Dedicated Close Call screens and all other mismatches stay separate.
+_CC_DND_TRUNK_RECORDS = frozenset(
+    {"System", "Department", "Site", "SiteFrequency", "TGID", "Property", "DualWatch", "OverWrite"}
+)
 _CHANNEL_TAGS = frozenset(
     {"ConvFrequency", "TGID", "SrchFrequency", "CcHitsChannel", "WxChannel", "ToneOutChannel"}
 )
@@ -264,6 +271,18 @@ def _bounded_rssi(value: float | None) -> float | None:
     return value if value is None or (math.isfinite(value) and abs(value) <= 1e9) else 1e10
 
 
+def _cc_dnd_trunk_transition(info: ScannerInfo, counts: Counter[str]) -> bool:
+    dual_watch = info.node("DualWatch")
+    return (
+        info.command == "PSI"
+        and info.mode == "Close Call"
+        and info.screen == "trunk_scan"
+        and all(counts[tag] == 1 for tag in _CC_DND_TRUNK_RECORDS)
+        and dual_watch is not None
+        and dual_watch.get("CC") == "DND"
+    )
+
+
 def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observation:
     tags = set(info.nodes)
     status = DisplayObservationStatus.CURRENT
@@ -293,6 +312,7 @@ def _project(info: ScannerInfo, sequence: int, received_at: float) -> _Observati
             operating_family is not None
             and operating_family is not _DATA_FAMILIES[screen_id]
             and transition_tag not in tags
+            and not _cc_dnd_trunk_transition(info, counts)
         ):
             reasons.append(DisplayConflictReason.MODE_SCREEN_MISMATCH)
         if duplicates:

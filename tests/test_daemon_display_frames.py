@@ -37,6 +37,7 @@ from sds200.web_dashboard import create_web_dashboard_app
 from sds200.xml_protocol import ScannerInfoParser
 
 from .fakes import FakeTransport
+from .test_scanner_display_adapter import cc_dnd_trunk_info
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="POSIX daemon display profile")
 TARGET = "udp://192.0.2.25:50536"
@@ -663,8 +664,11 @@ def test_read_only_api_is_conditional_and_refuses_parameters_or_control_dispatch
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-def test_real_unix_to_web_display_only_read_path(live, tmp_path, enabled):
-    feed, _, _, _ = live
+@pytest.mark.parametrize("cc_dnd_transition", [False, True])
+def test_real_unix_to_web_display_only_read_path(live, tmp_path, enabled, cc_dnd_transition):
+    feed, _, scanner, _ = live
+    if cc_dnd_transition:
+        scanner.sample(cc_dnd_trunk_info())
     api = DaemonReadOnlyApi(SimpleNamespace(), display_frames=feed if enabled else None)
     location = resolve_daemon_socket_location(tmp_path / "s")
     server = DaemonApiServer(DaemonSocketListener(location), api)
@@ -690,6 +694,10 @@ def test_real_unix_to_web_display_only_read_path(live, tmp_path, enabled):
             assert response.status_code == (200 if enabled else 503)
             if enabled:
                 assert texts(response.json()["display"])
+                if cc_dnd_transition:
+                    display = response.json()["display"]
+                    assert all(frame["status"] == "current" for frame in display["frames"].values())
+                    assert "New system" in texts(display) and "Demo System" not in texts(display)
                 assert response.headers["cache-control"] == "no-store"
                 assert client.get("/api/v1/display-frame?path=/secret").status_code == 422
             assert (

@@ -831,9 +831,20 @@ conflicting mode/screen pair. An unavailable layout also must not claim a
 documented screen-family basis. Regression tests cover these empty states and
 recovery to a newer qualified frame, independently from physical acceptance.
 
-Brief Close Call/scan transitions still require matching live source-record
-evidence before any additional adapter exception. The Close Call-only band graph
-is a separate deferred capability: documented band enable flags do not establish
+One narrowly qualified Close Call/scan transition is now handled: during an
+SDS200 CC DND capture, five complete replies reported `Mode="Close Call"`
+with `V_Screen="trunk_scan"`, retaining exactly one each of `System`, `Department`,
+`Site`, `SiteFrequency`, `TGID`, `Property`, `DualWatch` and `OverWrite`. Each was
+followed by a normal trunk reply. The adapter can use this exact visual-screen
+structure for PSI only with `DualWatch.CC="DND"`; it still rejects duplicates, foreign
+channel records and overlays. It uses only that reply's values, without keeping
+previous fields or changing freshness. This does not qualify GSI, conventional
+scan, Close Call Only, other CC policies or incomplete structures. A dedicated
+Close Call detected-frequency screen remains a real mode change, not a scanning
+transition to hide. Physical acceptance of the new candidate remains separate.
+
+The Close Call-only band graph is a separate deferred capability: documented
+band enable flags do not establish
 bar heights or counter semantics. Do not draw invented bars, infer disabled
 bands from missing bars, or reuse scanning values to conceal an unqualified
 screen while that source is under investigation.
