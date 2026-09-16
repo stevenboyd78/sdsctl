@@ -35,6 +35,28 @@ def packets():
     return {name: item["display"] for name, item in scenarios().items()}
 
 
+@pytest.mark.parametrize(
+    "state,expected",
+    [
+        ("current", "Scanner layout unavailable."),
+        ("waiting", "Connected — waiting for a new scanner frame."),
+        ("disconnected", "Scanner disconnected — waiting for reconnection."),
+        ("stale", "Scanner data is stale — waiting for a fresh frame."),
+        ("override", "Scanner menu, popup or replay is active — normal display paused."),
+        ("ambiguous_records", "Scanner data is inconsistent — waiting for a matching frame."),
+        ("unsupported_screen", "This scanner screen is not supported by Mimic-SDS."),
+    ],
+)
+def test_empty_screen_reason_and_missing_profile_are_distinct(packets, state, expected):
+    frame = copy.deepcopy(packets["held_trunk"]["frames"]["preferred"])
+    frame.update(status=state, screen=None)
+    assert render_mimic_terminal(frame, width=100, height=30).plain == expected
+    frame["profile_revision"] = None
+    assert render_mimic_terminal(frame, width=100, height=30).plain == (
+        "An administrator must import a display profile for this scanner."
+    )
+
+
 def test_all_synthetic_frames_decode_and_are_detached_immutable(packets):
     for original in packets.values():
         value = copy.deepcopy(original)

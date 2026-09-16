@@ -57,6 +57,39 @@ function harness() {
   };
 }
 const cases={
+  async empty_states(h){
+    for(const [state,expected] of Object.entries({
+      current:'Scanner layout unavailable.',
+      waiting:'Connected — waiting for a new scanner frame.',
+      disconnected:'Scanner disconnected — waiting for reconnection.',
+      stale:'Scanner data is stale — waiting for a fresh frame.',
+      override:'Scanner menu, popup or replay is active — normal display paused.',
+      ambiguous_records:'Scanner data is inconsistent — waiting for a matching frame.',
+      unsupported_screen:'This scanner screen is not supported by Mimic-SDS.',
+    })){
+      h.scenario('held_trunk');
+      const c=h.card();await h.start(c);assert.ok(h.raw(c).length);
+      const original=structuredClone(h.frame.display),data=h.frame.display;
+      for(const f of Object.values(data.frames)){
+        f.status=state;f.screen=null;f.layout_basis='unavailable';f.sequence++;
+        for(const key of Object.keys(f.indicators))f.indicators[key]=null;
+      }
+      if(state==='disconnected')data.session_id=null;
+      await h.tick(250);
+      assert.equal(h.raw(c).length,0);
+      assert.equal(c._surround.children[0].textContent,expected);
+      assert.ok(c._note.textContent.startsWith('Scanner screen layout is not currently available.'));
+      for(const f of Object.values(data.frames)){
+        f.profile_revision=null;f.source=null;f.profile_status='unavailable';f.sequence++;
+      }
+      await h.tick(250);
+      assert.equal(c._surround.children[0].textContent,'An administrator must import a display profile for this scanner.');
+      for(const f of Object.values(original.frames))f.sequence+=3;
+      Object.assign(data,original);
+      await h.tick(250);assert.ok(h.raw(c).length);
+      c.disconnectedCallback();assert.equal(h.timers.size,0);
+    }
+  },
   async configuration(h){
     const c=h.card(); assert.equal(c._config.layout,'preferred');assert.equal(c.getCardSize(),9);
     for(const value of [null,[],{url:'https://bad.test'},{profile:'/private'},{layout:'auto'},{led_treatment:'blink'},

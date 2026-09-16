@@ -82,6 +82,7 @@ def test_mimic_installer_refuses_symlinks(tmp_path, part):
     [
         "configuration",
         "render_all",
+        "empty_states",
         "freshness",
         "identity",
         "hidden",

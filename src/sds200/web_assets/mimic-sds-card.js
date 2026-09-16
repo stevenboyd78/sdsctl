@@ -146,7 +146,7 @@ class Sds200MimicCard extends HTMLElement {
     draw(this._surround, frame);
     const color = frame.indicators.alert_led;
     this._surround.style.setProperty("--mimic-led", `#${contract.leds[color] ?? "3b4654"}`); this._surround.dataset.led = color ?? "unknown";
-    const basis = frame.layout_basis === "profile_preference_unconfirmed" ? "Profile preference; the physical Simple/Detail toggle is not reported." : frame.layout_basis === "explicit_presentation_choice" ? "Local presentation choice; scanner unchanged." : "Documented scanner screen family.";
+    const basis = layoutBasisText(frame);
     this._note.textContent = `${basis} Alert LED: ${color ?? "unavailable"}; reported color only, blink timing is not reproduced. Profile: ${frame.profile_status}; source: ${data.source_status ?? "unavailable"}${frame.profile_refresh_pending ? "; refresh pending" : ""}. Revision: ${frame.profile_revision ?? "none"}. Source notation is preserved. Neutral colors indicate missing/unqualified mapping; BLACK/WHITE transforms and icon glyphs are not yet qualified.`;
     this._fields.replaceChildren(...(frame.screen?.regions ?? []).filter(region => !["empty", "blank"].includes(region.value_status)).map(region => make("li", `${region.token ?? region.id}: ${region.value_status}`)));
   }

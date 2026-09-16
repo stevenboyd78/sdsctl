@@ -104,6 +104,39 @@ function harness() {
   j.frame.display.failure = null; j.newer(); await j.tick(250); assert.ok(j.raw().length);
   j.request = () => j.response(input.scenarios.stale);
   await j.tick(250); assert.equal(j.raw().length, 0);
+  // The central empty view must explain the actual state, never label every
+  // missing screen as unsupported. Rejection still erases all prior values.
+  for (const [state, expected] of Object.entries({
+    current: 'Scanner layout unavailable.',
+    waiting: 'Connected — waiting for a new scanner frame.',
+    disconnected: 'Scanner disconnected — waiting for reconnection.',
+    stale: 'Scanner data is stale — waiting for a fresh frame.',
+    override: 'Scanner menu, popup or replay is active — normal display paused.',
+    ambiguous_records: 'Scanner data is inconsistent — waiting for a matching frame.',
+    unsupported_screen: 'This scanner screen is not supported by Mimic-SDS.',
+  })) {
+    const empty = harness(); await empty.start();
+    const original = structuredClone(empty.frame);
+    for (const f of Object.values(empty.frame.display.frames)) {
+      f.status = state; f.screen = null; f.layout_basis = 'unavailable'; f.sequence++;
+      for (const key of Object.keys(f.indicators)) f.indicators[key] = null;
+    }
+    if (state === 'disconnected') empty.frame.display.session_id = null;
+    await empty.tick(250);
+    assert.equal(empty.raw().length, 0);
+    assert.ok(nodes(empty.host).some(n => n.textContent === expected));
+    assert.ok(nodes(empty.host).some(n => n.textContent === 'Scanner screen layout is not currently available.'));
+    assert.ok(!nodes(empty.host).some(n => n.textContent === 'Waiting for a supported scanner screen.'));
+    for (const f of Object.values(empty.frame.display.frames)) {
+      f.profile_revision = null; f.source = null; f.profile_status = 'unavailable'; f.sequence++;
+    }
+    await empty.tick(250);
+    assert.ok(nodes(empty.host).some(n => n.textContent === 'An administrator must import a display profile for this scanner.'));
+    for (const f of Object.values(original.display.frames)) f.sequence += 3;
+    empty.request = () => empty.response(original);
+    await empty.tick(250); assert.ok(empty.raw().length);
+    empty.controller.stop();
+  }
   const k = harness();
   for (const f of Object.values(k.frame.display.frames)) f.age_seconds = 5;
   await k.start(); assert.equal(k.raw().length, 0); // Deadline exactly zero.

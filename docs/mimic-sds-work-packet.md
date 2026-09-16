@@ -822,6 +822,22 @@ color inversion. The first passive live sample verifies parsing and projection,
 not visual acceptance. Keep the existing freshness thresholds; one observed
 clearing cause does not prove every intermittent waiting message is resolved.
 
+When no qualified screen can be drawn, the WebUI, TUI and shared HA renderer
+distinguish an inconsistent observation, stale data, disconnection, an active
+menu/popup/replay, a new-frame wait and a genuinely unsupported screen. Missing
+profile configuration has its own import guidance. These messages clear prior
+values; they do not extend the five-second observation lifetime or qualify a
+conflicting mode/screen pair. An unavailable layout also must not claim a
+documented screen-family basis. Regression tests cover these empty states and
+recovery to a newer qualified frame, independently from physical acceptance.
+
+Brief Close Call/scan transitions still require matching live source-record
+evidence before any additional adapter exception. The Close Call-only band graph
+is a separate deferred capability: documented band enable flags do not establish
+bar heights or counter semantics. Do not draw invented bars, infer disabled
+bands from missing bars, or reuse scanning values to conceal an unqualified
+screen while that source is under investigation.
+
 The audit follows [shared state](../src/sds200/state.py),
 [scanner model projections](../src/sds200/models.py), and the existing
 [35-field web parity test](../tests/test_web_dashboard_field_parity.py).

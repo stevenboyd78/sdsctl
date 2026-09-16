@@ -296,6 +296,41 @@ def test_frame_and_foreign_adapter_tickets_cannot_substitute_for_current_session
     assert second.frame(store_for().snapshot(ENDPOINT), now=12).status is Status.CURRENT
 
 
+@pytest.mark.parametrize("cc", ["Off", "DND", "Priority"])
+@pytest.mark.parametrize(
+    "screen,channel,mode",
+    [("trunk_scan", "TGID", "Trunk Scan"), ("conventional_scan", "ConvFrequency", "Scan Mode")],
+)
+def test_unqualified_close_call_scan_conflict_clears_values_and_recovers(cc, screen, channel, mode):
+    # A matching channel node and a CC flag do not establish a safe exception.
+    # These synthetic records test refusal, not live firmware qualification.
+    sample = replace(
+        info(
+            screen,
+            f'<System Name="Before" Hold="On"/><{channel} Name="Before channel"/>'
+            f'<Property A_Led="Red"/><DualWatch CC="{cc}"/>',
+        ),
+        mode=mode,
+    )
+    adapter, session = live_adapter(sample)
+    profile = store_for().snapshot(ENDPOINT)
+    assert "Before" in texts(adapter.frame(profile, now=11))
+    conflict = adapter.observe(
+        session, replace(sample, mode="Close Call"), sequence=2, received_at=12, now=12
+    )
+    assert conflict is not None
+    rejected = adapter.frame(profile, now=12)
+    assert rejected.status is Status.AMBIGUOUS_RECORDS
+    assert rejected.screen is None and not rejected.values
+    assert rejected.indicators == ScannerDisplayIndicators()
+    recovered = replace(info(screen, f'<System Name="After"/><{channel}/>'), mode=mode)
+    assert adapter.observe(session, recovered, sequence=3, received_at=13, now=13) is None
+    current = adapter.frame(profile, now=13)
+    assert current.status is Status.CURRENT
+    assert "After" in texts(current) and "Before" not in texts(current)
+    assert current.indicators == ScannerDisplayIndicators()
+
+
 @pytest.mark.parametrize(
     "screen",
     [

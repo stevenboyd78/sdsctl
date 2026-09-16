@@ -19,7 +19,7 @@ from textual.widgets import Static
 
 from . import __version__
 from .scanner_display_reader import DisplayFrameReader
-from .scanner_display_web import scanner_display_browser_contract
+from .scanner_display_web import scanner_display_browser_contract, scanner_display_empty_message
 from .tui_clock import LocalHeaderClock
 
 _CONTRACT: Any = scanner_display_browser_contract()
@@ -69,7 +69,11 @@ def render_mimic_terminal(
         return Text("Mimic-SDS needs at least 60 columns × 22 rows.\nResize or press M to return.")
     screen = frame["screen"]
     if screen is None:
-        return Text("No qualified scanner screen.\nImport a display profile if none is accepted.")
+        return Text(
+            scanner_display_empty_message(
+                frame["status"], has_profile=frame["profile_revision"] is not None
+            )
+        )
     inner_width, inner_height = width - 2, height - 2
     console = Console(width=inner_width)
     content: list[list[tuple[int, Text]]] = [[] for _ in range(inner_height)]

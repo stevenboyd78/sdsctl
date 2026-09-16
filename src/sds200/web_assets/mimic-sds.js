@@ -110,7 +110,7 @@
     const grid = make("div", undefined, "mimic-grid");
     if (frame.screen === null) {
       grid.classList.add("mimic-empty");
-      grid.textContent = frame.profile_revision === null ? "An administrator must import a display profile for this scanner." : "Waiting for a supported scanner screen.";
+      grid.textContent = frame.profile_revision === null ? contract.missing_profile_message : contract.empty_messages[frame.status];
       target.replaceChildren(grid);
       return;
     }
@@ -137,6 +137,11 @@
       grid.append(cell);
     }
     target.replaceChildren(grid);
+  }
+
+  function layoutBasisText(frame) {
+    if (frame.screen === null) return "Scanner screen layout is not currently available.";
+    return frame.layout_basis === "profile_preference_unconfirmed" ? "Profile preference — physical Simple/Detail toggle is not reported." : frame.layout_basis === "explicit_presentation_choice" ? "Local Simple/Detail choice — scanner unchanged." : "Documented scanner screen family.";
   }
 
   // Only these local phase identifiers enter diagnostics; never exception text,
@@ -252,7 +257,7 @@
       const message = states[frame.status];
       if (status.textContent !== message) status.textContent = message;
       pane.dataset.state = frame.status;
-      basis.textContent = frame.layout_basis === "profile_preference_unconfirmed" ? "Profile preference — physical Simple/Detail toggle is not reported." : frame.layout_basis === "explicit_presentation_choice" ? "Local Simple/Detail choice — scanner unchanged." : "Documented scanner screen family.";
+      basis.textContent = layoutBasisText(frame);
       draw(surround, frame);
       const color = frame.indicators.alert_led;
       surround.style.setProperty("--mimic-led", `#${contract.leds[color] ?? "3b4654"}`);
