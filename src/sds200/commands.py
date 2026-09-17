@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal, Protocol, TypeVar
 
 from .exceptions import (
@@ -22,6 +23,7 @@ from .models import (
     ModelResponse,
     MsiResponse,
     Packet,
+    ScannerDateTime,
     ScannerInfo,
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
@@ -31,6 +33,49 @@ from .models import (
 )
 
 T = TypeVar("T", covariant=True)
+
+
+@dataclass(frozen=True, slots=True)
+class GetDateTime:
+    """V1.02 p.9 GET only; no clock-setting command is provided here."""
+
+    @property
+    def wire(self) -> str:
+        return "DTM"
+
+    @property
+    def response_command(self) -> str:
+        return "DTM"
+
+    def parse_response(self, response: object) -> ScannerDateTime:
+        if not isinstance(response, Packet) or response.command != "DTM":
+            raise ProtocolError("DTM read returned an unexpected response.")
+        if response.fields in (("NG",), ("ERR",), ("ERROR",)):
+            raise CommandRejectedError("DTM read was rejected.")
+        if len(response.fields) != 8:
+            raise ProtocolError("DTM read requires exactly eight fields.")
+        daylight, *components, rtc = response.fields
+        if (
+            not 1 <= len(daylight) <= 16
+            or not daylight.isascii()
+            or not all(c.isalnum() or c in "_-" for c in daylight)
+            or rtc not in ("0", "1")
+            or any(
+                len(value) != width or not value.isascii() or not value.isdecimal()
+                for value, width in zip(components, (4, 2, 2, 2, 2, 2), strict=True)
+            )
+        ):
+            raise ProtocolError("DTM read returned invalid clock fields.")
+        local_time = None
+        if rtc == "1":
+            try:
+                year, month, day, hour, minute, second = (int(value) for value in components)
+                local_time = datetime(year, month, day, hour, minute, second)
+            except ValueError:
+                raise ProtocolError("DTM read returned an invalid calendar date or time.") from None
+        # RTC NG can contain unset date components (including year/month/day 0).
+        # Preserve the packet for diagnostics but never expose them as valid time.
+        return ScannerDateTime(local_time, daylight, rtc == "1", response)
 
 
 class Command(Protocol[T]):

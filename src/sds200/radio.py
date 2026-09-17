@@ -20,6 +20,7 @@ from .analysis_subscriptions import (
 from .commands import (
     Command,
     GetChargeStatus,
+    GetDateTime,
     GetDepartmentQuickKeys,
     GetFavoritesQuickKeys,
     GetFirmware,
@@ -84,6 +85,7 @@ from .models import (
     PwfResponse,
     RadioEvent,
     RadioHealth,
+    ScannerDateTime,
     ScannerInfo,
     ScannerRecordingStatus,
     ScannerRecordingStatusResponse,
@@ -771,6 +773,30 @@ class SDSScanner:
 
     def get_firmware(self, *, timeout: float = 2.0) -> str:
         return self.execute(GetFirmware(), timeout=timeout)
+
+    def get_date_time(self, *, timeout: float = 2.0) -> ScannerDateTime:
+        """Read the scanner's own clock without setting it or converting timezone."""
+        return self.execute(GetDateTime(), timeout=timeout)
+
+    def read_clock_if_idle(self, *, timeout: float = 0.25) -> ScannerDateTime | None:
+        """One GET on the existing owner; busy/disconnected returns None.
+
+        No connect, worker, retry or cache is created. Like quick-key GETs,
+        callers must quarantine uncertain reads until a real reconnect. Never
+        call from a PSI callback. The deadline bounds response waiting, not a
+        blocking transport write; a shared worker must also enforce pacing.
+        """
+        timeout = _require_positive_timeout(timeout, label="Background clock timeout")
+        if timeout > 0.5:
+            raise ValueError("Background clock timeout must not exceed 0.5 seconds.")
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            if not self.connected:
+                return None
+            return self.execute(GetDateTime(), timeout=timeout)
+        finally:
+            self._command_lock.release()
 
     def get_volume(self, *, timeout: float = 2.0) -> int:
         value = self.execute(GetVolume(), timeout=timeout)

@@ -187,15 +187,63 @@ instead of clipping a five-bar reading to fewer bars. Update the server and
 bundled readers/generated HA resource together: the strict decoder validates
 canonical alignment, so an old centered-layout reader rejects the new geometry.
 
-The scanner clock remains a separate acquisition task. V1.02 p.9 documents
-read-only `DTM` and a reply with DayLightSaving, year/month/day, hour/minute/second
-and RTC Status (0 invalid, 1 valid). Do not substitute the host clock, issue the
-SET form, assume an undocumented timezone/DST encoding, or reuse a stale RTC
-reading. Before live Day/Time display, qualify a bounded GET on the existing
-scanner-owner connection, RTC/date validation, independent freshness and caching.
-F/S/D rows likewise require the scoped bank acquisition described below; a
-current selection alone cannot reconstruct them. This presentation change adds
-no DTM or quick-key polling and does not resolve the remaining AST-only IDs.
+The scanner clock is a separate acquisition task from the application header
+clock. The GET/parser and passive sample lifecycle described below are available
+locally, but **live Day/Time fields are not enabled**. F/S/D rows likewise require
+the scoped bank acquisition described below; a current selection alone cannot
+reconstruct them. These changes add no automatic DTM or quick-key polling and do
+not resolve the remaining AST-only IDs.
+
+### Scanner clock GET groundwork (not automatic polling)
+
+Remote Command Specification V1.02 p.9 documents a read-only `DTM` and a reply
+with eight fields: DayLightSaving, year/month/day, hour/minute/second, and RTC
+Status (0 invalid, 1 valid). `GetDateTime` / `get_date_time()` parse that GET reply
+through the scanner object's existing serialized transport. There is no new SET
+clock command, second connection, remote operation or daemon startup hook.
+
+`ScannerDateTime.local_time` is a **naive scanner-local calendar reading**, not
+an instant in UTC or the host's local timezone. The DayLightSaving token is
+preserved without interpreting its undocumented encoding. An invalid RTC has
+no usable `local_time`, even if its numeric fields happen to form a valid date.
+An RTC-valid response requires a real calendar date and 00–23/00–59/00–59 time.
+The documented four-digit year and two-digit components are enforced; an actual
+firmware deviation requires captured evidence before changing that contract.
+`DTM,OK` is a SET acknowledgement and is not accepted as a clock reading.
+
+`read_clock_if_idle()` offers one bounded GET on an already-connected scanner,
+with no queued wait for a busy command lane. Its default response budget is
+250 ms and cannot be raised above 500 ms. This is not a hard transport-write
+preemption deadline. It creates no worker, retry or cache, and must not run
+inside a PSI callback. Calling code must quarantine uncertain outcomes until an
+actual reconnect, because replies have a command code but no request identifier.
+
+The internal `ScannerClockSamples` store is passive: no transport, thread, timer,
+polling or I/O in construction/snapshots. It provides:
+
+- endpoint/session-bound tickets, one outstanding read, and a minimum two-second
+  reservation interval; a previous session's read occupies its slot until it
+  finishes, but cannot populate or quarantine the new session;
+- exact samples with freshness measured from dispatch, expiring at five seconds;
+  no extrapolation from the workstation clock or substitution of receipt time;
+- source-packet revalidation without retaining the raw packet in the sample;
+- a 250 ms completion budget, connection quarantine after timeout, malformed or
+  uncertain reads, and a 30-second backoff for an in-budget definite rejection;
+- invalidation that discards pending values without lifting quarantine, and an
+  invalid RTC that immediately replaces any previously valid clock reading.
+
+Only the owning connection lifecycle may begin a new session; it is not a retry
+button. An eventual **single shared owner worker** must coordinate clock and
+quick-key reads with foreground controls, waterfall/analysis modes, fresh PSI
+and demand. The clock store does not enforce those external conditions itself.
+Do not create an independent clock polling loop next to the quick-key worker.
+
+Before live Day/Time display, qualify the exact reply and ongoing PSI behavior
+with one bounded existing-owner GET, compare with the physical scanner, and
+verify mode and freshness gates. Stop on an uncertain reply; do not retry it in
+the same connection. No DTM SET, FQK/SQK/DQK SET, automatic AST or scanner-clock
+timezone assumption is part of that qualification. The scanner's configured
+12/24-hour presentation also needs a verified source before claiming LCD parity.
 
 ### Quick-key GET groundwork (not automatic polling)
 

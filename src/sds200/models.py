@@ -20,6 +20,20 @@ class Packet:
     received_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
+@dataclass(frozen=True, slots=True)
+class ScannerDateTime:
+    """DTM clock reading, not an instant in UTC or the host's timezone.
+
+    An invalid RTC has no usable local_time. DayLightSaving is preserved as
+    an opaque bounded token: V1.02 does not define its encoding or UTC offset.
+    """
+
+    local_time: datetime | None
+    daylight_saving: str
+    rtc_valid: bool
+    packet: Packet
+
+
 class FavoritesQuickKeyState(IntEnum):
     NONEXISTENT = 0
     DISABLED = 1

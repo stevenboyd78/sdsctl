@@ -549,6 +549,8 @@ __all__ = [
     "GetFavoritesQuickKeys",
     "GetDepartmentQuickKeys",
     "GetSystemQuickKeys",
+    "GetDateTime",
+    "ScannerDateTime",
     "GetGltFavorites",
     "GetModel",
     "GetMsi",
