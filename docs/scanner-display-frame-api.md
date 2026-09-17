@@ -326,6 +326,15 @@ command path; calling code must not open a second scanner connection. These
 methods are **not yet wired to the Mimic feed** or exposed as new remote commands.
 Nothing polls or changes quick keys automatically.
 
+One operator-triggered existing-owner UDP `FQK` GET on SDS200 firmware 1.26.01
+returned exactly 100 valid state fields, all `0`, followed by two qualified normal
+PSI updates with no connection or scan-context change. An independent bounded
+receive-only observation captured the same reply and 57 normal PSI updates
+without decoding errors. The first ten states are consistent with the dashed
+F0 row in the operator's baseline photo. This qualifies that bounded reply/PSI
+observation only: it does not establish populated-bank glyphs, a live LCD decade
+selector, System/Department GET behavior, or automatic-polling acceptance.
+
 The specification's SQK GET reply unusually includes both FAV_QK and SYS_QK.
 The parser preserves that reported SYS_QK separately and requires the documented
 field count; its meaning and actual firmware reply must be hardware-qualified
