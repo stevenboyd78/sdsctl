@@ -73,6 +73,7 @@ class ReadWindow:
         self.timing = timing
         self.timing_events = []
         self.timing_overflow = False
+        self.timing_poll_active = False
         self.max_opportunities = CONTINUITY_MAX_OPPORTUNITIES if continuity else MAX_OPPORTUNITIES
         self.window_seconds = CONTINUITY_WINDOW_SECONDS if continuity else WINDOW_SECONDS
         self.runtime, self.firmware, self.clock = runtime, firmware, clock
@@ -142,6 +143,7 @@ class ReadWindow:
                 "origin_monotonic_seconds": self.started,
                 "limit": TIMING_EVENT_LIMIT,
                 "overflow": self.timing_overflow,
+                "poll_active_at_snapshot": self.timing_poll_active,
                 "events": [dict(event) for event in self.timing_events],
                 "outgoing_wire_delivery_established": False,
             }
@@ -289,6 +291,7 @@ class ReadWindow:
                 and self.failure is None
                 and self.opportunities == self.max_opportunities
                 and self.inflight == 0
+                and not self.timing_poll_active
                 and self.replies
                 == {"DTM": self.max_opportunities // 2, "FQK": self.max_opportunities // 2}
                 and self.post_read_psi >= 2
@@ -305,6 +308,7 @@ class ReadWindow:
                 "failure": self.failure,
                 "read_failure": self.read_failure,
                 "timing_overflow": self.timing_overflow,
+                "timing_poll_active": self.timing_poll_active,
                 "samples_valid": samples_valid,
                 "elapsed_seconds": None
                 if self.started is None
@@ -451,12 +455,16 @@ def main(argv=None):
     class TimingCache(DaemonQuickKeyCache):
         def poll_once(self):
             window = trigger.window
-            before = window.opportunities
+            with window.lock:
+                before = window.opportunities
+                window.timing_poll_active = True
             try:
                 return super().poll_once()
             finally:
-                if window.opportunities != before:
-                    window.record_timing("cache_complete")
+                with window.lock:
+                    if window.opportunities != before:
+                        window.record_timing("cache_complete")
+                    window.timing_poll_active = False
 
     class ResearchFrames(original_frames):
         def __init__(self, profile, scanner, **kwargs):

@@ -518,6 +518,7 @@ def test_actual_feed_worker_and_trigger_lifecycle(
             report = json.loads(result_file.read_text())
             if outcome == "success":
                 assert count == limit and report["status"] == "replies_and_psi_observed"
+                assert not report["timing_poll_active"]
                 assert report["reply_counts"] == {"DTM": limit // 2, "FQK": limit // 2}
             elif outcome == "expiry":
                 assert count == 0 and report["status"] == "operator_wait_expired"
@@ -541,6 +542,7 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                 assert not timeline["overflow"] and len(timeline["events"]) <= 512
                 assert "PRIVATE" not in timing_file.read_text()
                 if outcome == "success":
+                    assert not timeline["poll_active_at_snapshot"]
                     assert len([e for e in timeline["events"] if e["event"] == "tx_intent"]) == 60
                     assert (
                         len([e for e in timeline["events"] if e["event"] == "cache_complete"]) == 60
