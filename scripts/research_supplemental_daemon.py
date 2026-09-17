@@ -26,22 +26,53 @@ from sds200.daemon_display_read_research import (
 from sds200.daemon_quick_keys import DaemonQuickKeyCache
 from sds200.daemon_runtime import DaemonRuntime, DaemonRuntimeState
 from sds200.network import UdpTransport
+from sds200.trace import TrafficTrace
 
 MAX_OPPORTUNITIES = 6
 WINDOW_SECONDS = 8.0
 CONTINUITY_MAX_OPPORTUNITIES = 60
 CONTINUITY_WINDOW_SECONDS = 64.0
 CONTINUITY_MAX_PSI_GAP = 2.0
+TIMING_EVENT_LIMIT = 512
+
+
+class TimingTrace:
+    """Delegate the existing trace; retain only allowlisted phase/command/time.
+
+    tx is software intent BEFORE the transport write, not wire delivery. rx is
+    after UDP decoding, before typed parsing. Neither is a kernel arrival time.
+    """
+
+    def __init__(self, original, window):
+        self.original, self.window = original, window
+
+    def tx(self, value):
+        if value in {"DTM", "FQK"}:
+            self.window.record_timing("tx_intent", value)
+        self.original.tx(value)
+
+    def rx(self, value):
+        command = value[:4]
+        if command in {"DTM,", "FQK,"}:
+            self.window.record_timing("rx_line", command[:3])
+        elif value.rstrip("\r\n") in {"ERR", "NG"}:
+            self.window.record_timing("rx_rejection")
+        self.original.rx(value)
 
 
 class ReadWindow:
     """One non-renewable admission budget; no threads or scanner commands."""
 
-    def __init__(self, runtime, firmware, *, clock=monotonic, continuity=False):
+    def __init__(self, runtime, firmware, *, clock=monotonic, continuity=False, timing=False):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
         if type(continuity) is not bool:
             raise ValueError("An explicit boolean continuity policy is required.")
+        if type(timing) is not bool or (timing and not continuity):
+            raise ValueError("Timing requires an explicit continuity policy.")
         self.continuity = continuity
+        self.timing = timing
+        self.timing_events = []
+        self.timing_overflow = False
         self.max_opportunities = CONTINUITY_MAX_OPPORTUNITIES if continuity else MAX_OPPORTUNITIES
         self.window_seconds = CONTINUITY_WINDOW_SECONDS if continuity else WINDOW_SECONDS
         self.runtime, self.firmware, self.clock = runtime, firmware, clock
@@ -58,8 +89,62 @@ class ReadWindow:
 
     def stop(self, reason=None):
         with self.lock:
+            if not self.closed:
+                self.record_timing("closed")
             self.closed = True
             self.failure = self.failure or reason
+
+    def record_timing(self, event, command=None):
+        if event not in {
+            "armed",
+            "closed",
+            "scope_enter",
+            "scope_exit",
+            "cache_complete",
+            "tx_intent",
+            "rx_line",
+            "rx_rejection",
+            "parsed_packet",
+        } or command not in {None, "DTM", "FQK"}:
+            raise ValueError("Timing accepts only reviewed metadata labels.")
+        if not self.timing or self.started is None:
+            return
+        now = self.clock()  # Timestamp before waiting for the short metadata lock.
+        with self.lock:
+            if len(self.timing_events) >= TIMING_EVENT_LIMIT:
+                self.timing_overflow = self.closed = True
+                self.failure = self.failure or "timing_overflow"
+                return
+            self.timing_events.append(
+                {"event": event, "command": command, "monotonic_seconds": now}
+            )
+
+    @contextmanager
+    def trace_scope(self):
+        scanner = self.runtime.scanner
+        original = scanner.trace
+        if type(original) is not TrafficTrace:
+            raise ValueError("Timing requires the existing unmodified trace.")
+        probe = TimingTrace(original, self)
+        scanner.trace = probe
+        try:
+            yield
+        finally:
+            if scanner.trace is not probe:
+                raise RuntimeError("Timing trace ownership changed; preserve for review.")
+            scanner.trace = original
+
+    def timing_report(self):
+        with self.lock:
+            return {
+                "schema": 1,
+                "clock": "time.monotonic (same container required for comparison)",
+                "origin_monotonic_seconds": self.started,
+                "limit": TIMING_EVENT_LIMIT,
+                "overflow": self.timing_overflow,
+                "events": [dict(event) for event in self.timing_events],
+                "outgoing_wire_delivery_established": False,
+            }
 
     def observe_connection(self, _connected):
         self.stop("connection_changed")  # Even a rapid false/true pair consumes the trial.
@@ -84,6 +169,8 @@ class ReadWindow:
 
     def observe_packet(self, packet):
         with self.lock:
+            if packet.command in self.replies:
+                self.record_timing("parsed_packet", packet.command)
             if not self.closed and packet.command in self.replies:
                 self.replies[packet.command] += 1
 
@@ -108,6 +195,7 @@ class ReadWindow:
                 self.stop("preflight_refused")
                 return False
             self.started = self.clock()
+            self.record_timing("armed")
             return True
 
     def allow_poll(self):
@@ -163,6 +251,11 @@ class ReadWindow:
                         self.opportunities += 1
                         self.inflight += 1
                         self.post_read_psi = 0
+                        self.record_timing("scope_enter")
+                        if self.timing_overflow:
+                            self.opportunities -= 1
+                            self.inflight -= 1
+                            allowed = False
                 elif self.allow_poll() and not available:
                     self.stop("runtime_busy")
             try:
@@ -170,6 +263,7 @@ class ReadWindow:
             finally:
                 if allowed:
                     with self.lock:
+                        self.record_timing("scope_exit")
                         self.inflight -= 1
                         self.post_read_psi = 0
 
@@ -210,6 +304,7 @@ class ReadWindow:
                 "max_psi_gap_seconds": round(self.max_psi_gap, 6),
                 "failure": self.failure,
                 "read_failure": self.read_failure,
+                "timing_overflow": self.timing_overflow,
                 "samples_valid": samples_valid,
                 "elapsed_seconds": None
                 if self.started is None
@@ -219,11 +314,14 @@ class ReadWindow:
 
 
 class SupplementalTrigger(OperatorTrigger):
-    def __init__(self, directory, firmware, *, continuity=False, **kwargs):
+    def __init__(self, directory, firmware, *, continuity=False, timing=False, **kwargs):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
         if type(continuity) is not bool:
             raise ValueError("An explicit boolean continuity policy is required.")
+        if type(timing) is not bool or (timing and not continuity):
+            raise ValueError("Timing requires an explicit continuity policy.")
         self.continuity = continuity
+        self.timing = timing
         super().__init__(directory, **kwargs)
         self.firmware, self.window = firmware, None
 
@@ -232,7 +330,9 @@ class SupplementalTrigger(OperatorTrigger):
             filename,
             {
                 **report,
-                "read_kind": "shared-clock-favorites-continuity"
+                "read_kind": "shared-clock-favorites-timing"
+                if self.timing
+                else "shared-clock-favorites-continuity"
                 if self.continuity
                 else "shared-clock-favorites",
                 "firmware_pin": self.firmware,
@@ -241,6 +341,7 @@ class SupplementalTrigger(OperatorTrigger):
                 else MAX_OPPORTUNITIES,
                 "window_seconds": CONTINUITY_WINDOW_SECONDS if self.continuity else WINDOW_SECONDS,
                 "max_psi_gap_seconds_allowed": CONTINUITY_MAX_PSI_GAP if self.continuity else None,
+                "timing_event_limit": TIMING_EVENT_LIMIT if self.timing else None,
             },
         )
 
@@ -251,10 +352,17 @@ class SupplementalTrigger(OperatorTrigger):
 
     def invoke(self, runtime):
         window = self.window
-        if window is None or window.runtime is not runtime or window.continuity != self.continuity:
+        if (
+            window is None
+            or window.runtime is not runtime
+            or window.continuity != self.continuity
+            or window.timing != self.timing
+        ):
             raise ValueError("Review the exact supplemental reader owner.")
         try:
             with ExitStack() as stack:
+                if self.timing:
+                    stack.enter_context(window.trace_scope())
                 # Passive subscriptions only, registered before preflight/arming.
                 for register, callback in (
                     (runtime.scanner.on_connection, window.observe_connection),
@@ -279,9 +387,11 @@ class SupplementalTrigger(OperatorTrigger):
                             or window.clock() - window.started >= window.window_seconds
                         ):
                             break
-                return window.report()
         finally:
             window.stop()  # Never leave a continuing acquisition loop behind.
+            if self.timing:
+                self.write("timing.json", window.timing_report())
+        return window.report()
 
 
 def main(argv=None):
@@ -294,6 +404,7 @@ def main(argv=None):
         action="store_true",
         help="Separate 60-read/64-second scanning-only case; never rearm the short case.",
     )
+    parser.add_argument("--timing", action="store_true")
     parser.add_argument("daemon_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if not args.daemon_args or args.daemon_args[0] != "--":
@@ -311,6 +422,7 @@ def main(argv=None):
         args.expected_firmware,
         ready_timeout=args.ready_timeout,
         continuity=args.continuity,
+        timing=args.timing,
     )
     constructed = False
 
@@ -321,7 +433,9 @@ def main(argv=None):
                 raise RuntimeError("Research launcher must have exactly one daemon owner.")
             constructed = True
             super().__init__(*runtime_args, **runtime_kwargs)
-            trigger.window = ReadWindow(self, args.expected_firmware, continuity=args.continuity)
+            trigger.window = ReadWindow(
+                self, args.expected_firmware, continuity=args.continuity, timing=args.timing
+            )
             self._research_trigger_started = False
 
         def start(self):
@@ -334,6 +448,16 @@ def main(argv=None):
             trigger.cancel()
             super().stop()
 
+    class TimingCache(DaemonQuickKeyCache):
+        def poll_once(self):
+            window = trigger.window
+            before = window.opportunities
+            try:
+                return super().poll_once()
+            finally:
+                if window.opportunities != before:
+                    window.record_timing("cache_complete")
+
     class ResearchFrames(original_frames):
         def __init__(self, profile, scanner, **kwargs):
             window = trigger.window
@@ -342,7 +466,8 @@ def main(argv=None):
             if kwargs.get("quick_keys") is not None:
                 raise ValueError("An existing supplemental reader cannot be replaced.")
             cached, _, _, _ = profile.frame_context()
-            cache = DaemonQuickKeyCache(
+            cache_type = TimingCache if args.timing else DaemonQuickKeyCache
+            cache = cache_type(
                 scanner,
                 cached.endpoint_id,
                 profile.scanner_target,

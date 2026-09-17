@@ -28,6 +28,7 @@ from sds200.exceptions import CommandRejectedError, CommandTimeoutError, Protoco
 from sds200.models import Packet
 from sds200.network import UdpTransport
 from sds200.scanner_quick_keys import QuickKeySelection
+from sds200.trace import TrafficTrace
 
 from .fakes import FakeAudioTransport
 from .test_daemon_display_frames import configured as configured
@@ -78,9 +79,12 @@ def trial(request):
     scanner.endpoint = TARGET
     # Constructor only; no socket/connect is used.
     scanner.transport = UdpTransport("192.0.2.10")
+    scanner.trace = TrafficTrace()
     runtime = Runtime(scanner)
+    policy = getattr(request, "param", False)
+    continuity, timing = policy if isinstance(policy, tuple) else (policy, False)
     window = launcher.ReadWindow(
-        runtime, FIRMWARE, clock=lambda: clock.now, continuity=getattr(request, "param", False)
+        runtime, FIRMWARE, clock=lambda: clock.now, continuity=continuity, timing=timing
     )
     cache = DaemonQuickKeyCache(
         scanner,
@@ -438,10 +442,10 @@ def test_connection_change_during_registration_is_preserved_without_arm(tmp_path
     assert scanner.reads == [] and not window.attempted
 
 
-@pytest.mark.parametrize("continuity", [False, True])
+@pytest.mark.parametrize("continuity,timing", [(False, False), (True, False), (True, True)])
 @pytest.mark.parametrize("outcome", ["success", "timeout", "mode", "cancel", "expiry"])
 def test_actual_feed_worker_and_trigger_lifecycle(
-    tmp_path, monkeypatch, configured, outcome, continuity
+    tmp_path, monkeypatch, configured, outcome, continuity, timing
 ):
     # Shorten only scheduling intervals for this offline lifecycle test.
     monkeypatch.setattr(daemon_quick_keys, "MIN_READ_GAP", 0.005)
@@ -450,18 +454,23 @@ def test_actual_feed_worker_and_trigger_lifecycle(
     limit = 60 if continuity else 6
     scanner = OwnerScanner()
     scanner.transport = UdpTransport("192.0.2.25")
+    scanner.trace = original_trace = TrafficTrace()
     scanner.on_packet = lambda cb: scanner.events.subscribe("packet", cb)
     old_reply, old_clock = scanner.reply, scanner.clock_reply
 
     def reply(command):
+        scanner.trace.tx(command.wire)
         if outcome == "timeout":
             raise CommandTimeoutError("PRIVATE_SENTINEL")
         result = old_reply(command)
+        scanner.trace.rx("FQK,PRIVATE_RESPONSE")
         scanner.events.emit("packet", result.packet)
         return result
 
     def clock_reply():
+        scanner.trace.tx("DTM")
         result = old_clock()
+        scanner.trace.rx("DTM,PRIVATE_RESPONSE")
         scanner.events.emit("packet", result.packet)
         return result
 
@@ -519,8 +528,28 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                     assert report["read_failure"]["bank_failures"]["favorites"] == "timeout"
             assert report["max_opportunities"] == limit
             assert report["read_kind"] == (
-                "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"
+                "shared-clock-favorites-timing"
+                if timing
+                else (
+                    "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"
+                )
             )
+            assert scanner.trace is original_trace
+            timing_file = tmp_path / "case/timing.json"
+            if timing and outcome != "expiry":
+                timeline = json.loads(timing_file.read_text())
+                assert not timeline["overflow"] and len(timeline["events"]) <= 512
+                assert "PRIVATE" not in timing_file.read_text()
+                if outcome == "success":
+                    assert len([e for e in timeline["events"] if e["event"] == "tx_intent"]) == 60
+                    assert (
+                        len([e for e in timeline["events"] if e["event"] == "cache_complete"]) == 60
+                    )
+                    assert (
+                        len([e for e in timeline["events"] if e["event"] == "parsed_packet"]) == 60
+                    )
+            else:
+                assert not timing_file.exists()
             return 0
         finally:
             stop.set()
@@ -534,6 +563,8 @@ def test_actual_feed_worker_and_trigger_lifecycle(
     args = arguments(tmp_path)
     if continuity:
         args.insert(0, "--continuity")
+    if timing:
+        args.insert(0, "--timing")
     args[args.index("--ready-timeout") + 1] = "0.1" if outcome == "expiry" else "10"
     assert launcher.main(args) == 0
     assert "PRIVATE_SENTINEL" not in result_file.read_text()

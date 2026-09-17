@@ -46,8 +46,8 @@ def keys(text):
     return set(re.findall(r"^  ([a-z][a-z0-9_]*):", text, re.MULTILINE))
 
 
-@pytest.mark.parametrize("continuity", [False, True])
-def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuity):
+@pytest.mark.parametrize("continuity,timing", [(False, False), (True, False), (True, True)])
+def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuity, timing):
     runtime_name = "src/sds200/home_assistant_app_runtime.py"
     for name in (
         runtime_name,
@@ -61,17 +61,22 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
         REVISION,
         supplemental_firmware="Version 1.26.01",
         supplemental_continuity=continuity,
+        supplemental_timing=timing,
     )
     assert normal[runtime_name] == snapshot[runtime_name]
     assert not any("research" in name for name in normal)
-    assert ("-supplemental-continuity" if continuity else "-supplemental-research") in research[
-        "config.yaml"
-    ].decode()
+    suffix = (
+        "-supplemental-timing"
+        if timing
+        else ("-supplemental-continuity" if continuity else "-supplemental-research")
+    )
+    assert suffix in research["config.yaml"].decode()
     assert "boot: manual" in research["config.yaml"].decode()
     assert "50000/udp: null" in research["config.yaml"].decode()
     assert b"from research_supplemental_daemon import main" in research["research-entry.py"]
     assert b"--read-kind" not in research["research-entry.py"]
     assert (b"'--continuity'" in research["research-entry.py"]) is continuity
+    assert (b"'--timing'" in research["research-entry.py"]) is timing
     compile(research["research-entry.py"], "research-entry.py", "exec")
     boundary = b"def build_home_assistant_web_command("
     assert (
@@ -79,11 +84,14 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
     )
     report = json.loads(research["candidate-source.json"])
     assert report["research_read_kind"] == (
-        "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"
+        "shared-clock-favorites-timing"
+        if timing
+        else ("shared-clock-favorites-continuity" if continuity else "shared-clock-favorites")
     )
     assert report["research_max_opportunities"] == (60 if continuity else 6)
     assert report["research_window_seconds"] == (64 if continuity else 8)
     assert report["research_max_psi_gap_seconds"] == (2 if continuity else None)
+    assert report["research_timing_event_limit"] == (512 if timing else None)
     assert report["research_automatic_start"] is False
     for name, digest in report["files"].items():
         assert hashlib.sha256(research[name]).hexdigest() == digest
@@ -95,6 +103,14 @@ def test_continuity_cannot_be_implicitly_enabled_or_unpinned(value):
         stager.render({}, REVISION, supplemental_continuity=value)
     with pytest.raises(ValueError, match="Continuity research"):
         stager.from_revision(REVISION, supplemental_continuity=value)
+
+
+@pytest.mark.parametrize("value", [True, None, 1, "yes"])
+def test_timing_requires_explicit_continuity_and_pin(value):
+    with pytest.raises(ValueError, match="Timing research"):
+        stager.render({}, REVISION, supplemental_timing=value)
+    with pytest.raises(ValueError, match="Timing research"):
+        stager.from_revision(REVISION, supplemental_timing=value)
 
 
 @pytest.mark.parametrize(

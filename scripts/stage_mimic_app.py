@@ -59,6 +59,7 @@ def render(
     display_read_kind: str | None = None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
+    supplemental_timing: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
         research_firmware,
@@ -66,6 +67,7 @@ def render(
         display_read_kind,
         supplemental_firmware,
         supplemental_continuity,
+        supplemental_timing,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("An exact source revision is required.")
@@ -270,13 +272,21 @@ def render(
         )
     if supplemental_firmware is not None:
         read_kind = (
-            "shared-clock-favorites-continuity"
+            "shared-clock-favorites-timing"
+            if supplemental_timing
+            else "shared-clock-favorites-continuity"
             if supplemental_continuity
             else "shared-clock-favorites"
         )
-        suffix = "supplemental-continuity" if supplemental_continuity else "supplemental-research"
+        suffix = (
+            "supplemental-timing"
+            if supplemental_timing
+            else ("supplemental-continuity" if supplemental_continuity else "supplemental-research")
+        )
         limit, duration = (60, 64) if supplemental_continuity else (6, 8)
         continuity_argument = "'--continuity', " if supplemental_continuity else ""
+        if supplemental_timing:
+            continuity_argument += "'--timing', "
         runtime_name = "src/sds200/home_assistant_app_runtime.py"
         before, delimiter, after = (
             result[runtime_name].decode().partition("def build_home_assistant_daemon_command(")
@@ -333,6 +343,7 @@ def render(
                 "research_max_opportunities": limit,
                 "research_window_seconds": duration,
                 "research_max_psi_gap_seconds": 2 if supplemental_continuity else None,
+                "research_timing_event_limit": 512 if supplemental_timing else None,
                 "files": {
                     name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
                 },
@@ -348,7 +359,12 @@ def validate_research_choice(
     read_kind: str | None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
+    supplemental_timing: bool = False,
 ) -> None:
+    if type(supplemental_timing) is not bool or (
+        supplemental_timing and not supplemental_continuity
+    ):
+        raise ValueError("Timing research requires explicit continuity and firmware selection.")
     if type(supplemental_continuity) is not bool or (
         supplemental_continuity and supplemental_firmware is None
     ):
@@ -381,6 +397,7 @@ def from_revision(
     display_read_kind: str | None = None,
     supplemental_firmware: str | None = None,
     supplemental_continuity: bool = False,
+    supplemental_timing: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
         research_firmware,
@@ -388,6 +405,7 @@ def from_revision(
         display_read_kind,
         supplemental_firmware,
         supplemental_continuity,
+        supplemental_timing,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
@@ -434,6 +452,7 @@ def from_revision(
         display_read_kind=display_read_kind,
         supplemental_firmware=supplemental_firmware,
         supplemental_continuity=supplemental_continuity,
+        supplemental_timing=supplemental_timing,
     )
 
 
@@ -492,6 +511,7 @@ def main() -> None:
     parser.add_argument("--display-read-research-firmware")
     parser.add_argument("--supplemental-research-firmware")
     parser.add_argument("--supplemental-continuity", action="store_true")
+    parser.add_argument("--supplemental-timing", action="store_true")
     parser.add_argument(
         "--display-read-kind", choices=("clock", "favorites", "system", "department")
     )
@@ -503,6 +523,7 @@ def main() -> None:
         display_read_kind=args.display_read_kind,
         supplemental_firmware=args.supplemental_research_firmware,
         supplemental_continuity=args.supplemental_continuity,
+        supplemental_timing=args.supplemental_timing,
     )
     if not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(

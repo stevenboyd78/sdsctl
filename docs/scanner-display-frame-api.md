@@ -547,6 +547,47 @@ reply observed before a completion timeout. These changes neither loosen the
 Any future timing investigation requires a fresh bounded plan and evidence
 case that retains timing for every allowed reply, not another trigger here.
 
+The separate developer-only timing case is selected with
+`--supplemental-timing --supplemental-continuity` and the same explicit firmware
+pin. Its version suffix is `supplemental-timing` and read kind is
+`shared-clock-favorites-timing`. It retains the 60-opportunity/64-second limits,
+250ms read/completion budget, two-second PSI gap limit and one-trigger policy.
+It is not hardware-qualified by the offline tests.
+
+The temporary launcher delegates the existing traffic trace without changing
+the scanner owner, transport, command serialization or normal trace behavior.
+It stores at most 512 allowlisted phase/command/monotonic-time records in a
+private `timing.json`; overflow stops further admissions and invalidates the
+diagnostic. No file I/O is added to a timing callback. The original trace is
+restored on success, cancellation or failure. No signal means no extra reads.
+
+Timing phases have deliberately limited meanings:
+
+| Phase | Observation point | Does not establish |
+| --- | --- | --- |
+| `scope_enter` | Background read admitted by the runtime guard | A command was transmitted |
+| `tx_intent` | Existing radio trace call, before transport write | Successful write or wire delivery |
+| `rx_line` | Response line reached the radio, after UDP decoding | Kernel packet-arrival time or successful parsing |
+| `parsed_packet` | Typed parsing succeeded and packet callback ran | Delivery to the command's waiting queue |
+| `scope_exit` | Runtime read reservation exits | Completed cache validation |
+| `cache_complete` | Admitted background poll returned or raised | Successful read; inspect failure categories |
+
+`scripts/observe_supplemental_timing.py --observe-75s` is a separate explicit
+receive-only observer, not a trigger. It must run in the same acceptance
+container/time namespace for monotonic-time comparison. It keeps every incoming
+DTM/FQK reply timestamp up to 80 records (the 60 permitted replies plus bounded
+late/unexpected traffic), with only command and field count. Userspace receive
+times are not kernel/hardware timestamps. It exits at 75 seconds or at its
+packet/reply/PSI cap; hitting a cap is incomplete evidence, not silent sampling.
+It sends no commands, retains no raw packets, and establishes no outgoing wire
+count. Archive both timing files, including late replies, before restoration.
+
+Deterministic fake-transport tests reproduce both delayed arrival and delayed
+local publication after parsing: either can time out while producing different
+phase orders. These tests validate the diagnostic, not the explanation of the
+earlier hardware result. Do not widen deadlines, retry an uncertain read, or
+enable ordinary acquisition based on these simulations.
+
 ### Internal supplemental projection (not yet rendered)
 
 `supplemental_snapshot()` joins the optional cache's banks and clock at one
