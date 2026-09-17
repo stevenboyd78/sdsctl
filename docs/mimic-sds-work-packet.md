@@ -826,6 +826,14 @@ records the manual test and the transport-free one-shot guard now being prepared
 for a future explicitly owned command test. No AST command was sent by that
 manual test, and no daemon analysis operation has been exposed.
 
+The subsequent same-owner research helper is opt-in and remains outside normal
+daemon startup and every public API. A temporary source-pinned acceptance
+launcher can wait for an administrator signal while the operator is physically
+present. Its bounded AST transaction and fake-transport coverage prepare a
+separate command test; they do not establish ordinary-scanning identifier
+availability or add an analysis renderer. Keep the normal Mimic field/layout
+comparison independent of this research.
+
 The regression suite distinguishes known inactive icons, unavailable sources and
 invalid values; covers empty UnitID changes, duplicate records, full-screen
 overlays versus channel overwrite, site-hold On/Off/stale transitions, ordinary

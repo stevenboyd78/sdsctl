@@ -50,7 +50,9 @@ def replace_once(text: str, old: str, new: str) -> str:
     return text.replace(old, new, 1)
 
 
-def render(snapshot: dict[str, bytes], revision: str) -> dict[str, bytes]:
+def render(
+    snapshot: dict[str, bytes], revision: str, *, research_firmware: str | None = None
+) -> dict[str, bytes]:
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("An exact source revision is required.")
     version = tomllib.loads(snapshot["pyproject.toml"].decode())["project"]["version"]
@@ -130,11 +132,72 @@ def render(snapshot: dict[str, bytes], revision: str) -> dict[str, bytes]:
         "profile_enabled_by_default": False,
         "files": {name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())},
     }
+    if research_firmware is not None:
+        if (
+            re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", research_firmware) is None
+            or research_firmware != research_firmware.strip()
+        ):
+            raise ValueError("Review the exact research firmware pin.")
+        runtime_name = "src/sds200/home_assistant_app_runtime.py"
+        runtime_source = result[runtime_name].decode()
+        before, delimiter, after = runtime_source.partition(
+            "def build_home_assistant_daemon_command("
+        )
+        if not delimiter:
+            raise ValueError("Review the daemon launcher boundary.")
+        signature, end, body = after.partition(") -> tuple[str, ...]:")
+        if not end:
+            raise ValueError("Review the daemon launcher signature.")
+        signature = replace_once(
+            signature,
+            "executable: str = HOME_ASSISTANT_APP_EXECUTABLE",
+            'executable: str = "/usr/local/bin/sdsctl-system-status-research"',
+        )
+        result[runtime_name] = (before + delimiter + signature + end + body).encode()
+        result["research_system_status_daemon.py"] = snapshot[
+            "scripts/research_system_status_daemon.py"
+        ]
+        result["research-entry.py"] = (
+            "#!/usr/local/bin/python\n"
+            "import os, sys, uuid\n"
+            "sys.path.insert(0, '/opt/sdsctl-research')\n"
+            "from research_system_status_daemon import main\n"
+            "directory = ('/run/sdsctl/system-status-research-' "
+            "+ str(os.getpid()) + '-' + uuid.uuid4().hex)\n"
+            f"raise SystemExit(main(['--expected-firmware', {research_firmware!r}, "
+            "'--evidence-directory', directory, '--', *sys.argv[1:]]))\n"
+        ).encode()
+        result["Dockerfile"] += (
+            b"\n# Temporary, explicit operator-triggered System Status research only.\n"
+            b"COPY research_system_status_daemon.py /opt/sdsctl-research/\n"
+            b"COPY --chmod=0555 research-entry.py /usr/local/bin/sdsctl-system-status-research\n"
+        )
+        result["config.yaml"] = replace_once(
+            result["config.yaml"].decode(),
+            f'version: "{version}-mimic-{revision[:12]}"',
+            f'version: "{version}-mimic-{revision[:12]}-ast-research"',
+        ).encode()
+        result["DOCS.md"] += (
+            b"\n## Temporary System Status research\n\n"
+            b"This opt-in image pins one SDS200 firmware and requires direct UDP. "
+            b"No research command runs on startup. The daemon waits ten minutes for "
+            b"an administrator SIGUSR1 trigger while the operator is at the scanner. "
+            b"Inspect fresh private ready.json and verify PID plus process start ticks "
+            b"before signaling. One attempt only; never retry an uncertain start. "
+            b"Use the physical to Scan soft key for return. No APR/remote stop is sent. "
+            b"Preserve the private result and restore the normal acceptance image afterward.\n"
+        )
+        report["purpose"] = "local-mimic-system-status-research-only"
+        report["research_firmware_pin"] = research_firmware
+        report["research_automatic_start"] = False
+        report["files"] = {
+            name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
+        }
     result["candidate-source.json"] = (json.dumps(report, indent=2) + "\n").encode()
     return result
 
 
-def from_revision(revision: str) -> dict[str, bytes]:
+def from_revision(revision: str, *, research_firmware: str | None = None) -> dict[str, bytes]:
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
     archive = git(
@@ -147,6 +210,7 @@ def from_revision(revision: str) -> dict[str, bytes]:
         "README.md",
         "LICENSE",
         "home-assistant/sds200",
+        *(["scripts/research_system_status_daemon.py"] if research_firmware is not None else []),
     )
     snapshot = {}
     with tarfile.open(fileobj=io.BytesIO(archive)) as source:
@@ -162,7 +226,7 @@ def from_revision(revision: str) -> dict[str, bytes]:
             stream = source.extractfile(member)
             assert stream is not None
             snapshot[member.name] = stream.read()
-    return render(snapshot, revision)
+    return render(snapshot, revision, research_firmware=research_firmware)
 
 
 def stage(destination: Path, files: dict[str, bytes]) -> None:
@@ -213,8 +277,14 @@ def main() -> None:
     parser.add_argument("--source-revision", required=True)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument(
+        "--system-status-research-firmware",
+        help="Explicit temporary same-owner research launcher with this exact firmware pin.",
+    )
     args = parser.parse_args()
-    files = from_revision(args.source_revision)
+    files = from_revision(
+        args.source_revision, research_firmware=args.system_status_research_firmware
+    )
     if not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(
             "status", "--porcelain"

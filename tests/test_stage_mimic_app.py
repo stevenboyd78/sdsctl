@@ -46,6 +46,39 @@ def keys(text):
     return set(re.findall(r"^  ([a-z][a-z0-9_]*):", text, re.MULTILINE))
 
 
+def test_research_staging_is_explicit_and_only_changes_daemon_launcher(snapshot):
+    runtime_name = "src/sds200/home_assistant_app_runtime.py"
+    launcher_name = "scripts/research_system_status_daemon.py"
+    for name in (runtime_name, launcher_name):
+        snapshot[name] = (ROOT / name).read_bytes()
+    normal = stager.render(snapshot, REVISION)
+    research = stager.render(snapshot, REVISION, research_firmware="Version 1.00.00")
+    assert normal[runtime_name] == snapshot[runtime_name]
+    assert "research-entry.py" not in normal
+    assert "-ast-research" in research["config.yaml"].decode()
+    assert "boot: manual" in research["config.yaml"].decode()
+    assert research["research_system_status_daemon.py"] == snapshot[launcher_name]
+    rewritten = research[runtime_name].decode()
+    assert rewritten.count('"/usr/local/bin/sdsctl-system-status-research"') == 1
+    web_boundary = "def build_home_assistant_web_command("
+    assert (
+        rewritten.partition(web_boundary)[2]
+        == normal[runtime_name].decode().partition(web_boundary)[2]
+    )
+    compile(research["research-entry.py"], "research-entry.py", "exec")
+    inventory = json.loads(research["candidate-source.json"])
+    assert inventory["research_automatic_start"] is False
+    for name, digest in inventory["files"].items():
+        assert hashlib.sha256(research[name]).hexdigest() == digest
+    assert research["translations/en.yaml"] == normal["translations/en.yaml"]
+
+
+@pytest.mark.parametrize("firmware", ["", "v;echo x", "v\n", " v", "v'", "x" * 65])
+def test_research_staging_rejects_invalid_pins(snapshot, firmware):
+    with pytest.raises(ValueError, match="firmware pin"):
+        stager.render(snapshot, REVISION, research_firmware=firmware)
+
+
 def test_candidate_is_paired_manual_and_disabled_by_default(snapshot):
     before = dict(snapshot)
     output = stager.render(snapshot, REVISION)
@@ -184,7 +217,7 @@ def test_cli_refuses_dirty_or_other_checkout(monkeypatch, tmp_path, dirty, head)
     monkeypatch.setattr(
         sys, "argv", ["stage", "--source-revision", REVISION, "--destination", str(destination)]
     )
-    monkeypatch.setattr(stager, "from_revision", lambda r: {"one": b"x"})
+    monkeypatch.setattr(stager, "from_revision", lambda r, **kwargs: {"one": b"x"})
     monkeypatch.setattr(
         stager,
         "git",
@@ -204,7 +237,9 @@ def test_cli_verify_uses_committed_snapshot_not_self_attested_hashes(monkeypatch
         ["stage", "--source-revision", REVISION, "--destination", str(destination), "--verify"],
     )
     monkeypatch.setattr(
-        stager, "from_revision", lambda r: {"one": b"committed", "candidate-source.json": b"{}"}
+        stager,
+        "from_revision",
+        lambda r, **kwargs: {"one": b"committed", "candidate-source.json": b"{}"},
     )
     monkeypatch.setattr(
         stager, "git", lambda *a: pytest.fail("Verification does not require clean HEAD")

@@ -3,7 +3,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections import deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -17,6 +18,13 @@ from .audio_sinks import (
     PcmSink,
     PcmSinkRouter,
     PcmSinkRouterSnapshot,
+)
+from .daemon_system_status_research import (
+    SystemStatusResearchAttempt,
+    SystemStatusResearchPolicy,
+    SystemStatusResearchResult,
+    _ResearchScanner,
+    research_timeout,
 )
 from .events import EventBus
 from .exceptions import (
@@ -345,6 +353,7 @@ class DaemonRuntime:
         allow_degraded_psi_startup: bool = False,
         psi_recover_after: float = 10.0,
         psi_recovery_cooldown: float = 60.0,
+        system_status_research: SystemStatusResearchPolicy | None = None,
         clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -405,6 +414,14 @@ class DaemonRuntime:
         self._psi_unsubscribe: Callable[[], None] | None = None
         self._last_psi_at: float | None = None
         self._last_psi_recovery_at: float | None = None
+        if system_status_research is not None and not isinstance(
+            system_status_research, SystemStatusResearchPolicy
+        ):
+            raise TypeError("System Status research requires an explicit policy.")
+        self._system_status_research = (
+            None if system_status_research is None
+            else SystemStatusResearchAttempt(system_status_research)
+        )
 
     @property
     def running(self) -> bool:
@@ -1149,6 +1166,43 @@ class DaemonRuntime:
         *,
         requires_connection: bool = True,
     ) -> DaemonControlResult:
+        with self._control_scope(timeout, requires_connection=requires_connection) as remaining:
+            started_at = _require_aware_datetime(self._now())
+            action(remaining)
+            completed_at = _require_aware_datetime(self._now())
+            with self._state_lock:
+                self._control_sequence += 1
+                return DaemonControlResult(
+                    sequence=self._control_sequence,
+                    operation=operation,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    snapshot=self._snapshot_locked(),
+                )
+
+    def run_system_status_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> SystemStatusResearchResult:
+        """Internal opt-in qualification, never advertised as a daemon control.
+
+        The research policy must have been explicitly supplied at construction;
+        ordinary CLI/config/API startup never supplies one. This does not manage
+        the ongoing analysis mode or implement a remote return-to-scan action.
+        """
+        if self._system_status_research is None:
+            raise UnsupportedScannerFeatureError("System Status research is disabled.")
+        normalized = research_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._system_status_research.run(
+                cast(_ResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    @contextmanager
+    def _control_scope(
+        self, timeout: float, *, requires_connection: bool = True
+    ) -> Iterator[float]:
         normalized_timeout = _require_positive_control_timeout(timeout)
         deadline = monotonic() + normalized_timeout
 
@@ -1184,19 +1238,7 @@ class DaemonRuntime:
                     "Daemon scanner control timed out before execution."
                 )
 
-            started_at = _require_aware_datetime(self._now())
-            action(remaining)
-            completed_at = _require_aware_datetime(self._now())
-
-            with self._state_lock:
-                self._control_sequence += 1
-                return DaemonControlResult(
-                    sequence=self._control_sequence,
-                    operation=operation,
-                    started_at=started_at,
-                    completed_at=completed_at,
-                    snapshot=self._snapshot_locked(),
-                )
+            yield remaining
         finally:
             if lifecycle_acquired:
                 self._lifecycle_lock.release()

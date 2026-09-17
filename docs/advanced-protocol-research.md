@@ -878,6 +878,66 @@ an uncertain start or inventing a remote stop. The daemon API still has no
 analysis operation or arbitrary-command route. The guard sends nothing, adds
 no polling, and does not change normal scanner operation or Mimic rendering.
 
+### Opt-in same-owner System Status research transaction
+
+The internal [runtime helper](../src/sds200/daemon_system_status_research.py)
+now composes that guard with the existing daemon owner. Ordinary daemon startup
+does not supply its explicit `SystemStatusResearchPolicy`, so the method is
+disabled by default. No daemon API, remote-client grant, WebUI control, Home
+Assistant option or automatic polling path is added.
+
+An explicit research invocation uses the normal daemon control/lifecycle locks
+and the scanner command lock, with one total budget capped at eight seconds.
+It requires a directly owned UDP transport, an already connected SDS200, an
+exact firmware pin, and a physically ready operator. It checks MDL/VER, reads
+two authoritative GSI selections, and reserves at most one typed AST start.
+The entire attempt is consumed even when preflight fails. Disconnect/reconnect
+invalidates the attempt; there is no connect, retry, replay or model fallback.
+
+A short-lived idle reservation prevents waterfall subscription from racing
+with this transaction. It refuses existing/busy/non-idle waterfall sessions
+instead of stopping them. It does not hold the waterfall session lock while
+waiting for scanner replies, allowing receive callbacks to make progress.
+The reservation and temporary observers are released on success and failure.
+Ordinary controls are serialized; daemon shutdown waits for the bounded scope.
+
+Results distinguish not-started, start-unconfirmed, acknowledged-only,
+analysis-observed and connection-changed outcomes. Only a subsequent complete
+PSI `analyze_system_status` frame with one SystemStatus record, after the exact
+acknowledgement and before the deadline, supplies the observation flag. A
+pre-ack frame, repeated SystemStatus records or overlay does not qualify. The
+result stores flags/timing and sanitized failure categories, not identifiers,
+scanner names, raw XML or raw exception messages. No scanner transaction ID
+ties the observed frame to the requested site; physical comparison is still
+required. The helper does not claim ongoing analysis ownership after returning,
+does not issue APR, and does not implement a remote stop.
+
+The [temporary research launcher](../scripts/research_system_status_daemon.py)
+is developer-only and is not installed by normal packaging. It launches the
+normal daemon in the same process with that policy and waits for an explicit
+administrator `SIGUSR1` while the operator is physically at the scanner. It
+ignores signals before readiness and after the one attempt; shutdown cancels
+the wait. No signal means no research command. Evidence uses a new private
+directory and create-only files; existing state is never adopted or overwritten.
+Before signaling, verify the exact candidate/container, fresh `ready.json`,
+PID and process start ticks. Do not signal a remembered PID from an earlier run.
+
+For a reviewed local Home Assistant candidate, `scripts/stage_mimic_app.py`
+accepts the optional `--system-status-research-firmware` argument. This pins
+the launcher to the selected commit, gives the image an `-ast-research` suffix,
+and rewrites only the staged daemon executable; the web child and public App
+schema remain unchanged. The source inventory covers the launcher and staged
+rewrite. Without the argument, staging is unchanged. Staging does not install,
+start or contact an App. This is not a published release configuration.
+
+Physical acceptance must be separately coordinated: keep the scanner in normal
+trunk scanning, stop waterfall consumers, verify there is only one scanner
+owner, and have the physical **to Scan** return path available. Trigger once,
+inspect the private result and physical screen, then return manually and
+confirm normal Mimic recovery. Do not treat a missing result or uncertain start
+as permission to retry. Retain evidence before restoring the normal acceptance
+image. Fake transport/launcher tests are not physical AST acceptance.
+
 ## Milestone 24.10 implementation boundary
 
 The first Milestone 24.10 slice is the separately deferred RF Power Plot start

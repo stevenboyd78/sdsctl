@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import queue
+import threading
 from collections.abc import Callable
 
 import pytest
@@ -553,3 +554,49 @@ def test_slow_lease_overflow_does_not_degrade_another_lease() -> None:
 
     slow.close()
     fast.close()
+
+
+def test_idle_research_reservation_releases_after_exception() -> None:
+    radio = FakeWaterfallRadio()
+    session = WaterfallSession(radio)
+    with pytest.raises(ValueError, match="synthetic"), session.reserve_idle_for_research():
+        with pytest.raises(RuntimeError, match="reserved"):
+            session.subscribe()
+        with pytest.raises(RuntimeError, match="not idle"), session.reserve_idle_for_research():
+            pytest.fail("Nested reservation should fail")
+        raise ValueError("synthetic")
+    with session.subscribe():
+        assert session.consumer_count == 1
+
+
+def test_research_reservation_refuses_busy_session_without_waiting() -> None:
+    session = WaterfallSession(FakeWaterfallRadio())
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold() -> None:
+        with session._lock:
+            held.set()
+            assert release.wait(1)
+
+    worker = threading.Thread(target=hold)
+    worker.start()
+    try:
+        assert held.wait(1)
+        with pytest.raises(RuntimeError, match="busy"), session.reserve_idle_for_research():
+            pytest.fail("Busy session should refuse immediately")
+    finally:
+        release.set()
+        worker.join(timeout=1)
+    assert not worker.is_alive()
+
+
+def test_shutdown_during_idle_reservation_does_not_resurrect_session() -> None:
+    radio = FakeWaterfallRadio()
+    session = WaterfallSession(radio)
+    with session.reserve_idle_for_research():
+        session.close()
+    assert session.state is WaterfallSessionState.CLOSED
+    assert radio.start_calls == radio.stop_calls == []
+    with pytest.raises(RuntimeError, match="not idle"), session.reserve_idle_for_research():
+        pytest.fail("Closed session should stay closed")
