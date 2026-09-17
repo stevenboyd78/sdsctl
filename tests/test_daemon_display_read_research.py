@@ -428,3 +428,20 @@ def test_stale_psi_is_not_enough_to_dispatch_even_when_identity_passes(scanner, 
     result = attempt().run(scanner, operator_ready=True, timeout=0.07)
     assert result.status == "not_started" and result.failure == "timeout"
     assert scanner.commands == []
+
+
+def test_captured_unpadded_clock_reply_qualifies_offline_without_extra_reads(scanner):
+    from .test_clock_reads import CAPTURED_FIELDS
+
+    scanner.fields_override = CAPTURED_FIELDS
+    result = attempt().run(scanner, operator_ready=True, timeout=0.15)
+    assert result.status == "reply_and_psi_observed"
+    assert result.sample == {
+        "scanner_local_time": "2026-09-17T03:38:10",
+        "rtc_valid": True,
+        "daylight_saving_token": "1",
+        "timezone_known": False,
+    }
+    assert result.normal_psi_after_response >= 2
+    assert result.response_shape["field_count"] == 8
+    assert scanner.commands == ["DTM"]

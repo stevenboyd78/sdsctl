@@ -13,6 +13,7 @@ from sds200.exceptions import UnsupportedScannerFeatureError
 from sds200.radio import SDS200
 
 from .fakes import FakeDatagramSocket, FakeDatagramSocketFactory, FakeTransport
+from .test_clock_reads import CAPTURED_FIELDS
 from .test_daemon_display_read_research import FIRMWARE, STATES
 
 
@@ -20,6 +21,7 @@ class ReplySocket(FakeDatagramSocket):
     def __init__(self, *, timeout=False):
         super().__init__()
         self.no_reply = timeout
+        self.clock_fields = ("0", "2026", "09", "17", "09", "45", "02", "1")
         self.quit = threading.Event()
         self.producer = None
 
@@ -43,7 +45,7 @@ class ReplySocket(FakeDatagramSocket):
         elif not self.no_reply:
             name = data.decode().split(",")[0].strip()
             fields = (
-                ("0", "2026", "09", "17", "09", "45", "02", "1")
+                self.clock_fields
                 if name == "DTM"
                 else STATES
                 if name == "FQK"
@@ -95,6 +97,23 @@ def test_read_scope_does_not_implicitly_connect_udp():
     ):
         pytest.fail("Unexpected scope")
     assert factory.calls == [] and factory.socket.sent == []
+
+
+def test_captured_clock_reply_replays_through_real_decoder_on_one_fake_socket():
+    socket = ReplySocket()
+    socket.clock_fields = CAPTURED_FIELDS
+    factory = FakeDatagramSocketFactory(socket)
+    with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        probe = DisplayReadResearchAttempt(
+            DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.CLOCK)
+        )
+        result = probe.run(radio, operator_ready=True, timeout=0.15)
+        assert result.status == "reply_and_psi_observed"
+        assert result.sample["scanner_local_time"] == "2026-09-17T03:38:10"
+        assert result.sample["timezone_known"] is False
+        assert socket.sent == [b"MDL\r", b"VER\r", b"DTM\r"]
+        assert len(factory.calls) == 1
+    assert socket.closed
 
 
 def test_read_scope_refuses_custom_transport_even_with_udp_name():

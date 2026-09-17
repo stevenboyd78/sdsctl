@@ -207,8 +207,14 @@ an instant in UTC or the host's local timezone. The DayLightSaving token is
 preserved without interpreting its undocumented encoding. An invalid RTC has
 no usable `local_time`, even if its numeric fields happen to form a valid date.
 An RTC-valid response requires a real calendar date and 00–23/00–59/00–59 time.
-The documented four-digit year and two-digit components are enforced; an actual
-firmware deviation requires captured evidence before changing that contract.
+The year must have four ASCII digits. Month/day/hour/minute/second accept one or
+two ASCII digits, with optional leading zeros. An explicit SDS200 1.26.01 GET
+capture returned `DTM,1,2026,9,17,3,38,10,1`: the scanner did not pad its month or
+hour. The initial fixed-width parser rejected this response; offline regressions
+now replay that exact response through the parser,
+passive cache and one-owner qualification path. Calendar/range checks remain
+unchanged; whitespace, signs, Unicode digits and overlong components are rejected.
+Offline replay is not a second physical test or automatic-polling acceptance.
 `DTM,OK` is a SET acknowledgement and is not accepted as a clock reading.
 
 `read_clock_if_idle()` offers one bounded GET on an already-connected scanner,

@@ -19,7 +19,7 @@ from sds200.scanner_clock import (
     ScannerClockSamples,
 )
 
-from .test_clock_reads import FIELDS, packet
+from .test_clock_reads import CAPTURED_FIELDS, FIELDS, packet
 
 
 @pytest.fixture
@@ -62,6 +62,16 @@ def test_freshness_is_measured_from_dispatch_not_completion(fixture):
     snapshot = samples.snapshot()
     assert snapshot.local_time is snapshot.age_seconds is snapshot.rtc_valid is None
     assert snapshot.daylight_saving is None
+
+
+def test_captured_unpadded_reply_keeps_exact_naive_time_and_existing_freshness(fixture):
+    samples, clock, session = fixture
+    assert samples.finish(samples.begin_read(session), reading(CAPTURED_FIELDS))
+    snapshot = samples.snapshot()
+    assert snapshot.local_time == datetime(2026, 9, 17, 3, 38, 10)
+    assert snapshot.local_time.tzinfo is None and snapshot.daylight_saving == "1"
+    clock.now += STALE_AFTER
+    assert samples.snapshot().local_time is None
 
 
 def test_invalid_rtc_clears_previously_valid_clock_without_quarantine(fixture):

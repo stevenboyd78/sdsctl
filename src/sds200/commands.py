@@ -55,14 +55,18 @@ class GetDateTime:
         if len(response.fields) != 8:
             raise ProtocolError("DTM read requires exactly eight fields.")
         daylight, *components, rtc = response.fields
+        # SDS200 1.26.01 reports unpadded decimal components (captured GET:
+        # DTM,1,2026,9,17,3,38,10,1). Retain the four-digit year and bounded
+        # numeric/calendar validation; padding is not evidence of validity.
+        widths = ((4, 4), (1, 2), (1, 2), (1, 2), (1, 2), (1, 2))
         if (
             not 1 <= len(daylight) <= 16
             or not daylight.isascii()
             or not all(c.isalnum() or c in "_-" for c in daylight)
             or rtc not in ("0", "1")
             or any(
-                len(value) != width or not value.isascii() or not value.isdecimal()
-                for value, width in zip(components, (4, 2, 2, 2, 2, 2), strict=True)
+                not minimum <= len(value) <= maximum or not value.isascii() or not value.isdecimal()
+                for value, (minimum, maximum) in zip(components, widths, strict=True)
             )
         ):
             raise ProtocolError("DTM read returned invalid clock fields.")
