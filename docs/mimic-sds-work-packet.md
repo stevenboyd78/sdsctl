@@ -834,9 +834,12 @@ recovery to a newer qualified frame, independently from physical acceptance.
 One narrowly qualified Close Call/scan transition is now handled: during an
 SDS200 CC DND capture, five complete replies reported `Mode="Close Call"`
 with `V_Screen="trunk_scan"`, retaining exactly one each of `System`, `Department`,
-`Site`, `SiteFrequency`, `TGID`, `Property`, `DualWatch` and `OverWrite`. Each was
-followed by a normal trunk reply. The adapter can use this exact visual-screen
-structure for PSI only with `DualWatch.CC="DND"`; it still rejects duplicates, foreign
+`Site`, `SiteFrequency`, `TGID`, `Property`, `DualWatch` and `OverWrite`. A second
+capture confirmed the same transition both with and without the optional
+`OverWrite` channel message; the reply without it was followed by a normal trunk
+reply approximately half a second later. The adapter requires the seven core
+records, not the optional message. It can use this visual-screen structure for
+PSI only with `DualWatch.CC="DND"`; it still rejects duplicates, foreign
 channel records and overlays. It uses only that reply's values, without keeping
 previous fields or changing freshness. This does not qualify GSI, conventional
 scan, Close Call Only, other CC policies or incomplete structures. A dedicated

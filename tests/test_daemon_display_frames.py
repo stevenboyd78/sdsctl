@@ -664,11 +664,13 @@ def test_read_only_api_is_conditional_and_refuses_parameters_or_control_dispatch
 
 
 @pytest.mark.parametrize("enabled", [False, True])
-@pytest.mark.parametrize("cc_dnd_transition", [False, True])
+@pytest.mark.parametrize("cc_dnd_transition", [None, "scan_message", "channel_name"])
 def test_real_unix_to_web_display_only_read_path(live, tmp_path, enabled, cc_dnd_transition):
     feed, _, scanner, _ = live
     if cc_dnd_transition:
-        scanner.sample(cc_dnd_trunk_info())
+        scanner.sample(
+            cc_dnd_trunk_info(omit="OverWrite" if cc_dnd_transition == "channel_name" else None)
+        )
     api = DaemonReadOnlyApi(SimpleNamespace(), display_frames=feed if enabled else None)
     location = resolve_daemon_socket_location(tmp_path / "s")
     server = DaemonApiServer(DaemonSocketListener(location), api)

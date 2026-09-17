@@ -187,12 +187,13 @@ _QUALIFIED_SCAN_TRANSITIONS = {
     ("conventional_scan", "Trunk Scan"): "ConvFrequency",
     ("trunk_scan", "Scan Mode"): "TGID",
 }
-# Observed during ordinary SDS200 scanning with CC DND: five complete scanner
-# replies retained this trunk-screen structure while Mode briefly said Close
-# Call. Require the observed structure and exact CC policy, not just a TGID or
-# V_Screen. Dedicated Close Call screens and all other mismatches stay separate.
+# Observed during ordinary SDS200 scanning with CC DND: complete scanner replies
+# retained this trunk-screen structure while Mode briefly said Close Call, both
+# with and without the optional OverWrite channel message. Require the core
+# structure and exact CC policy, not just a TGID or V_Screen. Dedicated Close
+# Call screens and all other mismatches stay separate.
 _CC_DND_TRUNK_RECORDS = frozenset(
-    {"System", "Department", "Site", "SiteFrequency", "TGID", "Property", "DualWatch", "OverWrite"}
+    {"System", "Department", "Site", "SiteFrequency", "TGID", "Property", "DualWatch"}
 )
 _CHANNEL_TAGS = frozenset(
     {"ConvFrequency", "TGID", "SrchFrequency", "CcHitsChannel", "WxChannel", "ToneOutChannel"}

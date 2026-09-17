@@ -352,17 +352,23 @@ def cc_dnd_trunk_info(*, omit=None, extra="", dual_watch=None):
     return replace(info("trunk_scan", "".join(records.values()) + extra), mode="Close Call")
 
 
-def test_observed_cc_dnd_trunk_reply_uses_current_records_and_keeps_freshness():
+@pytest.mark.parametrize("omit", [None, "OverWrite"])
+def test_observed_cc_dnd_trunk_reply_uses_current_records_and_keeps_freshness(omit):
     before = info("trunk_scan", '<System Name="Old system" Hold="On"/><Property A_Led="Red"/>')
     adapter, session = live_adapter(before)
     profile = store_for().snapshot(ENDPOINT)
     assert "Old system" in texts(adapter.frame(profile, now=11))
-    assert adapter.observe(session, cc_dnd_trunk_info(), sequence=2, received_at=12, now=12) is None
+    assert (
+        adapter.observe(session, cc_dnd_trunk_info(omit=omit), sequence=2, received_at=12, now=12)
+        is None
+    )
     current = adapter.frame(profile, now=12)
     assert current.status is Status.CURRENT
     assert current.screen.layout.requested_mode is ScannerDisplayMode.DETAIL_TRUNK
-    assert {"New system", "New department", "New site", "Scanning...", "08511250"} <= texts(current)
-    assert "Old system" not in texts(current) and "New channel" not in texts(current)
+    assert {"New system", "New department", "New site", "08511250"} <= texts(current)
+    shown, absent = ("New channel", "Scanning...") if omit else ("Scanning...", "New channel")
+    assert shown in texts(current) and absent not in texts(current)
+    assert "Old system" not in texts(current)
     assert current.indicators == ScannerDisplayIndicators(ScannerAlertLed.OFF, False, False, False)
     assert adapter.frame(profile, now=17).status is Status.STALE
     assert not texts(adapter.frame(profile, now=17))
@@ -375,7 +381,26 @@ def test_observed_cc_dnd_trunk_reply_uses_current_records_and_keeps_freshness():
     assert "New system" not in texts(actual_hit) and "00949000" in texts(actual_hit)
 
 
-@pytest.mark.parametrize("tag", CC_DND_TRUNK_RECORDS)
+def test_cc_dnd_trunk_channel_message_disappears_without_retaining_old_values():
+    adapter, session = live_adapter(cc_dnd_trunk_info())
+    profile = store_for().snapshot(ENDPOINT)
+    assert "Scanning..." in texts(adapter.frame(profile, now=11))
+    assert (
+        adapter.observe(
+            session, cc_dnd_trunk_info(omit="OverWrite"), sequence=2, received_at=12, now=12
+        )
+        is None
+    )
+    current = adapter.frame(profile, now=12)
+    assert current.status is Status.CURRENT
+    assert "New channel" in texts(current) and "Scanning..." not in texts(current)
+    assert adapter.observe(session, cc_dnd_trunk_info(), sequence=3, received_at=13, now=13) is None
+    message = adapter.frame(profile, now=13)
+    assert message.status is Status.CURRENT
+    assert "Scanning..." in texts(message) and "New channel" not in texts(message)
+
+
+@pytest.mark.parametrize("tag", [tag for tag in CC_DND_TRUNK_RECORDS if tag != "OverWrite"])
 @pytest.mark.parametrize("mutation", ["missing", "duplicate"])
 def test_cc_dnd_trunk_exception_requires_one_of_every_observed_record(tag, mutation):
     sample = (
@@ -391,9 +416,10 @@ def test_cc_dnd_trunk_exception_requires_one_of_every_observed_record(tag, mutat
 
 
 @pytest.mark.parametrize("cc", [None, "", "Off", "Priority", "dnd", "DND "])
-def test_cc_dnd_trunk_exception_never_assumes_the_close_call_policy(cc):
+@pytest.mark.parametrize("omit", [None, "OverWrite"])
+def test_cc_dnd_trunk_exception_never_assumes_the_close_call_policy(cc, omit):
     dual_watch = "<DualWatch/>" if cc is None else f'<DualWatch CC="{cc}"/>'
-    adapter, _ = live_adapter(cc_dnd_trunk_info(dual_watch=dual_watch))
+    adapter, _ = live_adapter(cc_dnd_trunk_info(dual_watch=dual_watch, omit=omit))
     assert adapter.frame(store_for().snapshot(ENDPOINT), now=11).status is Status.AMBIGUOUS_RECORDS
 
 
@@ -406,8 +432,9 @@ def test_cc_dnd_trunk_exception_never_assumes_the_close_call_policy(cc):
         ("screen", "conventional_scan"),
     ],
 )
-def test_cc_dnd_exception_does_not_widen_other_mode_screen_command_pairs(field, value):
-    adapter, _ = live_adapter(replace(cc_dnd_trunk_info(), **{field: value}))
+@pytest.mark.parametrize("omit", [None, "OverWrite"])
+def test_cc_dnd_exception_does_not_widen_other_mode_screen_command_pairs(field, value, omit):
+    adapter, _ = live_adapter(replace(cc_dnd_trunk_info(omit=omit), **{field: value}))
     frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
     assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
 
@@ -415,15 +442,20 @@ def test_cc_dnd_exception_does_not_widen_other_mode_screen_command_pairs(field, 
 @pytest.mark.parametrize(
     "tag", ["ConvFrequency", "SrchFrequency", "WxChannel", "CcHitsChannel", "ToneOutChannel"]
 )
-def test_cc_dnd_trunk_exception_never_bypasses_foreign_channel_rejection(tag):
-    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f'<{tag} Name="Foreign"/>'))
+@pytest.mark.parametrize("omit", [None, "OverWrite"])
+def test_cc_dnd_trunk_exception_never_bypasses_foreign_channel_rejection(tag, omit):
+    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f'<{tag} Name="Foreign"/>', omit=omit))
     frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
     assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
 
 
-@pytest.mark.parametrize("tag", ["MonitorList", "UnitID", "InfoArea1", "InfoArea2"])
+@pytest.mark.parametrize("tag", ["MonitorList", "UnitID", "InfoArea1", "InfoArea2", "OverWrite"])
 def test_cc_dnd_trunk_exception_preserves_other_duplicate_guards(tag):
-    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f"<{tag}/><{tag}/>"))
+    adapter, _ = live_adapter(
+        cc_dnd_trunk_info(
+            extra=f"<{tag}/><{tag}/>", omit="OverWrite" if tag == "OverWrite" else None
+        )
+    )
     frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
     assert frame.status is Status.AMBIGUOUS_RECORDS and not frame.values
 
@@ -431,8 +463,11 @@ def test_cc_dnd_trunk_exception_preserves_other_duplicate_guards(tag):
 @pytest.mark.parametrize(
     "tag", ["PopupScreen", "PlainText", "ReplayDescription", "ReplayMode", "Button"]
 )
-def test_cc_dnd_trunk_exception_preserves_full_screen_overrides(tag):
-    adapter, _ = live_adapter(cc_dnd_trunk_info(extra=f'<{tag} Text="private overlay"/>'))
+@pytest.mark.parametrize("omit", [None, "OverWrite"])
+def test_cc_dnd_trunk_exception_preserves_full_screen_overrides(tag, omit):
+    adapter, _ = live_adapter(
+        cc_dnd_trunk_info(extra=f'<{tag} Text="private overlay"/>', omit=omit)
+    )
     frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
     assert frame.status is Status.OVERRIDE and not frame.values
 
