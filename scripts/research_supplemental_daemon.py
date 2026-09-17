@@ -49,6 +49,7 @@ class ReadWindow:
         self.attempted = self.closed = False
         self.started = None
         self.failure = None
+        self.read_failure = None
         self.opportunities = self.inflight = self.psi_count = self.post_read_psi = 0
         self.latest_psi = None
         self.max_psi_gap = 0.0
@@ -118,6 +119,32 @@ class ReadWindow:
                 and self.opportunities < self.max_opportunities
             )
 
+    def close_on_read_failure(self):
+        """Retain first sanitized cache fault before later scope invalidation.
+
+        This is passive evidence, not another read or permission to retry. In
+        particular, a timeout category cannot distinguish wire delay from local
+        completion delay and must not be described as either without evidence.
+        """
+        sample = self.cache.supplemental_snapshot()
+        banks, clock = sample.quick_keys, sample.clock
+        if not (
+            banks.blocked_until_reconnect
+            or any(bank.failure for bank in banks.banks)
+            or (clock and (clock.failure or clock.blocked_until_reconnect))
+        ):
+            return False
+        with self.lock:
+            if self.read_failure is None:
+                self.read_failure = {
+                    "cache_quarantine": banks.blocked_until_reconnect,
+                    "bank_failures": {bank.kind: bank.failure for bank in banks.banks},
+                    "clock_failure": None if clock is None else clock.failure,
+                    "clock_quarantine": None if clock is None else clock.blocked_until_reconnect,
+                }
+            self.stop("read_unconfirmed")
+        return True
+
     @contextmanager
     def scope(self, scanner):
         # Runtime acquisition is outside the window lock so stop/callbacks do
@@ -126,16 +153,11 @@ class ReadWindow:
             with self.lock:
                 allowed = available and self.allow_poll()
                 if allowed:
-                    state = self.cache.snapshot()
-                    clock = self.cache.clock_snapshot()
                     if (
-                        state.blocked_until_reconnect
-                        or any(b.failure for b in state.banks)
-                        or (clock and clock.failure)
+                        self.close_on_read_failure()
+                        or self.latest_psi is None
+                        or self.clock() - self.latest_psi > 1.5
                     ):
-                        self.stop("read_unconfirmed")
-                        allowed = False
-                    elif self.latest_psi is None or self.clock() - self.latest_psi > 1.5:
                         allowed = False
                     else:
                         self.opportunities += 1
@@ -153,8 +175,9 @@ class ReadWindow:
 
     def report(self):
         with self.lock:
-            banks = None if self.cache is None else self.cache.snapshot()
-            clock = None if self.cache is None else self.cache.clock_snapshot()
+            sample = None if self.cache is None else self.cache.supplemental_snapshot()
+            banks = None if sample is None else sample.quick_keys
+            clock = None if sample is None else sample.clock
             favorites = None if banks is None else banks.banks[0]
             samples_valid = bool(
                 banks
@@ -186,6 +209,7 @@ class ReadWindow:
                 "normal_psi_after_last_read": self.post_read_psi,
                 "max_psi_gap_seconds": round(self.max_psi_gap, 6),
                 "failure": self.failure,
+                "read_failure": self.read_failure,
                 "samples_valid": samples_valid,
                 "elapsed_seconds": None
                 if self.started is None
@@ -247,14 +271,7 @@ class SupplementalTrigger(OperatorTrigger):
                         worker = window.feed.quick_key_worker_status()
                         if worker is None or worker.stopped or worker.failure is not None:
                             window.stop("worker_unavailable")
-                        state = window.cache.snapshot()
-                        clock = window.cache.clock_snapshot()
-                        if (
-                            state.blocked_until_reconnect
-                            or any(b.failure for b in state.banks)
-                            or (clock and clock.failure)
-                        ):
-                            window.stop("read_unconfirmed")
+                        window.close_on_read_failure()
                         report = window.report()
                         if (
                             window.closed

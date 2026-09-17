@@ -24,7 +24,7 @@ from sds200 import (
 from sds200.daemon_display_profile import DaemonDisplayProfile
 from sds200.daemon_quick_keys import DaemonQuickKeyCache
 from sds200.daemon_runtime import DaemonRuntime, DaemonRuntimeState
-from sds200.exceptions import CommandRejectedError, CommandTimeoutError
+from sds200.exceptions import CommandRejectedError, CommandTimeoutError, ProtocolError
 from sds200.models import Packet
 from sds200.network import UdpTransport
 from sds200.scanner_quick_keys import QuickKeySelection
@@ -257,6 +257,112 @@ def test_other_packets_not_retained_and_missing_fresh_psi_blocks_read(trial):
     assert scanner.reads == [] and window.replies == {"DTM": 0, "FQK": 0}
 
 
+@pytest.mark.parametrize("kind", ["favorites", "clock"])
+@pytest.mark.parametrize(
+    "error,category",
+    [
+        (CommandTimeoutError, "timeout"),
+        (CommandRejectedError, "rejected"),
+        (ProtocolError, "invalid_response"),
+        (RuntimeError, "read_error"),
+    ],
+)
+def test_private_report_retains_first_failure_category_without_payload(
+    trial, kind, error, category
+):
+    window, scanner, cache, clock, psi = trial
+    assert window.arm()
+    psi()
+    if kind == "clock":
+        assert cache.poll_once()
+        clock.now = 10.5
+
+    def fail(*_args):
+        raise error("PRIVATE_SENTINEL")
+
+    if kind == "clock":
+        scanner.clock_reply = fail
+    else:
+        scanner.reply = fail
+    assert cache.poll_once()
+    assert window.close_on_read_failure()
+    report = window.report()
+    fault = report["read_failure"]
+    quarantine = None if category == "rejected" else category
+    assert fault == {
+        "cache_quarantine": quarantine,
+        "bank_failures": {
+            "favorites": category if kind == "favorites" else None,
+            "system": None,
+            "department": None,
+        },
+        "clock_failure": category if kind == "clock" else None,
+        "clock_quarantine": quarantine,
+    }
+    assert report["failure"] == "read_unconfirmed"
+    assert report["status"] == "qualification_unconfirmed"
+    assert "PRIVATE" not in json.dumps(report) and TARGET not in json.dumps(report)
+    reads = list(scanner.reads)
+    # A later scope/profile barrier may clear per-bank rejection detail. The
+    # first observed fault must survive without retaining raw data or rearming.
+    cache.clear_demand()
+    psi()
+    clock.now += 2
+    cache.poll_once()
+    window.close_on_read_failure()
+    assert window.report()["read_failure"] == fault
+    assert scanner.reads == reads and not window.allow_poll()
+
+
+def test_scope_preserves_fault_before_it_suspends_cache(trial):
+    window, scanner, cache, clock, psi = trial
+    assert window.arm()
+    psi()
+
+    def reject(_command):
+        raise CommandRejectedError("PRIVATE_REJECTION")
+
+    scanner.reply = reject
+    assert cache.poll_once()
+    clock.now = 10.5
+    assert cache.poll_once()  # The second reservation sees and closes on the fault.
+    assert window.report()["read_failure"]["bank_failures"]["favorites"] == "rejected"
+    assert len(scanner.reads) == 1
+    assert not cache.snapshot().active and not window.allow_poll()
+
+
+def test_completion_deadline_category_does_not_claim_wire_lateness(trial):
+    window, scanner, cache, clock, psi = trial
+    assert window.arm()
+    psi()
+    original = scanner.reply
+
+    def complete_late(command):
+        result = original(command)  # Reply observed before the completion deadline.
+        clock.now += 0.25
+        return result
+
+    scanner.reply = complete_late
+    assert cache.poll_once()
+    assert window.close_on_read_failure()
+    report = window.report()
+    assert report["reply_counts"] == {"DTM": 0, "FQK": 1}
+    assert report["read_failure"]["cache_quarantine"] == "timeout"
+    assert report["status"] == "qualification_unconfirmed"
+    window.observe_packet(Packet("FQK", (), "PRIVATE_LATE_REPLY"))
+    assert window.report()["reply_counts"] == report["reply_counts"]
+    assert not window.allow_poll()
+
+
+def test_read_fault_observation_is_passive_and_healthy_report_has_no_fault(trial):
+    window, scanner, cache, _, psi = trial
+    psi()
+    lease = cache._demand_until
+    assert not window.close_on_read_failure()
+    assert window.report()["read_failure"] is None
+    assert scanner.reads == [] and cache._demand_until == lease and not window.closed
+
+
 def arguments(tmp_path):
     return [
         "--expected-firmware",
@@ -408,6 +514,9 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                 assert count == 0 and report["status"] == "operator_wait_expired"
             else:
                 assert 0 < count < limit and report["status"] == "qualification_unconfirmed"
+                if outcome == "timeout":
+                    assert report["read_failure"]["cache_quarantine"] == "timeout"
+                    assert report["read_failure"]["bank_failures"]["favorites"] == "timeout"
             assert report["max_opportunities"] == limit
             assert report["read_kind"] == (
                 "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"

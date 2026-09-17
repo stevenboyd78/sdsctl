@@ -501,7 +501,7 @@ acquisition still disabled. This qualifies only this short combined-reader
 scanning case, not endurance, controls/audio/Waterfall under load, scoped quick
 keys, displayed bank selection, or rendered clock/quick-key fields.
 
-The next **scanning-continuity** case is separate from that completed short
+The **scanning-continuity** case is separate from that completed short
 trial. `--supplemental-continuity` requires the stager's explicit supplemental
 firmware pin and selects a distinct version suffix/read-kind in its manifest.
 The research entry passes `--continuity` to the launcher: at most 60 read
@@ -509,9 +509,43 @@ opportunities within 64 seconds, requiring 30 validated replies of each kind,
 two final normal PSI updates, and no observed inter-PSI gap above two seconds.
 It cannot be rearmed, does nothing before the verified operator signal, and
 closes on connection/mode changes, contention, cancellation or uncertain reads.
-This proposed case is not yet hardware-accepted and does not qualify controls,
+This case is not hardware-accepted and does not qualify controls,
 audio, or Waterfall under load. The bounds are admission/response-wait limits,
 not hard preemption of a blocked transport write. It adds no public App option.
+
+The first continuity trial on 2026-09-17 stopped safely but was **unconfirmed**.
+At about 13.23 seconds it had admitted 13 opportunities, counted six replies of
+each kind and 26 normal PSI updates, and closed on `read_unconfirmed`. Its largest
+observed inter-PSI gap was about 0.546 seconds; there were no remaining in-flight
+reads at the recorded result. A separate 75-second receive-only observation
+recorded 142 normal scanning PSI updates without parsing errors or System Status
+records, plus seven incoming FQK and six incoming DTM replies. The operator
+confirmed that physical scanning stayed normal. That physical pass does not
+override the unconfirmed machine result or qualify continuous acquisition.
+
+The extra FQK reply was not counted in the bounded reader result. A late reply
+is one possibility, but the saved evidence does not establish its arrival time
+or the underlying failure category: this trial retained only the first 12 reply
+timestamps, and the launcher reported only the generic stop reason. No outgoing
+wire count was established. Preserve this closed case; do not retry or rearm it.
+The matching normal candidate was restored and verified: 12 current HTTP frame
+samples without errors, research launcher/support/markers absent, protected
+configuration/profile/recording inventory and five shared card resources
+unchanged, and Home Assistant Core not restarted. Ordinary supplemental reads
+remain disabled; neither Pi was changed.
+
+Subsequent **offline-only** diagnostic changes retain the first sanitized cache
+fault in the private launcher's `read_failure` report: cache quarantine,
+per-bank failure categories, and clock failure/quarantine. A coherent snapshot
+is taken before a later scope invalidation can erase per-bank detail. No raw
+packet, scanner clock value, bank contents, or endpoint is included. A `timeout`
+category alone still does not distinguish network arrival delay from local
+completion delay. Tests cover both kinds of read, rejection, timeout, malformed
+response, unexpected read error, preserved evidence after invalidation, and a
+reply observed before a completion timeout. These changes neither loosen the
+250ms budget nor allow retries, start acquisition, or expose new public fields.
+Any future timing investigation requires a fresh bounded plan and evidence
+case that retains timing for every allowed reply, not another trigger here.
 
 ### Internal supplemental projection (not yet rendered)
 
