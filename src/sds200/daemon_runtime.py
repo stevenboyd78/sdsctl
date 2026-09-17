@@ -1232,6 +1232,14 @@ class DaemonRuntime:
             )
 
     @contextmanager
+    def _supplemental_read_scope(self, scanner: object) -> Iterator[bool]:
+        """Internal optional reader gate; not a daemon API control or startup hook."""
+        from .daemon_supplemental_reads import supplemental_read_scope
+
+        with supplemental_read_scope(self, scanner) as ready:
+            yield ready
+
+    @contextmanager
     def _control_scope(
         self, timeout: float, *, requires_connection: bool = True
     ) -> Iterator[float]:

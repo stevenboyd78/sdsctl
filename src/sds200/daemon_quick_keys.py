@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 import threading
 from collections.abc import Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Literal, Protocol
@@ -57,6 +58,10 @@ class _ClockReader(Protocol):
     def __call__(self, *, timeout: float) -> ScannerDateTime | None: ...
 
 
+class SupplementalReadScope(Protocol):
+    def __call__(self, scanner: object) -> AbstractContextManager[bool]: ...
+
+
 @dataclass(frozen=True, slots=True, eq=False)
 class QuickKeySession:
     endpoint_id: UUID
@@ -94,6 +99,7 @@ class DaemonQuickKeyCache:
         clock: Callable[[], float] = monotonic,
         include_clock: bool = False,
         allow_scoped_reads: bool = True,
+        read_scope: SupplementalReadScope | None = None,
     ) -> None:
         if (
             not isinstance(endpoint_id, UUID)
@@ -103,6 +109,9 @@ class DaemonQuickKeyCache:
             raise ValueError("An explicit endpoint identity and scanner target are required.")
         if type(include_clock) is not bool or type(allow_scoped_reads) is not bool:
             raise ValueError("Explicit boolean supplemental read policies are required.")
+        if read_scope is not None and not callable(read_scope):
+            raise ValueError("Supplemental read scope must be an explicit callable.")
+        self._read_scope = read_scope
         clock_reader = getattr(scanner, "read_clock_if_idle", None) if include_clock else None
         if include_clock and not callable(clock_reader):
             raise ValueError("Clock reads require the existing scanner owner's idle reader.")
@@ -352,30 +361,57 @@ class DaemonQuickKeyCache:
         result: Result | None = None
         clock_result: ScannerDateTime | None = None
         failure: Failure | None = None
-        target_valid = False
+        target_valid: bool | None = None
         try:
-            target_valid = self._scanner.connected and self._scanner.endpoint == self._target
-            if target_valid:
-                if kind == "clock":
-                    assert self._clock_reader is not None
-                    clock_result = self._clock_reader(timeout=READ_TIMEOUT)
-                else:
-                    command = commands[kind]
-                    result = self._scanner.read_quick_keys_if_idle(command, timeout=READ_TIMEOUT)
-                target_valid = self._scanner.connected and self._scanner.endpoint == self._target
-                if result is not None:
-                    expected = {
-                        GetFavoritesQuickKeys: FavoritesQuickKeys,
-                        GetSystemQuickKeys: SystemQuickKeys,
-                        GetDepartmentQuickKeys: DepartmentQuickKeys,
-                    }[type(command)]
-                    if (
-                        type(result) is not expected
-                        or type(result.states) is not tuple
-                        or any(type(state) is not FavoritesQuickKeyState for state in result.states)
-                        or result != command.parse_response(result.packet)
-                    ):
-                        raise ProtocolError("Invalid quick-key result.")
+            scope = (
+                nullcontext(True) if self._read_scope is None else self._read_scope(self._scanner)
+            )
+            # Never acquire runtime locks under the cache/PSI callback lock.
+            with scope as allowed:
+                if type(allowed) is not bool:
+                    raise ValueError("Supplemental read scope must yield a boolean.")
+                with self._lock:
+                    if not allowed and self._session is session and session is not None:
+                        # Even an otherwise-normal control can precede a mode
+                        # change. Require new PSI/demand rather than old context.
+                        self.suspend(session)
+                    current = (
+                        self._session is session
+                        and self._epoch == epoch
+                        and self._active(self._now())
+                    )
+                if allowed and current:
+                    target_valid = (
+                        self._scanner.connected and self._scanner.endpoint == self._target
+                    )
+                    if target_valid:
+                        if kind == "clock":
+                            assert self._clock_reader is not None
+                            clock_result = self._clock_reader(timeout=READ_TIMEOUT)
+                        else:
+                            command = commands[kind]
+                            result = self._scanner.read_quick_keys_if_idle(
+                                command, timeout=READ_TIMEOUT
+                            )
+                        target_valid = (
+                            self._scanner.connected and self._scanner.endpoint == self._target
+                        )
+                        if result is not None:
+                            expected = {
+                                GetFavoritesQuickKeys: FavoritesQuickKeys,
+                                GetSystemQuickKeys: SystemQuickKeys,
+                                GetDepartmentQuickKeys: DepartmentQuickKeys,
+                            }[type(command)]
+                            if (
+                                type(result) is not expected
+                                or type(result.states) is not tuple
+                                or any(
+                                    type(state) is not FavoritesQuickKeyState
+                                    for state in result.states
+                                )
+                                or result != command.parse_response(result.packet)
+                            ):
+                                raise ProtocolError("Invalid quick-key result.")
         except CommandTimeoutError:
             failure = "timeout"
         except CommandRejectedError:
@@ -404,7 +440,7 @@ class DaemonQuickKeyCache:
             self._next_poll = max(self._next_poll, finished + MIN_READ_GAP)
             if finished - now >= READ_TIMEOUT:
                 failure = "timeout"
-            if not target_valid and self._session is session and session is not None:
+            if target_valid is False and self._session is session and session is not None:
                 self.disconnect(session)
             if clock_ticket is not None:
                 assert self._clock_samples is not None

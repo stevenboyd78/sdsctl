@@ -22,6 +22,10 @@ from .waterfall_subscriptions import (
 logger = logging.getLogger(__name__)
 
 
+class WaterfallIdleReservationError(RuntimeError):
+    """Expected busy/non-idle refusal, distinct from a reservation implementation fault."""
+
+
 class WaterfallSessionState(StrEnum):
     """Lifecycle state for one shared scanner waterfall publication session."""
 
@@ -439,10 +443,10 @@ class WaterfallSession:
         and shutdown remain free to acquire the session lock while reserved.
         """
         if not self._lock.acquire(blocking=False):
-            raise RuntimeError("Waterfall session is busy.")
+            raise WaterfallIdleReservationError("Waterfall session is busy.")
         try:
             if self._idle_reserved or self._leases or self._state is not WaterfallSessionState.IDLE:
-                raise RuntimeError("Waterfall session is not idle.")
+                raise WaterfallIdleReservationError("Waterfall session is not idle.")
             self._idle_reserved = True
         finally:
             self._lock.release()

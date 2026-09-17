@@ -443,6 +443,27 @@ The component's initial, hardware-unqualified scheduling limits are:
   commit its result or restart reads. The shared scanner is never force-closed
   by this worker. Unsubscription failures still stop/invalidate the worker.
 
+An internal cache can also receive `read_scope=runtime._supplemental_read_scope`.
+This reserves the exact runtime scanner, not another object at the same address.
+It attempts control and lifecycle locks nonblockingly, briefly checks runtime
+state, and reserves an idle real Waterfall session before yielding to the same
+scanner command lane. Runtime state and Waterfall state locks are not held over
+GET I/O, so receive-thread PSI and connection callbacks can progress. A busy
+lock, inactive PSI/connection, non-running runtime, existing research policy or
+unavailable/non-idle Waterfall reservation refuses the read; it never stops
+Waterfall or reconnects the scanner to make room. All partial reservations are
+released before a refusal is returned.
+
+A refused scope suspends supplemental values and requires new qualified PSI
+and display demand before trying again. The cache rechecks its session,
+generation and demand after scope entry, discarding a reservation that became
+obsolete in between. Unexpected scope faults are quarantined, not treated as
+ordinary contention; only the typed Waterfall idle-reservation refusal is busy.
+Foreground operations arriving after a GET has reserved the owner retain their
+existing busy behavior. Shutdown waits for that in-flight reservation to exit;
+there is no new claim of hard transport-write preemption. This coordination hook
+is not installed by ordinary daemon startup and does not enable periodic reads.
+
 Offline tests cover the shared schedule, independent freshness, invalid RTC,
 cross-kind quarantine, global rejection backoff through barriers, retired-session
 replies, bounded shutdown, real parser callbacks during reads and yielding to a
