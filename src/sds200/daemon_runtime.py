@@ -19,6 +19,13 @@ from .audio_sinks import (
     PcmSinkRouter,
     PcmSinkRouterSnapshot,
 )
+from .daemon_display_read_research import (
+    DisplayReadResearchAttempt,
+    DisplayReadResearchPolicy,
+    DisplayReadResearchResult,
+    _DisplayResearchScanner,
+    display_read_timeout,
+)
 from .daemon_system_status_research import (
     SystemStatusResearchAttempt,
     SystemStatusResearchPolicy,
@@ -354,6 +361,7 @@ class DaemonRuntime:
         psi_recover_after: float = 10.0,
         psi_recovery_cooldown: float = 60.0,
         system_status_research: SystemStatusResearchPolicy | None = None,
+        display_read_research: DisplayReadResearchPolicy | None = None,
         clock: Callable[[], float] = monotonic,
         now: Callable[[], datetime] = _utc_now,
     ) -> None:
@@ -421,6 +429,16 @@ class DaemonRuntime:
         self._system_status_research = (
             None if system_status_research is None
             else SystemStatusResearchAttempt(system_status_research)
+        )
+        if display_read_research is not None and not isinstance(
+            display_read_research, DisplayReadResearchPolicy
+        ):
+            raise TypeError("Display-read research requires an explicit policy.")
+        if display_read_research is not None and system_status_research is not None:
+            raise ValueError("Only one research policy may be enabled per runtime.")
+        self._display_read_research = (
+            None if display_read_research is None
+            else DisplayReadResearchAttempt(display_read_research)
         )
 
     @property
@@ -1195,6 +1213,20 @@ class DaemonRuntime:
         with self._control_scope(normalized) as remaining:
             return self._system_status_research.run(
                 cast(_ResearchScanner, self.scanner),
+                operator_ready=operator_ready,
+                timeout=remaining,
+            )
+
+    def run_display_read_research(
+        self, *, operator_ready: bool, timeout: float = 6.0
+    ) -> DisplayReadResearchResult:
+        """One opt-in GET qualification; not a public daemon control or poller."""
+        if self._display_read_research is None:
+            raise UnsupportedScannerFeatureError("Display-read research is disabled.")
+        normalized = display_read_timeout(timeout)
+        with self._control_scope(normalized) as remaining:
+            return self._display_read_research.run(
+                cast(_DisplayResearchScanner, self.scanner),
                 operator_ready=operator_ready,
                 timeout=remaining,
             )

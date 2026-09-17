@@ -63,6 +63,10 @@ class OperatorTrigger:
             self._armed.clear()
             self._signal.set()
 
+    def invoke(self, runtime: _Runtime) -> dict[str, object]:
+        """Narrow hook reused by the separate read-only research launcher."""
+        return dict(asdict(runtime.run_system_status_research(operator_ready=True, timeout=6.0)))
+
     def start(self, runtime: _Runtime) -> None:
         if self._worker is not None:
             raise RuntimeError("Research trigger can only be started once.")
@@ -92,14 +96,7 @@ class OperatorTrigger:
                     result = {"status": "operator_wait_expired", "research_started": False}
                 else:
                     self.write("triggered.json", {"status": "operator_trigger_received"})
-                    result = dict(
-                        asdict(
-                            runtime.run_system_status_research(
-                                operator_ready=True,
-                                timeout=6.0,
-                            )
-                        )
-                    )
+                    result = self.invoke(runtime)
                 self.write("result.json", result)
             except Exception:
                 # Do not export the exception message, command line or scanner values.

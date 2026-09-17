@@ -51,8 +51,14 @@ def replace_once(text: str, old: str, new: str) -> str:
 
 
 def render(
-    snapshot: dict[str, bytes], revision: str, *, research_firmware: str | None = None
+    snapshot: dict[str, bytes],
+    revision: str,
+    *,
+    research_firmware: str | None = None,
+    display_read_firmware: str | None = None,
+    display_read_kind: str | None = None,
 ) -> dict[str, bytes]:
+    validate_research_choice(research_firmware, display_read_firmware, display_read_kind)
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("An exact source revision is required.")
     version = tomllib.loads(snapshot["pyproject.toml"].decode())["project"]["version"]
@@ -193,11 +199,94 @@ def render(
         report["files"] = {
             name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
         }
+    if display_read_firmware is not None:
+        runtime_name = "src/sds200/home_assistant_app_runtime.py"
+        before, delimiter, after = (
+            result[runtime_name].decode().partition("def build_home_assistant_daemon_command(")
+        )
+        signature, end, body = after.partition(") -> tuple[str, ...]:")
+        if not delimiter or not end:
+            raise ValueError("Review the daemon launcher boundary.")
+        signature = replace_once(
+            signature,
+            "executable: str = HOME_ASSISTANT_APP_EXECUTABLE",
+            'executable: str = "/usr/local/bin/sdsctl-display-read-research"',
+        )
+        result[runtime_name] = (before + delimiter + signature + end + body).encode()
+        for name in ("research_system_status_daemon.py", "research_display_read_daemon.py"):
+            result[name] = snapshot["scripts/" + name]
+        result["research-entry.py"] = (
+            "#!/usr/local/bin/python\nimport os, sys, uuid\n"
+            "sys.path.insert(0, '/opt/sdsctl-research')\n"
+            "from research_display_read_daemon import main\n"
+            "directory = ('/run/sdsctl/display-read-research-' "
+            "+ str(os.getpid()) + '-' + uuid.uuid4().hex)\n"
+            f"raise SystemExit(main(['--expected-firmware', {display_read_firmware!r}, "
+            f"'--read-kind', {display_read_kind!r}, "
+            "'--evidence-directory', directory, '--', *sys.argv[1:]]))\n"
+        ).encode()
+        result["Dockerfile"] += (
+            b"\n# Explicit one-shot GET research, no automatic reads.\n"
+            b"COPY research_system_status_daemon.py research_display_read_daemon.py "
+            b"/opt/sdsctl-research/\n"
+            b"COPY --chmod=0555 research-entry.py /usr/local/bin/sdsctl-display-read-research\n"
+        )
+        result["config.yaml"] = replace_once(
+            result["config.yaml"].decode(),
+            f'version: "{version}-mimic-{revision[:12]}"',
+            f'version: "{version}-mimic-{revision[:12]}-{display_read_kind}-research"',
+        ).encode()
+        result["DOCS.md"] += (
+            "\n## Temporary display GET qualification\n\n"
+            f"Only {display_read_kind} is enabled, with firmware {display_read_firmware}. "
+            "This image requires direct UDP and no active waterfall. It does not send "
+            "research commands on startup. Verify fresh private ready.json, read_kind, "
+            "PID and process start ticks before one administrator SIGUSR1 trigger with "
+            "the operator at the scanner. It checks MDL/VER then sends at most one "
+            "selected GET using the existing owner, never GSI/SET/KEY/AST/APR. "
+            "No retry, second owner, automatic bank sweep, renderer data injection or "
+            "polling is enabled. Preserve every result, especially unconfirmed reads. "
+            "Do not restart/rearm a failed case; review before another qualification. "
+            "Restore the prepared normal candidate after the bounded test.\n"
+        ).encode()
+        report.update(
+            {
+                "purpose": "local-mimic-display-read-research-only",
+                "research_firmware_pin": display_read_firmware,
+                "research_read_kind": display_read_kind,
+                "research_automatic_start": False,
+                "files": {
+                    name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
+                },
+            }
+        )
     result["candidate-source.json"] = (json.dumps(report, indent=2) + "\n").encode()
     return result
 
 
-def from_revision(revision: str, *, research_firmware: str | None = None) -> dict[str, bytes]:
+def validate_research_choice(
+    ast_firmware: str | None, read_firmware: str | None, read_kind: str | None
+) -> None:
+    if ast_firmware is not None and (read_firmware is not None or read_kind is not None):
+        raise ValueError("Only one research mode can be staged.")
+    if (read_firmware is None) != (read_kind is None):
+        raise ValueError("Display-read research requires both firmware and GET kind.")
+    if read_firmware is not None and (
+        re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", read_firmware) is None
+        or read_firmware != read_firmware.strip()
+        or read_kind not in {"clock", "favorites", "system", "department"}
+    ):
+        raise ValueError("Review the exact display-read firmware pin and GET kind.")
+
+
+def from_revision(
+    revision: str,
+    *,
+    research_firmware: str | None = None,
+    display_read_firmware: str | None = None,
+    display_read_kind: str | None = None,
+) -> dict[str, bytes]:
+    validate_research_choice(research_firmware, display_read_firmware, display_read_kind)
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
     archive = git(
@@ -210,7 +299,12 @@ def from_revision(revision: str, *, research_firmware: str | None = None) -> dic
         "README.md",
         "LICENSE",
         "home-assistant/sds200",
-        *(["scripts/research_system_status_daemon.py"] if research_firmware is not None else []),
+        *(
+            ["scripts/research_system_status_daemon.py"]
+            if research_firmware is not None or display_read_firmware is not None
+            else []
+        ),
+        *(["scripts/research_display_read_daemon.py"] if display_read_firmware is not None else []),
     )
     snapshot = {}
     with tarfile.open(fileobj=io.BytesIO(archive)) as source:
@@ -226,7 +320,13 @@ def from_revision(revision: str, *, research_firmware: str | None = None) -> dic
             stream = source.extractfile(member)
             assert stream is not None
             snapshot[member.name] = stream.read()
-    return render(snapshot, revision, research_firmware=research_firmware)
+    return render(
+        snapshot,
+        revision,
+        research_firmware=research_firmware,
+        display_read_firmware=display_read_firmware,
+        display_read_kind=display_read_kind,
+    )
 
 
 def stage(destination: Path, files: dict[str, bytes]) -> None:
@@ -281,9 +381,16 @@ def main() -> None:
         "--system-status-research-firmware",
         help="Explicit temporary same-owner research launcher with this exact firmware pin.",
     )
+    parser.add_argument("--display-read-research-firmware")
+    parser.add_argument(
+        "--display-read-kind", choices=("clock", "favorites", "system", "department")
+    )
     args = parser.parse_args()
     files = from_revision(
-        args.source_revision, research_firmware=args.system_status_research_firmware
+        args.source_revision,
+        research_firmware=args.system_status_research_firmware,
+        display_read_firmware=args.display_read_research_firmware,
+        display_read_kind=args.display_read_kind,
     )
     if not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(

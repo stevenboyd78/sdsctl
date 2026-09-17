@@ -1157,22 +1157,32 @@ class SDSScanner:
 
     @contextmanager
     def _system_status_research_scope(self, *, timeout: float) -> Iterator[None]:
+        with self._direct_udp_research_scope(timeout=timeout, label="System Status"):
+            yield
+
+    @contextmanager
+    def _display_read_research_scope(self, *, timeout: float) -> Iterator[None]:
+        with self._direct_udp_research_scope(timeout=timeout, label="Display read"):
+            yield
+
+    @contextmanager
+    def _direct_udp_research_scope(self, *, timeout: float, label: str) -> Iterator[None]:
         """Serialize the internal research transaction on an existing UDP owner.
 
         No fallback/custom transport, connect, reconnect or automatic retry.
         This is not a public analysis lifecycle or a daemon API operation.
         """
-        normalized = _require_positive_timeout(timeout, label="System Status research timeout")
+        normalized = _require_positive_timeout(timeout, label=f"{label} research timeout")
         if type(self.transport) is not UdpTransport:
             raise UnsupportedScannerFeatureError(
-                "System Status research requires a directly owned UDP transport."
+                f"{label} research requires a directly owned UDP transport."
             )
         if not self._command_lock.acquire(timeout=normalized):
-            raise CommandTimeoutError("System Status research command scope timed out.")
+            raise CommandTimeoutError(f"{label} research command scope timed out.")
         try:
             if not self.connected:
                 raise UnsupportedScannerFeatureError(
-                    "System Status research requires an existing connection."
+                    f"{label} research requires an existing connection."
                 )
             yield
         finally:

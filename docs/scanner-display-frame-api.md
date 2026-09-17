@@ -245,6 +245,57 @@ the same connection. No DTM SET, FQK/SQK/DQK SET, automatic AST or scanner-clock
 timezone assumption is part of that qualification. The scanner's configured
 12/24-hour presentation also needs a verified source before claiming LCD parity.
 
+### One-shot display GET qualification (internal opt-in only)
+
+`DisplayReadResearchAttempt` is a separate qualification path, not a poller or
+source for renderer fields. One immutable policy selects exactly one of `clock`,
+`favorites`, `system`, or `department` and pins an SDS200 firmware string. Ordinary
+daemon construction leaves it disabled, and no API/CLI operation advertises it.
+System Status research and display-read research cannot be enabled together.
+
+An explicitly supplied policy permits one attempt through the existing daemon's
+control/lifecycle locks and its directly owned UDP command lane. It reserves an
+idle waterfall session without stopping an active one. The attempted sequence is
+read-only `MDL`, `VER`, then at most one selected `DTM`, `FQK`, `SQK,<FAV_QK>` or
+`DQK,<FAV_QK>,<SYS_QK>` GET. Each response wait is capped at 250 ms; the complete
+attempt, including passive PSI observation, is bounded to at most eight seconds.
+This is not transport-write preemption. No GSI, SET, KEY, AST, APR, second scanner
+connection, automatic retry or follow-on bank sweep is issued by this helper.
+
+The selected GET requires newly observed, unambiguous normal-scan PSI no more
+than 1.5 seconds old. System/Department selectors come only from assigned Q_Key
+values, never object indices, an unassigned-to-zero fallback or a previous bank.
+After validating the reply, two further qualified normal PSI updates are required
+for `reply_and_psi_observed`; a reply alone is `reply_only`. A connection change,
+mode interruption or relevant bank-scope change invalidates the result even if
+the previous state returns. These states are evidence, not claims of physical
+screen parity or of which LCD quick-key decade the operator selected.
+
+Private results retain only bounded typed clock/bank values after a complete
+pass, plus fixed failure classes and response-field counts for malformed replies.
+They contain no raw response, XML, scanner names, host addresses or exception
+text. An RTC-invalid clock reply can pass protocol/continuity checks but supplies
+no usable time. An unexpected SQK shape is recorded as counts and rejected, not
+silently reinterpreted. All attempted/refused/uncertain outcomes consume the
+one-shot object; no retry is scheduled.
+
+The developer-only `research_display_read_daemon.py` launcher reuses the private
+operator-trigger lifecycle but **does not enable System Status research**. A
+fresh private `ready.json` includes PID, process start ticks and `read_kind`.
+No research command runs until a deliberate administrator SIGUSR1 signal during
+the readiness window. Repeated signals cannot repeat an attempt. Expiry and
+shutdown cancel the wait, and existing evidence paths are never adopted or
+overwritten. Verify the actual image/process identity before signaling; preserve
+failed evidence and do not restart/rearm an uncertain case to try again.
+
+`scripts/stage_mimic_app.py` can prepare that temporary image using paired
+`--display-read-research-firmware` and `--display-read-kind` arguments. They are
+mutually exclusive with the System Status research option. Staging stays local,
+source-pinned, manually started and unmapped by default; it does not install or
+start an App. Prepare the corresponding ordinary candidate as well, preserve
+private data and existing card resources, and restore ordinary startup after
+the bounded qualification. Clock and bank polling/display remain disabled.
+
 ### Quick-key GET groundwork (not automatic polling)
 
 Remote Command Specification V1.02, page 6, provides the separate bank reads:

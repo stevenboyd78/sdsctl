@@ -73,6 +73,64 @@ def test_research_staging_is_explicit_and_only_changes_daemon_launcher(snapshot)
     assert research["translations/en.yaml"] == normal["translations/en.yaml"]
 
 
+@pytest.mark.parametrize("kind", ["clock", "favorites", "system", "department"])
+def test_display_read_staging_pins_one_kind_and_preserves_normal_runtime(snapshot, kind):
+    runtime_name = "src/sds200/home_assistant_app_runtime.py"
+    for name in (
+        runtime_name,
+        "scripts/research_system_status_daemon.py",
+        "scripts/research_display_read_daemon.py",
+    ):
+        snapshot[name] = (ROOT / name).read_bytes()
+    normal = stager.render(snapshot, REVISION)
+    research = stager.render(
+        snapshot, REVISION, display_read_firmware="Version 1.26.01", display_read_kind=kind
+    )
+    assert "research-entry.py" not in normal
+    assert normal[runtime_name] == snapshot[runtime_name]
+    assert f"-{kind}-research" in research["config.yaml"].decode()
+    assert "-ast-research" not in research["config.yaml"].decode()
+    assert "boot: manual" in research["config.yaml"].decode()
+    assert "50000/udp: null" in research["config.yaml"].decode()
+    assert f"'--read-kind', '{kind}'" in research["research-entry.py"].decode()
+    rewritten = research[runtime_name].decode()
+    assert rewritten.count('"/usr/local/bin/sdsctl-display-read-research"') == 1
+    boundary = "def build_home_assistant_web_command("
+    assert rewritten.partition(boundary)[2] == normal[runtime_name].decode().partition(boundary)[2]
+    for name in (
+        "research-entry.py",
+        "research_system_status_daemon.py",
+        "research_display_read_daemon.py",
+    ):
+        compile(research[name], name, "exec")
+    report = json.loads(research["candidate-source.json"])
+    assert report["research_read_kind"] == kind
+    assert report["research_automatic_start"] is False
+    assert report["purpose"] == "local-mimic-display-read-research-only"
+    for name, digest in report["files"].items():
+        assert hashlib.sha256(research[name]).hexdigest() == digest
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"display_read_firmware": "Version 1.26.01"},
+        {"display_read_kind": "clock"},
+        {"display_read_firmware": "bad\n", "display_read_kind": "clock"},
+        {"display_read_firmware": "Version 1.26.01", "display_read_kind": "DTM,0"},
+        {
+            "display_read_firmware": "Version 1.26.01",
+            "display_read_kind": "clock",
+            "research_firmware": "Version 1.26.01",
+        },
+    ],
+)
+def test_read_research_bad_or_combined_modes_fail_before_archive_access(monkeypatch, kwargs):
+    monkeypatch.setattr(stager, "git", lambda *args: pytest.fail("Unexpected git read"))
+    with pytest.raises(ValueError):
+        stager.from_revision(REVISION, **kwargs)
+
+
 @pytest.mark.parametrize("firmware", ["", "v;echo x", "v\n", " v", "v'", "x" * 65])
 def test_research_staging_rejects_invalid_pins(snapshot, firmware):
     with pytest.raises(ValueError, match="firmware pin"):
