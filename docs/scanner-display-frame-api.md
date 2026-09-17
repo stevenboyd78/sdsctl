@@ -331,8 +331,9 @@ returned exactly 100 valid state fields, all `0`, followed by two qualified norm
 PSI updates with no connection or scan-context change. An independent bounded
 receive-only observation captured the same reply and 57 normal PSI updates
 without decoding errors. The first ten states are consistent with the dashed
-F0 row in the operator's baseline photo. This qualifies that bounded reply/PSI
-observation only: it does not establish populated-bank glyphs, a live LCD decade
+F0 row in the operator's baseline photo, and the operator confirmed that physical
+scanning stayed normal. This qualifies that bounded read/continuity observation
+only: it does not establish populated-bank glyphs, a live LCD decade
 selector, System/Department GET behavior, or automatic-polling acceptance.
 
 The specification's SQK GET reply unusually includes both FAV_QK and SYS_QK.
@@ -340,6 +341,16 @@ The parser preserves that reported SYS_QK separately and requires the documented
 field count; its meaning and actual firmware reply must be hardware-qualified
 before using it as a display selector. A changed or unassigned scope must not
 silently become key 0, a scanner object index, or a previous system's bank.
+
+A populated System quick-key row on the LCD is not itself an assigned Favorites
+selector. Following the bounded Favorites qualification, a receive-only normal
+scan sample reported explicit `Q_Key="None"` for both the current MonitorList
+and System. The scoped qualification guards correctly refused to select either
+SQK or DQK; no request was sent. Page 6 does not define an unassigned-selector
+encoding. Qualify those reads using an explicitly assigned scope or separately
+established protocol evidence, without changing user settings to create a scope
+as an automatic side effect. Global Favorites and clock reads do not require
+those assigned selectors.
 
 ### Owner quick-key worker integration (internal opt-in only)
 
