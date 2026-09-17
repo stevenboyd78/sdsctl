@@ -487,6 +487,20 @@ the trial. Preserve unconfirmed evidence and restore the prepared normal image;
 never restart a research image merely to bypass a failed trial. The launcher
 does not expose samples in display frames or enable SQK/DQK, AST/APR, SET or KEY.
 
+The bounded shared-reader hardware trial passed on an SDS200 running firmware
+1.26.01 on 2026-09-17. One operator-triggered window admitted six read
+opportunities in about six seconds, with three incoming DTM and three incoming
+FQK replies, fresh validated samples, and two normal PSI updates after the last
+read. A separate approximately 30-second receive-only observation recorded 57
+normal scanning PSI updates without errors or System Status records. The
+operator confirmed that physical scanning stayed normal. These are observed
+replies and admission counts, not an outgoing wire-capture count. The trial is
+complete and must not be rearmed. The matching normal candidate was restored,
+with the temporary launcher and runtime markers absent and ordinary supplemental
+acquisition still disabled. This qualifies only this short combined-reader
+scanning case, not endurance, controls/audio/Waterfall under load, scoped quick
+keys, displayed bank selection, or rendered clock/quick-key fields.
+
 Offline tests cover the shared schedule, independent freshness, invalid RTC,
 cross-kind quarantine, global rejection backoff through barriers, retired-session
 replies, bounded shutdown, real parser callbacks during reads and yielding to a
