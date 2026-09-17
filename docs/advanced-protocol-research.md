@@ -869,7 +869,7 @@ only one typed start command. Once reserved, it cannot be rearmed, including
 after a timeout, nonexact acknowledgement, or an exact `AST,OK`. The latter
 still conveys no System Status frame or confirmed analysis-running state.
 
-This latch is not an exactly-once network-delivery guarantee. An eventual owner
+This latch is not an exactly-once network-delivery guarantee. An owner
 bridge must hold the existing control/lifecycle locks through final validation
 and dispatch, supply a new connection identity after reconnect, establish the
 intended model/firmware/transport scope, and bound the entire request. It must
@@ -937,6 +937,39 @@ inspect the private result and physical screen, then return manually and
 confirm normal Mimic recovery. Do not treat a missing result or uncertain start
 as permission to retry. Retain evidence before restoring the normal acceptance
 image. Fake transport/launcher tests are not physical AST acceptance.
+
+### SDS200 guarded AST command qualification
+
+On September 17, 2026, a separately coordinated test exercised that one-shot
+path on an SDS200 reporting `Version 1.26.01`, using the existing daemon's
+direct UDP owner. The operator confirmed the physical System Status screen
+matched the expected target and subsequently returned to normal scanning with
+the physical **to Scan** key. No APR or remote return command was used.
+
+The guarded transaction received exact `AST,OK` and then a qualifying analysis
+PSI observation within approximately 0.33 seconds, with no connection change.
+A 30-second receive-only sample contained nine normal trunk observations followed
+by 52 `analyze_system_status` observations, each with one `SystemStatus` record,
+and no decoding errors. The passive observer also saw one exact incoming AST
+acknowledgement, but did not capture outgoing AST packets; it is not independent
+wire-count proof or an exactly-once delivery guarantee.
+
+This analysis sample reported Signal, Quality and Activity while omitting
+SystemID, SystemSubID, SiteID, WacnID and NAC. The cause is not established.
+Unlike the earlier manual-source sample, it does not qualify identifier values.
+Missing identifiers do not negate the separately observed analysis screen, and
+must not be filled from prior analysis, scanner programming or object indices.
+
+After the operator's manual return, all 56 sampled observations were ordinary
+scan screens (54 trunk, two conventional), with no SystemStatus records or
+decoding errors. All 12 sampled Mimic API frames were current, and the four
+analysis-only identifier regions remained unqualified with null text.
+
+This qualifies the bounded start/acknowledgement/analysis-observation/manual-return
+path on that tested setup. It does not qualify APR, automatic recovery into
+analysis, remote exit, graph scaling, other models/firmware/transports, an
+analysis renderer, or ordinary-scanning identifier availability. The research
+path remains opt-in, with no public daemon operation or background AST polling.
 
 ## Milestone 24.10 implementation boundary
 

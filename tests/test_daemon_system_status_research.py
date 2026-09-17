@@ -162,6 +162,35 @@ def test_single_exact_start_observed_after_ack_and_cleanup(scanner: ResearchScan
         probe.run(scanner, operator_ready=True, timeout=0.2)
 
 
+def test_analysis_observation_does_not_require_or_invent_identifiers(
+    scanner: ResearchScanner,
+) -> None:
+    # Synthetic minimal shape matching the qualified optional-attribute boundary.
+    # Observing analysis is separate from receiving identifiers or target parity.
+    scanner.post_ack = ScannerInfoParser().parse(
+        "PSI",
+        '<ScannerInfo Mode="Trunk Scan" V_Screen="analyze_system_status">'
+        '<SystemStatus Signal="10" Quality="0" Activity="0"/></ScannerInfo>',
+    )
+    result = attempt().run(scanner, operator_ready=True, timeout=0.2)
+    assert result.status is SystemStatusResearchStatus.ANALYSIS_OBSERVED
+    assert result.acknowledged and result.analysis_observed
+    assert scanner.post_ack.system_statuses[0].attributes == {
+        "Signal": "10",
+        "Quality": "0",
+        "Activity": "0",
+    }
+    assert set(asdict(result)) == {
+        "status",
+        "start_reserved",
+        "acknowledged",
+        "analysis_observed",
+        "connection_changed",
+        "elapsed_seconds",
+        "failure",
+    }
+
+
 @pytest.mark.parametrize(
     "field,value", [("model", "SDS100"), ("model", "SDS150"), ("firmware", "Version 1.01.00")]
 )

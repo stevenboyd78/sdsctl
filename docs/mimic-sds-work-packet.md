@@ -822,17 +822,26 @@ not contain SystemStatus; return-to-scan API checks also confirmed that Mimic
 did not reuse analysis values. This qualifies the separate source, not background
 AST polling, an analysis renderer, or normal-screen identifier parity. The
 [protocol research boundary](advanced-protocol-research.md#system-status-manual-source-qualification-and-pre-send-preparation)
-records the manual test and the transport-free one-shot guard now being prepared
-for a future explicitly owned command test. No AST command was sent by that
+records the manual test and the transport-free one-shot guard used by the
+separate explicitly owned command test. No AST command was sent by that
 manual test, and no daemon analysis operation has been exposed.
 
 The subsequent same-owner research helper is opt-in and remains outside normal
 daemon startup and every public API. A temporary source-pinned acceptance
 launcher can wait for an administrator signal while the operator is physically
-present. Its bounded AST transaction and fake-transport coverage prepare a
+present. Its bounded AST transaction and fake-transport coverage support the
 separate command test; they do not establish ordinary-scanning identifier
 availability or add an analysis renderer. Keep the normal Mimic field/layout
 comparison independent of this research.
+
+The subsequent [physical command qualification](advanced-protocol-research.md#sds200-guarded-ast-command-qualification)
+confirmed the guarded AST acknowledgement, post-ack analysis data, matching
+physical screen and operator return on SDS200 firmware 1.26.01 over direct UDP.
+That run supplied signal/quality/activity but omitted the analysis identifiers;
+their absence was preserved, not filled from the earlier manual test. Normal
+PSI and current Mimic frames recovered without analysis-only identifier reuse.
+This closes that narrow command test, not the normal-field parity or analysis
+renderer work. Background AST polling and remote exit remain out of scope.
 
 The regression suite distinguishes known inactive icons, unavailable sources and
 invalid values; covers empty UnitID changes, duplicate records, full-screen
