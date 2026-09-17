@@ -830,6 +830,54 @@ not automatically issued. RF Power Plot remains deferred as a separate slice
 because its start grammar and applicability carry additional parameters and
 version/model caveats.
 
+### System Status manual-source qualification and pre-send preparation
+
+A September 16, 2026 SDS200 investigation separately qualified incoming PSI
+while the operator manually selected the physical System Status screen. The
+existing daemon remained the only scanner owner. A passive capture saw 59
+complete analysis observations in approximately 30 seconds, each with
+`V_Screen="analyze_system_status"` and exactly one `SystemStatus` record.
+The physical display matched the received SystemID/SystemSubID composition,
+SiteID, WacnID and NAC. Signal, Quality and Activity changed during the sample;
+their graph scaling is not yet qualified. Missing attributes remained missing.
+No raw XML, scanner names, audio or credentials were retained in this evidence.
+
+Crucially, `Mode="Trunk Scan"` remained present throughout the analysis sample.
+The mode label alone therefore does not prove ordinary scanning is continuing.
+The before/after samples (56 observations each) contained no SystemStatus
+records. After the operator used the visible physical **to Scan** soft key,
+all 56 recovery observations were trunk-scan screens and 12 display-frame API
+samples were current. Analysis-only identifiers did not leak into normal Mimic
+fields. These are bounded observations on one SDS200 setup, not a universal
+absence claim, a browser-pixel acceptance result, or a qualified remote exit.
+No AST or APR command was sent; APR is not treated as a stop command.
+
+The internal [pre-send guard](../src/sds200/system_status_research.py) is an
+offline preparation layer, not a daemon control or a new public API. It selects
+the current `System.Index` and `Site.Index` from a structurally unambiguous
+PSI/GSI trunk-scan observation. These are scanner object indices, **not** the
+displayed SystemID, SiteID, or quick keys. Malformed, unavailable, duplicate,
+foreign and overlay records are refused. It deliberately excludes the mixed
+scan transitions that the display adapter can qualify independently.
+
+The guard binds one reservation to the selected system/site and an opaque
+owner-connection identity. Both preparation and the final observation must be
+at most two seconds old, using owner-supplied monotonic receipt times; the final
+observation must also be no earlier than preparation. Readiness, connection and
+idle-waterfall checks must all be explicitly true. Concurrent claims can reserve
+only one typed start command. Once reserved, it cannot be rearmed, including
+after a timeout, nonexact acknowledgement, or an exact `AST,OK`. The latter
+still conveys no System Status frame or confirmed analysis-running state.
+
+This latch is not an exactly-once network-delivery guarantee. An eventual owner
+bridge must hold the existing control/lifecycle locks through final validation
+and dispatch, supply a new connection identity after reconnect, establish the
+intended model/firmware/transport scope, and bound the entire request. It must
+also define post-start observations, cancellation and recovery without replaying
+an uncertain start or inventing a remote stop. The daemon API still has no
+analysis operation or arbitrary-command route. The guard sends nothing, adds
+no polling, and does not change normal scanner operation or Mimic rendering.
+
 ## Milestone 24.10 implementation boundary
 
 The first Milestone 24.10 slice is the separately deferred RF Power Plot start

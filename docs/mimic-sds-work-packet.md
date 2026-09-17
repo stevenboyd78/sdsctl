@@ -814,6 +814,18 @@ during ordinary scanning. Do not enter Analyze to fill a cosmetic display, reuse
 old Analyze values, substitute saved record IDs/indexes, or infer them from NAC.
 More source qualification is needed before these fields can match the scanner.
 
+A subsequent manually selected System Status test confirmed PSI analysis
+identifiers against the physical SDS200 display. `Mode` remained `Trunk Scan`
+while `V_Screen` reported `analyze_system_status`, so the mode name does not make
+these values ordinary-scan data. The before/after normal-scanning samples did
+not contain SystemStatus; return-to-scan API checks also confirmed that Mimic
+did not reuse analysis values. This qualifies the separate source, not background
+AST polling, an analysis renderer, or normal-screen identifier parity. The
+[protocol research boundary](advanced-protocol-research.md#system-status-manual-source-qualification-and-pre-send-preparation)
+records the manual test and the transport-free one-shot guard now being prepared
+for a future explicitly owned command test. No AST command was sent by that
+manual test, and no daemon analysis operation has been exposed.
+
 The regression suite distinguishes known inactive icons, unavailable sources and
 invalid values; covers empty UnitID changes, duplicate records, full-screen
 overlays versus channel overwrite, site-hold On/Off/stale transitions, ordinary
