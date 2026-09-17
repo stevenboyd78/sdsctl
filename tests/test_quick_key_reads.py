@@ -25,6 +25,45 @@ def packet(command, fields):
     return Packet(command=command, fields=fields, raw=command + "," + ",".join(fields))
 
 
+@pytest.mark.parametrize("index", range(100))
+@pytest.mark.parametrize("state", list(FavoritesQuickKeyState))
+def test_favorites_read_preserves_every_global_bank_position(index, state):
+    fields = ["0"] * 100
+    fields[index] = str(int(state))
+    response = packet("FQK", tuple(fields))
+    command = GetFavoritesQuickKeys()
+    result = command.parse_response(response)
+    assert command.wire == "FQK"
+    assert result.packet is response
+    assert len(result.states) == 100
+    assert result.states[index] is state
+    assert all(
+        value is FavoritesQuickKeyState.NONEXISTENT
+        for offset, value in enumerate(result.states)
+        if offset != index
+    )
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        (),
+        ("OK",),
+        ("NG",),
+        STATES[:-1],
+        (*STATES, "0"),
+        (*STATES[:-1], "3"),
+        (*STATES[:-1], " 2"),
+        (*STATES[:-1], "２"),
+        (*STATES[:-1], "PRIVATE_RESPONSE"),
+    ],
+)
+def test_favorites_read_never_repairs_shape_or_echoes_invalid_data(fields):
+    with pytest.raises(ProtocolError) as error:
+        GetFavoritesQuickKeys().parse_response(packet("FQK", fields))
+    assert "PRIVATE_RESPONSE" not in str(error.value)
+
+
 @pytest.mark.parametrize("favorites,system", [(0, 0), (1, 23), (99, 99)])
 def test_scoped_get_commands_preserve_documented_selectors_and_all_states(favorites, system):
     for command, model in (

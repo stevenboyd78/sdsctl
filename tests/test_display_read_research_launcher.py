@@ -25,34 +25,45 @@ with patch.dict(sys.modules, {"research_system_status_daemon": shared_launcher})
 
 
 class Runtime:
-    def __init__(self):
+    def __init__(self, kind=DisplayReadKind.CLOCK):
         self.calls = 0
+        self.kind = kind
 
     def run_display_read_research(self, *, operator_ready, timeout):
         assert operator_ready is True and timeout == 6.0
         self.calls += 1
         return DisplayReadResearchResult(
-            "clock", "read_unconfirmed", True, False, 0, False, False, 0.25, "timeout", None, None
+            self.kind.value,
+            "read_unconfirmed",
+            True,
+            False,
+            0,
+            False,
+            False,
+            0.25,
+            "timeout",
+            None,
+            None,
         )
 
 
-def test_read_launcher_expires_without_read_or_ast(tmp_path):
-    runtime = Runtime()
-    trigger = launcher.DisplayReadTrigger(
-        tmp_path / "case", DisplayReadKind.CLOCK, ready_timeout=0.01
-    )
+@pytest.mark.parametrize("kind", list(DisplayReadKind))
+def test_read_launcher_expires_without_read_or_ast(tmp_path, kind):
+    runtime = Runtime(kind)
+    trigger = launcher.DisplayReadTrigger(tmp_path / "case", kind, ready_timeout=0.01)
     trigger.start(runtime)
     trigger.join()
     assert runtime.calls == 0
     ready = json.loads((trigger.directory / "ready.json").read_text())
-    assert ready["read_kind"] == "clock" and ready["research_started"] is False
+    assert ready["read_kind"] == kind.value and ready["research_started"] is False
     result = json.loads((trigger.directory / "result.json").read_text())
     assert result["status"] == "operator_wait_expired"
 
 
-def test_read_launcher_consumes_one_trigger_and_preserves_result(tmp_path):
-    runtime = Runtime()
-    trigger = launcher.DisplayReadTrigger(tmp_path / "case", DisplayReadKind.CLOCK)
+@pytest.mark.parametrize("kind", list(DisplayReadKind))
+def test_read_launcher_consumes_one_trigger_and_preserves_result(tmp_path, kind):
+    runtime = Runtime(kind)
+    trigger = launcher.DisplayReadTrigger(tmp_path / "case", kind)
     trigger.signal(signal.SIGUSR1, None)
     trigger.start(runtime)
     assert trigger._armed.wait(0.5)
@@ -63,15 +74,16 @@ def test_read_launcher_consumes_one_trigger_and_preserves_result(tmp_path):
     trigger.signal(signal.SIGUSR1, None)
     assert runtime.calls == 1
     saved = json.loads((trigger.directory / "result.json").read_text())
-    expected = asdict(Runtime().run_display_read_research(operator_ready=True, timeout=6.0))
-    assert saved == {**expected, "read_kind": "clock"}
+    expected = asdict(Runtime(kind).run_display_read_research(operator_ready=True, timeout=6.0))
+    assert saved == {**expected, "read_kind": kind.value}
     with pytest.raises(FileExistsError):
-        launcher.DisplayReadTrigger(tmp_path / "case", DisplayReadKind.CLOCK)
+        launcher.DisplayReadTrigger(tmp_path / "case", kind)
 
 
-def test_read_launcher_cancel_never_dispatches(tmp_path):
-    runtime = Runtime()
-    trigger = launcher.DisplayReadTrigger(tmp_path / "case", DisplayReadKind.SYSTEM)
+@pytest.mark.parametrize("kind", list(DisplayReadKind))
+def test_read_launcher_cancel_never_dispatches(tmp_path, kind):
+    runtime = Runtime(kind)
+    trigger = launcher.DisplayReadTrigger(tmp_path / "case", kind)
     trigger.cancel()
     trigger.start(runtime)
     trigger.join()
@@ -79,7 +91,8 @@ def test_read_launcher_cancel_never_dispatches(tmp_path):
     assert json.loads((trigger.directory / "result.json").read_text())["status"] == "cancelled"
 
 
-def test_read_launcher_constructs_one_owner_without_enabling_ast(tmp_path, monkeypatch):
+@pytest.mark.parametrize("kind", list(DisplayReadKind))
+def test_read_launcher_constructs_one_owner_without_enabling_ast(tmp_path, monkeypatch, kind):
     original_signal = signal.getsignal(signal.SIGUSR1)
     monkeypatch.setattr(DaemonRuntime, "start", lambda self: None)
     monkeypatch.setattr(DaemonRuntime, "stop", lambda self: None)
@@ -89,7 +102,7 @@ def test_read_launcher_constructs_one_owner_without_enabling_ast(tmp_path, monke
         router = object()
         runtime = cli.DaemonRuntime(object(), SimpleNamespace(sinks=(router,)), router)
         assert runtime._system_status_research is None
-        assert runtime._display_read_research._policy.kind is DisplayReadKind.CLOCK
+        assert runtime._display_read_research._policy.kind is kind
         with pytest.raises(RuntimeError, match="one daemon owner"):
             cli.DaemonRuntime(object(), SimpleNamespace(sinks=(router,)), router)
         runtime.start()
@@ -105,7 +118,7 @@ def test_read_launcher_constructs_one_owner_without_enabling_ast(tmp_path, monke
                 "--expected-firmware",
                 "Version 1.26.01",
                 "--read-kind",
-                "clock",
+                kind.value,
                 "--evidence-directory",
                 str(tmp_path / "case"),
                 "--",

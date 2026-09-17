@@ -228,9 +228,10 @@ def test_unassigned_or_invalid_scope_is_not_key_zero_or_an_index(scanner, kind, 
         psi(extra="<ConvFrequency/>"),
     ],
 )
-def test_no_fresh_qualified_psi_means_no_get(scanner, frame):
+@pytest.mark.parametrize("kind", list(DisplayReadKind))
+def test_no_fresh_qualified_psi_means_no_get(scanner, frame, kind):
     scanner.frame = frame
-    result = attempt().run(scanner, operator_ready=True, timeout=0.025)
+    result = attempt(kind).run(scanner, operator_ready=True, timeout=0.025)
     assert result.status == "not_started" and result.sample is None
     assert scanner.commands == [] and scanner.hooks == 0
 
@@ -272,6 +273,7 @@ def test_no_post_reply_psi_is_not_a_continuity_pass(scanner):
     "kind,new_frame",
     [
         (DisplayReadKind.CLOCK, psi(screen="waterfall")),
+        (DisplayReadKind.FAVORITES, psi(screen="waterfall")),
         (DisplayReadKind.SYSTEM, psi(favorites="2")),
         (DisplayReadKind.DEPARTMENT, psi(system="24")),
     ],
@@ -295,15 +297,24 @@ def test_scope_or_mode_change_and_return_cannot_revalidate_a_read(scanner, kind,
         (OSError("PRIVATE_HOST"), "operation_failed"),
     ],
 )
-def test_uncertain_read_stops_without_retry_or_follow_on_get(scanner, error, failure):
+@pytest.mark.parametrize(
+    "kind,wire",
+    [
+        (DisplayReadKind.CLOCK, "DTM"),
+        (DisplayReadKind.FAVORITES, "FQK"),
+        (DisplayReadKind.SYSTEM, "SQK,1"),
+        (DisplayReadKind.DEPARTMENT, "DQK,1,23"),
+    ],
+)
+def test_uncertain_read_stops_without_retry_or_follow_on_get(scanner, error, failure, kind, wire):
     def fail():
         raise error
 
     scanner.on_execute = fail
-    probe = attempt()
+    probe = attempt(kind)
     result = probe.run(scanner, operator_ready=True, timeout=0.1)
     assert result.status == "read_unconfirmed" and result.failure == failure
-    assert scanner.commands == ["DTM"] and scanner.hooks == 0
+    assert scanner.commands == [wire] and scanner.hooks == 0
     assert "PRIVATE" not in str(asdict(result))
     with pytest.raises(DisplayReadRefused):
         probe.run(scanner, operator_ready=True, timeout=0.1)
