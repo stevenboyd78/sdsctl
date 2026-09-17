@@ -1,9 +1,10 @@
-"""Opt-in owner-side quick-key cache and finite-wait background worker.
+"""Opt-in owner-side supplemental cache and finite-wait background worker.
 
 An owner supplies qualified PSI selections and connection tickets. Consumers
 renew one shared demand lease; snapshots never perform I/O. A background worker
 may call poll_once to perform at most one GET through the existing scanner.
 Construction starts nothing; ordinary daemon startup does not opt in.
+Clock reads can join the same worker, never a second scheduler/command lane.
 """
 
 from __future__ import annotations
@@ -11,17 +12,25 @@ from __future__ import annotations
 import math
 import threading
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import monotonic
 from typing import Literal, Protocol
 from uuid import UUID
 
 from .commands import GetDepartmentQuickKeys, GetFavoritesQuickKeys, GetSystemQuickKeys
 from .exceptions import CommandRejectedError, CommandTimeoutError, ProtocolError
-from .models import DepartmentQuickKeys, FavoritesQuickKeys, FavoritesQuickKeyState, SystemQuickKeys
+from .models import (
+    DepartmentQuickKeys,
+    FavoritesQuickKeys,
+    FavoritesQuickKeyState,
+    ScannerDateTime,
+    SystemQuickKeys,
+)
+from .scanner_clock import ClockReadTicket, ClockSession, ClockSnapshot, ScannerClockSamples
 from .scanner_quick_keys import QuickKeySelection
 
 Kind = Literal["favorites", "system", "department"]
+Operation = Literal["favorites", "system", "department", "clock"]
 Failure = Literal["rejected", "timeout", "invalid_response", "read_error"]
 Read = GetFavoritesQuickKeys | GetSystemQuickKeys | GetDepartmentQuickKeys
 Result = FavoritesQuickKeys | SystemQuickKeys | DepartmentQuickKeys
@@ -42,6 +51,10 @@ class _Scanner(Protocol):
     def connected(self) -> bool: ...
 
     def read_quick_keys_if_idle(self, command: Read, *, timeout: float) -> Result | None: ...
+
+
+class _ClockReader(Protocol):
+    def __call__(self, *, timeout: float) -> ScannerDateTime | None: ...
 
 
 @dataclass(frozen=True, slots=True, eq=False)
@@ -79,6 +92,8 @@ class DaemonQuickKeyCache:
         scanner_target: str,
         *,
         clock: Callable[[], float] = monotonic,
+        include_clock: bool = False,
+        allow_scoped_reads: bool = True,
     ) -> None:
         if (
             not isinstance(endpoint_id, UUID)
@@ -86,6 +101,17 @@ class DaemonQuickKeyCache:
             or not scanner_target
         ):
             raise ValueError("An explicit endpoint identity and scanner target are required.")
+        if type(include_clock) is not bool or type(allow_scoped_reads) is not bool:
+            raise ValueError("Explicit boolean supplemental read policies are required.")
+        clock_reader = getattr(scanner, "read_clock_if_idle", None) if include_clock else None
+        if include_clock and not callable(clock_reader):
+            raise ValueError("Clock reads require the existing scanner owner's idle reader.")
+        self._clock_reader: _ClockReader | None = clock_reader
+        self._allow_scoped_reads = allow_scoped_reads
+        self._clock_samples = (
+            ScannerClockSamples(endpoint_id, clock=clock) if include_clock else None
+        )
+        self._clock_session: ClockSession | None = None
         self._scanner, self._endpoint_id, self._target, self._clock = (
             scanner,
             endpoint_id,
@@ -105,7 +131,7 @@ class DaemonQuickKeyCache:
         self._demand_until = self._next_poll = self._latest_time = 0.0
         self._values: dict[Kind, _Cached] = {}
         self._failures: dict[Kind, Failure] = {}
-        self._due: dict[Kind, float] = {}
+        self._due: dict[Operation, float] = {}
 
     def _now(self) -> float:
         now = self._clock()
@@ -120,7 +146,15 @@ class DaemonQuickKeyCache:
         self._epoch += 1
         self._values.clear()
         self._failures.clear()
-        self._due.clear()
+        # Global GET backoff survives view/profile/scope barriers. A real new
+        # connection resets it explicitly. Scoped legacy schedules are unchanged.
+        self._due = {
+            kind: due
+            for kind, due in self._due.items()
+            if kind == "clock" or (kind == "favorites" and not self._allow_scoped_reads)
+        }
+        if self._clock_samples is not None and self._clock_session is not None:
+            self._clock_samples.invalidate(self._clock_session)
         # An old in-flight request still occupies the one shared read slot.
 
     def require_owner(self, scanner: object, endpoint_id: UUID, scanner_target: str) -> None:
@@ -161,6 +195,9 @@ class DaemonQuickKeyCache:
                 raise ValueError("Quick-key cache is closed.")
             self._now()
             self._invalidate()
+            self._due.clear()
+            if self._clock_samples is not None:
+                self._clock_session = self._clock_samples.begin_session()
             self._session = QuickKeySession(self._endpoint_id)
             self._selection = self._seen = self._blocked = None
             self._sequence = -1
@@ -171,6 +208,9 @@ class DaemonQuickKeyCache:
         with self._lock:
             if session is self._session:
                 self._invalidate()
+                if self._clock_samples is not None and self._clock_session is not None:
+                    self._clock_samples.disconnect(self._clock_session)
+                self._clock_session = None
                 self._session = self._selection = self._seen = None
                 self._demand_until = 0.0
 
@@ -193,7 +233,8 @@ class DaemonQuickKeyCache:
             if sequence <= self._sequence:
                 return False
             if (
-                selection != self._selection
+                (selection != self._selection and self._allow_scoped_reads)
+                or (selection is None) != (self._selection is None)
                 or self._seen is None
                 or now - self._seen >= STALE_AFTER
             ):
@@ -224,7 +265,7 @@ class DaemonQuickKeyCache:
     def _commands(self) -> dict[Kind, Read]:
         commands: dict[Kind, Read] = {"favorites": GetFavoritesQuickKeys()}
         selection = self._selection
-        if selection is not None and selection.favorites is not None:
+        if self._allow_scoped_reads and selection is not None and selection.favorites is not None:
             commands["system"] = GetSystemQuickKeys(selection.favorites)
             if selection.system is not None:
                 commands["department"] = GetDepartmentQuickKeys(
@@ -253,6 +294,29 @@ class DaemonQuickKeyCache:
                 active, self._selection if active else None, self._blocked, tuple(banks)
             )
 
+    def clock_snapshot(self) -> ClockSnapshot | None:
+        """Internal exact scanner time only; no I/O, demand renewal or extrapolation."""
+        with self._lock:
+            if self._clock_samples is None:
+                return None
+            snapshot = self._clock_samples.snapshot()
+            if self._active(self._now()) and self._blocked is None:
+                return snapshot
+            return replace(
+                snapshot,
+                local_time=None,
+                daylight_saving=None,
+                rtc_valid=None,
+                age_seconds=None,
+                blocked_until_reconnect=self._blocked or snapshot.blocked_until_reconnect,
+            )
+
+    def _quarantine(self, failure: Failure) -> None:
+        self._blocked = failure
+        self._values.clear()
+        if self._clock_samples is not None and self._clock_session is not None:
+            self._clock_samples.invalidate(self._clock_session)
+
     def poll_once(self) -> bool:
         """Worker only: one bounded GET, never holding the cache lock over I/O.
 
@@ -264,22 +328,40 @@ class DaemonQuickKeyCache:
             if not self._active(now) or self._blocked or self._pending or now < self._next_poll:
                 return False
             commands = self._commands()
-            ready = [kind for kind in KINDS if kind in commands and self._due.get(kind, 0) <= now]
-            if not ready:
+            operations: list[Operation] = list(commands)
+            if self._clock_samples is not None:
+                operations.append("clock")
+            ready = sorted(
+                (kind for kind in operations if self._due.get(kind, 0) <= now),
+                key=lambda key: self._due.get(key, 0),
+            )
+            clock_ticket: ClockReadTicket | None = None
+            for kind in ready:
+                if kind != "clock":
+                    break
+                assert self._clock_samples is not None and self._clock_session is not None
+                clock_ticket = self._clock_samples.begin_read(self._clock_session)
+                if clock_ticket is not None:
+                    break
+            else:
                 return False
-            kind = min(ready, key=lambda key: self._due.get(key, 0))
-            command = commands[kind]
             ticket = self._pending = object()
             epoch, session = self._epoch, self._session
             self._next_poll = now + MIN_READ_GAP
 
         result: Result | None = None
+        clock_result: ScannerDateTime | None = None
         failure: Failure | None = None
         target_valid = False
         try:
             target_valid = self._scanner.connected and self._scanner.endpoint == self._target
             if target_valid:
-                result = self._scanner.read_quick_keys_if_idle(command, timeout=READ_TIMEOUT)
+                if kind == "clock":
+                    assert self._clock_reader is not None
+                    clock_result = self._clock_reader(timeout=READ_TIMEOUT)
+                else:
+                    command = commands[kind]
+                    result = self._scanner.read_quick_keys_if_idle(command, timeout=READ_TIMEOUT)
                 target_valid = self._scanner.connected and self._scanner.endpoint == self._target
                 if result is not None:
                     expected = {
@@ -306,9 +388,11 @@ class DaemonQuickKeyCache:
             with self._lock:
                 if self._pending is ticket:
                     self._pending = None
+                if clock_ticket is not None:
+                    assert self._clock_samples is not None
+                    self._clock_samples.finish(clock_ticket, failure="read_error")
                 if self._session is session:
-                    self._blocked = "read_error"
-                    self._values.clear()
+                    self._quarantine("read_error")
             raise
 
         with self._lock:
@@ -317,22 +401,36 @@ class DaemonQuickKeyCache:
             if self._pending is ticket:
                 self._pending = None
             finished = self._now()
-            if self._closed or self._session is not session:
-                return True
-            if not target_valid:
-                if session is not None:
-                    self.disconnect(session)
-                return True
+            self._next_poll = max(self._next_poll, finished + MIN_READ_GAP)
             if finished - now >= READ_TIMEOUT:
                 failure = "timeout"
+            if not target_valid and self._session is session and session is not None:
+                self.disconnect(session)
+            if clock_ticket is not None:
+                assert self._clock_samples is not None
+                if not self._active(finished) and self._clock_session is not None:
+                    self._clock_samples.invalidate(self._clock_session)
+                self._clock_samples.finish(
+                    clock_ticket, clock_result if failure is None else None, failure=failure
+                )
+                if self._session is session:
+                    failure = self._clock_samples.snapshot().blocked_until_reconnect or failure
+            if self._closed or self._session is not session:
+                return True
             # Scope/demand changes cannot make an uncertain reply safe to retry
             # on the same wire connection, even though its value is discarded.
             if failure in ("timeout", "invalid_response", "read_error"):
-                self._blocked = failure
-                self._values.clear()
+                self._quarantine(failure)
+            # Rejection pacing also survives a barrier while the GET was pending.
+            if failure == "rejected" and (kind == "clock" or not self._allow_scoped_reads):
+                self._due[kind] = finished + REJECTION_BACKOFF
             if epoch != self._epoch or not self._active(finished):
                 return True
-            self._next_poll = max(self._next_poll, finished + MIN_READ_GAP)
+            if kind == "clock":
+                self._due[kind] = finished + (
+                    REJECTION_BACKOFF if failure is not None else REFRESH_INTERVAL
+                )
+                return True
             if failure is not None:
                 self._values.pop(kind, None)
                 self._failures[kind] = failure
@@ -350,6 +448,9 @@ class DaemonQuickKeyCache:
         with self._lock:
             self._closed = True
             self._invalidate()
+            if self._clock_samples is not None and self._clock_session is not None:
+                self._clock_samples.disconnect(self._clock_session)
+            self._clock_session = None
             self._session = self._selection = self._seen = None
             self._demand_until = 0.0
 

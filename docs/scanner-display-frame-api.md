@@ -246,17 +246,20 @@ polling or I/O in construction/snapshots. It provides:
   invalid RTC that immediately replaces any previously valid clock reading.
 
 Only the owning connection lifecycle may begin a new session; it is not a retry
-button. An eventual **single shared owner worker** must coordinate clock and
-quick-key reads with foreground controls, waterfall/analysis modes, fresh PSI
-and demand. The clock store does not enforce those external conditions itself.
-Do not create an independent clock polling loop next to the quick-key worker.
+button. The internal opt-in **single shared owner worker** now coordinates clock
+and quick-key reads with foreground controls, normal-scan PSI, profile health
+and demand. The passive clock store does not enforce those external conditions
+itself. There is no independent clock polling loop next to the quick-key worker,
+and ordinary daemon startup still does not enable either read.
 
-Before live Day/Time display, qualify the exact reply and ongoing PSI behavior
-with one bounded existing-owner GET, compare with the physical scanner, and
-verify mode and freshness gates. Stop on an uncertain reply; do not retry it in
-the same connection. No DTM SET, FQK/SQK/DQK SET, automatic AST or scanner-clock
-timezone assumption is part of that qualification. The scanner's configured
-12/24-hour presentation also needs a verified source before claiming LCD parity.
+The one-shot reply/physical comparison gate above is complete for the tested
+firmware; it must not be repeated merely to proceed with implementation. Before
+live Day/Time display, separately qualify periodic shared-worker behavior,
+mode/freshness gates and renderer integration. Stop on an uncertain reply; do
+not retry it in the same connection. No DTM SET, FQK/SQK/DQK SET, automatic AST or
+scanner-clock timezone assumption is part of that qualification. The scanner's
+configured 12/24-hour presentation also needs a verified source before claiming
+LCD parity.
 
 ### One-shot display GET qualification (internal opt-in only)
 
@@ -354,14 +357,15 @@ those assigned selectors.
 
 ### Owner quick-key worker integration (internal opt-in only)
 
-The local `DaemonQuickKeyCache` separates bank freshness from PSI freshness.
+The local `DaemonQuickKeyCache` separates supplemental freshness from PSI freshness.
 An internal caller can explicitly inject it into `DaemonDisplayFrames` to opt
 into one owner worker. Ordinary daemon startup does **not** inject a cache:
 installing this candidate starts no bank reads and displays no new F/S/D rows.
 There is no CLI flag, App option, remote operation or new display.frame field
 for enabling or reading it yet. The cache retains at most three immutable
-100-state banks, without raw packets or exception text. No extra scanner
-transport, audio subscription, profile watcher or per-client worker is created.
+100-state banks and, when explicitly selected, one exact clock sample, without
+raw packets or exception text. No extra scanner transport, audio subscription,
+profile watcher or per-client worker is created.
 
 Attachment checks the exact scanner object, endpoint UUID and configured target;
 one cache can attach to only one feed. The cache belongs to that scanner owner's
@@ -369,6 +373,25 @@ lifetime, not to a browser connection. Do not replace a quarantined cache on the
 same live scanner connection to retry it. Connection callbacks create/invalidate
 its tickets, and qualified complete PSI supplies selection. Default passive
 operation remains unchanged.
+
+For local qualification, constructing that cache with `include_clock=True` and
+`allow_scoped_reads=False` selects only global `FQK` and `DTM` GETs. These are
+internal constructor policies, not supported configuration keys. Defaults retain
+the earlier bank-only behavior (`include_clock=False`, `allow_scoped_reads=True`)
+when a developer explicitly injects a cache. No ordinary startup injects one.
+Clock opt-in requires the exact same scanner object's `read_clock_if_idle()`;
+there is no second scanner object, connection, worker, demand lease or read slot.
+An internal `clock_snapshot()` does not perform I/O or renew demand, and neither
+it nor the bank snapshot changes the public display-frame contract.
+
+The global-only policy never sends SQK/DQK, even if assigned selectors appear
+later. It accepts qualified normal PSI with explicit unassigned selectors, does
+not infer zero, and still refuses ambiguous/missing/non-scan observations.
+Changing between qualified selections does not invalidate endpoint-global values
+or continually reset their schedule. Profile/mode/demand barriers still discard
+them. Per-operation global refresh/backoff deadlines survive those barriers;
+only a new connection resets them. This policy does not qualify SQK/DQK or infer
+which ten-key bank/decade is visible on the physical LCD.
 
 Only an already-qualified, current conventional/trunk observation supplies the
 Favorites and system `Q_Key` scope. Object `Index` values never supply quick
@@ -385,21 +408,27 @@ The component's initial, hardware-unqualified scheduling limits are:
   demand. After the last reader stops, bank requests cease when the lease expires,
   not necessarily immediately. The single worker remains idle until renewed
   demand or owner shutdown. A stricter display-freshness setting is honored too.
-- At most one GET in flight, with at least 500 ms between reads. Successful
-  banks become eligible for refresh after two seconds; bank values and PSI
+- At most one GET in flight across both kinds, with at least 500 ms from
+  completion to the next read. Earliest-due selection gives both global reads
+  opportunities to run. Successful banks become eligible for refresh after
+  two seconds; clock reservations (including a busy-lane attempt) wait at least
+  two seconds before the next clock attempt. Bank values, clock samples and PSI
   selection each expire independently after five seconds. Bank age starts at
   request dispatch, not response completion or browser refresh.
-- A worker uses `read_quick_keys_if_idle()` on the existing owner. It immediately
-  yields when a foreground command holds the command lane. A dispatched GET
+- A worker uses `read_quick_keys_if_idle()` / `read_clock_if_idle()` on the
+  existing owner. It immediately yields when a foreground command holds the
+  command lane. A dispatched GET
   occupies that lane until completion with a 250 ms response budget; this is
   not hard preemption of a transport write or a promise of zero control latency.
-- A definite command rejection backs off that bank for 30 seconds. A timeout,
-  malformed reply or other uncertain read disables all automatic bank reads
-  for that connection, without reconnecting the scanner. These replies have no
+- A definite command rejection backs off only that operation for 30 seconds.
+  A timeout, malformed reply or other uncertain read disables **both** clock
+  and bank reads and hides their cached values for that connection, without
+  reconnecting the scanner. These replies have no
   request IDs: retrying on the same connection could mistake a late reply for
   a new read. A changed scope or renewed demand does not lift that restriction.
-- Connection, endpoint, selection and demand-generation changes discard late
-  results. An old request keeps the shared in-flight slot until it exits; it
+- Connection, endpoint, qualifying-observation and demand-generation changes
+  discard late results (scoped mode also invalidates changed selections).
+  An old request keeps the shared in-flight slot until it exits; it
   cannot populate a newer session or revive a closed cache. A failed bank read
   does not modify or clear the otherwise-current PSI display frame.
 - Before each poll, the worker checks cached profile health/invalidation before
@@ -414,11 +443,19 @@ The component's initial, hardware-unqualified scheduling limits are:
   commit its result or restart reads. The shared scanner is never force-closed
   by this worker. Unsubscription failures still stop/invalidate the worker.
 
-Remaining work is hardware qualification of actual replies, displayed decade/
-selection and glyph mapping, followed by reviewed opt-in deployment and frame
-projection. Those gates must be met before rendering bank rows. Transport write bounds, foreground
-control latency, audio and Waterfall continuity also need qualification before
-enabling the reader; synthetic cache tests are not that acceptance.
+Offline tests cover the shared schedule, independent freshness, invalid RTC,
+cross-kind quarantine, global rejection backoff through barriers, retired-session
+replies, bounded shutdown, real parser callbacks during reads and yielding to a
+foreground command through the actual owner lane. They are not periodic hardware
+acceptance. A quarantined auxiliary reader leaves a current PSI display intact.
+
+Remaining work is scoped GET qualification, displayed decade/selection and glyph
+mapping, followed by reviewed opt-in deployment and frame projection. Completed
+one-shot clock/Favorites gates do not establish periodic-read safety. Transport
+write bounds, foreground control latency, audio and Waterfall continuity also
+need qualification before enabling the reader; synthetic cache tests are not
+that acceptance. Day/Time must remain exact scanner-local data, not a workstation
+clock, inferred UTC offset or extrapolated timestamp.
 
 ## Candidate WebUI presentation
 

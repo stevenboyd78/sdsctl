@@ -2,7 +2,8 @@
 
 Passive by default: no commands, threads, audio lease, raw capture or watcher.
 An explicitly injected quick-key cache opts into one background reader; daemon
-startup does not inject it. Bank values remain internal, not rendered or on wire.
+startup does not inject it. Optional clock reads share that worker. Supplemental
+values remain internal, not rendered or on wire.
 Per-connection callback tickets reject queued callbacks from previous sessions.
 Snapshots join one immutable accepted profile with one current observation.
 """
@@ -26,6 +27,7 @@ from .daemon_quick_keys import (
     QuickKeyWorkerStatus,
 )
 from .models import ScannerInfo
+from .scanner_clock import ClockSnapshot
 from .scanner_display_adapter import (
     DisplayObservationSession,
     ScannerDisplayAdapter,
@@ -239,6 +241,10 @@ class DaemonDisplayFrames:
 
     def quick_key_worker_status(self) -> QuickKeyWorkerStatus | None:
         return None if self._quick_key_worker is None else self._quick_key_worker.status()
+
+    def clock_snapshot(self) -> ClockSnapshot | None:
+        """Internal qualification only, through the same optional owner worker."""
+        return None if self._quick_keys is None else self._quick_keys.clock_snapshot()
 
     def snapshot(self) -> dict[str, object]:
         # Administrator reload can block this API read, but never scanner callbacks.

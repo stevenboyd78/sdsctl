@@ -1,6 +1,6 @@
 """Passive, session-bound DTM samples; no transport, thread, timer or auto-read.
 
-An eventual shared owner worker must reserve a ticket, call the scanner's
+The opt-in shared owner worker must reserve a ticket, call the scanner's
 read_clock_if_idle once, and finish the ticket even when that call fails. Only
 an actual connection boundary may begin a new session. This module deliberately
 does not schedule reads or enable clock fields on any display.
