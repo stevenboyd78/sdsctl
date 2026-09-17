@@ -15,6 +15,75 @@ from .test_scanner_display_adapter import ENDPOINT, info, live_adapter, store_fo
 from .test_scanner_display_values import MODE, screen_for
 
 
+@pytest.mark.parametrize(
+    "screen,node", [("trunk_scan", "TGID"), ("conventional_scan", "ConvFrequency")]
+)
+@pytest.mark.parametrize(
+    "source,status,text",
+    [
+        ("Off", ValueStatus.BLANK, None),
+        ("Avoid", ValueStatus.RAW_SOURCE, "AVOID"),
+        ("T-Avoid", ValueStatus.RAW_SOURCE, "T-AVOID"),
+        ("On", ValueStatus.INVALID_SOURCE, None),
+        (None, ValueStatus.DATA_UNAVAILABLE, None),
+    ],
+)
+def test_avoid_regions_use_only_current_scoped_telemetry(screen, node, source, status, text):
+    content = "".join(
+        f"<{tag}/>" if source is None else f'<{tag} Avoid="{source}"/>'
+        for tag in ("System", "Department", node)
+    )
+    adapter, session = live_adapter(info(screen, content))
+    profile = store_for().snapshot(ENDPOINT)
+    values = {v.region_id: v for v in adapter.frame(profile, now=11).values}
+    for name in ("system", "department", "channel"):
+        assert (values[name + "_avoid"].status, values[name + "_avoid"].text) == (status, text)
+    # A following sample with absent attributes must clear previous states.
+    adapter.observe(session, info(screen, ""), sequence=2, received_at=12, now=12)
+    values = {v.region_id: v for v in adapter.frame(profile, now=12).values}
+    assert all(
+        values[name + "_avoid"].status is ValueStatus.DATA_UNAVAILABLE
+        for name in ("system", "department", "channel")
+    )
+
+
+@pytest.mark.parametrize(
+    "attribute,identifier,source,status,text",
+    [
+        ("F", "function", "On", ValueStatus.RAW_SOURCE, "F"),
+        ("F", "function", "Off", ValueStatus.BLANK, None),
+        ("F", "function", "on", ValueStatus.INVALID_SOURCE, None),
+        ("F", "function", None, ValueStatus.DATA_UNAVAILABLE, None),
+        *[("Sig", "signal", str(level), ValueStatus.RAW_SOURCE, str(level)) for level in range(6)],
+        *[
+            ("Sig", "signal", value, ValueStatus.INVALID_SOURCE, None)
+            for value in ("-1", "6", "1.5", "01", "５", "")
+        ],
+        ("Sig", "signal", None, ValueStatus.DATA_UNAVAILABLE, None),
+    ],
+)
+def test_function_and_signal_sources_and_freshness(attribute, identifier, source, status, text):
+    content = '<Property Rssi="-50"/>' if source is None else f'<Property {attribute}="{source}"/>'
+    adapter, _ = live_adapter(info("trunk_scan", content))
+    profile = store_for().snapshot(ENDPOINT)
+    value = next(v for v in adapter.frame(profile, now=11).values if v.region_id == identifier)
+    assert (value.status, value.text) == (status, text)
+    stale = next(v for v in adapter.frame(profile, now=16).values if v.region_id == identifier)
+    assert stale.status is ValueStatus.NOT_CURRENT and stale.text is None
+
+
+def test_idle_control_frequency_remains_visible_without_active_tgid():
+    adapter, _ = live_adapter(
+        info(
+            "trunk_scan", '<SiteFrequency Freq="772.618750MHz"/><OverWrite Text="ID Scanning..."/>'
+        )
+    )
+    frame = adapter.frame(store_for().snapshot(ENDPOINT), now=11)
+    frequency_slots = {slot.region.id for slot in frame.screen.regions if slot.token == "Frequency"}
+    value = next(v for v in frame.values if v.region_id in frequency_slots)
+    assert value.status is ValueStatus.RAW_SOURCE and value.text == "772.618750MHz"
+
+
 def token_value(token, content, *, group=2, current=True):
     sample = info("trunk_scan", content)
     screen = screen_for(token, group)
@@ -188,10 +257,9 @@ def test_normal_scan_overwrite_updates_only_channel_area_and_remains_current():
     )
     frame = adapter.frame(profile, now=12)
     assert {v.region_id: v for v in frame.values}["channel"].text == "New"
-    assert (
-        {v.region_id: v for v in frame.values}["information_1"].status
-        is ValueStatus.DATA_UNAVAILABLE
-    )
+    assert {v.region_id: v for v in frame.values}[
+        "information_1"
+    ].status is ValueStatus.DATA_UNAVAILABLE
     assert frame.indicators.site_hold is False
     assert (
         project_scanner_display_frame(adapter.frame(profile, now=18))["indicators"]["site_hold"]

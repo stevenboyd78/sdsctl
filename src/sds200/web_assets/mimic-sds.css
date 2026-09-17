@@ -74,6 +74,10 @@
   #pane-scanner .mimic-details summary { cursor: pointer !important; min-height: 24px !important; }
   #pane-scanner .mimic-details ul { columns: 3 180px !important; padding-left: 20px !important; }
   #pane-scanner .mimic-cell { color: #cbd5e1; background-color: #18212d; }
+  /* Fit five bars in the two-column slot; never ellipsize into a lower level. */
+  #pane-scanner .mimic-cell[data-region="signal"][data-indicator^="level_"] {
+    padding: 0 !important; font-size: clamp(6px, min(1.2cqw, 4.5cqh), 24px) !important;
+  }
   #pane-scanner[hidden],
   #pane-scanner > #radio-activity-panel[hidden] { display: none !important; }
   #pane-scanner [hidden] { display: none !important; }

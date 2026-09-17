@@ -233,7 +233,9 @@ def scanner_display_layout(mode: ScannerDisplayMode) -> ScannerDisplayLayout:
                 26,
                 option=(1, index + 1),
                 color=(2, index + 1),
-                center=True,
+                # Hardware photos supersede the centered reference HTML for
+                # Favorites, Site and Frequency below the three name bands.
+                center=False,
             )
             add(
                 f"{name}_avoid",

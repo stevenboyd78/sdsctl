@@ -702,9 +702,12 @@ SQL, TGID and RSSI remain in their applicable option fields. Raw values and thei
 qualification status are still explicit in the details; no LCD units/code
 formatting is invented by merely removing a generic tag.
 
-Region descriptors preserve the supplied HTML's explicit alignment: top short
-options, under-name option rows, Simple A/B fields, icons and soft keys centered;
-name bands, Detail/special A/B/C and information fields left-aligned. Simple names
+Region descriptors preserve the supplied HTML's explicit alignment except for
+the under-name option rows: the user's 2026-09-17 hardware comparison and request
+supersede their originally centered HTML. Favorites, Site and Frequency rows are
+left-aligned with the name bands in both Simple and Detail. Top short options,
+Simple A/B fields, icons and soft keys remain centered; Detail/special A/B/C and
+information fields remain left-aligned. Simple names
 can wrap to two lines; Detail names remain one line. Longer text never changes
 the canonical row geometry. The synthetic profile uses invented red/green/blue
 name colors to make the photo-described inversion easy to inspect.

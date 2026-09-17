@@ -20,6 +20,7 @@ from .scanner_display_adapter import (
     ScannerDisplayIndicators,
 )
 from .scanner_display_layout import DisplayRegionKind, scanner_display_layout
+from .scanner_display_presentation import present_indicator
 from .scanner_display_profile_state import DisplayProfileStatus
 from .scanner_display_values import ScannerDisplayValueStatus
 
@@ -177,6 +178,13 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
         label = slot.token if slot.token not in (None, "", "Empty") else region.id.replace("_", " ")
         empty = state in {ScannerDisplayValueStatus.EMPTY, ScannerDisplayValueStatus.BLANK}
         foreground, background = "cbd5e1", "18212d"
+        indicator = present_indicator(
+            region.id,
+            slot.token,
+            slot.selection.value,
+            state.value if frame.status is DisplayObservationStatus.CURRENT else "not_current",
+            value.text,
+        )
         color = slot.stored_color
         held = indicators.site_hold if slot.token == "SiteName" else holds.get(region.id)
         if (
@@ -185,14 +193,23 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
             and (_COLOR.fullmatch(color.text) and _COLOR.fullmatch(color.background))
         ):
             foreground, background = color.text, color.background
-            if region.reverse_colors or held is True:
+            reverse = region.reverse_colors and (
+                region.id != "function" or (indicator is not None and indicator.state == "on")
+            )
+            if reverse or held is True:
                 foreground, background = background, foreground
+        if indicator is not None:
+            foreground = indicator.foreground or foreground
+            background = indicator.background or background
+            text, empty = indicator.text, not indicator.text
         classes = f"cell align-{region.alignment.value}"
         if region.kind is DisplayRegionKind.NAME:
             classes += " name-cell"
             if region.name_lines == 2:
                 classes += " two-line"
-        title = f"{label}: {state.value}" + (f"; raw source: {text}" if raw else "")
+        title = f"{label}: {state.value}" + (f"; raw source: {value.text}" if raw else "")
+        if indicator is not None:
+            title += f"; indicator: {indicator.state}"
         hold_state = "on" if held is True else "off" if held is False else "unknown"
         if region.id in holds:
             title += f"; hold: {hold_state}"
@@ -221,7 +238,8 @@ def render_scanner_display_frame(frame: ScannerDisplayFrame) -> str:
             f'<p class="alert-status">Scanner alert LED: {led_label}. '
             "Reported color only; blink timing is not reproduced.</p>",
             '<p class="legend">Raw source values only; '
-            "no inferred units, scanner clock or icon behavior. "
+            "no inferred units or scanner clock. Gray indicator labels mean confirmed off; "
+            "? means unknown. Signal bars use the reported level, not an RSSI conversion. "
             "-- means unavailable or unqualified. Intentionally empty slots remain blank.</p>",
             f'<details class="field-details"><summary>Field details and mapping limits '
             f"({len(screen.issues)} mapping issues)</summary>",

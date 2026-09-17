@@ -103,7 +103,14 @@ def project_live_values(info: ScannerInfo) -> ScannerDisplayLiveValues:
     tokens["UnitIdName"] = attr("UnitID", "Name")
     digital = attr("Property", "P25Status")
     tokens["P25Status"] = "" if digital == "None" else "DATA" if digital == "Data" else digital
-    regions: dict[str, str | None] = {}
+    regions: dict[str, str | None] = {
+        "function": icon(attr("Property", "F"), "F"),
+    }
+    # Direct reported level, never a conversion from RSSI. V1.02 documents
+    # 0..4; existing scanner replay fixtures also report 5. Preserve that
+    # bounded extension without claiming a calibrated dBm scale.
+    signal = attr("Property", "Sig")
+    regions["signal"] = signal if signal in (None, "0", "1", "2", "3", "4", "5") else "\x00"
     for index in (1, 2):
         tag = f"InfoArea{index}"
         # The SDS200 may omit these records while showing F/S/D quick-key
@@ -112,6 +119,14 @@ def project_live_values(info: ScannerInfo) -> ScannerDisplayLiveValues:
         regions[f"information_{index}"] = attr(tag, "Text")
     if info.screen in ("conventional_scan", "trunk_scan"):
         regions.update({"soft_key_1": "SYSTEM", "soft_key_2": "DEPT", "soft_key_3": "CHANNEL"})
+        for name, source in (
+            ("system", attr("System", "Avoid")),
+            ("department", attr("Department", "Avoid")),
+            ("channel", first(channel, "Avoid")),
+        ):
+            regions[f"{name}_avoid"] = (
+                "T-AVOID" if source == "T-Avoid" else icon(source, "AVOID", ("Avoid",))
+            )
         if info.node("OverWrite") is not None:
             regions["channel"] = attr("OverWrite", "Text")
     return ScannerDisplayLiveValues(tuple(tokens.items()), tuple(regions.items()))

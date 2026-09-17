@@ -68,6 +68,27 @@ def test_all_synthetic_frames_decode_and_are_detached_immutable(packets):
             packet["frames"]["preferred"]["status"] = "current"
 
 
+@pytest.mark.parametrize("width", [60, 80, 100, 160])
+def test_function_inversion_and_signal_level_survive_terminal_widths(packets, width):
+    frame = copy.deepcopy(packets["held_trunk"]["frames"]["preferred"])
+    function = next(r for r in frame["screen"]["regions"] if r["id"] == "function")
+    function.update(
+        text="F", value_status="raw_source", stored_color={"text": "ffffff", "background": "000000"}
+    )
+    signal = next(r for r in frame["screen"]["regions"] if r["id"] == "signal")
+    signal.update(text="5", value_status="raw_source")
+    output = render_mimic_terminal(frame, width=width, height=22)
+    style = output.get_style_at_offset(Console(), output.plain.index("F"))
+    assert style.bgcolor.name == "#ffffff" and style.color.name == "#000000"
+    assert ("S5" if width == 60 else "▁▂▃▄▅") in output.plain
+    for status in ("blank", "data_unavailable"):
+        function.update(text=None, value_status=status)
+        output = render_mimic_terminal(frame, width=width, height=22)
+        # The first interior cell cannot remain an inverted white placeholder.
+        style = output.get_style_at_offset(Console(), width + 2)
+        assert style.bgcolor.name == "#000000"
+
+
 @pytest.mark.parametrize(
     "path,value",
     [

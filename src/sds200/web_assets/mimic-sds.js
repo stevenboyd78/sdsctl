@@ -106,6 +106,25 @@
     const value = region.text ?? "—";
     return prefix && !value.toLowerCase().startsWith(prefix.toLowerCase() + ":") ? `${prefix}: ${value}` : value;
   }
+  function presentIndicator(region, current = true) {
+    if (!["fixed", "configured"].includes(region.selection)) return null;
+    const spec = contract.indicator_presentation;
+    const status = current ? region.value_status : "not_current";
+    const unknown = {text: "?", state: "unknown", foreground: spec.unknown_color, background: "000000"};
+    if (region.id === "signal") {
+      return status === "raw_source" && /^[0-5]$/.test(region.text ?? "")
+        ? {text: spec.signal_bars.slice(0, Number(region.text)), state: `level_${region.text}`}
+        : unknown;
+    }
+    const label = Object.hasOwn(spec.regions, region.id) ? spec.regions[region.id]
+      : region.id.startsWith("icon_") && Object.hasOwn(spec.tokens, region.token) ? spec.tokens[region.token] : null;
+    if (label === null) return null;
+    if (status === "raw_source" && (region.text === label || (label === "AVOID" && region.text === "T-AVOID")))
+      return {text: region.text, state: region.text === "T-AVOID" ? "temporary" : "on"};
+    if (status === "blank")
+      return {text: region.id === "function" ? "" : label, state: "off", foreground: spec.inactive_color, background: "000000"};
+    return unknown;
+  }
   function draw(target, frame) {
     const grid = make("div", undefined, "mimic-grid");
     if (frame.screen === null) {
@@ -122,18 +141,26 @@
       cell.dataset.lines = String(region.name_lines);
       cell.dataset.alignment = region.alignment;
       cell.dataset.valueStatus = region.value_status;
+      const indicator = presentIndicator(region, frame.status === "current");
+      if (indicator !== null) cell.dataset.indicator = indicator.state;
       cell.style.gridArea = `${region.row + 1} / ${region.column + 1} / span ${region.rows} / span ${region.columns}`;
       const held = frame.indicators[region.token === "SiteName" ? "site_hold" : `${region.id}_hold`];
       cell.dataset.hold = held === true ? "on" : held === false ? "off" : "unknown";
       if (frame.screen.color_mode === "COLOR" && region.stored_color !== null) {
         let {text: foreground, background} = region.stored_color;
-        if (region.reverse_colors || held === true) [foreground, background] = [background, foreground];
+        const reverse = region.reverse_colors && (region.id !== "function" || indicator?.state === "on");
+        if (reverse || held === true) [foreground, background] = [background, foreground];
         cell.style.color = `#${foreground}`;
         cell.style.backgroundColor = `#${background}`;
       }
+      if (indicator?.foreground) cell.style.color = `#${indicator.foreground}`;
+      if (indicator?.background) cell.style.backgroundColor = `#${indicator.background}`;
       const empty = ["blank", "empty"].includes(region.value_status) || region.kind === "spacer";
-      if (!empty) cell.append(make("span", presentValue(region)));
-      cell.title = `${region.token ?? region.id}: ${region.value_status}`;
+      if (indicator !== null) {
+        if (indicator.text) cell.append(make("span", indicator.text));
+      } else if (!empty) cell.append(make("span", presentValue(region)));
+      cell.title = `${region.token ?? region.id}: ${region.value_status}${indicator === null ? "" : `; indicator: ${indicator.state}`}`;
+      cell.setAttribute("aria-label", cell.title);
       grid.append(cell);
     }
     target.replaceChildren(grid);
@@ -376,5 +403,5 @@
       stop() { closed = stopped = true; failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; delete failureNote.dataset.phase; cancel("Session stopped — scanner values cleared."); },
     });
   }
-  window.sdsctlMimic = Object.freeze({create, decode, presentValue});
+  window.sdsctlMimic = Object.freeze({create, decode, presentValue, presentIndicator});
 })();

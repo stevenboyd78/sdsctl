@@ -9,6 +9,13 @@ from .scanner_display_layout import (
     DisplaySlotSelection,
     scanner_display_layout,
 )
+from .scanner_display_presentation import (
+    INACTIVE_COLOR,
+    SIGNAL_BARS,
+    TOGGLE_REGIONS,
+    TOGGLE_TOKENS,
+    UNKNOWN_COLOR,
+)
 from .scanner_display_profile import ScannerDisplayMode
 from .scanner_display_profile_state import DisplayProfileSourceKind, DisplayProfileStatus
 from .scanner_display_values import ScannerDisplayValueStatus
@@ -67,5 +74,12 @@ def scanner_display_browser_contract() -> dict[str, object]:
         "issues": [item.value for item in DisplayMappingIssueKind],
         "sources": [item.value for item in DisplayProfileSourceKind],
         "captions": dict(_CAPTIONS),
+        "indicator_presentation": {
+            "regions": dict(TOGGLE_REGIONS),
+            "tokens": dict(TOGGLE_TOKENS),
+            "inactive_color": INACTIVE_COLOR,
+            "unknown_color": UNKNOWN_COLOR,
+            "signal_bars": SIGNAL_BARS,
+        },
         "leds": {key.value: value for key, value in _LED_COLORS.items()},
     }

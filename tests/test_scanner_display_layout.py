@@ -44,7 +44,7 @@ def test_source_html_alignment_and_photographed_name_line_counts(mode):
         for name in ("system", "department", "channel"):
             assert regions[name].alignment is DisplayTextAlignment.LEFT
             assert regions[name].name_lines == (2 if simple else 1)
-            assert regions[f"{name}_option"].alignment is DisplayTextAlignment.CENTER
+            assert regions[f"{name}_option"].alignment is DisplayTextAlignment.LEFT
     if not simple:
         for name in ("information_1", "information_2", "information_3", "option_c_1"):
             assert regions[name].alignment is DisplayTextAlignment.LEFT

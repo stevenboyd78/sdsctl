@@ -66,6 +66,7 @@ class Sds200MimicCard extends HTMLElement {
         color:#cbd5e1; background:#18212d; font:clamp(9px,min(1.7cqw,4.5cqh),24px)/1 monospace; }
       .mimic-cell[data-alignment="center"] { justify-content:center; text-align:center; }
       .mimic-cell[data-alignment="left"] { justify-content:start; text-align:left; }
+      .mimic-cell[data-region="signal"][data-indicator^="level_"] { padding:0; font-size:clamp(6px,min(1.2cqw,4.5cqh),24px); }
       .mimic-cell span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; min-width:0; }
       .mimic-cell[data-kind="name"] span { width:100%; font:clamp(16px,min(3.7cqw,9cqh),48px)/1 monospace; }
       .mimic-cell[data-kind="name"][data-lines="2"] span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; white-space:normal; overflow-wrap:anywhere; }

@@ -156,6 +156,47 @@ omit these nodes while the physical LCD displays F/S/D quick-key rows. The
 current selection's `Q_Key` does not describe all 100 bank states. The third
 information row has no qualified PSI source yet.
 
+### Hardware-aligned presentation and live indicators
+
+The 2026-09-17 hardware comparison supersedes the original reference HTML's
+centered Favorites, Site and Frequency rows: all three under-name rows align
+left in Simple and Detail. The current reported site/control-channel frequency
+remains visible during idle scanning by user preference, even where the physical
+LCD omits it. This is an intentional difference, not proof of receiving voice.
+
+`Property.F` supplies the Function indicator: On shows an inverted `F` using the
+profile pair; Off leaves the cell blank and black. Missing, invalid or expired
+states show a neutral `?`, never an inverted placeholder. Normal-scan AVOID
+regions use their own System, Department and ConvFrequency/TGID Avoid attributes,
+not Hold or Site Avoid. Off shows dark-gray `AVOID` on black; Avoid shows profile
+colors; T-Avoid shows `T-AVOID` in profile colors. Unknown states show `?`, not an
+inactive label. The same inactive treatment applies to configured, qualified
+PRI, CC, WX, REC, IFX and priority-channel icons. Intentionally Empty/blank profile
+slots remain empty; unqualified GPS/SCR/REP, offsets and modulation do not gain
+invented toggle behavior. No scanner state is changed by these indicators.
+
+The signal region uses current `Property.Sig` directly. V1.02 p.18 documents
+0..4; existing scanner replay fixtures also report 5. This bounded 0..5 input
+renders zero to five ascending bars, without an RSSI conversion, dBm calibration,
+or a claim of pixel-exact LCD glyphs. Missing/invalid/stale is unknown, not zero.
+Function, AVOID and signal data share PSI's qualification/freshness gate; they
+do not trigger commands. WebUI, generated HA card, TUI and offline frame preview
+share presentation semantics. Profile colors remain authoritative when active.
+Very narrow terminal cells show a numeric signal label (for example `S5`)
+instead of clipping a five-bar reading to fewer bars. Update the server and
+bundled readers/generated HA resource together: the strict decoder validates
+canonical alignment, so an old centered-layout reader rejects the new geometry.
+
+The scanner clock remains a separate acquisition task. V1.02 p.9 documents
+read-only `DTM` and a reply with DayLightSaving, year/month/day, hour/minute/second
+and RTC Status (0 invalid, 1 valid). Do not substitute the host clock, issue the
+SET form, assume an undocumented timezone/DST encoding, or reuse a stale RTC
+reading. Before live Day/Time display, qualify a bounded GET on the existing
+scanner-owner connection, RTC/date validation, independent freshness and caching.
+F/S/D rows likewise require the scoped bank acquisition described below; a
+current selection alone cannot reconstruct them. This presentation change adds
+no DTM or quick-key polling and does not resolve the remaining AST-only IDs.
+
 ### Quick-key GET groundwork (not automatic polling)
 
 Remote Command Specification V1.02, page 6, provides the separate bank reads:

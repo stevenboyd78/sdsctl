@@ -56,6 +56,44 @@ function harness() {
   };
 }
 (async () => {
+  // Real DOM construction: profile colors for active states, neutral off and
+  // unknown states, and no inverted Function placeholder. No scanner requests.
+  const indicators = harness();
+  function setIndicator(id, status, text) {
+    for (const frame of Object.values(indicators.frame.display.frames)) {
+      const region = frame.screen.regions.find(r => r.id === id);
+      region.value_status = status; region.text = text;
+    }
+  }
+  setIndicator('function', 'blank', null);
+  setIndicator('system_avoid', 'blank', null);
+  setIndicator('department_avoid', 'raw_source', 'T-AVOID');
+  setIndicator('signal', 'raw_source', '3');
+  await indicators.start();
+  const cell = id => indicators.cells().find(c => c.dataset.region === id);
+  assert.equal(cell('function').children.length, 0);
+  assert.equal(cell('function').style.backgroundColor, '#000000');
+  assert.equal(cell('system_avoid').children[0].textContent, 'AVOID');
+  assert.equal(cell('system_avoid').style.color, '#707070');
+  assert.equal(cell('department_avoid').children[0].textContent, 'T-AVOID');
+  assert.equal(cell('department_avoid').dataset.indicator, 'temporary');
+  assert.equal(cell('signal').children[0].textContent, '▁▂▃');
+  for (const id of ['system_option', 'department_option', 'channel_option'])
+    assert.equal(cell(id).dataset.alignment, 'left');
+  setIndicator('function', 'raw_source', 'F');
+  indicators.newer(); await indicators.tick(250);
+  assert.equal(cell('function').children[0].textContent, 'F');
+  const pair = indicators.frame.display.frames.preferred.screen.regions.find(r => r.id === 'function').stored_color;
+  assert.equal(cell('function').style.color, `#${pair.background}`);
+  assert.equal(cell('function').style.backgroundColor, `#${pair.text}`);
+  setIndicator('function', 'data_unavailable', null);
+  setIndicator('system_avoid', 'data_unavailable', null);
+  indicators.newer(); await indicators.tick(250);
+  assert.equal(cell('function').dataset.indicator, 'unknown');
+  assert.equal(cell('function').style.backgroundColor, '#000000');
+  assert.equal(cell('system_avoid').children[0].textContent, '?');
+  assert.equal(cell('system_avoid').style.color, '#9aa6b2');
+  indicators.controller.stop();
   const h = harness(); await h.start(); assert.ok(h.raw().length);
   // Ordinary status/events must not restart polling or clear an unchanged view.
   const originalCells = h.cells(), originalCalls = h.calls;

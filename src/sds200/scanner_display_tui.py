@@ -18,6 +18,7 @@ from textual.timer import Timer
 from textual.widgets import Static
 
 from . import __version__
+from .scanner_display_presentation import present_indicator
 from .scanner_display_reader import DisplayFrameReader
 from .scanner_display_web import scanner_display_browser_contract, scanner_display_empty_message
 from .tui_clock import LocalHeaderClock
@@ -84,12 +85,25 @@ def render_mimic_terminal(
         bottom = (region["row"] + region["rows"]) * inner_height // 20
         size = right - left
         foreground, background = "cbd5e1", "18212d"
+        indicator = present_indicator(
+            region["id"],
+            region["token"],
+            region["selection"],
+            region["value_status"] if frame["status"] == "current" else "not_current",
+            region["text"],
+        )
         pair = region["stored_color"]
         if screen["color_mode"] == "COLOR" and pair is not None:
             foreground, background = pair["text"], pair["background"]
             hold_key = "site_hold" if region["token"] == "SiteName" else region["id"] + "_hold"
-            if region["reverse_colors"] or frame["indicators"].get(hold_key) is True:
+            reverse = region["reverse_colors"] and (
+                region["id"] != "function" or (indicator is not None and indicator.state == "on")
+            )
+            if reverse or frame["indicators"].get(hold_key) is True:
                 foreground, background = background, foreground
+        if indicator is not None:
+            foreground = indicator.foreground or foreground
+            background = indicator.background or background
         style = Style(
             color=f"#{foreground}", bgcolor=f"#{background}", bold=region["kind"] == "name"
         )
@@ -98,6 +112,11 @@ def render_mimic_terminal(
             if region["value_status"] in ("empty", "blank") or region["kind"] == "spacer"
             else _value(region)
         )
+        if indicator is not None:
+            value = indicator.text
+            if region["id"] == "signal" and indicator.state.startswith("level_") and size < 5:
+                # Never clip five reported bars into a false lower level.
+                value = "S" + indicator.state.removeprefix("level_")
         line_count = region["name_lines"] if region["kind"] == "name" else 1
         lines = list(
             Text(value, style=style).wrap(

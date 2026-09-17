@@ -67,7 +67,8 @@ def test_clean_names_alignment_and_current_hold_inversion(scenarios, style):
         assert f"color:#{color};background:#000000" in released[name]["style"]
         assert "align-left" in held[name]["class"]
         assert ("two-line" in held[name]["class"]) == (style == "simple")
-    assert "align-center" in held["system_option"]["class"]
+    for name in ("system_option", "department_option", "channel_option"):
+        assert "align-left" in held[name]["class"]
     assert f"align-{'center' if style == 'simple' else 'left'}" in held["option_a_1"]["class"]
     source = render_scanner_display_frame(scenarios["held_trunk"][style])
     assert '<span class="field-label">system</span>' not in source
@@ -264,11 +265,18 @@ def test_unqualified_or_malformed_colors_are_neutral(scenarios):
     assert "onload" not in source
     document = Document(source)
     first = next(attrs for _, attrs in document.elements if "data-region" in attrs)
-    assert "color:#cbd5e1;background:#18212d" in first["style"]
+    # Function is unknown: no inverted rectangle and no untrusted colors.
+    assert "color:#9aa6b2;background:#000000" in first["style"]
     black_white = replace(frame, screen=replace(frame.screen, color_mode="BLACK/WHITE"))
     for _, attrs in Document(render_scanner_display_frame(black_white)).elements:
         if "data-region" in attrs:
-            assert "color:#cbd5e1;background:#18212d" in attrs["style"]
+            palette = (
+                "color:#9aa6b2;background:#000000"
+                if attrs["data-region"]
+                in {"function", "signal", "system_avoid", "department_avoid", "channel_avoid"}
+                else "color:#cbd5e1;background:#18212d"
+            )
+            assert palette in attrs["style"]
 
 
 def test_gallery_csp_hash_and_independent_controls(scenarios):
