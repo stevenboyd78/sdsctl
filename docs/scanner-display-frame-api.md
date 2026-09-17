@@ -464,6 +464,29 @@ existing busy behavior. Shutdown waits for that in-flight reservation to exit;
 there is no new claim of hard transport-write preemption. This coordination hook
 is not installed by ordinary daemon startup and does not enable periodic reads.
 
+The separate developer-only `scripts/research_supplemental_daemon.py` launcher
+qualifies the combined reader without changing ordinary startup. Its source-pinned
+staging option is `--supplemental-research-firmware`, mutually exclusive with the
+one-shot clock/Favorites/System/Department and System Status research modes. A
+fresh private evidence directory and verified operator `SIGUSR1` are required.
+No signal means no extra GETs. Existing startup MDL/VER identity must match SDS200
+and the exact firmware pin on direct UDP; the launcher does not add identity
+queries. The existing display worker may admit at most six global DTM/FQK read
+opportunities during one eight-second window. This is an admission/response-wait
+budget, not a claim of preempting a blocked transport write.
+
+The trigger thread supplies bounded display demand and observes results, but
+never schedules a GET itself. It counts incoming DTM/FQK packets without saving
+raw data; a successful machine result requires three replies of each kind, fresh
+validated cache samples, and two normal PSI updates after the last read. Read
+opportunities and observed replies are not a packet-captured outgoing command
+count. Physical scanning continuity remains a separate operator acceptance.
+Connection/mode changes, runtime contention, uncertain or rejected reads, expiry
+and cancellation cannot renew/rearm the window. The worker is gated off after
+the trial. Preserve unconfirmed evidence and restore the prepared normal image;
+never restart a research image merely to bypass a failed trial. The launcher
+does not expose samples in display frames or enable SQK/DQK, AST/APR, SET or KEY.
+
 Offline tests cover the shared schedule, independent freshness, invalid RTC,
 cross-kind quarantine, global rejection backoff through barriers, retired-session
 replies, bounded shutdown, real parser callbacks during reads and yielding to a

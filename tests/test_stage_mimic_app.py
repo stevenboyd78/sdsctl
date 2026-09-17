@@ -46,6 +46,56 @@ def keys(text):
     return set(re.findall(r"^  ([a-z][a-z0-9_]*):", text, re.MULTILINE))
 
 
+def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot):
+    runtime_name = "src/sds200/home_assistant_app_runtime.py"
+    for name in (
+        runtime_name,
+        "scripts/research_system_status_daemon.py",
+        "scripts/research_supplemental_daemon.py",
+    ):
+        snapshot[name] = (ROOT / name).read_bytes()
+    normal = stager.render(snapshot, REVISION)
+    research = stager.render(snapshot, REVISION, supplemental_firmware="Version 1.26.01")
+    assert normal[runtime_name] == snapshot[runtime_name]
+    assert not any("research" in name for name in normal)
+    assert "-supplemental-research" in research["config.yaml"].decode()
+    assert "boot: manual" in research["config.yaml"].decode()
+    assert "50000/udp: null" in research["config.yaml"].decode()
+    assert b"from research_supplemental_daemon import main" in research["research-entry.py"]
+    assert b"--read-kind" not in research["research-entry.py"]
+    compile(research["research-entry.py"], "research-entry.py", "exec")
+    boundary = b"def build_home_assistant_web_command("
+    assert (
+        research[runtime_name].partition(boundary)[2] == normal[runtime_name].partition(boundary)[2]
+    )
+    report = json.loads(research["candidate-source.json"])
+    assert report["research_read_kind"] == "shared-clock-favorites"
+    assert report["research_max_opportunities"] == 6
+    assert report["research_window_seconds"] == 8
+    assert report["research_automatic_start"] is False
+    for name, digest in report["files"].items():
+        assert hashlib.sha256(research[name]).hexdigest() == digest
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"research_firmware": "Version 1.26.01"},
+        {"display_read_firmware": "Version 1.26.01", "display_read_kind": "clock"},
+        {"display_read_kind": "favorites"},
+    ],
+)
+def test_supplemental_research_cannot_combine_modes(snapshot, kwargs):
+    with pytest.raises(ValueError, match="Only one"):
+        stager.render(snapshot, REVISION, supplemental_firmware="Version 1.26.01", **kwargs)
+
+
+@pytest.mark.parametrize("firmware", ["", " a", "a\n", "a'", "a" * 65])
+def test_supplemental_firmware_refused_before_reading_source(firmware):
+    with pytest.raises(ValueError, match="firmware pin"):
+        stager.render({}, REVISION, supplemental_firmware=firmware)
+
+
 def test_research_staging_is_explicit_and_only_changes_daemon_launcher(snapshot):
     runtime_name = "src/sds200/home_assistant_app_runtime.py"
     launcher_name = "scripts/research_system_status_daemon.py"
