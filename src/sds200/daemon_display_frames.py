@@ -36,6 +36,10 @@ from .scanner_display_adapter import (
     ScannerDisplayStyle,
 )
 from .scanner_display_frame import project_scanner_display_frame
+from .scanner_display_supplemental import (
+    SupplementalDisplayValues,
+    project_supplemental_display_values,
+)
 
 DEFAULT_DISPLAY_STALE_SECONDS = 5.0
 _LOGGER = logging.getLogger(__name__)
@@ -245,6 +249,49 @@ class DaemonDisplayFrames:
     def clock_snapshot(self) -> ClockSnapshot | None:
         """Internal qualification only, through the same optional owner worker."""
         return None if self._quick_keys is None else self._quick_keys.clock_snapshot()
+
+    def supplemental_values(self) -> SupplementalDisplayValues | None:
+        """Internal candidate projection only; no demand renewal or public API change.
+
+        Re-read the profile barrier and bind the coherent cache cut to exactly
+        this feed session/PSI sequence. Never cache this result for a later frame.
+        """
+        if self._quick_keys is None:
+            return None
+        profile, failure, _, invalidation = self._profile.frame_context()
+        target = self._scanner.endpoint
+        with self._lock:
+            if not self._profile_barrier(failure, invalidation):
+                return None
+            if (
+                self._closed
+                or not self._started
+                or failure is not None
+                or profile.last_good is None
+                or self._session is None
+                or self._quick_key_session is None
+                or self._failure is not None
+            ):
+                return None
+            if (
+                target != self._profile.scanner_target
+                or self._adapter.quick_key_selection(self._session, now=self._clock()) is None
+            ):
+                self._suspend_quick_keys()
+                return None
+            try:
+                sample = self._quick_keys.supplemental_snapshot()
+                return project_supplemental_display_values(
+                    sample,
+                    session=self._quick_key_session,
+                    sequence=self._sequence,
+                    now=self._clock(),
+                )
+            except Exception:
+                # Auxiliary failure must not hide otherwise-current PSI data.
+                assert self._quick_key_worker is not None
+                self._quick_key_worker.fail()
+                return None
 
     def snapshot(self) -> dict[str, object]:
         # Administrator reload can block this API read, but never scanner callbacks.

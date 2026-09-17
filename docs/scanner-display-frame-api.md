@@ -501,6 +501,43 @@ acquisition still disabled. This qualifies only this short combined-reader
 scanning case, not endurance, controls/audio/Waterfall under load, scoped quick
 keys, displayed bank selection, or rendered clock/quick-key fields.
 
+The next **scanning-continuity** case is separate from that completed short
+trial. `--supplemental-continuity` requires the stager's explicit supplemental
+firmware pin and selects a distinct version suffix/read-kind in its manifest.
+The research entry passes `--continuity` to the launcher: at most 60 read
+opportunities within 64 seconds, requiring 30 validated replies of each kind,
+two final normal PSI updates, and no observed inter-PSI gap above two seconds.
+It cannot be rearmed, does nothing before the verified operator signal, and
+closes on connection/mode changes, contention, cancellation or uncertain reads.
+This proposed case is not yet hardware-accepted and does not qualify controls,
+audio, or Waterfall under load. The bounds are admission/response-wait limits,
+not hard preemption of a blocked transport write. It adds no public App option.
+
+### Internal supplemental projection (not yet rendered)
+
+`supplemental_snapshot()` joins the optional cache's banks and clock at one
+monotonic cutoff under its existing lock. Its identity ticket and PSI sequence
+bind that cut to one owner connection, while each independently acquired reply
+retains its own age. This neither performs I/O nor renews display demand.
+
+The candidate `DaemonDisplayFrames.supplemental_values()` method checks the
+accepted-profile invalidation barrier, current normal scan, endpoint and exact
+session/PSI sequence before projecting a fresh cut. Auxiliary projection faults
+quarantine that worker without blanking otherwise-current PSI content. No
+transport or command lock is acquired by the projection, and slow profile work
+runs outside the PSI callback lock. Ordinary `snapshot()`/`display.frame` and
+WebUI/TUI/HA output remain unchanged; ordinary startup still has no such cache.
+
+The immutable candidate values preserve exact naive scanner-local time and the
+100 typed global Favorites states. Their ages may increase during projection;
+the scanner time never advances by extrapolation. Invalid RTC, expiry, disabled
+acquisition and quarantine are distinct from a valid reading. An absent bank
+does not become 100 off states. No timezone, DST offset, physical 12/24-hour
+setting, F0/S0/D0 decade, glyph, scoped selector, or missing field is invented.
+A result is a point-in-time internal value, not authority to retain it across a
+profile/session change or enable automatic reads. Rendering these values still
+requires the remaining acquisition and presentation qualifications.
+
 Offline tests cover the shared schedule, independent freshness, invalid RTC,
 cross-kind quarantine, global rejection backoff through barriers, retired-session
 replies, bounded shutdown, real parser callbacks during reads and yielding to a

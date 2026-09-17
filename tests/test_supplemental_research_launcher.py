@@ -71,7 +71,7 @@ class Runtime:
 
 
 @pytest.fixture
-def trial():
+def trial(request):
     clock = SimpleNamespace(now=10.0)
     scanner = SupplementalScanner()
     scanner.connected = True
@@ -79,7 +79,9 @@ def trial():
     # Constructor only; no socket/connect is used.
     scanner.transport = UdpTransport("192.0.2.10")
     runtime = Runtime(scanner)
-    window = launcher.ReadWindow(runtime, FIRMWARE, clock=lambda: clock.now)
+    window = launcher.ReadWindow(
+        runtime, FIRMWARE, clock=lambda: clock.now, continuity=getattr(request, "param", False)
+    )
     cache = DaemonQuickKeyCache(
         scanner,
         ENDPOINT,
@@ -330,12 +332,16 @@ def test_connection_change_during_registration_is_preserved_without_arm(tmp_path
     assert scanner.reads == [] and not window.attempted
 
 
+@pytest.mark.parametrize("continuity", [False, True])
 @pytest.mark.parametrize("outcome", ["success", "timeout", "mode", "cancel", "expiry"])
-def test_actual_feed_worker_and_trigger_lifecycle(tmp_path, monkeypatch, configured, outcome):
+def test_actual_feed_worker_and_trigger_lifecycle(
+    tmp_path, monkeypatch, configured, outcome, continuity
+):
     # Shorten only scheduling intervals for this offline lifecycle test.
-    monkeypatch.setattr(daemon_quick_keys, "MIN_READ_GAP", 0.02)
-    monkeypatch.setattr(daemon_quick_keys, "REFRESH_INTERVAL", 0.08)
-    monkeypatch.setattr(scanner_clock, "REFRESH_INTERVAL", 0.08)
+    monkeypatch.setattr(daemon_quick_keys, "MIN_READ_GAP", 0.005)
+    monkeypatch.setattr(daemon_quick_keys, "REFRESH_INTERVAL", 0.02)
+    monkeypatch.setattr(scanner_clock, "REFRESH_INTERVAL", 0.02)
+    limit = 60 if continuity else 6
     scanner = OwnerScanner()
     scanner.transport = UdpTransport("192.0.2.25")
     scanner.on_packet = lambda cb: scanner.events.subscribe("packet", cb)
@@ -389,19 +395,23 @@ def test_actual_feed_worker_and_trigger_lifecycle(tmp_path, monkeypatch, configu
             wait_for(result_file.exists)
             # The worker still exists, but cannot perform additional reads.
             count = len(scanner.reads)
-            assert count <= 6
+            assert count <= limit
             stop.wait(0.12)
             handler(signal.SIGUSR1, None)
             assert len(scanner.reads) == count
             assert feed.quick_key_worker_status().failure is None
             report = json.loads(result_file.read_text())
             if outcome == "success":
-                assert count == 6 and report["status"] == "replies_and_psi_observed"
-                assert report["reply_counts"] == {"DTM": 3, "FQK": 3}
+                assert count == limit and report["status"] == "replies_and_psi_observed"
+                assert report["reply_counts"] == {"DTM": limit // 2, "FQK": limit // 2}
             elif outcome == "expiry":
                 assert count == 0 and report["status"] == "operator_wait_expired"
             else:
-                assert 0 < count < 6 and report["status"] == "qualification_unconfirmed"
+                assert 0 < count < limit and report["status"] == "qualification_unconfirmed"
+            assert report["max_opportunities"] == limit
+            assert report["read_kind"] == (
+                "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"
+            )
             return 0
         finally:
             stop.set()
@@ -413,6 +423,80 @@ def test_actual_feed_worker_and_trigger_lifecycle(tmp_path, monkeypatch, configu
 
     monkeypatch.setattr(cli, "main", fake_main)
     args = arguments(tmp_path)
+    if continuity:
+        args.insert(0, "--continuity")
     args[args.index("--ready-timeout") + 1] = "0.1" if outcome == "expiry" else "10"
     assert launcher.main(args) == 0
     assert "PRIVATE_SENTINEL" not in result_file.read_text()
+
+
+@pytest.mark.parametrize("trial", [True], indirect=True)
+def test_continuity_is_distinct_fixed_budget_not_unbounded_polling(trial):
+    window, scanner, cache, clock, psi = trial
+    assert window.max_opportunities == 60 and window.window_seconds == 64
+    assert not window.allow_poll() and window.arm()
+    for index in range(30):
+        for offset in (0, 0.5):
+            clock.now = 10 + index * 2 + offset
+            psi()
+            assert window.allow_poll() and cache.poll_once()
+            assert window.report()["status"] == "qualification_unconfirmed"
+    assert len(scanner.reads) == 60
+    psi()
+    psi()
+    assert window.report()["status"] == "replies_and_psi_observed"
+    assert window.report()["max_psi_gap_seconds"] == 1.5
+    assert window.replies == {"DTM": 30, "FQK": 30}
+    assert not window.allow_poll()
+    window.stop()
+    cache.poll_once()
+    assert len(scanner.reads) == 60
+    with pytest.raises(ValueError, match="rearmed"):
+        window.arm()
+
+
+@pytest.mark.parametrize("trial", [True], indirect=True)
+@pytest.mark.parametrize("cause", ["gap", "deadline", "mode", "connection", "busy"])
+def test_continuity_failures_cannot_resume_after_recovery(trial, cause):
+    window, scanner, cache, clock, psi = trial
+    assert window.arm()
+    psi()
+    cache.poll_once()
+    clock.now = 10.5
+    if cause == "gap":
+        clock.now = 12.001
+        psi()
+        assert window.failure == "psi_gap_exceeded"
+    elif cause == "deadline":
+        clock.now = 74
+    elif cause == "mode":
+        window.observe_psi(None)
+    elif cause == "connection":
+        window.observe_connection(False)
+        window.observe_connection(True)
+    else:
+        window.runtime.ready = False
+        cache.poll_once()
+        window.runtime.ready = True
+    psi()
+    cache.poll_once()
+    assert not window.allow_poll() and len(scanner.reads) == 1
+    assert window.report()["status"] == "qualification_unconfirmed"
+
+
+@pytest.mark.parametrize("bad", [None, 1, "true", object()])
+def test_unbounded_or_ambiguous_policy_is_rejected(tmp_path, bad):
+    with pytest.raises(ValueError, match="boolean"):
+        launcher.ReadWindow(object(), FIRMWARE, continuity=bad)
+    with pytest.raises(ValueError, match="boolean"):
+        launcher.SupplementalTrigger(tmp_path / "case", FIRMWARE, continuity=bad)
+    assert not (tmp_path / "case").exists()
+
+
+def test_trigger_and_window_cannot_disagree_on_case(tmp_path, trial):
+    window, scanner, _, _, _ = trial
+    trigger = launcher.SupplementalTrigger(tmp_path / "case", FIRMWARE, continuity=True)
+    trigger.window = window
+    with pytest.raises(ValueError, match="exact supplemental reader owner"):
+        trigger.invoke(window.runtime)
+    assert not scanner.reads and not window.attempted

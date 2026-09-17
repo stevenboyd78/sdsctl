@@ -29,13 +29,21 @@ from sds200.network import UdpTransport
 
 MAX_OPPORTUNITIES = 6
 WINDOW_SECONDS = 8.0
+CONTINUITY_MAX_OPPORTUNITIES = 60
+CONTINUITY_WINDOW_SECONDS = 64.0
+CONTINUITY_MAX_PSI_GAP = 2.0
 
 
 class ReadWindow:
     """One non-renewable admission budget; no threads or scanner commands."""
 
-    def __init__(self, runtime, firmware, *, clock=monotonic):
+    def __init__(self, runtime, firmware, *, clock=monotonic, continuity=False):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
+        if type(continuity) is not bool:
+            raise ValueError("An explicit boolean continuity policy is required.")
+        self.continuity = continuity
+        self.max_opportunities = CONTINUITY_MAX_OPPORTUNITIES if continuity else MAX_OPPORTUNITIES
+        self.window_seconds = CONTINUITY_WINDOW_SECONDS if continuity else WINDOW_SECONDS
         self.runtime, self.firmware, self.clock = runtime, firmware, clock
         self.lock = threading.RLock()
         self.attempted = self.closed = False
@@ -43,6 +51,7 @@ class ReadWindow:
         self.failure = None
         self.opportunities = self.inflight = self.psi_count = self.post_read_psi = 0
         self.latest_psi = None
+        self.max_psi_gap = 0.0
         self.replies = {"DTM": 0, "FQK": 0}
         self.cache = self.feed = None
 
@@ -61,7 +70,13 @@ class ReadWindow:
             if _selection(info, DisplayReadKind.CLOCK) is None:
                 self.stop("scan_context_changed")
                 return
-            self.latest_psi = self.clock()
+            now = self.clock()
+            if self.latest_psi is not None:
+                self.max_psi_gap = max(self.max_psi_gap, now - self.latest_psi)
+                if self.continuity and self.max_psi_gap > CONTINUITY_MAX_PSI_GAP:
+                    self.stop("psi_gap_exceeded")
+                    return
+            self.latest_psi = now
             self.psi_count += 1
             if self.opportunities and not self.inflight:
                 self.post_read_psi += 1
@@ -99,8 +114,8 @@ class ReadWindow:
             return (
                 self.started is not None
                 and not self.closed
-                and self.clock() - self.started < WINDOW_SECONDS
-                and self.opportunities < MAX_OPPORTUNITIES
+                and self.clock() - self.started < self.window_seconds
+                and self.opportunities < self.max_opportunities
             )
 
     @contextmanager
@@ -155,9 +170,10 @@ class ReadWindow:
             passed = (
                 samples_valid
                 and self.failure is None
-                and self.opportunities == MAX_OPPORTUNITIES
+                and self.opportunities == self.max_opportunities
                 and self.inflight == 0
-                and self.replies == {"DTM": 3, "FQK": 3}
+                and self.replies
+                == {"DTM": self.max_opportunities // 2, "FQK": self.max_opportunities // 2}
                 and self.post_read_psi >= 2
             )
             return {
@@ -168,6 +184,7 @@ class ReadWindow:
                 "reply_counts": dict(self.replies),
                 "normal_psi_count": self.psi_count,
                 "normal_psi_after_last_read": self.post_read_psi,
+                "max_psi_gap_seconds": round(self.max_psi_gap, 6),
                 "failure": self.failure,
                 "samples_valid": samples_valid,
                 "elapsed_seconds": None
@@ -178,8 +195,11 @@ class ReadWindow:
 
 
 class SupplementalTrigger(OperatorTrigger):
-    def __init__(self, directory, firmware, **kwargs):
+    def __init__(self, directory, firmware, *, continuity=False, **kwargs):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
+        if type(continuity) is not bool:
+            raise ValueError("An explicit boolean continuity policy is required.")
+        self.continuity = continuity
         super().__init__(directory, **kwargs)
         self.firmware, self.window = firmware, None
 
@@ -188,10 +208,15 @@ class SupplementalTrigger(OperatorTrigger):
             filename,
             {
                 **report,
-                "read_kind": "shared-clock-favorites",
+                "read_kind": "shared-clock-favorites-continuity"
+                if self.continuity
+                else "shared-clock-favorites",
                 "firmware_pin": self.firmware,
-                "max_opportunities": 6,
-                "window_seconds": WINDOW_SECONDS,
+                "max_opportunities": CONTINUITY_MAX_OPPORTUNITIES
+                if self.continuity
+                else MAX_OPPORTUNITIES,
+                "window_seconds": CONTINUITY_WINDOW_SECONDS if self.continuity else WINDOW_SECONDS,
+                "max_psi_gap_seconds_allowed": CONTINUITY_MAX_PSI_GAP if self.continuity else None,
             },
         )
 
@@ -202,7 +227,7 @@ class SupplementalTrigger(OperatorTrigger):
 
     def invoke(self, runtime):
         window = self.window
-        if window is None or window.runtime is not runtime:
+        if window is None or window.runtime is not runtime or window.continuity != self.continuity:
             raise ValueError("Review the exact supplemental reader owner.")
         try:
             with ExitStack() as stack:
@@ -234,7 +259,7 @@ class SupplementalTrigger(OperatorTrigger):
                         if (
                             window.closed
                             or report["status"] == "replies_and_psi_observed"
-                            or window.clock() - window.started >= WINDOW_SECONDS
+                            or window.clock() - window.started >= window.window_seconds
                         ):
                             break
                 return window.report()
@@ -247,6 +272,11 @@ def main(argv=None):
     parser.add_argument("--expected-firmware", required=True)
     parser.add_argument("--evidence-directory", type=Path, required=True)
     parser.add_argument("--ready-timeout", type=float, default=600)
+    parser.add_argument(
+        "--continuity",
+        action="store_true",
+        help="Separate 60-read/64-second scanning-only case; never rearm the short case.",
+    )
     parser.add_argument("daemon_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if not args.daemon_args or args.daemon_args[0] != "--":
@@ -260,7 +290,10 @@ def main(argv=None):
     original_frames = daemon_display_frames.DaemonDisplayFrames
     original_signal = signal.getsignal(signal.SIGUSR1)
     trigger = SupplementalTrigger(
-        args.evidence_directory, args.expected_firmware, ready_timeout=args.ready_timeout
+        args.evidence_directory,
+        args.expected_firmware,
+        ready_timeout=args.ready_timeout,
+        continuity=args.continuity,
     )
     constructed = False
 
@@ -271,7 +304,7 @@ def main(argv=None):
                 raise RuntimeError("Research launcher must have exactly one daemon owner.")
             constructed = True
             super().__init__(*runtime_args, **runtime_kwargs)
-            trigger.window = ReadWindow(self, args.expected_firmware)
+            trigger.window = ReadWindow(self, args.expected_firmware, continuity=args.continuity)
             self._research_trigger_started = False
 
         def start(self):

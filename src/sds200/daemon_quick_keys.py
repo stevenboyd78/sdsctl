@@ -84,6 +84,21 @@ class QuickKeySnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class SupplementalSnapshot:
+    """One owner/session/PSI cut, not simultaneous DTM/FQK acquisition.
+
+    Internal only. Retain independent sample ages; never infer an LCD decade
+    from the selected Favorites/System quick keys or the global state bank.
+    """
+
+    session: QuickKeySession | None
+    sequence: int | None
+    captured_at: float
+    quick_keys: QuickKeySnapshot
+    clock: ClockSnapshot | None
+
+
+@dataclass(frozen=True, slots=True)
 class _Cached:
     states: tuple[FavoritesQuickKeyState, ...]
     requested_at: float
@@ -284,40 +299,60 @@ class DaemonQuickKeyCache:
 
     def snapshot(self) -> QuickKeySnapshot:
         with self._lock:
-            now = self._now()
-            active = self._active(now)
-            banks = []
-            for kind in KINDS:
-                cached = self._values.get(kind)
-                age = None if cached is None else now - cached.requested_at
-                fresh = active and self._blocked is None and age is not None and age < STALE_AFTER
-                banks.append(
-                    QuickKeyBank(
-                        kind,
-                        cached.states if fresh and cached is not None else None,
-                        age if active else None,
-                        self._failures.get(kind) if active else None,
-                    )
+            return self._snapshot_at(self._now())
+
+    def _snapshot_at(self, now: float) -> QuickKeySnapshot:
+        # Caller holds the shared lock; all sample gates use this same cutoff.
+        active = self._active(now)
+        banks = []
+        for kind in KINDS:
+            cached = self._values.get(kind)
+            age = None if cached is None else now - cached.requested_at
+            fresh = active and self._blocked is None and age is not None and age < STALE_AFTER
+            banks.append(
+                QuickKeyBank(
+                    kind,
+                    cached.states if fresh and cached is not None else None,
+                    age if active else None,
+                    self._failures.get(kind) if active else None,
                 )
-            return QuickKeySnapshot(
-                active, self._selection if active else None, self._blocked, tuple(banks)
             )
+        return QuickKeySnapshot(
+            active, self._selection if active else None, self._blocked, tuple(banks)
+        )
 
     def clock_snapshot(self) -> ClockSnapshot | None:
         """Internal exact scanner time only; no I/O, demand renewal or extrapolation."""
         with self._lock:
             if self._clock_samples is None:
                 return None
-            snapshot = self._clock_samples.snapshot()
-            if self._active(self._now()) and self._blocked is None:
-                return snapshot
-            return replace(
-                snapshot,
-                local_time=None,
-                daylight_saving=None,
-                rtc_valid=None,
-                age_seconds=None,
-                blocked_until_reconnect=self._blocked or snapshot.blocked_until_reconnect,
+            return self._clock_snapshot_at(self._now())
+
+    def _clock_snapshot_at(self, now: float) -> ClockSnapshot | None:
+        if self._clock_samples is None:
+            return None
+        snapshot = self._clock_samples._snapshot_at(now)
+        if self._active(now) and self._blocked is None:
+            return snapshot
+        return replace(
+            snapshot,
+            local_time=None,
+            daylight_saving=None,
+            rtc_valid=None,
+            age_seconds=None,
+            blocked_until_reconnect=self._blocked or snapshot.blocked_until_reconnect,
+        )
+
+    def supplemental_snapshot(self) -> SupplementalSnapshot:
+        """Read one coherent internal cut; no I/O, worker start or demand renewal."""
+        with self._lock:
+            now = self._now()
+            return SupplementalSnapshot(
+                self._session,
+                self._sequence if self._sequence >= 0 else None,
+                now,
+                self._snapshot_at(now),
+                self._clock_snapshot_at(now),
             )
 
     def _quarantine(self, failure: Failure) -> None:

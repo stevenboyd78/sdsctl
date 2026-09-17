@@ -75,7 +75,9 @@ class ScannerClockSamples:
         self._due = self._latest_time = 0.0
 
     def _now(self) -> float:
-        now = self._clock()
+        return self._advance_time(self._clock())
+
+    def _advance_time(self, now: float) -> float:
         if (
             type(now) not in (int, float)
             or not 0 <= now <= 1e15
@@ -194,20 +196,28 @@ class ScannerClockSamples:
     def snapshot(self) -> ClockSnapshot:
         """Return fresh data only; never read, retry, or advance the scanner clock."""
         with self._lock:
-            now = self._now()
-            sample = self._sample
-            if (
-                self._session is None
-                or self._blocked
-                or sample is None
-                or now - sample.requested_at >= STALE_AFTER
-            ):
-                sample = None
-            return ClockSnapshot(
-                local_time=sample.local_time if sample else None,
-                daylight_saving=sample.daylight_saving if sample else None,
-                rtc_valid=sample.rtc_valid if sample else None,
-                age_seconds=now - sample.requested_at if sample else None,
-                failure=self._failure,
-                blocked_until_reconnect=self._blocked,
-            )
+            return self._snapshot(self._now())
+
+    def _snapshot_at(self, now: float) -> ClockSnapshot:
+        """Shared owner only: join samples at one monotonic cutoff, without I/O."""
+        with self._lock:
+            return self._snapshot(self._advance_time(now))
+
+    def _snapshot(self, now: float) -> ClockSnapshot:
+        # Caller holds the sample lock and has validated/advanced monotonic time.
+        sample = self._sample
+        if (
+            self._session is None
+            or self._blocked
+            or sample is None
+            or now - sample.requested_at >= STALE_AFTER
+        ):
+            sample = None
+        return ClockSnapshot(
+            local_time=sample.local_time if sample else None,
+            daylight_saving=sample.daylight_saving if sample else None,
+            rtc_valid=sample.rtc_valid if sample else None,
+            age_seconds=now - sample.requested_at if sample else None,
+            failure=self._failure,
+            blocked_until_reconnect=self._blocked,
+        )

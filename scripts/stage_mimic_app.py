@@ -58,9 +58,14 @@ def render(
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
     supplemental_firmware: str | None = None,
+    supplemental_continuity: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
-        research_firmware, display_read_firmware, display_read_kind, supplemental_firmware
+        research_firmware,
+        display_read_firmware,
+        display_read_kind,
+        supplemental_firmware,
+        supplemental_continuity,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("An exact source revision is required.")
@@ -264,6 +269,14 @@ def render(
             }
         )
     if supplemental_firmware is not None:
+        read_kind = (
+            "shared-clock-favorites-continuity"
+            if supplemental_continuity
+            else "shared-clock-favorites"
+        )
+        suffix = "supplemental-continuity" if supplemental_continuity else "supplemental-research"
+        limit, duration = (60, 64) if supplemental_continuity else (6, 8)
+        continuity_argument = "'--continuity', " if supplemental_continuity else ""
         runtime_name = "src/sds200/home_assistant_app_runtime.py"
         before, delimiter, after = (
             result[runtime_name].decode().partition("def build_home_assistant_daemon_command(")
@@ -286,7 +299,7 @@ def render(
             "directory = ('/run/sdsctl/supplemental-research-' "
             "+ str(os.getpid()) + '-' + uuid.uuid4().hex)\n"
             f"raise SystemExit(main(['--expected-firmware', {supplemental_firmware!r}, "
-            "'--evidence-directory', directory, '--', *sys.argv[1:]]))\n"
+            f"'--evidence-directory', directory, {continuity_argument}'--', *sys.argv[1:]]))\n"
         ).encode()
         result["Dockerfile"] += (
             b"\n# Explicit bounded shared-reader qualification; no signal means no reads.\n"
@@ -297,14 +310,14 @@ def render(
         result["config.yaml"] = replace_once(
             result["config.yaml"].decode(),
             f'version: "{version}-mimic-{revision[:12]}"',
-            f'version: "{version}-mimic-{revision[:12]}-supplemental-research"',
+            f'version: "{version}-mimic-{revision[:12]}-{suffix}"',
         ).encode()
         result["DOCS.md"] += (
             "\n## Temporary shared clock/Favorites qualification\n\n"
             f"Exact startup identity must be SDS200 / {supplemental_firmware}, direct UDP. "
             "No supplemental reads occur before a verified administrator SIGUSR1 while "
             "the operator is watching normal scanning. One existing display worker gets "
-            "at most six DTM/FQK read opportunities in eight seconds. No scoped queries, "
+            f"at most {limit} DTM/FQK read opportunities in {duration} seconds. No scoped queries, "
             "scanner writes, AST/APR, extra owner, rendered samples or automatic rearming. "
             "Runtime controls, reconnects, shutdown and Waterfall retain their guards. "
             "Archive private evidence; distinguish counted replies from wire commands and "
@@ -315,10 +328,11 @@ def render(
             {
                 "purpose": "local-mimic-supplemental-research-only",
                 "research_firmware_pin": supplemental_firmware,
-                "research_read_kind": "shared-clock-favorites",
+                "research_read_kind": read_kind,
                 "research_automatic_start": False,
-                "research_max_opportunities": 6,
-                "research_window_seconds": 8,
+                "research_max_opportunities": limit,
+                "research_window_seconds": duration,
+                "research_max_psi_gap_seconds": 2 if supplemental_continuity else None,
                 "files": {
                     name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
                 },
@@ -333,7 +347,12 @@ def validate_research_choice(
     read_firmware: str | None,
     read_kind: str | None,
     supplemental_firmware: str | None = None,
+    supplemental_continuity: bool = False,
 ) -> None:
+    if type(supplemental_continuity) is not bool or (
+        supplemental_continuity and supplemental_firmware is None
+    ):
+        raise ValueError("Continuity research requires an explicit shared-reader firmware pin.")
     if supplemental_firmware is not None:
         if any(value is not None for value in (ast_firmware, read_firmware, read_kind)):
             raise ValueError("Only one research mode can be staged.")
@@ -361,9 +380,14 @@ def from_revision(
     display_read_firmware: str | None = None,
     display_read_kind: str | None = None,
     supplemental_firmware: str | None = None,
+    supplemental_continuity: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
-        research_firmware, display_read_firmware, display_read_kind, supplemental_firmware
+        research_firmware,
+        display_read_firmware,
+        display_read_kind,
+        supplemental_firmware,
+        supplemental_continuity,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
@@ -409,6 +433,7 @@ def from_revision(
         display_read_firmware=display_read_firmware,
         display_read_kind=display_read_kind,
         supplemental_firmware=supplemental_firmware,
+        supplemental_continuity=supplemental_continuity,
     )
 
 
@@ -466,6 +491,7 @@ def main() -> None:
     )
     parser.add_argument("--display-read-research-firmware")
     parser.add_argument("--supplemental-research-firmware")
+    parser.add_argument("--supplemental-continuity", action="store_true")
     parser.add_argument(
         "--display-read-kind", choices=("clock", "favorites", "system", "department")
     )
@@ -476,6 +502,7 @@ def main() -> None:
         display_read_firmware=args.display_read_research_firmware,
         display_read_kind=args.display_read_kind,
         supplemental_firmware=args.supplemental_research_firmware,
+        supplemental_continuity=args.supplemental_continuity,
     )
     if not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(
