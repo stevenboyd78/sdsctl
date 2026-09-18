@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import signal
 import threading
+from collections import Counter
 from contextlib import ExitStack, contextmanager
+from copy import deepcopy
 from pathlib import Path
 from time import monotonic
 
@@ -25,6 +27,7 @@ from sds200.daemon_display_read_research import (
 )
 from sds200.daemon_quick_keys import DaemonQuickKeyCache
 from sds200.daemon_runtime import DaemonRuntime, DaemonRuntimeState
+from sds200.models import ScannerInfo
 from sds200.network import UdpTransport
 from sds200.trace import TrafficTrace
 
@@ -34,6 +37,82 @@ CONTINUITY_MAX_OPPORTUNITIES = 60
 CONTINUITY_WINDOW_SECONDS = 64.0
 CONTINUITY_MAX_PSI_GAP = 2.0
 TIMING_EVENT_LIMIT = 512
+
+# Diagnostic labels mirror the CLOCK selector, but never make admission decisions.
+# Unknown strings are reduced to fixed categories, never copied into evidence.
+SCAN_MODES = {
+    "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
+    "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+}
+EXCLUDED_SCAN_TAGS = frozenset(
+    {
+        "PopupScreen",
+        "PlainText",
+        "ReplayDescription",
+        "ReplayMode",
+        "Button",
+        "SrchFrequency",
+        "CcHitsChannel",
+        "WxChannel",
+        "ToneOutChannel",
+        "SystemStatus",
+        "Analyze",
+        "RfPowerPlot",
+    }
+)
+DIAGNOSTIC_TAGS = EXCLUDED_SCAN_TAGS | {
+    "System",
+    "MonitorList",
+    "Site",
+    "Department",
+    "TGID",
+    "ConvFrequency",
+    "Property",
+}
+
+
+def scan_context_shape(info):
+    """Bounded structural facts only; not a selector and not proof of a radio fault.
+
+    Counts saturate at their documented caps. No attributes, raw XML, arbitrary
+    tags, or unrecognized mode/screen/command strings enter this report.
+    """
+    if not isinstance(info, ScannerInfo):
+        return {"schema": 1, "violations": ["not_scanner_info"]}
+    counts = Counter(record.tag for record in info.records)
+    modes = SCAN_MODES.get(info.screen)
+    excluded = EXCLUDED_SCAN_TAGS | {"ConvFrequency" if info.screen == "trunk_scan" else "TGID"}
+    violations = []
+    if info.command != "PSI":
+        violations.append("not_psi")
+    if modes is None:
+        violations.append("unsupported_screen")
+    elif info.mode not in modes:
+        violations.append("mode_mismatch")
+    if counts["System"] != 1:
+        violations.append("system_record_count")
+    if any(n > 1 for n in counts.values()):
+        violations.append("duplicate_record_tag")
+    if excluded.intersection(counts):
+        violations.append("excluded_record_tag")
+    known_modes = {mode for choices in SCAN_MODES.values() for mode in choices}
+    return {
+        "schema": 1,
+        "violations": violations,
+        "command": info.command if info.command in {"PSI", "GSI"} else "other",
+        "screen": info.screen if info.screen in SCAN_MODES else "other",
+        "mode": info.mode if info.mode in known_modes else "other",
+        "system_record_count": min(counts["System"], 2),
+        "system_record_count_cap": 2,
+        "record_count": min(len(info.records), 256),
+        "record_count_cap": 256,
+        "duplicate_known_tags": sorted(tag for tag in DIAGNOSTIC_TAGS if counts[tag] > 1),
+        "other_duplicate_tag_count": min(
+            sum(n > 1 for tag, n in counts.items() if tag not in DIAGNOSTIC_TAGS), 2
+        ),
+        "other_duplicate_tag_count_cap": 2,
+        "excluded_record_tags": sorted(excluded.intersection(counts)),
+    }
 
 
 class TimingTrace:
@@ -82,6 +161,7 @@ class ReadWindow:
         self.started = None
         self.failure = None
         self.read_failure = None
+        self.scan_rejection = None
         self.opportunities = self.inflight = self.psi_count = self.post_read_psi = 0
         self.latest_psi = None
         self.max_psi_gap = 0.0
@@ -102,6 +182,7 @@ class ReadWindow:
             "scope_enter",
             "scope_exit",
             "cache_complete",
+            "context_rejected",
             "tx_intent",
             "rx_line",
             "rx_rejection",
@@ -145,6 +226,7 @@ class ReadWindow:
                 "overflow": self.timing_overflow,
                 "poll_active_at_snapshot": self.timing_poll_active,
                 "events": [dict(event) for event in self.timing_events],
+                "scan_rejection": deepcopy(self.scan_rejection),
                 "outgoing_wire_delivery_established": False,
             }
 
@@ -156,6 +238,16 @@ class ReadWindow:
             if self.closed:
                 return
             if _selection(info, DisplayReadKind.CLOCK) is None:
+                if self.timing:
+                    self.scan_rejection = {
+                        **scan_context_shape(info),
+                        "monotonic_seconds": self.clock(),
+                        "before_arm": self.started is None,
+                    }
+                    # A future selector change must not be explained by stale labels.
+                    if not self.scan_rejection["violations"]:
+                        self.scan_rejection["violations"] = ["unclassified_rejection"]
+                    self.record_timing("context_rejected")
                 self.stop("scan_context_changed")
                 return
             now = self.clock()
@@ -307,6 +399,7 @@ class ReadWindow:
                 "max_psi_gap_seconds": round(self.max_psi_gap, 6),
                 "failure": self.failure,
                 "read_failure": self.read_failure,
+                "scan_rejection": deepcopy(self.scan_rejection),
                 "timing_overflow": self.timing_overflow,
                 "timing_poll_active": self.timing_poll_active,
                 "samples_valid": samples_valid,

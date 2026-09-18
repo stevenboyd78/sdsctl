@@ -541,7 +541,12 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                 timeline = json.loads(timing_file.read_text())
                 assert not timeline["overflow"] and len(timeline["events"]) <= 512
                 assert "PRIVATE" not in timing_file.read_text()
+                assert timeline["scan_rejection"] == report["scan_rejection"]
+                if report["failure"] == "scan_context_changed":
+                    assert report["scan_rejection"]["violations"] == ["unsupported_screen"]
+                    assert not report["scan_rejection"]["before_arm"]
                 if outcome == "success":
+                    assert report["scan_rejection"] is None
                     assert not timeline["poll_active_at_snapshot"]
                     assert len([e for e in timeline["events"] if e["event"] == "tx_intent"]) == 60
                     assert (

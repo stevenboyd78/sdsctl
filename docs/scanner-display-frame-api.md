@@ -571,6 +571,20 @@ Timing phases have deliberately limited meanings:
 | `parsed_packet` | Typed parsing succeeded and packet callback ran | Delivery to the command's waiting queue |
 | `scope_exit` | Runtime read reservation exits | Completed cache validation |
 | `cache_complete` | Admitted background poll returned or raised | Successful read; inspect failure categories |
+| `context_rejected` | Existing CLOCK selector refused a scanner update | A physical screen change or scanner fault |
+
+In the explicit timing case only, the first refused update also supplies a
+private `scan_rejection` summary in the result and `timing.json`. It identifies
+non-PSI data, unsupported screen/mode pairing, a missing/multiple System record,
+duplicate tags or excluded record types. Only fixed command/screen/mode/tag
+labels, bounded counts, booleans and a monotonic timestamp are retained. System
+and unknown-duplicate counts saturate at two; record count saturates at 256.
+Unknown strings become `other`; XML, attributes, text and scanner names are
+never copied. An unrecognized selector rule is reported as
+`unclassified_rejection`, not a guessed reason. These explanations do not
+authorize reads: the existing selector remains authoritative and unchanged.
+The first summary cannot be replaced by later updates; snapshots are defensive
+copies. Pre-arm refusals remain pre-arm and cannot enable a read.
 
 `scripts/observe_supplemental_timing.py --observe-75s` is a separate explicit
 receive-only observer, not a trigger. It must run in the same acceptance
@@ -587,6 +601,19 @@ local publication after parsing: either can time out while producing different
 phase orders. These tests validate the diagnostic, not the explanation of the
 earlier hardware result. Do not widen deadlines, retry an uncertain read, or
 enable ordinary acquisition based on these simulations.
+
+The first timing hardware trial on 2026-09-18 stopped at 42.56 seconds with
+`scan_context_changed` after 21 FQK and 21 DTM reads. All 42 complete software
+phase sequences were retained without overflow; maximum scope-to-cache times
+were 78.139ms for FQK and 68.519ms for DTM. The 75-second passive observer saw
+144 trunk/conventional PSI updates, all 42 replies and no decoding errors.
+The operator reported normal physical scanning. This is a physical pass but
+**not** a completed 60-read qualification, nor an explanation of the earlier
+timeout. That source did not retain the rejected update's structure; the coarse
+screen kinds cannot establish which stricter selector rule rejected it. The
+normal image was restored and the case closed without retry. First-refusal
+structural evidence was added afterward and requires its own fresh hardware
+case before claiming the stop has been explained.
 
 ### Internal supplemental projection (not yet rendered)
 
