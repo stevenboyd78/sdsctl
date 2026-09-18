@@ -187,6 +187,29 @@ def test_selector_remains_authority_if_diagnostic_labels_drift(trial, monkeypatc
     assert window.failure == "scan_context_changed" and not window.allow_poll()
 
 
+@pytest.mark.parametrize("trial", [(True, True)], indirect=True)
+def test_diagnostic_fault_cannot_bypass_stop_or_leak_exception(trial, monkeypatch):
+    window, scanner, cache, _, psi = trial
+    assert window.arm()
+    psi()
+    assert cache.poll_once()
+
+    def broken_diagnostic(_info):
+        raise RuntimeError("PRIVATE_DIAGNOSTIC_ERROR")
+
+    monkeypatch.setattr(launcher, "scan_context_shape", broken_diagnostic)
+    window.observe_psi(None)
+    assert window.closed and window.failure == "scan_context_changed"
+    assert window.report()["scan_rejection"] == {
+        "schema": 1,
+        "violations": ["diagnostic_unavailable"],
+    }
+    psi()
+    cache.poll_once()
+    assert len(scanner.reads) == 1 and not window.allow_poll()
+    assert "PRIVATE" not in json.dumps(window.report()) + json.dumps(window.timing_report())
+
+
 def test_maximum_allowlisted_report_stays_small_and_does_not_retain_mutable_input():
     info = frame(records="".join(f"<{tag}/><{tag}/>" for tag in sorted(launcher.DIAGNOSTIC_TAGS)))
     summary = launcher.scan_context_shape(info)

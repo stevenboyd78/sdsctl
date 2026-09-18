@@ -238,17 +238,22 @@ class ReadWindow:
             if self.closed:
                 return
             if _selection(info, DisplayReadKind.CLOCK) is None:
-                if self.timing:
-                    self.scan_rejection = {
-                        **scan_context_shape(info),
-                        "monotonic_seconds": self.clock(),
-                        "before_arm": self.started is None,
-                    }
-                    # A future selector change must not be explained by stale labels.
-                    if not self.scan_rejection["violations"]:
-                        self.scan_rejection["violations"] = ["unclassified_rejection"]
-                    self.record_timing("context_rejected")
-                self.stop("scan_context_changed")
+                try:
+                    if self.timing:
+                        self.scan_rejection = {
+                            **scan_context_shape(info),
+                            "monotonic_seconds": self.clock(),
+                            "before_arm": self.started is None,
+                        }
+                        # A future selector change must not be explained by stale labels.
+                        if not self.scan_rejection["violations"]:
+                            self.scan_rejection["violations"] = ["unclassified_rejection"]
+                        self.record_timing("context_rejected")
+                except Exception:
+                    # Observability cannot defeat the original guard or leak error text.
+                    self.scan_rejection = {"schema": 1, "violations": ["diagnostic_unavailable"]}
+                finally:
+                    self.stop("scan_context_changed")
                 return
             now = self.clock()
             if self.latest_psi is not None:

@@ -585,6 +585,8 @@ never copied. An unrecognized selector rule is reported as
 authorize reads: the existing selector remains authoritative and unchanged.
 The first summary cannot be replaced by later updates; snapshots are defensive
 copies. Pre-arm refusals remain pre-arm and cannot enable a read.
+If structural diagnostics fail, the original guard still closes the window;
+only `diagnostic_unavailable` is retained, never exception text.
 
 `scripts/observe_supplemental_timing.py --observe-75s` is a separate explicit
 receive-only observer, not a trigger. It must run in the same acceptance
