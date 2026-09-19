@@ -122,7 +122,9 @@ def _selection(info: ScannerInfo, kind: DisplayReadKind) -> tuple[int, ...] | No
         return None
     modes = {
         "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
-        "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+        # Uniden Remote Command V1.02 p18; Scan Mode also observed on SDS200.
+        # Exact same-family labels only, not the display adapter's transitions.
+        "conventional_scan": {"Scan Mode", "Scan Hold"},
     }
     if info.screen is None or info.mode not in modes.get(info.screen, set()):
         return None

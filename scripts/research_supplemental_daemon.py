@@ -43,10 +43,9 @@ CONTEXT_DIAGNOSTIC_SCHEMA = 2
 # Diagnostic recognition below is deliberately broader than this policy mirror.
 SCAN_MODES = {
     "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
-    "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+    "conventional_scan": {"Scan Mode", "Scan Hold"},
 }
 # Remote Command Specification V1.02 p18, reviewed separately from admission.
-# In particular Scan Mode / Scan Hold are NOT the selector's conventional labels.
 # Recognizing one here never authorizes a read or a presentation exception.
 DOCUMENTED_MODES = frozenset(
     {
@@ -66,9 +65,7 @@ DOCUMENTED_MODES = frozenset(
         "Menu tree",
     }
 )
-DIAGNOSTIC_MODES = DOCUMENTED_MODES | frozenset(
-    mode for choices in SCAN_MODES.values() for mode in choices
-)
+DIAGNOSTIC_MODES = DOCUMENTED_MODES
 DUAL_WATCH_VALUES = {
     "PRI": frozenset({"Off", "DND", "Priority"}),
     "CC": frozenset({"Off", "DND", "Priority"}),
@@ -144,8 +141,6 @@ def scan_context_shape(info):
     mode_class = "unrecognized" if mode == "other" else mode
     if info.mode in DOCUMENTED_MODES:
         mode_class = "documented"
-    elif info.mode in DIAGNOSTIC_MODES:
-        mode_class = "selector_only"
     # Use records, not the lossy nodes map, and never choose a duplicate's values.
     watches = info.records_by_tag("DualWatch")
     record_status = "single" if len(watches) == 1 else "duplicate"

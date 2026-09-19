@@ -199,6 +199,34 @@ def test_global_reads_do_not_need_or_invent_an_assigned_key(scanner, kind):
     assert attempt(kind).run(scanner, operator_ready=True, timeout=0.1).sample is not None
 
 
+@pytest.mark.parametrize("mode", ["Scan Mode", "Scan Hold"])
+@pytest.mark.parametrize(
+    "kind,wire",
+    [
+        (DisplayReadKind.CLOCK, "DTM"),
+        (DisplayReadKind.FAVORITES, "FQK"),
+        (DisplayReadKind.SYSTEM, "SQK,1"),
+        (DisplayReadKind.DEPARTMENT, "DQK,1,23"),
+    ],
+)
+def test_corrected_conventional_labels_work_through_one_shot_lifecycle(scanner, mode, kind, wire):
+    scanner.frame = ScannerInfoParser().parse(
+        "PSI",
+        f'<ScannerInfo Mode="{mode}" V_Screen="conventional_scan">'
+        '<MonitorList Q_Key="01"/><System Q_Key="23"/><ConvFrequency/>'
+        '<Department/><Property/><DualWatch PRI="Off" CC="Off" WX="Priority"/>'
+        "<OverWrite/></ScannerInfo>",
+    )
+    probe = attempt(kind)
+    result = probe.run(scanner, operator_ready=True, timeout=0.15)
+    assert result.status == "reply_and_psi_observed" and result.failure is None
+    assert result.read_reserved and result.response_validated
+    assert result.normal_psi_after_response >= 2
+    assert scanner.commands == [wire] and scanner.scope_depth == scanner.hooks == 0
+    with pytest.raises(DisplayReadRefused, match="already attempted"):
+        probe.run(scanner, operator_ready=True, timeout=0.15)
+
+
 @pytest.mark.parametrize(
     "kind,favorites,system",
     [

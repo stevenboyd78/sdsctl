@@ -99,10 +99,10 @@ def trial(request):
     session = cache.begin_session()
     sequence = 0
 
-    def psi():
+    def psi(info=None):
         nonlocal sequence
         sequence += 1
-        window.observe_psi(normal_psi(favorites="None", system="None"))
+        window.observe_psi(normal_psi(favorites="None", system="None") if info is None else info)
         activate(cache, session, QuickKeySelection(None, None), sequence=sequence)
 
     old_reply, old_clock = scanner.reply, scanner.clock_reply

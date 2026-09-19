@@ -35,7 +35,7 @@ def frame(*, command="PSI", screen="trunk_scan", mode="Trunk Scan", records="<Sy
         (frame(records="<System/><PopupScreen/>"), ["excluded_record_tag"]),
         (frame(records="<System/><ConvFrequency/>"), ["excluded_record_tag"]),
         (
-            frame(screen="conventional_scan", mode="Conventional Scan", records="<System/><TGID/>"),
+            frame(screen="conventional_scan", mode="Scan Mode", records="<System/><TGID/>"),
             ["excluded_record_tag"],
         ),
         (
@@ -73,13 +73,10 @@ def test_documented_labels_are_independent_of_read_eligibility():
         "Close Call",
         "Menu tree",
     } == launcher.DOCUMENTED_MODES
-    assert {
-        "Conventional Scan",
-        "Conventional Scan Hold",
-    } == launcher.DIAGNOSTIC_MODES - launcher.DOCUMENTED_MODES
+    assert launcher.DIAGNOSTIC_MODES == launcher.DOCUMENTED_MODES
     assert {
         "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
-        "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+        "conventional_scan": {"Scan Mode", "Scan Hold"},
     } == launcher.SCAN_MODES
 
 
@@ -95,9 +92,9 @@ def test_documented_modes_retained_as_exact_diagnostic_labels_only(mode):
 
 
 @pytest.mark.parametrize("mode", ["Conventional Scan", "Conventional Scan Hold"])
-def test_selector_only_labels_are_not_misrepresented_as_documented(mode):
+def test_former_selector_only_labels_are_unrecognized_and_refused(mode):
     summary = launcher.scan_context_shape(frame(mode=mode))
-    assert summary["mode"] == mode and summary["mode_class"] == "selector_only"
+    assert summary["mode"] == "other" and summary["mode_class"] == "unrecognized"
     assert summary["violations"] == ["mode_mismatch"]
 
 
@@ -219,7 +216,7 @@ def test_newly_classified_mode_still_stops_reads_and_keeps_first_evidence(trial,
 
 @pytest.mark.parametrize("tag", sorted(launcher.EXCLUDED_SCAN_TAGS))
 @pytest.mark.parametrize(
-    "screen,mode", [("trunk_scan", "Trunk Scan"), ("conventional_scan", "Conventional Scan")]
+    "screen,mode", [("trunk_scan", "Trunk Scan"), ("conventional_scan", "Scan Mode")]
 )
 def test_every_excluded_tag_is_named_without_values(tag, screen, mode):
     info = frame(
@@ -236,7 +233,17 @@ def test_every_excluded_tag_is_named_without_values(tag, screen, mode):
 
 @pytest.mark.parametrize("command", ["PSI", "GSI", "PRIVATE_COMMAND"])
 @pytest.mark.parametrize("screen", ["trunk_scan", "conventional_scan", None, "PRIVATE_SCREEN"])
-@pytest.mark.parametrize("mode", [*sorted(launcher.DIAGNOSTIC_MODES), None, "", "PRIVATE_MODE"])
+@pytest.mark.parametrize(
+    "mode",
+    [
+        *sorted(launcher.DIAGNOSTIC_MODES),
+        "Conventional Scan",
+        "Conventional Scan Hold",
+        None,
+        "",
+        "PRIVATE_MODE",
+    ],
+)
 @pytest.mark.parametrize(
     "records",
     [
@@ -252,7 +259,7 @@ def test_every_excluded_tag_is_named_without_values(tag, screen, mode):
 def test_diagnostic_explanation_matches_clock_and_favorites_selector(
     command, screen, mode, records
 ):
-    """Mirrored labels cannot silently drift from the unchanged admission code."""
+    """Mirrored labels cannot silently drift from the authoritative selector."""
     info = frame(command=command, screen=screen, mode=mode, records=records)
     rejected = bool(launcher.scan_context_shape(info)["violations"])
     for kind in (DisplayReadKind.CLOCK, DisplayReadKind.FAVORITES):

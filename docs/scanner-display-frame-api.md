@@ -582,7 +582,7 @@ and unknown-duplicate counts saturate at two; record count saturates at 256.
 Unknown strings become `other`; XML, free-form attributes, text and scanner names
 are never copied. An unrecognized selector rule is reported as
 `unclassified_rejection`, not a guessed reason. These explanations do not
-authorize reads: the existing selector remains authoritative and unchanged.
+authorize reads: the selector remains authoritative.
 The first summary cannot be replaced by later updates; snapshots are defensive
 copies. Pre-arm refusals remain pre-arm and cannot enable a read.
 If structural diagnostics fail, the original guard still closes the window;
@@ -592,9 +592,14 @@ Private context-diagnostic schema 2 separates label recognition from read
 eligibility. It recognizes the exact 14 `Mode` labels in Uniden Remote Command
 Specification V1.02 p18, without trimming or case folding. Missing and empty
 labels are distinct; unknown labels remain `other`. A separate `mode_class`
-distinguishes documented labels from the existing selector-only
-`Conventional Scan` / `Conventional Scan Hold` labels. In particular, documenting
-`Scan Mode` / `Scan Hold` does not silently add them to read admission.
+identifies documented labels, missing/empty values and unrecognized values.
+The corrected conventional read selector uses exact `Scan Mode` / `Scan Hold`
+only with `conventional_scan`; trunk modes still require `trunk_scan`.
+The previous, undocumented `Conventional Scan` / `Conventional Scan Hold`
+aliases are no longer admitted or classified as recognized diagnostic labels.
+All other selector guards remain unchanged. Recognizing a label does not bypass
+screen pairing, record validation or runtime admission, and the presentation
+adapter's cross-family and Close Call exceptions are not reader exceptions.
 
 The report also lists only fixed recognized record tags and the exact documented
 `PRI`, `CC`, and `WX` enums from a single `DualWatch` record. Missing or duplicate
@@ -644,6 +649,24 @@ Schema 1 classified that Mode as `other`, not its literal value: it could not
 distinguish a documented-but-ineligible label from missing/unknown data. Schema 2
 addresses that diagnostic limitation only; it cannot retrospectively recover the
 value, explain the earlier timeout or qualify read admission during a transition.
+
+The mode-diagnostic trial then identified an exact same-family mismatch:
+`conventional_scan` with `Scan Mode`. All four reads completed in 19.0-39.3ms
+before that refusal, without a timeout; the operator reported that scanning
+appeared to stay normal. The 75-second passive observer saw all four replies
+and 140 PSI updates without decoding errors. WX Priority was reported, but no
+causal attribution is made. The case is closed, normal restoration passed, and
+the 60-read machine qualification remains unconfirmed.
+
+The follow-up label correction replaces the undocumented conventional aliases
+with exact `Scan Mode` / `Scan Hold` as listed on p18. It applies to the shared
+research selector for all four read kinds; scoped requests still require valid
+assigned quick keys, while the continuity trial remains global DTM/FQK only.
+No timeout, quota, runtime exclusion, record guard, retry policy or default
+acquisition setting changes. Synthetic mixed-family qualification and refusal
+tests are not new hardware acceptance. The earlier trunk-mode rejection and
+isolated timeout remain unresolved; a new reviewed candidate and fresh operator
+readiness are required before another live trial.
 
 ### Internal supplemental projection (not yet rendered)
 
