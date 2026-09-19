@@ -579,14 +579,30 @@ non-PSI data, unsupported screen/mode pairing, a missing/multiple System record,
 duplicate tags or excluded record types. Only fixed command/screen/mode/tag
 labels, bounded counts, booleans and a monotonic timestamp are retained. System
 and unknown-duplicate counts saturate at two; record count saturates at 256.
-Unknown strings become `other`; XML, attributes, text and scanner names are
-never copied. An unrecognized selector rule is reported as
+Unknown strings become `other`; XML, free-form attributes, text and scanner names
+are never copied. An unrecognized selector rule is reported as
 `unclassified_rejection`, not a guessed reason. These explanations do not
 authorize reads: the existing selector remains authoritative and unchanged.
 The first summary cannot be replaced by later updates; snapshots are defensive
 copies. Pre-arm refusals remain pre-arm and cannot enable a read.
 If structural diagnostics fail, the original guard still closes the window;
 only `diagnostic_unavailable` is retained, never exception text.
+
+Private context-diagnostic schema 2 separates label recognition from read
+eligibility. It recognizes the exact 14 `Mode` labels in Uniden Remote Command
+Specification V1.02 p18, without trimming or case folding. Missing and empty
+labels are distinct; unknown labels remain `other`. A separate `mode_class`
+distinguishes documented labels from the existing selector-only
+`Conventional Scan` / `Conventional Scan Hold` labels. In particular, documenting
+`Scan Mode` / `Scan Hold` does not silently add them to read admission.
+
+The report also lists only fixed recognized record tags and the exact documented
+`PRI`, `CC`, and `WX` enums from a single `DualWatch` record. Missing or duplicate
+records have no selected attribute values; missing, empty and unknown attributes
+are not treated as Off. No other attributes are retained. These private facts
+can distinguish a known transition from absent/unrecognized data without copying
+the presentation adapter's exceptions into the reader. Neither these categories
+nor synthetic tests establish that extra reads are safe during such transitions.
 
 `scripts/observe_supplemental_timing.py --observe-75s` is a separate explicit
 receive-only observer, not a trigger. It must run in the same acceptance
@@ -613,9 +629,21 @@ The operator reported normal physical scanning. This is a physical pass but
 **not** a completed 60-read qualification, nor an explanation of the earlier
 timeout. That source did not retain the rejected update's structure; the coarse
 screen kinds cannot establish which stricter selector rule rejected it. The
-normal image was restored and the case closed without retry. First-refusal
-structural evidence was added afterward and requires its own fresh hardware
-case before claiming the stop has been explained.
+normal image was restored and the case closed without retry.
+
+The subsequent context-diagnostic trial on the same day stopped after 2.58
+seconds and three completed reads. Its first rejected PSI reported `trunk_scan`
+with only `mode_mismatch`, one System record, eleven records total and no
+duplicate/excluded tags. All reads completed in 40.8-65.1ms without a timeout;
+the rejection followed the final completion. The operator noticed no abnormal
+physical behavior. The complete 75-second observer saw all three replies and
+141 PSI updates without decoding errors. Normal restoration passed, and the
+case is closed with machine qualification still unconfirmed.
+
+Schema 1 classified that Mode as `other`, not its literal value: it could not
+distinguish a documented-but-ineligible label from missing/unknown data. Schema 2
+addresses that diagnostic limitation only; it cannot retrospectively recover the
+value, explain the earlier timeout or qualify read admission during a transition.
 
 ### Internal supplemental projection (not yet rendered)
 

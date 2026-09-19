@@ -55,6 +55,168 @@ def test_specific_refusal_facts_match_existing_guard(info, violations):
     assert launcher.scan_context_shape(info)["violations"] == violations
 
 
+def test_documented_labels_are_independent_of_read_eligibility():
+    # Uniden Remote Command Specification V1.02 p18. Not a firmware-support list.
+    assert {
+        "Scan Mode",
+        "Scan Hold",
+        "Tone-Out",
+        "Custom Search",
+        "Custom Search Hold",
+        "Quick Search",
+        "Quick Search Hold",
+        "Service Scan",
+        "Service Scan Hold",
+        "Trunk Scan",
+        "Trunk Scan Hold",
+        "Close Call Only",
+        "Close Call",
+        "Menu tree",
+    } == launcher.DOCUMENTED_MODES
+    assert {
+        "Conventional Scan",
+        "Conventional Scan Hold",
+    } == launcher.DIAGNOSTIC_MODES - launcher.DOCUMENTED_MODES
+    assert {
+        "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
+        "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+    } == launcher.SCAN_MODES
+
+
+@pytest.mark.parametrize("mode", sorted(launcher.DOCUMENTED_MODES))
+def test_documented_modes_retained_as_exact_diagnostic_labels_only(mode):
+    info = frame(mode=mode)
+    summary = launcher.scan_context_shape(info)
+    assert summary["schema"] == 2
+    assert summary["mode"] == mode and summary["mode_class"] == "documented"
+    assert ("mode_mismatch" in summary["violations"]) == (
+        mode not in {"Trunk Scan", "Trunk Scan Hold"}
+    )
+
+
+@pytest.mark.parametrize("mode", ["Conventional Scan", "Conventional Scan Hold"])
+def test_selector_only_labels_are_not_misrepresented_as_documented(mode):
+    summary = launcher.scan_context_shape(frame(mode=mode))
+    assert summary["mode"] == mode and summary["mode_class"] == "selector_only"
+    assert summary["violations"] == ["mode_mismatch"]
+
+
+@pytest.mark.parametrize(
+    "mode,label,classification",
+    [
+        (None, "missing", "missing"),
+        ("", "empty", "empty"),
+        (" ", "other", "unrecognized"),
+        ("Scan Mode ", "other", "unrecognized"),
+        ("scan mode", "other", "unrecognized"),
+        ("missing", "other", "unrecognized"),
+        ("empty", "other", "unrecognized"),
+        ("PRIVATE_MODE\nTrunk Scan", "other", "unrecognized"),
+    ],
+)
+def test_missing_empty_and_unknown_modes_are_not_conflated_or_normalized(
+    mode, label, classification
+):
+    summary = launcher.scan_context_shape(frame(mode=mode))
+    assert summary["mode"] == label and summary["mode_class"] == classification
+    assert summary["violations"] == ["mode_mismatch"]
+    assert "PRIVATE" not in json.dumps(summary)
+
+
+@pytest.mark.parametrize(
+    "attribute,label", [("", "missing"), ('Mode=""', "empty"), ('Mode="Scan Mode"', "Scan Mode")]
+)
+def test_parser_to_diagnostic_preserves_mode_presence_without_translation(attribute, label):
+    parsed = ScannerInfoParser().parse(
+        "PSI", f'<ScannerInfo {attribute} V_Screen="trunk_scan"><System/></ScannerInfo>'
+    )
+    summary = launcher.scan_context_shape(parsed)
+    assert summary["mode"] == label
+    assert summary["violations"] == ["mode_mismatch"]
+    assert _selection(parsed, DisplayReadKind.CLOCK) is None
+
+
+@pytest.mark.parametrize("pri", ["Off", "DND", "Priority"])
+@pytest.mark.parametrize("cc", ["Off", "DND", "Priority"])
+@pytest.mark.parametrize("wx", ["Off", "Priority"])
+def test_only_exact_documented_watch_enums_and_fixed_record_names_retained(pri, cc, wx):
+    info = frame(
+        mode="Close Call",
+        records=f'<System Name="PRIVATE"/><TGID/><SiteFrequency/><Property/>'
+        f'<DualWatch PRI="{pri}" CC="{cc}" WX="{wx}" Private="SECRET"/>'
+        '<InfoArea1 Text="SECRET"/><OverWrite Text="SECRET"/><PrivateTag/>',
+    )
+    summary = launcher.scan_context_shape(info)
+    assert summary["dual_watch"] == {"record_status": "single", "PRI": pri, "CC": cc, "WX": wx}
+    assert summary["present_known_tags"] == [
+        "DualWatch",
+        "InfoArea1",
+        "OverWrite",
+        "Property",
+        "SiteFrequency",
+        "System",
+        "TGID",
+    ]
+    assert summary["violations"] == ["mode_mismatch"]
+    assert _selection(info, DisplayReadKind.CLOCK) is None
+    assert "SECRET" not in json.dumps(summary) and "PRIVATE" not in json.dumps(summary)
+    assert "PrivateTag" not in json.dumps(summary)
+
+
+@pytest.mark.parametrize("attribute", ["PRI", "CC", "WX"])
+@pytest.mark.parametrize(
+    "value,label", [(None, "missing"), ("", "empty"), ("PRIVATE", "other"), ("off", "other")]
+)
+def test_watch_attributes_do_not_default_missing_or_unknown_to_off(attribute, value, label):
+    raw = "" if value is None else f'{attribute}="{value}"'
+    summary = launcher.scan_context_shape(frame(records=f"<System/><DualWatch {raw}/>"))
+    assert summary["dual_watch"][attribute] == label
+    assert "PRIVATE" not in json.dumps(summary)
+    wx = launcher.scan_context_shape(frame(records='<System/><DualWatch WX="DND"/>'))
+    assert wx["dual_watch"]["WX"] == "other"
+
+
+@pytest.mark.parametrize(
+    "body,status",
+    [
+        ("", "missing"),
+        ('<DualWatch CC="Off"/><DualWatch CC="DND"/>', "duplicate"),
+    ],
+)
+def test_missing_or_duplicate_watch_record_has_no_guessed_attributes(body, status):
+    summary = launcher.scan_context_shape(frame(records="<System/>" + body))
+    assert summary["dual_watch"] == {"record_status": status}
+
+
+def test_watch_evidence_comes_from_ordered_records_not_lossy_node_map():
+    info = frame(records='<System/><DualWatch CC="DND"/>')
+    deceptive_nodes = frame(records='<System/><DualWatch CC="Off"/>').nodes
+    summary = launcher.scan_context_shape(replace(info, nodes=deceptive_nodes))
+    assert summary["dual_watch"]["CC"] == "DND"
+
+
+@pytest.mark.parametrize("trial", [(True, True)], indirect=True)
+@pytest.mark.parametrize("mode", ["Scan Mode", "Scan Hold", "Close Call", "Menu tree", None, ""])
+def test_newly_classified_mode_still_stops_reads_and_keeps_first_evidence(trial, mode):
+    window, scanner, cache, clock, psi = trial
+    assert window.arm()
+    psi()
+    assert cache.poll_once() and len(scanner.reads) == 1
+    clock.now = 10.5
+    window.observe_psi(frame(mode=mode, records='<System/><TGID/><DualWatch CC="DND"/>'))
+    first = window.report()["scan_rejection"]
+    assert first["violations"] == ["mode_mismatch"]
+    assert window.closed and not window.allow_poll()
+    window.observe_psi(frame(mode="Close Call Only"))
+    psi()
+    cache.poll_once()
+    assert len(scanner.reads) == 1 and window.report()["scan_rejection"] == first
+    copied = window.timing_report()["scan_rejection"]
+    copied["dual_watch"]["CC"] = "Off"
+    copied["present_known_tags"].clear()
+    assert window.report()["scan_rejection"] == first
+
+
 @pytest.mark.parametrize("tag", sorted(launcher.EXCLUDED_SCAN_TAGS))
 @pytest.mark.parametrize(
     "screen,mode", [("trunk_scan", "Trunk Scan"), ("conventional_scan", "Conventional Scan")]
@@ -74,9 +236,7 @@ def test_every_excluded_tag_is_named_without_values(tag, screen, mode):
 
 @pytest.mark.parametrize("command", ["PSI", "GSI", "PRIVATE_COMMAND"])
 @pytest.mark.parametrize("screen", ["trunk_scan", "conventional_scan", None, "PRIVATE_SCREEN"])
-@pytest.mark.parametrize(
-    "mode", ["Trunk Scan", "Trunk Scan Hold", "Conventional Scan", "Conventional Scan Hold", None]
-)
+@pytest.mark.parametrize("mode", [*sorted(launcher.DIAGNOSTIC_MODES), None, "", "PRIVATE_MODE"])
 @pytest.mark.parametrize(
     "records",
     [
@@ -201,7 +361,7 @@ def test_diagnostic_fault_cannot_bypass_stop_or_leak_exception(trial, monkeypatc
     window.observe_psi(None)
     assert window.closed and window.failure == "scan_context_changed"
     assert window.report()["scan_rejection"] == {
-        "schema": 1,
+        "schema": 2,
         "violations": ["diagnostic_unavailable"],
     }
     psi()

@@ -37,12 +37,42 @@ CONTINUITY_MAX_OPPORTUNITIES = 60
 CONTINUITY_WINDOW_SECONDS = 64.0
 CONTINUITY_MAX_PSI_GAP = 2.0
 TIMING_EVENT_LIMIT = 512
+CONTEXT_DIAGNOSTIC_SCHEMA = 2
 
-# Diagnostic labels mirror the CLOCK selector, but never make admission decisions.
-# Unknown strings are reduced to fixed categories, never copied into evidence.
+# Violation rules mirror the CLOCK selector, but never make admission decisions.
+# Diagnostic recognition below is deliberately broader than this policy mirror.
 SCAN_MODES = {
     "trunk_scan": {"Trunk Scan", "Trunk Scan Hold"},
     "conventional_scan": {"Conventional Scan", "Conventional Scan Hold"},
+}
+# Remote Command Specification V1.02 p18, reviewed separately from admission.
+# In particular Scan Mode / Scan Hold are NOT the selector's conventional labels.
+# Recognizing one here never authorizes a read or a presentation exception.
+DOCUMENTED_MODES = frozenset(
+    {
+        "Scan Mode",
+        "Scan Hold",
+        "Tone-Out",
+        "Custom Search",
+        "Custom Search Hold",
+        "Quick Search",
+        "Quick Search Hold",
+        "Service Scan",
+        "Service Scan Hold",
+        "Trunk Scan",
+        "Trunk Scan Hold",
+        "Close Call Only",
+        "Close Call",
+        "Menu tree",
+    }
+)
+DIAGNOSTIC_MODES = DOCUMENTED_MODES | frozenset(
+    mode for choices in SCAN_MODES.values() for mode in choices
+)
+DUAL_WATCH_VALUES = {
+    "PRI": frozenset({"Off", "DND", "Priority"}),
+    "CC": frozenset({"Off", "DND", "Priority"}),
+    "WX": frozenset({"Off", "Priority"}),
 }
 EXCLUDED_SCAN_TAGS = frozenset(
     {
@@ -68,17 +98,32 @@ DIAGNOSTIC_TAGS = EXCLUDED_SCAN_TAGS | {
     "TGID",
     "ConvFrequency",
     "Property",
+    "SiteFrequency",
+    "DualWatch",
+    "InfoArea1",
+    "InfoArea2",
+    "OverWrite",
 }
+
+
+def diagnostic_label(value, allowed):
+    """Exact fixed labels only; never trim, fold, interpolate or retain unknowns."""
+    if value is None:
+        return "missing"
+    if value == "":
+        return "empty"
+    return value if value in allowed else "other"
 
 
 def scan_context_shape(info):
     """Bounded structural facts only; not a selector and not proof of a radio fault.
 
-    Counts saturate at their documented caps. No attributes, raw XML, arbitrary
-    tags, or unrecognized mode/screen/command strings enter this report.
+    Counts saturate at their documented caps. Only documented DualWatch enum
+    attributes are classified, from one unambiguous record. No raw XML, other
+    attributes, arbitrary tags or unrecognized values enter this report.
     """
     if not isinstance(info, ScannerInfo):
-        return {"schema": 1, "violations": ["not_scanner_info"]}
+        return {"schema": CONTEXT_DIAGNOSTIC_SCHEMA, "violations": ["not_scanner_info"]}
     counts = Counter(record.tag for record in info.records)
     modes = SCAN_MODES.get(info.screen)
     excluded = EXCLUDED_SCAN_TAGS | {"ConvFrequency" if info.screen == "trunk_scan" else "TGID"}
@@ -95,13 +140,32 @@ def scan_context_shape(info):
         violations.append("duplicate_record_tag")
     if excluded.intersection(counts):
         violations.append("excluded_record_tag")
-    known_modes = {mode for choices in SCAN_MODES.values() for mode in choices}
+    mode = diagnostic_label(info.mode, DIAGNOSTIC_MODES)
+    mode_class = "unrecognized" if mode == "other" else mode
+    if info.mode in DOCUMENTED_MODES:
+        mode_class = "documented"
+    elif info.mode in DIAGNOSTIC_MODES:
+        mode_class = "selector_only"
+    # Use records, not the lossy nodes map, and never choose a duplicate's values.
+    watches = info.records_by_tag("DualWatch")
+    record_status = "single" if len(watches) == 1 else "duplicate"
+    if not watches:
+        record_status = "missing"
+    dual_watch = {"record_status": record_status}
+    if len(watches) == 1:
+        dual_watch.update(
+            (name, diagnostic_label(watches[0].get(name), allowed))
+            for name, allowed in DUAL_WATCH_VALUES.items()
+        )
     return {
-        "schema": 1,
+        "schema": CONTEXT_DIAGNOSTIC_SCHEMA,
         "violations": violations,
         "command": info.command if info.command in {"PSI", "GSI"} else "other",
         "screen": info.screen if info.screen in SCAN_MODES else "other",
-        "mode": info.mode if info.mode in known_modes else "other",
+        "mode": mode,
+        "mode_class": mode_class,
+        "present_known_tags": sorted(DIAGNOSTIC_TAGS.intersection(counts)),
+        "dual_watch": dual_watch,
         "system_record_count": min(counts["System"], 2),
         "system_record_count_cap": 2,
         "record_count": min(len(info.records), 256),
@@ -251,7 +315,10 @@ class ReadWindow:
                         self.record_timing("context_rejected")
                 except Exception:
                     # Observability cannot defeat the original guard or leak error text.
-                    self.scan_rejection = {"schema": 1, "violations": ["diagnostic_unavailable"]}
+                    self.scan_rejection = {
+                        "schema": CONTEXT_DIAGNOSTIC_SCHEMA,
+                        "violations": ["diagnostic_unavailable"],
+                    }
                 finally:
                     self.stop("scan_context_changed")
                 return
