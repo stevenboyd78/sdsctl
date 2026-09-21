@@ -14,6 +14,7 @@ import logging
 import threading
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from time import monotonic
 from typing import Protocol
 from uuid import uuid4
@@ -33,6 +34,7 @@ from .scanner_display_adapter import (
     ScannerDisplayAdapter,
     ScannerDisplayAdapterError,
     ScannerDisplayConflict,
+    ScannerDisplayFrame,
     ScannerDisplayStyle,
 )
 from .scanner_display_frame import project_scanner_display_frame
@@ -44,6 +46,27 @@ from .scanner_display_supplemental import (
 DEFAULT_DISPLAY_STALE_SECONDS = 5.0
 _LOGGER = logging.getLogger(__name__)
 _CONFLICT_LOG_INTERVAL_SECONDS = 30.0
+
+
+@dataclass(frozen=True, slots=True)
+class SupplementalDisplayFrameSet:
+    """Internal point-in-time join, not a public payload or future-read authority.
+
+    All layouts use one accepted profile, owner session, PSI sequence and cutoff.
+    Supplemental replies retain independent ages; they were not acquired with
+    that PSI packet. Reacquire the entire set for each subsequent presentation.
+    """
+
+    endpoint_id: str
+    stream_id: str
+    session_id: str
+    sequence: int
+    profile_invalidation: int
+    captured_at: float
+    preferred: ScannerDisplayFrame
+    simple: ScannerDisplayFrame
+    detail: ScannerDisplayFrame
+    supplemental: SupplementalDisplayValues
 
 
 class _ScannerDisplaySource(Protocol):
@@ -251,10 +274,18 @@ class DaemonDisplayFrames:
         return None if self._quick_keys is None else self._quick_keys.clock_snapshot()
 
     def supplemental_values(self) -> SupplementalDisplayValues | None:
-        """Internal candidate projection only; no demand renewal or public API change.
+        """Internal values-only view; do not join this with a later frame read."""
+        capture = self.supplemental_frame_set()
+        return None if capture is None else capture.supplemental
 
-        Re-read the profile barrier and bind the coherent cache cut to exactly
-        this feed session/PSI sequence. Never cache this result for a later frame.
+    def supplemental_frame_set(self) -> SupplementalDisplayFrameSet | None:
+        """Internal coherent projection; no I/O, demand renewal or public change.
+
+        Obtain the immutable profile before taking the callback lock. Under that
+        lock, read the cache and then check PSI freshness at the final cutoff;
+        bind all three layouts and supplemental values to that same context.
+        A concurrent profile reload is observed on a subsequent read, not by
+        mixing a different profile into an already captured frame set.
         """
         if self._quick_keys is None:
             return None
@@ -269,23 +300,37 @@ class DaemonDisplayFrames:
                 or failure is not None
                 or profile.last_good is None
                 or self._session is None
+                or self._session_id is None
                 or self._quick_key_session is None
                 or self._failure is not None
             ):
                 return None
-            if (
-                target != self._profile.scanner_target
-                or self._adapter.quick_key_selection(self._session, now=self._clock()) is None
-            ):
+            if target != self._profile.scanner_target:
                 self._suspend_quick_keys()
                 return None
             try:
                 sample = self._quick_keys.supplemental_snapshot()
-                return project_supplemental_display_values(
+                now = self._clock()
+                if self._adapter.quick_key_selection(self._session, now=now) is None:
+                    self._suspend_quick_keys()
+                    return None
+                supplemental = project_supplemental_display_values(
                     sample,
                     session=self._quick_key_session,
                     sequence=self._sequence,
-                    now=self._clock(),
+                    now=now,
+                )
+                return SupplementalDisplayFrameSet(
+                    endpoint_id=str(self._endpoint_id),
+                    stream_id=self._stream_id,
+                    session_id=self._session_id,
+                    sequence=self._sequence,
+                    profile_invalidation=invalidation,
+                    captured_at=now,
+                    preferred=self._adapter.frame(profile, now=now),
+                    simple=self._adapter.frame(profile, now=now, style=ScannerDisplayStyle.SIMPLE),
+                    detail=self._adapter.frame(profile, now=now, style=ScannerDisplayStyle.DETAIL),
+                    supplemental=supplemental,
                 )
             except Exception:
                 # Auxiliary failure must not hide otherwise-current PSI data.

@@ -406,3 +406,18 @@ def test_explicit_cutoff_rejects_regression_and_cannot_revive_clock(shared, samp
     with pytest.raises(ValueError):
         cache._clock_samples._snapshot_at(11)
     assert cache.clock_snapshot().local_time is None
+
+
+def test_psi_expiring_during_cache_capture_withholds_even_a_fresh_clock(engine, monkeypatch):
+    feed, cache, _, _, clock = engine
+    worker_read_both(engine)
+    original = cache.supplemental_snapshot
+
+    def delayed_capture():
+        sample = original()
+        # PSI arrived at 10, but DTM arrived at 10.5: only PSI is stale here.
+        clock.now = 15.01
+        return sample
+
+    monkeypatch.setattr(cache, "supplemental_snapshot", delayed_capture)
+    assert feed.supplemental_values() is None

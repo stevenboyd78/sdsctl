@@ -88,6 +88,7 @@ def test_default_feed_stays_passive_even_with_qualified_scope(configured):
         assert feed.quick_key_snapshot() is feed.quick_key_worker_status() is None
         assert feed.clock_snapshot() is None
         assert feed.supplemental_values() is None
+        assert feed.supplemental_frame_set() is None
         assert scanner.reads == []
     finally:
         feed.close()

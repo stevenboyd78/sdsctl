@@ -715,10 +715,26 @@ monotonic cutoff under its existing lock. Its identity ticket and PSI sequence
 bind that cut to one owner connection, while each independently acquired reply
 retains its own age. This neither performs I/O nor renews display demand.
 
-The candidate `DaemonDisplayFrames.supplemental_values()` method checks the
+The candidate `DaemonDisplayFrames.supplemental_frame_set()` method checks the
 accepted-profile invalidation barrier, current normal scan, endpoint and exact
-session/PSI sequence before projecting a fresh cut. Auxiliary projection faults
-quarantine that worker without blanking otherwise-current PSI content. No
+session/PSI sequence before projecting a fresh cut. Its frozen internal result
+contains the preferred, Simple and Detail frames plus typed supplemental values,
+the owner stream/session, profile invalidation generation, PSI sequence and one
+monotonic cutoff. The three layouts use the same immutable profile and scanner
+observation. Cache capture precedes the final cutoff and PSI freshness check, so
+a newer clock sample cannot outlive the PSI context that authorizes its use.
+Independent reply ages are advanced to that cutoff; this does not claim that
+PSI, DTM and FQK were acquired simultaneously.
+
+Profile context is obtained before the feed lock. A concurrent successful
+profile reload is observed on a subsequent read, not mixed into the captured
+set. An older invalidation generation cannot lower an already-observed barrier.
+The values-only `supplemental_values()` delegates to this path; consumers must
+not combine that result with a separate later frame read. Neither method grants
+permission to retain a set across later updates or bypass freshness checks.
+
+Auxiliary projection faults quarantine that worker without blanking
+otherwise-current PSI content. No
 transport or command lock is acquired by the projection, and slow profile work
 runs outside the PSI callback lock. Ordinary `snapshot()`/`display.frame` and
 WebUI/TUI/HA output remain unchanged; ordinary startup still has no such cache.
@@ -738,10 +754,21 @@ cross-kind quarantine, global rejection backoff through barriers, retired-sessio
 replies, bounded shutdown, real parser callbacks during reads and yielding to a
 foreground command through the actual owner lane. They are not periodic hardware
 acceptance. A quarantined auxiliary reader leaves a current PSI display intact.
+Frame-join regressions also cover PSI expiry during cache capture, unchanged
+public payloads, no demand renewal, all-layout coherence, immutability, concurrent
+PSI arrival, profile replacement and reconnects without reusing old replies.
 
-Remaining work is scoped GET qualification, displayed decade/selection and glyph
-mapping, followed by reviewed opt-in deployment and frame projection. Completed
-one-shot clock/Favorites gates do not establish periodic-read safety. Transport
+A separately bounded hardware trial completed 60 shared-reader GETs (30 FQK and
+30 DTM) in about 62 seconds, with all replies and continued qualified PSI. The
+observer reported normal physical scanning. That trial exercised no transition
+withholding/recovery episodes, so its result qualifies that bounded normal-scan
+continuity only, not the unexercised recovery branch or indefinite polling. The
+new internal frame join has offline coverage; it was not part of that trial.
+
+Remaining work includes scoped GET qualification, displayed decade/selection and
+glyph mapping, reviewed opt-in deployment and visible field integration. Completed
+one-shot clock/Favorites gates and bounded continuity do not establish safety for
+unrestricted periodic reads. Transport
 write bounds, foreground control latency, audio and Waterfall continuity also
 need qualification before enabling the reader; synthetic cache tests are not
 that acceptance. Day/Time must remain exact scanner-local data, not a workstation
