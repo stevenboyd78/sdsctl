@@ -16,7 +16,7 @@ from sds200.scanner_display_supplemental_wire import (
 from sds200.scanner_quick_keys import QuickKeySelection
 
 from .test_daemon_display_frames import configured as configured
-from .test_daemon_quick_key_worker import scan
+from .test_daemon_quick_key_worker import scan, wait_for
 from .test_daemon_quick_keys import activate
 from .test_daemon_supplemental_reads import engine as engine
 from .test_daemon_supplemental_reads import read_both, wires, worker_read_both
@@ -69,7 +69,7 @@ def test_complete_owner_join_has_real_independent_sequences_and_no_io(engine, pa
 
 
 def test_psi_and_snapshot_do_not_change_sample_ids_but_successful_reads_do(engine, payload):
-    feed, cache, _, scanner, clock = engine
+    feed, _, _, scanner, clock = engine
     initial = payload["context"]
     scanner.sample(scan("None", "None", "New PSI channel"))
     sample = feed.supplemental_frame_set()
@@ -79,12 +79,14 @@ def test_psi_and_snapshot_do_not_change_sample_ids_but_successful_reads_do(engin
     clock.now = 12
     scanner.sample(scan("None", "None"))
     feed.snapshot()
-    assert cache.poll_once()
+    # This fixture owns a running worker. Observe its committed sample rather
+    # than competing with it for the due read from the test thread.
+    wait_for(lambda: feed.supplemental_frame_set().supplemental.favorites.sample_sequence == 2)
     sample = feed.supplemental_frame_set()
     assert sample.supplemental.favorites.sample_sequence == 2
     assert sample.supplemental.clock.sample_sequence == 1
     clock.now = 12.5
-    assert cache.poll_once()
+    wait_for(lambda: feed.supplemental_frame_set().supplemental.clock.sample_sequence == 2)
     assert feed.supplemental_frame_set().supplemental.clock.sample_sequence == 2
     assert wires(scanner) == ["FQK", "DTM", "FQK", "DTM"]
 
