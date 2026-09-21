@@ -309,6 +309,14 @@ class DisplayFrameReader:
     def alive(self) -> bool:
         return self._thread is not None and self._thread.is_alive()
 
+    def details_snapshot(self) -> str:
+        """Ordinary frames do not negotiate or contain supplemental values."""
+        return ""
+
+    def view_and_details(self) -> tuple[Mapping[str, Any] | None, str, str]:
+        packet, message = self.view()
+        return packet, message, ""
+
     def _accept(self, packet: Mapping[str, Any], started: float) -> None:
         _require(self._endpoint is None or self._endpoint == packet["endpoint_id"])
         identity = packet["stream_id"], packet["session_id"]

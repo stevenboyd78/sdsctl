@@ -29,6 +29,7 @@ from .presentation import ScannerPresentation, present_radio_state
 from .rich_cli import rich_style
 from .scanner import capabilities_for_model
 from .scanner_display_reader import DisplayFrameReader, DisplayFrameSource
+from .scanner_display_supplemental_reader import SupplementalFrameReader, SupplementalFrameSource
 from .scanner_display_tui import MimicScreen, safe_terminal_text
 from .state import RadioStateSnapshot, ScannerScreenKind
 from .theme import (
@@ -489,6 +490,7 @@ class ScannerTuiApp(App[None]):
         managed_stylesheet: str | None = None,
         terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
         display_source: DisplayFrameSource | None = None,
+        supplemental_display_source: SupplementalFrameSource | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -500,6 +502,8 @@ class ScannerTuiApp(App[None]):
             raise ValueError("PSI recovery threshold must be greater than zero")
         if psi_recovery_cooldown < 0:
             raise ValueError("PSI recovery cooldown must not be negative")
+        if display_source is not None and supplemental_display_source is not None:
+            raise ValueError("Choose one Mimic-SDS display source.")
 
         if managed_stylesheet is not None:
             object.__setattr__(
@@ -554,8 +558,12 @@ class ScannerTuiApp(App[None]):
         )
         self._applied_theme_screen_class: str | None = None
         self._terminal_failure_subscribe = terminal_failure_subscribe
-        self._mimic_reader = (
-            DisplayFrameReader(display_source, clock=clock) if display_source else None
+        self._mimic_reader: DisplayFrameReader | SupplementalFrameReader | None = (
+            SupplementalFrameReader(supplemental_display_source, clock=clock)
+            if supplemental_display_source is not None
+            else DisplayFrameReader(display_source, clock=clock)
+            if display_source
+            else None
         )
         self._mimic_screen: MimicScreen | None = None
         self._mimic_style = "preferred"
@@ -2441,6 +2449,7 @@ def run_tui(
     managed_stylesheet: str | None = None,
     terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
     display_source: DisplayFrameSource | None = None,
+    supplemental_display_source: SupplementalFrameSource | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2467,6 +2476,7 @@ def run_tui(
         managed_stylesheet=managed_stylesheet,
         terminal_failure_subscribe=terminal_failure_subscribe,
         display_source=display_source,
+        supplemental_display_source=supplemental_display_source,
     )
     try:
         app.run()

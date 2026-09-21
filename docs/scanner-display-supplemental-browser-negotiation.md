@@ -89,8 +89,10 @@ Another test supplies real authenticated HTTP responses from a real local Unix
 daemon API using a fake scanner/cache owner; delivery produces no extra reads.
 This is not visual browser or physical scanner acceptance.
 
-Still required: explicit shell/dependency activation, equivalent TUI and HA
-consumer lifecycle integration, and the bounded acquisition enable/demand policy.
+The [TUI reader candidate](scanner-display-supplemental-tui.md) now covers the
+equivalent offline TUI lifecycle without activating ordinary startup.
+Still required: explicit shell/dependency activation, HA consumer lifecycle
+integration, and the bounded acquisition enable/demand policy.
 Only after those gates pass should a source-pinned candidate be staged for fresh
 operator-assisted visual and continuity testing. Closed hardware trials stay
 closed. This work does not resolve the separate saved-recording Pause issue.

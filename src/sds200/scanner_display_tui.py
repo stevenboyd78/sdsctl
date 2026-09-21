@@ -20,6 +20,7 @@ from textual.widgets import Static
 from . import __version__
 from .scanner_display_presentation import present_indicator
 from .scanner_display_reader import DisplayFrameReader
+from .scanner_display_supplemental_reader import SupplementalFrameReader
 from .scanner_display_web import scanner_display_browser_contract, scanner_display_empty_message
 from .tui_clock import LocalHeaderClock
 
@@ -211,7 +212,10 @@ class MimicScreen(ModalScreen[None]):
     ]
 
     def __init__(
-        self, reader: DisplayFrameReader, runtime: Callable[[], Text], now: Callable[[], datetime]
+        self,
+        reader: DisplayFrameReader | SupplementalFrameReader,
+        runtime: Callable[[], Text],
+        now: Callable[[], datetime],
     ):
         super().__init__()
         self.reader, self._runtime = reader, runtime
@@ -331,7 +335,7 @@ class MimicScreen(ModalScreen[None]):
     def action_runtime(self) -> None:
         # Palette actions must not stack a second runtime drawer on the first.
         if not any(isinstance(screen, MimicRuntimeScreen) for screen in self.app.screen_stack):
-            packet, _ = self.reader.view()
+            packet, _, supplemental_details = self.reader.view_and_details()
             details = Text("Profile at drawer open — frame polling is paused while covered\n")
             if packet is not None:
                 frame = packet["frames"][self.style]
@@ -356,4 +360,5 @@ class MimicScreen(ModalScreen[None]):
             else:
                 details.append("No current display metadata available.\n")
             details.append("\n")
+            details.append(supplemental_details)
             self.app.push_screen(MimicRuntimeScreen(lambda: details + self.runtime_text()))
