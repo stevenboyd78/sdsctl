@@ -200,7 +200,7 @@ def test_slow_logger_is_off_request_thread_and_queue_is_bounded(monkeypatch):
     assert drained.wait(2) and all(value != threading.get_ident() for value in thread_ids)
 
 
-def test_requested_trace_is_visible_at_default_warning_level_without_private_data():
+def test_requested_trace_is_visible_at_default_warning_level_without_private_data(monkeypatch):
     records = []
     complete = threading.Event()
 
@@ -212,10 +212,13 @@ def test_requested_trace_is_visible_at_default_warning_level_without_private_dat
 
     handler = Handler(logging.WARNING)
     old_level = module.logger.level
+    # Other CLI tests can leave root handlers bound to expired capture streams.
+    # This test owns its sink and handler; it must not write through those roots.
+    monkeypatch.setattr(module.logger, "propagate", False)
     module.logger.addHandler(handler)
     module.logger.setLevel(logging.WARNING)
+    middleware = module.MimicRequestTimingMiddleware(response)
     try:
-        middleware = module.MimicRequestTimingMiddleware(response)
         messages = asyncio.run(invoke(middleware))
         assert messages[0]["status"] == 200 and complete.wait(2)
         assert len(records) == 4
@@ -223,6 +226,9 @@ def test_requested_trace_is_visible_at_default_warning_level_without_private_dat
         assert all(PRIVATE not in record.getMessage() for record in records)
         assert all("dropped=0" in record.getMessage() for record in records)
     finally:
+        # The handler's completion event fires before logger.warning returns.
+        # Drain before restoring propagation or removing the owned handler.
+        middleware._sink._queue.join()
         module.logger.removeHandler(handler)
         module.logger.setLevel(old_level)
 
