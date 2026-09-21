@@ -68,6 +68,7 @@ class SupplementalDisplayFrameSet:
     detail: ScannerDisplayFrame
     supplemental: SupplementalDisplayValues
     context_revision: int = 0
+    source_status: str | None = None
 
 
 class _ScannerDisplaySource(Protocol):
@@ -290,7 +291,7 @@ class DaemonDisplayFrames:
         """
         if self._quick_keys is None:
             return None
-        profile, failure, _, invalidation = self._profile.frame_context()
+        profile, failure, source_status, invalidation = self._profile.frame_context()
         target = self._scanner.endpoint
         with self._lock:
             if not self._profile_barrier(failure, invalidation):
@@ -333,6 +334,7 @@ class DaemonDisplayFrames:
                     detail=self._adapter.frame(profile, now=now, style=ScannerDisplayStyle.DETAIL),
                     supplemental=supplemental,
                     context_revision=sample.context_revision,
+                    source_status=source_status,
                 )
             except Exception:
                 # Auxiliary failure must not hide otherwise-current PSI data.

@@ -273,7 +273,10 @@ def test_candidate_guard_is_not_loaded_served_or_enabled_by_ordinary_dashboard()
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         assert "mimic-supplemental" not in client.get("/").text
         assert client.get("/assets/mimic-supplemental.js").status_code == 404
-        assert "sdsctlSupplemental" not in client.get("/assets/mimic-sds.js").text
+        assert "supplementalContext = null" in client.get("/assets/mimic-sds.js").text
+        assert "supplementalContext" not in client.get("/assets/dashboard.js").text
+    generated = ROOT / "src/sds200/themes/home-assistant/mimic-sds/sds200-mimic-card.js"
+    assert "sdsctlSupplemental" not in generated.read_text()
     text = SCRIPT.read_text()
     for forbidden in (
         "fetch(",

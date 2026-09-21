@@ -26,8 +26,9 @@ def outputs() -> dict[Path, str]:
     web = (ASSETS / "mimic-sds.js").read_text()
     # This prefix is the exact WebUI decoder, safe DOM renderer and bounded reader.
     # Fail if its explicit boundary moves; never maintain a second protocol copy.
-    assert web.count("  function create({host, standard, url, request}) {") == 1
-    core = web.split("  function create({host, standard, url, request}) {")[0]
+    boundary = "  function create({host, standard, url, request, supplementalContext = null}) {"
+    assert web.count(boundary) == 1
+    core = web.split(boundary)[0]
     core = core.replace(
         "__SDSCTL_MIMIC_CONTRACT__",
         json.dumps(scanner_display_browser_contract(), separators=(",", ":")),

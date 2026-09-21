@@ -173,7 +173,7 @@
 
   // Only these local phase identifiers enter diagnostics; never exception text,
   // response bodies, URLs, credentials or scanner/profile values.
-  async function readResponse(response, phase = () => {}, progress = () => {}) {
+  async function readResponse(response, phase = () => {}, progress = () => {}, decoder = decode) {
     phase("http_status");
     require(response.ok);
     phase("content_type");
@@ -201,12 +201,21 @@
     phase("json_decode");
     const payload = JSON.parse(source);
     phase("frame_validation");
-    return decode(payload);
+    return decoder(payload);
   }
 
-  function create({host, standard, url, request}) {
+  function create({host, standard, url, request, supplementalContext = null}) {
+    // Internal opt-in seam only. The normal shell never supplies a context or
+    // loads this dependency. A verified new context requires a new controller;
+    // incoming replies and ordinary status callbacks cannot rebind this guard.
+    const auxiliary = supplementalContext === null ? null : window.sdsctlSupplemental;
+    require(supplementalContext === null ||
+      ["create", "bundle", "present", "favoritesRows"].every(key => typeof auxiliary?.[key] === "function"));
+    const auxiliaryGuard = auxiliary === null ? null : auxiliary.create(supplementalContext);
+    const decoder = auxiliaryGuard === null ? decode
+      : payload => auxiliary.bundle(payload, decode, auxiliaryGuard.context);
     let available = false, active = false, selected = false, stopped = false, closed = false;
-    let generation = 0, controller = null, timer = null, expiryTimer = null;
+    let generation = 0, controller = null, timer = null, expiryTimer = null, auxiliaryTimer = null;
     let latest = null, deadline = null, sequenceDeadline = null, endpoint = null, session = null, sequence = null;
     let style = "preferred", treatment = "strips";
     const toolbar = make("div", undefined, "mimic-toolbar");
@@ -264,11 +273,19 @@
     });
     const rows = make("ul");
     details.append(detailText, failureNote, traceButton, traceNote, rows);
+    const auxiliaryNote = make("p"), favorites = make("pre");
+    if (auxiliaryGuard !== null) {
+      auxiliaryNote.id = "mimic-supplemental-status";
+      favorites.id = "mimic-favorites-states";
+      details.append(auxiliaryNote, favorites);
+    }
     pane.append(status, basis, surround, ledStatus, details);
     host.prepend(toolbar, pane);
     function clear(message) {
       latest = null; deadline = null;
       window.clearTimeout(expiryTimer); expiryTimer = null;
+      window.clearTimeout(auxiliaryTimer); auxiliaryTimer = null;
+      auxiliaryNote.textContent = ""; favorites.textContent = "";
       status.textContent = message; pane.dataset.state = "unavailable";
       basis.textContent = "No current scanner values are shown.";
       surround.replaceChildren(make("div", "Waiting for current scanner data…", "mimic-grid mimic-empty"));
@@ -280,7 +297,17 @@
     function render() {
       if (latest === null) return;
       if (deadline !== null && performance.now() >= deadline) { clear(states.stale); return; }
-      const frame = latest.frames[style];
+      let frame = latest.frames[style];
+      if (auxiliaryGuard !== null) {
+        const values = auxiliaryGuard.snapshot(performance.now() / 1000);
+        frame = auxiliary.present(frame, values, contract.supplemental_clock_regions);
+        auxiliaryNote.textContent = `Scanner clock: ${values.clock.status}. Global Favorites quick keys (00–99, not LCD F0/S0/D0): ${values.favorites.status}.`;
+        favorites.textContent = auxiliary.favoritesRows(values).join("\n");
+        window.clearTimeout(auxiliaryTimer); auxiliaryTimer = null;
+        const remaining = Object.values(values).filter(value => value.status === "current")
+          .map(value => (5 - value.age_seconds) * 1000);
+        if (remaining.length) auxiliaryTimer = window.setTimeout(render, Math.max(1, Math.min(...remaining)));
+      }
       const message = states[frame.status];
       if (status.textContent !== message) status.textContent = message;
       pane.dataset.state = frame.status;
@@ -296,6 +323,7 @@
     function demanded() { return selected && available && active && !stopped && !document.hidden; }
     function cancel(message) {
       generation++; controller?.abort(); controller = null;
+      auxiliaryGuard?.suspend();
       stopTrace("Request tracing is off.");
       window.clearTimeout(timer); timer = null; clear(message);
     }
@@ -304,6 +332,7 @@
       controller = new AbortController();
       const current = controller;
       const started = performance.now();
+      const auxiliaryTicket = auxiliaryGuard?.begin(started / 1000);
       const traceId = tracePrefix !== null && started < traceUntil && traceNumber < 999999
         ? `${tracePrefix}-${++traceNumber}` : null;
       let traceAcknowledged = false;
@@ -327,7 +356,7 @@
         require(!timedOut);
         headersMs = elapsedMs();
         traceAcknowledged = traceId !== null && response.headers.get("x-sdsctl-mimic-trace") === traceId;
-        const data = await readResponse(response, value => {
+        const decoded = await readResponse(response, value => {
           if (!timedOut) {
             phase = value;
             if (value === "utf8_decode") bodyMs = elapsedMs();
@@ -337,17 +366,20 @@
             bytes = size;
             if (firstByteMs === null && size > 0) firstByteMs = elapsedMs();
           }
-        });
+        }, decoder);
         if (ticket !== generation || !demanded()) return;
         // Even a transport/body reader that ignores abort cannot publish a late
         // response as a successful update after this request's deadline.
         require(!timedOut);
+        const data = auxiliaryGuard === null ? decoded : decoded.display;
         phase = "endpoint_identity";
         require(endpoint === null || endpoint === data.endpoint_id);
         const identity = `${data.stream_id}/${data.session_id}`;
         const incoming = data.frames.preferred.sequence;
         phase = "frame_sequence";
         require(identity !== session || incoming === null || sequence === null || incoming >= sequence);
+        if (auxiliaryGuard !== null)
+          auxiliaryGuard.accept(auxiliaryTicket, decoded.supplemental, performance.now() / 1000);
         // Retain the freshness limit even while the screen is cleared or hidden.
         // A repeated sequence cannot renew its lease by reporting a younger age.
         let incomingDeadline = incoming === null ? null : started + (5 - data.frames.preferred.age_seconds) * 1000;
@@ -365,6 +397,7 @@
         if (traceId !== null && tracePrefix !== null) traceNote.textContent = `Last traced update: ${traceId}; App acknowledgement: ${traceAcknowledged ? "received" : "not confirmed"}; elapsed ${elapsedMs()} ms. Tracing stops automatically after 2 minutes. IDs confer no access; missing entries or acknowledgements do not prove non-arrival.`;
       } catch {
         if (ticket === generation && demanded()) {
+          auxiliaryGuard?.suspend();
           const reason = timedOut ? "request_timeout" : phase;
           const interruptedPhase = timeoutPhase ?? phase;
           failures = Math.min(failures + 1, 999999);
@@ -400,7 +433,7 @@
     led.addEventListener("change", () => { treatment = led.value === "border" ? "border" : "strips"; pane.dataset.ledTreatment = treatment; });
     return Object.freeze({
       context(value) { if (closed) return; available = value.available === true; active = value.active === true; stopped = value.stopped === true; reconcile(); },
-      stop() { closed = stopped = true; failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; delete failureNote.dataset.phase; cancel("Session stopped — scanner values cleared."); },
+      stop() { closed = stopped = true; auxiliaryGuard?.close(); failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; delete failureNote.dataset.phase; cancel("Session stopped — scanner values cleared."); },
     });
   }
   window.sdsctlMimic = Object.freeze({create, decode, presentValue, presentIndicator});

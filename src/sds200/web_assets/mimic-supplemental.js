@@ -1,4 +1,4 @@
-/* Internal delivery candidate only. Not loaded or served by any live client.
+/* Internal delivery candidate only. Not loaded or served by the normal dashboard.
  * Pure decoder/expiry guard: no DOM, requests, timers, storage or clock reads.
  * Callers retain one guard per explicitly verified owner context.
  */
@@ -148,5 +148,48 @@
       suspend, close,
     });
   }
-  window.sdsctlSupplemental = Object.freeze({decode, create});
+  function bundle(payload, decodeFrame, binding) {
+    const data = object(payload, ["protocol", "version", "display", "supplemental"]);
+    require(data.protocol === "sdsctl.mimic-supplemental" && data.version === 1);
+    const display = decodeFrame({protocol: "sdsctl.web", version: 1, display: data.display});
+    const auxiliary = decode(data.supplemental);
+    require(contextKeys.every(key => auxiliary.context[key] === binding[key]));
+    require(display.failure === null && display.source_status === "matches_import");
+    for (const key of ["endpoint_id", "stream_id", "session_id"]) require(display[key] === binding[key]);
+    for (const frame of Object.values(display.frames)) {
+      require(frame.profile_revision === binding.profile_revision &&
+        frame.sequence === auxiliary.psi.sequence && frame.age_seconds === auxiliary.psi.age_seconds);
+      require(frame.profile_status === "last_imported" && frame.profile_refresh_pending === false);
+      require(["current", "stale"].includes(frame.status) &&
+        /^(simple|detail)_(trunk|conventional)$/.test(frame.screen?.mode ?? ""));
+      require(frame.status === (auxiliary.psi.age_seconds < ttl ? "current" : "stale"));
+    }
+    return {display, supplemental: data.supplemental};
+  }
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function present(frame, values, clockRegions) {
+    if (frame.status !== "current" || frame.screen === null) return frame;
+    const eligible = clockRegions[frame.screen.mode] ?? [];
+    const clock = values.clock.status === "current" ? values.clock.value : null;
+    const regions = frame.screen.regions.map(region => {
+      if (!eligible.includes(region.id) || region.selection !== "configured" ||
+          !["Day", "Time"].includes(region.token) ||
+          !["unqualified", "data_unavailable", "raw_source"].includes(region.value_status)) return region;
+      return {...region, value_status: clock === null ? "data_unavailable" : "raw_source",
+        text: clock === null ? null : region.token === "Time" ? clock.slice(11, 16)
+          : `${months[Number(clock.slice(5, 7)) - 1]}${clock.slice(8, 10)}`};
+    });
+    return {...frame, screen: {...frame.screen, regions}};
+  }
+  function favoritesRows(values) {
+    if (values.favorites.status !== "current") return [];
+    const states = values.favorites.value, labels = ["Absent", "Off", "On"], rows = [];
+    for (let start = 0; start < 100; start += 10)
+      rows.push(Array.from({length: 10}, (_, offset) => {
+        const key = start + offset;
+        return `${String(key).padStart(2, "0")}:${labels[Number(states[key])]}`;
+      }).join("  "));
+    return rows;
+  }
+  window.sdsctlSupplemental = Object.freeze({decode, create, bundle, present, favoritesRows});
 })();

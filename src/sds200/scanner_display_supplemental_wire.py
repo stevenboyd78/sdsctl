@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import math
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime
 from typing import cast
 from uuid import UUID
 
 from .daemon_display_frames import SupplementalDisplayFrameSet
+from .scanner_display_frame import project_scanner_display_frame
+from .scanner_display_supplemental import DisplayClockValue
 from .scanner_display_supplemental import SupplementalValueStatus as Status
 from .scanner_display_supplemental_presentation import present_supplemental_capture
 
@@ -198,3 +200,43 @@ def project_supplemental_delivery(
         }
     decode_supplemental_delivery(result)
     return result
+
+
+def project_supplemental_web_bundle(
+    capture: SupplementalDisplayFrameSet, *, now: float
+) -> dict[str, object]:
+    """One owner cut for the opt-in controller; no endpoint, reads or demand.
+
+    Keep clock text OUT of the base frame: only the consumer's independently
+    expiring clock may fill those cells. This is not the schema-1 route payload.
+    """
+    supplemental = project_supplemental_delivery(capture, now=now)
+    if capture.source_status != "matches_import" or any(
+        frame.profile_refresh_pending or frame.profile_status != "last_imported"
+        for frame in (capture.preferred, capture.simple, capture.detail)
+    ):
+        raise ValueError("An accepted, unchanged profile source is required.")
+    base = present_supplemental_capture(
+        replace(
+            capture,
+            supplemental=replace(capture.supplemental, clock=DisplayClockValue(Status.UNAVAILABLE)),
+        ),
+        now=now,
+    )
+    return {
+        "protocol": "sdsctl.mimic-supplemental",
+        "version": 1,
+        "display": {
+            "schema_version": 1,
+            "endpoint_id": capture.endpoint_id,
+            "stream_id": capture.stream_id,
+            "session_id": capture.session_id,
+            "failure": None,
+            "source_status": capture.source_status,
+            "frames": {
+                name: project_scanner_display_frame(getattr(base, name))
+                for name in ("preferred", "simple", "detail")
+            },
+        },
+        "supplemental": supplemental,
+    }

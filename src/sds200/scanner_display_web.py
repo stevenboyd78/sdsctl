@@ -61,6 +61,14 @@ def scanner_display_browser_contract() -> dict[str, object]:
         }
     return {
         "layouts": layouts,
+        "supplemental_clock_regions": {
+            mode.value: [
+                region.id
+                for region in scanner_display_layout(mode).regions
+                if region.option is not None and region.option.group == 3
+            ]
+            for mode in ScannerDisplayMode
+        },
         "statuses": [item.value for item in DisplayObservationStatus],
         "empty_messages": {
             item.value: scanner_display_empty_message(item.value, has_profile=True)

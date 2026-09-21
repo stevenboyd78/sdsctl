@@ -3,6 +3,8 @@
 Status: **internal, offline-tested contract; not a live API or enabled feature**.
 This extends the [point-in-time presentation groundwork](scanner-display-supplemental-presentation.md).
 It does not change the existing public schema-1 display response or start reads.
+The [opt-in WebUI controller candidate](scanner-display-supplemental-web-controller.md)
+now exercises these guards in the real polling/rendering controller offline.
 
 ## Source identity and coherent capture
 
@@ -47,7 +49,9 @@ opaque DST tokens and server monotonic timestamps are absent.
 
 The transport-free Python `SupplementalConsumer` and JavaScript
 `sdsctlSupplemental.create()` implement the same state machine. The JavaScript
-candidate is not served, imported by the dashboard, or bundled into the HA card.
+dependency is not served, loaded by the normal dashboard, or bundled into the HA card.
+The WebUI controller has an internal explicit-context opt-in seam, unused by the
+normal dashboard shell. Supplying the dependency alone does not enable it.
 Neither guard reads a clock itself, schedules timers, makes requests or owns a
 scanner. The caller supplies monotonic seconds from one event-loop clock.
 For example, browser callers use `performance.now() / 1000`, not milliseconds;
@@ -104,9 +108,11 @@ acceptance is implied.
    from each client's local expiry timer even when no response arrives, and
    clear UI state on unavailable capability/context. Context replacement must
    follow verified owner state, not opportunistic rebinding.
-3. Update WebUI, TUI and generated HA resources together, with delayed-body,
+3. Complete WebUI, TUI and generated HA integration together, with delayed-body,
    disconnect, profile replacement, multi-client and cancellation tests through
-   their real controllers. The pure guards alone are not that integration.
+   their real controllers. The offline WebUI candidate covers these rejection,
+   expiry and cancellation paths but does not yet negotiate a new verified
+   context or use an authenticated server endpoint. TUI and HA remain pending.
 4. Define the explicit acquisition enable policy, preserving one owner, bounded
    shared GETs, demand expiry, contention/media behavior and all context gates.
    These additions do not widen the qualified hardware-read window.
