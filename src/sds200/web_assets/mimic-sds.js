@@ -173,7 +173,7 @@
 
   // Only these local phase identifiers enter diagnostics; never exception text,
   // response bodies, URLs, credentials or scanner/profile values.
-  async function readResponse(response, phase = () => {}, progress = () => {}, decoder = decode) {
+  async function readResponse(response, phase = () => {}, progress = () => {}, decoder = decode, maxBytes = MAX_BYTES) {
     phase("http_status");
     require(response.ok);
     phase("content_type");
@@ -187,7 +187,7 @@
         const {value, done} = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > MAX_BYTES) { phase("response_size"); require(false); }
+        if (size > maxBytes) { phase("response_size"); require(false); }
         progress(size);
         chunks.push(value);
       }
@@ -204,18 +204,33 @@
     return decoder(payload);
   }
 
-  function create({host, standard, url, request, supplementalContext = null}) {
-    // Internal opt-in seam only. The normal shell never supplies a context or
-    // loads this dependency. A verified new context requires a new controller;
-    // incoming replies and ordinary status callbacks cannot rebind this guard.
-    const auxiliary = supplementalContext === null ? null : window.sdsctlSupplemental;
-    require(supplementalContext === null ||
+  function create({host, standard, url, request, supplementalContext = null, supplementalRoot = null}) {
+    // Internal opt-ins only; the normal shell supplies neither. A fixed-context
+    // caller cannot rebind. Negotiated callers use only the authenticated fixed
+    // routes under their same-origin (possibly HA Ingress-prefixed) web root.
+    const negotiated = supplementalRoot !== null;
+    require(!negotiated || supplementalContext === null);
+    const supplemental = supplementalContext !== null || negotiated;
+    const auxiliary = supplemental ? window.sdsctlSupplemental : null;
+    require(!supplemental ||
       ["create", "bundle", "present", "favoritesRows"].every(key => typeof auxiliary?.[key] === "function"));
-    const auxiliaryGuard = auxiliary === null ? null : auxiliary.create(supplementalContext);
-    const decoder = auxiliaryGuard === null ? decode
+    let contextUrl = null, frameUrl = url, negotiationNeeded = negotiated;
+    if (negotiated) {
+      require(typeof supplementalRoot === "string" && supplementalRoot.length <= 2048 &&
+        typeof auxiliary.contextResponse === "function");
+      const root = new URL(supplementalRoot);
+      require(["http:", "https:"].includes(root.protocol) && root.origin === window.location.origin &&
+        !root.username && !root.password && !root.search && !root.hash && root.pathname.endsWith("/"));
+      contextUrl = new URL("api/v1/display-supplemental/context", root).href;
+      frameUrl = new URL("api/v1/display-supplemental/frame", root).href;
+    }
+    let auxiliaryGuard = supplementalContext === null ? null : auxiliary.create(supplementalContext);
+    const retiredConnections = new Set(), retiredProfiles = new Set();
+    const decoder = auxiliary === null ? decode
       : payload => auxiliary.bundle(payload, decode, auxiliaryGuard.context);
     let available = false, active = false, selected = false, stopped = false, closed = false;
     let generation = 0, controller = null, timer = null, expiryTimer = null, auxiliaryTimer = null;
+    let requestTimer = null;
     let latest = null, deadline = null, sequenceDeadline = null, endpoint = null, session = null, sequence = null;
     let style = "preferred", treatment = "strips";
     const toolbar = make("div", undefined, "mimic-toolbar");
@@ -274,7 +289,7 @@
     const rows = make("ul");
     details.append(detailText, failureNote, traceButton, traceNote, rows);
     const auxiliaryNote = make("p"), favorites = make("pre");
-    if (auxiliaryGuard !== null) {
+    if (auxiliary !== null) {
       auxiliaryNote.id = "mimic-supplemental-status";
       favorites.id = "mimic-favorites-states";
       details.append(auxiliaryNote, favorites);
@@ -323,16 +338,64 @@
     function demanded() { return selected && available && active && !stopped && !document.hidden; }
     function cancel(message) {
       generation++; controller?.abort(); controller = null;
+      window.clearTimeout(requestTimer); requestTimer = null;
       auxiliaryGuard?.suspend();
       stopTrace("Request tracing is off.");
       window.clearTimeout(timer); timer = null; clear(message);
+    }
+    function stopSession(message) {
+      closed = stopped = true; auxiliaryGuard?.close();
+      failureNote.hidden = true; failureNote.textContent = "";
+      delete failureNote.dataset.reason; delete failureNote.dataset.phase;
+      cancel(message);
+    }
+    function admitted(response) {
+      if (negotiated && [401, 403].includes(response.status)) {
+        // dashboardFetch handles native sign-in. Ingress denial must not invent
+        // a native login flow, and neither admission failure may auto-retry.
+        stopSession("Display access ended — values cleared. Reopen through the authorized dashboard entry.");
+        return false;
+      }
+      return true;
+    }
+    function bindContext(binding) {
+      const old = auxiliaryGuard?.context;
+      if (old && same(old, binding)) return;
+      const identity = value => `${value.stream_id}/${value.session_id}`;
+      const connectionChanged = old && identity(old) !== identity(binding);
+      let epochChanged = false;
+      require(!retiredConnections.has(identity(binding)));
+      if (old) {
+        require(binding.endpoint_id === old.endpoint_id);
+        if (!connectionChanged) {
+          require(binding.context_revision >= old.context_revision &&
+            binding.profile_invalidation >= old.profile_invalidation);
+          epochChanged = binding.context_revision > old.context_revision ||
+            binding.profile_invalidation > old.profile_invalidation;
+          if (!epochChanged) require(!retiredProfiles.has(binding.profile_revision));
+        }
+        // Monotonic epochs retire their predecessors without retaining each one.
+        // Bound only incomparable connection IDs / same-epoch profile changes.
+        if ((connectionChanged && retiredConnections.size >= 64) ||
+            (!connectionChanged && !epochChanged && retiredProfiles.size >= 64)) {
+          stopSession("Display connection history limit reached — reopen the authorized dashboard entry.");
+          return;
+        }
+      }
+      const replacement = auxiliary.create(binding);
+      if (connectionChanged) retiredConnections.add(identity(old));
+      if (connectionChanged || epochChanged) retiredProfiles.clear();
+      else if (old) retiredProfiles.add(old.profile_revision);
+      auxiliaryGuard?.close(); auxiliaryGuard = replacement;
+      session = sequence = sequenceDeadline = null;
+      clear("New display connection verified — waiting for current scanner data…");
     }
     async function poll(ticket) {
       if (!demanded() || ticket !== generation) return;
       controller = new AbortController();
       const current = controller;
       const started = performance.now();
-      const auxiliaryTicket = auxiliaryGuard?.begin(started / 1000);
+      let frameStarted = started;
       const traceId = tracePrefix !== null && started < traceUntil && traceNumber < 999999
         ? `${tracePrefix}-${++traceNumber}` : null;
       let traceAcknowledged = false;
@@ -345,15 +408,42 @@
       const timeout = window.setTimeout(() => {
         timedOut = true; timeoutPhase = phase; current.abort();
       }, 5000);
+      requestTimer = timeout;
       let delay = 250;
       try {
         const options = {signal: current.signal, credentials: "same-origin", cache: "no-store", redirect: "error"};
+        if (negotiated && negotiationNeeded) {
+          phase = "context_request";
+          const response = await request(contextUrl, {...options, headers: {"X-SDSCTL-Supplemental-Version": "1"}});
+          if (ticket !== generation || !demanded()) return;
+          require(!timedOut);
+          if (!admitted(response)) return;
+          const binding = await readResponse(response, value => {
+            if (!timedOut) phase = `context_${value}`;
+          }, () => {}, auxiliary.contextResponse, 2048);
+          if (ticket !== generation || !demanded()) return;
+          require(!timedOut);
+          phase = "context_binding";
+          bindContext(binding);
+          if (closed) return;
+          negotiationNeeded = false;
+        }
+        frameStarted = performance.now();
+        const auxiliaryTicket = auxiliaryGuard?.begin(frameStarted / 1000);
+        phase = "request";
         if (traceId !== null) options.headers = {"X-SDSCTL-Mimic-Trace": traceId};
-        const response = await request(url, options);
+        if (negotiated) options.headers = {...options.headers,
+          "X-SDSCTL-Supplemental-Version": "1",
+          "X-SDSCTL-Supplemental-Context": JSON.stringify(auxiliaryGuard.context)};
+        const response = await request(frameUrl, options);
         // A transport that ignores abort must not read a late body or overwrite
         // the phase/timings recorded at the deadline.
         if (ticket !== generation || !demanded()) return;
         require(!timedOut);
+        if (!admitted(response)) return;
+        if (negotiated && response.status === 409) {
+          negotiationNeeded = true; phase = "context_changed"; require(false);
+        }
         headersMs = elapsedMs();
         traceAcknowledged = traceId !== null && response.headers.get("x-sdsctl-mimic-trace") === traceId;
         const decoded = await readResponse(response, value => {
@@ -382,7 +472,7 @@
           auxiliaryGuard.accept(auxiliaryTicket, decoded.supplemental, performance.now() / 1000);
         // Retain the freshness limit even while the screen is cleared or hidden.
         // A repeated sequence cannot renew its lease by reporting a younger age.
-        let incomingDeadline = incoming === null ? null : started + (5 - data.frames.preferred.age_seconds) * 1000;
+        let incomingDeadline = incoming === null ? null : frameStarted + (5 - data.frames.preferred.age_seconds) * 1000;
         if (identity === session && incoming === sequence && sequenceDeadline !== null && incomingDeadline !== null) incomingDeadline = Math.min(sequenceDeadline, incomingDeadline);
         endpoint = data.endpoint_id;
         if (identity !== session) { sequence = null; sequenceDeadline = null; }
@@ -415,6 +505,7 @@
         delay = 2000;
       } finally {
         window.clearTimeout(timeout);
+        if (requestTimer === timeout) requestTimer = null;
         if (controller === current) controller = null;
         if (ticket === generation && demanded()) timer = window.setTimeout(() => poll(ticket), delay);
       }
@@ -433,7 +524,7 @@
     led.addEventListener("change", () => { treatment = led.value === "border" ? "border" : "strips"; pane.dataset.ledTreatment = treatment; });
     return Object.freeze({
       context(value) { if (closed) return; available = value.available === true; active = value.active === true; stopped = value.stopped === true; reconcile(); },
-      stop() { closed = stopped = true; auxiliaryGuard?.close(); failureNote.hidden = true; failureNote.textContent = ""; delete failureNote.dataset.reason; delete failureNote.dataset.phase; cancel("Session stopped — scanner values cleared."); },
+      stop() { stopSession("Session stopped — scanner values cleared."); },
     });
   }
   window.sdsctlMimic = Object.freeze({create, decode, presentValue, presentIndicator});

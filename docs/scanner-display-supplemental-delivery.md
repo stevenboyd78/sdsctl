@@ -113,9 +113,10 @@ acceptance is implied.
    follow verified owner state, not opportunistic rebinding.
 3. Complete WebUI, TUI and generated HA integration together, with delayed-body,
    disconnect, profile replacement, multi-client and cancellation tests through
-   their real controllers. The offline WebUI candidate covers these rejection,
-   expiry and cancellation paths but does not yet negotiate a new verified
-   context or call the opt-in authenticated server endpoints. TUI and HA remain pending.
+   their real controllers. The offline WebUI candidate now includes an internal
+   [authenticated negotiation opt-in](scanner-display-supplemental-browser-negotiation.md)
+   and verified guard replacement. Its normal shell/dependency activation,
+   and TUI/HA integrations, remain pending.
 4. Define the explicit acquisition enable policy, preserving one owner, bounded
    shared GETs, demand expiry, contention/media behavior and all context gates.
    These additions do not widen the qualified hardware-read window.

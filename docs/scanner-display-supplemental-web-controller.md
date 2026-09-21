@@ -41,9 +41,12 @@ from a missing guard into unguarded supplemental rendering.
 
 The opt-in controller binds once to the context verified by its caller. It never
 adopts an incoming response's endpoint, stream, session, profile or context revision.
-A new verified context requires a new controller; ordinary status callbacks,
-layout changes and hide/show do not replace or reset the existing guard.
-Automated context negotiation/replacement remains future integration work.
+This fixed-context mode cannot rebind; ordinary status callbacks, layout changes
+and hide/show do not replace or reset the existing guard. A separate, mutually
+exclusive internal `supplementalRoot` option now exercises the
+[authenticated negotiation coordinator](scanner-display-supplemental-browser-negotiation.md).
+That mode replaces guards only after explicit negotiation, inside the same
+controller, while retaining user preferences and retired-context history.
 
 The actual controller's existing response-size limit (256 KiB), UTF-8/JSON and
 canonical frame validation apply before it can update the DOM. Bundle decoding
@@ -77,7 +80,7 @@ The regular WebUI and generated HA lifecycle suites remain regression gates.
 
 The opt-in authenticated server transport now provides explicit negotiation,
 no-store responses, bounded bundles and stale-context rejection. Before deployment,
-connect the actual browser coordinator and define verified context replacement;
+activate the browser shell/dependency explicitly after qualification;
 integrate TUI and HA consumers; and preserve the qualified bounded acquisition
 policy. Then build a source-pinned candidate and request fresh operator readiness.
 There is no new hardware trial, background task or CLI/config activation switch.

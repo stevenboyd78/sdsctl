@@ -37,6 +37,11 @@
     for (const key of ["profile_invalidation", "context_revision"]) result[key] = sequence(data[key]);
     return Object.freeze(result);
   }
+  function contextResponse(payload) {
+    const data = object(payload, ["protocol", "version", "context"]);
+    require(data.protocol === "sdsctl.supplemental-context" && data.version === 1);
+    return context(data.context);
+  }
   function validClock(value) {
     if (typeof value !== "string" || value.length !== 19 ||
         !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(value)) return false;
@@ -191,5 +196,5 @@
       }).join("  "));
     return rows;
   }
-  window.sdsctlSupplemental = Object.freeze({decode, create, bundle, present, favoritesRows});
+  window.sdsctlSupplemental = Object.freeze({decode, create, bundle, present, favoritesRows, contextResponse});
 })();

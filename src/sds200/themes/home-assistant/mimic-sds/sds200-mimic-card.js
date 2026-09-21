@@ -174,7 +174,7 @@
 
   // Only these local phase identifiers enter diagnostics; never exception text,
   // response bodies, URLs, credentials or scanner/profile values.
-  async function readResponse(response, phase = () => {}, progress = () => {}, decoder = decode) {
+  async function readResponse(response, phase = () => {}, progress = () => {}, decoder = decode, maxBytes = MAX_BYTES) {
     phase("http_status");
     require(response.ok);
     phase("content_type");
@@ -188,7 +188,7 @@
         const {value, done} = await reader.read();
         if (done) break;
         size += value.byteLength;
-        if (size > MAX_BYTES) { phase("response_size"); require(false); }
+        if (size > maxBytes) { phase("response_size"); require(false); }
         progress(size);
         chunks.push(value);
       }

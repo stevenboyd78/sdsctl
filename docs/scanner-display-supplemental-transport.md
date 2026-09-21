@@ -90,8 +90,10 @@ Ingress admission, context changes, malformed input, canonical bundle mutation,
 sanitized errors and absence of scanner-read/demand side effects. All scanner
 data and credentials in these tests are fixtures, not live hardware.
 
-Still required: an actual browser negotiation/replacement coordinator, equivalent
-TUI/HA lifecycle integration, explicit bounded acquisition enable policy, and
+The [browser negotiation coordinator](scanner-display-supplemental-browser-negotiation.md)
+now exercises these endpoints through an internal controller opt-in offline.
+Still required: explicit shell/dependency activation, equivalent TUI/HA lifecycle
+integration, explicit bounded acquisition enable policy, and
 source-pinned visual/continuity acceptance. The transport alone does not enable
 the feature or resolve the separate saved-recording playback/Pause investigation.
 Closed hardware trials remain closed; no new trial is armed by this work.
