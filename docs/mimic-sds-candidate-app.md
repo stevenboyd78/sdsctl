@@ -98,3 +98,9 @@ Record automated checks separately from user-observed physical passes. A
 launch-plan test does not prove Supervisor rebuild/upgrade behavior, and a
 synthetic frame does not prove a scanner firmware field. Do not publish private
 profile contents, credentials, scanner names or endpoint evidence as fixtures.
+
+For a separately reviewed bounded supplemental-read/audio trial, the
+[cached media observer](supplemental-media-observer.md) provides read-only
+progress/fault evidence without creating scanner-read demand or a second audio
+consumer. Its local fixtures do not authorize a live trial or establish audible
+playback, physical continuity, or full browser-consumer accounting.
