@@ -18,7 +18,7 @@ from time import monotonic
 from typing import Literal, Protocol
 from uuid import UUID
 
-from .commands import GetDepartmentQuickKeys, GetFavoritesQuickKeys, GetSystemQuickKeys
+from .commands import GetDateTime, GetDepartmentQuickKeys, GetFavoritesQuickKeys, GetSystemQuickKeys
 from .exceptions import CommandRejectedError, CommandTimeoutError, ProtocolError
 from .models import (
     DepartmentQuickKeys,
@@ -114,6 +114,7 @@ class DaemonQuickKeyCache:
         clock: Callable[[], float] = monotonic,
         include_clock: bool = False,
         allow_scoped_reads: bool = True,
+        bounded_writes: bool = False,
         read_scope: SupplementalReadScope | None = None,
     ) -> None:
         if (
@@ -122,11 +123,25 @@ class DaemonQuickKeyCache:
             or not scanner_target
         ):
             raise ValueError("An explicit endpoint identity and scanner target are required.")
-        if type(include_clock) is not bool or type(allow_scoped_reads) is not bool:
+        if any(
+            type(policy) is not bool
+            for policy in (include_clock, allow_scoped_reads, bounded_writes)
+        ):
             raise ValueError("Explicit boolean supplemental read policies are required.")
         if read_scope is not None and not callable(read_scope):
             raise ValueError("Supplemental read scope must be an explicit callable.")
         self._read_scope = read_scope
+        self._bounded_scanner = None
+        if bounded_writes:
+            # Explicit internal policy, never inferred from a scanner-like
+            # method name. No scoped reads or fallback to the legacy writer.
+            from .radio import SDS200
+
+            if type(scanner) is not SDS200 or allow_scoped_reads:
+                raise ValueError(
+                    "Bounded reads require the native scanner owner and unscoped GETs."
+                )
+            self._bounded_scanner = scanner
         clock_reader = getattr(scanner, "read_clock_if_idle", None) if include_clock else None
         if include_clock and not callable(clock_reader):
             raise ValueError("Clock reads require the existing scanner owner's idle reader.")
@@ -421,13 +436,38 @@ class DaemonQuickKeyCache:
                     )
                     if target_valid:
                         if kind == "clock":
-                            assert self._clock_reader is not None
-                            clock_result = self._clock_reader(timeout=READ_TIMEOUT)
+                            if self._bounded_scanner is not None:
+                                bounded_clock = (
+                                    self._bounded_scanner._read_bounded_supplemental_if_idle(
+                                        GetDateTime(), timeout=READ_TIMEOUT
+                                    )
+                                )
+                                if bounded_clock is not None and not isinstance(
+                                    bounded_clock, ScannerDateTime
+                                ):
+                                    raise ProtocolError("Invalid bounded clock result.")
+                                clock_result = bounded_clock
+                            else:
+                                assert self._clock_reader is not None
+                                clock_result = self._clock_reader(timeout=READ_TIMEOUT)
                         else:
                             command = commands[kind]
-                            result = self._scanner.read_quick_keys_if_idle(
-                                command, timeout=READ_TIMEOUT
-                            )
+                            if self._bounded_scanner is not None:
+                                assert isinstance(command, GetFavoritesQuickKeys)
+                                bounded_keys = (
+                                    self._bounded_scanner._read_bounded_supplemental_if_idle(
+                                        command, timeout=READ_TIMEOUT
+                                    )
+                                )
+                                if bounded_keys is not None and not isinstance(
+                                    bounded_keys, FavoritesQuickKeys
+                                ):
+                                    raise ProtocolError("Invalid bounded Favorites result.")
+                                result = bounded_keys
+                            else:
+                                result = self._scanner.read_quick_keys_if_idle(
+                                    command, timeout=READ_TIMEOUT
+                                )
                         target_valid = (
                             self._scanner.connected and self._scanner.endpoint == self._target
                         )

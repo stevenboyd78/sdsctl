@@ -708,6 +708,51 @@ credit; old samples or old PSI cannot manufacture a success. Timing remains
 software observation, not proof of transport delivery. Normal UI/API projection
 and acquisition defaults remain unchanged.
 
+### Candidate nonblocking supplemental writes (offline qualification)
+
+The private cache policy `bounded_writes=True` opts into a separate native
+POSIX UDP writer for exact `DTM` and global `FQK` GETs only. It requires the
+actual `SDS200` owner and `allow_scoped_reads=False`; no generic scanner method,
+serial/custom/capture transport or file-traced path is assumed to be bounded.
+There is no fallback to the ordinary writer when this policy is selected.
+Ordinary startup, commands and the existing research launcher do not select it.
+
+The candidate takes the existing command lane, response registry, transport
+write/socket/statistics and decoder locks without waiting. Contention before
+dispatch yields without queueing a command. It checks that the directly owned
+IPv4 datagram descriptor is already nonblocking and makes one `os.write` on it,
+without opening another connection or changing the shared receive timeout or
+descriptor flags. The socket-ownership lock prevents normal close/reopen from
+recycling the descriptor during that write. Successful dispatch preserves the
+decoder's ongoing PSI attribution while clearing the prior one-shot XML
+expectation, as an ordinary non-XML command does.
+
+One absolute monotonic deadline covers admission, dispatch, response waiting
+and parsing (250ms from the cache, with a 500ms maximum at the radio boundary).
+An expired pre-send deadline, disconnected socket, busy lock or kernel
+backpressure means not sent. There is no transport retry, detached writer or
+new response budget after dispatch. Other write failures, incomplete writes,
+reply timeouts or late parsed success are uncertain: the cache withholds both
+supplemental kinds until a real new connection. A later reply cannot revive a
+quarantined value. Unsupported paths are explicitly refused and quarantined,
+not silently sent through legacy I/O.
+
+This removes intentional blocking from the candidate's write/admission path;
+it is not hard real-time preemption of OS scheduling, signal handlers or Python
+execution. Final pending-response cleanup still takes the existing short
+metadata lock. The runtime reservation and ordinary receive/parser paths keep
+their existing contracts. File tracing is refused rather than silently skipped;
+this path does not synchronously call TX log handlers.
+
+Synthetic contention/failure tests and actual localhost UDP exchanges cover
+same-socket dispatch, receive settings, bare PSI attribution, one-budget reply
+handling, quarantine, late packets, runtime control/Waterfall exclusion and
+receive callbacks during the wait. These tests do not qualify physical scanner
+latency, audio coexistence, indefinite polling or the unsupported transports.
+The earlier shared-reader hardware trial used the legacy writer, not this
+candidate. A distinct reviewed research path and fresh bounded hardware case
+are required before live use; no old case can be rearmed.
+
 ### Internal supplemental projection (not yet rendered)
 
 `supplemental_snapshot()` joins the optional cache's banks and clock at one

@@ -798,6 +798,71 @@ class SDSScanner:
         finally:
             self._command_lock.release()
 
+    def _read_bounded_supplemental_if_idle(
+        self, command: GetDateTime | GetFavoritesQuickKeys, *, timeout: float = 0.25
+    ) -> ScannerDateTime | FavoritesQuickKeys | None:
+        """Internal opt-in candidate; normal startup/reader do not select it.
+
+        One exact DTM/FQK GET on directly owned native POSIX UDP only. Admission
+        and transport contention yield without a queued write; the same
+        absolute budget covers dispatch, reply waiting and parsing. An expired
+        or uncertain dispatched read must quarantine the optional reader.
+
+        No synchronous TX trace/logger or capture-wrapper bypass: file tracing
+        and wrapped/custom transports are refused. No socket timeout mutation,
+        detached work, reconnect or retry. This is not a real-time OS guarantee;
+        normal response-registry cleanup still uses its short metadata lock.
+        """
+        if type(command) not in (GetDateTime, GetFavoritesQuickKeys):
+            raise ValueError("Bounded supplemental reads require an exact DTM or FQK GET.")
+        timeout = _require_positive_timeout(timeout, label="Bounded supplemental timeout")
+        if timeout > 0.5:
+            raise ValueError("Bounded supplemental timeout must not exceed 0.5 seconds.")
+        deadline = monotonic() + timeout
+        if (
+            type(self.transport) is not UdpTransport
+            or type(self.trace) is not TrafficTrace
+            or self.trace.path is not None
+        ):
+            raise UnsupportedScannerFeatureError(
+                "Bounded supplemental reads require direct UDP without file tracing."
+            )
+        if not self._command_lock.acquire(blocking=False):
+            return None
+        try:
+            response_queue: queue.Queue[object] = queue.Queue(maxsize=1)
+            pending = _PendingResponse(command=command.response_command, queue=response_queue)
+            if not self._response_lock.acquire(blocking=False):
+                return None
+            try:
+                if self._responses:
+                    return None
+                self._responses[command.response_command] = pending
+            finally:
+                self._response_lock.release()
+            try:
+                if not self.transport.try_write_supplemental_get(command.wire, deadline=deadline):
+                    return None
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise CommandTimeoutError("Bounded supplemental read expired after dispatch.")
+                try:
+                    response = response_queue.get(timeout=remaining)
+                except queue.Empty as exc:
+                    raise CommandTimeoutError("Bounded supplemental response timed out.") from exc
+                if isinstance(response, CommandRejectedError):
+                    raise response
+                result = command.parse_response(response)
+                if monotonic() >= deadline:
+                    raise CommandTimeoutError("Bounded supplemental response arrived too late.")
+                return result
+            finally:
+                with self._response_lock:
+                    if self._responses.get(command.response_command) is pending:
+                        self._responses.pop(command.response_command)
+        finally:
+            self._command_lock.release()
+
     def get_volume(self, *, timeout: float = 2.0) -> int:
         value = self.execute(GetVolume(), timeout=timeout)
         self._publish_level_state("volume", value)

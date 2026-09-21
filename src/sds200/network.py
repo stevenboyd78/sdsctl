@@ -2,18 +2,20 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 import socket
 import threading
 import time
 import xml.etree.ElementTree as ET
 from collections.abc import Callable, Mapping
-from contextlib import suppress
+from contextlib import ExitStack, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from time import monotonic
 from types import MappingProxyType
 from typing import Protocol
 
-from .exceptions import ScannerConnectionError
+from .exceptions import ScannerConnectionError, UnsupportedScannerFeatureError
 from .reliability import ReconnectCounter, ReconnectPolicy
 from .socket_utils import (
     LocalAddressResolver,
@@ -627,6 +629,83 @@ class UdpTransport:
             raise ValueError("Command must not be empty.")
         self._remember_xml_command(normalized)
         self._send_normalized(normalized, retry=False)
+
+    def try_write_supplemental_get(self, command: str, *, deadline: float) -> bool:
+        """Candidate POSIX UDP path: one immediate FQK/DTM send, or no send.
+
+        Does not open/duplicate a socket, change its mode, queue work, retry,
+        call logging handlers or reset the caller's absolute deadline. False
+        means not sent (busy, expired, disconnected or kernel backpressure).
+        Unsupported implementations are refused; any other write failure is
+        uncertain and must quarantine the caller's optional reader.
+
+        This is nonblocking I/O, not an OS scheduling/real-time guarantee.
+        Ordinary commands and startup never select this opt-in path.
+        """
+        if type(command) is not str or command not in {"FQK", "DTM"}:
+            raise ValueError("Supplemental writes require an exact FQK or DTM GET.")
+        if type(deadline) not in (int, float) or not math.isfinite(deadline) or deadline < 0:
+            raise ValueError("Supplemental writes require a finite monotonic deadline.")
+        remaining = deadline - monotonic()
+        if remaining > 0.5:
+            raise ValueError("Supplemental write budget must not exceed 0.5 seconds.")
+        if remaining <= 0:
+            return False
+        if os.name != "posix":
+            raise UnsupportedScannerFeatureError("Supplemental writes require POSIX UDP.")
+        with ExitStack() as locks:
+            # No waiting even for metadata; keep the descriptor owned until the
+            # single write finishes so close/reopen cannot recycle it under us.
+            for lock in (
+                self._write_lock,
+                self._socket_lock,
+                self._statistics_lock,
+                self._decoder._lock,
+            ):
+                if not lock.acquire(blocking=False):
+                    return False
+                locks.callback(lock.release)
+            udp_socket = self._socket
+            if udp_socket is None:
+                return False
+            if (
+                type(udp_socket) is not socket.socket
+                or udp_socket.family != socket.AF_INET
+                or udp_socket.type != socket.SOCK_DGRAM
+            ):
+                raise UnsupportedScannerFeatureError(
+                    "Supplemental writes require a native UDP socket."
+                )
+            data = (command + "\r").encode("ascii")
+            try:
+                descriptor = udp_socket.fileno()
+                # Python timeout-mode sockets are already O_NONBLOCK. Bypass
+                # Python's send-time readiness wait without altering recv's
+                # timeout or the shared descriptor flags. Never infer this
+                # property from a socket-like object's declared timeout.
+                if os.get_blocking(descriptor):
+                    raise UnsupportedScannerFeatureError(
+                        "Supplemental writes require an already nonblocking UDP descriptor."
+                    )
+                if monotonic() >= deadline:
+                    return False
+                sent = os.write(descriptor, data)
+            except BlockingIOError:
+                return False  # No datagram was accepted; do not retry here.
+            except OSError as exc:
+                # No synchronous close/callback/logging on this bounded path.
+                raise ScannerConnectionError(
+                    "Supplemental UDP write failed; outcome uncertain."
+                ) from exc
+            if sent != len(data):
+                raise ScannerConnectionError(
+                    "Supplemental UDP write was incomplete; outcome uncertain."
+                )
+            # Match ordinary non-XML command bookkeeping without waiting for
+            # the decoder or changing its ongoing PSI stream attribution.
+            self._decoder.expect_command(command)
+            self._mutable_statistics.commands_sent += 1
+            return True
 
     def _remember_xml_command(self, normalized: str) -> None:
         command, separator, argument = normalized.partition(",")
