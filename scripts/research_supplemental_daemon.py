@@ -103,28 +103,37 @@ DIAGNOSTIC_TAGS = EXCLUDED_SCAN_TAGS | {
     "OverWrite",
 }
 
-# CrerB7 observed this exact pair during ordinary scanning. This predicate
-# authorizes withholding only, NEVER read admission. The strict selector stays
-# unchanged, and no renderer-only held/Close Call/other-family rule is copied.
+# Observed mixed reports authorize withholding only, NEVER read admission.
+# The strict selector stays unchanged; no renderer-only rule is copied.
 TRANSITION_TRUNK_RECORDS = frozenset(
     {"System", "Department", "Site", "SiteFrequency", "TGID", "Property", "DualWatch"}
+)
+# OGtd1n retained seven known tags among eight records. WX Priority is a
+# constraint of this observed shape, not an assertion about its cause.
+TRANSITION_CONVENTIONAL_RECORDS = frozenset(
+    {"System", "Department", "ConvFrequency", "Property", "DualWatch", "MonitorList", "OverWrite"}
 )
 TRANSITION_RECOVERY_PSI = 2
 
 
 def is_withheld_transition(info):
-    if not isinstance(info, ScannerInfo) or (info.command, info.screen, info.mode) != (
-        "PSI",
-        "trunk_scan",
-        "Scan Mode",
-    ):
+    if not isinstance(info, ScannerInfo) or info.command != "PSI":
         return False
     counts = Counter(record.tag for record in info.records)
-    return (
-        counts.keys() >= TRANSITION_TRUNK_RECORDS
-        and not any(count > 1 for count in counts.values())
-        and not (EXCLUDED_SCAN_TAGS | {"ConvFrequency"}).intersection(counts)
-    )
+    if any(count > 1 for count in counts.values()) or EXCLUDED_SCAN_TAGS.intersection(counts):
+        return False
+    if (info.screen, info.mode) == ("trunk_scan", "Scan Mode"):
+        return counts.keys() >= TRANSITION_TRUNK_RECORDS and "ConvFrequency" not in counts
+    if (info.screen, info.mode) == ("conventional_scan", "Trunk Scan"):
+        if (
+            not counts.keys() >= TRANSITION_CONVENTIONAL_RECORDS
+            or len(info.records) > 8
+            or {"Site", "SiteFrequency", "TGID"}.intersection(counts)
+        ):
+            return False
+        watch = info.records_by_tag("DualWatch")[0]  # Required and unique above.
+        return (watch.get("PRI"), watch.get("CC"), watch.get("WX")) == ("Off", "Off", "Priority")
+    return False
 
 
 def diagnostic_label(value, allowed):

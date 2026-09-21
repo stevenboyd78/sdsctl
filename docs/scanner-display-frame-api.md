@@ -684,10 +684,20 @@ continuity and timing. Staging additionally requires the firmware pin and
 the strict read selector. The old research modes retain terminal mismatch
 handling. This policy is locally tested, **not hardware qualified**.
 
-Only the exact observed PSI `trunk_scan` / `Scan Mode` pair can withhold reads,
-and only with unique System, Department, Site, SiteFrequency, TGID, Property
-and DualWatch records and no excluded/foreign channel records or duplicates.
-That is permission to wait, never to issue a read on the mismatched update.
+Two narrowly observed PSI shapes can withhold reads:
+
+- `trunk_scan` / `Scan Mode`, with unique System, Department, Site,
+  SiteFrequency, TGID, Property and DualWatch records; no ConvFrequency record.
+- `conventional_scan` / `Trunk Scan`, with unique System, Department,
+  ConvFrequency, Property, DualWatch, MonitorList and OverWrite records, at most
+  eight records total, and no Site, SiteFrequency or TGID. Its DualWatch values
+  must be exactly PRI Off, CC Off and WX Priority. Those settings constrain the
+  observed shape; they do not establish that WX caused the mixed report. The
+  original eighth tag was not retained, so synthetic fixtures reconstruct only
+  the seven known tags rather than inventing raw capture evidence.
+
+Neither shape may contain excluded screen records or duplicate tags. This is
+permission to wait, never to issue a read on the mismatched update.
 Other cross-family pairs, held mismatches, Close Call, unknown labels, missing
 core records and unsafe screens remain terminal. Ordinary unchanged handling
 of single unknown tags does not make their values diagnostic evidence.
