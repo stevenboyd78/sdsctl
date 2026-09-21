@@ -194,6 +194,13 @@ the scoped bank acquisition described below; a current selection alone cannot
 reconstruct them. These changes add no automatic DTM or quick-key polling and do
 not resolve the remaining AST-only IDs.
 
+An [offline supplemental presentation candidate](scanner-display-supplemental-presentation.md)
+now joins the coherent owner capture to profile-selected Day/Time slots and
+separate numbered Favorites diagnostics. Its synthetic HTML/TUI/WebUI/card tests
+do not enable public delivery. Independent per-source freshness and consumer
+deadline handling are required before live integration; ordinary schema 1
+continues to carry PSI only.
+
 ### Scanner clock GET groundwork (not automatic polling)
 
 Remote Command Specification V1.02 p.9 documents a read-only `DTM` and a reply

@@ -299,6 +299,8 @@ background:#18212d; padding:24px }
 table { border-collapse:collapse; table-layout:fixed; width:100%; margin-top:8px }
 td,th { text-align:left; border:1px solid #425168; padding:6px; overflow-wrap:anywhere }
 .compare > summary { padding:10px; margin-bottom:10px } .scenario-note { font-size:12px }
+.supplemental-notes { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px;
+line-height:1.5; color:#c6d2e2; padding:10px; border:1px solid #425168 }
 @media(max-width:850px) { body{padding:8px} h1{font-size:21px} .consumer{padding:8px}
 .scanner-grid{height:460px} .toolbar{gap:8px} select{font-size:13px} }
 """
@@ -329,23 +331,34 @@ document.documentElement.dataset.previewReady = 'true';
 
 def render_scanner_display_gallery(
     scenarios: Mapping[str, Mapping[str, ScannerDisplayFrame]],
+    *,
+    notes: Mapping[str, str] | None = None,
 ) -> str:
     """Development document with independent panels and no live connections.
 
     Each scenario must contain profile/simple/detail variants computed by the
     adapter. Template cloning changes presentation only; CSP blocks networking.
     Labels and keys are bounded developer identifiers, not profile text or URLs.
+    Optional scenario notes are bounded, escaped plain text outside the LCD.
     """
     if not 1 <= len(scenarios) <= 64 or any(not _KEY.fullmatch(key) for key in scenarios):
         raise ValueError("Expected bounded synthetic scenario identifiers.")
+    if notes is not None and (
+        set(notes) - set(scenarios)
+        or any(type(note) is not str or len(note) > 20000 for note in notes.values())
+    ):
+        raise ValueError("Expected bounded plain-text scenario notes.")
     templates = []
     for key, variants in scenarios.items():
         if set(variants) != {"profile", "simple", "detail"}:
             raise ValueError("Each scenario requires the three presentation variants.")
         for style, frame in variants.items():
+            note = "" if notes is None else notes.get(key, "")
             templates.append(
                 f'<template id="frame-{key}-{style}">'
-                f"{render_scanner_display_frame(frame)}</template>"
+                f"{render_scanner_display_frame(frame)}"
+                + (f'<pre class="supplemental-notes">{escape(note)}</pre>' if note else "")
+                + "</template>"
             )
     options = "".join(
         f'<option value="{key}">{escape(key.replace("_", " ").title())}</option>'

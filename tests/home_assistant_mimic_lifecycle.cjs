@@ -110,6 +110,15 @@ const cases={
       for(const layout of ['preferred','simple','detail']){c.setConfig({layout});
         assert.equal(c._surround.children[0].children.length,data.frames[layout].screen?.regions.length??0);
         if(data.frames[layout].status!=='current')assert.equal(h.raw(c).length,0);
+        for(const region of data.frames[layout].screen?.regions??[]){
+          if(data.frames[layout].status==='current' && region.value_status==='raw_source' &&
+             ['Day','Time'].includes(region.token)){
+            const cell=nodes(c.shadowRoot).find(node=>node.dataset.region===region.id);
+            assert.ok(cell, 'Configured clock cell must be present');
+            assert.ok(nodes(cell).some(node=>node.textContent===region.text),
+              'Configured scanner clock value must render literally');
+          }
+        }
       }
     }
   },
