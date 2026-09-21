@@ -346,7 +346,10 @@ def test_real_worker_trigger_and_native_udp_lifecycle(
                         return False
 
                     wait_for(inject_transition)
-                wait_for(result_file.exists)
+                # O_EXCL creates the report before json.dump has finished.
+                # Observe the producer's completion, not a partially written file.
+                handler.__self__.join()
+                assert result_file.is_file()
                 assert not peer_errors
                 report = json.loads(result_file.read_text())
                 assert report["read_kind"] == "shared-clock-favorites-bounded-write"
