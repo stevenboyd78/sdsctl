@@ -47,16 +47,17 @@ def keys(text):
 
 
 @pytest.mark.parametrize(
-    "continuity,timing,transition_wait",
+    "continuity,timing,transition_wait,bounded_writes",
     [
-        (False, False, False),
-        (True, False, False),
-        (True, True, False),
-        (True, True, True),
+        (False, False, False, False),
+        (True, False, False, False),
+        (True, True, True, True),
+        (True, True, False, False),
+        (True, True, True, False),
     ],
 )
 def test_supplemental_staging_is_pinned_bounded_and_separate(
-    snapshot, continuity, timing, transition_wait
+    snapshot, continuity, timing, transition_wait, bounded_writes
 ):
     runtime_name = "src/sds200/home_assistant_app_runtime.py"
     for name in (
@@ -73,11 +74,14 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(
         supplemental_continuity=continuity,
         supplemental_timing=timing,
         supplemental_transition_wait=transition_wait,
+        supplemental_bounded_writes=bounded_writes,
     )
     assert normal[runtime_name] == snapshot[runtime_name]
     assert not any("research" in name for name in normal)
     suffix = (
-        "-supplemental-transition-wait"
+        "-supplemental-bounded-write"
+        if bounded_writes
+        else "-supplemental-transition-wait"
         if transition_wait
         else "-supplemental-timing"
         if timing
@@ -91,6 +95,7 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(
     assert (b"'--continuity'" in research["research-entry.py"]) is continuity
     assert (b"'--timing'" in research["research-entry.py"]) is timing
     assert (b"'--transition-wait'" in research["research-entry.py"]) is transition_wait
+    assert (b"'--bounded-writes'" in research["research-entry.py"]) is bounded_writes
     compile(research["research-entry.py"], "research-entry.py", "exec")
     boundary = b"def build_home_assistant_web_command("
     assert (
@@ -98,7 +103,9 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(
     )
     report = json.loads(research["candidate-source.json"])
     assert report["research_read_kind"] == (
-        "shared-clock-favorites-transition-wait"
+        "shared-clock-favorites-bounded-write"
+        if bounded_writes
+        else "shared-clock-favorites-transition-wait"
         if transition_wait
         else "shared-clock-favorites-timing"
         if timing
@@ -111,6 +118,12 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(
     assert report["research_automatic_start"] is False
     assert report["research_scan_transition_wait"] is transition_wait
     assert report["research_scan_transition_recovery_psi"] == (2 if transition_wait else None)
+    if bounded_writes:
+        assert report["research_write_policy"] == "native-posix-nonblocking"
+        assert report["research_timing_schema"] == 2
+        assert report["research_unobserved_phases"] == ["tx_intent", "rx_line", "rx_rejection"]
+    else:
+        assert "research_write_policy" not in report
     for name, digest in report["files"].items():
         assert hashlib.sha256(research[name]).hexdigest() == digest
 
@@ -137,6 +150,14 @@ def test_transition_wait_requires_exact_policy_before_reading_source(value):
         stager.render({}, REVISION, supplemental_transition_wait=value)
     with pytest.raises(ValueError, match="Transition research"):
         stager.from_revision(REVISION, supplemental_transition_wait=value)
+
+
+@pytest.mark.parametrize("value", [True, None, 0, 1, "yes"])
+def test_bounded_writes_require_explicit_transition_case_before_source_read(value):
+    with pytest.raises(ValueError, match="Bounded-write research"):
+        stager.render({}, REVISION, supplemental_bounded_writes=value)
+    with pytest.raises(ValueError, match="Bounded-write research"):
+        stager.from_revision(REVISION, supplemental_bounded_writes=value)
 
 
 @pytest.mark.parametrize(

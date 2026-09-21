@@ -715,7 +715,7 @@ POSIX UDP writer for exact `DTM` and global `FQK` GETs only. It requires the
 actual `SDS200` owner and `allow_scoped_reads=False`; no generic scanner method,
 serial/custom/capture transport or file-traced path is assumed to be bounded.
 There is no fallback to the ordinary writer when this policy is selected.
-Ordinary startup, commands and the existing research launcher do not select it.
+Ordinary startup, commands and existing research cases do not select it.
 
 The candidate takes the existing command lane, response registry, transport
 write/socket/statistics and decoder locks without waiting. Contention before
@@ -750,8 +750,18 @@ handling, quarantine, late packets, runtime control/Waterfall exclusion and
 receive callbacks during the wait. These tests do not qualify physical scanner
 latency, audio coexistence, indefinite polling or the unsupported transports.
 The earlier shared-reader hardware trial used the legacy writer, not this
-candidate. A distinct reviewed research path and fresh bounded hardware case
-are required before live use; no old case can be rearmed.
+candidate. The developer-only launcher now has a distinct `--bounded-writes`
+case, requiring explicit continuity, timing and transition-wait policies. Its
+source-pinned staging switch is `--supplemental-bounded-writes`. Quotas remain
+60 opportunities / 64 seconds / 250ms per read / two-second qualified PSI gap;
+there are no reads before a verified operator trigger and no automatic rearm.
+The native trace stays in place. Timing schema 2 explicitly marks `tx_intent`,
+`rx_line` and `rx_rejection` as unobserved; scope, parsed-packet and cache events
+are not substitutes for send/arrival timestamps. Legacy timing schema 1 and
+older case labels remain unchanged. Offline tests exercise native localhost
+UDP through the actual feed worker and trigger, including withholding and
+timeout quarantine. A fresh bounded hardware case and installed-image checks
+are still required before live use; no old case can be rearmed.
 
 ### Internal supplemental projection (not yet rendered)
 

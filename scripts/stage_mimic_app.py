@@ -61,6 +61,7 @@ def render(
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
     supplemental_transition_wait: bool = False,
+    supplemental_bounded_writes: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
         research_firmware,
@@ -70,6 +71,7 @@ def render(
         supplemental_continuity,
         supplemental_timing,
         supplemental_transition_wait,
+        supplemental_bounded_writes,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("An exact source revision is required.")
@@ -274,7 +276,9 @@ def render(
         )
     if supplemental_firmware is not None:
         read_kind = (
-            "shared-clock-favorites-transition-wait"
+            "shared-clock-favorites-bounded-write"
+            if supplemental_bounded_writes
+            else "shared-clock-favorites-transition-wait"
             if supplemental_transition_wait
             else "shared-clock-favorites-timing"
             if supplemental_timing
@@ -283,7 +287,9 @@ def render(
             else "shared-clock-favorites"
         )
         suffix = (
-            "supplemental-transition-wait"
+            "supplemental-bounded-write"
+            if supplemental_bounded_writes
+            else "supplemental-transition-wait"
             if supplemental_transition_wait
             else "supplemental-timing"
             if supplemental_timing
@@ -295,6 +301,8 @@ def render(
             continuity_argument += "'--timing', "
         if supplemental_transition_wait:
             continuity_argument += "'--transition-wait', "
+        if supplemental_bounded_writes:
+            continuity_argument += "'--bounded-writes', "
         runtime_name = "src/sds200/home_assistant_app_runtime.py"
         before, delimiter, after = (
             result[runtime_name].decode().partition("def build_home_assistant_daemon_command(")
@@ -352,6 +360,15 @@ def render(
                 b"context or failed read is still terminal. No renderer exception becomes "
                 b"read permission, and scoped queries remain disabled.\n"
             )
+        if supplemental_bounded_writes:
+            result["DOCS.md"] += (
+                b"\nThis distinct candidate uses native POSIX nonblocking writes for "
+                b"exact DTM/FQK GETs and one shared write/reply deadline. The existing "
+                b"receive timeout is unchanged. Native trace ownership is retained; "
+                b"software TX-intent and raw RX-line phases are NOT observed. Timing "
+                b"schema 2 records scope, parsed-packet and cache events only, not "
+                b"wire delivery. No unsupported-transport or file-trace fallback.\n"
+            )
         report.update(
             {
                 "purpose": "local-mimic-supplemental-research-only",
@@ -366,6 +383,15 @@ def render(
                 "research_scan_transition_recovery_psi": 2
                 if supplemental_transition_wait
                 else None,
+                **(
+                    {
+                        "research_write_policy": "native-posix-nonblocking",
+                        "research_timing_schema": 2,
+                        "research_unobserved_phases": ["tx_intent", "rx_line", "rx_rejection"],
+                    }
+                    if supplemental_bounded_writes
+                    else {}
+                ),
                 "files": {
                     name: hashlib.sha256(data).hexdigest() for name, data in sorted(result.items())
                 },
@@ -383,7 +409,12 @@ def validate_research_choice(
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
     supplemental_transition_wait: bool = False,
+    supplemental_bounded_writes: bool = False,
 ) -> None:
+    if type(supplemental_bounded_writes) is not bool or (
+        supplemental_bounded_writes and not supplemental_transition_wait
+    ):
+        raise ValueError("Bounded-write research requires an explicit transition-wait case.")
     if type(supplemental_transition_wait) is not bool or (
         supplemental_transition_wait and not (supplemental_continuity and supplemental_timing)
     ):
@@ -426,6 +457,7 @@ def from_revision(
     supplemental_continuity: bool = False,
     supplemental_timing: bool = False,
     supplemental_transition_wait: bool = False,
+    supplemental_bounded_writes: bool = False,
 ) -> dict[str, bytes]:
     validate_research_choice(
         research_firmware,
@@ -435,6 +467,7 @@ def from_revision(
         supplemental_continuity,
         supplemental_timing,
         supplemental_transition_wait,
+        supplemental_bounded_writes,
     )
     if re.fullmatch(r"[0-9a-f]{40}", revision) is None:
         raise ValueError("Use a full 40-character commit ID, not a branch or tag.")
@@ -483,6 +516,7 @@ def from_revision(
         supplemental_continuity=supplemental_continuity,
         supplemental_timing=supplemental_timing,
         supplemental_transition_wait=supplemental_transition_wait,
+        supplemental_bounded_writes=supplemental_bounded_writes,
     )
 
 
@@ -543,6 +577,7 @@ def main() -> None:
     parser.add_argument("--supplemental-continuity", action="store_true")
     parser.add_argument("--supplemental-timing", action="store_true")
     parser.add_argument("--supplemental-transition-wait", action="store_true")
+    parser.add_argument("--supplemental-bounded-writes", action="store_true")
     parser.add_argument(
         "--display-read-kind", choices=("clock", "favorites", "system", "department")
     )
@@ -556,6 +591,7 @@ def main() -> None:
         supplemental_continuity=args.supplemental_continuity,
         supplemental_timing=args.supplemental_timing,
         supplemental_transition_wait=args.supplemental_transition_wait,
+        supplemental_bounded_writes=args.supplemental_bounded_writes,
     )
     if not args.verify:
         if git("rev-parse", "HEAD").decode().strip() != args.source_revision or git(

@@ -29,6 +29,7 @@ from sds200.daemon_quick_keys import DaemonQuickKeyCache
 from sds200.daemon_runtime import DaemonRuntime, DaemonRuntimeState
 from sds200.models import ScannerInfo
 from sds200.network import UdpTransport
+from sds200.radio import SDS200
 from sds200.trace import TrafficTrace
 
 MAX_OPPORTUNITIES = 6
@@ -233,6 +234,7 @@ class ReadWindow:
         continuity=False,
         timing=False,
         transition_wait=False,
+        bounded_writes=False,
     ):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
         if type(continuity) is not bool:
@@ -241,9 +243,12 @@ class ReadWindow:
             raise ValueError("Timing requires an explicit continuity policy.")
         if type(transition_wait) is not bool or (transition_wait and not (continuity and timing)):
             raise ValueError("Transition withholding requires explicit continuity and timing.")
+        if type(bounded_writes) is not bool or (bounded_writes and not transition_wait):
+            raise ValueError("Bounded writes require the explicit transition-wait case.")
         self.continuity = continuity
         self.timing = timing
         self.transition_wait = transition_wait
+        self.bounded_writes = bounded_writes
         self.transition_deadline = None
         self.transition_recovery_psi = 0
         self.transition_episodes = self.transition_recoveries = 0
@@ -274,6 +279,8 @@ class ReadWindow:
             self.failure = self.failure or reason
 
     def record_timing(self, event, command=None):
+        if self.bounded_writes and event in {"tx_intent", "rx_line", "rx_rejection"}:
+            raise ValueError("Native bounded-write timing has no trace-wrapper observations.")
         if event not in {
             "armed",
             "closed",
@@ -307,6 +314,15 @@ class ReadWindow:
         original = scanner.trace
         if type(original) is not TrafficTrace:
             raise ValueError("Timing requires the existing unmodified trace.")
+        if self.bounded_writes:
+            if original.path is not None:
+                raise ValueError("Native bounded-write research refuses file tracing.")
+            try:
+                yield  # Keep the native trace; do not reintroduce a TX callback.
+            finally:
+                if scanner.trace is not original:
+                    raise RuntimeError("Timing trace ownership changed; preserve for review.")
+            return
         probe = TimingTrace(original, self)
         scanner.trace = probe
         try:
@@ -319,7 +335,15 @@ class ReadWindow:
     def timing_report(self):
         with self.lock:
             return {
-                "schema": 1,
+                "schema": 2 if self.bounded_writes else 1,
+                **(
+                    {
+                        "write_policy": "native-posix-nonblocking",
+                        "unobserved_phases": ["tx_intent", "rx_line", "rx_rejection"],
+                    }
+                    if self.bounded_writes
+                    else {}
+                ),
                 "clock": "time.monotonic (same container required for comparison)",
                 "origin_monotonic_seconds": self.started,
                 "limit": TIMING_EVENT_LIMIT,
@@ -457,6 +481,15 @@ class ReadWindow:
                 or self.runtime._display_read_research is not None
                 or self.cache is None
                 or self.feed is None
+                or (
+                    self.bounded_writes
+                    and (
+                        type(self.runtime.scanner) is not SDS200
+                        or getattr(self.cache, "_bounded_scanner", None) is not self.runtime.scanner
+                        or type(self.runtime.scanner.trace) is not TrafficTrace
+                        or self.runtime.scanner.trace.path is not None
+                    )
+                )
             ):
                 self.stop("preflight_refused")
                 return False
@@ -596,6 +629,7 @@ class SupplementalTrigger(OperatorTrigger):
         continuity=False,
         timing=False,
         transition_wait=False,
+        bounded_writes=False,
         **kwargs,
     ):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
@@ -605,9 +639,12 @@ class SupplementalTrigger(OperatorTrigger):
             raise ValueError("Timing requires an explicit continuity policy.")
         if type(transition_wait) is not bool or (transition_wait and not (continuity and timing)):
             raise ValueError("Transition withholding requires explicit continuity and timing.")
+        if type(bounded_writes) is not bool or (bounded_writes and not transition_wait):
+            raise ValueError("Bounded writes require the explicit transition-wait case.")
         self.continuity = continuity
         self.timing = timing
         self.transition_wait = transition_wait
+        self.bounded_writes = bounded_writes
         super().__init__(directory, **kwargs)
         self.firmware, self.window = firmware, None
 
@@ -616,7 +653,9 @@ class SupplementalTrigger(OperatorTrigger):
             filename,
             {
                 **report,
-                "read_kind": "shared-clock-favorites-transition-wait"
+                "read_kind": "shared-clock-favorites-bounded-write"
+                if self.bounded_writes
+                else "shared-clock-favorites-transition-wait"
                 if self.transition_wait
                 else "shared-clock-favorites-timing"
                 if self.timing
@@ -634,6 +673,11 @@ class SupplementalTrigger(OperatorTrigger):
                 "scan_transition_recovery_psi": TRANSITION_RECOVERY_PSI
                 if self.transition_wait
                 else None,
+                **(
+                    {"write_policy": "native-posix-nonblocking", "timing_schema": 2}
+                    if self.bounded_writes
+                    else {}
+                ),
             },
         )
 
@@ -650,6 +694,7 @@ class SupplementalTrigger(OperatorTrigger):
             or window.continuity != self.continuity
             or window.timing != self.timing
             or window.transition_wait != self.transition_wait
+            or window.bounded_writes != self.bounded_writes
         ):
             raise ValueError("Review the exact supplemental reader owner.")
         try:
@@ -699,6 +744,7 @@ def main(argv=None):
     )
     parser.add_argument("--timing", action="store_true")
     parser.add_argument("--transition-wait", action="store_true")
+    parser.add_argument("--bounded-writes", action="store_true")
     parser.add_argument("daemon_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if not args.daemon_args or args.daemon_args[0] != "--":
@@ -718,6 +764,7 @@ def main(argv=None):
         continuity=args.continuity,
         timing=args.timing,
         transition_wait=args.transition_wait,
+        bounded_writes=args.bounded_writes,
     )
     constructed = False
 
@@ -734,6 +781,7 @@ def main(argv=None):
                 continuity=args.continuity,
                 timing=args.timing,
                 transition_wait=args.transition_wait,
+                bounded_writes=args.bounded_writes,
             )
             self._research_trigger_started = False
 
@@ -776,6 +824,7 @@ def main(argv=None):
                 profile.scanner_target,
                 include_clock=True,
                 allow_scoped_reads=False,
+                bounded_writes=args.bounded_writes,
                 read_scope=window.scope,
             )
             kwargs["quick_keys"] = cache
