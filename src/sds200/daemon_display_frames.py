@@ -92,9 +92,13 @@ class DaemonDisplayFrames:
         stale_after: float = DEFAULT_DISPLAY_STALE_SECONDS,
         clock: Callable[[], float] = monotonic,
         quick_keys: DaemonQuickKeyCache | None = None,
+        legacy_snapshot_demand: bool = True,
     ) -> None:
         if not isinstance(profile, DaemonDisplayProfile) or not callable(clock):
             raise ValueError("An explicit daemon profile owner and clock are required.")
+        if type(legacy_snapshot_demand) is not bool:
+            raise ValueError("An explicit snapshot demand policy is required.")
+        self._legacy_snapshot_demand = legacy_snapshot_demand
         cached, _, _, self._profile_invalidation = profile.frame_context()
         self._profile, self._scanner, self._clock = profile, scanner, clock
         self._endpoint_id = cached.endpoint_id
@@ -248,12 +252,16 @@ class DaemonDisplayFrames:
     def _allow_quick_keys(self) -> bool:
         # Slow administrator reload can delay this worker, never the PSI callback
         # or a scanner control: no command/cache/feed lock held while obtaining it.
-        profile, failure, _, invalidation = self._profile.frame_context()
+        profile, failure, source_status, invalidation = self._profile.frame_context()
         with self._lock:
             if self._closed or not self._started or self._quick_keys is None:
                 return False
             current = self._profile_barrier(failure, invalidation)
-            if not current or failure is not None or profile.last_good is None:
+            if (
+                not current or failure is not None or profile.last_good is None
+                or not self._legacy_snapshot_demand
+                and (source_status != "matches_import" or profile.pending is not None)
+            ):
                 self._quick_keys.clear_demand()
                 return False
             if (
@@ -279,6 +287,41 @@ class DaemonDisplayFrames:
         """Internal values-only view; do not join this with a later frame read."""
         capture = self.supplemental_frame_set()
         return None if capture is None else capture.supplemental
+
+    def renew_supplemental_demand(self, capture: SupplementalDisplayFrameSet) -> int | None:
+        """Internal explicit lease, not a public API or cached delivery side effect.
+
+        Only explicit-demand feeds accept a previously captured same-context
+        ticket. Current PSI/profile/session and cache revision are checked again;
+        ordinary snapshots cannot renew or cancel another consumer's lease.
+        The returned revision may advance when renewing an expired lease.
+        """
+        if type(capture) is not SupplementalDisplayFrameSet:
+            raise ValueError("An existing supplemental capture is required.")
+        if self._legacy_snapshot_demand or self._quick_keys is None:
+            return None
+        profile, failure, source_status, invalidation = self._profile.frame_context()
+        target = self._scanner.endpoint
+        with self._lock:
+            if not self._profile_barrier(failure, invalidation):
+                return None
+            if (
+                self._closed or not self._started or failure is not None
+                or self._failure is not None or profile.last_good is None
+                or profile.pending is not None or source_status != "matches_import"
+                or self._session is None or self._quick_key_session is None
+                or target != self._profile.scanner_target
+                or capture.endpoint_id != str(self._endpoint_id)
+                or capture.stream_id != self._stream_id
+                or capture.session_id != self._session_id
+                or capture.profile_invalidation != invalidation
+                or capture.preferred.profile_revision != profile.last_good.profile.revision
+                or self._adapter.quick_key_selection(self._session, now=self._clock()) is None
+            ):
+                return None
+            return self._quick_keys.renew_demand_if_current(
+                self._quick_key_session, capture.context_revision
+            )
 
     def supplemental_frame_set(self) -> SupplementalDisplayFrameSet | None:
         """Internal coherent projection; no I/O, demand renewal or public change.
@@ -348,7 +391,7 @@ class DaemonDisplayFrames:
         with self._lock:
             now = self._clock()
             current = self._profile_barrier(profile_failure, invalidation)
-            if self._quick_keys is not None:
+            if self._quick_keys is not None and self._legacy_snapshot_demand:
                 if (
                     current
                     and not self._closed

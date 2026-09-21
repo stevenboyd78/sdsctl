@@ -90,7 +90,9 @@ Use `scripts/build_mimic_lovelace.py` to regenerate the shared resource, Waterfa
 owner copy, manifests and aggregate imports together. Do not edit generated
 assets manually or install this private build as a production release.
 
-Remaining work: explicit client/shell/resource activation and bounded acquisition/
-demand policy, followed by a fresh source-pinned supervised display and scanner
+The [bounded acquisition candidate](scanner-display-supplemental-acquisition.md)
+now separates ordinary delivery from explicit internal demand and provides a
+finite native-owner window. Public demand transport and client/shell/resource
+activation remain to be connected, followed by a fresh supervised display and scanner
 continuity test. Closed hardware trials remain closed. This change does not
 resolve the separate saved-recording Pause/browser timeout issue.

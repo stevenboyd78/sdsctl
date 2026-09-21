@@ -402,6 +402,9 @@ class DaemonRuntime:
         self._now = now
         self._scanner_model: str | None = None
         self._scanner_firmware: str | None = None
+        # Internal candidate owner only; never constructed by default startup.
+        self._supplemental_acquisition: object | None = None
+        self._supplemental_acquisition_used = False
 
         self.events = EventBus()
         self._lifecycle_lock = threading.RLock()

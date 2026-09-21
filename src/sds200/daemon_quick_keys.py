@@ -295,6 +295,37 @@ class DaemonQuickKeyCache:
                 self._invalidate()
             self._demand_until = now + DEMAND_LIFETIME
 
+    def renew_demand_if_current(
+        self, session: QuickKeySession, context_revision: int
+    ) -> int | None:
+        """Explicit internal demand; compare and renew atomically, without I/O.
+
+        A fresh lease invalidates old samples and returns the new revision. A
+        caller must use that revision, not keep using its pre-renewal context.
+        This never clears quarantine or changes per-command scheduling/backoff.
+        """
+        if type(context_revision) is not int or not 0 <= context_revision < 2**53:
+            raise ValueError("An exact current supplemental revision is required.")
+        with self._lock:
+            now = self._now()
+            if (
+                self._closed
+                or session is not self._session
+                or context_revision != self._epoch
+                or self._blocked is not None
+                or self._allow_scoped_reads
+                or self._clock_samples is None
+                or self._selection is None
+                or self._seen is None
+                or now - self._seen >= STALE_AFTER
+                or self._epoch >= 2**53 - 1
+            ):
+                return None
+            if now >= self._demand_until:
+                self._invalidate()
+            self._demand_until = now + DEMAND_LIFETIME
+            return self._epoch
+
     def _active(self, now: float) -> bool:
         return (
             not self._closed
