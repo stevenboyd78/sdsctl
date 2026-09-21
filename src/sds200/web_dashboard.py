@@ -280,6 +280,11 @@ class DaemonApiClientLike(Protocol):
     def display_supplemental_frame(self, context: object) -> Mapping[str, object]:
         """Read one cached supplemental bundle bound to that context."""
 
+    def display_supplemental_demand(
+        self, context: object, renewal_id: str
+    ) -> Mapping[str, object]:
+        """Renew only an explicitly enabled bounded observational lease."""
+
     def remote_clients(self) -> Mapping[str, object]:
         """Return the local operator's remote-connection inventory."""
 
@@ -481,6 +486,8 @@ def create_web_dashboard_app(
     scanner_display_admin_ingress: ScannerDisplayIngress | None = None,
     managed_theme_root: Path | None = None,
     supplemental_delivery: bool = False,
+    supplemental_demand: bool = False,
+    supplemental_consumer: bool = False,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
 
@@ -510,6 +517,14 @@ def create_web_dashboard_app(
         )
     if type(supplemental_delivery) is not bool:
         raise TypeError("Supplemental delivery opt-in must be boolean.")
+    if type(supplemental_demand) is not bool:
+        raise TypeError("Supplemental demand opt-in must be boolean.")
+    if supplemental_demand and not supplemental_delivery:
+        raise ValueError("Supplemental demand requires explicit supplemental delivery.")
+    if type(supplemental_consumer) is not bool:
+        raise TypeError("Supplemental consumer opt-in must be boolean.")
+    if supplemental_consumer and not supplemental_delivery:
+        raise ValueError("Supplemental consumer requires explicit supplemental delivery.")
     if supplemental_delivery and not (home_assistant_ingress or lan_authentication is not None):
         raise ValueError("Supplemental delivery requires authenticated dashboard admission.")
     if lan_authentication is not None and not isinstance(
@@ -567,17 +582,21 @@ def create_web_dashboard_app(
         display_theme_paths = frozenset(
             "/" + asset.manifest.stylesheet_url for asset in web_theme_runtime.assets
         )
+        if supplemental_consumer:
+            display_theme_paths |= {"/assets/mimic-supplemental.js"}
         if browser_device_sessions is not None:
             app.add_middleware(BrowserDeviceHTTP, devices=browser_device_sessions,
                                authentication=lan_authentication,
-                               display_theme_paths=display_theme_paths)
+                               display_theme_paths=display_theme_paths,
+                               supplemental_demand=supplemental_demand)
         else:
             app.add_middleware(WebDashboardAuthenticationMiddleware,
                                authentication=lan_authentication,
-                               display_theme_paths=display_theme_paths)
+                               display_theme_paths=display_theme_paths,
+                               supplemental_demand=supplemental_demand)
 
     if supplemental_delivery:
-        attach_supplemental_routes(app, api_client_factory)
+        attach_supplemental_routes(app, api_client_factory, demand=supplemental_demand)
 
     @app.get(
         "/",
@@ -586,11 +605,21 @@ def create_web_dashboard_app(
     )
     def index(request: Request) -> HTMLResponse:
         shell = _dashboard_shell(web_theme_runtime, home_assistant_ingress)
+        if supplemental_consumer:
+            mode = "demand" if supplemental_demand else "cached"
+            shell = shell.replace(
+                '<html lang="en"', f'<html data-sdsctl-supplemental="{mode}" lang="en"', 1,
+            ).replace(
+                '  <script src="assets/mimic-sds.js" defer></script>',
+                '  <script src="assets/mimic-supplemental.js" defer></script>\n'
+                '  <script src="assets/mimic-sds.js" defer></script>',
+                1,
+            )
         if lan_authentication is not None:
             display_only = request.scope.get("state", {}).get("sdsctl_display_only") is True
             mode = "display" if display_only else "operator"
             shell = shell.replace(
-                '<html lang="en"', f'<html data-access-mode="{mode}" lang="en"', 1,
+                '<html ', f'<html data-access-mode="{mode}" ', 1,
             )
         return HTMLResponse(
             content=shell,
@@ -643,6 +672,12 @@ def create_web_dashboard_app(
             ),
             media_type="application/javascript", headers=dict(_WEB_RESPONSE_HEADERS),
         )
+
+    if supplemental_consumer:
+
+        @app.get("/assets/mimic-supplemental.js", include_in_schema=False)
+        def supplemental_script() -> Response:
+            return _asset_response("mimic-supplemental.js", media_type="application/javascript")
 
     @app.get(
         "/assets/system-palettes.css",

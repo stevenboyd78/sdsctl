@@ -33,7 +33,12 @@ from .exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
-from .scanner_display_supplemental_transport import decode_context_response, validate_bundle
+from .scanner_display_supplemental_transport import (
+    decode_context_response,
+    decode_demand_response,
+    validate_bundle,
+    validate_renewal_id,
+)
 from .scanner_display_supplemental_wire import decode_supplemental_context
 
 DAEMON_API_CLIENT_DEFAULT_TIMEOUT = 5.0
@@ -205,6 +210,20 @@ class DaemonApiClient:
         except ValueError:
             self.close()
             raise DaemonProtocolError("Invalid supplemental display bundle.") from None
+
+    def display_supplemental_demand(self, context: object, renewal_id: str) -> dict[str, object]:
+        """One non-replayed lease renewal; a failed reply does not undo acquisition."""
+        binding = decode_supplemental_context(context)
+        validate_renewal_id(renewal_id)
+        self._require_operation(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND)
+        result = self.request(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
+                              params={"context": asdict(binding), "renewal_id": renewal_id})
+        try:
+            decode_demand_response(result, binding, renewal_id)
+            return result
+        except (ValueError, TypeError):
+            self.close()
+            raise DaemonProtocolError("Supplemental demand acknowledgement was invalid.") from None
 
     def remote_clients(self) -> dict[str, object]:
         """Return operator-only live connections through the local daemon API."""

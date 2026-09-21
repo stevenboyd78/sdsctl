@@ -3,7 +3,8 @@
 The source must use finite I/O on a dedicated authenticated client. The worker
 alone owns that client; the UI never closes or waits on it. All guard mutations
 and projections share one Condition, with no transport operation under its lock.
-No acquisition, demand renewal, scanner ownership or ordinary-frame fallback.
+Demand renewal is a separate optional source capability; never arms acquisition.
+No scanner ownership or ordinary-frame fallback.
 """
 
 from __future__ import annotations
@@ -15,13 +16,18 @@ from threading import Condition, Thread
 from time import monotonic
 from types import MappingProxyType
 from typing import Any, Protocol
+from uuid import uuid4
 
 from .daemon_remote_client import DaemonRemoteClientError, DaemonRemoteClientErrorReason
 from .exceptions import DaemonRequestError
 from .scanner_display_reader import decode_display_packet
 from .scanner_display_supplemental import SupplementalDisplayValues
 from .scanner_display_supplemental_client import SupplementalConsumer, SupplementalRequest
-from .scanner_display_supplemental_transport import decode_context_response, validate_bundle
+from .scanner_display_supplemental_transport import (
+    decode_context_response,
+    decode_demand_response,
+    validate_bundle,
+)
 from .scanner_display_supplemental_wire import LIFETIME, SupplementalContext, bounded_seconds
 from .scanner_display_web import scanner_display_browser_contract
 
@@ -34,30 +40,52 @@ class SupplementalReaderStopped(ValueError):
     """Terminal admission/history failure; never display remote error text."""
 
 
+class _DemandUnconfirmed(SupplementalReaderStopped):
+    """Stop this instance even if it was hidden while the request was in flight."""
+
+
 @dataclass(frozen=True)
 class SupplementalFrameSource:
     negotiate: Callable[[], object]
     read: Callable[[object], object]
     close: Callable[[], None]
+    renew: Callable[[object, str], object] | None = None
 
 
 class _SupplementalClient(Protocol):
     def hello(self) -> dict[str, object]: ...
     def display_supplemental_context(self) -> dict[str, object]: ...
     def display_supplemental_frame(self, context: object) -> dict[str, object]: ...
+    def display_supplemental_demand(
+        self, context: object, renewal_id: str
+    ) -> dict[str, object]: ...
     def close(self) -> None: ...
 
 
-def daemon_supplemental_source(client: _SupplementalClient) -> SupplementalFrameSource:
+def daemon_supplemental_source(
+    client: _SupplementalClient, *, demand: bool = False
+) -> SupplementalFrameSource:
     """Opt-in factory; reuse admission/capabilities on a dedicated finite client."""
+    if type(demand) is not bool:
+        raise TypeError("Supplemental demand opt-in must be boolean.")
+    required = _OPERATIONS | ({"display.supplemental.demand"} if demand else set())
 
     def negotiate() -> object:
         operations = client.hello().get("operations")
-        if type(operations) is not list or not all(op in operations for op in _OPERATIONS):
+        if (
+            type(operations) is not list
+            or not all(type(op) is str for op in operations)
+            or not required.issubset(operations)
+        ):
             raise SupplementalReaderStopped("Supplemental delivery is not supported.")
         return client.display_supplemental_context()
 
-    return SupplementalFrameSource(negotiate, client.display_supplemental_frame, client.close)
+    return SupplementalFrameSource(
+        negotiate,
+        client.display_supplemental_frame,
+        client.close,
+        client.display_supplemental_demand if demand else None,
+    )
 
 
 def _terminal(error: Exception) -> bool:
@@ -335,6 +363,31 @@ class SupplementalFrameReader:
                             continue
                         assert self._guard is not None
                         context = self._guard.context
+                    if self._source.renew is not None:
+                        nonce = str(uuid4())
+                        try:
+                            response = self._source.renew(asdict(context), nonce)
+                            renewed = decode_demand_response(response, context, nonce)
+                            if bounded_seconds(self._clock()) - started >= LIFETIME:
+                                raise TimeoutError
+                        except Exception as error:
+                            if (
+                                isinstance(error, DaemonRequestError)
+                                and error.code == "supplemental_context_changed"
+                            ):
+                                raise  # Explicit pre-mutation context rejection only.
+                            raise _DemandUnconfirmed(
+                                "Supplemental demand was not confirmed."
+                            ) from None
+                        with self._condition:
+                            if not self._current(generation):
+                                continue
+                            self._bind(renewed)
+                            context = renewed
+                    with self._condition:
+                        if not self._current(generation):
+                            continue
+                        assert self._guard is not None
                         ticket = self._guard.begin(now=self._clock())
                     # Validation and I/O do not hold the UI/guard lock.
                     bundle = validate_bundle(self._source.read(asdict(context)), context)
@@ -348,7 +401,10 @@ class SupplementalFrameReader:
                 except Exception as error:
                     delay = 2.0
                     with self._condition:
-                        if self._current(generation):
+                        if isinstance(error, _DemandUnconfirmed) and not self._closed:
+                            self._stop()
+                            self._message = "Supplemental demand unconfirmed — renewal stopped"
+                        elif self._current(generation):
                             if _terminal(error):
                                 self._stop()
                             else:

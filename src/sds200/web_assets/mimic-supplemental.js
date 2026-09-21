@@ -42,6 +42,23 @@
     require(data.protocol === "sdsctl.supplemental-context" && data.version === 1);
     return context(data.context);
   }
+  function renewalId(bytes) {
+    require(Array.isArray(bytes) && bytes.length === 16 &&
+      bytes.every(value => Number.isInteger(value) && value >= 0 && value <= 255));
+    const copy = [...bytes]; copy[6] = (copy[6] & 15) | 64; copy[8] = (copy[8] & 63) | 128;
+    const hex = copy.map(value => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
+  function demandResponse(payload, expected, nonce) {
+    const data = object(payload, ["protocol", "version", "context", "renewal_id", "lease_seconds"]);
+    require(typeof nonce === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(nonce));
+    require(data.protocol === "sdsctl.supplemental-demand" && data.version === 1 &&
+      data.renewal_id === nonce && data.lease_seconds === 5);
+    const before = context(expected), after = context(data.context);
+    require(contextKeys.every(key => key === "context_revision"
+      ? after[key] === before[key] || after[key] === before[key] + 1 : after[key] === before[key]));
+    return after;
+  }
   function validClock(value) {
     if (typeof value !== "string" || value.length !== 19 ||
         !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(value)) return false;
@@ -196,5 +213,5 @@
       }).join("  "));
     return rows;
   }
-  window.sdsctlSupplemental = Object.freeze({decode, create, bundle, present, favoritesRows, contextResponse});
+  window.sdsctlSupplemental = Object.freeze({decode, create, bundle, present, favoritesRows, contextResponse, renewalId, demandResponse});
 })();

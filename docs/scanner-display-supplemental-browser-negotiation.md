@@ -21,7 +21,8 @@ served or loaded by the ordinary dashboard**. Neither option is supplied by the
 normal shell. Supplying a script alone does not enable the feature. The generated
 HA card contains the shared bounded reader, not this coordinator or its guard.
 
-A future opted-in shell must pass its existing `webRootUrl.href` and
+The internal `supplemental_consumer=True` application-factory opt-in passes the
+shell's existing `webRootUrl.href` and
 `request: dashboardFetch`, preserving the outer session lifecycle. Do not replace
 that wrapper with a parallel raw fetch. Native 401 responses already trigger
 the established sign-in path and stop all session activity. An Ingress 403 is
@@ -92,8 +93,10 @@ This is not visual browser or physical scanner acceptance.
 The [TUI reader candidate](scanner-display-supplemental-tui.md) now covers the
 equivalent offline TUI lifecycle without activating ordinary startup.
 The [HA card candidate](scanner-display-supplemental-ha.md) likewise remains
-default-off. Still required: explicit shell/dependency activation and the bounded
-acquisition enable/demand policy.
-Only after those gates pass should a source-pinned candidate be staged for fresh
+default-off. The [authenticated demand candidate](scanner-display-supplemental-demand.md)
+adds separately selected lease renewal, conservative uncertainty handling, and
+an explicit authenticated shell/dependency switch. Ordinary startup still leaves
+it disabled. A new finite source-pinned launcher and restoration are required
+before a candidate is staged for fresh
 operator-assisted visual and continuity testing. Closed hardware trials stay
 closed. This work does not resolve the separate saved-recording Pause issue.

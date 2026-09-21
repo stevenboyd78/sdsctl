@@ -19,16 +19,42 @@ from .test_scanner_display_supplemental_web import engine as engine
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    [
+        "demand-happy",
+        "demand-lost",
+        "demand-bad",
+        "demand-timeout",
+        "demand-hide",
+        "demand-reject",
+        "demand-hidden-return",
+    ],
+)
+def test_browser_explicit_demand(scripts, bundle, scenario):
+    run(scripts, bundle, scenario)
+
+
 @pytest.fixture(scope="module")
 def scripts():
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         script = client.get("/assets/mimic-sds.js").text
         assert client.get("/assets/mimic-supplemental.js").status_code == 404
-        assert "supplementalRoot" not in client.get("/assets/dashboard.js").text
+        assert "data-sdsctl-supplemental" not in client.get("/").text
+        dashboard = client.get("/assets/dashboard.js").text
+        start = dashboard.index("function initializeMimicDisplay() {")
+        end = dashboard.index("\ninitializeMimicDisplay();", start)
     return {
         "script": script,
+        "bootstrap": dashboard[start:end],
         "auxiliary": (ROOT / "src/sds200/web_assets/mimic-supplemental.js").read_text(),
     }
+
+
+@pytest.mark.parametrize("demand", [False, True])
+@pytest.mark.parametrize("ip", [False, True])
+def test_actual_shell_boots_actual_supplemental_controller(scripts, bundle, demand, ip):
+    run(scripts, bundle, "shell-bootstrap", demand=demand, ip=ip)
 
 
 def run(scripts, bundle, scenario, **options):

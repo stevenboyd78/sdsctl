@@ -71,6 +71,11 @@ _DISPLAY_READ_PATHS = frozenset({
 })
 
 
+def _display_demand_allowed(method: str, path: str, enabled: bool) -> bool:
+    # One observational lease mutation. Never grant generic display POST access.
+    return enabled and method == "POST" and path == "/api/v1/display-supplemental/demand"
+
+
 @dataclass(frozen=True, slots=True)
 class _SessionWatcher:
     loop: asyncio.AbstractEventLoop
@@ -508,12 +513,16 @@ class WebDashboardAuthenticationMiddleware:
         *,
         authentication: WebDashboardAuthentication,
         display_theme_paths: frozenset[str] = frozenset(),
+        supplemental_demand: bool = False,
     ) -> None:
         if not isinstance(authentication, WebDashboardAuthentication):
             raise TypeError("Web dashboard authentication middleware requires a valid policy.")
         self._app = app
         self._authentication = authentication
         self._display_paths = _DISPLAY_READ_PATHS | display_theme_paths
+        if type(supplemental_demand) is not bool:
+            raise TypeError("Supplemental demand opt-in must be boolean.")
+        self._supplemental_demand = supplemental_demand
 
     async def __call__(
         self,
@@ -625,7 +634,10 @@ class WebDashboardAuthenticationMiddleware:
             await unauthorized_response(scope, receive, send)
             return
 
-        if lease.display_only and (method != "GET" or path not in self._display_paths):
+        if lease.display_only and not (
+            method == "GET" and path in self._display_paths
+            or _display_demand_allowed(method, path, self._supplemental_demand)
+        ):
             lease.release()
             await _json_error(
                 "Display-only access does not permit this operation.", status_code=403,

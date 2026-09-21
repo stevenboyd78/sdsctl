@@ -30,19 +30,44 @@ function harness(options = {}) {
     setTimeout(fn, delay) { timers.set(++timerId, {fn, at:now + Math.max(0, delay)}); return timerId; },
     clearTimeout(id) { timers.delete(id); },
   };
-  const sandbox = {window, document, performance:{now:() => now}, AbortController, TextDecoder, URL};
+  const sandbox = {window, document, performance:{now:() => now}, AbortController, TextDecoder, URL,
+    crypto: require('node:crypto').webcrypto};
   vm.runInNewContext(input.auxiliary, sandbox);
   vm.runInNewContext(input.script, sandbox);
   const response = (body = payload, status = 200) => new Response(JSON.stringify(body),
     {status, headers:{'content-type':'application/json'}});
   const negotiation = () => input.negotiation ? copy(input.negotiation)
     : {protocol:'sdsctl.supplemental-context', version:1, context:copy(payload.supplemental.context)};
-  const controller = window.sdsctlMimic.create({host, standard:new Element('section'),
-    url:'/FORBIDDEN-ordinary-fallback', supplementalRoot:rootUrl, ...options,
-    request:async (url, opts) => {
+  let renewed = false;
+  const defaultRequest = (url, opts) => {
+    if (url.endsWith('/demand')) {
+      assert.equal(opts.method, 'POST'); assert.equal(opts.body, undefined);
+      assert.deepEqual(JSON.parse(opts.headers['X-SDSCTL-Supplemental-Context']), payload.supplemental.context);
+      if (!renewed) { renewed = true; payload.supplemental.context.context_revision++; }
+      return response({protocol:'sdsctl.supplemental-demand',version:1,context:payload.supplemental.context,
+        renewal_id:opts.headers['X-SDSCTL-Supplemental-Renewal'],lease_seconds:5});
+    }
+    return response(url.endsWith('/context') ? negotiation() : payload);
+  };
+  const request = async (url, opts) => {
       requests.push([url, opts]);
-      return handler ? handler(url, opts) : response(url.endsWith('/context') ? negotiation() : payload);
-    }});
+      return handler ? handler(url, opts) : defaultRequest(url, opts);
+    };
+  let controller;
+  if (options.shell) {
+    const standard = new Element('section');
+    document.documentElement = {dataset:{sdsctlSupplemental:options.supplementalDemand ? 'demand' : 'cached'}};
+    Object.assign(sandbox, {
+      webRootUrl:new URL(options.supplementalRoot ?? rootUrl),
+      element:id => id === 'pane-scanner' ? host : standard, dashboardFetch:request, mimicDisplay:null,
+    });
+    // Functions called in strict mode cannot depend on their receiver.
+    sandbox.webUrl = path => new URL(path, sandbox.webRootUrl).href;
+    vm.runInNewContext(input.bootstrap + '\ninitializeMimicDisplay();', sandbox);
+    controller = sandbox.mimicDisplay;
+    assert.ok(controller, 'Candidate shell must start the actual guarded controller');
+  } else controller = window.sdsctlMimic.create({host, standard:new Element('section'),
+    url:'/FORBIDDEN-ordinary-fallback', supplementalRoot:rootUrl, ...options, request});
   const find = id => nodes(host).find(n => n.id === id);
   const choose = (id, value) => { const n = find(id); n.value = value; n.listeners.change(); };
   const context = (value = {}) => controller.context({available:true,active:true,stopped:false,...value});
@@ -51,7 +76,7 @@ function harness(options = {}) {
     const region = payload.display.frames[mode].screen.regions.find(r => r.token === token);
     return region && nodes(host).find(n => n.dataset.region === region.id)?.children[0]?.textContent;
   };
-  return {controller, payload, host, document, requests, find, choose, context, response, negotiation, text,
+  return {controller, payload, host, document, requests, find, choose, context, response, negotiation, text, defaultRequest,
     get negotiations() { return requests.filter(([url]) => url.endsWith('/context')).length; },
     get frames() { return requests.filter(([url]) => url.endsWith('/frame')).length; },
     get pendingTimers() { return timers.size; },
@@ -96,11 +121,57 @@ const streamed = text => {
   return {response, finish};
 };
 async function scenario(name) {
+  if (name === 'shell-bootstrap') {
+    const root = input.ip ? 'http://192.0.2.10:8123/ingress/' : rootUrl;
+    const h = harness({shell:true,supplementalDemand:input.demand,supplementalRoot:root,pageOrigin:new URL(root).origin});
+    await h.start(); clock(h); assert.ok(h.favorite());
+    assert.equal(h.negotiations,1); assert.equal(h.frames,1);
+    assert.equal(h.requests.filter(([url])=>url.endsWith('/demand')).length,input.demand ? 1 : 0);
+    assert.ok(h.requests.every(([url])=>url.startsWith(root + 'api/v1/display-supplemental/')));
+    h.controller.stop(); const count=h.requests.length; await h.tick(10000);
+    assert.equal(h.requests.length,count); assert.equal(h.pendingTimers,0); return;
+  }
   if (name.startsWith('root:')) {
     assert.throws(() => harness({supplementalRoot:input.value})); return;
   }
   if (name === 'mutually-exclusive') {
     assert.throws(() => harness({supplementalContext:input.bundle.supplemental.context})); return;
+  }
+  if (name.startsWith('demand-')) {
+    const h = harness({supplementalDemand:true});
+    let finish;
+    if (name !== 'demand-happy' && name !== 'demand-reject') h.request = (url, opts) => {
+      if (!url.endsWith('/demand')) return h.defaultRequest(url, opts);
+      if (name === 'demand-lost') throw Error('PRIVATE');
+      if (name === 'demand-bad') return h.response({protocol:'invalid'});
+      return new Promise(resolve => { finish = () => resolve(h.defaultRequest(url, opts)); });
+    };
+    if (name === 'demand-reject') {
+      let refused = false;
+      h.request = (url, opts) => {
+        if (url.endsWith('/demand') && !refused) { refused = true; return h.response({},409); }
+        return h.defaultRequest(url,opts);
+      };
+    }
+    await h.start();
+    if (name === 'demand-happy') {
+      clock(h); assert.equal(h.negotiations,1); assert.equal(h.frames,1);
+      await h.tick(250); assert.equal(h.negotiations,1); assert.equal(h.frames,2);
+      const renewals = h.requests.filter(([url])=>url.endsWith('/demand'));
+      assert.equal(new Set(renewals.map(([,o])=>o.headers['X-SDSCTL-Supplemental-Renewal'])).size,2);
+      h.controller.stop(); const count=h.requests.length; await h.tick(10000); assert.equal(h.requests.length,count);
+    } else if (name === 'demand-reject') {
+      empty(h); assert.equal(h.frames,0); await h.tick(2000); clock(h); assert.equal(h.negotiations,2);
+    } else {
+      if (name === 'demand-hide') { h.document.hidden=true; h.context(); h.document.hidden=false; h.context(); }
+      if (name === 'demand-hidden-return') h.document.hidden=true;
+      if (name === 'demand-timeout') await h.tick(5000);
+      finish?.(); await flush(); empty(h);
+      h.document.hidden=false;
+      const count=h.requests.length; h.context(); await h.tick(10000);
+      assert.equal(h.requests.length,count); assert.equal(h.frames,0);
+    }
+    h.controller.stop(); assert.equal(h.pendingTimers,0); return;
   }
   const h = harness(name === 'ip-origin' ? {pageOrigin:'http://192.0.2.10:8123',
     supplementalRoot:'http://192.0.2.10:8123/ingress/'} : {});

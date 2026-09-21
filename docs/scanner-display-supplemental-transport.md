@@ -23,12 +23,18 @@ option defaults to false and requires native authentication or trusted Home
 Assistant Ingress. Neither ordinary startup nor CLI/configuration exposes or
 sets these options. The normal dashboard does not load the auxiliary JavaScript
 dependency or opt its controller into this transport.
+An additional internal `supplemental_consumer=True` factory option now provides
+that candidate shell wiring; it does not enable demand unless the separate
+demand option is also selected. Ordinary startup supplies none of these flags.
 
-Delivery never starts a worker, renews demand, requests a refresh, switches
+Cached delivery never starts a worker, renews demand, requests a refresh, switches
 scanner modes, imports a profile, or performs scanner I/O. A dormant/expired
 cache remains dormant/expired. A transport connection is not acquisition consent.
 The service and its owner must share a monotonic clock domain; defaults use
 `time.monotonic`, while offline fixtures inject their common fake clock.
+The separate [authenticated demand candidate](scanner-display-supplemental-demand.md)
+adds a further explicit opt-in for a bounded lease mutation; it does not change
+these cached GET semantics.
 
 ## Authenticated negotiation
 
@@ -47,8 +53,8 @@ session, managed-device display session, or trusted Supervisor Ingress admission
 Forwarded headers do not replace the trusted Ingress peer check. Expiration,
 sign-out and device revocation retain their existing authorization semantics.
 
-Display-only sessions can perform these GETs, but not POSTs, profile
-administration, scanner control, audio or recording operations. Authenticated
+With only cached delivery enabled, display-only sessions can perform these GETs,
+but not POSTs, profile administration, scanner control, audio or recording operations. Authenticated
 daemon observe peers may use the new operations only when explicitly provided
 by the daemon. The scanner-control-only interface does not admit them.
 

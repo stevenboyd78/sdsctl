@@ -84,8 +84,9 @@ adds no scanner reads. This is not physical Pi or visual hardware acceptance.
 
 The [HA consumer candidate](scanner-display-supplemental-ha.md) now provides the
 corresponding offline card lifecycle integration, also default-off.
-Still required: explicit client/shell/resource activation and the bounded
-acquisition/demand policy. Only then should a fresh,
+The [bounded authenticated demand candidate](scanner-display-supplemental-demand.md)
+now adds optional lease renewal, leaving this cached-only mode unchanged.
+Still required: explicit client/shell/resource activation. Only then should a fresh,
 source-pinned candidate be staged for supervised scanner and display testing.
 Closed hardware trials stay closed. The separate saved-recording Pause/browser
 timeout issue remains unresolved by this work.

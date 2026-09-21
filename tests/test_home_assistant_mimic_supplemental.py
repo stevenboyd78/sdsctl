@@ -17,6 +17,14 @@ from .test_scanner_display_supplemental_web import engine as engine
 @pytest.mark.parametrize(
     "case",
     [
+        "demand_happy",
+        "demand_lost",
+        "demand_bad",
+        "demand_timeout",
+        "demand_hide",
+        "demand_hidden_return",
+        "demand_reject",
+        "demand_siblings",
         "aux_default_off",
         "aux_profile",
         "aux_expiry",

@@ -4388,13 +4388,33 @@ window.setInterval(() => {
   }
 }, 5000);
 
-if (window.sdsctlMimic) {
-  mimicDisplay = window.sdsctlMimic.create({
+function initializeMimicDisplay() {
+  // Server-selected internal candidate only. No storage/query/config shortcut.
+  const mode = document.documentElement.dataset.sdsctlSupplemental;
+  const supplemental = mode !== undefined;
+  const unavailable = () => {
+    const notice = document.createElement("p");
+    notice.className = "notice notice-error";
+    notice.setAttribute("role", "alert");
+    notice.textContent = "Supplemental Mimic-SDS could not start. No supplemental reader was selected; administrator review is required.";
+    element("pane-scanner").prepend(notice);
+  };
+  if (supplemental && (!["cached", "demand"].includes(mode) ||
+      !window.sdsctlSupplemental || !window.sdsctlMimic)) { unavailable(); return; }
+  if (!window.sdsctlMimic) return;
+  const options = {
     host: element("pane-scanner"), standard: element("radio-activity-panel"),
     url: webUrl("api/v1/display-frame"), request: dashboardFetch,
-  });
+  };
+  if (supplemental) {
+    options.supplementalRoot = webRootUrl.href;
+    options.supplementalDemand = mode === "demand";
+  }
+  try { mimicDisplay = window.sdsctlMimic.create(options); }
+  catch (error) { if (!supplemental) throw error; unavailable(); }
 }
 
+initializeMimicDisplay();
 void initializeNativeSession();
 initializeWaterfallWorkspace();
 initializeWorkspace();

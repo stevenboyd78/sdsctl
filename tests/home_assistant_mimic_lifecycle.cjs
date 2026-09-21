@@ -34,10 +34,18 @@ function harness() {
   if(input.supplemental)frame.supplemental.psi={sequence:100,age_seconds:0};
   const response=(payload=frame,status=200)=>new Response(JSON.stringify(payload),{status,headers:{'content-type':'application/json'}});
   const contextResponse=()=>({protocol:'sdsctl.supplemental-context',version:1,context:frame.supplemental.context});
+  let renewed=false;
   const defaultRequest=async(url,options)=>{
     assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
     if(input.supplemental){
       assert.equal(options.headers['X-SDSCTL-Supplemental-Version'],'1');
+      if(url.endsWith('/demand')){
+        assert.equal(options.method,'POST');assert.equal(options.body,undefined);
+        assert.deepEqual(JSON.parse(options.headers['X-SDSCTL-Supplemental-Context']),frame.supplemental.context);
+        if(!renewed){renewed=true;frame.supplemental.context.context_revision++;}
+        return response({protocol:'sdsctl.supplemental-demand',version:1,context:frame.supplemental.context,
+          renewal_id:options.headers['X-SDSCTL-Supplemental-Renewal'],lease_seconds:5});
+      }
       if(url.endsWith('/context')){
         assert.equal(url,origin+'/api/hassio_ingress/example_key/api/v1/display-supplemental/context');
         assert.equal(options.headers['X-SDSCTL-Supplemental-Context'],undefined);
@@ -52,14 +60,16 @@ function harness() {
   const ctx=vm.createContext({window,document,location:{origin,protocol:new URL(origin).protocol},HTMLElement:Element,CustomEvent:class {},
     customElements:{get:tag=>definitions.get(tag),define:(tag,constructor)=>definitions.set(tag,constructor)},
     IntersectionObserver:class {constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},
-    performance:{now:()=>now},AbortController,TextDecoder,URL,fetch:(...args)=>{calls++;return request(...args);}});
+    performance:{now:()=>now},AbortController,TextDecoder,URL,crypto:require('node:crypto').webcrypto,
+    fetch:(...args)=>{calls++;return request(...args);}});
   if(input.case==='aux_legacy_owner')vm.runInContext(`globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")] = Object.freeze({
     acquire:async()=>()=>{}, invalidate(){}, resolve:async()=>{throw Error("Old owner does not support the new route.");}, get _leases(){return 0;}
   });`,ctx);
   vm.runInContext(input.script,ctx);
   const Card=definitions.get('sds200-mimic-card');
   const owner=vm.runInContext('globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")]',ctx);
-  const card=()=>{const c=new Card({supplemental:input.supplemental??false});c.setConfig({});return c;};
+  const card=()=>{const c=new Card({supplemental:input.supplemental??false,
+    supplementalDemand:input.case.startsWith('demand_')});c.setConfig({});return c;};
   const start=async c=>{c.connectedCallback();c.contexts.hassApi(api);c.contexts.hassUi(ui,()=>{});observers.at(-1).callback([{isIntersecting:true}]);await flush();};
   const raw=c=>nodes(c.shadowRoot).filter(node=>node.dataset.valueStatus==='raw_source');
   return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,contextResponse,defaultRequest,
@@ -74,11 +84,55 @@ function harness() {
 }
 const clockShown=c=>nodes(c._surround).some(node=>node.textContent==='21:26');
 const cases={
+  async demand_happy(h){
+    const c=h.card();await h.start(c);assert.ok(clockShown(c));assert.equal(h.calls,3);
+    await h.tick(250);assert.equal(h.calls,5);assert.equal(c._terminal,false);
+    c.disconnectedCallback();const count=h.calls;await h.tick(10000);assert.equal(h.calls,count);assert.equal(h.owner._leases,0);
+  },
+  async demand_lost(h){
+    h.request=(url,opts)=>{if(url.endsWith('/demand'))throw Error('PRIVATE');return h.defaultRequest(url,opts);};
+    const c=h.card();await h.start(c);assert.equal(c._terminal,true);assert.equal(h.raw(c).length,0);
+    const count=h.calls;await h.tick(10000);assert.equal(h.calls,count);assert.equal(h.owner._leases,0);c.disconnectedCallback();
+  },
+  async demand_bad(h){
+    h.request=(url,opts)=>url.endsWith('/demand')?h.response({protocol:'bad'}):h.defaultRequest(url,opts);
+    const c=h.card();await h.start(c);assert.equal(c._terminal,true);assert.equal(h.raw(c).length,0);c.disconnectedCallback();
+  },
+  async demand_timeout(h){
+    let finish;h.request=(url,opts)=>url.endsWith('/demand')?new Promise(resolve=>{finish=()=>resolve(h.defaultRequest(url,opts));}):h.defaultRequest(url,opts);
+    const c=h.card();await h.start(c);await h.tick(5000);assert.equal(c._terminal,true);assert.equal(h.owner._leases,0);
+    finish();await flush();assert.equal(h.raw(c).length,0);const count=h.calls;await h.tick(10000);assert.equal(h.calls,count);c.disconnectedCallback();
+  },
+  async demand_hide(h){
+    let finish;h.request=(url,opts)=>url.endsWith('/demand')?new Promise(resolve=>{finish=()=>resolve(h.defaultRequest(url,opts));}):h.defaultRequest(url,opts);
+    const c=h.card();await h.start(c);h.document.hidden=true;c._reconcile();h.document.hidden=false;c._reconcile();
+    assert.equal(c._terminal,true);finish();await flush();assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);c.disconnectedCallback();
+  },
+  async demand_reject(h){
+    let rejected=false;h.request=(url,opts)=>{if(url.endsWith('/demand')&&!rejected){rejected=true;return h.response({},409);}return h.defaultRequest(url,opts);};
+    const c=h.card();await h.start(c);assert.equal(h.raw(c).length,0);assert.equal(c._terminal,false);
+    await h.tick(2000);assert.ok(clockShown(c));c.disconnectedCallback();
+  },
+  async demand_hidden_return(h){
+    let finish;h.request=(url,opts)=>url.endsWith('/demand')?new Promise(resolve=>{finish=()=>resolve(h.defaultRequest(url,opts));}):h.defaultRequest(url,opts);
+    const c=h.card();await h.start(c);h.document.hidden=true;finish();await flush();assert.equal(c._terminal,true);
+    h.document.hidden=false;c._reconcile();const count=h.calls;await h.tick(10000);assert.equal(h.calls,count);assert.equal(h.raw(c).length,0);c.disconnectedCallback();
+  },
+  async demand_siblings(h){
+    const a=h.card(),b=h.card();await h.start(a);await h.start(b);assert.equal(h.owner._leases,2);
+    let fail=true;h.request=(url,opts)=>{if(url.endsWith('/demand')&&fail){fail=false;throw Error('PRIVATE');}return h.defaultRequest(url,opts);};
+    await h.tick(250);assert.equal([a,b].filter(c=>c._terminal).length,1);assert.equal(h.owner._leases,1);
+    const survivor=[a,b].find(c=>!c._terminal);assert.ok(clockShown(survivor));h.newer();await h.tick(250);assert.ok(clockShown(survivor));
+    a.disconnectedCallback();b.disconnectedCallback();assert.equal(h.owner._leases,0);
+  },
   async aux_default_off(h){
     const c=new h.Card();assert.equal(c._supplemental,false);assert.equal(c._auxGuard,null);
     assert.throws(()=>c.setConfig({supplemental:true}));assert.equal(h.calls,0);
     assert.equal(h.window.sdsctlSupplemental,undefined); // resource-private guard
     assert.throws(()=>new h.Card({supplemental:'true'}));
+    assert.throws(()=>new h.Card({supplementalDemand:true}));
+    assert.throws(()=>new h.Card({supplemental:true,supplementalDemand:1}));
+    assert.throws(()=>c.setConfig({supplementalDemand:true}));
   },
   async aux_profile(h){
     const original=JSON.stringify(h.frame),c=h.card();await h.start(c);

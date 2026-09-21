@@ -204,16 +204,18 @@
     return decoder(payload);
   }
 
-  function create({host, standard, url, request, supplementalContext = null, supplementalRoot = null}) {
+  function create({host, standard, url, request, supplementalContext = null, supplementalRoot = null, supplementalDemand = false}) {
     // Internal opt-ins only; the normal shell supplies neither. A fixed-context
     // caller cannot rebind. Negotiated callers use only the authenticated fixed
     // routes under their same-origin (possibly HA Ingress-prefixed) web root.
     const negotiated = supplementalRoot !== null;
+    require(typeof supplementalDemand === "boolean" && (!supplementalDemand || negotiated));
     require(!negotiated || supplementalContext === null);
     const supplemental = supplementalContext !== null || negotiated;
     const auxiliary = supplemental ? window.sdsctlSupplemental : null;
     require(!supplemental ||
       ["create", "bundle", "present", "favoritesRows"].every(key => typeof auxiliary?.[key] === "function"));
+    require(!supplementalDemand || ["renewalId", "demandResponse"].every(key => typeof auxiliary?.[key] === "function"));
     let contextUrl = null, frameUrl = url, negotiationNeeded = negotiated;
     if (negotiated) {
       require(typeof supplementalRoot === "string" && supplementalRoot.length <= 2048 &&
@@ -230,7 +232,8 @@
       : payload => auxiliary.bundle(payload, decode, auxiliaryGuard.context);
     let available = false, active = false, selected = false, stopped = false, closed = false;
     let generation = 0, controller = null, timer = null, expiryTimer = null, auxiliaryTimer = null;
-    let requestTimer = null;
+    let requestTimer = null, renewalPending = false;
+    const demandUnconfirmed = "Supplemental demand unconfirmed — renewal stopped; reads may have occurred. Reopen for administrator review.";
     let latest = null, deadline = null, sequenceDeadline = null, endpoint = null, session = null, sequence = null;
     let style = "preferred", treatment = "strips";
     const toolbar = make("div", undefined, "mimic-toolbar");
@@ -337,6 +340,10 @@
     }
     function demanded() { return selected && available && active && !stopped && !document.hidden; }
     function cancel(message) {
+      if (renewalPending) {
+        closed = stopped = true; renewalPending = false; auxiliaryGuard?.close();
+        message = demandUnconfirmed;
+      }
       generation++; controller?.abort(); controller = null;
       window.clearTimeout(requestTimer); requestTimer = null;
       auxiliaryGuard?.suspend();
@@ -407,6 +414,7 @@
       // pending request never renews the display's five-second freshness lease.
       const timeout = window.setTimeout(() => {
         timedOut = true; timeoutPhase = phase; current.abort();
+        if (renewalPending && controller === current) stopSession(demandUnconfirmed);
       }, 5000);
       requestTimer = timeout;
       let delay = 250;
@@ -427,6 +435,26 @@
           bindContext(binding);
           if (closed) return;
           negotiationNeeded = false;
+        }
+        if (supplementalDemand) {
+          const binding = auxiliaryGuard.context;
+          const nonce = auxiliary.renewalId(Array.from(crypto.getRandomValues(new Uint8Array(16))));
+          phase = "demand_request"; renewalPending = true;
+          const response = await request(new URL("demand", contextUrl).href, {...options, method: "POST", headers: {
+            "X-SDSCTL-Supplemental-Version": "1", "X-SDSCTL-Supplemental-Context": JSON.stringify(binding),
+            "X-SDSCTL-Supplemental-Renewal": nonce}});
+          if (ticket !== generation || !demanded()) return;
+          require(!timedOut && performance.now() - started < 5000);
+          if (response.status === 409) {
+            renewalPending = false; negotiationNeeded = true; phase = "context_changed"; require(false);
+          }
+          if (!admitted(response)) return;
+          const renewed = await readResponse(response, () => {}, () => {},
+            value => auxiliary.demandResponse(value, binding, nonce), 2048);
+          if (ticket !== generation || !demanded()) return;
+          require(!timedOut && performance.now() - started < 5000);
+          renewalPending = false; bindContext(renewed);
+          if (closed) return;
         }
         frameStarted = performance.now();
         const auxiliaryTicket = auxiliaryGuard?.begin(frameStarted / 1000);
@@ -486,6 +514,7 @@
         else render();
         if (traceId !== null && tracePrefix !== null) traceNote.textContent = `Last traced update: ${traceId}; App acknowledgement: ${traceAcknowledged ? "received" : "not confirmed"}; elapsed ${elapsedMs()} ms. Tracing stops automatically after 2 minutes. IDs confer no access; missing entries or acknowledgements do not prove non-arrival.`;
       } catch {
+        if (renewalPending) { stopSession(demandUnconfirmed); return; }
         if (ticket === generation && demanded()) {
           auxiliaryGuard?.suspend();
           const reason = timedOut ? "request_timeout" : phase;
@@ -504,6 +533,9 @@
         }
         delay = 2000;
       } finally {
+        // Visibility may change before its event handler runs. An early return
+        // must not leave an unresolved mutation eligible for a later retry.
+        if (renewalPending && controller === current) stopSession(demandUnconfirmed);
         window.clearTimeout(timeout);
         if (requestTimer === timeout) requestTimer = null;
         if (controller === current) controller = null;

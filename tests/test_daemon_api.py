@@ -207,6 +207,7 @@ def test_hello_negotiates_version_and_lists_capabilities(
                 DaemonApiOperation.DISPLAY_FRAME,
                 DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
                 DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
             )
         ],
         "read_only": False,

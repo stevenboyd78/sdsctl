@@ -28,7 +28,7 @@ def outputs() -> dict[Path, str]:
     # Fail if its explicit boundary moves; never maintain a second protocol copy.
     boundary = (
         "  function create({host, standard, url, request, "
-        "supplementalContext = null, supplementalRoot = null}) {"
+        "supplementalContext = null, supplementalRoot = null, supplementalDemand = false}) {"
     )
     assert web.count(boundary) == 1
     core = web.split(boundary)[0]

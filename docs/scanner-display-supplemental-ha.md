@@ -92,7 +92,8 @@ assets manually or install this private build as a production release.
 
 The [bounded acquisition candidate](scanner-display-supplemental-acquisition.md)
 now separates ordinary delivery from explicit internal demand and provides a
-finite native-owner window. Public demand transport and client/shell/resource
-activation remain to be connected, followed by a fresh supervised display and scanner
+finite native-owner window. The [authenticated demand candidate](scanner-display-supplemental-demand.md)
+adds a separate route and opt-in card renewal. Client/shell/resource activation
+still needs a fresh supervised display and scanner
 continuity test. Closed hardware trials remain closed. This change does not
 resolve the separate saved-recording Pause/browser timeout issue.

@@ -279,6 +279,7 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
                 DaemonApiOperation.DISPLAY_FRAME,
                 DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
                 DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
             )
         ],
         "read_only": False,

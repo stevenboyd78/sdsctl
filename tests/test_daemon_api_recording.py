@@ -129,6 +129,7 @@ def test_recording_capabilities_are_advertised_only_with_manager() -> None:
             DaemonApiOperation.DISPLAY_FRAME,
             DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
             DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
         )
     ]
     assert with_manager.result["read_only_operations"] == [

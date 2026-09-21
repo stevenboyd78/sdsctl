@@ -370,6 +370,23 @@ const sdsctlCardSupplemental = (() => {
     require(data.protocol === "sdsctl.supplemental-context" && data.version === 1);
     return context(data.context);
   }
+  function renewalId(bytes) {
+    require(Array.isArray(bytes) && bytes.length === 16 &&
+      bytes.every(value => Number.isInteger(value) && value >= 0 && value <= 255));
+    const copy = [...bytes]; copy[6] = (copy[6] & 15) | 64; copy[8] = (copy[8] & 63) | 128;
+    const hex = copy.map(value => value.toString(16).padStart(2, "0")).join("");
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+  }
+  function demandResponse(payload, expected, nonce) {
+    const data = object(payload, ["protocol", "version", "context", "renewal_id", "lease_seconds"]);
+    require(typeof nonce === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(nonce));
+    require(data.protocol === "sdsctl.supplemental-demand" && data.version === 1 &&
+      data.renewal_id === nonce && data.lease_seconds === 5);
+    const before = context(expected), after = context(data.context);
+    require(contextKeys.every(key => key === "context_revision"
+      ? after[key] === before[key] || after[key] === before[key] + 1 : after[key] === before[key]));
+    return after;
+  }
   function validClock(value) {
     if (typeof value !== "string" || value.length !== 19 ||
         !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$/.test(value)) return false;
@@ -524,7 +541,7 @@ const sdsctlCardSupplemental = (() => {
       }).join("  "));
     return rows;
   }
-  return Object.freeze({decode, create, bundle, present, favoritesRows, contextResponse});
+  return Object.freeze({decode, create, bundle, present, favoritesRows, contextResponse, renewalId, demandResponse});
 })();
 // Appended inside the shared Mimic renderer closure. No profile upload or controls.
 const TAG = "sds200-mimic-card";
@@ -562,10 +579,12 @@ class Sds200MimicCard extends HTMLElement {
       assertConfig: configValue,
     };
   }
-  constructor({supplemental = false} = {}) {
+  constructor({supplemental = false, supplementalDemand = false} = {}) {
     super();
     // Internal candidate only. Normal HA construction/config never selects it.
     require(typeof supplemental === "boolean");
+    require(typeof supplementalDemand === "boolean" && (!supplementalDemand || supplemental));
+    this._supplementalDemand = supplementalDemand; this._renewalPending = false;
     this._supplemental = supplemental; this._auxGuard = null; this._needNegotiation = true;
     this._terminal = false; this._retiredConnections = new Set(); this._retiredProfiles = new Set();
     this._requestTimer = null; this._auxExpiry = null;
@@ -716,11 +735,14 @@ class Sds200MimicCard extends HTMLElement {
     else this._render();
   }
   _stop() {
+    const uncertain = this._renewalPending;
+    if (uncertain) { this._terminal = true; this._renewalPending = false; this._auxGuard?.close(); }
     this._epoch++; this._controller?.abort(); this._controller = null;
     window.clearTimeout(this._requestTimer); this._requestTimer = null;
     this._auxGuard?.suspend(); this._needNegotiation = true;
     window.clearTimeout(this._timer); this._timer = null;
-    this._clear("Mimic-SDS inactive — values cleared.");
+    this._clear(uncertain ? "Supplemental demand unconfirmed — renewal stopped; reads may have occurred."
+      : "Mimic-SDS inactive — values cleared.");
   }
   _reconcile() {
     if (!this._demanded()) { this._stop(); return; }
@@ -770,7 +792,11 @@ class Sds200MimicCard extends HTMLElement {
       const poll = async () => {
         if (epoch !== this._epoch || !this._demanded()) return;
         let started = performance.now();
-        const timeout = window.setTimeout(() => controller.abort(), this._supplemental ? 5000 : 2000);
+        const cycleStarted = started;
+        const timeout = window.setTimeout(() => {
+          controller.abort();
+          if (this._renewalPending && this._controller === controller) this._stop();
+        }, this._supplemental ? 5000 : 2000);
         this._requestTimer = timeout;
         try {
           const current = () => epoch === this._epoch && this._demanded() && !controller.signal.aborted;
@@ -792,6 +818,24 @@ class Sds200MimicCard extends HTMLElement {
             if (this._terminal) return;
             this._needNegotiation = false;
           }
+          if (this._supplementalDemand) {
+            const binding = this._auxGuard.context;
+            const nonce = sdsctlCardSupplemental.renewalId(Array.from(crypto.getRandomValues(new Uint8Array(16))));
+            this._renewalPending = true;
+            const response = await fetch(new URL("demand", url).href, {...options, method: "POST", headers: {
+              ...options.headers, "X-SDSCTL-Supplemental-Version": "1",
+              "X-SDSCTL-Supplemental-Context": JSON.stringify(binding), "X-SDSCTL-Supplemental-Renewal": nonce}});
+            if (epoch !== this._epoch || !this._demanded()) return;
+            require(current() && performance.now() - cycleStarted < 5000);
+            if (response.status === 409) { this._renewalPending = false; throw new Error("Context changed."); }
+            if (!admitted(response)) return;
+            const renewed = await readResponse(response, () => {}, () => {},
+              value => sdsctlCardSupplemental.demandResponse(value, binding, nonce), 2048);
+            if (epoch !== this._epoch || !this._demanded()) return;
+            require(current() && performance.now() - cycleStarted < 5000);
+            this._renewalPending = false; this._bindSupplemental(renewed);
+            if (this._terminal) return;
+          }
           started = performance.now();
           const ticket = this._auxGuard?.begin(started / 1000);
           if (this._supplemental) options.headers = {...options.headers,
@@ -809,8 +853,11 @@ class Sds200MimicCard extends HTMLElement {
           const data = this._supplemental ? decoded.display : decoded;
           this._accept(data, started);
           this._timer = window.setTimeout(() => { this._timer = null; void poll(); }, 250);
-        } catch { failed(); }
-        finally { window.clearTimeout(timeout); if (this._requestTimer === timeout) this._requestTimer = null; }
+        } catch { if (this._renewalPending) this._stop(); else failed(); }
+        finally {
+          if (this._renewalPending && this._controller === controller) this._stop();
+          window.clearTimeout(timeout); if (this._requestTimer === timeout) this._requestTimer = null;
+        }
       };
       const failed = () => {
         if (epoch !== this._epoch) return;

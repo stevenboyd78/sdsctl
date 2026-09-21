@@ -33,11 +33,11 @@ that lease; callers using the current revision coalesce into the existing lease.
 Renewal does not reset per-source scheduling, minimum gaps or error backoff.
 None of these methods performs scanner I/O on the calling thread.
 
-This is an internal boundary, **not authorization**. The public cached-delivery
-service still has no demand operation. Future exposure must be an explicitly
-advertised, authenticated mutation, never an implicit side effect of a GET.
-An acknowledgment lost after lease creation would mean an uncertain but bounded
-outcome, not proof that no read occurred; it must not permit blind rearming.
+This is an internal boundary, **not authorization**. The separate
+[authenticated demand candidate](scanner-display-supplemental-demand.md) adds an
+explicitly advertised mutation, never a side effect of a GET. An acknowledgment
+lost after lease creation means an uncertain but bounded outcome, not proof that
+no read occurred; it does not permit blind rearming.
 
 ## One finite acquisition owner
 
@@ -94,8 +94,8 @@ bounded write path and runtime reservations, including reconnects, controls,
 synthetic PCM delivery and continuing PSI while a reply is withheld. They are
 not evidence of physical scanner behavior or audible browser/recording quality.
 
-Remaining: wire the explicit authenticated demand operation and matching client
-behavior, then prepare an opt-in source-pinned launcher with independent cleanup
+The authenticated demand operation and matching opt-in clients are implemented
+separately. Remaining: prepare an opt-in source-pinned launcher with independent cleanup
 and restoration. Public startup/schema/client activation remains disabled.
 User-facing continuous operation needs its own qualification; a bounded trial
 must not silently become a permanent polling loop. The separate saved-recording

@@ -28,7 +28,9 @@ from .scanner_display_profile_storage import DisplayProfileStorageError
 from .scanner_display_supplemental_transport import (
     SupplementalContextChanged,
     SupplementalDeliveryService,
+    SupplementalDemandUnconfirmed,
     SupplementalUnavailable,
+    validate_renewal_id,
 )
 from .scanner_display_supplemental_wire import decode_supplemental_context
 
@@ -55,6 +57,7 @@ class DaemonApiOperation(StrEnum):
     DISPLAY_FRAME = "display.frame"
     DISPLAY_SUPPLEMENTAL_CONTEXT = "display.supplemental.context"
     DISPLAY_SUPPLEMENTAL_FRAME = "display.supplemental.frame"
+    DISPLAY_SUPPLEMENTAL_DEMAND = "display.supplemental.demand"
     DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
     AUDIO_HEALTH = "audio.health"
@@ -126,6 +129,7 @@ class DaemonApiErrorCode(StrEnum):
     INTERNAL_ERROR = "internal_error"
     SUPPLEMENTAL_UNAVAILABLE = "supplemental_unavailable"
     SUPPLEMENTAL_CONTEXT_CHANGED = "supplemental_context_changed"
+    SUPPLEMENTAL_DEMAND_UNCONFIRMED = "supplemental_demand_unconfirmed"
 
 
 class _SnapshotLike(Protocol):
@@ -482,6 +486,8 @@ class DaemonReadOnlyApi:
         ):
             raise TypeError("An explicit supplemental delivery service is required.")
         self.supplemental_display = supplemental_display
+        if supplemental_display is not None:
+            supplemental_display.validate_owner(runtime, display_frames)
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
         return tuple(
@@ -604,11 +610,15 @@ class DaemonReadOnlyApi:
                     DaemonApiErrorCode.INVALID_PARAMETERS,
                     str(error),
                 )
-        elif operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME:
+        elif operation in (DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                           DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND):
             try:
-                if set(request.params) != {"context"}:
+                demand = operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND
+                if set(request.params) != ({"context", "renewal_id"} if demand else {"context"}):
                     raise ValueError
                 decode_supplemental_context(request.params["context"])
+                if demand:
+                    validate_renewal_id(request.params["renewal_id"])
             except ValueError:
                 return DaemonApiResponse.failure(
                     request.request_id, DaemonApiErrorCode.INVALID_PARAMETERS,
@@ -713,8 +723,12 @@ class DaemonReadOnlyApi:
         if operation in (
             DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
             DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND,
         ):
-            if self.supplemental_display is None:
+            if self.supplemental_display is None or (
+                operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND
+                and not self.supplemental_display.demand_enabled
+            ):
                 raise _ControlDispatchError(
                     DaemonApiErrorCode.UNSUPPORTED_OPERATION,
                     "Supplemental display delivery is not enabled.",
@@ -722,7 +736,14 @@ class DaemonReadOnlyApi:
             try:
                 if operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT:
                     return self.supplemental_display.context()
+                if operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND:
+                    return self.supplemental_display.demand(params["context"], params["renewal_id"])
                 return self.supplemental_display.frame(params["context"])
+            except SupplementalDemandUnconfirmed:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.SUPPLEMENTAL_DEMAND_UNCONFIRMED,
+                    "Supplemental demand was not confirmed. Stop renewal; reads may have occurred.",
+                ) from None
             except SupplementalContextChanged:
                 raise _ControlDispatchError(
                     DaemonApiErrorCode.SUPPLEMENTAL_CONTEXT_CHANGED,
@@ -967,6 +988,11 @@ class DaemonReadOnlyApi:
                         DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
                     )
                     or self.supplemental_display is not None
+                )
+                and (
+                    operation is not DaemonApiOperation.DISPLAY_SUPPLEMENTAL_DEMAND
+                    or self.supplemental_display is not None
+                    and self.supplemental_display.demand_enabled
                 )
             )
         ]
