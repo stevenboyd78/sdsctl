@@ -25,6 +25,12 @@ from .exceptions import (
 )
 from .scanner_display_configuration import ScannerDisplayConfigurationError
 from .scanner_display_profile_storage import DisplayProfileStorageError
+from .scanner_display_supplemental_transport import (
+    SupplementalContextChanged,
+    SupplementalDeliveryService,
+    SupplementalUnavailable,
+)
+from .scanner_display_supplemental_wire import decode_supplemental_context
 
 DAEMON_API_PROTOCOL = "sdsctl.daemon"
 DAEMON_API_VERSION = 1
@@ -47,6 +53,8 @@ class DaemonApiOperation(StrEnum):
     REMOTE_CLIENTS = "remote.clients"
     DISPLAY_PROFILE = "display.profile"
     DISPLAY_FRAME = "display.frame"
+    DISPLAY_SUPPLEMENTAL_CONTEXT = "display.supplemental.context"
+    DISPLAY_SUPPLEMENTAL_FRAME = "display.supplemental.frame"
     DISPLAY_PROFILE_RELOAD = "display.profile.reload"
     SCANNER_STATE = "scanner.state"
     AUDIO_HEALTH = "audio.health"
@@ -71,6 +79,8 @@ DAEMON_API_READ_ONLY_OPERATIONS = (
     DaemonApiOperation.REMOTE_CLIENTS,
     DaemonApiOperation.DISPLAY_PROFILE,
     DaemonApiOperation.DISPLAY_FRAME,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
     DaemonApiOperation.RECORDING_STATUS,
@@ -114,6 +124,8 @@ class DaemonApiErrorCode(StrEnum):
     RECORDING_FAILED = "recording_failed"
     REQUEST_TOO_LARGE = "request_too_large"
     INTERNAL_ERROR = "internal_error"
+    SUPPLEMENTAL_UNAVAILABLE = "supplemental_unavailable"
+    SUPPLEMENTAL_CONTEXT_CHANGED = "supplemental_context_changed"
 
 
 class _SnapshotLike(Protocol):
@@ -455,6 +467,7 @@ class DaemonReadOnlyApi:
         remote_clients_provider: Callable[[], Mapping[str, object]] | None = None,
         display_profile: _DisplayProfileLike | None = None,
         display_frames: _DisplayFramesLike | None = None,
+        supplemental_display: SupplementalDeliveryService | None = None,
     ) -> None:
         if type(reconnect_available) is not bool:
             raise TypeError("Daemon reconnect availability must be a boolean.")
@@ -464,6 +477,11 @@ class DaemonReadOnlyApi:
         self.remote_clients_provider = remote_clients_provider
         self.display_profile = display_profile
         self.display_frames = display_frames
+        if supplemental_display is not None and not isinstance(
+            supplemental_display, SupplementalDeliveryService
+        ):
+            raise TypeError("An explicit supplemental delivery service is required.")
+        self.supplemental_display = supplemental_display
 
     def _control_operations(self) -> tuple[DaemonApiOperation, ...]:
         return tuple(
@@ -586,6 +604,16 @@ class DaemonReadOnlyApi:
                     DaemonApiErrorCode.INVALID_PARAMETERS,
                     str(error),
                 )
+        elif operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME:
+            try:
+                if set(request.params) != {"context"}:
+                    raise ValueError
+                decode_supplemental_context(request.params["context"])
+            except ValueError:
+                return DaemonApiResponse.failure(
+                    request.request_id, DaemonApiErrorCode.INVALID_PARAMETERS,
+                    "A valid supplemental context is required.",
+                )
         elif request.params:
             return DaemonApiResponse.failure(
                 request.request_id,
@@ -682,6 +710,29 @@ class DaemonReadOnlyApi:
             return self._capabilities(allowed_operations=allowed_operations)
         if operation is DaemonApiOperation.PING:
             return {"pong": True}
+        if operation in (
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+        ):
+            if self.supplemental_display is None:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.UNSUPPORTED_OPERATION,
+                    "Supplemental display delivery is not enabled.",
+                )
+            try:
+                if operation is DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT:
+                    return self.supplemental_display.context()
+                return self.supplemental_display.frame(params["context"])
+            except SupplementalContextChanged:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.SUPPLEMENTAL_CONTEXT_CHANGED,
+                    "Supplemental display context changed. Negotiate again.",
+                ) from None
+            except SupplementalUnavailable:
+                raise _ControlDispatchError(
+                    DaemonApiErrorCode.SUPPLEMENTAL_UNAVAILABLE,
+                    "Supplemental display is unavailable.",
+                ) from None
         if operation is DaemonApiOperation.DISPLAY_FRAME:
             if self.display_frames is None:
                 raise _ControlDispatchError(
@@ -909,6 +960,13 @@ class DaemonReadOnlyApi:
                 and (
                     operation is not DaemonApiOperation.DISPLAY_FRAME
                     or self.display_frames is not None
+                )
+                and (
+                    operation not in (
+                        DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                        DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+                    )
+                    or self.supplemental_display is not None
                 )
             )
         ]

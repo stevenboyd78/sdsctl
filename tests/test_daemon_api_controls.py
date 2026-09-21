@@ -277,6 +277,8 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
             and operation not in (
                 DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_PROFILE_RELOAD,
                 DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
             )
         ],
         "read_only": False,
@@ -285,7 +287,9 @@ def test_capabilities_preserve_reads_and_advertise_controls() -> None:
             for operation in DAEMON_API_READ_ONLY_OPERATIONS
             if operation not in DAEMON_API_RECORDING_OPERATIONS
             and operation not in (
-                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME
+                DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+                DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
             )
         ],
         "control_operations": [

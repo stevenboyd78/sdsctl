@@ -1,4 +1,4 @@
-"""Internal versioned delivery candidate. No public route or acquisition opt-in.
+"""Versioned delivery candidate. No default route or acquisition activation.
 
 Relative ages and independent successful-acquisition sequences only. Monotonic
 server timestamps, raw packets and profile paths never cross this boundary.

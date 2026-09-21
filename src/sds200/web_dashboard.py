@@ -64,6 +64,7 @@ from .web_auth import (
     WebDashboardAuthentication,
     WebDashboardAuthenticationMiddleware,
 )
+from .web_supplemental import attach_supplemental_routes
 from .web_theme_runtime import (
     WebThemeRuntimeRegistry,
     build_web_theme_runtime,
@@ -273,6 +274,12 @@ class DaemonApiClientLike(Protocol):
     def display_frame(self) -> Mapping[str, object]:
         """Return the configured daemon's read-only Mimic-SDS presentations."""
 
+    def display_supplemental_context(self) -> Mapping[str, object]:
+        """Negotiate an explicitly enabled supplemental owner context."""
+
+    def display_supplemental_frame(self, context: object) -> Mapping[str, object]:
+        """Read one cached supplemental bundle bound to that context."""
+
     def remote_clients(self) -> Mapping[str, object]:
         """Return the local operator's remote-connection inventory."""
 
@@ -473,6 +480,7 @@ def create_web_dashboard_app(
     browser_device_admin_ingress: BrowserDeviceIngress | None = None,
     scanner_display_admin_ingress: ScannerDisplayIngress | None = None,
     managed_theme_root: Path | None = None,
+    supplemental_delivery: bool = False,
 ) -> FastAPI:
     """Create the daemon-backed web application without scanner ownership."""
 
@@ -500,6 +508,10 @@ def create_web_dashboard_app(
         raise TypeError(
             "Home Assistant Ingress setting must be boolean."
         )
+    if type(supplemental_delivery) is not bool:
+        raise TypeError("Supplemental delivery opt-in must be boolean.")
+    if supplemental_delivery and not (home_assistant_ingress or lan_authentication is not None):
+        raise ValueError("Supplemental delivery requires authenticated dashboard admission.")
     if lan_authentication is not None and not isinstance(
         lan_authentication,
         WebDashboardAuthentication,
@@ -563,6 +575,9 @@ def create_web_dashboard_app(
             app.add_middleware(WebDashboardAuthenticationMiddleware,
                                authentication=lan_authentication,
                                display_theme_paths=display_theme_paths)
+
+    if supplemental_delivery:
+        attach_supplemental_routes(app, api_client_factory)
 
     @app.get(
         "/",

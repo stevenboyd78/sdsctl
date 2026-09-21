@@ -1,6 +1,6 @@
 # Supplemental WebUI controller candidate
 
-Status: **offline integration only; no endpoint, startup option or deployment**.
+Status: **offline integration only; no startup activation or deployment**.
 Builds on the [delivery and expiry contract](scanner-display-supplemental-delivery.md).
 The existing public schema-1 endpoint and ordinary acquisition policy are unchanged.
 
@@ -16,8 +16,10 @@ display: existing schema-1-shaped frame set, without supplemental clock text
 supplemental: sdsctl.supplemental version 1 envelope
 ```
 
-This is not a response from the current `/api/v1/display-frame` route. No route
-serves the bundle yet. Projection does not request a new frame, run commands or
+This is not a response from the current `/api/v1/display-frame` route. The
+[authenticated transport candidate](scanner-display-supplemental-transport.md)
+can serve it only through separate daemon and web-application dependency opt-ins,
+which ordinary startup does not supply. Projection does not run commands or
 renew demand. The profile source status comes from the same capture, never an
 assumed match. Changed sources, pending profile refreshes and failed imports are
 refused by this narrow candidate. It only covers the qualified conventional and
@@ -73,8 +75,9 @@ visibility, layout choice, sign-out and independent controller instances. This
 is synthetic DOM/HTTP testing in Node, not visual browser or physical acceptance.
 The regular WebUI and generated HA lifecycle suites remain regression gates.
 
-Before deployment, provide an authenticated, explicitly negotiated transport
-with no-store responses and bounded bodies; define verified context replacement;
+The opt-in authenticated server transport now provides explicit negotiation,
+no-store responses, bounded bundles and stale-context rejection. Before deployment,
+connect the actual browser coordinator and define verified context replacement;
 integrate TUI and HA consumers; and preserve the qualified bounded acquisition
 policy. Then build a source-pinned candidate and request fresh operator readiness.
-There is no new hardware trial, background task or activation switch in this work.
+There is no new hardware trial, background task or CLI/config activation switch.

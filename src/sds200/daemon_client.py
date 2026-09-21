@@ -6,6 +6,7 @@ import threading
 from collections.abc import Mapping
 from contextlib import suppress
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 from math import isfinite
 
@@ -32,6 +33,8 @@ from .exceptions import (
     DaemonRequestError,
     DaemonUnavailableError,
 )
+from .scanner_display_supplemental_transport import decode_context_response, validate_bundle
+from .scanner_display_supplemental_wire import decode_supplemental_context
 
 DAEMON_API_CLIENT_DEFAULT_TIMEOUT = 5.0
 _DAEMON_API_CLIENT_RECV_BYTES = 4096
@@ -180,6 +183,28 @@ class DaemonApiClient:
     def display_frame(self) -> dict[str, object]:
         """Read independent Mimic-SDS presentations; never imports or controls."""
         return self.request(DaemonApiOperation.DISPLAY_FRAME)
+
+    def display_supplemental_context(self) -> dict[str, object]:
+        """Explicitly negotiate a current supplemental owner context; no reads."""
+        result = self.request(DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT)
+        try:
+            decode_context_response(result)
+        except ValueError:
+            self.close()
+            raise DaemonProtocolError("Invalid supplemental context response.") from None
+        return result
+
+    def display_supplemental_frame(self, context: object) -> dict[str, object]:
+        """Read one cached same-cut bundle bound to a previously negotiated context."""
+        binding = decode_supplemental_context(context)
+        result = self.request(
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME, params={"context": asdict(binding)}
+        )
+        try:
+            return validate_bundle(result, binding)
+        except ValueError:
+            self.close()
+            raise DaemonProtocolError("Invalid supplemental display bundle.") from None
 
     def remote_clients(self) -> dict[str, object]:
         """Return operator-only live connections through the local daemon API."""

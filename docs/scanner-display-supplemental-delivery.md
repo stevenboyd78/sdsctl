@@ -1,10 +1,12 @@
 # Supplemental delivery and expiry candidate
 
-Status: **internal, offline-tested contract; not a live API or enabled feature**.
+Status: **offline-tested contract; not deployed or enabled by ordinary startup**.
 This extends the [point-in-time presentation groundwork](scanner-display-supplemental-presentation.md).
 It does not change the existing public schema-1 display response or start reads.
 The [opt-in WebUI controller candidate](scanner-display-supplemental-web-controller.md)
 now exercises these guards in the real polling/rendering controller offline.
+The [authenticated transport candidate](scanner-display-supplemental-transport.md)
+adds separately opted-in daemon/HTTP negotiation; default routes remain absent.
 
 ## Source identity and coherent capture
 
@@ -100,10 +102,11 @@ acceptance is implied.
 
 ## Still required before deployment
 
-1. Wire the candidate into an explicitly negotiated, authenticated opt-in
-   transport without changing schema 1. Bound response bytes, use no-store
-   responses, and validate frame and auxiliary context/PSI sequence atomically
-   from the **same** owner capture. Never stitch it to a later frame read.
+1. Connect clients to the explicitly negotiated, authenticated opt-in transport
+   without changing schema 1. The server candidate now bounds bundle bytes,
+   sends no-store responses, and validates frame and auxiliary context/PSI
+   sequence atomically from the **same** owner capture. Clients must retain
+   their own body bounds and freshness checks. Never stitch to a later frame read.
 2. Maintain consumer guards across layout/visibility changes, call snapshot
    from each client's local expiry timer even when no response arrives, and
    clear UI state on unavailable capability/context. Context replacement must
@@ -112,7 +115,7 @@ acceptance is implied.
    disconnect, profile replacement, multi-client and cancellation tests through
    their real controllers. The offline WebUI candidate covers these rejection,
    expiry and cancellation paths but does not yet negotiate a new verified
-   context or use an authenticated server endpoint. TUI and HA remain pending.
+   context or call the opt-in authenticated server endpoints. TUI and HA remain pending.
 4. Define the explicit acquisition enable policy, preserving one owner, bounded
    shared GETs, demand expiry, contention/media behavior and all context gates.
    These additions do not widen the qualified hardware-read window.

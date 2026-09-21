@@ -399,7 +399,11 @@ def test_observe_peer_advertises_only_safe_read_only_operations() -> None:
 
     assert result["operations"] == [
         operation.value for operation in DAEMON_REMOTE_OBSERVE_OPERATIONS
-        if operation not in (DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME)
+        if operation not in (
+            DaemonApiOperation.DISPLAY_PROFILE, DaemonApiOperation.DISPLAY_FRAME,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+            DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
+        )
     ]
     assert result["read_only"] is True
     assert result["control_operations"] == []

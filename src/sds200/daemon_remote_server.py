@@ -53,6 +53,8 @@ DAEMON_REMOTE_OBSERVE_OPERATIONS = (
     DaemonApiOperation.RUNTIME_SNAPSHOT,
     DaemonApiOperation.DISPLAY_PROFILE,
     DaemonApiOperation.DISPLAY_FRAME,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_CONTEXT,
+    DaemonApiOperation.DISPLAY_SUPPLEMENTAL_FRAME,
     DaemonApiOperation.SCANNER_STATE,
     DaemonApiOperation.AUDIO_HEALTH,
 )
