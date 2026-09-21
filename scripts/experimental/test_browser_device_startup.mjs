@@ -191,9 +191,10 @@ function dashboardFixture(managed, reply) {
   const node=tag=>({tagName:tag.toUpperCase(),children:[],hidden:true,
     append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},
     setAttribute(){}});
-  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0}, banner=node('div');
+  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,mimicStops:0}, banner=node('div');
   const scope={managedDeviceEntry:managed,nativeAccessMode:"display",displayOnly:true,
     authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},
+    mimicDisplay:{stop(){f.mimicStops++;}},
     document:{documentElement:{dataset:{}},getElementById:id=>id==='native-menu'?{close(){f.closed++;}}:null,
       createElement:node},
     window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout:id=>f.cleared.push(id),
@@ -233,6 +234,15 @@ for(const reply of [{status:401},{device_enrolled:false,display_only:true,remain
     assert.deepEqual(f.navigations,[origin+"/device-display"]);assert.equal(f.timers.length,0);
   });
 }
+test('session expiry stops Mimic rendering, including when no renderer is mounted',()=>{
+  for(const mounted of [false,true]) {
+    const f=dashboardFixture(true,{});
+    if(!mounted)f.scope.mimicDisplay=null;
+    f.scope.requireNativeLogin();
+    assert.equal(f.mimicStops,mounted?1:0);
+    assert.deepEqual(f.navigations,[origin+'/device-display']);
+  }
+});
 for(const reply of [{status:503},new Error("private-do-not-echo")]) {
   test("managed transient read retries finitely without authentication",async()=>{
     const f=dashboardFixture(true,reply);await f.scope.refreshManagedNativeSession();
@@ -263,8 +273,10 @@ for(const status of [401,500,202]) {
     assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
     assert.equal(f.scope.nativeSessionTimer,null);assert.equal(f.closed,0);
     assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.equal(f.mimicStops,1);
     assert.equal(f.requests.length,2); // Two GETs only; no POST, native call or cookie operation.
     f.transportIntent();assert.equal(f.stops.length,5);
+    assert.equal(f.mimicStops,1);
   });
 }
 test('transport UI hint cannot quiesce manual login or unrelated event targets',async()=>{
@@ -284,6 +296,7 @@ for(const phase of ['complete','pending','unconfirmed']) {
     assert.equal(f.scope.authenticationRequired,true);
     assert.equal(f.scope.document.documentElement.dataset.sessionState,'signing-out');
     assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+    assert.equal(f.mimicStops,1);
     assert.deepEqual(f.cleared,[1]);
     assert.equal(f.scope.nativeSessionTimer,null);
     assert.equal(f.requests.length,1); // Session read only; no dashboard-owned POST.
@@ -291,6 +304,7 @@ for(const phase of ['complete','pending','unconfirmed']) {
     const before=f.timers.length;await f.scope.refreshManagedNativeSession();
     assert.equal(f.timers.length,before);assert.equal(f.requests.length,1);
     f.submit();assert.equal(f.stops.length,5); // Repeated UI intent is not another operation.
+    assert.equal(f.mimicStops,1);
   });
 }
 for(const change of [e=>{e.isTrusted=false;},e=>{e.target={...e.target};},
