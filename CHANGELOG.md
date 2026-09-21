@@ -6,6 +6,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Fixed
+
+- Keep finalized recording reliability counters aligned with their saved
+  metadata when shared browser audio continues. Later transport faults no longer
+  change a stopped recording's status; starting another recording resumes live
+  cumulative counters without changing older files.
+
 ## [0.30.0] - 2026-09-14
 
 Display improvements, remote TUI recording continuity, and explicitly opt-in

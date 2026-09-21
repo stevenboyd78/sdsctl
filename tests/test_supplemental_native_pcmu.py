@@ -5,6 +5,7 @@ encoder is claimed. Both network sockets are localhost-only. The real RTP
 receiver fans out to the PCMU Unix client and a decoded WAV recording.
 """
 
+import json
 import os
 import socket
 import wave
@@ -119,6 +120,25 @@ def test_native_read_allows_rtp_pcmu_delivery_and_recording(network_rig, tmp_pat
         assert media.transport.statistics.packets_delivered == 8
         assert native.peer.reads == (["FQK"] if command == "FQK" else ["FQK", "DTM"])
         assert len(media.rtsp.started_ports) == 1  # One existing audio owner only.
+
+        # A still-connected listener keeps the shared RTP session alive after
+        # finalization. Faults in that later audio must not relabel the WAV.
+        metadata = stopped.metadata_path.read_bytes()
+        wav_bytes = stopped.recording_path.read_bytes()
+        media.peer.sendto(
+            make_rtp(payload, sequence=109, timestamp=2440),
+            ("127.0.0.1", media.rtsp.started_ports[0]),
+        )
+        assert client.receive().packet.payload == payload
+        wait_for(lambda: media.transport.statistics.packets_delivered == 9)
+        assert media.transport.statistics.packets_lost == 1
+        assert media.transport.statistics.timestamp_discontinuities == 1
+        assert manager.snapshot().reliability == stopped.reliability
+        assert manager.stop_recording().reliability == stopped.reliability
+        assert stopped.metadata_path.read_bytes() == metadata
+        assert stopped.recording_path.read_bytes() == wav_bytes
+        assert json.loads(metadata)["statistics"]["reliability"] == stopped.reliability.as_dict()
+        assert media.transport.running and len(media.rtsp.started_ports) == 1
     finally:
         client.close()
         manager.close()

@@ -315,6 +315,17 @@ browser reload or complete web-process disconnect. Daemon shutdown closes the
 recording manager before destination and audio-runtime teardown so an active WAV
 can be finalized while the shared router is still available.
 
+Recording reliability counters retain their existing shared-transport,
+cumulative meaning; they are not recording-relative loss estimates. While a
+recording is active, the counters follow the transport. Finalization captures
+one reliability snapshot for both the metadata and the terminal response/state
+event. Later `recording.status` calls and repeated stops retain those counters,
+even if browser audio continues and the shared transport reports new faults.
+A failed start or finalization also retains its captured counters. An explicit
+finalization retry captures a new boundary, and starting another recording
+resumes live counters. This does not reset transport statistics or rewrite
+previous recording metadata.
+
 Stable recording failures are:
 
 | Code | Meaning |
