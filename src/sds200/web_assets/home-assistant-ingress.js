@@ -90,7 +90,7 @@ const sdsctlCardIngress = (() => {
   }
   async function resolve(api, ui, route, signal) {
     if (!api || typeof api.callWS !== "function") throw fail();
-    if (!["api/v1/display-frame", "api/v1/waterfall"].includes(route)) throw fail();
+    if (!["api/v1/display-frame", "api/v1/waterfall", "api/v1/display-supplemental/context"].includes(route)) throw fail();
     const slugs = panelSlugs(ui);
     if (slugs.length === 0) throw new Error("No sds200 Home Assistant App panel is available.");
     if (slugs.length > 16) throw new Error("Too many sds200 Home Assistant App panels.");

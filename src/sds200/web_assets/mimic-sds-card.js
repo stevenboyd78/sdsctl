@@ -34,8 +34,13 @@ class Sds200MimicCard extends HTMLElement {
       assertConfig: configValue,
     };
   }
-  constructor() {
+  constructor({supplemental = false} = {}) {
     super();
+    // Internal candidate only. Normal HA construction/config never selects it.
+    require(typeof supplemental === "boolean");
+    this._supplemental = supplemental; this._auxGuard = null; this._needNegotiation = true;
+    this._terminal = false; this._retiredConnections = new Set(); this._retiredProfiles = new Set();
+    this._requestTimer = null; this._auxExpiry = null;
     this._config = configValue({});
     this._connected = false; this._visible = false; this._mount = 0; this._epoch = 0;
     this._api = null; this._ui = null; this._panelsKey = null; this._unsubscribe = null; this._observer = null;
@@ -72,6 +77,7 @@ class Sds200MimicCard extends HTMLElement {
       .mimic-cell[data-kind="name"][data-lines="2"] span { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; white-space:normal; overflow-wrap:anywhere; }
       .mimic-empty { display:flex; align-items:center; justify-content:center; padding:12px; color:#cbd5e1; font:14px/1.4 system-ui; }
       details { font:12px/1.4 system-ui; overflow-wrap:anywhere; }
+      pre { max-width:100%; margin:4px 0; white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.4 monospace; }
       summary { cursor:pointer; min-height:28px; }
       details p { margin:4px 0; } ul { padding-left:20px; } [hidden] { display:none !important; }
     `;
@@ -80,6 +86,8 @@ class Sds200MimicCard extends HTMLElement {
     this._surround = make("div", undefined, "mimic-surround");
     this._details = make("details"); this._details.append(make("summary", "Profile, LED and field details"));
     this._note = make("p"); this._fields = make("ul"); this._details.append(this._note, this._fields);
+    this._auxNote = make("p"); this._favorites = make("pre");
+    if (supplemental) this._details.append(this._auxNote, this._favorites);
     this._card.append(this._title, this._status, this._surround, this._details);
     this.shadowRoot.append(css, this._card);
     this._clear("Waiting for Home Assistant…");
@@ -130,10 +138,12 @@ class Sds200MimicCard extends HTMLElement {
     this._unsubscribe?.(); this._unsubscribe = null; this._api = this._ui = null;
     this._stop();
   }
-  _demanded() { return this._connected && this._visible && !document.hidden && this._api !== null && this._ui !== null; }
+  _demanded() { return !this._terminal && this._connected && this._visible && !document.hidden && this._api !== null && this._ui !== null; }
   _clear(message) {
     this._latest = null; this._deadline = null;
     window.clearTimeout(this._expiry); this._expiry = null;
+    window.clearTimeout(this._auxExpiry); this._auxExpiry = null;
+    this._auxNote.textContent = ""; this._favorites.textContent = "";
     this._status.textContent = message; this._card.dataset.state = "unavailable";
     this._surround.replaceChildren(make("div", "No current scanner values are shown.", "mimic-grid mimic-empty"));
     this._surround.style.setProperty("--mimic-led", "#3b4654"); this._surround.dataset.led = "unknown";
@@ -142,7 +152,17 @@ class Sds200MimicCard extends HTMLElement {
   _render() {
     if (this._latest === null) return;
     if (this._deadline !== null && performance.now() >= this._deadline) { this._clear(states.stale); return; }
-    const data = this._latest, frame = data.frames[this._config.layout];
+    const data = this._latest;
+    let frame = data.frames[this._config.layout];
+    if (this._auxGuard !== null) {
+      const values = this._auxGuard.snapshot(performance.now() / 1000);
+      frame = sdsctlCardSupplemental.present(frame, values, contract.supplemental_clock_regions);
+      this._auxNote.textContent = `Scanner-local clock: ${values.clock.status}. Global Favorites quick keys (00–99, not LCD F0/S0/D0): ${values.favorites.status}.`;
+      this._favorites.textContent = sdsctlCardSupplemental.favoritesRows(values).join("\n");
+      window.clearTimeout(this._auxExpiry); this._auxExpiry = null;
+      const remaining = Object.values(values).filter(value => value.status === "current").map(value => (5 - value.age_seconds) * 1000);
+      if (remaining.length) this._auxExpiry = window.setTimeout(() => this._render(), Math.max(1, Math.min(...remaining)));
+    }
     this._status.textContent = states[frame.status]; this._card.dataset.state = frame.status;
     draw(this._surround, frame);
     const color = frame.indicators.alert_led;
@@ -169,12 +189,38 @@ class Sds200MimicCard extends HTMLElement {
   }
   _stop() {
     this._epoch++; this._controller?.abort(); this._controller = null;
+    window.clearTimeout(this._requestTimer); this._requestTimer = null;
+    this._auxGuard?.suspend(); this._needNegotiation = true;
     window.clearTimeout(this._timer); this._timer = null;
     this._clear("Mimic-SDS inactive — values cleared.");
   }
   _reconcile() {
     if (!this._demanded()) { this._stop(); return; }
     if (this._controller === null && this._timer === null) void this._start();
+  }
+  _endSupplemental() {
+    this._terminal = true; this._auxGuard?.close(); this._stop();
+    this._clear("Display access or context ended — reopen through an authorized Home Assistant session.");
+  }
+  _bindSupplemental(binding) {
+    const old = this._auxGuard?.context;
+    if (old && same(old, binding)) return;
+    const identity = value => `${value.stream_id}/${value.session_id}`;
+    const changed = old && identity(old) !== identity(binding);
+    const epoch = old && (binding.context_revision > old.context_revision || binding.profile_invalidation > old.profile_invalidation);
+    const retired = this._retiredConnections.has(identity(binding)) || old && (
+      binding.endpoint_id !== old.endpoint_id || !changed && (
+        binding.context_revision < old.context_revision || binding.profile_invalidation < old.profile_invalidation ||
+        !epoch && this._retiredProfiles.has(binding.profile_revision)));
+    const overflow = old && (changed ? this._retiredConnections.size >= 64 : !epoch && this._retiredProfiles.size >= 64);
+    if (retired || overflow) { this._endSupplemental(); return; }
+    const replacement = sdsctlCardSupplemental.create(binding);
+    if (changed) this._retiredConnections.add(identity(old));
+    if (changed || epoch) this._retiredProfiles.clear();
+    else if (old) this._retiredProfiles.add(old.profile_revision);
+    this._auxGuard?.close(); this._auxGuard = replacement;
+    this._identity = this._sequence = this._sequenceDeadline = null;
+    this._clear("New display context verified — waiting for current scanner data…");
   }
   async _start() {
     if (!this._demanded()) return;
@@ -184,29 +230,64 @@ class Sds200MimicCard extends HTMLElement {
       this._clear("Connecting through Home Assistant…");
       release = await sdsctlCardIngress.acquire(this._api, controller.signal);
       if (epoch !== this._epoch || !this._demanded() || controller.signal.aborted) return;
-      const url = await sdsctlCardIngress.resolve(this._api, this._ui, "api/v1/display-frame", controller.signal);
+      const route = this._supplemental ? "api/v1/display-supplemental/context" : "api/v1/display-frame";
+      const url = await sdsctlCardIngress.resolve(this._api, this._ui, route, controller.signal);
       if (epoch !== this._epoch || !this._demanded() || controller.signal.aborted) return;
-      if (this._url !== url) { this._endpoint = this._identity = this._sequence = this._sequenceDeadline = null; this._url = url; }
+      if (this._url !== url) {
+        // Supplemental endpoint pin/history belongs to the card instance, not
+        // its transient Ingress key. Negotiation must authorize every new cut.
+        if (!this._supplemental) this._endpoint = this._identity = this._sequence = this._sequenceDeadline = null;
+        this._needNegotiation = true; this._url = url;
+      }
       const poll = async () => {
         if (epoch !== this._epoch || !this._demanded()) return;
-        const started = performance.now();
-        const timeout = window.setTimeout(() => controller.abort(), 2000);
+        let started = performance.now();
+        const timeout = window.setTimeout(() => controller.abort(), this._supplemental ? 5000 : 2000);
+        this._requestTimer = timeout;
         try {
-          const response = await fetch(url, {headers: {Accept: "application/json"}, signal: controller.signal, credentials: "same-origin", cache: "no-store", redirect: "error"});
+          const current = () => epoch === this._epoch && this._demanded() && !controller.signal.aborted;
+          const admitted = response => {
+            if (![401, 403].includes(response.status)) return true;
+            sdsctlCardIngress.invalidate();
+            if (!this._supplemental) return true;
+            this._endSupplemental(); return false;
+          };
+          const options = {headers: {Accept: "application/json"}, signal: controller.signal, credentials: "same-origin", cache: "no-store", redirect: "error"};
+          if (this._supplemental && this._needNegotiation) {
+            const response = await fetch(url, {...options, headers: {...options.headers, "X-SDSCTL-Supplemental-Version": "1"}});
+            if (epoch !== this._epoch || !this._demanded()) return;
+            require(current());
+            if (!admitted(response)) return;
+            const binding = await readResponse(response, () => {}, () => {}, sdsctlCardSupplemental.contextResponse, 2048);
+            if (epoch !== this._epoch || !this._demanded()) return;
+            require(current()); this._bindSupplemental(binding);
+            if (this._terminal) return;
+            this._needNegotiation = false;
+          }
+          started = performance.now();
+          const ticket = this._auxGuard?.begin(started / 1000);
+          if (this._supplemental) options.headers = {...options.headers,
+            "X-SDSCTL-Supplemental-Version": "1", "X-SDSCTL-Supplemental-Context": JSON.stringify(this._auxGuard.context)};
+          const frameUrl = this._supplemental ? new URL("frame", url).href : url;
+          const response = await fetch(frameUrl, options);
           if (epoch !== this._epoch || !this._demanded()) return;
-          require(!controller.signal.aborted);
-          if (response.status === 401 || response.status === 403) sdsctlCardIngress.invalidate();
-          const data = await readResponse(response);
+          require(current());
+          if (!admitted(response)) return;
+          const decoder = this._supplemental ? payload => sdsctlCardSupplemental.bundle(payload, decode, this._auxGuard.context) : decode;
+          const decoded = await readResponse(response, () => {}, () => {}, decoder);
           if (epoch !== this._epoch || !this._demanded()) return;
-          require(!controller.signal.aborted);
+          require(current());
+          if (this._supplemental) require(this._auxGuard.accept(ticket, decoded.supplemental, performance.now() / 1000));
+          const data = this._supplemental ? decoded.display : decoded;
           this._accept(data, started);
           this._timer = window.setTimeout(() => { this._timer = null; void poll(); }, 250);
         } catch { failed(); }
-        finally { window.clearTimeout(timeout); }
+        finally { window.clearTimeout(timeout); if (this._requestTimer === timeout) this._requestTimer = null; }
       };
       const failed = () => {
         if (epoch !== this._epoch) return;
         this._controller = null; controller.abort(); release?.();
+        this._auxGuard?.suspend(); this._needNegotiation = true;
         this._clear("Mimic-SDS data unavailable — retrying safely.");
         if (this._demanded()) this._timer = window.setTimeout(() => { this._timer = null; void this._start(); }, 2000);
       };
@@ -215,6 +296,7 @@ class Sds200MimicCard extends HTMLElement {
     } catch {
       if (epoch !== this._epoch) return;
       controller.abort(); release?.(); this._controller = null;
+      this._auxGuard?.suspend(); this._needNegotiation = true;
       this._clear("Home Assistant App unavailable or ambiguous — retrying safely.");
       if (this._demanded()) this._timer = window.setTimeout(() => { this._timer = null; void this._start(); }, 2000);
     } finally {

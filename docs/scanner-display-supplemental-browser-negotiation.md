@@ -91,8 +91,9 @@ This is not visual browser or physical scanner acceptance.
 
 The [TUI reader candidate](scanner-display-supplemental-tui.md) now covers the
 equivalent offline TUI lifecycle without activating ordinary startup.
-Still required: explicit shell/dependency activation, HA consumer lifecycle
-integration, and the bounded acquisition enable/demand policy.
+The [HA card candidate](scanner-display-supplemental-ha.md) likewise remains
+default-off. Still required: explicit shell/dependency activation and the bounded
+acquisition enable/demand policy.
 Only after those gates pass should a source-pinned candidate be staged for fresh
 operator-assisted visual and continuity testing. Closed hardware trials stay
 closed. This work does not resolve the separate saved-recording Pause issue.

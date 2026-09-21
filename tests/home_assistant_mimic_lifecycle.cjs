@@ -15,6 +15,7 @@ class Element {
 function nodes(root) { return [root,...root.children.flatMap(nodes)]; }
 function harness() {
   let now=0, next=0, sessions=0, calls=0;
+  const origin=input.origin??'https://ha.example.test';
   const timers=new Map(), definitions=new Map(), observers=[], cookies=[];
   const document={hidden:false, createElement:tag=>new Element(tag), addEventListener(){},removeEventListener(){}};
   Object.defineProperty(document,'cookie',{get:()=>cookies.at(-1)||'',set:value=>cookies.push(value)});
@@ -28,35 +29,221 @@ function harness() {
     return {state:'started',ingress:true,ingress_url:'/api/hassio_ingress/example_key/'};
   };
   const api={callWS:request=>ws(request)};
-  let frame=structuredClone(input.scenarios.held_trunk);
+  let frame=structuredClone(input.supplemental ? input.bundle : input.scenarios.held_trunk);
   for(const f of Object.values(frame.display.frames)){f.sequence=100;f.age_seconds=0;}
+  if(input.supplemental)frame.supplemental.psi={sequence:100,age_seconds:0};
   const response=(payload=frame,status=200)=>new Response(JSON.stringify(payload),{status,headers:{'content-type':'application/json'}});
-  let request=async(url,options)=>{
-    assert.equal(url,'https://ha.example.test/api/hassio_ingress/example_key/api/v1/display-frame');
+  const contextResponse=()=>({protocol:'sdsctl.supplemental-context',version:1,context:frame.supplemental.context});
+  const defaultRequest=async(url,options)=>{
     assert.equal(options.credentials,'same-origin');assert.equal(options.redirect,'error');assert.equal(options.cache,'no-store');
+    if(input.supplemental){
+      assert.equal(options.headers['X-SDSCTL-Supplemental-Version'],'1');
+      if(url.endsWith('/context')){
+        assert.equal(url,origin+'/api/hassio_ingress/example_key/api/v1/display-supplemental/context');
+        assert.equal(options.headers['X-SDSCTL-Supplemental-Context'],undefined);
+        return response(contextResponse());
+      }
+      assert.equal(url,origin+'/api/hassio_ingress/example_key/api/v1/display-supplemental/frame');
+      assert.deepEqual(JSON.parse(options.headers['X-SDSCTL-Supplemental-Context']),frame.supplemental.context);
+    }else assert.equal(url,origin+'/api/hassio_ingress/example_key/api/v1/display-frame');
     return response();
   };
-  const ctx=vm.createContext({window,document,location:{origin:'https://ha.example.test',protocol:'https:'},HTMLElement:Element,CustomEvent:class {},
+  let request=defaultRequest;
+  const ctx=vm.createContext({window,document,location:{origin,protocol:new URL(origin).protocol},HTMLElement:Element,CustomEvent:class {},
     customElements:{get:tag=>definitions.get(tag),define:(tag,constructor)=>definitions.set(tag,constructor)},
     IntersectionObserver:class {constructor(callback){this.callback=callback;observers.push(this);}observe(){}disconnect(){}},
     performance:{now:()=>now},AbortController,TextDecoder,URL,fetch:(...args)=>{calls++;return request(...args);}});
+  if(input.case==='aux_legacy_owner')vm.runInContext(`globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")] = Object.freeze({
+    acquire:async()=>()=>{}, invalidate(){}, resolve:async()=>{throw Error("Old owner does not support the new route.");}, get _leases(){return 0;}
+  });`,ctx);
   vm.runInContext(input.script,ctx);
   const Card=definitions.get('sds200-mimic-card');
   const owner=vm.runInContext('globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")]',ctx);
-  const card=()=>{const c=new Card();c.setConfig({});return c;};
+  const card=()=>{const c=new Card({supplemental:input.supplemental??false});c.setConfig({});return c;};
   const start=async c=>{c.connectedCallback();c.contexts.hassApi(api);c.contexts.hassUi(ui,()=>{});observers.at(-1).callback([{isIntersecting:true}]);await flush();};
   const raw=c=>nodes(c.shadowRoot).filter(node=>node.dataset.valueStatus==='raw_source');
-  return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,
+  return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,contextResponse,defaultRequest,
     get calls(){return calls;},get sessions(){return sessions;},get frame(){return frame;},
     set ws(fn){ws=fn;},set request(fn){request=fn;},
-    newer(){for(const f of Object.values(frame.display.frames))f.sequence++;},
+    newer(){for(const f of Object.values(frame.display.frames))f.sequence++;if(input.supplemental)frame.supplemental.psi.sequence++;},
     scenario(name){frame=structuredClone(input.scenarios[name]);for(const f of Object.values(frame.display.frames)){if(f.sequence!==null){f.sequence=100;f.age_seconds=0;}}},
     loadWaterfall(){return vm.runInContext(`(()=>{${input.waterfall}\nreturn sds200WaterfallIngressSession;})();`,ctx);},
     async tick(duration){const end=now+duration;for(;;){const entry=[...timers.entries()].filter(([,v])=>v.at<=end).sort((a,b)=>a[1].at-b[1].at)[0];if(!entry)break;
       const [id,task]=entry;now=task.at;timers.delete(id);if(task.repeat)timers.set(id,{...task,at:now+task.repeat});task.fn();await flush();}now=end;await flush();},
   };
 }
+const clockShown=c=>nodes(c._surround).some(node=>node.textContent==='21:26');
 const cases={
+  async aux_default_off(h){
+    const c=new h.Card();assert.equal(c._supplemental,false);assert.equal(c._auxGuard,null);
+    assert.throws(()=>c.setConfig({supplemental:true}));assert.equal(h.calls,0);
+    assert.equal(h.window.sdsctlSupplemental,undefined); // resource-private guard
+    assert.throws(()=>new h.Card({supplemental:'true'}));
+  },
+  async aux_profile(h){
+    const original=JSON.stringify(h.frame),c=h.card();await h.start(c);
+    assert.ok(clockShown(c));assert.ok(c._favorites.textContent.includes('00:'));assert.ok(c._favorites.textContent.includes('99:'));
+    assert.ok(c._auxNote.textContent.includes('not LCD F0/S0/D0'));
+    assert.ok(nodes(c.shadowRoot).some(node=>node.tag==='style'&&node.textContent.includes('white-space:pre-wrap')));
+    for(const layout of ['preferred','simple','detail']){c.setConfig({layout});assert.ok(clockShown(c));}
+    assert.equal(JSON.stringify(h.frame),original);c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_expiry(h){
+    h.frame.supplemental.clock.age_seconds=4;h.frame.supplemental.favorites.age_seconds=1;
+    const c=h.card();await h.start(c);assert.ok(clockShown(c));
+    await h.tick(1000);assert.equal(clockShown(c),false);assert.ok(c._favorites.textContent);
+    assert.ok(h.raw(c).length);await h.tick(3000);assert.equal(c._favorites.textContent,'');assert.ok(h.raw(c).length);
+    await h.tick(1000);assert.equal(h.raw(c).length,0);c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_duplicate(h){
+    h.request=async(url,options)=>{if(url.endsWith('/frame'))h.newer();return h.defaultRequest(url,options);};
+    const c=h.card();await h.start(c);await h.tick(5100);
+    assert.ok(h.raw(c).length);assert.equal(clockShown(c),false);assert.equal(c._favorites.textContent,'');
+    h.frame.supplemental.clock.sample_sequence++;h.frame.supplemental.favorites.sample_sequence++;
+    await h.tick(250);assert.ok(clockShown(c));assert.ok(c._favorites.textContent);c.disconnectedCallback();
+  },
+  async aux_resume(h){
+    const c=h.card();await h.start(c);const guard=c._auxGuard;
+    h.document.hidden=true;c._visibility();assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);
+    h.document.hidden=false;c._visibility();await flush();assert.equal(h.raw(c).length,0);assert.equal(c._auxGuard,guard);
+    h.newer();await h.tick(2000);assert.ok(h.raw(c).length);assert.equal(clockShown(c),false);
+    c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_context(h){
+    const c=h.card(),requests=[];await h.start(c);const first=c._auxGuard;
+    h.frame.supplemental.context.context_revision++;h.newer();
+    h.request=async(url,options)=>{requests.push(url.endsWith('/context')?'context':'frame');
+      if(url.endsWith('/frame')&&JSON.parse(options.headers['X-SDSCTL-Supplemental-Context']).context_revision!==h.frame.supplemental.context.context_revision)return h.response({},409);
+      return h.defaultRequest(url,options);};
+    await h.tick(250);assert.equal(h.raw(c).length,0);await h.tick(2000);
+    assert.deepEqual(requests.slice(0,3),['frame','context','frame']);assert.notEqual(c._auxGuard,first);assert.ok(clockShown(c));
+    c.disconnectedCallback();
+  },
+  async aux_replay(h){
+    for(const field of ['endpoint_id','context_revision','profile_invalidation','session_id','profile_revision']){
+      const c=h.card();await h.start(c);const initial=structuredClone(h.frame.supplemental.context);
+      if(field==='endpoint_id')c._bindSupplemental({...initial,endpoint_id:'00000000-0000-0000-0000-000000000099'});
+      else if(field.endsWith('revision')&&field!=='profile_revision'||field==='profile_invalidation'){
+        c._bindSupplemental({...initial,[field]:initial[field]+1});c._bindSupplemental(initial);
+      }else{c._bindSupplemental({...initial,[field]:field==='session_id'?'00000000-0000-0000-0000-000000000099':'f'.repeat(64)});c._bindSupplemental(initial);}
+      assert.equal(c._terminal,true,field);assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);
+      const calls=h.calls;c._reconcile();await h.tick(3000);assert.equal(h.calls,calls);c.disconnectedCallback();
+    }
+  },
+  async aux_epochs(h){
+    const c=h.card();await h.start(c);const initial=structuredClone(h.frame.supplemental.context);
+    for(let i=1;i<=150;i++)c._bindSupplemental({...initial,context_revision:initial.context_revision+i});
+    assert.equal(c._terminal,false);assert.equal(c._retiredConnections.size,0);assert.equal(c._retiredProfiles.size,0);c.disconnectedCallback();
+  },
+  async aux_limits(h){
+    for(const kind of ['session_id','profile_revision']){
+      const c=h.card();await h.start(c);const initial=structuredClone(h.frame.supplemental.context);
+      for(let i=1;i<=65;i++)c._bindSupplemental({...initial,[kind]:kind==='session_id'?`00000000-0000-0000-0000-${String(i+100).padStart(12,'0')}`:i.toString(16).padStart(64,'0')});
+      assert.equal(c._terminal,true);assert.equal(h.owner._leases,0);assert.ok(c._retiredProfiles.size<=64&&c._retiredConnections.size<=64);c.disconnectedCallback();
+    }
+  },
+  async aux_auth(h){
+    for(const status of [401,403])for(const phase of ['context','frame']){
+      h.request=async(url,options)=>url.endsWith('/'+phase)?h.response({},status):h.defaultRequest(url,options);
+      const c=h.card();await h.start(c);assert.equal(c._terminal,true);assert.equal(h.owner._leases,0);assert.equal(h.raw(c).length,0);
+      const calls=h.calls;c._reconcile();await h.tick(10000);assert.equal(h.calls,calls);c.disconnectedCallback();assert.equal(h.timers.size,0);
+    }
+  },
+  async aux_late_auth(h){
+    let resolve;h.request=()=>new Promise(done=>resolve=done);const c=h.card();await h.start(c);
+    h.document.hidden=true;c._visibility();h.request=h.defaultRequest;h.newer();h.document.hidden=false;c._visibility();await flush();
+    assert.ok(clockShown(c));const cookies=h.cookies.length;resolve(h.response({},401));await flush();
+    assert.equal(c._terminal,false);assert.equal(h.cookies.length,cookies);assert.ok(clockShown(c));c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_late_body(h){
+    let body;h.request=async()=>new Response(new ReadableStream({start(controller){body=controller;}}),{headers:{'content-type':'application/json'}});
+    const c=h.card();await h.start(c);c.disconnectedCallback();assert.equal(h.owner._leases,0);assert.equal(h.timers.size,0);
+    body.enqueue(new TextEncoder().encode(JSON.stringify(h.contextResponse())));body.close();await flush();
+    assert.equal(h.raw(c).length,0);assert.equal(h.calls,1);assert.equal(h.timers.size,0);
+  },
+  async aux_stall(h){
+    const c=h.card();h.frame.supplemental.clock.age_seconds=4;await h.start(c);
+    h.request=()=>new Promise(()=>{});await h.tick(1000);assert.equal(clockShown(c),false);assert.ok(h.raw(c).length);
+    await h.tick(4500);assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);
+    const calls=h.calls;await h.tick(10000);assert.equal(h.calls,calls);c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_shared(h){
+    const owner=h.loadWaterfall();assert.equal(owner,h.owner);vm.runInContext(input.script,h.ctx);
+    const release=await owner.acquire(h.api),a=h.card(),b=h.card();await h.start(a);await h.start(b);
+    assert.equal(h.owner._leases,3);assert.equal(h.sessions,1);a._endSupplemental();assert.equal(h.owner._leases,2);assert.ok(clockShown(b));
+    a.disconnectedCallback();release();assert.equal(h.owner._leases,1);b.disconnectedCallback();assert.equal(h.owner._leases,0);assert.equal(h.timers.size,0);
+  },
+  async aux_limits_body(h){
+    for(const payload of [()=>new Response('x'.repeat(2049),{headers:{'content-type':'application/json'}}),()=>h.response({...h.contextResponse(),version:99}),()=>new Response(new Uint8Array([255]),{headers:{'content-type':'application/json'}})]){
+      h.request=async()=>payload();const c=h.card();await h.start(c);assert.equal(h.raw(c).length,0);assert.equal(c._auxGuard,null);assert.equal(h.owner._leases,0);c.disconnectedCallback();assert.equal(h.timers.size,0);
+    }
+    h.request=async(url,options)=>url.endsWith('/context')?h.defaultRequest(url,options):new Response('x'.repeat(262145),{headers:{'content-type':'application/json'}});
+    const c=h.card();await h.start(c);assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);c.disconnectedCallback();
+  },
+  async aux_discovery(h){
+    const ui={panels:{one:h.panel('local_sds200_one'),two:h.panel('local_sds200_two')}};
+    await assert.rejects(h.owner.resolve(h.api,ui,'api/v1/display-supplemental/context'),/More than one/);
+    await assert.rejects(h.owner.resolve(h.api,h.ui,'api/v1/display-supplemental/frame'));
+    await assert.rejects(h.owner.resolve(h.api,h.ui,'https://bad.test/context'));
+    h.ws=async req=>{if(req.endpoint.includes('two'))throw Error('PRIVATE');return {state:'started',ingress:true,ingress_url:'/api/hassio_ingress/example_key/'};};
+    await assert.rejects(h.owner.resolve(h.api,ui,'api/v1/display-supplemental/context'));
+  },
+  async aux_new_ingress(h){
+    const c=h.card();await h.start(c);const guard=c._auxGuard;
+    h.ws=async req=>req.endpoint==='/ingress/session'?{session:'next_ingress_session_1234'}:{state:'started',ingress:true,ingress_url:'/api/hassio_ingress/other_key/'};
+    h.request=(url,options)=>h.defaultRequest(url.replace('/other_key/','/example_key/'),options);
+    h.ui.panels.scanner.title='sds200 renamed';h.newer();c.contexts.hassUi(h.ui);await flush();
+    assert.equal(c._auxGuard,guard);assert.ok(h.raw(c).length);assert.equal(clockShown(c),false);c.disconnectedCallback();
+  },
+  async aux_instance(h){
+    const a=h.card(),b=h.card();a.setConfig({layout:'simple',led_treatment:'border'});b.setConfig({layout:'detail'});await h.start(a);await h.start(b);
+    assert.ok(clockShown(a)&&clockShown(b));assert.equal(a._surround.children[0].dataset.mode,'simple_trunk');assert.equal(b._surround.children[0].dataset.mode,'detail_trunk');
+    a.setConfig({layout:'detail'});assert.equal(b._config.layout,'detail');a.disconnectedCallback();b.disconnectedCallback();
+  },
+  async aux_clock_budget(h){
+    let resolveContext,resolveFrame;
+    h.request=url=>new Promise(done=>{if(url.endsWith('/context'))resolveContext=done;else resolveFrame=done;});
+    const c=h.card();await h.start(c);await h.tick(2000);resolveContext(h.response(h.contextResponse()));await flush();
+    await h.tick(2000);resolveFrame(h.response());await flush();assert.ok(clockShown(c));
+    h.request=h.defaultRequest;await h.tick(2900);assert.ok(clockShown(c));await h.tick(100);assert.equal(clockShown(c),false);c.disconnectedCallback();
+  },
+  async aux_unmount(h){await cases.unmount(h);await cases.late_context(harness());await cases.late_auth(harness());},
+  async aux_old_deadline(h){
+    let finishOld,finishNew;h.request=()=>new Promise(done=>finishOld=done);const c=h.card();await h.start(c);
+    h.document.hidden=true;c._visibility();h.document.hidden=false;
+    h.request=()=>new Promise(done=>finishNew=done);c._visibility();await flush();const timer=c._requestTimer;
+    finishOld(h.response(h.contextResponse()));await flush();assert.equal(c._requestTimer,timer);assert.ok(h.timers.has(timer));
+    await h.tick(5000);assert.equal(h.owner._leases,0);finishNew(h.response(h.contextResponse()));await flush();assert.equal(h.raw(c).length,0);c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_total_budget(h){
+    let finishContext,finishFrame;h.request=url=>new Promise(done=>{if(url.endsWith('/context'))finishContext=done;else finishFrame=done;});
+    const c=h.card();await h.start(c);await h.tick(4000);finishContext(h.response(h.contextResponse()));await flush();
+    await h.tick(1100);finishFrame(h.response());await flush();assert.equal(h.raw(c).length,0);assert.equal(h.owner._leases,0);c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
+  async aux_frame_cannot_rebind(h){
+    const c=h.card();await h.start(c);const old=c._auxGuard;
+    h.request=async(url,options)=>{
+      if(url.endsWith('/context'))return h.defaultRequest(url,options);
+      const bad=structuredClone(h.frame);bad.supplemental.context.context_revision++;return h.response(bad);
+    };
+    await h.tick(250);assert.equal(h.raw(c).length,0);assert.equal(c._auxGuard,old);c.disconnectedCallback();
+  },
+  async aux_statuses(h){
+    for(const status of ['unavailable','disabled','blocked','invalid_rtc','invalid_source','stale']){
+      h.frame.supplemental.clock={status,sample_sequence:null,age_seconds:null,value:null};
+      const c=h.card();await h.start(c);assert.ok(h.raw(c).length);assert.equal(clockShown(c),false);
+      assert.ok(c._auxNote.textContent.includes(`clock: ${status}`));c.disconnectedCallback();
+    }
+  },
+  async aux_guard_private(h){
+    h.window.sdsctlSupplemental=Object.freeze({create(){throw Error('wrong global helper');}});
+    const c=h.card();await h.start(c);assert.ok(clockShown(c));assert.notEqual(c._auxGuard,h.window.sdsctlSupplemental);c.disconnectedCallback();
+  },
+  async aux_legacy_owner(h){
+    const owner=h.owner,c=h.card();await h.start(c);assert.equal(h.calls,0);assert.equal(h.raw(c).length,0);
+    assert.equal(vm.runInContext('globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")]',h.ctx),owner);
+    c.disconnectedCallback();assert.equal(h.timers.size,0);
+  },
   async empty_states(h){
     for(const [state,expected] of Object.entries({
       current:'Scanner layout unavailable.',
