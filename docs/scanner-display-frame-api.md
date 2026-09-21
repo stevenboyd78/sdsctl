@@ -668,6 +668,46 @@ tests are not new hardware acceptance. The earlier trunk-mode rejection and
 isolated timeout remain unresolved; a new reviewed candidate and fresh operator
 readiness are required before another live trial.
 
+The scan-label trial completed 24 reads (12 FQK and 12 DTM) before its first
+refusal at 24.85 seconds. The exact pair was `trunk_scan` / `Scan Mode`, with
+only `mode_mismatch`, one System and no duplicate/excluded records. Every read
+completed before the refusal; no read timeout was recorded. The operator
+reported normal physical scanning. Full passive observation saw all 24 replies
+and 143 PSI updates without decoding errors. Normal restoration passed. This
+is not a completed 60-read qualification or an explanation of older failures.
+
+#### Opt-in transition withholding research
+
+`--transition-wait` is a distinct temporary launcher policy, requiring explicit
+continuity and timing. Staging additionally requires the firmware pin and
+`--supplemental-transition-wait`. It does not change ordinary runtime files or
+the strict read selector. The old research modes retain terminal mismatch
+handling. This policy is locally tested, **not hardware qualified**.
+
+Only the exact observed PSI `trunk_scan` / `Scan Mode` pair can withhold reads,
+and only with unique System, Department, Site, SiteFrequency, TGID, Property
+and DualWatch records and no excluded/foreign channel records or duplicates.
+That is permission to wait, never to issue a read on the mismatched update.
+Other cross-family pairs, held mismatches, Close Call, unknown labels, missing
+core records and unsafe screens remain terminal. Ordinary unchanged handling
+of single unknown tags does not make their values diagnostic evidence.
+
+The window must already be armed and have a prior strictly qualified PSI, with
+no active poll or in-flight read. Reads remain blocked until two consecutive
+strictly qualifying PSI updates arrive. Repeated mismatches reset that recovery
+count but cannot renew the deadline: the previous qualified PSI plus two
+seconds, inside the original 64-second/60-opportunity window. Existing read
+pacing, 250ms budget, runtime reservations and disabled scoped queries remain.
+Failure, disconnect, unsafe context, an overlapping read or an expired wait
+cannot recover/rearm. A successfully recovered wait does not reset the quota.
+
+Private result/timing metadata separately retain the first withheld observation,
+bounded episode/recovery counts and wait/resume timing phases. The first terminal
+rejection remains independent and immutable. A wait clears post-read continuity
+credit; old samples or old PSI cannot manufacture a success. Timing remains
+software observation, not proof of transport delivery. Normal UI/API projection
+and acquisition defaults remain unchanged.
+
 ### Internal supplemental projection (not yet rendered)
 
 `supplemental_snapshot()` joins the optional cache's banks and clock at one

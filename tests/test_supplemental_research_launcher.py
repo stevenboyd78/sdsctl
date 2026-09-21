@@ -445,7 +445,7 @@ def test_connection_change_during_registration_is_preserved_without_arm(tmp_path
 @pytest.mark.parametrize("continuity,timing", [(False, False), (True, False), (True, True)])
 @pytest.mark.parametrize("outcome", ["success", "timeout", "mode", "cancel", "expiry"])
 def test_actual_feed_worker_and_trigger_lifecycle(
-    tmp_path, monkeypatch, configured, outcome, continuity, timing
+    tmp_path, monkeypatch, configured, outcome, continuity, timing, transition_wait=False
 ):
     # Shorten only scheduling intervals for this offline lifecycle test.
     monkeypatch.setattr(daemon_quick_keys, "MIN_READ_GAP", 0.005)
@@ -486,10 +486,28 @@ def test_actual_feed_worker_and_trigger_lifecycle(
         stop = threading.Event()
 
         def emit():
+            transitions_left = 0
+            transition_injected = False
             while not stop.wait(0.01):
                 sample = normal_psi(favorites="None", system="None", extra='<TGID Name="Demo"/>')
                 if outcome == "mode" and len(scanner.reads) >= 2:
                     sample = normal_psi(screen="unknown")
+                if outcome == "transition" and len(scanner.reads) >= 2:
+                    from .test_supplemental_transition_wait import transition
+
+                    window = signal.getsignal(signal.SIGUSR1).__self__.window
+                    # Exercise complete feed callbacks between polls, never
+                    # relaxing the terminal guard for an overlapping read.
+                    with window.lock:
+                        if not transition_injected and not (
+                            window.inflight or window.timing_poll_active
+                        ):
+                            transition_injected = True
+                            transitions_left = 5
+                        if transitions_left:
+                            scanner.events.emit("psi", transition())
+                            transitions_left -= 1
+                            continue
                 scanner.events.emit("psi", sample)
 
         emitter = threading.Thread(target=emit)
@@ -516,10 +534,14 @@ def test_actual_feed_worker_and_trigger_lifecycle(
             assert len(scanner.reads) == count
             assert feed.quick_key_worker_status().failure is None
             report = json.loads(result_file.read_text())
-            if outcome == "success":
+            if outcome in {"success", "transition"}:
                 assert count == limit and report["status"] == "replies_and_psi_observed"
                 assert not report["timing_poll_active"]
                 assert report["reply_counts"] == {"DTM": limit // 2, "FQK": limit // 2}
+                if outcome == "transition":
+                    assert report["transition_wait"]["episodes"] == 1
+                    assert report["transition_wait"]["recoveries"] == 1
+                    assert not report["transition_wait"]["waiting"]
             elif outcome == "expiry":
                 assert count == 0 and report["status"] == "operator_wait_expired"
             else:
@@ -529,7 +551,9 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                     assert report["read_failure"]["bank_failures"]["favorites"] == "timeout"
             assert report["max_opportunities"] == limit
             assert report["read_kind"] == (
-                "shared-clock-favorites-timing"
+                "shared-clock-favorites-transition-wait"
+                if transition_wait
+                else "shared-clock-favorites-timing"
                 if timing
                 else (
                     "shared-clock-favorites-continuity" if continuity else "shared-clock-favorites"
@@ -545,7 +569,7 @@ def test_actual_feed_worker_and_trigger_lifecycle(
                 if report["failure"] == "scan_context_changed":
                     assert report["scan_rejection"]["violations"] == ["unsupported_screen"]
                     assert not report["scan_rejection"]["before_arm"]
-                if outcome == "success":
+                if outcome in {"success", "transition"}:
                     assert report["scan_rejection"] is None
                     assert not timeline["poll_active_at_snapshot"]
                     assert len([e for e in timeline["events"] if e["event"] == "tx_intent"]) == 60
@@ -572,9 +596,19 @@ def test_actual_feed_worker_and_trigger_lifecycle(
         args.insert(0, "--continuity")
     if timing:
         args.insert(0, "--timing")
+    if transition_wait:
+        args.insert(0, "--transition-wait")
     args[args.index("--ready-timeout") + 1] = "0.1" if outcome == "expiry" else "10"
     assert launcher.main(args) == 0
     assert "PRIVATE_SENTINEL" not in result_file.read_text()
+
+
+def test_actual_feed_withholds_and_recovers_in_same_bounded_trial(
+    tmp_path, monkeypatch, configured
+):
+    test_actual_feed_worker_and_trigger_lifecycle(
+        tmp_path, monkeypatch, configured, "transition", True, True, transition_wait=True
+    )
 
 
 @pytest.mark.parametrize("trial", [True], indirect=True)

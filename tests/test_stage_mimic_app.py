@@ -46,8 +46,18 @@ def keys(text):
     return set(re.findall(r"^  ([a-z][a-z0-9_]*):", text, re.MULTILINE))
 
 
-@pytest.mark.parametrize("continuity,timing", [(False, False), (True, False), (True, True)])
-def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuity, timing):
+@pytest.mark.parametrize(
+    "continuity,timing,transition_wait",
+    [
+        (False, False, False),
+        (True, False, False),
+        (True, True, False),
+        (True, True, True),
+    ],
+)
+def test_supplemental_staging_is_pinned_bounded_and_separate(
+    snapshot, continuity, timing, transition_wait
+):
     runtime_name = "src/sds200/home_assistant_app_runtime.py"
     for name in (
         runtime_name,
@@ -62,11 +72,14 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
         supplemental_firmware="Version 1.26.01",
         supplemental_continuity=continuity,
         supplemental_timing=timing,
+        supplemental_transition_wait=transition_wait,
     )
     assert normal[runtime_name] == snapshot[runtime_name]
     assert not any("research" in name for name in normal)
     suffix = (
-        "-supplemental-timing"
+        "-supplemental-transition-wait"
+        if transition_wait
+        else "-supplemental-timing"
         if timing
         else ("-supplemental-continuity" if continuity else "-supplemental-research")
     )
@@ -77,6 +90,7 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
     assert b"--read-kind" not in research["research-entry.py"]
     assert (b"'--continuity'" in research["research-entry.py"]) is continuity
     assert (b"'--timing'" in research["research-entry.py"]) is timing
+    assert (b"'--transition-wait'" in research["research-entry.py"]) is transition_wait
     compile(research["research-entry.py"], "research-entry.py", "exec")
     boundary = b"def build_home_assistant_web_command("
     assert (
@@ -84,7 +98,9 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
     )
     report = json.loads(research["candidate-source.json"])
     assert report["research_read_kind"] == (
-        "shared-clock-favorites-timing"
+        "shared-clock-favorites-transition-wait"
+        if transition_wait
+        else "shared-clock-favorites-timing"
         if timing
         else ("shared-clock-favorites-continuity" if continuity else "shared-clock-favorites")
     )
@@ -93,6 +109,8 @@ def test_supplemental_staging_is_pinned_bounded_and_separate(snapshot, continuit
     assert report["research_max_psi_gap_seconds"] == (2 if continuity else None)
     assert report["research_timing_event_limit"] == (512 if timing else None)
     assert report["research_automatic_start"] is False
+    assert report["research_scan_transition_wait"] is transition_wait
+    assert report["research_scan_transition_recovery_psi"] == (2 if transition_wait else None)
     for name, digest in report["files"].items():
         assert hashlib.sha256(research[name]).hexdigest() == digest
 
@@ -111,6 +129,14 @@ def test_timing_requires_explicit_continuity_and_pin(value):
         stager.render({}, REVISION, supplemental_timing=value)
     with pytest.raises(ValueError, match="Timing research"):
         stager.from_revision(REVISION, supplemental_timing=value)
+
+
+@pytest.mark.parametrize("value", [True, None, 0, 1, "yes"])
+def test_transition_wait_requires_exact_policy_before_reading_source(value):
+    with pytest.raises(ValueError, match="Transition research"):
+        stager.render({}, REVISION, supplemental_transition_wait=value)
+    with pytest.raises(ValueError, match="Transition research"):
+        stager.from_revision(REVISION, supplemental_transition_wait=value)
 
 
 @pytest.mark.parametrize(

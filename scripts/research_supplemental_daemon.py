@@ -102,6 +102,29 @@ DIAGNOSTIC_TAGS = EXCLUDED_SCAN_TAGS | {
     "OverWrite",
 }
 
+# CrerB7 observed this exact pair during ordinary scanning. This predicate
+# authorizes withholding only, NEVER read admission. The strict selector stays
+# unchanged, and no renderer-only held/Close Call/other-family rule is copied.
+TRANSITION_TRUNK_RECORDS = frozenset(
+    {"System", "Department", "Site", "SiteFrequency", "TGID", "Property", "DualWatch"}
+)
+TRANSITION_RECOVERY_PSI = 2
+
+
+def is_withheld_transition(info):
+    if not isinstance(info, ScannerInfo) or (info.command, info.screen, info.mode) != (
+        "PSI",
+        "trunk_scan",
+        "Scan Mode",
+    ):
+        return False
+    counts = Counter(record.tag for record in info.records)
+    return (
+        counts.keys() >= TRANSITION_TRUNK_RECORDS
+        and not any(count > 1 for count in counts.values())
+        and not (EXCLUDED_SCAN_TAGS | {"ConvFrequency"}).intersection(counts)
+    )
+
 
 def diagnostic_label(value, allowed):
     """Exact fixed labels only; never trim, fold, interpolate or retain unknowns."""
@@ -201,14 +224,30 @@ class TimingTrace:
 class ReadWindow:
     """One non-renewable admission budget; no threads or scanner commands."""
 
-    def __init__(self, runtime, firmware, *, clock=monotonic, continuity=False, timing=False):
+    def __init__(
+        self,
+        runtime,
+        firmware,
+        *,
+        clock=monotonic,
+        continuity=False,
+        timing=False,
+        transition_wait=False,
+    ):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
         if type(continuity) is not bool:
             raise ValueError("An explicit boolean continuity policy is required.")
         if type(timing) is not bool or (timing and not continuity):
             raise ValueError("Timing requires an explicit continuity policy.")
+        if type(transition_wait) is not bool or (transition_wait and not (continuity and timing)):
+            raise ValueError("Transition withholding requires explicit continuity and timing.")
         self.continuity = continuity
         self.timing = timing
+        self.transition_wait = transition_wait
+        self.transition_deadline = None
+        self.transition_recovery_psi = 0
+        self.transition_episodes = self.transition_recoveries = 0
+        self.first_transition = None
         self.timing_events = []
         self.timing_overflow = False
         self.timing_poll_active = False
@@ -242,6 +281,8 @@ class ReadWindow:
             "scope_exit",
             "cache_complete",
             "context_rejected",
+            "transition_wait",
+            "transition_resumed",
             "tx_intent",
             "rx_line",
             "rx_rejection",
@@ -286,8 +327,57 @@ class ReadWindow:
                 "poll_active_at_snapshot": self.timing_poll_active,
                 "events": [dict(event) for event in self.timing_events],
                 "scan_rejection": deepcopy(self.scan_rejection),
+                "transition_wait": self.transition_report(),
                 "outgoing_wire_delivery_established": False,
             }
+
+    def transition_report(self):
+        with self.lock:
+            return {
+                "enabled": self.transition_wait,
+                "waiting": self.transition_deadline is not None,
+                "episodes": self.transition_episodes,
+                "recoveries": self.transition_recoveries,
+                "required_recovery_psi": TRANSITION_RECOVERY_PSI,
+                "max_wait_seconds": CONTINUITY_MAX_PSI_GAP,
+                "first_observation": deepcopy(self.first_transition),
+            }
+
+    def expire_transition(self):
+        # Caller holds the metadata lock. Neither repeated mismatches nor one
+        # intermittent matching PSI can renew this deadline or the trial budget.
+        if self.transition_deadline is not None and self.clock() > self.transition_deadline:
+            self.stop("scan_transition_timeout")
+
+    def withhold_transition(self, info):
+        # Called under the metadata lock before the terminal refusal path.
+        # An already-admitted read may finish, but any overlapping transition
+        # stays terminal; never cancel/reissue that command or reset its ticket.
+        if not (
+            self.transition_wait
+            and is_withheld_transition(info)
+            and self.started is not None
+            and self.latest_psi is not None
+            and not self.inflight
+            and not self.timing_poll_active
+            and self.clock() - self.started < self.window_seconds
+        ):
+            return False
+        if self.close_on_read_failure():
+            return True
+        if self.transition_deadline is None:
+            self.transition_deadline = self.latest_psi + CONTINUITY_MAX_PSI_GAP
+            self.transition_episodes += 1
+            if self.first_transition is None:
+                self.first_transition = {
+                    **scan_context_shape(info),
+                    "monotonic_seconds": self.clock(),
+                    "before_arm": False,
+                }
+            self.record_timing("transition_wait")
+        self.transition_recovery_psi = self.post_read_psi = 0
+        self.expire_transition()
+        return True
 
     def observe_connection(self, _connected):
         self.stop("connection_changed")  # Even a rapid false/true pair consumes the trial.
@@ -296,8 +386,15 @@ class ReadWindow:
         with self.lock:
             if self.closed:
                 return
+            self.expire_transition()
+            if self.closed:
+                return
             if _selection(info, DisplayReadKind.CLOCK) is None:
+                withheld = False
                 try:
+                    withheld = self.withhold_transition(info)
+                    if withheld:
+                        return
                     if self.timing:
                         self.scan_rejection = {
                             **scan_context_shape(info),
@@ -315,7 +412,8 @@ class ReadWindow:
                         "violations": ["diagnostic_unavailable"],
                     }
                 finally:
-                    self.stop("scan_context_changed")
+                    if not withheld:
+                        self.stop("scan_context_changed")
                 return
             now = self.clock()
             if self.latest_psi is not None:
@@ -325,6 +423,13 @@ class ReadWindow:
                     return
             self.latest_psi = now
             self.psi_count += 1
+            if self.transition_deadline is not None:
+                self.transition_recovery_psi += 1
+                if self.transition_recovery_psi < TRANSITION_RECOVERY_PSI:
+                    return
+                self.transition_deadline = None
+                self.transition_recoveries += 1
+                self.record_timing("transition_resumed")
             if self.opportunities and not self.inflight:
                 self.post_read_psi += 1
 
@@ -361,9 +466,11 @@ class ReadWindow:
 
     def allow_poll(self):
         with self.lock:
+            self.expire_transition()
             return (
                 self.started is not None
                 and not self.closed
+                and self.transition_deadline is None
                 and self.clock() - self.started < self.window_seconds
                 and self.opportunities < self.max_opportunities
             )
@@ -430,6 +537,7 @@ class ReadWindow:
 
     def report(self):
         with self.lock:
+            self.expire_transition()
             sample = None if self.cache is None else self.cache.supplemental_snapshot()
             banks = None if sample is None else sample.quick_keys
             clock = None if sample is None else sample.clock
@@ -448,6 +556,7 @@ class ReadWindow:
             passed = (
                 samples_valid
                 and self.failure is None
+                and self.transition_deadline is None
                 and self.opportunities == self.max_opportunities
                 and self.inflight == 0
                 and not self.timing_poll_active
@@ -467,6 +576,7 @@ class ReadWindow:
                 "failure": self.failure,
                 "read_failure": self.read_failure,
                 "scan_rejection": deepcopy(self.scan_rejection),
+                "transition_wait": self.transition_report(),
                 "timing_overflow": self.timing_overflow,
                 "timing_poll_active": self.timing_poll_active,
                 "samples_valid": samples_valid,
@@ -478,14 +588,26 @@ class ReadWindow:
 
 
 class SupplementalTrigger(OperatorTrigger):
-    def __init__(self, directory, firmware, *, continuity=False, timing=False, **kwargs):
+    def __init__(
+        self,
+        directory,
+        firmware,
+        *,
+        continuity=False,
+        timing=False,
+        transition_wait=False,
+        **kwargs,
+    ):
         DisplayReadResearchPolicy(firmware, DisplayReadKind.CLOCK)
         if type(continuity) is not bool:
             raise ValueError("An explicit boolean continuity policy is required.")
         if type(timing) is not bool or (timing and not continuity):
             raise ValueError("Timing requires an explicit continuity policy.")
+        if type(transition_wait) is not bool or (transition_wait and not (continuity and timing)):
+            raise ValueError("Transition withholding requires explicit continuity and timing.")
         self.continuity = continuity
         self.timing = timing
+        self.transition_wait = transition_wait
         super().__init__(directory, **kwargs)
         self.firmware, self.window = firmware, None
 
@@ -494,7 +616,9 @@ class SupplementalTrigger(OperatorTrigger):
             filename,
             {
                 **report,
-                "read_kind": "shared-clock-favorites-timing"
+                "read_kind": "shared-clock-favorites-transition-wait"
+                if self.transition_wait
+                else "shared-clock-favorites-timing"
                 if self.timing
                 else "shared-clock-favorites-continuity"
                 if self.continuity
@@ -506,6 +630,10 @@ class SupplementalTrigger(OperatorTrigger):
                 "window_seconds": CONTINUITY_WINDOW_SECONDS if self.continuity else WINDOW_SECONDS,
                 "max_psi_gap_seconds_allowed": CONTINUITY_MAX_PSI_GAP if self.continuity else None,
                 "timing_event_limit": TIMING_EVENT_LIMIT if self.timing else None,
+                "scan_transition_wait_enabled": self.transition_wait,
+                "scan_transition_recovery_psi": TRANSITION_RECOVERY_PSI
+                if self.transition_wait
+                else None,
             },
         )
 
@@ -521,6 +649,7 @@ class SupplementalTrigger(OperatorTrigger):
             or window.runtime is not runtime
             or window.continuity != self.continuity
             or window.timing != self.timing
+            or window.transition_wait != self.transition_wait
         ):
             raise ValueError("Review the exact supplemental reader owner.")
         try:
@@ -569,6 +698,7 @@ def main(argv=None):
         help="Separate 60-read/64-second scanning-only case; never rearm the short case.",
     )
     parser.add_argument("--timing", action="store_true")
+    parser.add_argument("--transition-wait", action="store_true")
     parser.add_argument("daemon_args", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     if not args.daemon_args or args.daemon_args[0] != "--":
@@ -587,6 +717,7 @@ def main(argv=None):
         ready_timeout=args.ready_timeout,
         continuity=args.continuity,
         timing=args.timing,
+        transition_wait=args.transition_wait,
     )
     constructed = False
 
@@ -598,7 +729,11 @@ def main(argv=None):
             constructed = True
             super().__init__(*runtime_args, **runtime_kwargs)
             trigger.window = ReadWindow(
-                self, args.expected_firmware, continuity=args.continuity, timing=args.timing
+                self,
+                args.expected_firmware,
+                continuity=args.continuity,
+                timing=args.timing,
+                transition_wait=args.transition_wait,
             )
             self._research_trigger_started = False
 
