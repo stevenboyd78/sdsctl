@@ -635,6 +635,8 @@ def test_logout_revokes_only_current_session() -> None:
     finally:
         first.close()
         second.close()
+        # These clients bypass ASGI lifespan; close their shared password worker.
+        authentication.close()
 
 
 def test_login_attempts_are_bounded_per_peer_without_leaking_secret(

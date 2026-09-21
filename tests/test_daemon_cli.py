@@ -1111,6 +1111,7 @@ def test_daemon_cli_reports_process_os_error(
 def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     explicit = tmp_path / "explicit" / "daemon.sock"
     explicit_events = tmp_path / "explicit" / "events.sock"
@@ -1147,6 +1148,9 @@ def test_daemon_cli_explicit_socket_path_overrides_runtime_environment(
             live_audio_server: object,
         ) -> None:
             del runtime, destination_coordinator, destination_reloader
+            # The fake process never runs the real service shutdown lifecycle.
+            assert isinstance(live_audio_server, cli.DaemonLiveAudioServer)
+            request.addfinalizer(live_audio_server.session.close)
             observed.append(
                 (
                     recording_manager,
