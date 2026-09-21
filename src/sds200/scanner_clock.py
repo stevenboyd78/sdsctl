@@ -50,6 +50,7 @@ class ClockSnapshot:
     age_seconds: float | None
     failure: ClockFailure | None
     blocked_until_reconnect: ClockFailure | None
+    sample_sequence: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +59,7 @@ class _Sample:
     daylight_saving: str
     rtc_valid: bool
     requested_at: float
+    sequence: int
 
 
 class ScannerClockSamples:
@@ -72,6 +74,7 @@ class ScannerClockSamples:
         self._failure: ClockFailure | None = None
         self._blocked: ClockFailure | None = None
         self._epoch = 0
+        self._sample_sequence = 0
         self._due = self._latest_time = 0.0
 
     def _now(self) -> float:
@@ -171,11 +174,17 @@ class ScannerClockSamples:
                 return False
             if ticket.epoch != self._epoch or result is None:
                 return False
+            if self._sample_sequence >= 2**53 - 1:
+                self._sample = None
+                self._failure = self._blocked = "read_error"
+                return False
+            self._sample_sequence += 1
             self._sample = _Sample(
                 result.local_time,
                 result.daylight_saving,
                 result.rtc_valid,
                 ticket.requested_at,
+                self._sample_sequence,
             )
             self._failure = None
             return True
@@ -220,4 +229,5 @@ class ScannerClockSamples:
             age_seconds=now - sample.requested_at if sample else None,
             failure=self._failure,
             blocked_until_reconnect=self._blocked,
+            sample_sequence=sample.sequence if sample else None,
         )

@@ -201,6 +201,11 @@ do not enable public delivery. Independent per-source freshness and consumer
 deadline handling are required before live integration; ordinary schema 1
 continues to carry PSI only.
 
+The separate [supplemental delivery candidate](scanner-display-supplemental-delivery.md)
+adds successful-acquisition IDs and tested Python/JavaScript expiry guards.
+It is not advertised by this operation, served by the WebUI, or enabled on
+ordinary daemon startup. Existing strict schema-1 consumers remain unchanged.
+
 ### Scanner clock GET groundwork (not automatic polling)
 
 Remote Command Specification V1.02 p.9 documents a read-only `DTM` and a reply

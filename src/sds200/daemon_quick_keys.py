@@ -73,6 +73,7 @@ class QuickKeyBank:
     states: tuple[FavoritesQuickKeyState, ...] | None
     age_seconds: float | None
     failure: Failure | None
+    sample_sequence: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,12 +97,14 @@ class SupplementalSnapshot:
     captured_at: float
     quick_keys: QuickKeySnapshot
     clock: ClockSnapshot | None
+    context_revision: int = 0
 
 
 @dataclass(frozen=True, slots=True)
 class _Cached:
     states: tuple[FavoritesQuickKeyState, ...]
     requested_at: float
+    sequence: int
 
 
 class DaemonQuickKeyCache:
@@ -169,6 +172,7 @@ class DaemonQuickKeyCache:
         self._blocked: Failure | None = None
         self._demand_until = self._next_poll = self._latest_time = 0.0
         self._values: dict[Kind, _Cached] = {}
+        self._sample_sequences: dict[Kind, int] = {}
         self._failures: dict[Kind, Failure] = {}
         self._due: dict[Operation, float] = {}
 
@@ -330,6 +334,7 @@ class DaemonQuickKeyCache:
                     cached.states if fresh and cached is not None else None,
                     age if active else None,
                     self._failures.get(kind) if active else None,
+                    cached.sequence if fresh and cached is not None else None,
                 )
             )
         return QuickKeySnapshot(
@@ -355,6 +360,7 @@ class DaemonQuickKeyCache:
             daylight_saving=None,
             rtc_valid=None,
             age_seconds=None,
+            sample_sequence=None,
             blocked_until_reconnect=self._blocked or snapshot.blocked_until_reconnect,
         )
 
@@ -368,6 +374,7 @@ class DaemonQuickKeyCache:
                 now,
                 self._snapshot_at(now),
                 self._clock_snapshot_at(now),
+                self._epoch,
             )
 
     def _quarantine(self, failure: Failure) -> None:
@@ -550,7 +557,12 @@ class DaemonQuickKeyCache:
                 self._due[kind] = finished + MIN_READ_GAP
             else:
                 # Do not retain the packet, raw reply or wall-clock timestamp.
-                self._values[kind] = _Cached(tuple(result.states), now)
+                sequence = self._sample_sequences.get(kind, 0) + 1
+                if sequence >= 2**53:
+                    self._quarantine("read_error")
+                    return True
+                self._sample_sequences[kind] = sequence
+                self._values[kind] = _Cached(tuple(result.states), now, sequence)
                 self._failures.pop(kind, None)
                 self._due[kind] = finished + REFRESH_INTERVAL
             return True

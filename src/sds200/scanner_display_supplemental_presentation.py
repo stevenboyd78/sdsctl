@@ -81,7 +81,7 @@ def _clock(value: DisplayClockValue, elapsed: float) -> DisplayClockValue:
     age = value.age_seconds + elapsed
     if age >= CLOCK_STALE_AFTER:
         return DisplayClockValue(status.STALE)
-    return DisplayClockValue(status.CURRENT, local, age)
+    return DisplayClockValue(status.CURRENT, local, age, value.sample_sequence)
 
 
 def _favorites(value: DisplayFavoritesValue, elapsed: float) -> DisplayFavoritesValue:
@@ -101,7 +101,7 @@ def _favorites(value: DisplayFavoritesValue, elapsed: float) -> DisplayFavorites
     age = value.age_seconds + elapsed
     if age >= FAVORITES_STALE_AFTER:
         return DisplayFavoritesValue(status.STALE)
-    return DisplayFavoritesValue(status.CURRENT, value.states, age)
+    return DisplayFavoritesValue(status.CURRENT, value.states, age, value.sample_sequence)
 
 
 def _frame(

@@ -65,6 +65,11 @@ browser visual appearance, physical continuity or unrestricted polling.
 
 ## Required before live consumer integration
 
+The [delivery/expiry candidate](scanner-display-supplemental-delivery.md) now
+implements independent sample IDs, a strict internal envelope, and equivalent
+Python/JavaScript deadline guards. It is tested offline and not wired into a
+public route or live renderer; transport/controller integration remains below.
+
 Do not insert clock text into ordinary schema-1 responses just because the
 existing decoders accept that text. Schema 1 only carries the PSI sequence and
 age: a newly received PSI frame could otherwise keep an old auxiliary value

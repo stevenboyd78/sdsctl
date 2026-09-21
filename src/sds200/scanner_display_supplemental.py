@@ -40,6 +40,7 @@ class DisplayClockValue:
     status: SupplementalValueStatus
     local_time: datetime | None = None
     age_seconds: float | None = None
+    sample_sequence: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,7 @@ class DisplayFavoritesValue:
     # Index is the global Favorites quick key (0..99), never an LCD position.
     states: tuple[FavoritesQuickKeyState, ...] | None = None
     age_seconds: float | None = None
+    sample_sequence: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +96,7 @@ def _clock_value(sample: ClockSnapshot | None, elapsed: float) -> DisplayClockVa
     ):
         return DisplayClockValue(status.INVALID_SOURCE)
     # DST's opaque token must not become a UTC offset or a local timezone guess.
-    return DisplayClockValue(status.CURRENT, value, age)
+    return DisplayClockValue(status.CURRENT, value, age, sample.sample_sequence)
 
 
 def _favorites_value(bank: QuickKeyBank | None, elapsed: float) -> DisplayFavoritesValue:
@@ -115,7 +117,7 @@ def _favorites_value(bank: QuickKeyBank | None, elapsed: float) -> DisplayFavori
         or any(type(value) is not FavoritesQuickKeyState for value in bank.states)
     ):
         return DisplayFavoritesValue(status.INVALID_SOURCE)
-    return DisplayFavoritesValue(status.CURRENT, bank.states, age)
+    return DisplayFavoritesValue(status.CURRENT, bank.states, age, bank.sample_sequence)
 
 
 def project_supplemental_display_values(
