@@ -1,4 +1,4 @@
-# Finite supplemental acceptance launcher (internal, not deployed)
+# Finite supplemental acceptance launcher (internal, not released)
 
 This is offline-tested acceptance infrastructure for the
 [bounded acquisition owner](scanner-display-supplemental-acquisition.md) and
@@ -452,8 +452,9 @@ afterward. The source context is owned by a different UID: the first
 capability-stripped file helper correctly refused access. A fresh read-only helper
 with `DAC_READ_SEARCH` completed without changing permissions. Administrative
 Docker-socket access and host-file read capabilities must not be exposed publicly.
-Service assembly, independently sealed installation inputs, live candidate
-guardian qualification and full controlled handoff/recovery remain required.
+The service assembly below now supplies the finite loop and sealed-plan interface.
+Live candidate guardian qualification and full controlled handoff/recovery remain
+separate requirements; read-only qualification cannot substitute for either.
 
 The private candidate image was also built and inspected on the development host.
 All staged runtime assets and finite wrappers matched, and an isolated,
@@ -500,6 +501,45 @@ Service-assembly tests use real local journals/inboxes and fake host I/O. They
 cover no-request expiry, the four-command handoff/recovery path, changed boot or
 baseline, unqualified code, invalid finish input, disjoint storage and terminal
 re-entry. These are not evidence of a live App handoff or scanner acceptance.
+
+## Installed private candidate and no-request service qualification
+
+The separate candidate was subsequently installed **stopped** on the acceptance
+HAOS host, with manual boot, watchdog/automatic updates disabled and all host ports
+unmapped. Supervisor rebuilt the local App, so its destination image was inspected
+and pinned independently rather than assuming the desktop image ID would carry
+over. All staged runtime assets and five launcher files matched. Its networkless
+image run passed 325 selected tests, with two browser-engine checks skipped.
+The post-test bounded inventory returned unconfirmed; two fresh independent
+read-only inventories then matched the pre-test image fingerprint. The failed
+completion check remains preserved, not relabeled as a successful run.
+
+The candidate received an exact copy of the approved profile source, new local
+endpoint/source identities, new accepted-profile state, separate empty recording
+storage and a deployment with upload disabled. Credentials, browser state and
+recordings were not cloned. Only its validated options were changed. Supervisor's
+unversioned API uses the v1 `/addons` routes despite the CLI's user-facing `apps`
+name; the initial `/apps` request received a definite 404, unchanged options were
+confirmed, and the correct route was then used without repeating provisioning.
+
+Two complete host observations qualified in approximately 1.15 seconds each,
+within the unchanged two-second limit. An earlier unconfirmed context inventory
+remains a consumed failed preparation, not a partially accepted plan.
+
+A **different**, no-request fixture case exercised the actual independent service
+on HAOS. After the launching SSH session ended, it bound the existing normal
+process, waited its fixed request period and expired after approximately 301
+seconds. Replaying its journal showed preparation, process binding and a final
+expiry observation, with **zero App commands** and no operator notices. Its helper
+container was gone, all protected pins were unchanged, the normal App remained
+healthy in the original incarnation, and the candidate remained stopped. The
+report correctly said restoration was not verified: no handoff occurred, so this
+proves independent no-request expiry, **not** live recovery from a candidate.
+
+The acquisition case is still unused. Its fresh physical trial must separately
+qualify candidate readiness, explicit arming/authenticated demand, bounded reads,
+candidate process exit and healthy normal-App restoration. The expired service
+fixture must never be reused for that trial.
 
 ## Scanner-free host-runtime qualification
 
