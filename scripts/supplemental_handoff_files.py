@@ -56,7 +56,7 @@ class FileEvidence:
     gid: int
 
 
-def inventory(root: Path) -> dict[str, dict[str, int | str]]:
+def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dict[str, int | str]]:
     """Hash one explicit tree, with no symlinks, special files or hardlinks.
 
     Every parent is opened without following links. Both open descriptors and
@@ -68,6 +68,11 @@ def inventory(root: Path) -> dict[str, dict[str, int | str]]:
     opened: list[tuple[int, str, int, tuple[int, ...]]] = []
     anchor = -1
     try:
+        # Source/profile inventories keep their original 4 MiB limit. A reviewed
+        # recording root may opt into 16 MiB per file, still under the unchanged
+        # 64 MiB total, entry/depth and elapsed-time bounds. No metadata-only proof.
+        limit = MAX_FILE_BYTES if max_file_bytes is None else max_file_bytes
+        require(type(limit) is int and 0 < limit <= 16 * 1024 * 1024)
         require(type(root) is type(Path()) and root.is_absolute())
         require(root != Path("/") and all(p not in (".", "..") for p in root.parts))
         deadline = time.monotonic() + MAX_SECONDS
@@ -118,7 +123,7 @@ def inventory(root: Path) -> dict[str, dict[str, int | str]]:
                             os.close(child)
                     else:
                         require(stat.S_ISREG(stated.st_mode) and stated.st_nlink == 1)
-                        require(len(result) < MAX_FILES and stated.st_size <= MAX_FILE_BYTES)
+                        require(len(result) < MAX_FILES and stated.st_size <= limit)
                         total += stated.st_size
                         require(total <= MAX_TOTAL_BYTES)
                         fd = os.open(
@@ -171,6 +176,68 @@ def inventory(root: Path) -> dict[str, dict[str, int | str]]:
     except Exception:
         raise UnconfirmedFiles("Protected filesystem evidence is unconfirmed.") from None
     finally:
+        for _, _, child, _ in reversed(opened):
+            os.close(child)
+        if anchor >= 0:
+            os.close(anchor)
+
+
+def private_file(path: Path) -> FileEvidence:
+    """Hash exactly one existing private regular file, never its siblings.
+
+    The four accepted-profile/deployment inputs can live in different private
+    directories. Opening each ancestor without following links also avoids
+    importing an App to resolve paths while its container is stopped.
+    """
+    opened: list[tuple[int, str, int, tuple[int, ...]]] = []
+    anchor = file = -1
+    try:
+        require(type(path) is type(Path()) and path.is_absolute() and len(path.parts) > 2)
+        require(all(part not in (".", "..") for part in path.parts))
+        deadline = time.monotonic() + MAX_SECONDS
+        anchor = os.open("/", DIRECTORY)
+        parent = anchor
+        for name in path.parts[1:-1]:
+            child = os.open(name, DIRECTORY, dir_fd=parent)
+            try:
+                observed = identity(os.fstat(child))
+            except BaseException:
+                os.close(child)
+                raise
+            opened.append((parent, name, child, observed))
+            parent = child
+        stated = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
+        require(stat.S_ISREG(stated.st_mode) and stated.st_nlink == 1)
+        require(stated.st_uid == os.geteuid() and stat.S_IMODE(stated.st_mode) == 0o600)
+        require(0 < stated.st_size <= MAX_FILE_BYTES)
+        file = os.open(
+            path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent
+        )
+        require(identity(os.fstat(file)) == identity(stated))
+        hashed, size = hashlib.sha256(), 0
+        while True:
+            require(time.monotonic() <= deadline)
+            chunk = os.read(file, min(65536, stated.st_size + 1 - size))
+            if not chunk:
+                break
+            size += len(chunk)
+            require(size <= stated.st_size)
+            hashed.update(chunk)
+        require(size == stated.st_size and identity(os.fstat(file)) == identity(stated))
+        require(
+            identity(os.stat(path.name, dir_fd=parent, follow_symlinks=False)) == identity(stated)
+        )
+        for parent, name, child, before in opened:
+            current = identity(os.fstat(child))
+            named = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
+            require(current[:6] == named[:6] == before[:6])
+        require(time.monotonic() <= deadline)
+        return FileEvidence(size, hashed.hexdigest(), 0o600, stated.st_uid, stated.st_gid)
+    except Exception:
+        raise UnconfirmedFiles("Protected filesystem evidence is unconfirmed.") from None
+    finally:
+        if file >= 0:
+            os.close(file)
         for _, _, child, _ in reversed(opened):
             os.close(child)
         if anchor >= 0:

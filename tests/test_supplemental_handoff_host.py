@@ -427,6 +427,37 @@ def test_real_unix_http_create_start_inspect_shapes(http_engine):
     assert calls[1][2] == {"Detach": True, "Tty": False}
 
 
+def test_real_unix_http_fixed_inventory_and_image_reads(http_engine):
+    docker, calls, replies = http_engine
+    image = "sha256:" + "f" * 64
+    replies += [(200, b"[]"), (200, p.encode({"Id": image})), (200, b"{}")]
+    assert docker.containers() == []
+    assert docker.image(image) == {"Id": image}
+    assert docker.container(h.CORE) == {}
+    assert calls == [
+        ("GET", h.API + "/containers/json?all=1", None),
+        ("GET", h.API + "/images/" + image + "/json", None),
+        ("GET", h.API + "/containers/homeassistant/json", None),
+    ]
+
+
+@pytest.mark.parametrize("value", ["latest", "sha256:bad", "../images/test", None])
+def test_image_read_requires_immutable_identity(http_engine, value):
+    docker, calls, _ = http_engine
+    with pytest.raises(p.UnsafeHandoff):
+        docker.image(value)
+    assert not calls
+
+
+@pytest.mark.parametrize("raw", [b"{}", b"[null]", b"[1]", b'[ {"Id":1,"Id":2} ]', b"[NaN]"])
+def test_inventory_json_rejects_ambiguous_or_invalid_shapes(http_engine, raw):
+    docker, calls, replies = http_engine
+    replies.append((200, raw))
+    with pytest.raises(p.UnsafeHandoff):
+        docker.containers()
+    assert len(calls) == 1
+
+
 @pytest.mark.parametrize(
     "status,raw",
     [

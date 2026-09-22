@@ -226,6 +226,46 @@ def test_complete_journal_bridge_tracks_exits_before_each_next_owner(setup):
     assert len(host.sent) == 4
 
 
+def test_operator_notice_is_consumed_by_service_owner_before_dispatch(setup):
+    host, journal = setup
+    run = session(host, journal)
+
+    def consume():
+        journal.append({"kind": "request", "boot_id": host.boot, "now": host.now})
+        return True
+
+    run.consume_operator = consume
+    try:
+        assert poll(host, run).outcome == "dispatch_submitted"
+        assert host.sent == [("stop", p.NORMAL)]
+        assert any(item["event"]["kind"] == "request" for item in journal.entries)
+    finally:
+        run.close()
+
+
+def test_bad_operator_input_cannot_disable_candidate_expiry_recovery(setup):
+    host, journal = setup
+    run = session(host, journal)
+    request(host, journal)
+    for _ in range(3):
+        poll(host, run)
+    assert journal.machine.state.phase == "candidate_running"
+
+    def broken():
+        raise ValueError("private invalid operator input")
+
+    run.consume_operator = broken
+    host.now = journal.machine.state.trial_deadline
+    try:
+        assert run.poll().outcome == "dispatch_submitted"
+        assert host.sent[-1] == ("stop", p.CANDIDATE)
+        assert poll(host, run).outcome == "dispatch_submitted"
+        assert poll(host, run).phase == "complete"
+        assert host.sent[-1] == ("start", p.NORMAL)
+    finally:
+        run.close()
+
+
 def test_container_removal_without_process_exit_does_not_start_other_owner(setup):
     host, journal = setup
     run = session(host, journal)

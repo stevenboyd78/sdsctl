@@ -367,6 +367,68 @@ read-only diagnostics identified the private-cgroup namespace mismatch. The pass
 fixture used a new case with both host namespaces. No scanner access, App handoff,
 restoration test or installed recovery service is claimed by this qualification.
 
+## Joined host observation and private operator input
+
+`supplemental_handoff_observer.py` joins fixed Supervisor reads with independent
+Docker image/container inspection and separately qualified file/cache collectors.
+Installed versions, all container names, other scanner owners, nested jobs, Core
+process generation, App configuration and native readiness must agree. Core's
+CLI information response does **not** establish a running state: the collector
+checks the actual Core container and its pinned generation. It repeats the App
+inventory, container inventory, Core generation and jobs check before returning;
+the entire observation must fit its two-second freshness budget. A known protected
+file/configuration change reaches policy as a changed pin. Missing/ambiguous
+responses remain unavailable, never proof of a stopped App or healthy daemon.
+
+`supplemental_handoff_protected.py` reads the fixed host source context, running
+container's qualified overlay package, four private profile inputs, and recording
+contents. Source and profile limits remain unchanged. A reviewed recording root
+can explicitly allow files up to 16 MiB, still within the 64 MiB total and existing
+time/entry/depth budgets. It does not silently substitute timestamps for file
+contents. A stopped App uses its separately verified immutable-image package
+fingerprint; the observer must still inspect that image. Runtime package shadow
+mounts, nested profile/media shadow mounts, wrong host mappings and unknown storage
+drivers are refused. These private host paths are not a user-facing configuration
+or a portable Docker-storage discovery API.
+
+`supplemental_handoff_cached.py` uses the installed, independently qualified App
+package to compare accepted/source/configuration bytes with the loaded daemon
+profile and its scanner target. Its only IPC operations are hello, cached runtime,
+recording status and cached display profile. It never requests supplemental
+context/frame/demand, profile reload, scanner control or a probe. Profile files are
+rechecked afterward; the collection has a 1.5-second bound. Recording-active and
+confirmed unhealthy values are retained; invalid data is unconfirmed, not idle.
+Candidate health additionally needs separate case/guardian evidence, which this
+collector does not claim to supply.
+
+`supplemental_handoff_operator.py` provides a private local one-shot request/finish
+inbox. The service remains the sole writer of its locked journal. An atomic,
+exclusive 0600 notice binds the case, host boot, baseline digest and a fresh
+boot-relative issuance time (30 seconds maximum age). It cannot execute commands,
+arm acquisition, overwrite an earlier request or turn an expired case into a new
+one. Durable journal events prevent reconsumption after restart. Interrupted or
+ambiguous publication is retained for review rather than deleted for a retry.
+`RecoverySession` can consume these notices, but invalid operator input cannot
+disable the independent expiry/recovery path or confer dispatch authority.
+
+These components are not yet an installed operational recovery service. Read-only
+HAOS qualifications confirmed actual CLI/Docker response shapes, matching cached
+profile/runtime state, and exact source/package/profile/recording content hashes.
+The normal App incarnation stayed unchanged and temporary helpers were absent
+afterward. The source context is owned by a different UID: the first
+capability-stripped file helper correctly refused access. A fresh read-only helper
+with `DAC_READ_SEARCH` completed without changing permissions. Administrative
+Docker-socket access and host-file read capabilities must not be exposed publicly.
+Service assembly, independently sealed installation inputs, candidate guardian
+proof and full controlled handoff/recovery still require qualification.
+
+The private candidate image was also built and inspected on the development host.
+All staged runtime assets and finite wrappers matched, and an isolated,
+networkless image test run passed (browser-engine tests require the separate
+development-host environment). This does not establish an installed HA candidate.
+Containerd's image-index ID can differ from the classic Docker image-config ID;
+any transferred image must be independently inspected and pinned on its destination.
+
 ## Scanner-free host-runtime qualification
 
 `scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture

@@ -36,6 +36,7 @@ from supplemental_handoff_policy import (
 MAX_RESPONSE = 1024 * 1024
 API = "/v1.47"
 CLI = "hassio_cli"
+CORE = "homeassistant"
 CONTROL = {
     "stopping_normal": ("ha", "apps", "stop", NORMAL, "--raw-json"),
     "starting_candidate": ("ha", "apps", "start", CANDIDATE, "--raw-json"),
@@ -43,6 +44,7 @@ CONTROL = {
     "starting_normal": ("ha", "apps", "start", NORMAL, "--raw-json"),
 }
 READS = {
+    "apps": ("ha", "apps", "list", "--raw-json"),
     "jobs": ("ha", "jobs", "info", "--raw-json"),
     "core": ("ha", "core", "info", "--raw-json"),
     "normal": ("ha", "apps", "info", NORMAL, "--raw-json"),
@@ -260,9 +262,23 @@ class Docker:
             connection.close()
 
     def container(self, identity: str) -> dict[str, Any]:
-        if identity not in (CLI, "app_" + NORMAL, "app_" + CANDIDATE):
+        if identity not in (CLI, CORE, "app_" + NORMAL, "app_" + CANDIDATE):
             digest(identity)
         return object_json(self._request("GET", f"/containers/{identity}/json"))
+
+    def containers(self) -> list[dict[str, Any]]:
+        raw = self._request("GET", "/containers/json?all=1")
+        # Reuse strict duplicate-key/size decoding without accepting a free-form
+        # URL, filter or caller-selected Docker endpoint.
+        value = object_json(b'{"containers":' + raw + b"}")["containers"]
+        require(type(value) is list and len(value) <= 256)
+        require(all(type(item) is dict for item in value))
+        return cast(list[dict[str, Any]], value)
+
+    def image(self, identity: str) -> dict[str, Any]:
+        require(type(identity) is str and identity.startswith("sha256:"))
+        digest(identity[7:])
+        return object_json(self._request("GET", f"/images/{identity}/json"))
 
     def inspect_execution(self, identity: str) -> dict[str, Any]:
         digest(identity)

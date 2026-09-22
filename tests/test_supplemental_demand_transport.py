@@ -153,10 +153,43 @@ def test_expired_lease_advances_once_and_no_cached_read_can_extend(rig, service)
     assert second != first
     rig.clock.now = 85
     wait_for(lambda: rig.owner.frames.supplemental_frame_set() is not None)
-    with pytest.raises(SupplementalDemandUnconfirmed):
+    # Expiry may retire the cache epoch between context() and demand(). Both
+    # rejection paths are correct: an already-stale context is refused before
+    # renewal, or the matching context reaches the now-ended acquisition owner.
+    # Do not make worker scheduling order part of the acceptance contract.
+    with pytest.raises((SupplementalDemandUnconfirmed, SupplementalContextChanged)):
         service.demand(service.context()["context"], str(uuid4()))
     assert rig.owner.status().reason == "window_expired"
+    assert not rig.owner._cache.snapshot().active
     assert not rig.owner.arm()
+
+
+@pytest.mark.parametrize("retire_between_calls", [False, True])
+def test_ended_window_rejects_both_current_and_newly_retired_context(
+    rig, service, monkeypatch, retire_between_calls
+):
+    assert rig.owner.arm()
+    service.demand(service.context()["context"], str(uuid4()))
+    wait_for(lambda: rig.peer.reads == ["FQK"])
+    wait_for(lambda: rig.owner._cache._pending is None)
+    rig.owner._end("window_expired")
+    context = service.context()["context"]
+    attempts = rig.owner.status().read_attempts
+    if retire_between_calls:
+        original = service._capture
+
+        def retired():
+            rig.owner._cache.clear_demand()
+            return original()
+
+        monkeypatch.setattr(service, "_capture", retired)
+    error = SupplementalContextChanged if retire_between_calls else SupplementalDemandUnconfirmed
+    with pytest.raises(error):
+        service.demand(context, str(uuid4()))
+    assert rig.owner.status().reason == "window_expired"
+    assert rig.owner.status().read_attempts == attempts
+    assert rig.peer.reads == ["FQK"]
+    assert not rig.owner._cache.snapshot().active and not rig.owner.arm()
 
 
 @pytest.mark.parametrize(

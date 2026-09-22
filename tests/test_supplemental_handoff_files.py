@@ -168,3 +168,73 @@ def test_import_does_not_launch_or_connect():
     source = Path(f.__file__).read_text()
     assert "subprocess" not in source
     assert "import socket" not in source
+
+
+def test_recording_limit_is_explicit_and_total_budget_still_applies(tree, monkeypatch):
+    target = tree / "audio.wav"
+    target.write_bytes(b"a" * (4 * 1024 * 1024 + 1))
+    with pytest.raises(f.UnconfirmedFiles):
+        f.inventory(tree)
+    assert (
+        f.inventory(tree, max_file_bytes=16 * 1024 * 1024)["audio.wav"]["size"]
+        == target.stat().st_size
+    )
+    monkeypatch.setattr(f, "MAX_TOTAL_BYTES", 4 * 1024 * 1024)
+    with pytest.raises(f.UnconfirmedFiles):
+        f.inventory(tree, max_file_bytes=16 * 1024 * 1024)
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, 16 * 1024 * 1024 + 1, "4"])
+def test_content_limit_cannot_be_unbounded(tree, limit):
+    with pytest.raises(f.UnconfirmedFiles):
+        f.inventory(tree, max_file_bytes=limit)
+
+
+def test_single_private_file_reads_no_siblings(tree):
+    target = tree / "a.py"
+    target.chmod(0o600)
+    os.mkfifo(tree / "unrelated")
+    assert f.private_file(target).sha256 == hashlib.sha256(b"first\n").hexdigest()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["symlink", "ancestor", "hardlink", "fifo", "mode", "empty", "large", "replace", "grow"],
+)
+def test_private_file_faults_are_refused(tree, monkeypatch, fault):
+    target = tree / "a.py"
+    target.chmod(0o600)
+    if fault == "symlink":
+        target.rename(tree / "original")
+        target.symlink_to(tree / "original")
+    elif fault == "ancestor":
+        alias = tree.parent / "alias"
+        alias.symlink_to(tree)
+        target = alias / target.name
+    elif fault == "hardlink":
+        (tree / "other").hardlink_to(target)
+    elif fault == "fifo":
+        target.unlink()
+        os.mkfifo(target, 0o600)
+    elif fault == "mode":
+        target.chmod(0o644)
+    elif fault == "empty":
+        target.write_bytes(b"")
+    elif fault == "large":
+        monkeypatch.setattr(f, "MAX_FILE_BYTES", 2)
+    else:
+        original = f.os.read
+
+        def read(fd, size):
+            raw = original(fd, size)
+            if fault == "replace":
+                target.unlink()
+            target.write_bytes(b"different private bytes")
+            target.chmod(0o600)
+            return raw
+
+        monkeypatch.setattr(f.os, "read", read)
+    before = len(list(Path("/proc/self/fd").iterdir()))
+    with pytest.raises(f.UnconfirmedFiles, match="^Protected filesystem evidence is unconfirmed.$"):
+        f.private_file(target)
+    assert len(list(Path("/proc/self/fd").iterdir())) == before

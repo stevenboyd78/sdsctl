@@ -10,6 +10,7 @@ No automatic start, CLI, deployment, PID signaling or scanner import is provided
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import asdict, replace
 
 from supplemental_handoff_executor import Executor, Result, Sample
@@ -182,9 +183,12 @@ class RecoverySession:
         processes: TrackedProcesses,
         dispatch: TrackedDispatch,
         read: Callable[[], Sample],
+        *,
+        consume_operator: Callable[[], bool] | None = None,
     ):
         require(processes.journal is journal and dispatch.journal is journal)
         self.journal, self.processes, self.dispatch, self.read = journal, processes, dispatch, read
+        self.consume_operator = consume_operator
         self.executor = Executor(journal, self._read, self._send)
 
     def _read(self) -> Sample:
@@ -263,6 +267,12 @@ class RecoverySession:
             # response. A read timeout cannot indefinitely preserve a live case.
             boot, now = self.processes.read_clock()
             self.journal.append({"kind": "tick", "boot_id": boot, "now": now})
+            if self.consume_operator is not None:
+                # Bad/missing/expired operator input cannot authorize an
+                # action or disable the independent expiry/recovery path.
+                # Journal I/O failure still fails closed inside Executor.
+                with suppress(Exception):
+                    self.consume_operator()
         return self.executor.poll()
 
     def run(self, wait: Callable[[float], None]) -> Result:
