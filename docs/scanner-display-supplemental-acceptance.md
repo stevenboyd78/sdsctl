@@ -128,7 +128,7 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
-## Next media check: live browser playback only (installed networking gate pending)
+## Next media check: live browser playback only
 
 The default host adapter is **reader-only, not audio-ready**. Its
 `app_configuration()` check requires `50000/udp`, `50443/tcp` and `8443/tcp` to
@@ -172,6 +172,18 @@ The host-port evidence is a fresh observation, not an atomic reservation. It is
 rechecked around observations and before dispatch under the existing finite
 service protocol; packet counters and audible readiness remain separate live
 gates. The recording-idle rule and protected inventories are unchanged.
+
+Preparation on 2026-09-22 installed a fresh source-pinned candidate while stopped
+and saved only its UDP-only network configuration. Its 651 installed package
+entries and all five launcher files were verified against the staged source;
+the previous context and all existing App data were preserved. The new schema-2
+plan passed two full host observations within the existing two-second limit.
+The normal App retained its running process, configuration and protected pins.
+No candidate start, handoff request, read arm, recording or port publication
+occurred during preparation. Validation passed 747 handoff tests, 156 staging/
+finite-acceptance tests, and 11 isolated image lifecycle scenarios. Actual scanner
+RTP delivery, selected-player progress and audible continuity remain untested
+for this new case and require fresh physical readiness.
 
 Only after that offline policy and installed-network proof are qualified should
 physical/audio readiness be requested. Before arming, require increasing daemon
