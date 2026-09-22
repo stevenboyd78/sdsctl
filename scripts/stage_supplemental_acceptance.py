@@ -32,6 +32,7 @@ DAEMON_ENTRY = "/usr/local/bin/sdsctl-supplemental-acceptance"
 WEB_ENTRY = "/usr/local/bin/sdsctl-supplemental-acceptance-web"
 IMAGE_SCRIPTS = "/opt/sdsctl-supplemental-acceptance"
 RUNTIME = "src/sds200/home_assistant_app_runtime.py"
+SUPERVISOR = "src/sds200/home_assistant_app_supervisor.py"
 
 
 def validate(revision: str, case_id: str, firmware: str) -> None:
@@ -68,6 +69,53 @@ def launcher(source: str, function: str, executable: str) -> str:
     return before + delimiter + signature + end + body
 
 
+def finite_shutdown(source: str, *, directory: str, revision: str) -> str:
+    """Patch only the private staged wait method, not the normal App source."""
+    boundary = "    def _wait_for_stop_or_child_exit("
+    if source.count(boundary) != 1:
+        raise ValueError("Review the finite App supervisor boundary.")
+    before, _, rest = source.partition(boundary)
+    method, delimiter, after = rest.partition("    def _stop_child(")
+    if not delimiter or "\n    def " in method:
+        raise ValueError("Review the finite App supervisor method.")
+    signature, _, body = method.partition("    ) -> None:\n")
+    if (
+        not body.startswith("        while True:\n")
+        or body.count("daemon_returncode = daemon.poll()") != 1
+    ):
+        raise ValueError("Review the finite App supervisor loop.")
+    body = normal.replace_once(
+        body,
+        "            if daemon_returncode is not None:\n",
+        (
+            "            if daemon_returncode is not None:\n"
+            "                if completion.finished(daemon_returncode):\n"
+            "                    if any(child is not None and child.poll() is not None\n"
+            "                           for child in (web, media, native_web)):\n"
+            "                        raise SDS200Error(\n"
+            "                            'Acceptance sibling exited before App shutdown.')\n"
+            "                    return\n"
+        ),
+    )
+    body = normal.replace_once(
+        body,
+        "            web_returncode = web.poll()\n",
+        ("            completion.observe()\n            web_returncode = web.poll()\n"),
+    )
+    prefix = (
+        "        # Private finite acceptance only; normal supervisor remains unchanged.\n"
+        f"        sys.path.insert(0, {IMAGE_SCRIPTS!r})\n"
+        "        from guard_supplemental_acceptance import AppCompletion\n"
+        "        with AppCompletion(\n"
+        f"            Path({directory!r}), daemon.pid, {revision!r}\n"
+        "        ) as completion:\n"
+    )
+    body = "".join(
+        "    " + line if line.strip() else line for line in body.splitlines(keepends=True)
+    )
+    return before + boundary + signature + "    ) -> None:\n" + prefix + body + delimiter + after
+
+
 def render(
     snapshot: dict[str, bytes], revision: str, *, case_id: str, firmware: str
 ) -> dict[str, bytes]:
@@ -86,6 +134,9 @@ def render(
     for name in LAUNCHERS:
         result[name] = snapshot["scripts/" + name]
     guard_directory = f"/data/sdsctl-supplemental-acceptance-{case_id}"
+    result[SUPERVISOR] = finite_shutdown(
+        result[SUPERVISOR].decode(), directory=guard_directory, revision=revision
+    ).encode()
     result["supplemental-daemon-entry.py"] = (
         "#!/usr/local/bin/python\n"
         "import sys\n"
@@ -168,6 +219,7 @@ def render(
         guardian_deadline_seconds=684,
         explicit_arm_required=True,
         explicit_authenticated_demand_required=True,
+        expected_finite_app_shutdown=True,
         automatic_rearm=False,
         host_restoration_guard_required=True,
         restoration_verified=False,

@@ -48,7 +48,11 @@ normal_snapshot = test_stage_mimic_app.snapshot
 @pytest.fixture
 def snapshot(normal_snapshot):
     result = dict(normal_snapshot)
-    for name in [stager.RUNTIME, *("scripts/" + n for n in (*stager.DRIVERS, *stager.LAUNCHERS))]:
+    for name in [
+        stager.RUNTIME,
+        stager.SUPERVISOR,
+        *("scripts/" + n for n in (*stager.DRIVERS, *stager.LAUNCHERS)),
+    ]:
         result[name] = (ROOT / name).read_bytes()
     return result
 
@@ -67,6 +71,7 @@ def test_separate_deterministic_adapter_leaves_normal_staging_unchanged(snapshot
     changed = {name for name in baseline if baseline[name] != result[name]}
     assert changed == {
         stager.RUNTIME,
+        stager.SUPERVISOR,
         "Dockerfile",
         "config.yaml",
         "DOCS.md",
@@ -87,6 +92,7 @@ def test_separate_deterministic_adapter_leaves_normal_staging_unchanged(snapshot
     assert report["guardian_deadline_seconds"] == 684
     assert report["automatic_rearm"] is False and report["restoration_verified"] is False
     assert report["host_restoration_guard_required"] is True
+    assert report["expected_finite_app_shutdown"] is True
     assert report["explicit_arm_required"] and report["explicit_authenticated_demand_required"]
     assert report["files"] == {
         name: hashlib.sha256(data).hexdigest()
@@ -110,6 +116,25 @@ def test_separate_deterministic_adapter_leaves_normal_staging_unchanged(snapshot
     for name in stager.LAUNCHERS:
         assert result[name] == snapshot["scripts/" + name]
         assert name in dockerfile
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("def _wait_for_stop_or_child_exit(", "def _different_wait("),
+        ("def _stop_child(", "def _different_stop("),
+        ("        while True:\n", "        while not False:\n"),
+        ("daemon_returncode = daemon.poll()", "daemon_returncode = None"),
+        ("if daemon_returncode is not None:", "if daemon_returncode != None:"),
+        ("web_returncode = web.poll()", "web_returncode = None"),
+    ],
+)
+def test_finite_shutdown_refuses_unreviewed_supervisor_boundary(snapshot, before, after):
+    snapshot[stager.SUPERVISOR] = snapshot[stager.SUPERVISOR].replace(
+        before.encode(), after.encode()
+    )
+    with pytest.raises(ValueError):
+        render(snapshot)
 
 
 @pytest.mark.parametrize(

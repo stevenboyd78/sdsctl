@@ -582,6 +582,34 @@ pass. A corrected trial requires a new case and newly sealed image/plan. Audio,
 recordings, Pi/TUI behavior, HA-card delivery and full field parity were not
 qualified by this finite clock/global-Favorites trial.
 
+### Acceptance-only completion witness
+
+The private staging adapter now patches only its generated outer App supervisor.
+The repository's normal supervisor and normal App staging remain unchanged:
+unsolicited child exits, including status 0, still fail there. The private loop
+retains the normal signal/reload handling, sibling checks and ordered, bounded
+cleanup; completion is not a restart or rearm mechanism.
+
+The staged loop binds the actual owned guardian while it is live, then binds its
+native child as readiness becomes available without blocking other App checks.
+Both process identities include parentage, start ticks and open pidfds. A clean
+return requires both processes to have exited, the actual guardian return code
+to be 0, consistent private reports bound to the staged source and generation,
+and no web/media/native-web child failure. Only the expected finite outcomes
+(`window_expired`, `quota_exhausted`, or never-armed `operator_wait_expired`) are
+accepted. Arm receipts, quota limits and the guardian's non-forced child exit
+must agree. Missing, replaced, publicly readable, linked or inconsistent reports
+fail closed. The witness performs no scanner reads, writes or signals and makes
+no restoration claim.
+
+Scanner-free regression uses real disposable guardian/child processes and the
+actual generated outer supervisor. It checks success, premature completion,
+asynchronous readiness, source/identity mismatches and damaged evidence. The
+combined supplemental, staging and App-supervisor suite passed 3,879 tests before
+the additional staging-boundary checks. These are local software results, not
+proof of Supervisor's live resulting state or automatic restoration. Packaged
+container qualification and a new sealed physical trial are still required.
+
 ## Scanner-free host-runtime qualification
 
 `scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture
