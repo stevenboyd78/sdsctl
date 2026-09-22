@@ -13,10 +13,12 @@ from unittest.mock import patch
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "supplemental_handoff_policy.py"
-SPEC = importlib.util.spec_from_file_location("supplemental_handoff_policy", SCRIPT)
-policy = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = policy
-SPEC.loader.exec_module(policy)
+if "supplemental_handoff_policy" not in sys.modules:
+    SPEC = importlib.util.spec_from_file_location("supplemental_handoff_policy", SCRIPT)
+    policy = importlib.util.module_from_spec(SPEC)
+    sys.modules[SPEC.name] = policy
+    SPEC.loader.exec_module(policy)
+policy = sys.modules["supplemental_handoff_policy"]
 
 CASE = "4def7cd52b514600a80db8fe022e0e2f"
 BOOT = "aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa"

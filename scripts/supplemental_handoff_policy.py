@@ -128,6 +128,12 @@ class State:
     restored_generation: str | None = None
     finish_requested: bool = False
     reason: str | None = None
+    # phase, immutable CLI container ID, immutable Docker exec ID. Persisted
+    # before exec/start; a restart inspects these IDs, never starts them again.
+    executions: tuple[tuple[str, str, str], ...] = ()
+    # Independent exec inspection confirmed process exit, not App operation
+    # success. Persist before Docker eventually expires its execution metadata.
+    completed_executions: tuple[tuple[str, int], ...] = ()
 
 
 class Machine:
@@ -159,10 +165,14 @@ class Machine:
 
     def event(self, event: dict[str, Any]) -> Action | None:
         kind = event.get("kind")
-        require(kind in ("request", "finish", "observe"))
+        require(kind in ("request", "finish", "observe", "bind_execution", "execution_completed"))
         expected = {"kind", "now", "boot_id"}
         if kind == "observe":
             expected.add("observation")
+        elif kind == "bind_execution":
+            expected.update(("container_id", "execution_id"))
+        elif kind == "execution_completed":
+            expected.update(("execution_id", "exit_code"))
         require(set(event) == expected)
         now = event["now"]
         clock(now)
@@ -173,6 +183,42 @@ class Machine:
             self.state = replace(self.state, phase="review", reason="host_boot_changed")
         elif now >= self.hard_deadline:
             self.state = replace(self.state, phase="review", reason="hard_deadline")
+        elif kind == "execution_completed":
+            digest(event["execution_id"])
+            require(any(eid == event["execution_id"] for _, _, eid in self.state.executions))
+            require(
+                not any(eid == event["execution_id"] for eid, _ in self.state.completed_executions)
+            )
+            require(type(event["exit_code"]) is int and 0 <= event["exit_code"] <= 255)
+            self.state = replace(
+                self.state,
+                completed_executions=(
+                    *self.state.completed_executions,
+                    (event["execution_id"], event["exit_code"]),
+                ),
+            )
+        elif kind == "bind_execution":
+            require(
+                self.state.phase
+                in (
+                    "stopping_normal",
+                    "starting_candidate",
+                    "stopping_candidate",
+                    "starting_normal",
+                )
+            )
+            require(now < self.state.deadline)
+            digest(event["container_id"])
+            digest(event["execution_id"])
+            require(not any(phase == self.state.phase for phase, _, _ in self.state.executions))
+            require(not any(eid == event["execution_id"] for _, _, eid in self.state.executions))
+            self.state = replace(
+                self.state,
+                executions=(
+                    *self.state.executions,
+                    (self.state.phase, event["container_id"], event["execution_id"]),
+                ),
+            )
         elif kind == "request":
             require(self.state.phase == "prepared")
             if now >= self.state.deadline:

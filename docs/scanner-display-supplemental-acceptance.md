@@ -218,6 +218,63 @@ observations can establish the intended state or end the case in review. Local
 tests use the real journal with fake I/O; they are not evidence of installed App
 recovery.
 
+## Private host protocol and execution tracking
+
+`scripts/supplemental_handoff_host.py` supplies bounded local Docker Unix-socket
+requests, strict Supervisor response decoders and a tracked dispatch callback.
+It has **no installed service, automatic loop or operational CLI**. Access to a
+Docker socket grants host administration even if the socket mount is read-only;
+this module must remain a private administrative helper, not an App capability,
+browser endpoint or arbitrary-command API.
+
+The dispatcher only permits the four fixed start/stop commands already authorized
+by the journal. It verifies the separately pinned CLI image and process generation,
+creates a non-TTY/non-privileged execution in that exact CLI container, fsyncs its
+execution ID into the case journal, rechecks identity and freshness, then attempts
+start once. Reopening a pending intent, missing creation acknowledgement, lost
+start response or a failed evidence write never authorizes a second attempt.
+HTTP requests have time/output bounds, do not follow redirects or retry, and
+return fixed errors rather than raw private response text. Construct the dispatcher
+before polling so it can distinguish new intents from pending historical phases.
+
+Execution inspection distinguishes **created**, **running**, and **not running
+with a reported exit code**. A created execution has a null exit code; it is not
+a successful completed command and does not clear pending work. A start request
+may still be queued when that state is observed. The adapter explicitly requests
+and verifies user `0` in the administrative CLI container; it does not rely on an
+omitted default-user field.
+
+Before collecting the next policy observation, `reconcile_executions()` persists
+independently inspected process exits. Docker can expire old execution metadata,
+so a previously recorded exit survives that expiry; missing metadata without an
+observed exit remains uncertain. These records do **not** establish App success,
+even for exit code zero. The adapter must still verify Supervisor jobs, App state,
+process exit and cached readiness. The full four-command synthetic path, including
+the execution records, fits within the existing bounded journal. See the upstream
+[Docker execution API](https://docs.docker.com/reference/api/engine/version/v1.40/)
+and [execution lifecycle implementation](https://github.com/moby/moby/blob/master/daemon/exec.go).
+
+The jobs decoder checks every nested child, rejects duplicate identities and
+missing or non-boolean completion fields, bounds tree size/depth, and refuses
+ignored Supervisor safety conditions. App configuration decoding verifies the
+exact slug/version, manual startup, protection, disabled automatic update/watchdog,
+no host networking/PID namespace and unmapped trial ports. Nonempty private options are hashed,
+not returned; a redacted empty options object cannot establish a matching pin.
+That configuration digest is only one component of the eventual protected App
+identity. It does not certify installed source/image, accepted profile, recording
+state, other scanner owners or live health. The distinction follows the
+[Supervisor App API](https://developers.home-assistant.io/docs/api/supervisor/endpoints/),
+which can redact options depending on caller privileges.
+
+Fresh, read-only host probes verified the jobs and normal-App configuration
+decoders against actual Docker/CLI responses, with the normal App identity
+unchanged. The probes used an SSH/curl transport adapter; the Unix HTTP transport
+was separately exercised against a local Unix-socket fixture. An initial probe
+stopped before execution when it found omitted user/null exit-code fields; that
+execution was retained and not adopted or retried. Fixed probes used new executions.
+No start/stop App operation, privileged helper installation or restoration test
+is claimed by this protocol qualification.
+
 ## Scanner-free host-runtime qualification
 
 `scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture
