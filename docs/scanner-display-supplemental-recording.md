@@ -87,9 +87,65 @@ trial. The result does not claim scanner continuity, browser playback, audible
 recording quality, successful optional scanner reads, restart persistence, or
 normal-App restoration. Each still requires its own evidence.
 
+## Offline native start/stop owner
+
+`scripts/supplemental_recording_owner.py` now provides an independently tested
+native start/stop controller. It is **not connected** to the acceptance launcher,
+host service, public daemon API, or normal App startup. Importing or invoking the
+module starts nothing. Its explicit Python operations are exercised only by
+local fixtures at this stage.
+
+The controller binds one actual `DaemonRecordingManager` to the reserved
+template, endpoint hash, recording root identity and pre-start file baseline.
+It requires a fresh idle manager, disabled recording organization/overwrite,
+and a separate empty private journal. The trusted caller must establish the
+native process/generation and exclude all other recording mutators; a supplied
+generation string is not independent process attestation.
+
+One frozen monotonic plan fixes preparation, latest start, scheduled stop and
+latest completion. Total planned time is at most 180 seconds. Start and stop
+have cooperative two- and five-second acknowledgment budgets within those fixed
+deadlines. There is no timer thread, I/O cancellation, boot-resume authority or
+automatic extension. A qualified caller still has to schedule stop, and an
+independent outer supervisor must terminate a blocked or abandoned process.
+
+Before each native dispatch, the controller exclusively publishes a private
+intent, flushes it, and fsyncs both file and journal directory. It then rechecks
+identity, state and deadline. Successful acknowledgments are bound to the exact
+case filename and start time, checked against current native state and retained
+as private receipts. Paths and endpoints are hashed in preparation evidence;
+arbitrary failure text is never surfaced by the controller.
+
+Lost, late, malformed or failed acknowledgments consume the operation. So do
+publication failures and changed preconditions. There is no retry, reopened-case
+dispatch or implicit cleanup stop. A nonempty/partial journal is preserved and
+refused, even if the previous attempt did not reach dispatch. Advisory locking
+and a nonblocking local lock reject cooperating concurrent/reentrant owners.
+Links, unexpected files, altered receipt contents and replaced directories fail
+closed. These checks do not protect against a privileged actor discarding the
+entire case and its evidence.
+
+Receipts record observations, not final acceptance. A slow receipt publication
+can finish after the deadline and still leave a receipt on disk while the
+controller returns an unconfirmed result. A future host reconciler must not infer
+timely success, writer exit or restoration from receipt presence alone. Likewise,
+a stopped native receipt with zero samples is possible but fails the separate
+artifact verifier. Closing the controller only releases journal descriptors;
+native daemon shutdown and independent recovery remain responsible for a writer
+left active by an uncertain start or stop.
+
+Local tests cover native PCM finalization, durable-intent ordering, partial
+publication/fsync failures, unknown/late acknowledgments, deadline boundaries,
+schema faults, journal/root replacement, concurrent calls and descriptor cleanup.
+Real localhost RTP/PCMU cases also exercise the controller beside successful or
+timed-out FQK/DTM reads; the surviving audio consumer continues after recording
+stop, and the resulting pair passes the separate file verifier. These are not
+hardware or audible acceptance tests.
+
 ## Required live ownership and recovery contract
 
-The following are design gates, not implemented host-service permissions:
+The following remain design gates, not implemented host-service permissions.
+The offline owner above covers the native dispatch/receipt boundary only:
 
 | Phase | Required evidence and constraint |
 | --- | --- |
@@ -130,7 +186,11 @@ The finalized WAV/sidecar pass the content verifier in each case; subsequent
 transport faults must not alter their frozen recording statistics or hashes.
 These are local fixtures, not a real browser or physical scanner listening test.
 
-No live recording case is staged or authorized by this component. Activation
+The independent [manual audible saved-player check](web-dashboard.md#saved-player-browser-qualification)
+also passed on 2026-09-22, using a private copy of an existing finalized recording.
+It did not create a new recording or exercise this ownership path.
+
+No live recording case is staged or authorized by these components. Activation
 requires the separate reviewed ownership/recovery implementation above, a new
 sealed case, installed-source/platform qualification and fresh user readiness.
 All earlier hardware cases remain consumed and closed.
