@@ -349,8 +349,9 @@ observations fail. No-op polling does not fill the bounded journal or extend any
 deadline. A non-advancing clock hits a defensive poll-count ceiling, not a success
 result. Every exit from the loop closes only its local witness handles; it neither
 signals a process nor deletes the journal. Kernel/I/O stalls still require an
-independently supervised outer deadline. A locked-owner request/finish interface
-and the actual service installation are still pending.
+independently supervised outer deadline. The locked-owner request/finish interface
+and private service assembly are described below; actual service installation
+and controlled handoff qualification are still separate requirements.
 
 Local fault tests exercise the full four-command path, durable exit/command replay,
 lost replies, removal without exit evidence, helper restart, process exit racing
@@ -460,6 +461,45 @@ networkless image test run passed (browser-engine tests require the separate
 development-host environment). This does not establish an installed HA candidate.
 Containerd's image-index ID can differ from the classic Docker image-config ID;
 any transferred image must be independently inspected and pinned on its destination.
+
+## Private finite service assembly
+
+`scripts/supplemental_handoff_service.py` assembles the qualified readers, process
+witnesses, executor and one-shot inbox. It is not a shipped daemon feature, public
+API or automatically installed service. An administrator must first review an
+exact private plan: host boot, App/CLI/Core images and generations, installed App
+versions, other scanner owners, protected input hashes, and all fourteen helper
+module hashes. The plan is bounded, private, hash-pinned and rejects unknown keys.
+Profile inputs and recording roots must remain separate across both Apps.
+
+The launch builder produces one finite systemd service with no restart, a 1,510
+second outer deadline and an exact-container cleanup command. Its helper uses
+host PID **and** cgroup namespaces, no network, a read-only filesystem/code bundle,
+bounded resources, a read-only host-data view, and write access only to its private
+case directory. Docker-socket access remains administrative authority even when
+the socket mount is read-only; this is never a security boundary against a hostile
+host administrator. `DAC_READ_SEARCH` allows reading the separately owned source
+context without changing its permissions.
+
+Fresh preparation requires the candidate container to be absent and its guardian
+case not to exist. It does not adopt a retained candidate or clear old evidence.
+Supervisor's existing root-owned App data directory may be 0755; private case
+directories and reports retain 0700/0600 requirements. Preparation verifies the
+full normal baseline and binds its actual init-process pidfd **before** publishing
+the exclusive ready report. No App changes occur without a fresh bound operator
+request. Starting this service neither starts the candidate nor arms acquisition.
+
+The journal remains the sole dispatch authority. Expiry recovery works without a
+finish notice, including when the inbox contains invalid input. A completed or
+expired case cannot replay an App command. The exclusive outcome report claims
+restoration only for a policy-complete result; interruption, lost evidence, an
+outer timeout or an unavailable observer must not be reported as success. Preserve
+the journal, notices and reports for review rather than resetting the case.
+
+Service-assembly tests use real local journals/inboxes and fake host I/O. They
+cover no-request expiry, the four-command handoff/recovery path, changed boot or
+baseline, unqualified code, invalid finish input, disjoint storage and terminal
+re-entry. These are not evidence of a live App handoff or scanner acceptance.
 
 ## Scanner-free host-runtime qualification
 
