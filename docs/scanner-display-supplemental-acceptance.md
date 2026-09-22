@@ -635,6 +635,46 @@ restoration. The fixture's case is consumed. The earlier failed live case remain
 closed and its physical observation unconfirmed. A new source-pinned native
 case and independently sealed restoration plan are required for that retest.
 
+### Finite live retest: automatic restoration verified
+
+On September 22, 2026, a new native case pinned to source
+`1fb69d7967813f35214d20fb2cc24330794b8993` completed the full independent
+handoff and restoration path. The host service recorded the original normal
+process exit before starting the candidate. The candidate reached cached native
+and guardian readiness, received one explicit pidfd-bound arm, and ended with
+`window_expired`: **34 read attempts**, within the 64-second window and
+60-attempt cap. An attempt count is not a count of successful reads.
+
+One operator sequencing error is retained with the evidence: the first browser
+consumer was selected before arm and stopped with the conservative unconfirmed
+demand warning. The native case still contained only its waiting readiness
+report, with no arm or armed receipt; the acquisition gate rejects unarmed
+reads. That stopped browser session was closed, not retried. After the initial
+native arm, one fresh consumer displayed current scanner day/time and current
+global Favorites quick-key states. This is not acceptance of the LCD F0/S0/D0
+rows or full field parity. Future trials must arm before selecting a consumer.
+
+The guardian confirmed native exit 0 without a forced kill. The independent
+host service recorded the candidate process exit, observed Supervisor's stopped
+state and automatically started the unchanged normal App. Its journal reached
+`complete` / `restored` and its outcome reported `restoration_verified: true`.
+No manual stop, finish request, recovery start or replay was needed.
+
+A separate post-completion, read-only audit verified both durable process-exit
+receipts, a new healthy normal generation with recording idle, the stopped
+candidate, idle Supervisor jobs, unchanged protected pins, Core running and the
+other scanner owners stopped. The finite service exited successfully and its
+helper container was absent. The restored normal browser was independently
+verified connected and updating; both temporary candidate tabs were closed.
+The consumed case and all earlier failure evidence remain preserved.
+
+These software and automatic-restoration checks passed. After the marked
+window, the user separately confirmed: **"Scanning stayed normal."** The physical
+observation therefore passed as well; it was not inferred from software results.
+This trial did not exercise audio, recording, Pi/TUI behavior, HA-card
+delivery, scanner controls, scanner settings or power-loss recovery, and does
+not enable supplemental reads in the normal App or a published release.
+
 ## Scanner-free host-runtime qualification
 
 `scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture
