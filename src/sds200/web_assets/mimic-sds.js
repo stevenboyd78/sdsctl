@@ -235,7 +235,7 @@
     let requestTimer = null, renewalPending = false;
     const demandUnconfirmed = "Supplemental demand unconfirmed — renewal stopped; reads may have occurred. Reopen for administrator review.";
     let latest = null, deadline = null, sequenceDeadline = null, endpoint = null, session = null, sequence = null;
-    let style = "preferred", treatment = "strips";
+    let style = "preferred", treatment = "border";
     const toolbar = make("div", undefined, "mimic-toolbar");
     toolbar.hidden = true;
     const picker = (title, items) => {
@@ -248,8 +248,9 @@
     layout.id = "mimic-presentation";
     const mode = picker("Mimic layout", [["preferred", "Profile preference"], ["simple", "Simple"], ["detail", "Detail"]]);
     mode.id = "mimic-mode";
-    const led = picker("Alert LED treatment", [["strips", "Top and bottom strips"], ["border", "Surrounding border"]]);
+    const led = picker("Alert LED treatment", [["border", "Surrounding border"], ["strips", "Top and bottom strips"]]);
     led.id = "mimic-led";
+    led.value = treatment;
     const pane = make("section", undefined, "mimic-display");
     pane.id = "mimic-display";
     pane.hidden = true;

@@ -56,6 +56,20 @@ function harness() {
   };
 }
 (async () => {
+  // WebUI defaults to a surrounding alert border; the visible picker and DOM
+  // must agree, and either presentation remains selectable without new reads.
+  const led = harness();
+  assert.equal(led.find('mimic-led').value, 'border');
+  assert.equal(led.find('mimic-display').dataset.ledTreatment, 'border');
+  await led.start();
+  const ledCalls = led.calls;
+  for (const treatment of ['strips', 'border']) {
+    led.choose('mimic-led', treatment);
+    assert.equal(led.find('mimic-display').dataset.ledTreatment, treatment);
+    assert.equal(led.find('mimic-led').value, treatment);
+    assert.equal(led.calls, ledCalls);
+  }
+  led.controller.stop();
   // Real DOM construction: profile colors for active states, neutral off and
   // unknown states, and no inverted Function placeholder. No scanner requests.
   const indicators = harness();

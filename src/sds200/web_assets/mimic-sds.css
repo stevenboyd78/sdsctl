@@ -40,17 +40,21 @@
   }
   #pane-scanner .mimic-surround {
     --mimic-led: #3b4654;
-    border: 6px solid transparent !important;
+    --mimic-led-width: 12px;
+    --mimic-screen-min-height: 280px;
+    border: var(--mimic-led-width) solid transparent !important;
     border-top-color: var(--mimic-led) !important;
     border-bottom-color: var(--mimic-led) !important;
-    min-height: 280px !important; min-width: 0 !important; background: #000 !important;
+    min-height: var(--mimic-screen-min-height) !important; min-width: 0 !important; background: #000 !important;
     container-type: size !important;
   }
   #pane-scanner [data-led-treatment="border"] .mimic-surround { border-color: var(--mimic-led) !important; }
   #pane-scanner .mimic-grid {
     display: grid !important; grid-template-columns: repeat(30,minmax(0,1fr)) !important;
     grid-template-rows: repeat(20,minmax(0,1fr)) !important; height: 100% !important;
-    min-height: 268px !important; background: #000 !important; overflow: hidden !important;
+    /* Subtract both edges so the thicker LED never pushes the last row out. */
+    min-height: calc(var(--mimic-screen-min-height) - var(--mimic-led-width) - var(--mimic-led-width)) !important;
+    background: #000 !important; overflow: hidden !important;
   }
   #pane-scanner .mimic-cell {
     min-width: 0 !important; min-height: 0 !important; padding: 0 3px !important;
@@ -93,8 +97,7 @@
     }
     #pane-scanner :is(.mimic-basis, .mimic-note) { display: none !important; }
     #pane-scanner .mimic-status { padding: 3px 8px !important; font-size: 12px !important; }
-    #pane-scanner .mimic-surround { min-height: 220px !important; border-width: 3px !important; }
-    #pane-scanner .mimic-grid { min-height: 214px !important; }
+    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; --mimic-led-width: 6px; }
     #pane-scanner .mimic-cell { font-size: clamp(10px, min(1.7cqw, 4.5cqh), 24px) !important; }
   }
 }
