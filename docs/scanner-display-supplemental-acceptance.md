@@ -192,6 +192,65 @@ The future host adapter must independently verify the meaning of every observati
   supervision, installed before requesting a handoff. The local journal/process
   tests are not evidence of HAOS service or power-loss survival.
 
+## Journal-to-dispatch bridge
+
+`scripts/supplemental_handoff_executor.py` connects the journal to **injected**
+observation and dispatch functions. It has no SSH, Docker socket, Supervisor
+client, operational command-line entry point, or automatic service loop. The
+caller must own one executor per open journal and supply bounded, qualified I/O.
+The host adapter must include outstanding command executions and nested Supervisor
+jobs in its observations, including after an adapter restart.
+
+For each newly emitted action, the bridge first persists the intent, then obtains
+a second fresh observation. Host boot, protected state, scanner ownership,
+container generation, readiness, recording state and pending jobs must still match
+the intent's preconditions. The second sample must be within two seconds of the
+first, and before the operation and case deadlines. A changed or unavailable
+sample withholds the command without making the consumed intent reusable. A
+replaced journal directory also prevents dispatch.
+
+Only fixed `ha apps start/stop` arguments for the two reviewed App slugs can reach
+the dispatch callback. A successful callback means **submitted**, not started,
+stopped or restored. An exception means unconfirmed; exception text is not returned
+because it may contain private adapter output. A crash after persistence, a lost
+reply, or a reopened journal never causes that intent to be sent again. Later
+observations can establish the intended state or end the case in review. Local
+tests use the real journal with fake I/O; they are not evidence of installed App
+recovery.
+
+## Scanner-free host-runtime qualification
+
+`scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture
+commands; it does not execute them. Each fixture needs a new UUIDv4 and an already
+installed immutable image ID. The command is bounded below 8,000 bytes. This avoids
+embedding a whole supervisor program in an SSH command: the examined HAOS
+Dropbear version has a 9,000-byte command limit, and read-only transport probes
+confirmed that an 8,000-byte command succeeded while a 10,000-byte command was
+rejected. See the upstream
+[Dropbear command limit](https://github.com/mkj/dropbear/blob/DROPBEAR_2026.93/src/sysoptions.h).
+That finding strongly supports, but does not recover the discarded error output
+from, the earlier failed oversized helper launch. That old fixture is not retried.
+
+The fixtures run fixed Python standard-library code in a networkless, read-only,
+unprivileged container with no mounts, ports, Docker socket or scanner access.
+One completes after its launching SSH connection ends. The other ignores TERM
+and exceeds its systemd deadline. A supervised, exact-container stop operation
+must then remove that disposable container; the Docker client's exit alone is not
+proof of container exit. Unit creation is not container readiness, so independent
+read-only inspection must wait for the exact container without repeating launch.
+Only exact standalone worker log markers count, not markers embedded in systemd's
+printed command arguments.
+
+Both fixture modes were exercised on the acceptance host. Normal completion
+continued after SSH disconnect, and the forced-deadline case removed its exact
+container. The normal scanner App's image and start identity were unchanged.
+The completion fixture finished before a successful running-container inspection;
+its journal and final state establish completion, not a complete running-state
+inspection. The expiry fixture additionally has a running-state isolation check.
+These results qualify the tested supervision mechanism only. They do **not**
+install a restoration service, exercise App handoff, prove power-loss recovery,
+or replace sealed-baseline, host-observer and tracked-command-adapter review.
+
 Staging a verified build context does not build, install or start an App and does
 not install a host restoration guard. Before the first live trial, all of the
 following still need an explicit reviewed setup:
