@@ -928,8 +928,18 @@ and the explicit saved controls and reported **"native pause and saved controls
 passed"**. The page remained responsive; subsequent inspection confirmed Stopped,
 disabled controls, a paused player, no source and zero current time. Manual
 interaction therefore passed for this fixture; the earlier automated-control
-failure remains unresolved. A fresh audible acceptance test is still separate
-from these silent fixtures.
+failure remains unresolved.
+
+A separate audible check later on 2026-09-22 used the same actual dashboard and
+finalized-file route with a private copy of an existing finalized recording.
+The user reported **"audible playback, native pause, and saved controls passed"**.
+Independent inspection then confirmed Stopped, disabled saved controls, a paused
+player, no source and zero current time. The temporary tab was closed, the
+loopback server exited, and its listener was confirmed absent. No new recording,
+scanner connection, or Home Assistant/Pi service change was involved. This
+qualifies manual audible saved-file playback and controls for that fixture;
+it does not resolve the automated native-control crash or qualify concurrent
+recording/finalization through the finite shared-reader handoff.
 
 `GET /api/v1/recordings/file/{identifier}` never reads a caller-selected
 filesystem path. The web service sends the identifier to the daemon's private

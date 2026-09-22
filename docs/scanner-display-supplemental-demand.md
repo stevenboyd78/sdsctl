@@ -144,5 +144,8 @@ next trials require **new** reviewed cases and fresh readiness. Closed hardware
 cases remain closed. Public configuration and normal App activation
 remain disabled; continuous operation and schema-safe production upgrades are
 separate work. The [saved-player follow-up](web-dashboard.md#saved-player-browser-qualification)
-also remains distinct: explicit controls passed a silent local browser fixture,
-while the native Pause/browser crash cause and audible acceptance remain open.
+also remains distinct: both silent and audible local fixtures passed manual
+native Pause and explicit saved controls, with stopped/reset playback and fixture
+cleanup independently confirmed. The automated native Pause/browser crash cause
+remains unresolved. Those saved-file results do not qualify recording/finalization
+through the finite handoff.
