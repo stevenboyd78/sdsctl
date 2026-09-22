@@ -17,14 +17,20 @@ from typing import Any, cast
 
 from supplemental_handoff_executor import Sample
 from supplemental_handoff_host import (
+    AUDIO_NETWORK,
     CLI,
     CORE,
+    READER_NETWORK,
     READS,
     Docker,
     app_configuration,
+    audio_container_network,
     docker_output,
     execution_state,
     generation,
+    network_policy,
+    require_host_rtp_idle,
+    rtp_port_owners,
     supervisor_data,
     supervisor_jobs_idle,
 )
@@ -255,7 +261,10 @@ class HostObserver:
         read_clock: Callable[[], tuple[str, float]],
         collect_files: Callable[[str, dict[str, Any] | None], ProtectedFiles],
         read_native: Callable[[str, str], NativeState],
+        network: str = READER_NETWORK,
     ):
+        network_policy(network)
+        self.network = network
         require(type(seals) is tuple and len(seals) == 2 and all(type(s) is AppSeal for s in seals))
         require({s.slug for s in seals} == {NORMAL, CANDIDATE})
         require(type(installed_versions) is dict and 2 <= len(installed_versions) <= 256)
@@ -305,7 +314,9 @@ class HostObserver:
         clock(began)
         apps = installed_apps(self.supervisor.read("apps"))
         require({slug: value[0] for slug, value in apps.items()} == self.versions)
-        before = container_index(self.docker.containers())
+        listed = self.docker.containers()
+        before = container_index(listed)
+        port_owners = self._audio_network(listed)
         # Refuse unlisted orphan App containers rather than silently ignoring an
         # older naming convention or a possible additional scanner owner.
         for name in before:
@@ -324,7 +335,7 @@ class HostObserver:
         exited: dict[str, tuple[str, str]] = {}
         for slug, key in ((NORMAL, "normal"), (CANDIDATE, "candidate")):
             seal = self.seals[slug]
-            config = app_configuration(self.supervisor.read(key), slug=slug)
+            config = app_configuration(self.supervisor.read(key), slug=slug, network=self.network)
             require((config.version, config.supervisor_state) == apps[slug])
             image = self.docker.image(seal.image)
             require(image.get("Id") == seal.image and image.get("Os") == "linux")
@@ -338,6 +349,8 @@ class HostObserver:
                     container = self.docker.container("app_" + slug)
                     require(container.get("Id") == listing["Id"])
                     manual_container(container)
+                    if self.network == AUDIO_NETWORK:
+                        audio_container_network(container, candidate=slug == CANDIDATE)
                     incarnation = generation(container, name="app_" + slug, image=seal.image)
                 elif listing["State"] == "exited" and config.supervisor_state == "stopped":
                     proof = retained_exit(
@@ -367,6 +380,8 @@ class HostObserver:
                 require(type(native) is NativeState and native.generation == incarnation)
                 current = self.docker.container("app_" + slug)
                 manual_container(current)
+                if self.network == AUDIO_NETWORK:
+                    audio_container_network(current, candidate=slug == CANDIDATE)
                 require(generation(current, name="app_" + slug, image=seal.image) == incarnation)
                 observed[slug] = App(pin, "running", incarnation, native.healthy, native.recording)
             elif (listing is None or slug in exited) and config.supervisor_state == "stopped":
@@ -374,7 +389,9 @@ class HostObserver:
             else:
                 observed[slug] = App(pin, "unknown")
         require(installed_apps(self.supervisor.read("apps")) == apps)
-        require(container_index(self.docker.containers()) == before)
+        listed = self.docker.containers()
+        require(container_index(listed) == before)
+        require(self._audio_network(listed) == port_owners)
         for slug, (cid, proof) in exited.items():
             require(
                 retained_exit(
@@ -400,6 +417,17 @@ class HostObserver:
                 began, observed[NORMAL], observed[CANDIDATE], other_stopped, jobs_idle, True
             ),
         )
+
+    def _audio_network(self, listed: list[dict[str, Any]]) -> tuple[str, ...]:
+        if self.network == READER_NETWORK:
+            return ()
+        owners = rtp_port_owners(listed)
+        candidate = next((v for v in listed if v.get("Names") == ["/app_" + CANDIDATE]), None)
+        running = candidate is not None and candidate.get("State") == "running"
+        require(bool(owners) == running)
+        if not running:
+            require_host_rtp_idle()
+        return owners
 
 
 if __name__ == "__main__":

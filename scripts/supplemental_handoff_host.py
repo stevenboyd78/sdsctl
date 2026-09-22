@@ -17,6 +17,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, cast
 
 from supplemental_handoff_policy import (
@@ -37,6 +38,9 @@ MAX_RESPONSE = 1024 * 1024
 API = "/v1.47"
 CLI = "hassio_cli"
 CORE = "homeassistant"
+READER_NETWORK = "reader-only"
+AUDIO_NETWORK = "candidate-rtp-50000-v1"
+HOST_UDP_TABLES = Path("/opt/sdsctl-host-udp")
 CONTROL = {
     "stopping_normal": ("ha", "apps", "stop", NORMAL, "--raw-json"),
     "starting_candidate": ("ha", "apps", "start", CANDIDATE, "--raw-json"),
@@ -101,7 +105,12 @@ class AppConfiguration:
     # App pin (image/installed source/profile and process/cache state are separate).
 
 
-def app_configuration(raw: bytes, *, slug: str) -> AppConfiguration:
+def network_policy(value: object) -> None:
+    require(type(value) is str and value in (READER_NETWORK, AUDIO_NETWORK))
+
+
+def app_configuration(raw: bytes, *, slug: str, network: str = READER_NETWORK) -> AppConfiguration:
+    network_policy(network)
     require(slug in (NORMAL, CANDIDATE))
     data = supervisor_data(raw)
     require(data.get("slug") == slug)
@@ -111,7 +120,12 @@ def app_configuration(raw: bytes, *, slug: str) -> AppConfiguration:
     require(data.get("boot") == "manual" and data.get("protected") is True)
     for key in ("watchdog", "auto_update", "host_network", "host_pid"):
         require(data.get(key) is False)
-    require(data.get("network") == {"50000/udp": None, "50443/tcp": None, "8443/tcp": None})
+    ports: dict[str, int | None] = {"50000/udp": None, "50443/tcp": None, "8443/tcp": None}
+    if network == AUDIO_NETWORK and slug == CANDIDATE:
+        ports["50000/udp"] = 50000
+    actual = data.get("network")
+    require(type(actual) is dict and actual == ports)
+    require(all(type(actual[key]) is type(value) for key, value in ports.items()))
     require(type(data.get("options")) is dict and bool(data["options"]))
     # A redacted empty options object is not proof that private options match.
     protected = {
@@ -132,6 +146,93 @@ def app_configuration(raw: bytes, *, slug: str) -> AppConfiguration:
     return AppConfiguration(
         slug, cast(str, version), data["state"] or "unknown", checksum(protected)
     )
+
+
+def audio_container_network(value: dict[str, Any], *, candidate: bool) -> None:
+    """Actual bridge mappings, not just the Supervisor's requested settings."""
+    require(type(candidate) is bool)
+    config, runtime = value.get("HostConfig"), value.get("NetworkSettings")
+    require(type(config) is dict and type(runtime) is dict)
+    require(config.get("NetworkMode") == "bridge" and config.get("PublishAllPorts") is False)
+    bindings, ports = config.get("PortBindings"), runtime.get("Ports")
+    if not candidate:
+        require(bindings == {} and ports == {})
+        return
+    require(type(bindings) is dict and set(bindings) == {"50000/udp"})
+    require(
+        bindings["50000/udp"]
+        in (
+            [{"HostIp": "", "HostPort": "50000"}],
+            [{"HostIp": "0.0.0.0", "HostPort": "50000"}],
+        )
+    )
+    require(type(ports) is dict and set(ports) == {"50000/udp"})
+    active = ports["50000/udp"]
+    require(type(active) is list and 1 <= len(active) <= 2)
+    addresses = []
+    for item in active:
+        require(type(item) is dict and set(item) == {"HostIp", "HostPort"})
+        require(item["HostPort"] == "50000" and item["HostIp"] in ("0.0.0.0", "::"))
+        addresses.append(item["HostIp"])
+    require(len(set(addresses)) == len(addresses) and "0.0.0.0" in addresses)
+
+
+def rtp_port_owners(values: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Reject another Docker publication of UDP 50000; retain stable evidence."""
+    require(type(values) is list and len(values) <= 256)
+    owners = []
+    for value in values:
+        ports = value.get("Ports")
+        require(type(ports) is list and len(ports) <= 256)
+        for port in ports:
+            require(type(port) is dict)
+            require(port.get("Type") in ("tcp", "udp", "sctp"))
+            private = port.get("PrivatePort")
+            require(type(private) is int and 1 <= private <= 65535)
+            if "PublicPort" not in port:
+                continue  # Exposed but not published is not a host-port owner.
+            public = port["PublicPort"]
+            require(type(public) is int and 1 <= public <= 65535)
+            if public != 50000 or port["Type"] != "udp":
+                continue
+            require(value.get("Names") == ["/app_" + CANDIDATE])
+            require(value.get("State") == "running" and private == 50000)
+            require(port.get("IP") in ("0.0.0.0", "::"))
+            digest(value.get("Id"))
+            owners.append(value["Id"] + "/" + port["IP"])
+    require(len(owners) <= 2 and len(set(owners)) == len(owners))
+    return tuple(sorted(owners))
+
+
+def udp_table_idle(raw: bytes, *, ipv6: bool) -> bool:
+    """Bounded proc UDP table check; never binds, reserves or opens a port."""
+    require(type(raw) is bytes and 0 < len(raw) <= 512 * 1024 and type(ipv6) is bool)
+    lines = raw.decode("ascii").splitlines()
+    require(1 <= len(lines) <= 4097 and "local_address" in lines[0].split())
+    idle = True
+    for line in lines[1:]:
+        parts = line.split()
+        require(len(parts) >= 10 and re.fullmatch(r"\d+:", parts[0]) is not None)
+        require(
+            re.fullmatch(r"[0-9A-F]{" + ("32" if ipv6 else "8") + r"}:[0-9A-F]{4}", parts[1])
+            is not None
+        )
+        idle = idle and int(parts[1].split(":")[1], 16) != 50000
+    return idle
+
+
+def require_host_rtp_idle() -> None:
+    """Read exact host-init proc files mounted read-only by the sealed launcher.
+
+    Do not use /proc/self/net: the networkless helper has an empty namespace.
+    Direct /proc/1 access requires extra privileges on HAOS; the launcher instead
+    mounts only /proc/1/net/udp and udp6, without adding SYS_PTRACE or networking.
+    Fail closed on missing, inaccessible or oversized tables.
+    This is a fresh observation, not an atomic reservation or packet-delivery proof.
+    """
+    for name, ipv6 in (("udp", False), ("udp6", True)):
+        with (HOST_UDP_TABLES / name).open("rb") as stream:
+            require(udp_table_idle(stream.read(512 * 1024 + 1), ipv6=ipv6))
 
 
 def docker_output(raw: bytes) -> bytes:

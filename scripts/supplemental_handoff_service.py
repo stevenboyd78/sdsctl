@@ -22,7 +22,14 @@ from uuid import UUID
 
 from supplemental_handoff_app_read import AppReads, ProbePaths
 from supplemental_handoff_files import DIRECTORY, inventory
-from supplemental_handoff_host import Docker, TrackedDispatch, object_json
+from supplemental_handoff_host import (
+    AUDIO_NETWORK,
+    READER_NETWORK,
+    Docker,
+    TrackedDispatch,
+    network_policy,
+    object_json,
+)
 from supplemental_handoff_observer import (
     AppSeal,
     HostObserver,
@@ -85,6 +92,7 @@ class Plan:
     layouts: tuple[ProtectedLayout, ProtectedLayout]
     installed_versions: dict[str, str]
     other_scanner_apps: frozenset[str]
+    network: str = READER_NETWORK
 
     @property
     def root(self) -> Path:
@@ -106,8 +114,14 @@ class Plan:
 
 
 def decode_plan(value: dict[str, Any]) -> Plan:
-    require(type(value) is dict and set(value) == {"schema", *Plan.__dataclass_fields__})
-    require(type(value["schema"]) is int and value["schema"] == 1)
+    require(type(value) is dict and type(value.get("schema")) is int)
+    fields = {"schema", *Plan.__dataclass_fields__}
+    if value["schema"] == 1:
+        require(set(value) == fields - {"network"})
+    else:
+        require(value["schema"] == 2 and set(value) == fields)
+        network_policy(value["network"])
+        require(value["network"] == AUDIO_NETWORK)
     identifier(value["case"], case=True)
     identifier(value["boot"])
     require(
@@ -346,6 +360,7 @@ def run(plan: Plan) -> dict[str, Any]:
         read_clock=read_clock,
         collect_files=lambda slug, container: collect(layouts[slug], container),
         read_native=cached.read,
+        network=plan.network,
     )
     with Journal(plan.root / "journal") as journal:
         fresh = journal.machine is None
@@ -448,6 +463,18 @@ def launch(plan: Plan, plan_sha256: str) -> tuple[str, ...]:
         "import sys;sys.path.insert(0,'/opt/sdsctl-handoff');"
         "from supplemental_handoff_service import main;main()"
     )
+    udp_mounts = (
+        tuple(
+            arg
+            for table in ("udp", "udp6")
+            for arg in (
+                "--mount",
+                f"type=bind,source=/proc/1/net/{table},target=/opt/sdsctl-host-udp/{table},readonly",
+            )
+        )
+        if plan.network == AUDIO_NETWORK
+        else ()
+    )
     command = (
         "/usr/bin/systemd-run",
         "--unit=" + name,
@@ -484,6 +511,7 @@ def launch(plan: Plan, plan_sha256: str) -> tuple[str, ...]:
         f"type=bind,source={plan.root},target={plan.root}",
         "--mount",
         f"type=bind,source={plan.bundle},target={BUNDLE},readonly",
+        *udp_mounts,
         "--entrypoint=/usr/local/bin/python",
         plan.helper_image,
         "-I",

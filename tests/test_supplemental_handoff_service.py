@@ -245,8 +245,19 @@ def assembly(plan, tmp_path, monkeypatch):
     return plan, host, root, fresh_calls
 
 
-def test_service_preparation_without_operator_request_changes_no_app(assembly, monkeypatch):
+@pytest.mark.parametrize("network", [s.READER_NETWORK, s.AUDIO_NETWORK])
+def test_service_preparation_without_operator_request_changes_no_app(
+    assembly, monkeypatch, network
+):
     plan, host, root, fresh_calls = assembly
+    plan = replace(plan, network=network)
+    observed = []
+
+    def observer(*args, **kwargs):
+        observed.append(kwargs["network"])
+        return SimpleNamespace(read=host.read)
+
+    monkeypatch.setattr(s, "HostObserver", observer)
 
     def wait(seconds):
         assert seconds == 0.25
@@ -258,10 +269,15 @@ def test_service_preparation_without_operator_request_changes_no_app(assembly, m
     outcome = s.run(plan)
     assert outcome["phase"] == "review" and outcome["restoration_verified"] is False
     assert host.sent == [] and fresh_calls == [True] and all(w.closed for w in host.handles)
+    assert observed == [network]
 
 
-def test_real_journal_and_inbox_complete_four_command_cycle_on_fake_host(assembly, monkeypatch):
+@pytest.mark.parametrize("network", [s.READER_NETWORK, s.AUDIO_NETWORK])
+def test_real_journal_and_inbox_complete_four_command_cycle_on_fake_host(
+    assembly, monkeypatch, network
+):
     plan, host, root, _ = assembly
+    plan = replace(plan, network=network)
     notices = []
 
     def wait(seconds):

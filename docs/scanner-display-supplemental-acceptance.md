@@ -128,9 +128,9 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
-## Next media check: live browser playback only (networking gate pending)
+## Next media check: live browser playback only (installed networking gate pending)
 
-The existing host adapter is **reader-only, not audio-ready**. Its
+The default host adapter is **reader-only, not audio-ready**. Its
 `app_configuration()` check requires `50000/udp`, `50443/tcp` and `8443/tcp` to
 be unpublished for both App roles. This prevents the scanner's incoming RTP
 audio from reaching these bridge-networked containers. A healthy scanner
@@ -147,6 +147,31 @@ mapping as well as Supervisor configuration, and reject unexpected mappings
 or another running port/scanner owner. The normal App's original configuration
 must remain pinned; do not silently change it to match the candidate. Preserve
 the independent stop-before-start recovery and all file/recording checks.
+
+The opt-in `candidate-rtp-50000-v1` contract now provides that policy in a new
+schema-2 sealed plan. Schema-1 plans retain the original reader-only rule; no
+old seal or consumed case is upgraded in place. Only the candidate may publish
+UDP `50000` on the ordinary bridge, with both TCP mappings disabled. The normal
+App must retain its original all-unpublished configuration. The observer compares
+Supervisor settings, running-container bindings and active Docker publications
+before and after each bounded observation, and rejects a competing Docker port
+owner. Before candidate startup and after its exit, it also requires UDP `50000`
+to be unused in the host's IPv4 and IPv6 socket tables.
+
+The audio service remains network-isolated. Its launcher mounts only the two
+host-init UDP proc files read-only; it does not gain host networking or
+`SYS_PTRACE`. Direct access through `/proc/1/ns/net` was denied in the initial
+HAOS qualification and that failed result is retained. The revised exact-file
+mounts passed on HAOS without restarting the normal App. A separate desktop-only
+fixture verified real Docker binding shapes and delivery of a synthetic local
+UDP datagram; it launched no scanner or App processes. These checks establish
+policy/platform behavior, **not scanner RTP delivery or audible continuity**.
+Installed candidate settings and mappings still need case-specific verification.
+
+The host-port evidence is a fresh observation, not an atomic reservation. It is
+rechecked around observations and before dispatch under the existing finite
+service protocol; packet counters and audible readiness remain separate live
+gates. The recording-idle rule and protected inventories are unchanged.
 
 Only after that offline policy and installed-network proof are qualified should
 physical/audio readiness be requested. Before arming, require increasing daemon
