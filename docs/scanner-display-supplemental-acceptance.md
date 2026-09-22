@@ -128,6 +128,70 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
+## Offline host-handoff decision policy
+
+`scripts/supplemental_handoff_policy.py` now implements the persistent decision
+core for the separate-slot handoff. It deliberately has **no host adapter, network
+client, scanner connection, process launcher, or operational CLI**. Nothing in
+normal App startup imports it. The implementation and local fault tests do not
+yet establish independent host recovery or authorize a physical trial.
+
+The policy accepts only the normal and separate candidate App slugs above. Its
+maximum action sequence is: stop normal, start candidate, stop candidate, start
+normal. If an already observed candidate exits on its own, its stop action is
+unnecessary. It cannot update, rebuild, uninstall, delete state or change another
+App. A complete result requires a new normal container generation, verified idle
+recording state and healthy cached daemon state; a running container is not enough.
+
+A private 0700 directory is exclusively locked. Each bounded 0600 journal entry
+contains a strict, versioned input event and the previous entry's hash. Events are
+replayed through the same decision rules on restart, not trusted as arbitrary
+saved phase/result labels. Every action's intent is written and fsynced before
+the action can be returned. Reopening a journal never returns historical actions.
+An interrupted write, unexpected entry, malformed/duplicate JSON key, symlink,
+hardlink, permission change, replaced directory or broken event chain is refused;
+evidence is not erased or repaired automatically. These hashes detect corruption,
+not tampering by an administrator who controls the host and all journal bytes.
+
+The journal binds one case, one host boot, both protected-identity digests and
+observed container generations. The request expires 300 seconds after preparation;
+each pending command has at most 120 seconds to reconcile. The candidate deadline
+is fixed at 720 seconds after its start intent, and the whole case has a fixed
+1,500-second ceiling. Restart cannot extend these deadlines. The child's tighter
+600-second operator wait / 64-second acquisition window still apply independently.
+Use host boot-relative elapsed time, not wall-clock dates, in the eventual adapter.
+
+At-most-once intent is intentionally **not exactly-once command execution**. If the
+guard dies after writing an intent but before sending it, it cannot safely guess
+whether to send it again. Read-only reconciliation may advance when the intended
+state is conclusively observed; otherwise the fixed deadline ends in administrator
+review. The same applies to a lost command reply or a Supervisor job still running.
+Normal is never started while candidate exit is unknown. A changed host boot,
+image/source/options/protected-state pin, unexpected owner/generation or active
+recording ends the automatic sequence. Such a review state does not claim recovery;
+the candidate's separate finite child guard remains necessary.
+
+The future host adapter must independently verify the meaning of every observation:
+
+- `stopped` requires agreement between Supervisor, container state and process
+  exit evidence. Missing responses and API errors are `unknown`, not stopped.
+- Image/source/option/port/protected-profile digests must come from fresh validated
+  evidence and a separately sealed baseline, not unchecked manifest assertions.
+- `healthy` requires cached native running/connected/PSI/profile checks, plus no
+  supplemental capability/worker for the restored normal App. It must not issue a
+  scanner probe or acquire supplemental demand as a health check. Use unknown
+  (`None`) while startup/readiness is not yet established; false means confirmed
+  unhealthy. A confirmed unhealthy candidate is stopped even before readiness,
+  then normal can be started only after candidate exit is proven.
+- Supervisor jobs and issued command executions must be reconciled, including
+  across guard restart. A client timeout does not prove the operation ended.
+- Observations must be at most two seconds old. Before dispatch, take another
+  fresh observation and match the action's precondition digest (which excludes
+  only the sampling time). A mismatch consumes the intent without sending it.
+- Run outside both scanner App containers under independently verified service
+  supervision, installed before requesting a handoff. The local journal/process
+  tests are not evidence of HAOS service or power-loss survival.
+
 Staging a verified build context does not build, install or start an App and does
 not install a host restoration guard. Before the first live trial, all of the
 following still need an explicit reviewed setup:
