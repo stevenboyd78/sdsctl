@@ -746,6 +746,22 @@ def test_configuration_drift_redaction_or_unsafe_policy_refused(changes):
         h.app_configuration(config(**changes), slug=p.NORMAL)
 
 
+@pytest.mark.parametrize("slug", [p.NORMAL, p.CANDIDATE])
+def test_reader_only_contract_is_not_an_audio_ready_port_policy(slug):
+    # Live pre-arm qualification found zero RTP packets with this intentionally
+    # unpublished network. Keep both roles fail-closed: an audio-capable case
+    # needs its own explicit reviewed contract, not a silent port relaxation.
+    assert h.app_configuration(config(slug=slug), slug=slug).slug == slug
+    with pytest.raises(p.UnsafeHandoff):
+        h.app_configuration(
+            config(
+                slug=slug,
+                network={"50000/udp": 50000, "50443/tcp": None, "8443/tcp": None},
+            ),
+            slug=slug,
+        )
+
+
 def test_absolute_socket_deadline_cannot_be_extended_by_dripping_headers():
     import socket
     import time

@@ -128,7 +128,30 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
-## Next media check: live browser playback only
+## Next media check: live browser playback only (networking gate pending)
+
+The existing host adapter is **reader-only, not audio-ready**. Its
+`app_configuration()` check requires `50000/udp`, `50443/tcp` and `8443/tcp` to
+be unpublished for both App roles. This prevents the scanner's incoming RTP
+audio from reaching these bridge-networked containers. A healthy scanner
+connection, an audio runtime marked running, a successful image qualification
+or browser HTTP streaming does not establish RTP delivery. See the
+[App RTP networking requirement](home-assistant-app.md#scanner-rtp-audio).
+
+Do not advertise another finite audio case as ready under this unchanged
+contract, or change ports after sealing a case. An audio-capable handoff needs a
+separately reviewed, explicit networking contract before a new source-pinned
+case is installed. It must qualify exactly container UDP `50000` to host UDP
+`50000`, keep TCP dashboard/remote ports disabled, verify the actual Docker
+mapping as well as Supervisor configuration, and reject unexpected mappings
+or another running port/scanner owner. The normal App's original configuration
+must remain pinned; do not silently change it to match the candidate. Preserve
+the independent stop-before-start recovery and all file/recording checks.
+
+Only after that offline policy and installed-network proof are qualified should
+physical/audio readiness be requested. Before arming, require increasing daemon
+and selected-player packet counters and the user's audible confirmation. Do
+not create a recording merely to diagnose an idle-recording test's audio path.
 
 The existing host-handoff guard requires both recording managers to remain idle
 and hashes both recording inventories as protected state. Starting a recording
@@ -136,10 +159,10 @@ would intentionally violate that contract. Do not suppress `recording_active`,
 omit the inventory pin, or reuse the older recording research case to make a
 finite-media test pass.
 
-The next narrow trial can exercise **live browser playback without recording**
-under the existing guard. It needs a new source-pinned case and fresh physical
-and audible readiness. Before arm, use the ordinary presentation's Audio panel
-to establish playback and obtain the user's confirmation that transmissions are
+The intended narrow trial is **live browser playback without recording**, after
+the networking gate above is resolved. It needs a new source-pinned case and
+fresh physical and audible readiness. Before arm, use the ordinary presentation's
+Audio panel to establish playback and obtain the user's confirmation that transmissions are
 audible. Do not select Mimic or otherwise request supplemental demand yet.
 Then arm once, select one fresh Mimic consumer, and retain the same live-audio
 session during the fixed read window. No capture, saved-file playback, scanner
@@ -161,6 +184,25 @@ recording/finalization through the finite path needs a separate reviewed design
 that permits exactly the intended new recording while preserving every old file
 and maintaining independent recovery. Neither the earlier silent saved-player
 fixture nor the playback-only trial qualifies that future recording path.
+
+### Pre-arm audio setup result — 2026-09-22
+
+The first finite playback-only case was handed off under the existing sealed
+reader-only policy. One browser player remained on `Buffering` with zero packets;
+a cached daemon observation independently reported zero packets/samples while
+its audio runtime and scanner connection were running. Supervisor and Docker
+both showed no published UDP port. This is a test-preparation/networking failure,
+not an observed shared-reader interference or an audible-quality pass.
+
+The player was stopped, then one `finish` notice was published to the existing
+independent recovery service. No port or scanner setting was changed. The native
+result recorded `cancelled`, `ever_armed: false` and `read_attempts: 0`; the guardian
+confirmed clean child exit without a forced kill. The host service restored the
+unchanged normal App, and an independent full audit verified healthy/idle normal
+state, stopped candidate, both process-exit receipts, and unchanged image,
+settings, profile and recording pins. The normal dashboard also returned to
+Connected/current updates. The consumed case and all evidence remain preserved;
+do not rearm or reuse it. No user listening result was requested or inferred.
 
 ## Offline host-handoff decision policy
 
