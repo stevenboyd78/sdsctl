@@ -174,14 +174,14 @@ def test_web_led_widths_preserve_the_inner_grid_minimum():
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         css = client.get("/assets/mimic-sds.css").text
     desktop, compact = css.split("@media (max-height: 600px)")
-    assert "--mimic-led-width: 12px;" in desktop
+    assert "--mimic-led-width: 24px;" in desktop
     assert "--mimic-screen-min-height: 280px;" in desktop
     assert "border: var(--mimic-led-width) solid transparent !important;" in desktop
     assert (
         "calc(var(--mimic-screen-min-height) - var(--mimic-led-width) - var(--mimic-led-width))"
         in desktop
     )
-    assert "--mimic-led-width: 6px;" in compact
+    assert "--mimic-led-width: 12px;" in compact
     assert "--mimic-screen-min-height: 220px;" in compact
 
 

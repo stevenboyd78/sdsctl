@@ -40,7 +40,7 @@
   }
   #pane-scanner .mimic-surround {
     --mimic-led: #3b4654;
-    --mimic-led-width: 12px;
+    --mimic-led-width: 24px;
     --mimic-screen-min-height: 280px;
     border: var(--mimic-led-width) solid transparent !important;
     border-top-color: var(--mimic-led) !important;
@@ -97,7 +97,7 @@
     }
     #pane-scanner :is(.mimic-basis, .mimic-note) { display: none !important; }
     #pane-scanner .mimic-status { padding: 3px 8px !important; font-size: 12px !important; }
-    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; --mimic-led-width: 6px; }
+    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; --mimic-led-width: 12px; }
     #pane-scanner .mimic-cell { font-size: clamp(10px, min(1.7cqw, 4.5cqh), 24px) !important; }
   }
 }
