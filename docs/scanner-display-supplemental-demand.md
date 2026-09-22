@@ -134,10 +134,14 @@ This is not visual browser, physical Pi, scanner continuity or audible acceptanc
 The source-pinned finite launcher, explicit consumer selection and independent
 deadline/automatic restoration have now passed the narrow 2026-09-22
 [clock/global Favorites hardware trial](scanner-display-supplemental-acceptance.md).
-That result includes separate user confirmation of normal scanning; it does not
-qualify audio, recording, Pi/TUI or HA-card behavior through the finite path.
-Those next trials require **new** reviewed cases and fresh readiness. Closed
-hardware cases remain closed. Public configuration and normal App activation
+That result includes separate user confirmation of normal scanning. A subsequent
+[finite playback-only trial](scanner-display-supplemental-acceptance.md#finite-playback-only-result--2026-09-22)
+also passed with one browser stream, 45 supplemental read attempts, user-confirmed
+normal scanning and audible transmissions, and independently audited restoration.
+It does not qualify [recording/finalization](scanner-display-supplemental-recording.md),
+continuous operation, Pi/TUI or HA-card behavior through the finite path. Those
+next trials require **new** reviewed cases and fresh readiness. Closed hardware
+cases remain closed. Public configuration and normal App activation
 remain disabled; continuous operation and schema-safe production upgrades are
 separate work. The [saved-player follow-up](web-dashboard.md#saved-player-browser-qualification)
 also remains distinct: explicit controls passed a silent local browser fixture,

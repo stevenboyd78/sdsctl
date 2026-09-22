@@ -128,7 +128,7 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
-## Next media check: live browser playback only
+## Media qualification: live browser playback only
 
 The default host adapter is **reader-only, not audio-ready**. Its
 `app_configuration()` check requires `50000/udp`, `50443/tcp` and `8443/tcp` to
@@ -185,6 +185,21 @@ finite-acceptance tests, and 11 isolated image lifecycle scenarios. Actual scann
 RTP delivery, selected-player progress and audible continuity remain untested
 for this new case and require fresh physical readiness.
 
+In the subsequent UDP-enabled setup, the daemon packet/sample counters and the
+selected browser's packet count increased; the player reported no queue or RTP
+loss in the observed samples. Audible confirmation was not received before the
+setup deadline. The native case ended with `operator_wait_expired`,
+`ever_armed: false` and `read_attempts: 0`. The guardian confirmed clean child
+exit, and the independent service restored the normal App. A separate audit
+verified healthy/idle normal state, both process-exit receipts, and unchanged
+protected pins. The player was explicitly stopped and the normal dashboard
+returned to Connected/current updates. This establishes pre-arm transport
+progress, **not audible continuity or shared-reader audio acceptance**.
+
+The expired case remains preserved and must not be reused. Restarting this test
+means preparing a fresh source-pinned case while stopped, then obtaining fresh
+physical readiness before starting its timed setup. No recording is required.
+
 Only after that offline policy and installed-network proof are qualified should
 physical/audio readiness be requested. Before arming, require increasing daemon
 and selected-player packet counters and the user's audible confirmation. Do
@@ -240,6 +255,48 @@ state, stopped candidate, both process-exit receipts, and unchanged image,
 settings, profile and recording pins. The normal dashboard also returned to
 Connected/current updates. The consumed case and all evidence remain preserved;
 do not rearm or reuse it. No user listening result was requested or inferred.
+
+### Finite playback-only result — 2026-09-22
+
+A fresh source-pinned schema-2 case passed the narrow live browser-audio trial.
+Before arm, one ordinary-dashboard player reported increasing packet counts,
+the cached daemon packet/sample counts independently increased, and the user
+confirmed audible transmissions and readiness at the physical SDS200. One arm
+was then followed by one explicit Mimic consumer, with the same player retained.
+No recording, saved-file playback, scanner-setting change or second stream was
+part of this trial.
+
+The native result recorded `window_expired`, `ever_armed: true` and **45 read
+attempts** within the fixed 64-second window and 60-attempt ceiling. The count
+is attempted reads, not a claim that every requested value was available or that
+60 attempts occurred. Thirty-two cached observations covered about 62.2 seconds:
+scanner and audio remained running, daemon packets increased from 4,524 to 6,079,
+samples from 1,447,680 to 1,945,280, and recording stayed idle. Observed sink drop,
+overflow and underflow counters remained zero. The selected player remained
+Playing during the observed window and ultimately recorded 4,335 packets with
+zero reported queue or RTP loss. The user separately confirmed that physical
+scanning and audible browser transmissions stayed normal during the marked
+window.
+
+The planned candidate exit ended playback. The browser conservatively displayed
+unconfirmed supplemental renewal after service loss; no renewal was retried.
+The ancillary cached-observer `docker exec` ended with status 137 during
+container shutdown; the independent guardian separately confirmed the actual
+native child exited with code 0 and no forced kill. The host recovery service
+completed, and a separate full audit verified normal-App health, idle recording,
+both process-exit receipts and unchanged image/settings/profile/recording pins.
+The browser returned to the normal dashboard with current updates and audio
+Stopped. The consumed case and all evidence remain preserved.
+
+This is a **playback-only coexistence and recovery pass**, not continuous
+operation, recording/finalization, Pi/TUI or HA-card acceptance. Concurrent
+recording still requires its own reviewed ownership/inventory contract and a
+fresh case; the current guard intentionally requires recording to stay idle.
+
+The [finite recording qualification contract](scanner-display-supplemental-recording.md)
+now defines the offline final-artifact checks and the remaining ownership/recovery
+gates. Its standalone verifier permits exactly one new WAV/sidecar pair while
+checking every older file, but is not connected to the live handoff service.
 
 ## Offline host-handoff decision policy
 
