@@ -128,6 +128,40 @@ in its reports. `result.json` describes the acquisition outcome; `cleanup.json`
 describes native worker/hook cleanup; `guard-result.json` describes process exit.
 None is a user-observed scanner pass or an App restoration result.
 
+## Next media check: live browser playback only
+
+The existing host-handoff guard requires both recording managers to remain idle
+and hashes both recording inventories as protected state. Starting a recording
+would intentionally violate that contract. Do not suppress `recording_active`,
+omit the inventory pin, or reuse the older recording research case to make a
+finite-media test pass.
+
+The next narrow trial can exercise **live browser playback without recording**
+under the existing guard. It needs a new source-pinned case and fresh physical
+and audible readiness. Before arm, use the ordinary presentation's Audio panel
+to establish playback and obtain the user's confirmation that transmissions are
+audible. Do not select Mimic or otherwise request supplemental demand yet.
+Then arm once, select one fresh Mimic consumer, and retain the same live-audio
+session during the fixed read window. No capture, saved-file playback, scanner
+setting change or additional audio stream is part of that window. If setup is
+uncertain or the finite deadline expires, preserve the case; never rearm it.
+
+Capture the selected browser player's packet/queue/RTP counters and the
+independent read-window/exit/restoration receipts. Browser counters and the user's
+report of audible transmissions establish different things and must be recorded
+separately. A quiet channel is not proof of audible quality. The finite owner's
+planned exit ends candidate playback; distinguish that expected end from an
+interruption while the candidate is still serving the marked window. Independently
+verify automatic normal-App restoration and unchanged recording/profile pins.
+
+The existing [recording/media observer](supplemental-media-observer.md) requires
+an active recording and is **not suitable** for this playback-only trial. Do not
+invent a dummy recording binding or treat its failure as success. Concurrent
+recording/finalization through the finite path needs a separate reviewed design
+that permits exactly the intended new recording while preserving every old file
+and maintaining independent recovery. Neither the earlier silent saved-player
+fixture nor the playback-only trial qualifies that future recording path.
+
 ## Offline host-handoff decision policy
 
 `scripts/supplemental_handoff_policy.py` now implements the persistent decision

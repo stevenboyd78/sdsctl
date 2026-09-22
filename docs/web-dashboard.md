@@ -922,9 +922,14 @@ rejected playback promises, authorization guards and page/session teardown.
 An automated click on the browser's **native** Pause control timed out in a
 separate tab, which subsequently reported a page crash. This reproduces the
 earlier control-path symptom without live scanner traffic; it does not establish
-the root cause, prove that a manual native Pause click fails, or demonstrate that
-the explicit controls repair a browser crash. Native-control/manual interaction
-and a fresh audible acceptance test remain separate from these silent fixtures.
+the root cause or demonstrate that the explicit controls repair a browser crash.
+In a fresh local fixture later that day, the user manually tested native Pause
+and the explicit saved controls and reported **"native pause and saved controls
+passed"**. The page remained responsive; subsequent inspection confirmed Stopped,
+disabled controls, a paused player, no source and zero current time. Manual
+interaction therefore passed for this fixture; the earlier automated-control
+failure remains unresolved. A fresh audible acceptance test is still separate
+from these silent fixtures.
 
 `GET /api/v1/recordings/file/{identifier}` never reads a caller-selected
 filesystem path. The web service sends the identifier to the daemon's private
