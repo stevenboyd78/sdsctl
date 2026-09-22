@@ -275,6 +275,56 @@ execution was retained and not adopted or retried. Fixed probes used new executi
 No start/stop App operation, privileged helper installation or restoration test
 is claimed by this protocol qualification.
 
+## Source bytes and process-exit evidence
+
+`scripts/supplemental_handoff_files.py` collects a bounded, read-only file inventory
+for one explicit directory. It hashes content and records size, mode and ownership
+without returning content. Directory traversal rejects symbolic links (including
+ancestors), special files and multiply linked files. Descriptor/entry identity
+checks reject replacement or mutation during a read. File count, total bytes,
+per-file bytes, traversal depth and elapsed time are bounded. Errors are sanitized;
+there is no copying, repair, App import, command execution or deployment interface.
+This is not an atomic filesystem snapshot or a defense against a trusted host
+administrator. The collector's users must compare consecutive observations and
+separately reconstruct the expected source; an installed manifest is not proof.
+Kernel-level I/O stalls still require the outer service deadline.
+
+Read-only qualification against the running normal acceptance App established:
+
+- All **371 context files**, including the manifest, matched a reconstruction
+  using the staging driver from the exact previously installed source commit.
+- All **360 installed source/assets** matched that reconstruction, without
+  importing scanner runtime code as part of inventory collection.
+- All **636 installed package files**, including 276 compiled Python files,
+  matched the same preserved immutable image in a separate networkless,
+  read-only, unprivileged inspection container. That disposable container exited
+  and was confirmed absent; the scanner App's container identity stayed unchanged.
+
+These counts describe that normal-App revision, not the new candidate. They
+establish neither third-party dependency reproducibility nor a new candidate
+image/protected-state pin. The cached native health check separately confirmed
+running/connected/PSI state, idle recording, matching unchanged accepted profile,
+and no advertised supplemental capability. It requested no scanner probe or
+supplemental demand. These are baseline checks, not a restoration test.
+
+Inspection of the installed Supervisor implementation confirmed that normal stop
+removes an App's container by default. Consequently, a later missing-container
+response cannot establish exit by itself. `scripts/supplemental_handoff_process.py`
+adds a read-only Linux pidfd witness: bind the live Docker init process using its
+PID, start ticks and exact host cgroup, then poll its kernel process handle for
+exit. It sends no signals. The caller must run in the host PID namespace and
+independently match the Docker image/container generation before and after binding.
+The parser accepts the observed HAOS unified Docker-scope layout; unknown cgroup
+layouts, zombie-at-bind, changed identities and fd errors are refused.
+
+A lost witness or a recycled/missing PID is **unknown**, not an exit receipt.
+This distinction follows the [Linux pidfd contract](https://man7.org/linux/man-pages/man2/pidfd_open.2.html).
+Local real-process tests verify exit readability even after reaping; they are not
+host-container recovery tests. Durable witness/exit receipts, fresh container and
+other-owner inventory, Supervisor-job agreement and service integration are still
+required before this component can authorize a handoff. Neither new module has
+an operational controller or installs a privileged host helper.
+
 ## Scanner-free host-runtime qualification
 
 `scripts/supplemental_handoff_runtime.py` builds two fixed disposable fixture
