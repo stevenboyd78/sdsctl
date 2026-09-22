@@ -53,10 +53,12 @@ def trial(tmp_path):
     directory = tmp_path / "guard"
     directory.mkdir(mode=0o700)
     code = (
-        "import sys,threading;from pathlib import Path;"
+        "import signal,sys,threading;from pathlib import Path;"
         "from guard_supplemental_acceptance import supervise;"
+        "cancel=threading.Event();"
+        "signal.signal(signal.SIGTERM,lambda *_args:cancel.set());"
         f"raise SystemExit(supervise([sys.executable,'-c',{CHILD!r},sys.argv[1]],"
-        "Path(sys.argv[1]),deadline_seconds=684,cancel=threading.Event()))"
+        "Path(sys.argv[1]),deadline_seconds=684,cancel=cancel))"
     )
     environment = {
         **os.environ,
@@ -246,3 +248,4 @@ def test_actual_staged_outer_supervisor_handles_only_verified_completion(
     finally:
         timer.cancel()
         timer.join()
+    assert json.loads((directory / "guard-result.json").read_text())["child_exit_confirmed"]
