@@ -131,10 +131,14 @@ terminal failures. The actual WebUI controller and generated HA resource run
 against synthetic DOM/HTTP/timers, including IP origins and sibling isolation.
 This is not visual browser, physical Pi, scanner continuity or audible acceptance.
 
-The next stage must construct a **new** source-pinned finite acceptance launcher,
-explicitly select the factory/client dependencies, and provide independent
-deadline, cleanup and restoration. Closed hardware cases remain closed. Normal
-configuration schemas, installed Apps, devices, credentials, profiles and
-recordings are unchanged. Continuous operation and schema-safe production
-upgrades remain separate. The saved-recording Pause/browser-timeout issue is
-also separate and remains open.
+The source-pinned finite launcher, explicit consumer selection and independent
+deadline/automatic restoration have now passed the narrow 2026-09-22
+[clock/global Favorites hardware trial](scanner-display-supplemental-acceptance.md).
+That result includes separate user confirmation of normal scanning; it does not
+qualify audio, recording, Pi/TUI or HA-card behavior through the finite path.
+Those next trials require **new** reviewed cases and fresh readiness. Closed
+hardware cases remain closed. Public configuration and normal App activation
+remain disabled; continuous operation and schema-safe production upgrades are
+separate work. The [saved-player follow-up](web-dashboard.md#saved-player-browser-qualification)
+also remains distinct: explicit controls passed a silent local browser fixture,
+while the native Pause/browser crash cause and audible acceptance remain open.

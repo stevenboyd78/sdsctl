@@ -709,8 +709,10 @@ install a restoration service, exercise App handoff, prove power-loss recovery,
 or replace sealed-baseline, host-observer and tracked-command-adapter review.
 
 Staging a verified build context does not build, install or start an App and does
-not install a host restoration guard. Before the first live trial, all of the
-following still need an explicit reviewed setup:
+not install a host restoration guard. The 2026-09-22 finite trial above exercised
+these boundaries for its one consumed case. Each future live case must freshly
+satisfy the same setup requirements; none of its old one-shot actions may be
+replayed:
 
 1. A new clean source-pinned staging inventory from the separate adapter, followed
    by image and installed-source verification. Existing research/staging modes

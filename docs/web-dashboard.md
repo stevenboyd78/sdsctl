@@ -899,6 +899,33 @@ route with a browser download filename derived from the inventory identifier.
 Neither action creates a browser PCMU client or changes live scanner-audio
 ownership.
 
+The saved player has explicit **Pause saved recording**, **Resume saved
+recording** (or **Replay saved recording** after completion), and **Stop saved
+recording** controls alongside the browser's native seek/volume controls. Pause
+retains the current position. Stop clears the selected media source and resets
+the player; choose a library entry's **Play** action to load it again. These
+controls affect only local playback, not daemon-owned recording or live audio.
+Status follows the current media state, including native pause events. Replaced
+or interrupted playback promises cannot overwrite the newer status. Page exit
+and session termination stop saved playback and clear its source.
+
+### Saved-player browser qualification
+
+On 2026-09-22, the actual dashboard and finalized-file HTTP route were exercised
+on loopback with generated silent WAVs, without a scanner, daemon connection,
+Home Assistant, or real recordings. Explicit Pause/Resume/Stop, natural completion,
+Replay, replacement of a playing file, and subsequent dashboard navigation all
+passed. Stop was independently observed with a paused player, no source and
+zero current time. Lifecycle regressions additionally cover stale events,
+rejected playback promises, authorization guards and page/session teardown.
+
+An automated click on the browser's **native** Pause control timed out in a
+separate tab, which subsequently reported a page crash. This reproduces the
+earlier control-path symptom without live scanner traffic; it does not establish
+the root cause, prove that a manual native Pause click fails, or demonstrate that
+the explicit controls repair a browser crash. Native-control/manual interaction
+and a fresh audible acceptance test remain separate from these silent fixtures.
+
 `GET /api/v1/recordings/file/{identifier}` never reads a caller-selected
 filesystem path. The web service sends the identifier to the daemon's private
 recording-file client. The daemon accepts only canonical inventory-relative POSIX

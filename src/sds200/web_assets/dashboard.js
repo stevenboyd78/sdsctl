@@ -75,6 +75,7 @@ let recordingTotalEntries = 0;
 let recordingPageIndex = 0;
 let recordingInventorySignature = "";
 let recordingPaginationFocusId = null;
+let savedPlaybackGeneration = 0;
 let homeAssistantIntegrationBusy = false;
 let homeAssistantIntegrationStatus = {};
 let homeAssistantBridgeKeyClearTimer = null;
@@ -152,7 +153,7 @@ function stopNativeSessionActivity(waterfallStatus) {
   stopEventStream();
   stopWaterfallStream({status: waterfallStatus});
   stopAudioPlayback();
-  element("saved-recording-player").pause();
+  stopSavedRecording();
   currentDaemonHello = {};
   setScannerControls();
 }
@@ -1770,16 +1771,69 @@ function makeRecordingActionLink(label, identifier, download = false) {
 }
 
 function playSavedRecording(identifier) {
+  if (authenticationRequired || displayOnly) return;
   const player = element("saved-recording-player");
   const name = recordingName(identifier);
+  savedPlaybackGeneration++;
   player.src = recordingFileUrl(identifier);
   player.load();
   element("saved-playback-status").textContent = `Loading ${name}.`;
-  void player.play().catch((error) => {
-    const message =
-      error instanceof Error ? error.message : "Saved recording playback failed.";
-    element("saved-playback-status").textContent = message;
+  resumeSavedRecording();
+}
+
+function syncSavedPlaybackControls() {
+  const player = element("saved-recording-player");
+  const available = Boolean(player.getAttribute("src")) &&
+    !authenticationRequired && !displayOnly;
+  const toggle = element("saved-playback-toggle");
+  toggle.disabled = !available || Boolean(player.error);
+  toggle.textContent = player.ended ? "Replay saved recording" :
+    player.paused ? "Resume saved recording" : "Pause saved recording";
+  element("saved-playback-stop").disabled = !available;
+}
+
+function renderSavedPlaybackState() {
+  const player = element("saved-recording-player");
+  syncSavedPlaybackControls();
+  // Events from an earlier source can still be queued after load()/Stop.
+  // Inspect current element state rather than trusting an old event's name.
+  if (!player.getAttribute("src")) return;
+  element("saved-playback-status").textContent = player.error
+    ? "Saved recording playback failed."
+    : player.ended ? "Saved recording playback finished."
+    : player.paused ? "Saved recording playback paused."
+    : "Playing finalized recording.";
+}
+
+function resumeSavedRecording() {
+  const player = element("saved-recording-player");
+  if (authenticationRequired || displayOnly || !player.getAttribute("src")) return;
+  const generation = ++savedPlaybackGeneration;
+  void player.play().catch(() => {
+    // A replaced source, explicit pause/stop or ended session owns the newer
+    // status. An old play() rejection must not overwrite it or restart media.
+    if (generation !== savedPlaybackGeneration) return;
+    element("saved-playback-status").textContent = "Saved recording playback failed.";
+    syncSavedPlaybackControls();
   });
+  syncSavedPlaybackControls();
+}
+
+function pauseSavedRecording() {
+  savedPlaybackGeneration++;
+  element("saved-recording-player").pause();
+  renderSavedPlaybackState();
+}
+
+function stopSavedRecording() {
+  savedPlaybackGeneration++;
+  const player = element("saved-recording-player");
+  const selected = Boolean(player.getAttribute("src"));
+  player.pause();
+  player.removeAttribute("src");
+  player.load();
+  if (selected) element("saved-playback-status").textContent = "Saved recording playback stopped.";
+  syncSavedPlaybackControls();
 }
 
 function recordingsPageCount(entries = recordingEntries) {
@@ -4300,7 +4354,7 @@ window.addEventListener("pagehide", () => {
   stopEventStream();
   stopWaterfallStream({status: "Waterfall stream closed."});
   stopAudioPlayback();
-  element("saved-recording-player").pause();
+  stopSavedRecording();
 });
 
 window.addEventListener("pageshow", () => {
@@ -4368,18 +4422,18 @@ element("scanner-reconnect").addEventListener("click", () => {
 });
 
 const savedRecordingPlayer = element("saved-recording-player");
-savedRecordingPlayer.addEventListener("play", () => {
-  element("saved-playback-status").textContent =
-    "Playing finalized recording.";
+for (const event of ["play", "pause", "ended", "error", "emptied"]) {
+  savedRecordingPlayer.addEventListener(event, () => {
+    if (event === "pause" && savedRecordingPlayer.paused) savedPlaybackGeneration++;
+    renderSavedPlaybackState();
+  });
+}
+element("saved-playback-toggle").addEventListener("click", () => {
+  if (savedRecordingPlayer.paused || savedRecordingPlayer.ended) resumeSavedRecording();
+  else pauseSavedRecording();
 });
-savedRecordingPlayer.addEventListener("ended", () => {
-  element("saved-playback-status").textContent =
-    "Saved recording playback finished.";
-});
-savedRecordingPlayer.addEventListener("error", () => {
-  element("saved-playback-status").textContent =
-    "Saved recording playback failed.";
-});
+element("saved-playback-stop").addEventListener("click", stopSavedRecording);
+syncSavedPlaybackControls();
 
 
 window.setInterval(() => {

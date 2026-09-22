@@ -95,8 +95,14 @@ synthetic PCM delivery and continuing PSI while a reply is withheld. They are
 not evidence of physical scanner behavior or audible browser/recording quality.
 
 The authenticated demand operation and matching opt-in clients are implemented
-separately. Remaining: prepare an opt-in source-pinned launcher with independent cleanup
-and restoration. Public startup/schema/client activation remains disabled.
-User-facing continuous operation needs its own qualification; a bounded trial
-must not silently become a permanent polling loop. The separate saved-recording
-Pause/browser timeout issue remains open.
+separately. The source-pinned finite launcher and independent automatic
+restoration passed the narrow 2026-09-22
+[clock/global Favorites trial](scanner-display-supplemental-acceptance.md), with
+the user's separate confirmation of normal physical scanning. That case is
+consumed, not a reusable launch instruction. Public startup/schema/client
+activation remains disabled. Remaining qualification includes finite-path media,
+Pi/TUI and HA-card delivery; user-facing continuous operation needs its own
+review and must not follow implicitly from a bounded trial. The separate
+[saved-player follow-up](web-dashboard.md#saved-player-browser-qualification)
+has local explicit-control coverage, but the native Pause/browser crash cause
+remains unresolved.
