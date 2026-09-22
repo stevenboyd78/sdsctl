@@ -170,18 +170,21 @@ console.log(JSON.stringify({accepted: Object.keys(input.scenarios).length, rejec
     assert json.loads(result.stdout) == {"accepted": 33, "rejected": 26}
 
 
-def test_web_led_widths_preserve_the_inner_grid_minimum():
+def test_web_led_width_uses_the_surrounding_panel_on_all_display_sizes():
     with TestClient(create_web_dashboard_app(lambda: None)) as client:
         css = client.get("/assets/mimic-sds.css").text
     desktop, compact = css.split("@media (max-height: 600px)")
-    assert "--mimic-led-width: 24px;" in desktop
+    assert "--mimic-led-width: 3cqmin;" in desktop
     assert "--mimic-screen-min-height: 280px;" in desktop
     assert "border: var(--mimic-led-width) solid transparent !important;" in desktop
-    assert (
-        "calc(var(--mimic-screen-min-height) - var(--mimic-led-width) - var(--mimic-led-width))"
-        in desktop
+    surround, grid = desktop.split("#pane-scanner .mimic-surround {", 1)[1].split(
+        "#pane-scanner .mimic-grid {", 1
     )
-    assert "--mimic-led-width: 12px;" in compact
+    assert "container-type: size !important;" in surround
+    assert "position: relative !important; border: 0 !important; padding: 0 !important;" in surround
+    assert "position: absolute !important; inset: 0 !important;" in grid
+    assert "box-sizing: border-box !important; container-type: size !important;" in grid
+    assert "--mimic-led-width:" not in compact
     assert "--mimic-screen-min-height: 220px;" in compact
 
 

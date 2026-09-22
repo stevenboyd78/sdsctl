@@ -40,20 +40,24 @@
   }
   #pane-scanner .mimic-surround {
     --mimic-led: #3b4654;
-    --mimic-led-width: 24px;
+    --mimic-led-width: 3cqmin;
     --mimic-screen-min-height: 280px;
-    border: var(--mimic-led-width) solid transparent !important;
-    border-top-color: var(--mimic-led) !important;
-    border-bottom-color: var(--mimic-led) !important;
+    position: relative !important; border: 0 !important; padding: 0 !important;
     min-height: var(--mimic-screen-min-height) !important; min-width: 0 !important; background: #000 !important;
     container-type: size !important;
   }
-  #pane-scanner [data-led-treatment="border"] .mimic-surround { border-color: var(--mimic-led) !important; }
+  #pane-scanner [data-led-treatment="border"] .mimic-grid { border-color: var(--mimic-led) !important; }
   #pane-scanner .mimic-grid {
     display: grid !important; grid-template-columns: repeat(30,minmax(0,1fr)) !important;
-    grid-template-rows: repeat(20,minmax(0,1fr)) !important; height: 100% !important;
-    /* Subtract both edges so the thicker LED never pushes the last row out. */
-    min-height: calc(var(--mimic-screen-min-height) - var(--mimic-led-width) - var(--mimic-led-width)) !important;
+    grid-template-rows: repeat(20,minmax(0,1fr)) !important;
+    /* The child queries the surrounding panel, not the viewport or itself.
+       Keep the LED inside that fixed box; cell fonts query the remaining space. */
+    position: absolute !important; inset: 0 !important;
+    width: 100% !important; height: 100% !important; min-height: 0 !important;
+    box-sizing: border-box !important; container-type: size !important;
+    border: var(--mimic-led-width) solid transparent !important;
+    border-top-color: var(--mimic-led) !important;
+    border-bottom-color: var(--mimic-led) !important;
     background: #000 !important; overflow: hidden !important;
   }
   #pane-scanner .mimic-cell {
@@ -97,7 +101,7 @@
     }
     #pane-scanner :is(.mimic-basis, .mimic-note) { display: none !important; }
     #pane-scanner .mimic-status { padding: 3px 8px !important; font-size: 12px !important; }
-    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; --mimic-led-width: 12px; }
+    #pane-scanner .mimic-surround { --mimic-screen-min-height: 220px; }
     #pane-scanner .mimic-cell { font-size: clamp(10px, min(1.7cqw, 4.5cqh), 24px) !important; }
   }
 }

@@ -47,6 +47,18 @@ def test_generated_cards_share_exact_browser_projection_and_session_owner():
         assert forbidden not in module()
 
 
+def test_mimic_led_width_is_relative_to_each_cards_scanner_panel():
+    script = module()
+    assert "--mimic-led-width:3cqmin;" in script
+    assert "position:relative; border:0; padding:0; container-type:size;" in script
+    assert (
+        "position:absolute; inset:0; width:100%; height:100%; min-height:0; container-type:size;"
+        in script
+    )
+    assert "border:var(--mimic-led-width) solid transparent;" in script
+    assert ':host([data-led-treatment="border"]) .mimic-grid' in script
+
+
 def test_mimic_installer_atomic_idempotent_and_preserves_unrelated_files(tmp_path):
     target = tmp_path / "www/sds200/sds200-mimic-card.js"
     target.parent.mkdir(parents=True)

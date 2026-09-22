@@ -862,8 +862,12 @@ does not add a published App-catalog setting or install itself on any display.
 Visible **Mimic layout** and **Alert LED treatment** selectors choose profile
 preference/Simple/Detail and top-and-bottom strips/surrounding border. These are
 per-page presentation choices; reloading the page restores Dashboard, profile
-preference and strips. They neither write the scanner nor alter another client
-or the imported profile. Outer dashboard themes remain independent of profile
+preference and surrounding border. The LED frame is 3% of the scanner panel's
+shorter dimension, equally thick on all sides; it scales with the panel rather
+than the browser viewport. Strips reserve the same space with transparent sides,
+so switching treatment does not move the fields. These presentation choices
+neither write the scanner nor alter another client or the imported profile.
+Outer dashboard themes remain independent of profile
 field colors. Only supported COLOR mappings and confirmed individual name holds
 are applied; BLACK/WHITE transformations and icon glyphs remain unqualified.
 

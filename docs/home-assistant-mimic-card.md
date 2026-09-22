@@ -64,7 +64,12 @@ The visual editor offers the same presentation options:
 | `title` | Up to 128 printable characters | Card heading. An empty string hides it. |
 
 Choices are independent for each card and are saved in its dashboard
-configuration. The imported profile still determines field assignments and
+configuration. Both LED treatments use a frame thickness of 3% of that card's
+scanner panel's shorter dimension, with the same thickness on all four sides.
+The frame scales with the panel, not the browser window; transparent side edges
+reserve the same space in strips mode so changing treatment does not move the
+fields. The existing default remains `strips` unless `border` is selected.
+The imported profile still determines field assignments and
 colors. Simple/Detail applies to Conventional and Trunk; Search/Close Call,
 Weather and Tone-Out use their documented family layouts. Waterfall remains a
 separate card and scanner screen.

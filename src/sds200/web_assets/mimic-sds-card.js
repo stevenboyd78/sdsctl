@@ -62,13 +62,17 @@ class Sds200MimicCard extends HTMLElement {
       h2 { margin:0; font:500 20px/1.2 var(--paper-font-headline_-_font-family,system-ui); overflow-wrap:anywhere; }
       .mimic-status { margin:0; border-left:4px solid #f29b9b; padding:5px 8px; font:600 13px/1.3 system-ui; }
       ha-card[data-state="current"] .mimic-status { border-color:#37b88f; }
-      .mimic-surround { --mimic-led:#3b4654; height:360px; flex:0 0 auto; min-width:0; background:#000;
-        border:6px solid transparent; border-block-color:var(--mimic-led); container-type:size; }
+      .mimic-surround { --mimic-led:#3b4654; --mimic-led-width:3cqmin;
+        height:360px; flex:0 0 auto; min-width:0; background:#000;
+        position:relative; border:0; padding:0; container-type:size; }
       :host([data-density="compact"]) .mimic-surround { height:280px; }
       :host([data-density="tall"]) .mimic-surround { height:480px; }
       :host([data-fixed="true"]) .mimic-surround { flex:1 0 240px; height:0; }
-      :host([data-led-treatment="border"]) .mimic-surround { border-color:var(--mimic-led); }
-      .mimic-grid { display:grid; grid-template-columns:repeat(30,minmax(0,1fr)); grid-template-rows:repeat(20,minmax(0,1fr)); height:100%; overflow:hidden; }
+      :host([data-led-treatment="border"]) .mimic-grid { border-color:var(--mimic-led); }
+      /* Query this card's surrounding panel, reserving the same frame for either treatment. */
+      .mimic-grid { display:grid; grid-template-columns:repeat(30,minmax(0,1fr)); grid-template-rows:repeat(20,minmax(0,1fr));
+        position:absolute; inset:0; width:100%; height:100%; min-height:0; container-type:size;
+        border:var(--mimic-led-width) solid transparent; border-block-color:var(--mimic-led); overflow:hidden; }
       .mimic-cell { min-width:0; min-height:0; padding:0 3px; overflow:hidden; display:flex; align-items:center;
         color:#cbd5e1; background:#18212d; font:clamp(9px,min(1.7cqw,4.5cqh),24px)/1 monospace; }
       .mimic-cell[data-alignment="center"] { justify-content:center; text-align:center; }
