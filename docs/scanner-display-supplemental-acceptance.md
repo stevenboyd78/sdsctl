@@ -608,7 +608,32 @@ asynchronous readiness, source/identity mismatches and damaged evidence. The
 combined supplemental, staging and App-supervisor suite passed 3,879 tests before
 the additional staging-boundary checks. These are local software results, not
 proof of Supervisor's live resulting state or automatic restoration. Packaged
-container qualification and a new sealed physical trial are still required.
+container qualification and a new sealed physical trial are separate gates.
+
+The packaged-image check subsequently passed eleven scanner-free scenarios:
+three expected finite outcomes, cancellation, short quota evidence, missing
+result, forced-kill evidence, each of the three sibling failures, and SIGTERM.
+The installed staged supervisor and shipped guardian ran real synthetic child
+processes in disposable network-disabled containers. Expected completion and
+SIGTERM exited 0; invalid evidence and sibling failures exited 2. All owned
+children exited and the installed package/wrappers remained unchanged.
+
+A separate scanner-free fixture then ran once through the **actual Home
+Assistant Supervisor**, in the inactive supplemental test slot. Every installed
+non-bytecode runtime file and all five wrappers matched the reviewed staged
+source. Its own HA-built package fingerprint was retained because compiled
+bytecode differs between builds. The fixture launched only synthetic processes,
+not a scanner daemon or web/media service. Its container exited 0 and Supervisor
+reported `stopped`; this also replaced the old cached error with a real observed
+state transition. The normal App kept the same process generation, and all old
+candidate data/options/case files were unchanged. The old build context was
+archived intact before replacing the inactive test image.
+
+This proves the corrected finite completion is recognized as a clean App exit;
+it does **not** prove an automatic scanner-ownership handoff or normal-App
+restoration. The fixture's case is consumed. The earlier failed live case remains
+closed and its physical observation unconfirmed. A new source-pinned native
+case and independently sealed restoration plan are required for that retest.
 
 ## Scanner-free host-runtime qualification
 
