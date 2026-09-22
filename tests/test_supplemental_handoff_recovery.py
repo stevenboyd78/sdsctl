@@ -266,6 +266,44 @@ def test_bad_operator_input_cannot_disable_candidate_expiry_recovery(setup):
         run.close()
 
 
+@pytest.mark.parametrize("exit_witnessed", [True, False])
+def test_unready_candidate_is_bound_and_natural_exit_still_needs_receipt(setup, exit_witnessed):
+    host, journal = setup
+    run = session(host, journal)
+    request(host, journal)
+    poll(host, run)  # stop normal
+    poll(host, run)  # start candidate
+
+    def unready(sample):
+        return replace(
+            sample,
+            observation=replace(
+                sample.observation,
+                candidate=replace(sample.observation.candidate, healthy=None, recording=None),
+            ),
+        )
+
+    host.read_fault = unready
+    assert poll(host, run).phase == "starting_candidate"
+    record = run.processes.record(p.CANDIDATE)
+    assert record is not None
+    candidate = host.containers.pop("app_" + p.CANDIDATE)
+    host.read_fault = None
+    if exit_witnessed:
+        host.dead.add(candidate["Id"])
+    # This stopped observation could be Docker absence OR a qualified retained
+    # exit from HostObserver. Neither alone can substitute for the pidfd receipt.
+    result = poll(host, run)
+    assert result.phase == ("starting_normal" if exit_witnessed else "starting_candidate")
+    assert host.sent == [("stop", p.NORMAL), ("start", p.CANDIDATE)] + (
+        [("start", p.NORMAL)] if exit_witnessed else []
+    )
+    if exit_witnessed:
+        assert poll(host, run).phase == "complete"
+        assert record.generation in journal.machine.state.exited_processes
+    run.close()
+
+
 def test_container_removal_without_process_exit_does_not_start_other_owner(setup):
     host, journal = setup
     run = session(host, journal)

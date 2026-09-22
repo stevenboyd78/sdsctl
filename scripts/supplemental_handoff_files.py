@@ -182,8 +182,8 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
             os.close(anchor)
 
 
-def private_file(path: Path) -> FileEvidence:
-    """Hash exactly one existing private regular file, never its siblings.
+def _single_file(path: Path, mode: int) -> FileEvidence:
+    """Hash exactly one existing regular file, never its siblings.
 
     The four accepted-profile/deployment inputs can live in different private
     directories. Opening each ancestor without following links also avoids
@@ -192,6 +192,7 @@ def private_file(path: Path) -> FileEvidence:
     opened: list[tuple[int, str, int, tuple[int, ...]]] = []
     anchor = file = -1
     try:
+        require(type(mode) is int and mode in (0o600, 0o555))
         require(type(path) is type(Path()) and path.is_absolute() and len(path.parts) > 2)
         require(all(part not in (".", "..") for part in path.parts))
         deadline = time.monotonic() + MAX_SECONDS
@@ -208,7 +209,7 @@ def private_file(path: Path) -> FileEvidence:
             parent = child
         stated = os.stat(path.name, dir_fd=parent, follow_symlinks=False)
         require(stat.S_ISREG(stated.st_mode) and stated.st_nlink == 1)
-        require(stated.st_uid == os.geteuid() and stat.S_IMODE(stated.st_mode) == 0o600)
+        require(stated.st_uid == os.geteuid() and stat.S_IMODE(stated.st_mode) == mode)
         require(0 < stated.st_size <= MAX_FILE_BYTES)
         file = os.open(
             path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=parent
@@ -232,7 +233,7 @@ def private_file(path: Path) -> FileEvidence:
             named = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
             require(current[:6] == named[:6] == before[:6])
         require(time.monotonic() <= deadline)
-        return FileEvidence(size, hashed.hexdigest(), 0o600, stated.st_uid, stated.st_gid)
+        return FileEvidence(size, hashed.hexdigest(), mode, stated.st_uid, stated.st_gid)
     except Exception:
         raise UnconfirmedFiles("Protected filesystem evidence is unconfirmed.") from None
     finally:
@@ -242,6 +243,16 @@ def private_file(path: Path) -> FileEvidence:
             os.close(child)
         if anchor >= 0:
             os.close(anchor)
+
+
+def private_file(path: Path) -> FileEvidence:
+    """One bounded 0600 private configuration/profile file."""
+    return _single_file(path, 0o600)
+
+
+def executable_file(path: Path) -> FileEvidence:
+    """One bounded 0555 immutable candidate entry script, not a private input."""
+    return _single_file(path, 0o555)
 
 
 if __name__ == "__main__":

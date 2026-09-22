@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from contextlib import suppress
 from dataclasses import asdict, dataclass
 from typing import Any, cast
 
@@ -192,6 +193,43 @@ def container_index(values: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def manual_container(value: dict[str, Any]) -> None:
+    """A scanner owner must not independently restart outside the journal."""
+    config = value.get("HostConfig")
+    require(type(config) is dict)
+    config = cast(dict[str, Any], config)
+    policy = config.get("RestartPolicy")
+    require(type(policy) is dict and policy.get("Name") == "no")
+    policy = cast(dict[str, Any], policy)
+    require(type(policy.get("MaximumRetryCount")) is int and policy["MaximumRetryCount"] == 0)
+
+
+def retained_exit(value: dict[str, Any], *, name: str, image: str, cid: str) -> str:
+    """Docker exit evidence only; RecoverySession still requires its pidfd receipt.
+
+    A consumed candidate cannot qualify as a fresh case simply because it exited.
+    Initial service preparation must separately require an absent candidate and
+    absent case state. This path supports its natural finite-guardian shutdown.
+    """
+    manual_container(value)
+    require(value.get("Id") == cid and value.get("Name") == "/" + name)
+    require(value.get("Image") == image)
+    state = value.get("State")
+    require(type(state) is dict and state.get("Status") == "exited")
+    state = cast(dict[str, Any], state)
+    require(all(state.get(k) is False for k in ("Running", "Paused", "Restarting", "Dead")))
+    require(type(state.get("Pid")) is int and state["Pid"] == 0)
+    require(type(state.get("ExitCode")) is int and type(state.get("OOMKilled")) is bool)
+    require(type(state.get("Error")) is str)
+    for key in ("StartedAt", "FinishedAt"):
+        require(
+            type(state.get(key)) is str
+            and re.fullmatch(r"20\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,9})?Z", state[key])
+            is not None
+        )
+    return checksum({"id": cid, "image": image, "name": name, "state": state})
+
+
 class HostObserver:
     """Fresh joined evidence; process receipts remain RecoverySession's gate.
 
@@ -283,6 +321,7 @@ class HostObserver:
         require(core_id == self.core_generation)
         require(supervisor_data(self.supervisor.read("core")).get("version") == self.core_version)
         observed: dict[str, App] = {}
+        exited: dict[str, tuple[str, str]] = {}
         for slug, key in ((NORMAL, "normal"), (CANDIDATE, "candidate")):
             seal = self.seals[slug]
             config = app_configuration(self.supervisor.read(key), slug=slug)
@@ -298,7 +337,16 @@ class HostObserver:
                 if listing["State"] == "running" and config.supervisor_state == "started":
                     container = self.docker.container("app_" + slug)
                     require(container.get("Id") == listing["Id"])
+                    manual_container(container)
                     incarnation = generation(container, name="app_" + slug, image=seal.image)
+                elif listing["State"] == "exited" and config.supervisor_state == "stopped":
+                    proof = retained_exit(
+                        self.docker.container("app_" + slug),
+                        name="app_" + slug,
+                        image=seal.image,
+                        cid=listing["Id"],
+                    )
+                    exited[slug] = (listing["Id"], proof)
             files = self.collect_files(slug, container)
             require(type(files) is ProtectedFiles)
             # Report actual fingerprints to policy; a changed pin ends the case
@@ -308,25 +356,35 @@ class HostObserver:
                 # Do not execute/import a collector inside an App whose code,
                 # options or protected inputs no longer match the reviewed seal.
                 # The changed pin still reaches policy and ends the case.
-                native = (
-                    self.read_native(slug, incarnation)
-                    if pin == seal.pin
-                    else NativeState(incarnation, None, None)
-                )
+                native = NativeState(incarnation, None, None)
+                if pin == seal.pin:
+                    # A starting/exiting daemon may not answer IPC yet. Keep
+                    # the verified container incarnation visible so recovery
+                    # can bind its init pidfd early. This cannot authorize a
+                    # healthy/recording-idle transition.
+                    with suppress(Exception):
+                        native = self.read_native(slug, incarnation)
                 require(type(native) is NativeState and native.generation == incarnation)
-                require(
-                    generation(
-                        self.docker.container("app_" + slug), name="app_" + slug, image=seal.image
-                    )
-                    == incarnation
-                )
+                current = self.docker.container("app_" + slug)
+                manual_container(current)
+                require(generation(current, name="app_" + slug, image=seal.image) == incarnation)
                 observed[slug] = App(pin, "running", incarnation, native.healthy, native.recording)
-            elif listing is None and config.supervisor_state == "stopped":
+            elif (listing is None or slug in exited) and config.supervisor_state == "stopped":
                 observed[slug] = App(pin, "stopped")
             else:
                 observed[slug] = App(pin, "unknown")
         require(installed_apps(self.supervisor.read("apps")) == apps)
         require(container_index(self.docker.containers()) == before)
+        for slug, (cid, proof) in exited.items():
+            require(
+                retained_exit(
+                    self.docker.container("app_" + slug),
+                    name="app_" + slug,
+                    image=self.seals[slug].image,
+                    cid=cid,
+                )
+                == proof
+            )
         require(
             generation(self.docker.container(CORE), name=CORE, image=self.core_image) == core_id
         )

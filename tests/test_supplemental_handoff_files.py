@@ -197,6 +197,16 @@ def test_single_private_file_reads_no_siblings(tree):
     assert f.private_file(target).sha256 == hashlib.sha256(b"first\n").hexdigest()
 
 
+def test_executable_entry_requires_exact_nonwritable_mode(tree):
+    target = tree / "a.py"
+    with pytest.raises(f.UnconfirmedFiles):
+        f.executable_file(target)
+    target.chmod(0o555)
+    assert f.executable_file(target).mode == 0o555
+    with pytest.raises(f.UnconfirmedFiles):
+        f.private_file(target)
+
+
 @pytest.mark.parametrize(
     "fault",
     ["symlink", "ancestor", "hardlink", "fifo", "mode", "empty", "large", "replace", "grow"],

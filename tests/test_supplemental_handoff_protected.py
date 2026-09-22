@@ -152,3 +152,36 @@ def test_file_error_cannot_return_partial_proof(layout, disk, monkeypatch):
     monkeypatch.setattr(f, "private_file", fail)
     with pytest.raises(file_tests.f.UnconfirmedFiles):
         f.collect(layout, None)
+
+
+def test_candidate_fingerprint_includes_all_five_finite_wrappers(monkeypatch):
+    calls = []
+
+    def inventory(path):
+        calls.append(path)
+        if path.name == "sds200":
+            return {"runtime.py": {"sha256": "a" * 64}}
+        return {
+            name: {"sha256": "b" * 64}
+            for name in (
+                "accept_supplemental_daemon.py",
+                "guard_supplemental_acceptance.py",
+                "accept_supplemental_web.py",
+            )
+        }
+
+    def entry(path):
+        calls.append(path)
+        return file_tests.f.FileEvidence(10, "c" * 64, 0o555, 0, 0)
+
+    monkeypatch.setattr(f, "inventory", inventory)
+    monkeypatch.setattr(f, "executable_file", entry)
+    digest = f.package_fingerprint(Path("/fixture"), candidate=True)
+    assert len(digest) == 64 and len(calls) == 4
+    assert calls[-2:] == [Path("/fixture/usr/local/bin") / name for name in f.ENTRIES]
+
+
+def test_unexpected_launcher_file_or_bytecode_is_refused(monkeypatch):
+    monkeypatch.setattr(f, "inventory", lambda _: {"unexpected.pyc": {}})
+    with pytest.raises(p.UnsafeHandoff):
+        f.package_fingerprint(Path("/fixture"), candidate=True)

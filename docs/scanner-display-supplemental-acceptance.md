@@ -379,6 +379,15 @@ inventory, container inventory, Core generation and jobs check before returning;
 the entire observation must fit its two-second freshness budget. A known protected
 file/configuration change reaches policy as a changed pin. Missing/ambiguous
 responses remain unavailable, never proof of a stopped App or healthy daemon.
+Scanner containers must also have Docker restart policy `no`; Supervisor's manual
+boot setting alone does not establish that. A retained `exited` container can be
+observed as stopped only with matching Supervisor state, exact image/container
+identity, zero PID and stable exit metadata. Recovery still requires its durable
+pidfd exit receipt before allowing the next owner. Initial service preparation
+must require an absent candidate container and unused case state, not adopt an
+old exited candidate. An unavailable native socket preserves the verified running
+container identity with unknown health/recording, allowing early process binding
+without granting readiness or recording-idle authority.
 
 `supplemental_handoff_protected.py` reads the fixed host source context, running
 container's qualified overlay package, four private profile inputs, and recording
@@ -390,6 +399,9 @@ fingerprint; the observer must still inspect that image. Runtime package shadow
 mounts, nested profile/media shadow mounts, wrong host mappings and unknown storage
 drivers are refused. These private host paths are not a user-facing configuration
 or a portable Docker-storage discovery API.
+The candidate fingerprint additionally covers all three finite Python wrappers
+and both exact non-writable executable entries. A matching runtime package alone
+does not establish that its finite guardian/launch path is intact.
 
 `supplemental_handoff_cached.py` uses the installed, independently qualified App
 package to compare accepted/source/configuration bytes with the loaded daemon
@@ -400,6 +412,26 @@ rechecked afterward; the collection has a 1.5-second bound. Recording-active and
 confirmed unhealthy values are retained; invalid data is unconfirmed, not idle.
 Candidate health additionally needs separate case/guardian evidence, which this
 collector does not claim to supply.
+
+The private cached reader uses five fixed versioned IPC requests and strict
+correlation, framing, size and per-request time bounds. It does not import the
+unrelated App startup/web/server graph. Profile paths come from separately sealed
+options; accepted/source/configuration data and private permissions are still
+checked through installed storage readers. The actual Unix socket peer PID and
+start ticks are bound through `SO_PEERCRED` and a live pidfd. No PID signaling is
+performed. The normal App read and complete protected-content inventory qualified
+together in under one second on the test HAOS host, within the unchanged
+two-second observation and one-second Docker transport deadlines. Earlier slow
+import attempts remain failed/unconfirmed evidence; their execs are not replayed.
+
+`supplemental_handoff_app_read.py` executes only the two sealed cached/guardian
+collectors in an already qualified App incarnation, checks exec creation and exit,
+then rechecks the container. Candidate readiness additionally uses
+`supplemental_handoff_guard_state.py`: its private reports must match the case,
+source, finite budgets and actual IPC peer; the recorded guardian must still be
+that peer's live parent. Both pidfds and process start times are rechecked. A
+readiness file alone cannot prove health. These checks do not arm the reader,
+negotiate supplemental demand or establish that normal restoration occurred.
 
 `supplemental_handoff_operator.py` provides a private local one-shot request/finish
 inbox. The service remains the sole writer of its locked journal. An atomic,
@@ -419,8 +451,8 @@ afterward. The source context is owned by a different UID: the first
 capability-stripped file helper correctly refused access. A fresh read-only helper
 with `DAC_READ_SEARCH` completed without changing permissions. Administrative
 Docker-socket access and host-file read capabilities must not be exposed publicly.
-Service assembly, independently sealed installation inputs, candidate guardian
-proof and full controlled handoff/recovery still require qualification.
+Service assembly, independently sealed installation inputs, live candidate
+guardian qualification and full controlled handoff/recovery remain required.
 
 The private candidate image was also built and inspected on the development host.
 All staged runtime assets and finite wrappers matched, and an isolated,

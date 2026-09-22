@@ -1,6 +1,8 @@
 """Real private profile storage plus cached-only IPC doubles; no scanner I/O."""
 
 import importlib.util
+import os
+import struct
 import sys
 from copy import deepcopy
 from dataclasses import asdict
@@ -8,8 +10,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
-from sds200 import daemon_client
 
 from . import test_scanner_display_deployment as deployment_tests
 
@@ -64,6 +64,12 @@ def cached(configured, tmp_path, monkeypatch):
         def __exit__(self, *args):
             self.closed = True
 
+        def connect(self):
+            return self
+
+        def getsockopt(self, *args):
+            return struct.pack("3i", os.getpid(), os.geteuid(), os.getegid())
+
         def hello(self):
             self.calls.append("hello")
             return {"operations": self.operations}
@@ -83,7 +89,7 @@ def cached(configured, tmp_path, monkeypatch):
             return self.profile
 
     client = Client(None, timeout=0.2)
-    monkeypatch.setattr(daemon_client, "DaemonApiClient", lambda *args, **kwargs: client)
+    monkeypatch.setattr(c, "CachedClient", lambda *args, **kwargs: client)
     return deployment, config, client, tmp_path / "recordings", tmp_path / "daemon.sock"
 
 
@@ -103,6 +109,7 @@ def test_read_only_real_profile_and_cached_operations(cached, tmp_path):
     assert evidence.healthy and evidence.recording is False
     assert evidence.supplemental_advertised is False
     assert len(evidence.profile_sha256) == 64
+    assert evidence.peer_pid == os.getpid() and int(evidence.peer_start_ticks) > 0
     assert cached[2].calls == [
         "hello",
         "runtime.snapshot",
@@ -239,3 +246,35 @@ def test_slow_collection_refused(cached, monkeypatch):
     monkeypatch.setattr(c.time, "monotonic", lambda: next(moments))
     with pytest.raises(c.UnconfirmedCache):
         collect(cached)
+
+
+@pytest.mark.parametrize("kind", ["pid", "uid", "ticks", "exit"])
+def test_actual_ipc_peer_must_stay_bound_and_live(cached, monkeypatch, kind):
+    before = len(list(Path("/proc/self/fd").iterdir()))
+    if kind in ("pid", "uid"):
+        monkeypatch.setattr(
+            cached[2],
+            "getsockopt",
+            lambda *_: struct.pack(
+                "3i",
+                1 if kind == "pid" else os.getpid(),
+                os.geteuid() + (kind == "uid"),
+                os.getegid(),
+            ),
+        )
+    elif kind == "ticks":
+        ticks = iter(["10", "11"])
+        monkeypatch.setattr(c, "process_ticks", lambda _: next(ticks))
+    else:
+
+        class Poll:
+            def register(self, *args):
+                pass
+
+            def poll(self, *_):
+                return [(5, 1)]
+
+        monkeypatch.setattr(c.select, "poll", Poll)
+    with pytest.raises(c.UnconfirmedCache):
+        collect(cached)
+    assert len(list(Path("/proc/self/fd").iterdir())) == before

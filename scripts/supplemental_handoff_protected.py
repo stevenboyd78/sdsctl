@@ -9,15 +9,34 @@ the observer checks image/container identity before and after this collection.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from supplemental_handoff_files import inventory, private_file
+from supplemental_handoff_files import executable_file, inventory, private_file
 from supplemental_handoff_observer import ProtectedFiles
 from supplemental_handoff_policy import CANDIDATE, NORMAL, checksum, digest, require
 
 PACKAGE = Path("usr/local/lib/python3.14/site-packages/sds200")
+LAUNCHERS = Path("opt/sdsctl-supplemental-acceptance")
+ENTRIES = ("sdsctl-supplemental-acceptance", "sdsctl-supplemental-acceptance-web")
+
+
+def package_fingerprint(root: Path, *, candidate: bool) -> str:
+    runtime = inventory(root / PACKAGE)
+    if not candidate:
+        return checksum(runtime)
+    launchers = inventory(root / LAUNCHERS)
+    require(
+        set(launchers)
+        == {
+            "accept_supplemental_daemon.py",
+            "guard_supplemental_acceptance.py",
+            "accept_supplemental_web.py",
+        }
+    )
+    entries = {name: asdict(executable_file(root / "usr/local/bin" / name)) for name in ENTRIES}
+    return checksum({"runtime": runtime, "launchers": launchers, "entries": entries})
 
 
 @dataclass(frozen=True)
@@ -72,11 +91,15 @@ def collect(layout: ProtectedLayout, container: dict[str, Any] | None) -> Protec
             destinations.add(str(destination))
             # A bind over any source package ancestor or descendant could hide
             # modified runtime bytes outside the independently inspected image.
-            absolute_package = Path("/") / PACKAGE
-            require(
-                not destination.is_relative_to(absolute_package)
-                and not absolute_package.is_relative_to(destination)
+            code_roots = (
+                Path("/") / PACKAGE,
+                Path("/") / LAUNCHERS,
+                *(Path("/usr/local/bin") / name for name in ENTRIES),
             )
+            for code in code_roots:
+                require(
+                    not destination.is_relative_to(code) and not code.is_relative_to(destination)
+                )
             require(
                 not any(
                     destination != root and destination.is_relative_to(root)
@@ -101,7 +124,7 @@ def collect(layout: ProtectedLayout, container: dict[str, Any] | None) -> Protec
             and re.fullmatch(r"/mnt/data/docker/overlay2/[a-z0-9]{1,128}/merged", merged)
             is not None
         )
-        package = checksum(inventory(Path(cast(str, merged)) / PACKAGE))
+        package = package_fingerprint(Path(cast(str, merged)), candidate=layout.slug == CANDIDATE)
     profile = checksum(
         {
             key: private_file(path).sha256

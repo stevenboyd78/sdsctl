@@ -48,6 +48,8 @@ class Host:
         self.private_options = {"normal": "one", "candidate": "two"}
         self.files = {slug: o.ProtectedFiles(*("a" * 64,) * 4) for slug in (p.NORMAL, p.CANDIDATE)}
         self.native_state = (True, False)
+        for value in self.values.values():
+            value["HostConfig"] = {"RestartPolicy": {"Name": "no", "MaximumRetryCount": 0}}
 
     def container(self, key):
         return deepcopy(self.values[key])
@@ -67,7 +69,8 @@ class Host:
         return {"Id": identity, "Os": "linux", "Architecture": "amd64"}
 
     def state(self, slug):
-        return "started" if "app_" + slug in self.values else "stopped"
+        value = self.values.get("app_" + slug)
+        return "started" if value and value["State"]["Status"] != "exited" else "stopped"
 
     def read(self, key):
         self.reads.append(key)
@@ -198,6 +201,99 @@ def test_native_unknown_unhealthy_and_active_recording_survive(host, state):
     host.native_state = state
     app = read.read().observation.normal
     assert (app.healthy, app.recording) == state
+
+
+def test_missing_cached_response_preserves_running_identity_not_health(host):
+    read = observer(host)
+
+    def unavailable(*_):
+        raise TimeoutError("private diagnostic must not escape")
+
+    read.read_native = unavailable
+    app = read.read().observation.normal
+    assert app.state == "running" and app.generation is not None
+    assert app.healthy is None and app.recording is None
+
+
+def exited_normal(host):
+    value = host.values["app_" + p.NORMAL]
+    value["State"].update(
+        Status="exited", Running=False, Pid=0, ExitCode=0, FinishedAt="2026-09-22T00:00:03Z"
+    )
+    return value
+
+
+def test_confirmed_retained_exit_does_not_read_native_or_stopped_overlay(host):
+    read = observer(host)
+    exited_normal(host)
+
+    def forbidden(*_):
+        pytest.fail("Exited container must not run an exec")
+
+    def files(slug, container):
+        assert container is None
+        return host.files[slug]
+
+    read.read_native, read.collect_files = forbidden, files
+    app = read.read().observation.normal
+    assert app.state == "stopped" and app.generation is None
+    assert app.healthy is None and app.recording is None
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("Running", True),
+        ("Pid", 12),
+        ("Pid", False),
+        ("Paused", True),
+        ("Restarting", True),
+        ("Dead", True),
+        ("ExitCode", None),
+        ("OOMKilled", None),
+        ("Error", None),
+        ("FinishedAt", "0001-01-01T00:00:00Z"),
+    ],
+)
+def test_retained_exit_requires_full_process_state(host, key, value):
+    read = observer(host)
+    exited_normal(host)["State"][key] = value
+    with pytest.raises(p.UnsafeHandoff):
+        read.read()
+
+
+@pytest.mark.parametrize("exited", [False, True])
+@pytest.mark.parametrize(
+    "policy",
+    [
+        None,
+        {},
+        {"Name": "always", "MaximumRetryCount": 0},
+        {"Name": "no", "MaximumRetryCount": False},
+        {"Name": "no", "MaximumRetryCount": 1},
+    ],
+)
+def test_scanner_container_cannot_restart_independently(host, exited, policy):
+    read = observer(host)
+    if exited:
+        exited_normal(host)
+    host.values["app_" + p.NORMAL]["HostConfig"]["RestartPolicy"] = policy
+    with pytest.raises(p.UnsafeHandoff):
+        read.read()
+
+
+def test_retained_exit_identity_is_rechecked(host):
+    read = observer(host)
+    value = exited_normal(host)
+
+    def files(slug, container):
+        if slug == p.CANDIDATE:
+            value["State"]["FinishedAt"] = "2026-09-22T00:00:04Z"
+        return host.files[slug]
+
+    read.collect_files = files
+    with pytest.raises(p.UnsafeHandoff):
+        read.read()
 
 
 @pytest.mark.parametrize(
