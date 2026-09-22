@@ -120,6 +120,22 @@ def preconditions(observation: Observation) -> str:
 
 
 @dataclass(frozen=True)
+class ProcessRecord:
+    slug: str
+    generation: str
+    container_id: str
+    pid: int
+    start_ticks: int
+
+    def __post_init__(self) -> None:
+        require(self.slug in (NORMAL, CANDIDATE))
+        digest(self.generation)
+        digest(self.container_id)
+        require(type(self.pid) is int and 1 < self.pid < 2**31)
+        require(type(self.start_ticks) is int and 0 < self.start_ticks < 2**64)
+
+
+@dataclass(frozen=True)
 class State:
     phase: str = "prepared"
     deadline: float = 0
@@ -134,6 +150,11 @@ class State:
     # Independent exec inspection confirmed process exit, not App operation
     # success. Persist before Docker eventually expires its execution metadata.
     completed_executions: tuple[tuple[str, int], ...] = ()
+    # The two original scanner-owning init processes, never the restored normal
+    # incarnation. Binding is not exit. Only an independently observed pidfd exit
+    # can be recorded; API 404/missing PID does not establish this event.
+    processes: tuple[ProcessRecord, ...] = ()
+    exited_processes: tuple[str, ...] = ()  # generation digests, not recycled PIDs
 
 
 class Machine:
@@ -165,7 +186,19 @@ class Machine:
 
     def event(self, event: dict[str, Any]) -> Action | None:
         kind = event.get("kind")
-        require(kind in ("request", "finish", "observe", "bind_execution", "execution_completed"))
+        require(
+            kind
+            in (
+                "request",
+                "finish",
+                "observe",
+                "bind_execution",
+                "execution_completed",
+                "bind_process",
+                "process_exited",
+                "tick",
+            )
+        )
         expected = {"kind", "now", "boot_id"}
         if kind == "observe":
             expected.add("observation")
@@ -173,6 +206,10 @@ class Machine:
             expected.update(("container_id", "execution_id"))
         elif kind == "execution_completed":
             expected.update(("execution_id", "exit_code"))
+        elif kind == "bind_process":
+            expected.add("process")
+        elif kind == "process_exited":
+            expected.add("generation")
         require(set(event) == expected)
         now = event["now"]
         clock(now)
@@ -183,6 +220,63 @@ class Machine:
             self.state = replace(self.state, phase="review", reason="host_boot_changed")
         elif now >= self.hard_deadline:
             self.state = replace(self.state, phase="review", reason="hard_deadline")
+        elif kind == "tick":
+            # A qualified host clock can expire the case even when every remote
+            # observation fails. It cannot create an App action or prove recovery.
+            if self.state.phase == "candidate_running":
+                if now >= self.state.trial_deadline + COMMAND_SECONDS:
+                    self.review("recovery_observation_deadline")
+            elif now >= self.state.deadline:
+                self.review("phase_deadline")
+        elif kind == "bind_process":
+            value = event["process"]
+            require(type(value) is dict and set(value) == set(ProcessRecord.__dataclass_fields__))
+            record = ProcessRecord(**value)
+            require(len(self.state.processes) < 2)
+            require(
+                not any(
+                    old.slug == record.slug
+                    or old.generation == record.generation
+                    or old.container_id == record.container_id
+                    for old in self.state.processes
+                )
+            )
+            if record.slug == NORMAL:
+                require(self.state.phase in ("prepared", "requested", "stopping_normal"))
+                require(record.generation == self.baseline.normal.generation)
+            else:
+                require(
+                    self.state.phase
+                    in (
+                        "starting_candidate",
+                        "candidate_running",
+                        "stopping_candidate",
+                    )
+                )
+                require(self.state.candidate_generation in (None, record.generation))
+            deadline = (
+                self.state.trial_deadline + COMMAND_SECONDS
+                if self.state.phase == "candidate_running"
+                else self.state.deadline
+            )
+            require(now < deadline)
+            self.state = replace(
+                self.state,
+                processes=(*self.state.processes, record),
+                candidate_generation=(
+                    record.generation
+                    if record.slug == CANDIDATE
+                    else self.state.candidate_generation
+                ),
+            )
+        elif kind == "process_exited":
+            digest(event["generation"])
+            require(any(r.generation == event["generation"] for r in self.state.processes))
+            require(event["generation"] not in self.state.exited_processes)
+            self.state = replace(
+                self.state,
+                exited_processes=(*self.state.exited_processes, event["generation"]),
+            )
         elif kind == "execution_completed":
             digest(event["execution_id"])
             require(any(eid == event["execution_id"] for _, _, eid in self.state.executions))
@@ -513,7 +607,7 @@ class Journal:
         try:
             for entry in self.entries:
                 self.apply(entry["event"])
-            if self.machine is not None and event.get("kind") == "observe":
+            if self.machine is not None and event.get("kind") in ("observe", "tick"):
                 before = self.machine.state
                 action = self.machine.event(event)
                 if self.machine.state == before:

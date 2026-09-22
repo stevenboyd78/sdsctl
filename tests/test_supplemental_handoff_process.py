@@ -46,6 +46,8 @@ def test_identity_handles_arbitrary_comm_and_correct_start_field():
         ("too short", CGROUP),
         ("x" * 4097, CGROUP),
         (stat_text(), "0::/\n"),
+        (stat_text(), CGROUP.replace("0::/", "0::/../")),
+        (stat_text(), CGROUP.replace("0::/", "0::/../../")),
         (stat_text(), CGROUP + "1:extra:/other\n"),
         (stat_text(), CGROUP.replace(CID, "b" * 64)),
         (stat_text(), CGROUP.replace(".scope", ".scope/child")),

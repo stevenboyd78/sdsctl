@@ -312,18 +312,60 @@ removes an App's container by default. Consequently, a later missing-container
 response cannot establish exit by itself. `scripts/supplemental_handoff_process.py`
 adds a read-only Linux pidfd witness: bind the live Docker init process using its
 PID, start ticks and exact host cgroup, then poll its kernel process handle for
-exit. It sends no signals. The caller must run in the host PID namespace and
-independently match the Docker image/container generation before and after binding.
+exit. It sends no signals. The caller must run in both the host PID and host cgroup
+namespaces and independently match the Docker image/container generation before
+and after binding. Host PID access alone does not provide host-relative cgroup paths:
+Docker defaults to a private cgroup namespace on cgroup v2. See the upstream
+[Docker cgroup namespace documentation](https://docs.docker.com/engine/containers/runmetrics/#running-docker-on-cgroup-v2).
 The parser accepts the observed HAOS unified Docker-scope layout; unknown cgroup
 layouts, zombie-at-bind, changed identities and fd errors are refused.
 
 A lost witness or a recycled/missing PID is **unknown**, not an exit receipt.
 This distinction follows the [Linux pidfd contract](https://man7.org/linux/man-pages/man2/pidfd_open.2.html).
 Local real-process tests verify exit readability even after reaping; they are not
-host-container recovery tests. Durable witness/exit receipts, fresh container and
-other-owner inventory, Supervisor-job agreement and service integration are still
-required before this component can authorize a handoff. Neither new module has
-an operational controller or installs a privileged host helper.
+host-container recovery tests. Neither this witness nor the inventory collector
+has an operational controller or installs a privileged host helper.
+
+## Durable process receipts and finite recovery loop
+
+`scripts/supplemental_handoff_recovery.py` joins process witnesses, the private
+journal, tracked command executions and the injected-observation executor. It is
+**not an installed service or a complete host observer**. The independent reader
+still has to establish fresh source/image/options/profile, recording, other-owner,
+Supervisor/container/job and cached-health evidence. Process receipts add a gate;
+they cannot replace those checks.
+
+Before a stop submission, the original normal/candidate process binding is written
+and fsynced: App slug, Docker generation, full container ID, host PID and start ticks.
+The binding is checked against Docker before and after opening its pidfd. Only a
+readable exact process handle can produce a durable exit receipt. That receipt must
+be saved before the next owner can start. On helper restart, an exact still-live
+process can be rebound. A process that disappeared before an exit was saved stays
+unknown; a previously saved exit remains usable after Docker removes the container.
+The newly restored normal process never overwrites the original stopped binding.
+
+The finite loop also checks host boot and fixed deadlines when Docker/Supervisor
+observations fail. No-op polling does not fill the bounded journal or extend any
+deadline. A non-advancing clock hits a defensive poll-count ceiling, not a success
+result. Every exit from the loop closes only its local witness handles; it neither
+signals a process nor deletes the journal. Kernel/I/O stalls still require an
+independently supervised outer deadline. A locked-owner request/finish interface
+and the actual service installation are still pending.
+
+Local fault tests exercise the full four-command path, durable exit/command replay,
+lost replies, removal without exit evidence, helper restart, process exit racing
+the binding write, failed journal writes, boot changes and unavailable observations.
+The complete path fits within the existing 24-entry bound. These tests do not issue
+App commands to a real host.
+
+A new scanner-free HAOS fixture additionally verified an actual dummy-container
+pidfd exit, durable receipt and journal replay. Its target exited normally; both
+unprivileged, networkless temporary containers were confirmed absent, their private
+evidence directory was retained, and the normal scanner App generation was unchanged.
+An earlier fixture exited before binding and is retained as a failed, consumed case;
+read-only diagnostics identified the private-cgroup namespace mismatch. The passing
+fixture used a new case with both host namespaces. No scanner access, App handoff,
+restoration test or installed recovery service is claimed by this qualification.
 
 ## Scanner-free host-runtime qualification
 

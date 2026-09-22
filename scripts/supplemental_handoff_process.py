@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Read-only Linux process-exit witness, not an App controller or service.
 
-Must run in the host PID namespace. The caller must independently verify Docker
-image/container generation before AND after binding its init process. This does
-not prove Supervisor completion, absence of a replacement owner or restoration.
+Must run in both the host PID and host cgroup namespaces. A host PID view alone
+does not make /proc/PID/cgroup paths host-relative. The caller must independently
+verify Docker image/container generation before AND after binding its init
+process. This does not prove Supervisor completion, absence of a replacement
+owner or restoration.
 No signals are sent; loss of a witness is uncertainty, not proof of exit.
 """
 
@@ -43,7 +45,8 @@ def process_identity(pid: int, container_id: str, stat_text: str, cgroup: str) -
     require(len(fields) >= 20 and fields[0] in {"R", "S", "D", "T", "t", "I"})
     require(re.fullmatch(r"[1-9][0-9]*", fields[19]) is not None)
     # An exact unified Docker scope, not substring containment or a namespace's
-    # '/' view. Unknown layouts require review rather than accepting another PID.
+    # '/' or '/../...' view. Unknown layouts require review, not normalization
+    # of a relative cgroup path or acceptance of another PID.
     require(cgroup == f"0::/system.slice/docker-{container_id}.scope\n")
     return ProcessIdentity(pid, int(fields[19]), container_id)
 
