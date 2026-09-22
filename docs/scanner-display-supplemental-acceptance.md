@@ -536,10 +536,51 @@ healthy in the original incarnation, and the candidate remained stopped. The
 report correctly said restoration was not verified: no handoff occurred, so this
 proves independent no-request expiry, **not** live recovery from a candidate.
 
-The acquisition case is still unused. Its fresh physical trial must separately
-qualify candidate readiness, explicit arming/authenticated demand, bounded reads,
-candidate process exit and healthy normal-App restoration. The expired service
-fixture must never be reused for that trial.
+The acquisition case was subsequently consumed by the finite physical trial
+below. Neither it nor the expired no-request fixture may be reused.
+
+## First finite live trial: reads bounded, automatic restoration failed
+
+The source-pinned, separate candidate was handed scanner ownership only after the
+independent host service recorded the normal process exit. It reached cached
+native/guardian readiness, was armed once through the pidfd-bound helper and
+received one authenticated Mimic browser consumer. The daemon reported
+`window_expired` with **52 read attempts**, below its 60-attempt limit. The browser
+displayed supplemental day/time during the trial; that observation does not prove
+complete Favorites-field parity or that every attempt succeeded. The physical
+scanner observation is recorded separately from these software results.
+
+The guardian recorded a clean daemon exit (status 0), without a forced kill, and
+the host service durably recorded the candidate process exit. However, the
+unchanged normal App supervisor treats any unrequested child exit as unexpected,
+including status 0. It consequently exited the candidate container with status 2,
+and Home Assistant reported the candidate App as `error`. The host observer
+refused that state, so it did **not** automatically start the normal App. This is
+a failed end-to-end restoration trial, not an automatic-recovery pass.
+
+Administrative recovery first stopped the independent service, then submitted
+one stop for the already-exited candidate. This removed its container but did not
+clear Supervisor's `error` state. A separate read-only audit retained that state
+as **unknown**, never relabelled it stopped, and checked container absence plus
+the original durable process-exit receipts. The sealed code, options, profiles,
+recordings, Core, other scanner owners and idle jobs were checked before one
+normal-App start. A new normal generation subsequently passed cached native
+health and idle-recording checks with unchanged protected pins. The normal
+dashboard was verified updating. Bounded inventory reads that failed remain
+preserved separately from fresh successful observations.
+
+No original journal entry was rewritten, no successful service outcome was
+fabricated, and the candidate was not restarted or rearmed. Its case is closed
+for reuse, including its persistent guard state. Supervisor still retaining an
+error for this inactive test slot is not evidence of a running scanner owner.
+
+Before another physical trial, qualify the acceptance-only shutdown integration
+through the outer App supervisor and Supervisor's actual resulting state. Tests
+now explicitly preserve the normal App rule that an unsolicited status-0 child
+exit is still a failure; do not weaken that production behavior to make this test
+pass. A corrected trial requires a new case and newly sealed image/plan. Audio,
+recordings, Pi/TUI behavior, HA-card delivery and full field parity were not
+qualified by this finite clock/global-Favorites trial.
 
 ## Scanner-free host-runtime qualification
 
