@@ -1392,10 +1392,17 @@ unchanged bound; installed timing has not been established. Failures close the
 owned transport while retaining acquired actor/probe handles until explicit
 descriptor release. That release proves neither process exit nor restoration.
 
-The host inventory is now46 modules. The earlier45-module image qualification
-does not qualify these new host bytes. Local joined tests cover real Unix
+The host inventory is now46 modules. A separately reconstructed immutable local
+image passed read-only/network-none host46 and native29 import/runtime checks;
+the earlier45-module image remains historical. Local joined tests cover real Unix
 transport, durable journals and original pidfds with synthetic Engine metadata,
 host observations and native replies, under both supported sender profiles.
+A separate local Engine/native trial confirmed readiness about1.68s after the
+original receipt without extending the two-second policy bound, then separately
+observed original worker/Engine exits and the fixture's independent65s init
+expiry. It sent no recording begin. That trial still used declared synthetic
+App/Core/CLI baseline, idle claim and host-path facts; it does not qualify
+installed observation latency or restoration.
 Actual installed source/runtime qualification, the polling health selector,
 separate recording authorization, and independently supervised exit/recovery
 still need to be assembled and qualified. No live handoff is enabled.
