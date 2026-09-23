@@ -1703,6 +1703,26 @@ check rejects duplicate or extra keys, including dynamic-loader injection. It
 does not silently filter or rewrite the environment. The initial offline profile
 does not admit Supervisor credentials or claim to qualify a general HA App.
 
+Two explicitly selected, pure comparisons now cover a separate prospective
+Supervisor environment profile. `supervised_environment()` requires exactly
+the original five image keys plus `TZ`, `SUPERVISOR_TOKEN` and `HASSIO_TOKEN`.
+It compares all image values with an independently reconstructed image pin and
+requires the separately pinned timezone name. Credentials are bounded opaque
+values: their exact bytes affect the fingerprint, including rotation, but are
+not returned, logged or saved by the checker. Credential shape does not prove
+authentication. The original image-only function still rejects these additions.
+
+`supervised_process_environment()` separately compares bounded, NUL-delimited
+startup environment bytes with the original Config.Env fingerprint. Only the
+explicit derived `HOME=/root`, pinned container hostname, and existing fixed
+Engine-exec PATH override are accepted. The idle/PID-1 and fixed-exec profiles
+cannot be interchanged. Duplicate keys, unknown additions, loader hooks, changed
+credentials, malformed bytes and mismatched pins refuse with a fixed error.
+It does not read `os.environ`, collect a process, or execute anything. The host
+still must collect original pidfd-bound startup bytes and check process/container
+identity around that read. Neither function is selected by the installed helper
+or changes any App, credential, command or default admission policy.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

@@ -60,6 +60,9 @@ ENV_KEYS = frozenset(
 PATH_PARTS = frozenset(
     {"/usr/local/bin", "/usr/local/sbin", "/usr/bin", "/usr/sbin", "/bin", "/sbin"}
 )
+SUPERVISED_KEYS = ENV_KEYS | {"TZ", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"}
+PROCESS_KEYS = SUPERVISED_KEYS | {"HOME", "HOSTNAME"}
+FIXED_EXEC_PATH = "/usr/local/bin:/usr/bin:/bin"
 
 
 class UnconfirmedRuntime(ValueError):
@@ -96,6 +99,112 @@ def environment(values):
         require(1 <= len(parts) <= 16 and parts[0] == "/usr/local/bin")
         require(set(parts) <= PATH_PARTS)
         return checksum({"schema": 1, "kind": KIND + "-environment", "values": parsed})
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+
+
+def _environment_values(values, keys):
+    """Internal closed parser; never filter unknowns before validating shape."""
+    require(type(values) is list and len(values) == len(keys))
+    parsed = {}
+    for item in values:
+        require(type(item) is str and 1 <= len(item) <= 1024)
+        require(all(32 <= ord(c) < 127 for c in item) and "=" in item)
+        key, value = item.split("=", 1)
+        require(key in keys and key not in parsed)
+        parsed[key] = value
+    require(set(parsed) == keys)
+    return parsed
+
+
+def _supervised_values(values, *, image_environment_sha256, timezone):
+    digest(image_environment_sha256)
+    require(type(timezone) is str and 1 <= len(timezone) <= 64)
+    # A pinned zoneinfo name, not a TZ file path or arbitrary POSIX TZ program.
+    # Existence/zoneinfo bytes belong to independent runtime qualification.
+    require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z][A-Za-z0-9_+-]*)*", timezone))
+    parsed = _environment_values(values, SUPERVISED_KEYS)
+    require(parsed["TZ"] == timezone)
+    require(
+        environment([key + "=" + parsed[key] for key in sorted(ENV_KEYS)])
+        == image_environment_sha256
+    )
+    for key in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        token = parsed[key]
+        # Opaque credential shape only, never authentication or an assumption
+        # that both token values match. Exact bytes enter the fingerprint below.
+        require(32 <= len(token) <= 512 and all(33 <= ord(c) < 127 for c in token))
+    return parsed
+
+
+def supervised_environment(values, *, image_environment_sha256, timezone):
+    """Explicit eight-key Supervisor Config.Env profile; no default admission.
+
+    The original five-key environment() is unchanged. Image values must match
+    their independently reconstructed pin, and TZ must equal the caller's
+    separately pinned timezone. Exact opaque credential values contribute to
+    the hash, but are never returned, persisted, or printed here. Rotation must
+    not silently satisfy an earlier container pin. Input lists are unchanged.
+
+    This does not authenticate credentials, execute code, qualify an installed
+    App, or prove which environment a process actually inherited. Never pass
+    filtered Config.Env or os.environ as a substitute for original input.
+    """
+    try:
+        parsed = _supervised_values(
+            values, image_environment_sha256=image_environment_sha256, timezone=timezone
+        )
+        return checksum({"schema": 1, "kind": KIND + "-supervised-environment", "values": parsed})
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+
+
+def supervised_process_environment(
+    raw,
+    *,
+    configured,
+    configured_sha256,
+    image_environment_sha256,
+    timezone,
+    hostname,
+    fixed_exec,
+):
+    """Pure comparison of bounded startup /proc environ bytes, not a collector.
+
+    The host must bind the read to the ORIGINAL retained process/container and
+    check identity before/after it. A matching byte string supplies no process
+    provenance. Only HOME=/root, the exact pinned hostname, and (when explicitly
+    selected) the existing fixed Engine exec PATH may differ from Config.Env.
+    No arbitrary overrides, filtering, credential export, retry, or execution.
+    PID1 uses fixed_exec=False; operator/probe/web and their children use True.
+    """
+    try:
+        digest(configured_sha256)
+        require(type(fixed_exec) is bool)
+        require(type(hostname) is str)
+        require(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?", hostname))
+        expected = _supervised_values(
+            configured, image_environment_sha256=image_environment_sha256, timezone=timezone
+        )
+        require(
+            checksum({"schema": 1, "kind": KIND + "-supervised-environment", "values": expected})
+            == configured_sha256
+        )
+        expected.update(HOME="/root", HOSTNAME=hostname)
+        if fixed_exec:
+            expected["PATH"] = FIXED_EXEC_PATH
+        require(type(raw) is bytes and 0 < len(raw) <= 16384 and raw.endswith(b"\0"))
+        parsed = _environment_values(raw[:-1].decode("ascii").split("\0"), PROCESS_KEYS)
+        require(parsed == expected)
+        return checksum(
+            {
+                "schema": 1,
+                "kind": KIND + "-supervised-process-environment",
+                "configured": configured_sha256,
+                "fixed_exec": fixed_exec,
+                "values": parsed,
+            }
+        )
     except Exception:
         raise UnconfirmedRuntime(MESSAGE) from None
 
