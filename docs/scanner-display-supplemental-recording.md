@@ -1250,7 +1250,7 @@ and receipt time as well as raw message bytes. This does not qualify installed
 namespaces, image bytes or the eventual host execution environment.
 
 The prospective host-side mechanism has a separate source inventory in
-`scripts/supplemental_recording_host_source.py`: 40 fixed private modules plus
+`scripts/supplemental_recording_host_source.py`: 41 fixed private modules plus
 the complete product package. The host return verifier imports recording types
 from that package; copying the older 14-file idle helper is insufficient. Static
 import-closure and isolated local import tests check the reviewed helper graph.
@@ -1414,6 +1414,33 @@ withhold actions; expiry or conflicting identities require review and the
 independent recovery supervisor. The pure policy authenticates none of its
 observation inputs: the future host adapter must qualify the exact source,
 environment, mount, process, lease, return and cached-probe facts separately.
+
+## Read-only idle-init observation
+
+`scripts/supplemental_recording_idle_observer.py` joins the closed host plan to
+an already retained actual init pidfd, the fixed original lease and its one-use
+claim. It opens the fixed host-mapped case directory without following links,
+requires private root-owned regular files, checks the exact bounded command
+line and root/PID1/user/time namespace facts, and preserves original directory
+and file identities across refreshes. Both real clocks are checked against the
+original plan; suspend, expiry, replacement or uncertainty poisons the collector.
+
+Kernel process-start ticks use BOOTTIME while the native claim uses MONOTONIC.
+Their comparison uses the original bounded offset and kernel tick resolution,
+not an assumption that the clocks are identical. The kernel's implementation is
+documented in [Linux proc array.c](https://github.com/torvalds/linux/blob/v6.18/fs/proc/array.c).
+This coarse comparison supplements, rather than replaces, the retained pidfd
+and separately qualified source/claim continuity.
+
+Successful observation still reports **health and recording as unconfirmed**.
+It is not daemon readiness, recording inactivity, an operator-launch permission,
+an exit receipt, or proof of exclusive scanner ownership. The adapter must
+authenticate Engine/image/generation, interpreter/environment, mounts and all
+protected inputs around it. The collector has no Engine/network/scanner or
+signal operation and cannot renew deadlines. Local fixtures explicitly map
+HAOS paths and PID1 namespace/argv facts; those fixtures are not installed-host
+qualification. An actual source-pinned idle image and isolated platform recovery
+still require separate checks before physical testing.
 
 ## Required live ownership and recovery contract
 

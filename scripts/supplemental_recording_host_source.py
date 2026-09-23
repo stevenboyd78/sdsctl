@@ -26,6 +26,7 @@ ROOTS = frozenset(
     for name in (
         "host_source",
         "host_plan",
+        "idle_observer",
         "runtime",
         "bootstrap",
         "ready",
@@ -71,6 +72,7 @@ MODULES = frozenset(
             "host",
             "host_plan",
             "host_source",
+            "idle_observer",
             "monitor",
             "namespace",
             "owner",
