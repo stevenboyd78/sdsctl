@@ -4,23 +4,26 @@
 This is an uninstalled component, NOT an authenticator for caller-supplied PIDs
 or deadlines. The independent host must obtain these namespace identities and
 the original deadline from its exact source-qualified operator attachment. The
-installed exec wrapper and host-plan integration are separate unfinished gates.
+fixed wrapper is uninstalled; authenticated host-plan/exec integration remains
+a separate unfinished gate.
 There is no scanner request, consumer demand, stop, signal, replay or restoration.
 """
 
 from __future__ import annotations
 
+import hashlib
 import math
 import os
 import select
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import supplemental_handoff_cached as cached
 
 MESSAGE = "Finite recording cached probe is unconfirmed; no ownership change is authorized."
 MAX_SECONDS = 2.5
+REQUEST_SECONDS = 8
 
 
 class UnconfirmedProbe(ValueError):
@@ -138,6 +141,78 @@ def collect(expected, deployment, recordings, daemon_socket, *, firmware):
     finally:
         for fd in handles:
             os.close(fd)
+
+
+def sample(request, path, *, plan_sha256, source_sha256, probe_by):
+    """One cached sample from sealed inputs and externally authenticated actors.
+
+    A request dictionary is NOT authentication. The independent host must bind
+    these actors to its original Ready/Retained witness and exact Engine exec.
+    This operation never claims native return, file preservation or process exit.
+    Neither probe_by nor a new invocation renews the original watchdog deadline.
+    """
+    import supplemental_recording_launch_plan as launch
+    import supplemental_recording_wire as wire
+
+    try:
+        require(type(probe_by) in (int, float) and math.isfinite(probe_by))
+        require(0 < probe_by - time.monotonic() <= REQUEST_SECONDS)
+        fields = launch.protected._mapping
+        fields(request, {"schema", "kind", "context", "guardian", "native", "watchdog"})
+        request_raw = wire.encode(request)
+        require(type(request["schema"]) is int and request["schema"] == 1)
+        require(request["kind"] == "finite-recording-cached-probe")
+        inputs = launch.probe_inputs(
+            path, expected_sha256=plan_sha256, expected_source_sha256=source_sha256
+        )
+        context = fields(request["context"], set(inputs.context) | {"ready_by"})
+        ready_by = context["ready_by"]
+        require(type(ready_by) in (int, float) and math.isfinite(ready_by) and ready_by > 0)
+        require(context == inputs.context | {"ready_by": ready_by})
+        original_deadline = ready_by + inputs.maximum_recording_seconds
+        require(time.monotonic() < probe_by <= original_deadline)
+        actors = []
+        for role in ("guardian", "native", "watchdog"):
+            keys = {"pid", "start_ticks", "uid", "gid"}
+            value = fields(
+                request[role], keys | ({"deadline", "grace"} if role == "watchdog" else set())
+            )
+            actors.append(Process(**{key: value[key] for key in keys}))
+        watch = request["watchdog"]
+        require(
+            type(watch["deadline"]) in (int, float)
+            and watch["deadline"] == original_deadline
+            and type(watch["grace"]) is int
+            and watch["grace"] == 3
+        )
+        expected = Expected(*actors, context["profile"], original_deadline)
+        began = time.monotonic()
+        observed = collect(
+            expected,
+            inputs.deployment,
+            inputs.recordings,
+            inputs.daemon_socket,
+            firmware=inputs.firmware,
+        )
+        ended = time.monotonic()
+        require(
+            launch.probe_inputs(
+                path, expected_sha256=plan_sha256, expected_source_sha256=source_sha256
+            )
+            == inputs
+        )
+        require(began <= ended < time.monotonic() < probe_by)
+        require(wire.encode(request) == request_raw)
+        return {
+            "schema": 1,
+            "kind": "finite-recording-cached-probe-result",
+            "request_sha256": hashlib.sha256(request_raw).hexdigest(),
+            "observed_after": began,
+            "observed_at": ended,
+            "body": asdict(observed),
+        }
+    except Exception:
+        raise UnconfirmedProbe(MESSAGE) from None
 
 
 if __name__ == "__main__":

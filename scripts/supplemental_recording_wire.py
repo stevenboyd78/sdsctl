@@ -63,8 +63,10 @@ class Stream:
     """Own duplicate fds for two distinct pipes/Unix streams, with fixed budgets.
 
     The operator receives one begin frame and sends at most ready, started,
-    completed and exited. The host has the opposite budget. Semantic validation
-    and actual exec/native provenance are the caller's separate responsibilities.
+    completed and exited. The host has the opposite budget.
+    A separate probe role permits exactly one request and one reply; it grants
+    no operator messages or recording authority. Semantic validation and actual
+    exec/native provenance are the caller's separate responsibilities.
     Failed/late I/O poisons both directions; closing restores original flags on
     the retained descriptions, then closes the duplicates (never caller's fds).
     """
@@ -75,10 +77,14 @@ class Stream:
         self.owner = (os.getpid(), get_ident())
         self.reads = self.writes = 0
         try:
-            require(role in ("host", "operator"))
+            require(role in ("host", "operator", "probe"))
             require(type(incoming) is int and type(outgoing) is int and incoming != outgoing)
             require(incoming >= 0 and outgoing >= 0)
-            self.read_limit, self.write_limit = (4, 1) if role == "host" else (1, 4)
+            self.read_limit, self.write_limit = {
+                "host": (4, 1),
+                "operator": (1, 4),
+                "probe": (1, 1),
+            }[role]
             identities = set()
             for index, fd in enumerate((incoming, outgoing)):
                 info = os.fstat(fd)

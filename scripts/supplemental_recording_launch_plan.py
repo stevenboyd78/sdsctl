@@ -55,6 +55,22 @@ class LaunchPlan:
     sha256: str
 
 
+@dataclass(frozen=True)
+class ProbeInputs:
+    """Read-only locations and original pins, not a launchable configuration.
+
+    Current recording files are deliberately not collected here. Their stage,
+    preservation and native acknowledgments require the independent collector.
+    """
+
+    deployment: Path
+    recordings: Path
+    daemon_socket: Path
+    firmware: str
+    context: dict
+    maximum_recording_seconds: float
+
+
 def _bytes(path, deadline):
     require(type(path) is type(Path()) and path.name == "launch.json")
     with protected._private_directory(path.parent, exclusive=False) as fd:
@@ -71,13 +87,41 @@ def _path(value):
     return protected._path(value)
 
 
-def load(path: Path, *, expected_sha256: str, expected_source_sha256: str) -> LaunchPlan:
-    """Validate pinned original baseline/profile and only the declared services.
+def _probe_directory(path):
+    """Inspect live output ancestry without acquiring the recorder's lock.
 
-    Pure preflight: no socket, DNS lookup, daemon/recorder construction, child,
-    recording action, receipt publication or operator request. The caller must
-    still recheck pins at launch and retain independent hard termination.
+    No contents are read or published. Content changes are expected; descriptor
+    and name identity (including permissions/owner/link count) must still match.
+    The launch path and writer retain their original locking requirements.
     """
+    opened, anchor = [], -1
+    try:
+        _path(str(path))
+        anchor = os.open("/", protected.DIRECTORY)
+        parent = anchor
+        for name in path.parts[1:]:
+            child = os.open(name, protected.DIRECTORY, dir_fd=parent)
+            try:
+                before = identity(os.fstat(child))[:6]
+            except BaseException:
+                os.close(child)
+                raise
+            opened.append((parent, name, child, before))
+            parent = child
+        info = os.fstat(parent)
+        require(info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700)
+        for parent, name, child, before in opened:
+            require(identity(os.fstat(child))[:6] == before)
+            require(identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:6] == before)
+    finally:
+        for _, _, child, _ in reversed(opened):
+            os.close(child)
+        if anchor >= 0:
+            os.close(anchor)
+
+
+def _read(path, *, expected_sha256, expected_source_sha256, pristine):
+    """Shared immutable-input checks; the public launch path is always pristine."""
     try:
         for digest in (expected_sha256, expected_source_sha256):
             protected.evidence.digest(digest)
@@ -154,13 +198,19 @@ def load(path: Path, *, expected_sha256: str, expected_source_sha256: str) -> La
         for output in (specification.sockets, specification.receipts):
             for other in fixed:
                 construction._disjoint(output, other)
-            construction._empty_private(output)
+            if pristine:
+                construction._empty_private(output)
+            else:
+                # A live probe may find sockets/receipts, but never accepts an
+                # unsafe directory or changes its contents to make it pass.
+                _probe_directory(output)
         construction._disjoint(specification.sockets, specification.receipts)
         for immutable in (path.parent, directory, deployment, config_path):
             construction._disjoint(immutable, stored.baseline.root)
-        protected.Collector(stored).pristine()
+        if pristine:
+            protected.Collector(stored).pristine()
         require(_bytes(path, deadline) == raw and time.monotonic() < deadline)
-        return LaunchPlan(
+        return deployment, LaunchPlan(
             specification,
             stored,
             configuration,
@@ -173,6 +223,53 @@ def load(path: Path, *, expected_sha256: str, expected_source_sha256: str) -> La
         )
     except Exception:
         raise UnconfirmedLaunchPlan(MESSAGE) from None
+
+
+def load(path: Path, *, expected_sha256: str, expected_source_sha256: str) -> LaunchPlan:
+    """Launch-only preflight: empty output directories and pristine recordings.
+
+    No socket, DNS lookup, construction, child, recording action or publication.
+    The caller must still recheck pins and retain independent hard termination.
+    There is intentionally no flag to disable these launch-only requirements.
+    """
+    return _read(
+        path,
+        expected_sha256=expected_sha256,
+        expected_source_sha256=expected_source_sha256,
+        pristine=True,
+    )[1]
+
+
+def probe_inputs(path: Path, *, expected_sha256: str, expected_source_sha256: str) -> ProbeInputs:
+    """Read the same sealed originals without adopting current recording state.
+
+    Unlike load(), this cannot return a launch plan. It neither asserts pristine
+    files nor replaces the sealed baseline with a new inventory. It is valid
+    while a recording grows, and does not prove health, readiness or completion.
+    """
+    deployment, plan = _read(
+        path,
+        expected_sha256=expected_sha256,
+        expected_source_sha256=expected_source_sha256,
+        pristine=False,
+    )
+    return ProbeInputs(
+        deployment,
+        plan.stored.baseline.root,
+        plan.specification.sockets / "api.sock",
+        plan.specification.firmware,
+        {
+            "launch": plan.sha256,
+            "source": plan.source_sha256,
+            "projection": plan.projection_sha256,
+            "host_plan": plan.host_plan_sha256,
+            "profile": plan.profile_sha256,
+            "manifest": plan.stored.manifest_sha256,
+            "contract": plan.stored.contract.sha256,
+            "generation": plan.generation,
+        },
+        plan.stored.contract.maximum_recording_seconds,
+    )
 
 
 if __name__ == "__main__":

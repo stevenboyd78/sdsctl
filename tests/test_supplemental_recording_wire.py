@@ -67,6 +67,27 @@ def test_one_begin_four_responses_and_original_fd_flags():
         assert all(os.get_blocking(fd) for fd in (incoming, outgoing, reader, writer))
 
 
+@pytest.mark.parametrize("direction", ["send", "receive"])
+def test_passive_probe_has_one_request_and_one_reply_only(direction):
+    with pair() as (incoming, outgoing, reader, writer):
+        server = m.Stream(incoming, outgoing, role="probe")
+        client = m.Stream(reader, writer, role="probe")
+        try:
+            client.send({"request": 1}, deadline=until())
+            assert server.receive(deadline=until()) == {"request": 1}
+            server.send({"response": 1}, deadline=until())
+            assert client.receive(deadline=until()) == {"response": 1}
+            if direction == "send":
+                denied(lambda: server.send({"response": 2}, deadline=until()))
+            else:
+                denied(lambda: server.receive(deadline=until()))
+            assert server.poisoned
+        finally:
+            server.close()
+            client.close()
+        assert all(os.get_blocking(fd) for fd in (incoming, outgoing, reader, writer))
+
+
 @pytest.mark.parametrize("fragment", [1, 3, 4096])
 def test_fragmented_headers_and_maximum_frame(fragment):
     # Construct exactly MAX_BYTES of canonical JSON, with a real producer that

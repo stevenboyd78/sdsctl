@@ -1,5 +1,6 @@
 """Read-only launch preflight on actual private baseline and accepted profile."""
 
+import fcntl
 import hashlib
 import importlib.util
 import socket
@@ -105,6 +106,100 @@ def test_plan_is_exact_read_only_preflight_not_an_ordinary_cli(prepared, monkeyp
     assert not hasattr(result, "start") and not hasattr(result, "daemon_args")
     assert list(prepared.spec.sockets.iterdir()) == list(prepared.spec.receipts.iterdir()) == []
     assert p.Collector(prepared.stored).pristine().files.stage == "pristine"
+
+
+def probe_inputs(prepared):
+    return m.probe_inputs(
+        prepared.path,
+        expected_sha256=hashlib.sha256(p.encode(prepared.value)).hexdigest(),
+        expected_source_sha256=prepared.value["source_sha256"],
+    )
+
+
+@pytest.mark.parametrize("changed", ["sockets", "receipts", "new_recording", "old_recording"])
+def test_passive_inputs_keep_original_manifest_and_do_not_assert_current_files(
+    prepared, monkeypatch, changed
+):
+    original = probe_inputs(prepared)
+    assert type(original) is m.ProbeInputs and not isinstance(original, m.LaunchPlan)
+    assert original.recordings == prepared.stored.baseline.root
+    assert original.daemon_socket == prepared.spec.sockets / "api.sock"
+    assert original.context["manifest"] == prepared.stored.manifest_sha256
+    assert original.context["contract"] == prepared.stored.contract.sha256
+    if changed in ("sockets", "receipts"):
+        (getattr(prepared.spec, changed) / "occupied").write_bytes(b"retained")
+    else:
+        target = (
+            prepared.tree.wav if changed == "new_recording" else prepared.tree.root / "old.json"
+        )
+        target.write_bytes(b"unconfirmed recording state")
+    refused(lambda: load(prepared))  # The public launch gate stays strict.
+
+    def forbidden(*_, **__):
+        pytest.fail("A passive input read must not capture or assert current recording state")
+
+    monkeypatch.setattr(p.evidence, "capture_baseline", forbidden)
+    monkeypatch.setattr(p.Collector, "pristine", forbidden)
+    monkeypatch.setattr(m.construction, "construct", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    assert probe_inputs(prepared) == original
+    assert not hasattr(original, "healthy") and not hasattr(original, "recording")
+    assert not hasattr(original, "configuration") and not hasattr(original, "specification")
+
+
+@pytest.mark.parametrize("fault", ["plan", "manifest", "profile", "socket_directory"])
+def test_passive_inputs_still_refuse_changed_immutable_pins_or_unsafe_output(prepared, fault):
+    original_hash = hashlib.sha256(prepared.path.read_bytes()).hexdigest()
+    if fault == "plan":
+        prepared.path.write_bytes(prepared.path.read_bytes() + b"\n")
+    elif fault == "manifest":
+        (Path(prepared.value["baseline"]["directory"]) / "baseline.json").write_bytes(b"{}")
+    elif fault == "profile":
+        prepared.config.source_path.write_bytes(b"PRIVATE_CHANGED")
+    else:
+        prepared.spec.sockets.chmod(0o755)
+    refused(
+        lambda: m.probe_inputs(
+            prepared.path,
+            expected_sha256=original_hash,
+            expected_source_sha256=prepared.value["source_sha256"],
+        )
+    )
+
+
+def test_passive_inputs_never_contend_with_active_receipt_owner(prepared):
+    original = probe_inputs(prepared)
+    with p._private_directory(prepared.spec.receipts, exclusive=True) as writer:
+        (prepared.spec.receipts / "start-intent.json").write_bytes(b"retained fixture receipt")
+        # Prove the actual writer lock is held; a second shared lock fails.
+        with (
+            pytest.raises(BlockingIOError),
+            p._private_directory(prepared.spec.receipts, exclusive=False),
+        ):
+            pytest.fail("A reader unexpectedly borrowed the owner's lock")
+        assert probe_inputs(prepared) == original
+        fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    assert (
+        prepared.spec.receipts / "start-intent.json"
+    ).read_bytes() == b"retained fixture receipt"
+
+
+@pytest.mark.parametrize("role", ["sockets", "receipts"])
+@pytest.mark.parametrize("fault", ["symlink", "permissions", "missing"])
+def test_passive_output_inspection_keeps_ancestry_safety_and_closes_handles(prepared, role, fault):
+    directory = getattr(prepared.spec, role)
+    if fault == "permissions":
+        directory.chmod(0o755)
+    else:
+        retained = directory.with_name(directory.name + "-retained")
+        directory.rename(retained)
+        if fault == "symlink":
+            directory.symlink_to(retained)
+    import os
+
+    before = len(os.listdir("/proc/self/fd"))
+    refused(lambda: probe_inputs(prepared))
+    assert len(os.listdir("/proc/self/fd")) == before
 
 
 @pytest.mark.parametrize(

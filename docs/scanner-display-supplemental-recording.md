@@ -1002,6 +1002,38 @@ scanner reads. These are local process/IPC results, not an installed probe wrapp
 or authenticated cross-container execution. The new host plan, qualified private
 attachment, namespace binding and independent exit/recovery gates remain pending.
 
+### Fixed passive probe entrypoint — local qualification
+
+`accept_supplemental_recording_probe.py` is a separate, **uninstalled** isolated
+Python entrypoint. Its closed arguments pin the launch file, native source,
+runtime package and short sampling deadline. The native source inventory now
+explicitly includes the probe and entrypoint (24 files); an older source/image
+qualification does not cover these new bytes. No existing App invokes them.
+
+It accepts one bounded canonical request and returns at most one bounded result.
+The request binds the original launch/profile/baseline/contract/projection/host
+plan/generation context, guardian/native/watchdog identities and original
+watchdog deadline. The result includes the request hash, sampling interval and
+truthful cached flags. The independent host must still authenticate the actual
+exec and original retained actor/clock witnesses around the sample. Neither a
+matching request hash nor exit zero proves health, readiness, completion or exit.
+
+`launch_plan.probe_inputs` reads the original sealed manifest and profile without
+requiring empty output directories or collecting current recording files. It
+returns read-only locations/pins, not a launchable plan or a preservation result.
+Its output-directory inspection retains identity/permission/ancestry checks but
+does not acquire the active recorder's exclusive receipt lock. A focused test
+first reproduced that lock conflict; the non-locking read now passes while the
+recorder continues to hold its lock. Launch preflight still requires the original
+empty directories and pristine recording inventory, with no bypass option.
+
+Isolated tests run the actual fixed probe against the actual finite native Unix
+API both before and during a synthetic loopback recording. Idle/active flags stay
+truthful, the recording finalizes normally, and the probe adds no supplemental
+scanner reads. Additional cases cover malformed/expired requests, changed pins,
+unsafe directories, concurrent writer locks and failed framing. These are local
+process/IPC tests, not installed Engine authentication or live-radio acceptance.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
