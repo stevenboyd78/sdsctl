@@ -1392,7 +1392,7 @@ unchanged bound; installed timing has not been established. Failures close the
 owned transport while retaining acquired actor/probe handles until explicit
 descriptor release. That release proves neither process exit nor restoration.
 
-The host inventory is now 46 modules. A separately reconstructed immutable local
+The bootstrap join used a 46-module host inventory. A separately reconstructed immutable local
 image passed read-only/network-none host46 and native29 import/runtime checks;
 the earlier 45-module image remains historical. Local joined tests cover real Unix
 transport, durable journals and original pidfds with synthetic Engine metadata,
@@ -1604,6 +1604,33 @@ or a not-running Engine flag is never sufficient alone. Successful collection
 closes transport but retains the process handles. It does not stop container
 init, signal any process, restore the normal App, or authorize restoration.
 
+`scripts/supplemental_recording_reconcile.py` provides a separate failure-path
+exit reader. It must capture the actual live original `Ready` before begin,
+duplicate all four original pidfds, and authenticate a distinct Engine endpoint
+against the same live Engine peer and original running execution. These handles
+survive closure of Ready and its recording connection. There is no API that
+accepts replacement PIDs, deserialized readiness or a later case deadline.
+
+Polling checks the original host clock/recovery deadline, immutable dispatch
+history, endpoint identity and process identities. It reports no result while
+any worker remains live. A terminal result requires all three original worker
+pidfds to report exit plus an exact terminal Engine inspection for the original
+execution and command. Init exit is reported separately, never substituted for
+worker exit. Even returncode0 is only an exit fact: it cannot recover a lost
+recording-completion return, acknowledge a WAV, publish a journal transition or
+restore the normal App. An uncertain read consumes this observer and retains its
+handles until explicit cleanup. Partial capture failure releases only the new
+duplicates, leaving caller-owned Ready evidence intact.
+
+This reader is still a same-process object, not an independently supervised
+recovery service or descriptor-transfer protocol. Its local tests use real Unix
+transport, original Ready objects and owned process handles, with synthetic
+Engine replies, namespaces and host facts. They cover closure of the original
+handles, init-before-worker exit, frozen workers, changed histories/domains,
+wrong execution identity, expired recovery and both Engine credential profiles.
+The host inventory is now 47 modules; the qualified 46-module image does not
+qualify these newer bytes. Installed assembly and qualification remain required.
+
 Qualification uses actual local Unix framing, durable files, owned processes
 and retained pidfds, with explicit synthetic Engine, namespace and operator
 metadata. Native call-site/credential tests remain separate. Installed image,
@@ -1623,7 +1650,7 @@ and receipt time as well as raw message bytes. This does not qualify installed
 namespaces, image bytes or the eventual host execution environment.
 
 The prospective host-side mechanism has a separate source inventory in
-`scripts/supplemental_recording_host_source.py`: 41 fixed private modules plus
+`scripts/supplemental_recording_host_source.py`: initially 41 fixed private modules plus
 the complete product package. The host return verifier imports recording types
 from that package; copying the older 14-file idle helper is insufficient. Static
 import-closure and isolated local import tests check the reviewed helper graph.

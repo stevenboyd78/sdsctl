@@ -78,6 +78,7 @@ def ready(
     message=None,
     finish_extra=5,
     tap=None,
+    sender_credentials=False,
 ):
     retained = []
 
@@ -102,7 +103,9 @@ def ready(
         *(responses if responses is not None else [engine.reply(live(prepared, actors))] * 2),
     ]
     try:
-        with engine.engine(prepared, monkeypatch, handlers) as (client, requests):
+        with engine.engine(
+            prepared, monkeypatch, handlers, sender_credentials=sender_credentials
+        ) as (client, requests):
             client.create()
             channel = client.attach(finish_by=prepared.pins.command.ready_by + finish_extra)
             if consume:

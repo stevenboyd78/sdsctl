@@ -36,6 +36,7 @@ ROOTS = frozenset(
         "begin",
         "relay",
         "exit",
+        "reconcile",
         "host",
         "binding",
     )
@@ -72,6 +73,7 @@ MODULES = frozenset(
             "exec_stream",
             "execution",
             "exit",
+            "reconcile",
             "handoff",
             "host",
             "host_plan",
