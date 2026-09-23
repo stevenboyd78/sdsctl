@@ -21,7 +21,9 @@ tree, configured, prepared, context = (
 )
 
 
-@pytest.mark.parametrize("fault", [None, "ready_only", "invalid_begin", "lost_begin_return"])
+@pytest.mark.parametrize(
+    "fault", [None, "delayed_attachment", "ready_only", "invalid_begin", "lost_begin_return"]
+)
 def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, monkeypatch, fault):
     # Bind the synthetic scanner before the fork, but start its thread only in
     # the child. The parent never forks an already running scanner thread.
@@ -39,6 +41,7 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
     def run(right, parent):
         scanner.thread.start()
         done, feed_failed = Event(), Event()
+        feeder_saw_starting, packets_sent = Event(), Event()
         original = m.launch.construction.construct
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as packets:
@@ -59,12 +62,31 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
                         # Construction and lifecycle remain real. Only the
                         # external scanner's RTSP reply and RTP source are fake.
                         trial.runtime.audio.stream.transport._rtsp_client_factory = lambda *_: rtsp
+                        if fault == "delayed_attachment":
+                            attach = trial.runtime.attach_sink
+
+                            def delayed(sink):
+                                # Audio is already running, but active includes
+                                # STARTING before the WAV sink is attached.
+                                assert trial.manager.snapshot().status.value == "starting"
+                                assert feeder_saw_starting.wait(1)
+                                assert not packets_sent.is_set() and len(rtsp.started_ports) == 1
+                                return attach(sink)
+
+                            trial.runtime.attach_sink = delayed
 
                         def feed():
                             try:
-                                while not trial.manager.snapshot().active:
+                                while True:
+                                    status = trial.manager.snapshot().status.value
+                                    if status == "recording":
+                                        break
+                                    if status == "starting":
+                                        feeder_saw_starting.set()
                                     if done.wait(0.01):
                                         return
+                                assert len(rtsp.started_ports) == 1
+                                packets_sent.set()
                                 for i in range(8):
                                     packets.sendto(
                                         construction.make_rtp(
@@ -91,7 +113,7 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
                             assert not worker.is_alive() and not feed_failed.is_set()
 
                 m.launch.construction.construct = observed
-                if fault is None:
+                if fault in (None, "delayed_attachment"):
                     result = m.execute(
                         right,
                         context,
@@ -157,7 +179,7 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
                         control.binding(context), intent_at=time.monotonic(), intent_sha256="1" * 64
                     )
                 )
-            elif fault is None:
+            elif fault in (None, "delayed_attachment"):
                 reader = guardian.begin(
                     control.binding(context), intent_at=time.monotonic(), intent_sha256="1" * 64
                 )

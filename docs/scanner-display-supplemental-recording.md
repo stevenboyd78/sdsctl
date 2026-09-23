@@ -1184,12 +1184,59 @@ preparation margin; the native guardian still checks its entire pinned read and
 finalization budget. A lost write return or a failed post-write check closes the
 transport and preserves exact process handles and intent evidence for recovery.
 Neither a successful send nor durable intent is recorded as a native start
-acknowledgment. Actual started/completed returns remain separate required work.
+acknowledgment. Actual started/completed returns remain separate requirements,
+joined by the private return adapter below.
 
 Local tests join actual private framing, fsynced ledgers and owned process handles
 with synthetic Engine/namespace metadata. They exercise replaced/corrupt ledgers,
 lost file/directory fsync returns, stale readiness, partial/lost transport outcomes
 and insufficient original time. No live App, scanner or recorder is started.
+
+## Offline relayed recording returns and independent exit
+
+`scripts/supplemental_recording_relay.py` joins an actual received-ready object
+and returned durable host intent to one begin, then consumes the actual started
+and completed frames on that same private attachment. It does not accept a
+caller-supplied return dictionary or use receipt files as native acknowledgments.
+The original same-process `Bridge` still requires an exact kernel-credential
+`Receiver`; its type boundary is not weakened to accept serialized reports.
+
+The relayed outer context and guardian/native/watchdog identities must match
+the original readiness envelope. Embedded native-return bytes must be canonical,
+match the original recording binding and deadlines, and have ordered receipt
+timestamps. Original host ledger identity and history are reread around returns.
+The shared completion algorithm still validates the entire original recording
+root, independently pinned progress history, sidecar, WAV contents and the
+native artifact digest before publishing a host completion acknowledgment.
+Lost or late publication returns remain unconfirmed even if a complete entry
+exists on disk. No new baseline, resend or second recorder is substituted.
+
+`scripts/supplemental_recording_retained.py` separately retains the original
+dispatch and process context after begin. Its read-only checks may outlive the
+dispatch readiness window, but cannot extend that window or enable another
+create, attach or begin. A worker can exit before its buffered completion is
+read: only the original live-bound pidfd can establish that exit. Missing proc
+data alone, a frozen process, changed namespace, changed intent chain or a
+changed clock domain cannot do so. The original container init must remain live
+during this return path. Failed checks retain the exact handles for separate
+recovery observations until their owner closes them.
+
+`scripts/supplemental_recording_exit.py` then handles a distinct fourth reap
+report. It requires successful native and watchdog reap results, clean framing
+and EOF, actual exits through all three retained guardian/native/watchdog
+handles, and one independent fixed Engine inspection of the same command and
+execution. The guardian cleanup tail is bounded by three seconds and the
+original watchdog/grace and attachment deadlines. EOF, a successful recording,
+or a not-running Engine flag is never sufficient alone. Successful collection
+closes transport but retains the process handles. It does not stop container
+init, signal any process, restore the normal App, or authorize restoration.
+
+Qualification uses actual local Unix framing, durable files, owned processes
+and retained pidfds, with explicit synthetic Engine, namespace and operator
+metadata. Native call-site/credential tests remain separate. Installed image,
+interpreter/dependency and mount qualification, a new recording-capable host
+plan, independent recovery supervision and a fresh live case are still required
+before this mechanism can be used with the scanner.
 
 ## Offline finite idle-container bootstrap
 
