@@ -24,6 +24,7 @@ import supplemental_handoff_files as files
 import supplemental_handoff_process as process
 import supplemental_recording_host_plan as host_plan
 import supplemental_recording_namespace as namespace
+import supplemental_recording_retained as retained
 import supplemental_recording_time_domain as time_domain
 
 MESSAGE = "Recording idle-init evidence is unconfirmed; preserve the case and do not launch."
@@ -34,6 +35,10 @@ MAX_SECONDS = 2
 
 class UnconfirmedIdle(ValueError):
     """Failure never becomes a positive native-health or process-exit result."""
+
+
+class UnconfirmedPostBegin(ValueError):
+    """Expired readiness cannot be renewed by observing the original lease."""
 
 
 def require(value):
@@ -305,6 +310,179 @@ class Idle:
         if self.pidfd >= 0:
             os.close(self.pidfd)
             self.pidfd = -1
+
+
+POST_BEGIN_MESSAGE = "Post-begin init continuity is unconfirmed; retain evidence and do not retry."
+
+
+@dataclass(frozen=True)
+class Continuity:
+    """Only unchanged original init/lease evidence and retained actor exits.
+
+    No native health, recording completion, all-owner exit or restoration fact.
+    original.sampled_at is the initial observation, never refreshed readiness.
+    """
+
+    original: Evidence
+    sampled_at: float
+    exited: frozenset[str]
+
+
+class PostBegin:
+    """Read the already retained Idle files after exactly one bound begin.
+
+    This separate path does not call Idle.read(), parse a new claim or renew its
+    expired ready_by. The original Retained/Ready and Idle continue owning their
+    descriptors. Only fixed original stop/attachment bounds apply. Full host,
+    native health, source/runtime and independently supervised recovery remain
+    separate requirements; no installed service selects this adapter yet.
+    """
+
+    def __init__(self, idle, guard):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = False
+        try:
+            require(type(idle) is Idle and type(guard) is retained.Retained)
+            require(not idle.closed and not idle.failed and idle.owner == self.owner)
+            require(type(idle.initial) is Evidence and type(idle.plan) is host_plan.Plan)
+            self.idle, self.guard, self.plan = idle, guard, idle.plan
+            self.objects = (idle, guard, idle.plan)
+            self.original = idle.initial
+            self.plan_raw, self.pins = self.plan.raw, guard.pins
+            self.actor, self.domain = idle.actor, idle.zero_domain
+            self.domain_sha256 = idle.domain_sha256
+            self.opened, self.pidfd = tuple(idle.opened), idle.pidfd
+            self.pidfd_identity = files.identity(os.fstat(self.pidfd))
+            self.fixed_files = self._freeze(idle.original_files)
+            self.ready, self.finish_by = guard.ready, guard.finish_by
+            self.ready_by, self.watch_deadline = guard.ready_by, guard.watch_deadline
+            self.exits = frozenset()
+            self.initial = self.read()
+        except BaseException as error:
+            self._fail(error)
+
+    @staticmethod
+    def _freeze(observed):
+        before, entries = observed
+        require(set(entries) == {"lease.json", "consumed.json"})
+        return before, tuple((name, *entries[name]) for name in sorted(entries))
+
+    def _guard(self, deadline):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        idle, guard, plan = self.idle, self.guard, self.plan
+        require(all(a is b for a, b in zip((idle, guard, plan), self.objects, strict=True)))
+        require(type(idle) is Idle and type(guard) is retained.Retained)
+        require(not idle.closed and not idle.failed and idle.owner == guard.owner == self.owner)
+        require(type(plan) is host_plan.Plan and idle.plan is plan and plan.raw == self.plan_raw)
+        require(host_plan.load_bytes(plan.raw, plan.sha256) == plan)
+        require(idle.initial == self.original and idle.actor == self.actor)
+        require(idle.zero_domain is self.domain and idle.domain_sha256 == self.domain_sha256)
+        require(guard.zero_domain is self.domain and guard.domain_sha256 == self.domain_sha256)
+        require(guard.ready is self.ready and guard.clock is plan.original_clock)
+        require((guard.ready_by, guard.watch_deadline) == (self.ready_by, self.watch_deadline))
+        require(guard.finish_by == self.finish_by == plan.lease["stop_by"])
+        require(guard.pins == self.pins and guard.pins.init == idle.init == self.original.init)
+        require(guard.pins.generation == idle.generation == self.original.generation)
+        require(guard.pins.host.plan_sha256 == plan.sha256 and guard.pins.host.boot_id == plan.boot)
+        require(guard.pins.host.source_sha256 == plan.candidate_runtime.source)
+        plan.check_projection(guard.pins.host.projection)
+        require(guard.pins.command.source_sha256 == plan.candidate_runtime.source)
+        require(guard.pins.command.plan == str(plan.native_root / "launch/launch.json"))
+        require(guard.pins.command.ready_by == self.ready_by == plan.lease["ready_by"])
+        require(
+            self.watch_deadline == self.ready_by + plan.candidate.contract.maximum_recording_seconds
+        )
+        require(self.watch_deadline + retained.received.GRACE_SECONDS <= self.finish_by)
+        require(guard.actors[0] == self.actor)
+        require(tuple(idle.opened) == self.opened and idle.pidfd == self.pidfd)
+        require(files.identity(os.fstat(self.pidfd)) == self.pidfd_identity)
+        require(self._freeze(idle.original_files) == self.fixed_files)
+        require(self.original.plan_sha256 == plan.sha256)
+        require(self.original.lease_sha256 == plan.lease_sha256)
+        require(self.original.actor_sha256 == host_plan.base.checksum(asdict(self.actor)))
+        require(self.original.time_domain_sha256 == self.domain_sha256)
+        before, entries = self.fixed_files
+        require(
+            self.original.files_sha256
+            == host_plan.base.checksum(
+                {
+                    "directory": before,
+                    "files": {
+                        name: {"identity": identity, "sha256": hashlib.sha256(raw).hexdigest()}
+                        for name, raw, identity in entries
+                    },
+                }
+            )
+        )
+        raw = {name: raw for name, raw, _ in entries}
+        require(raw["lease.json"] == host_plan.base.encode(plan.lease))
+        require(hashlib.sha256(raw["consumed.json"]).hexdigest() == self.original.claim_sha256)
+        require(plan.deadlines.issued_at <= self.original.sampled_at < plan.deadlines.ready_by)
+        require(plan.lease["issued_at"] <= self.original.started_at < self.ready_by)
+        observed = host_plan.clock.read()
+        plan.check_clock(observed)
+        require(
+            self.original.sampled_at
+            <= observed.boottime_ns / host_plan.clock.NS
+            < plan.deadlines.stop_by
+        )
+        require(time.monotonic() < min(deadline, self.finish_by))
+        return observed
+
+    def read(self):
+        acquired = borrowed = False
+        try:
+            require(self.owner == (os.getpid(), get_ident()))
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(self.idle.lock.acquire(blocking=False))
+            borrowed = True
+            began = time.monotonic()
+            deadline = min(began + MAX_SECONDS, self.finish_by)
+            before = host_plan.clock.read()
+            self.plan.check_clock(before)
+            self._guard(deadline)
+            exited = self.guard.check()
+            require(
+                type(exited) is frozenset
+                and self.exits <= exited <= {"native", "guardian", "watchdog"}
+            )
+            require(self.idle._process() == self.actor)
+            require(self._freeze(self.idle._files()) == self.fixed_files)
+            require(self.idle._process() == self.actor)
+            require(self._freeze(self.idle._files()) == self.fixed_files)
+            after_exits = self.guard.check()
+            require(
+                type(after_exits) is frozenset
+                and exited <= after_exits <= {"native", "guardian", "watchdog"}
+            )
+            require(self.idle._process() == self.actor)
+            after = self._guard(deadline)
+            before.check_later(after)
+            require(
+                0 <= (after.boottime_ns - before.boottime_ns) / host_plan.clock.NS < MAX_SECONDS
+            )
+            require(time.monotonic() < deadline)
+            self.exits = after_exits
+            # Use the EARLIEST contributing sample, not completion as freshness.
+            return Continuity(self.original, before.boottime_ns / host_plan.clock.NS, after_exits)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if borrowed:
+                self.idle.lock.release()
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedPostBegin(POST_BEGIN_MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        self.closed = True  # Descriptors remain explicitly caller-owned.
 
 
 if __name__ == "__main__":

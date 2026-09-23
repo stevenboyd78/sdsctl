@@ -596,6 +596,30 @@ installed service selects this path. Phase-specific active-recording observation
 independent host supervision/recovery and fresh deployment qualification are
 still required before a new physical-scanner recording trial.
 
+### Original init and lease continuity after begin
+
+`supplemental_recording_idle_observer.PostBegin` is a separate read-only path
+for the actual original `Idle` and the `Retained` capability created after the
+one private begin. It rechecks original init handles, namespace/clock evidence,
+lease/claim bytes and directory identities. It does not call `Idle.read()`,
+interpret an expired readiness lease as new permission, renew any deadline or
+adopt a new file baseline. Startup readiness still expires at its original time;
+post-begin checks stop at the already fixed attachment/stop bounds.
+
+Returned `Continuity` retains the initial observation unchanged and timestamps
+the earliest contributing current read. Original worker exits may be reported
+only through `Retained`; an init exit, changed descriptor, source binding, claim,
+clock or original plan refuses the check. These are not daemon-health flags,
+recording completion, proof that all owners exited, or restoration authority.
+The facade borrows its callers' descriptors; failure or close does not signal
+processes, write files or release those handles. A blocked system read still
+requires independently supervised host recovery.
+
+Local tests use owned init processes and actual private files, with explicit
+synthetic platform/projection and `Retained` inputs. Full phase-specific host
+and recording-file observation, fresh source/runtime qualification, installed
+service supervision and a new user-observed trial remain separate gates.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently
