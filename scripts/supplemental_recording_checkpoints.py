@@ -70,9 +70,11 @@ def _context(directory: Path, collector: protected.Collector, expected):
     return checksum({"contract": collector.stored.contract.sha256, "expected": asdict(expected)})
 
 
-def _read(fd, collector, expected, context, tip, deadline):
+def _read(fd, collector, expected, context, tip, deadline, previous_tip=None):
     require(tip is None or type(tip) is Tip)
     count = 0 if tip is None else tip.count
+    require(previous_tip is None or type(previous_tip) is Tip)
+    require(previous_tip is None or previous_tip.count <= count)
     before = identity(os.fstat(fd))
     names = set()
     with os.scandir(fd) as entries:
@@ -101,6 +103,8 @@ def _read(fd, collector, expected, context, tip, deadline):
         if previous is not None:
             _follows(previous, current)
         previous, digest = current, hashlib.sha256(raw).hexdigest()
+        if previous_tip is not None and index + 1 == previous_tip.count:
+            require(digest == previous_tip.sha256)
     require(tip is None or digest == tip.sha256)
     require(identity(os.fstat(fd)) == before and time.monotonic() <= deadline)
     return previous
@@ -112,14 +116,19 @@ def load_progress(
     expected: evidence.RecordingExpectation,
     *,
     expected_tip: Tip,
+    previous_tip: Tip | None = None,
 ) -> monitor.Observation:
-    """Reload the entire strict chain against the independently retained exact tip."""
+    """Reload the chain, optionally pinning a previously acknowledged prefix too.
+
+    The independent host uses previous_tip before accepting a newly returned
+    tail. A rehashed replacement history cannot supersede its earlier pin.
+    """
     try:
         require(type(expected_tip) is Tip)
         deadline = time.monotonic() + MAX_SECONDS
         context = _context(directory, collector, expected)
         with protected._private_directory(directory, exclusive=False) as fd:
-            result = _read(fd, collector, expected, context, expected_tip, deadline)
+            result = _read(fd, collector, expected, context, expected_tip, deadline, previous_tip)
         require(result is not None and time.monotonic() <= deadline)
         return result
     except Exception:

@@ -539,13 +539,28 @@ this component does not authenticate assertions or publish checkpoint tips.
 Tests use synthetic Docker/Supervisor responses, fixed-path routing fixtures and
 actual temporary growing/retained files. No host installation is implied.
 
-One remaining namespace constraint is explicit: a host path beneath
+One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently
-rewritten. The future sealed adapter must independently qualify the bind-mount
-projection, both namespace identities and their shared original inventory before
-binding native acknowledgments. The old five-wrapper package inventory also
-does not qualify a future recording-specific launch bundle by itself.
+rewritten. `scripts/supplemental_recording_projection.py` now prepares two explicit
+canonical manifests from the same original baseline. It changes only the declared
+root alias, preserving case, root inode/ownership, every original file, writer,
+audio endpoint and duration bound. Both original manifest/contract hashes and the
+projection hash remain distinct and must be independently pinned.
+
+This is pure preparation, not a new filesystem capture or permission to adopt
+new files. The original host manifest is never overwritten or resealed. The
+mapping validator requires the exact running image/incarnation and a writable
+bind from `/mnt/data/supervisor/media` to `/media`, refusing duplicate, parent,
+nested or changed mounts. It does not collect a fresh inspect itself. A native
+process must separately verify its complete baseline in its own namespace;
+comparing declared manifest bytes on the host does not provide that observation.
+
+The future sealed adapter still must qualify both namespace observations, native
+success authentication and the independent host binding before a live start.
+Projection tests use synthetic inspect data, not an installed container. The old
+five-wrapper package inventory also does not qualify a future recording-specific
+launch bundle by itself.
 
 ## Offline dedicated native construction
 
@@ -583,6 +598,47 @@ decoded WAV bytes with and without optional-read demand. They prove one shared
 audio session, denied public recording mutations, preserved old recordings and
 native cleanup. They do not qualify an installed CLI, authenticated operator
 trigger, container guardian, physical scanning or audible playback.
+
+## Offline independent host recording ledger
+
+`scripts/supplemental_recording_binding.py` durably pins the original host/native
+manifests, projection, separate source/plan hashes and host boot identity. This
+ledger is independent of native receipt files and recording-progress storage. It
+refuses Supervisor-managed paths; an eventual deployment must also prove the
+host evidence directory is not mounted into either App or exposed to a client.
+
+One exclusive, file-and-directory-fsynced start intent binds the exact candidate
+generation, recovery-authorization evidence and fixed start/finish deadlines.
+The start acknowledgment must arrive before the start deadline; completion must
+arrive before the original finish deadline. Monotonic regressions, wrong cases,
+changed generations/endpoints/contracts and duplicate intents are refused. A
+publication failure or cancellation invalidates the live writer. Files are never
+repaired, truncated, deleted or retried. Reload returns evidence only, never an
+actionable controller—even if the ledger contains only preparation or a start
+intent with no acknowledgment.
+
+Returned progress tips are pinned only after complete checkpoint replay. Each
+extension verifies both the newly returned tip and the earlier independently
+pinned prefix, preventing a rehashed replacement history from superseding it.
+An additional complete checkpoint not pinned by this ledger cannot be adopted
+on restart. The host ledger is bounded to 197 entries of at most 8 KiB; the
+existing progress chain retains its separate 192-entry bound. Reads and writes
+have five-second cooperative budgets, not a substitute for outer termination.
+
+Native start/completion success is still a separately authenticated input to
+this component. A digest or `stopped.json` does not authenticate it. The ledger
+does not dispatch recording, prove process exit, inspect finalized WAV content,
+authorize App restoration or claim audible success. An acknowledged completion
+and an abandoned case are distinct terminal records. A host reboot changes the
+monotonic-clock domain and requires separate administrative recovery; it cannot
+resume this ledger under a new boot ID.
+
+Tests use actual private files and checkpoint chains, with synthetic namespace
+bindings and native-success assertions. They exercise lost returns, partial
+writes, fsync failure, cancellation, malformed chains, prior-history replacement,
+unsafe links, changed directories, fixed deadlines and read-only restart. This
+qualifies durable host binding offline; the native authentication channel and
+installed source/guardian/operator integration remain the next live gates.
 
 ## Required live ownership and recovery contract
 
