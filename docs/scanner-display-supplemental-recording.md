@@ -1039,6 +1039,41 @@ independently qualified image/source/interpreter, authenticated exact exec and
 PID-namespace binding, durable dispatch and installed isolated recovery tests.
 Legacy schemas and source policies remain idle-only; no live case is enabled.
 
+## Offline exact execution and namespace binding
+
+`scripts/supplemental_recording_execution.py` describes only the fixed isolated
+operator command and checks exact Engine exec-inspection fields against its
+original arguments, pins, container and execution IDs. It does not create an
+exec. Created, starting with no PID yet, running with a PID and not-running with
+an exit code are distinct; failed startup can produce an exit code without ever
+becoming a ready operator. The unchanged original readiness deadline remains in
+the command even when inspecting it after completion. Explicit PATH does not
+sanitize inherited container environment; image/configuration and interpreter
+qualification still apply.
+
+`scripts/supplemental_recording_namespace.py` maps independently inspected host
+PIDs to the operator's reported container PIDs. It admits only the qualified
+two-level PID layout and exact host-relative Docker cgroup. Init, guardian,
+native and watchdog must have distinct identities and matching PID, mount,
+network, user and time namespaces. The container init must map to PID 1, native
+and watcher must be children of the guardian, and the user/time domains must
+match the host. Frozen or uninterruptible processes cannot supply a healthy
+observation.
+
+Its witness duplicates an already retained init pidfd, retains guardian/child
+pidfds before reading their process details, then rechecks the entire mapping.
+An uncertain refresh disables future live claims but retains exact handles for
+separate exit observation. Closing releases only its own descriptors. It neither
+signals nor finds replacement processes by name. Caller-supplied PID reports,
+even when internally consistent, do not establish image/source/exec provenance.
+
+Local tests use serialized proc fixtures for Docker namespace/cgroup semantics
+and separately use owned disposable processes for actual pidfd retention, exit,
+freeze and cleanup tests. The latter explicitly supply synthetic namespace facts;
+they are not a claim of installed Docker authentication. The authenticated host
+connection, durable dispatch, new host plan and installed recovery tests are
+still required before a physical test.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
