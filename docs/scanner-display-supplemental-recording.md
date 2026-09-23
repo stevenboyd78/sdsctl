@@ -1034,6 +1034,14 @@ scanner reads. Additional cases cover malformed/expired requests, changed pins,
 unsafe directories, concurrent writer locks and failed framing. These are local
 process/IPC tests, not installed Engine authentication or live-radio acceptance.
 
+The host-side `ProbeCommand` and `ProbeAttachment` are separate from operator
+dispatch. Exact-type inspection refuses using either command as the other. The
+probe attachment permits one request/reply, rejects unsolicited or extra output
+and has a short absolute deadline; it cannot send a recording begin. Its clean
+EOF is framing evidence only. The default four-return operator decoder and its
+original deadlines remain unchanged. Synthetic Engine metadata and actual Unix
+socket tests qualify this transport, not an installed probe dispatcher.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP

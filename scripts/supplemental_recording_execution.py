@@ -17,6 +17,7 @@ from pathlib import PurePosixPath
 MESSAGE = "Finite recording execution is unconfirmed; preserve the case and do not dispatch."
 PYTHON = "/usr/local/bin/python"
 ENTRY = "/opt/sdsctl-supplemental-recording/accept_supplemental_recording_operator.py"
+PROBE_ENTRY = "/opt/sdsctl-supplemental-recording/accept_supplemental_recording_probe.py"
 RUNTIME = "/usr/local/lib/python3.14/site-packages/sds200"
 
 
@@ -97,7 +98,32 @@ class State:
     returncode: int | None
 
 
-def inspect(value, *, execution_id, container_id, command):
+@dataclass(frozen=True)
+class ProbeCommand:
+    """Fixed read-only exec metadata; deliberately not an operator Command.
+
+    No create/attach/begin ledger can accept this type. Fresh sampling bounds
+    and the original actor deadline must be checked before each new read; this
+    description does not renew either and cannot authenticate its own inputs.
+    """
+
+    plan: str
+    plan_sha256: str
+    source_sha256: str
+    probe_by: float
+
+    def argv(self):
+        args = list(Command(self.plan, self.plan_sha256, self.source_sha256, self.probe_by).argv())
+        args[3], args[-2] = PROBE_ENTRY, "--probe-by"
+        return tuple(args)
+
+    def create_body(self):
+        body = Command(self.plan, self.plan_sha256, self.source_sha256, self.probe_by).create_body()
+        body["Cmd"] = list(self.argv())
+        return body
+
+
+def _inspect(value, *, execution_id, container_id, command, command_type):
     """Check exact fixed exec metadata; never infer process exit from a reply.
 
     running with PID 0 is the Engine's possible pre-process startup interval,
@@ -108,7 +134,7 @@ def inspect(value, *, execution_id, container_id, command):
     try:
         _digest(execution_id)
         _digest(container_id)
-        require(type(command) is Command)
+        require(type(command) is command_type)
         argv = command.argv()
         require(
             type(value) is dict
@@ -164,6 +190,28 @@ def inspect(value, *, execution_id, container_id, command):
         return State("not_running", pid, code)
     except Exception:
         raise UnconfirmedExecution(MESSAGE) from None
+
+
+def inspect(value, *, execution_id, container_id, command):
+    """Operator-only inspection; a passive probe cannot gain its authority."""
+    return _inspect(
+        value,
+        execution_id=execution_id,
+        container_id=container_id,
+        command=command,
+        command_type=Command,
+    )
+
+
+def inspect_probe(value, *, execution_id, container_id, command):
+    """Probe-only metadata, not cached health or a retained process-exit proof."""
+    return _inspect(
+        value,
+        execution_id=execution_id,
+        container_id=container_id,
+        command=command,
+        command_type=ProbeCommand,
+    )
 
 
 if __name__ == "__main__":

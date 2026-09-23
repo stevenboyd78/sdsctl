@@ -56,11 +56,16 @@ class Decoder:
 
     Docker segment boundaries need not match the inner operator frame boundaries.
     stderr/stdin/system-error segments, malformed headers, partial EOF, excess
-    bytes and a fifth application frame poison the entire stream. No bytes from
+    bytes and excess application frames poison the entire stream. The default
+    operator contract is four frames; the explicit passive probe contract is one.
+    No other limit (including booleans) is accepted. No bytes from
     stderr or an error body are exposed. finish() is framing-only, never exit proof.
     """
 
-    def __init__(self):
+    def __init__(self, *, message_limit=4):
+        require(type(message_limit) is int and message_limit in (1, 4))
+        self.message_limit = message_limit
+        self.max_stdout = message_limit * (wire.HEADER.size + wire.MAX_BYTES)
         self.pending = bytearray()
         self.stdout = bytearray()
         self.upgraded = self.used = False
@@ -93,7 +98,7 @@ class Decoder:
                     require(
                         self.segments <= MAX_SEGMENTS and channel == 1 and reserved == b"\0" * 3
                     )
-                    require(size <= MAX_STDOUT - self.output_bytes)
+                    require(size <= self.max_stdout - self.output_bytes)
                     self.remaining = size
                 count = min(self.remaining, len(self.pending))
                 self.stdout.extend(self.pending[:count])
@@ -104,7 +109,7 @@ class Decoder:
                     self.remaining = None
                 while len(self.stdout) >= wire.HEADER.size:
                     size = wire.HEADER.unpack(self.stdout[: wire.HEADER.size])[0]
-                    require(0 < size <= wire.MAX_BYTES and self.messages < 4)
+                    require(0 < size <= wire.MAX_BYTES and self.messages < self.message_limit)
                     end = wire.HEADER.size + size
                     if len(self.stdout) < end:
                         break
@@ -134,7 +139,7 @@ class Decoder:
         self.used = True
         require(
             self.upgraded
-            and self.messages == 4
+            and self.messages == self.message_limit
             and self.remaining is None
             and not self.pending
             and not self.stdout

@@ -191,5 +191,97 @@ class Attachment:
             self.channel.close()
 
 
+class ProbeAttachment(Attachment):
+    """One request/reply on an already qualified exec socket, never an operator.
+
+    Takes socket ownership exactly like Attachment, but has a separate short
+    absolute sampling deadline and no ready/begin/native-return phases. Shared
+    methods provide bounded transport only. The exact Engine exec and retained
+    original actors must still be independently authenticated around this I/O.
+    Clean framing/EOF is not cached health, process exit or restoration authority.
+    """
+
+    def __init__(self, channel, execution_id, *, probe_by):
+        self.owner = (os.getpid(), get_ident())
+        self.channel = channel if type(channel) is socket.socket else None
+        self.closed = self.started = self.begun = self.finished = False
+        self.reads, self.pending = 0, []
+        self.decoder = framing.Decoder(message_limit=1)
+        try:
+            require(self.channel is not None and channel.fileno() >= 0)
+            require(channel.family == socket.AF_UNIX)
+            require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM)
+            channel.getpeername()
+            require(not channel.get_inheritable())
+            require(type(execution_id) is str and re.fullmatch(r"[0-9a-f]{64}", execution_id))
+            require(type(probe_by) in (int, float) and math.isfinite(probe_by))
+            require(0 < probe_by - time.monotonic() <= 8)
+            self.ready_by = self.finish_by = probe_by
+            self.execution_id = execution_id
+            channel.setblocking(False)
+        except BaseException as error:
+            self._fail(error)
+
+    def _read(self, deadline):
+        while True:
+            self._wait(deadline, writing=False)
+            try:
+                raw = self.channel.recv(framing.MAX_CHUNK)
+            except BlockingIOError:
+                continue
+            self._check(deadline)
+            if not raw:
+                return False
+            values = self.decoder.feed(raw)
+            self._check(deadline)
+            for value in values:
+                require(self.begun and self.reads + len(self.pending) == 0)
+                require(value.get("kind") == "finite-recording-cached-probe-result")
+                self.pending.append(value)
+            return True
+
+    def send_request(self, value, *, deadline):
+        try:
+            self._check(deadline)
+            require(self.started and not self.begun and self.reads == 0 and not self.pending)
+            require(
+                not self.decoder.pending
+                and not self.decoder.stdout
+                and self.decoder.segments == 0
+                and self.decoder.remaining is None
+            )
+            require(not select.select([self.channel], [], [], 0)[0])
+            self.begun = True  # Even an incomplete write consumes this sample.
+            require(type(value) is dict and value.get("kind") == "finite-recording-cached-probe")
+            raw = framing.wire.encode(value)
+            self._write(framing.wire.HEADER.pack(len(raw)) + raw, deadline)
+            self._check(deadline)
+        except BaseException as error:
+            self._fail(error)
+
+    def send_begin(self, value, *, deadline):
+        self._fail(UnconfirmedAttachment(MESSAGE))
+
+    def receive(self, *, deadline):
+        try:
+            require(self.begun and self.reads == 0)
+            return super().receive(deadline=deadline)
+        except BaseException as error:
+            self._fail(error)
+
+    def finish(self, *, deadline):
+        try:
+            self._check(deadline)
+            require(self.started and self.begun and self.reads == 1 and not self.pending)
+            while self._read(deadline):
+                require(not self.pending)
+            self.decoder.finish()
+            self._check(deadline)
+            self.finished = True
+            self.close()
+        except BaseException as error:
+            self._fail(error)
+
+
 if __name__ == "__main__":
     raise SystemExit("Private attachment I/O only; no installed host action enabled.")
