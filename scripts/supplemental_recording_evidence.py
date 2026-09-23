@@ -212,7 +212,7 @@ def capture_baseline(root: Path, case: str) -> RecordingBaseline:
         prefix = template(case).split("{timestamp}", 1)[0]
         with opened_root(root, deadline=time.monotonic() + MAX_SECONDS) as fd:
             files = inventory(root, max_file_bytes=16 * 1024 * 1024)
-            require(not any(Path(key).name.startswith(prefix) for key in files))
+            require(not any(Path(key).name.startswith((prefix, "." + prefix)) for key in files))
             require(len(files) <= 4094)
             return RecordingBaseline(
                 case,

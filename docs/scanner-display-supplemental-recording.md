@@ -21,8 +21,9 @@ scanner, start an App, create a recording, or dispatch recovery.
 
 Before a future recording start, `capture_baseline()` captures every existing
 file under one explicit recording root. It rejects any artifact using the new
-case's reserved prefix, including an older timestamp, sidecar or collision
-suffix. The baseline is an immutable in-memory result for a trusted caller; its
+case's reserved prefix, including an older timestamp, sidecar, collision suffix
+or dot-prefixed metadata temporary file in any subdirectory. The baseline is an
+immutable in-memory result for a trusted caller; its
 durable storage, authenticity and binding to the installed candidate are separate
 requirements, not properties supplied by this component.
 
@@ -142,10 +143,132 @@ timed-out FQK/DTM reads; the surviving audio consumer continues after recording
 stop, and the resulting pair passes the separate file verifier. These are not
 hardware or audible acceptance tests.
 
+## Offline active-file monitor
+
+`scripts/supplemental_recording_monitor.py` adds a read-only observation for the
+interval between an acknowledged start and final artifact verification. It does
+not replace the existing live host inventory guard. Each observation verifies
+every old file, with only the following exact new root-level entries permitted:
+
+| Caller-qualified stage | Permitted new entries |
+| --- | --- |
+| Recording | One case/start-bound WAV, which may still be zero bytes because native writes are buffered. |
+| Finalizing, before publication | That WAV and optionally one adjacent native metadata temporary file. |
+| Finalizing, link publication | That WAV and both metadata names, proven to be the same inode with exactly two links. |
+| Finalizing, publication complete | That WAV and one adjacent metadata sidecar with exactly one link. |
+
+The temporary name must be `.<expected-wav>.json.<8-character-native-token>.tmp`;
+this is not a root or wildcard exclusion. Other-case files, nested new files,
+multiple temporary files, wrong types/owners/modes, unexpected links, renamed old
+files and changed old contents are refused. A new baseline also refuses a
+leftover temporary file from the same case instead of accepting it as old data.
+
+The caller supplies separately qualified writer UID/GID and the expected WAV
+mode. Supported modes are 0600, 0640, 0644, 0660 and 0664; the native temporary
+metadata remains 0600. This recognizes the real writer's umask-derived mode
+without changing it or accepting executable/world-writable output. These checks
+do not themselves prove which process opened a file.
+
+One observation has a two-second cooperative budget and retains the inventory
+entry/depth/byte limits. It reserves room for three new entries, including both
+publication links, so a recording-capable preparation must limit the baseline to
+4,093 files. Dynamic growth is included in the aggregate byte bound. WAV and
+metadata retain their individual 180-second PCM and 64 KiB bounds.
+
+A trusted previous in-process observation binds the same case, complete start
+timestamp, endpoint, generation, root and writer. It rejects shrinking/replaced
+new files, publication regression, changed published metadata and a return from
+finalizing to recording. Intermediate states may be missed by sampling; they are
+not invented. Directory changes during sampling can produce an unconfirmed
+observation. A later read must stay within the **original** deadline and cannot
+reset it. The monitor never retries, finalizes, cleans up or signals anything.
+
+Successful observations are not atomic snapshots, durable restart receipts,
+authenticated writer/process evidence, audio-quality checks or a finalization
+verdict. Buffered WAV bytes and headers deliberately are not treated as stable
+audio contents. Linked/published metadata is hashed but only the separate final
+verifier validates its schema and agreement with the complete WAV and stopped
+receipt. Native writer integration tests cover the actual temporary-file,
+flush/fsync, link and unlink sequence; fault tests cover races and descriptor
+cleanup. No live recording acceptance is implied.
+
+## Offline candidate API restriction
+
+`scripts/supplemental_recording_api.py` provides a permanently restricted native
+API subclass for a future dedicated candidate. It keeps the same real recording
+manager, so status and library reads remain truthful, including active and failed
+states. It does not report an active recording as idle to satisfy a guard.
+
+An explicit observation-only allowlist is applied at the native shared dispatch
+boundary used by payload, JSON, control and authorized-JSON entry points. Peer
+permissions are intersected with that list and redaction is preserved. Native
+capabilities reflect the same restriction. Recording start/stop, scanner controls
+(including hold-state wire queries), profile reload and supplemental demand are
+unavailable. New product operations are not implicitly granted. Manager/runtime
+replacement fails closed. Restriction stays in place after the finite owner is
+closed or failed; a client cannot retry an uncertain recording operation.
+
+The finite owner and normal daemon shutdown retain the original manager, not a
+facade or second recorder. Local tests exercise all request entry points, real
+Unix clients, successful native PCM finalization and failed start/metadata paths.
+This component is not installed in the current launcher or normal product. It
+does not authenticate clients or prevent trusted in-process code from calling a
+manager directly. A future native assembly must qualify every transport binding,
+exclude other mutators and schedule start/stop under independent host supervision.
+
+## Isolated process-failure qualification
+
+An additional Linux-only fixture runs the actual recording manager and finite
+owner in a parent-owned child process with synthetic PCM and test clocks. The
+parent opens a pidfd before releasing the stop barrier. It checks orderly exit,
+abrupt exit while active, blocked stop, stalled metadata publication, a lost stop
+acknowledgment, and a lost return after a stopped receipt was already fsynced.
+The blocked cases are terminated and reaped under the fixture's separate deadline.
+
+Only orderly acknowledged finalization is submitted as a successful content
+verification. Complete-looking files, receipt presence and independently proven
+process exit are kept distinct from a confirmed operation result. Each failed
+case preserves its files and consumed intents and refuses another owner attempt;
+older recording bytes stay unchanged. These tests prove component behavior in
+owned local subprocesses, **not** a recording-capable host supervisor, native
+daemon shutdown integration, container/pidfd recovery or normal-App restoration.
+
+## Offline fixed-deadline schedule
+
+`scripts/supplemental_recording_schedule.py` composes the prepared native owner,
+restricted API and file monitor into one explicit synchronous run. The caller
+must already have independently qualified process supervision and readiness;
+constructing the scheduler does not start anything. It checks that the same
+manager, runtime, baseline and immutable plan remain bound throughout the run.
+
+After one start, it polls cancellation and native state at most every quarter
+second between calls and samples the full file monitor about once a second. At
+the original scheduled stop time it invokes the owner's single stop, observes
+publication completion and separately verifies the finalized pair. No wait,
+observation or slow call extends the original stop/finish deadline. Expired or
+cancelled observations do not begin another verification step. A successful
+result means only that this schedule acknowledged start/stop and verified file
+contents; the shared runtime intentionally remains running.
+
+Cancellation, interruption, changed bindings, unexpected native state, a changed
+old file, an unconfirmed observation or a late result consumes the run. The
+controller is closed even if cancellation happened before start, preventing a
+new scheduler from reusing that prepared controller. This only releases receipt
+descriptors: it does not stop or repair the writer. Native shutdown and an
+independent outer termination deadline remain mandatory, including when a call
+blocks and cannot check cancellation. No automatic retry or recovery operation
+is dispatched here.
+
+Tests combine deterministic clock/fault cases with an actual monotonic/event-wait
+run using the real recorder and synthetic PCM; the latter finalizes without a
+manual stop. No launcher has installed this scheduler. Native assembly binding,
+supplemental-window coordination, host policy and isolated installed-container
+qualification remain required before live use.
+
 ## Required live ownership and recovery contract
 
 The following remain design gates, not implemented host-service permissions.
-The offline owner above covers the native dispatch/receipt boundary only:
+The offline owner, monitor and API restriction above do not install this contract:
 
 | Phase | Required evidence and constraint |
 | --- | --- |
@@ -157,12 +280,11 @@ The offline owner above covers the native dispatch/receipt boundary only:
 | After owner exit | Independently prove exact scanner-owning process exit, then inspect the new pair and every old file. Candidate shutdown must not depend on a working browser, desktop connection or a successful file-validation result. |
 | Restoration and acceptance | Verify normal-App identity/health and its unchanged protections separately from the recording verdict. Preserve candidate evidence, including failed/partial files. Only after these checks may one bounded saved-file playback/listening test be offered. |
 
-An active WAV changes while it is written, and the metadata writer uses a
-short-lived temporary file plus an exclusive link publication. Therefore a final
-inventory rule is **not** an active-recording monitor. A future live contract must
-qualify those intermediate states explicitly, bind them to the exact writer/case,
-and retain the independent termination deadline. A blanket wildcard exclusion or
-an always-true recording-health flag would defeat the protection.
+The active-file component now qualifies the native writer's intermediate states
+locally. A future live contract still must bind those observations to the exact
+writer/case and retain the independent termination deadline. It cannot substitute
+a final-only inventory rule, blanket wildcard exclusion or always-true
+recording-health flag.
 
 The next implementation must also distinguish a failed artifact verdict from
 ownership/recovery evidence: a truncated WAV does not prove that a scanner owner

@@ -433,6 +433,18 @@ def test_any_previous_case_artifact_refuses_baseline_even_in_subdirectory(tmp_pa
         r.capture_baseline(root, CASE)
 
 
+@pytest.mark.parametrize("nested", [False, True])
+def test_case_metadata_temporary_is_never_an_old_baseline_file(tmp_path, nested):
+    root = tmp_path / "recordings"
+    selected = root / "older" if nested else root
+    selected.mkdir(parents=True)
+    path = selected / ("." + r.filename(CASE, START) + ".json.abcdefgh.tmp")
+    path.write_bytes(b"preserve partial metadata")
+    with pytest.raises(r.UnconfirmedRecording):
+        r.capture_baseline(root, CASE)
+    assert path.read_bytes() == b"preserve partial metadata"
+
+
 def test_filename_uses_original_start_zone_not_utc_or_current_clock():
     assert r.filename(CASE, START) == f"sdsctl-acceptance-{CASE}-20260922-080000.wav"
     assert r.filename(CASE, "2026-09-22T14:00:00Z").endswith("-20260922-140000.wav")
