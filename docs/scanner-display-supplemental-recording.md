@@ -1866,6 +1866,32 @@ assembled full-host timing, normal restoration, recording authorization and
 independent host-service recovery remain separate gates. No installed service or
 legacy plan selects this reader yet.
 
+The complete bootstrap observer also passed an isolated real-Engine trial with
+actual protected-file and recording inventories, at about 1.94 seconds from
+the original Ready receipt. Installed metadata, idle claims and Supervisor
+responses were explicitly synthetic. Adding simulated status-query latency then
+correctly refused readiness at about 2.19 seconds, without recording permission.
+The original two-second policy remains unchanged.
+
+For the actual bound `BootstrapHost`, combined confirmation can now prepare only
+its fixed read-only host I/O while the original thread hashes the complete
+runtime. It joins that one complete result inside the qualification bracket,
+before the separate native probe. Initial/final idle, process, namespace and
+journal checks remain on the original owner thread. No native probe, App-control
+command, journal write or recording action runs in the read worker. The oldest
+observation start and original two-second join deadline cannot be renewed. A
+changed context, worker failure, timeout or failed outer qualification consumes
+the collector; late completion cannot make its result usable again.
+
+Discarding a result does not cancel an already blocked kernel/Engine read or
+prove process exit. The original worker handle is retained on failure, and the
+independent outer host supervisor is still required for a stuck read. This is
+not an installed background service. The ordinary synchronous collector and
+separate launch/confirmation path retain their existing behavior. Local tests
+cover original-thread ownership, cancellation, late completion, clock/context
+changes, full inventories and the outer failure ordering; assembled timing and
+installed service recovery remain separate qualification gates.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

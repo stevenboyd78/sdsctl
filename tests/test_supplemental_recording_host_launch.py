@@ -360,6 +360,89 @@ def test_combined_path_prepares_before_one_bracket_and_does_not_begin(setup, mon
     assert s.creates == 1 and run.failed
 
 
+def prepared_host_ordering(setup, monkeypatch):
+    """Ordering only; real worker/file/identity joins have their own tests."""
+    s = setup
+    host = object.__new__(m.BootstrapHost)
+    host.plan, host.idle, host.witness = s.plan, s.idle, s.prepared.witness
+    host.projected = s.prepared.pins.host.projection
+    host.owner = m.os.getpid(), m.get_ident()
+    host.failed, host.pending = False, None
+
+    def prepare(self):
+        assert self is host and host.pending is None
+        s.trace.append("host_prepare")
+        host.pending = True
+
+    def read(self):
+        assert self is host and not host.failed
+        if host.pending:
+            s.trace.append("host_join")
+            host.pending = None
+        return s.read()
+
+    def discard(self):
+        assert self is host
+        s.trace.append("host_discard")
+        self.failed = True
+
+    monkeypatch.setattr(m.BootstrapHost, "prepare", prepare)
+    monkeypatch.setattr(m.BootstrapHost, "__call__", read)
+    monkeypatch.setattr(m.BootstrapHost, "discard", discard)
+    return host
+
+
+def test_actual_bound_host_io_prepares_before_hashing_but_joins_inside_bracket(setup, monkeypatch):
+    s = setup
+    run = s.launch(qualify=combined_qualifier(s, monkeypatch))
+    run.read = prepared_host_ordering(s, monkeypatch)
+    assert run.start_confirmed().healthy is True
+    order = [
+        "ready",
+        "probe_prepare",
+        "host_prepare",
+        "qualification_before",
+        "host_join",
+        "probe",
+        "qualification_after",
+    ]
+    assert [s.trace.index(item) for item in order] == sorted(s.trace.index(item) for item in order)
+    assert s.reads == 3 and s.qualifies == 4 and s.creates == 1
+    assert s.journal.machine.state.authorization_generation is None
+    assert s.journal.machine.state.recording_outcome == "not_attempted"
+    host = run.read
+    run.close()
+    assert host.failed and s.trace[-1] == "host_discard"
+
+
+@pytest.mark.parametrize("fault", ["qualification_before", "probe", "qualification_after"])
+def test_outer_failure_discards_even_an_unjoined_full_host_read(setup, monkeypatch, fault):
+    s = setup
+    run = s.launch(qualify=combined_qualifier(s, monkeypatch))
+    host = run.read = prepared_host_ordering(s, monkeypatch)
+    s.fault = fault
+    denied(run.start_confirmed)
+    assert host.failed and "host_discard" in s.trace
+    assert s.journal.machine.state.ready_evidence_sha256 is None
+    assert s.journal.machine.state.authorization_generation is None
+    assert run.client.closed and run.ready.failed
+    if fault == "qualification_before":
+        assert host.pending is True and "host_join" not in s.trace
+
+
+@pytest.mark.parametrize("field", ["plan", "idle", "witness", "projected"])
+def test_parallel_host_reader_must_bind_same_original_inputs_before_dispatch(
+    setup, monkeypatch, field
+):
+    s = setup
+    run = s.launch(qualify=combined_qualifier(s, monkeypatch))
+    host = run.read = prepared_host_ordering(s, monkeypatch)
+    setattr(host, field, object())
+    denied(run.start_confirmed)
+    assert s.creates == 0 and host.failed
+    assert "host_prepare" not in s.trace
+
+
 @pytest.mark.parametrize(
     "fault",
     [

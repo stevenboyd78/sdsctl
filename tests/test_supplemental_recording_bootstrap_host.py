@@ -4,8 +4,9 @@ These fixtures qualify the join, not installed Supervisor/Engine/mounts or the
 combined Ready timing. No App/scanner/network operation is performed here.
 """
 
+import time
 from dataclasses import asdict, replace
-from threading import Thread
+from threading import Event, Thread, get_ident
 from types import SimpleNamespace
 
 import pytest
@@ -318,3 +319,159 @@ def test_no_serialized_report_can_replace_bound_collector_inputs(joined, field):
     values[field] = {"looks_valid": True}
     launch.denied(lambda: m.BootstrapHost(**values))
     assert not s.host.reads
+
+
+def test_prepared_complete_host_read_joins_original_thread_and_oldest_time(joined):
+    s, idle_threads = joined, []
+    original_idle = s.idle.read
+
+    def idle_read():
+        idle_threads.append(get_ident())
+        return original_idle()
+
+    s.idle.read = idle_read
+    assert s.obj.prepare() is None
+    pending = s.obj.pending
+    assert pending.done.wait(2)
+    assert pending.worker.ident != get_ident()
+    sample = s.obj()
+    assert s.obj.pending is None and not pending.worker.is_alive()
+    assert idle_threads == [get_ident(), get_ident()]
+    assert sample.observation.sampled_at == pending.began
+    assert sample.observation.candidate.healthy is None
+    assert sample.observation.candidate.recording is None
+    assert s.host.reads == ["apps", "jobs", "core", "normal", "candidate", "apps", "jobs"]
+    assert s.idle_reads == 2 and not s.prepared.witness.exited()
+    s.obj()  # Following reads are fresh; the prepared sample is not a cache.
+    assert len(s.host.reads) == 14
+
+
+@pytest.mark.parametrize("error", [OSError("PRIVATE error"), KeyboardInterrupt()])
+def test_prepared_worker_failure_cannot_escape_as_success_or_close_original_pidfd(joined, error):
+    s = joined
+
+    def fail(_):
+        raise error
+
+    s.host.hook = fail
+    s.obj.prepare()
+    pending = s.obj.pending
+    assert pending.done.wait(2)
+    if isinstance(error, Exception):
+        launch.denied(s.obj)
+    else:
+        with pytest.raises(type(error)):
+            s.obj()
+    assert s.obj.failed and pending.cancelled.is_set() and not s.obj.lock.locked()
+    assert not pending.worker.is_alive() and not s.prepared.witness.exited()
+    launch.denied(s.obj.prepare)
+
+
+@pytest.mark.parametrize("action", ["repeat", "discard", "foreign_thread", "timeout"])
+def test_pending_read_invalidated_without_abandoning_or_reusing_result(joined, action):
+    s, entered, release = joined, Event(), Event()
+
+    def block(_):
+        entered.set()
+        assert release.wait(4)
+
+    s.host.hook = block
+    s.obj.prepare()
+    pending = s.obj.pending
+    try:
+        assert entered.wait(1)
+        assert pending.worker.is_alive() and not pending.done.is_set()
+        if action == "repeat":
+            launch.denied(s.obj.prepare)
+        elif action == "discard":
+            assert s.obj.discard() is None
+        elif action == "foreign_thread":
+            failures = []
+
+            def read_elsewhere():
+                try:
+                    s.obj()
+                except m.UnconfirmedHostLaunch:
+                    failures.append(True)
+
+            worker = Thread(target=read_elsewhere)
+            worker.start()
+            worker.join(1)
+            assert failures == [True] and not worker.is_alive()
+        else:
+            began = time.monotonic()
+            launch.denied(s.obj)
+            assert 0 < time.monotonic() - began < 2.2
+        assert s.obj.failed and pending.cancelled.is_set()
+        launch.denied(s.obj)
+        assert s.obj.pending is pending and not s.obj.lock.locked()
+    finally:
+        release.set()
+        pending.worker.join(2)
+    assert not pending.worker.is_alive() and not s.prepared.witness.exited()
+    # Completion of a discarded worker can never make the reader usable again.
+    launch.denied(s.obj)
+    launch.denied(s.obj.prepare)
+
+
+@pytest.mark.parametrize("field", ["deadline", "boot", "began", "before", "worker"])
+def test_prepared_evidence_cannot_renew_or_replace_original_context(joined, field):
+    s = joined
+    s.obj.prepare()
+    pending = s.obj.pending
+    assert pending.done.wait(2)
+    pending.worker.join(1)
+    if field in ("deadline", "began"):
+        setattr(pending, field, getattr(pending, field) + 1)
+    else:
+        setattr(pending, field, None)
+    launch.denied(s.obj)
+    assert s.obj.failed and not s.prepared.witness.exited()
+
+
+def test_prepared_sample_completion_does_not_refresh_original_freshness(joined, monkeypatch):
+    s = joined
+    s.obj.prepare()
+    pending = s.obj.pending
+    assert pending.done.wait(2)
+    pending.worker.join(1)
+    original = m.plans.clock.read
+
+    def later():
+        value = original()
+        return replace(
+            value,
+            before_ns=value.before_ns + 3 * m.plans.clock.NS,
+            after_ns=value.after_ns + 3 * m.plans.clock.NS,
+            boottime_ns=value.boottime_ns + 3 * m.plans.clock.NS,
+        )
+
+    monkeypatch.setattr(m.plans.clock, "read", later)
+    launch.denied(s.obj)
+    assert s.obj.failed and pending.cancelled.is_set()
+    assert not s.prepared.witness.exited()
+
+
+@pytest.mark.parametrize("fault", ["idle", "identity", "source", "new_recording"])
+def test_original_checks_still_bracket_prepared_read(joined, fault):
+    s = joined
+    s.obj.prepare()
+    pending = s.obj.pending
+    assert pending.done.wait(2)
+    pending.worker.join(1)
+    if fault == "idle":
+        s.fault = "idle_changed"
+    elif fault == "identity":
+        s.prepared.witness.close()
+    elif fault == "source":
+        object.__setattr__(s.plan, "core_generation", "f" * 64)
+    else:
+        # A file introduced before a NEW prepared read must not adopt that root.
+        assert s.obj()
+        (s.recording_root / "new.wav").write_bytes(b"PRIVATE_UNACKNOWLEDGED")
+        s.obj.prepare()
+        pending = s.obj.pending
+        assert pending.done.wait(2)
+    launch.denied(s.obj)
+    pending.worker.join(1)
+    assert s.obj.failed and pending.cancelled.is_set()

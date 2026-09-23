@@ -17,7 +17,7 @@ import time
 from dataclasses import asdict, replace
 from decimal import Decimal
 from pathlib import Path
-from threading import Lock, get_ident
+from threading import Event, Lock, Thread, current_thread, get_ident
 
 import supplemental_recording_idle_observer as idle_module
 import supplemental_recording_probe_exec as probe_exec
@@ -60,6 +60,7 @@ class BootstrapHost:
     def __init__(self, plan, projected, idle, witness, docker):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = False
+        self.pending = None
         try:
             require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
             plan.check_projection(projected)
@@ -110,81 +111,194 @@ class BootstrapHost:
         require(slug in (base.NORMAL, base.CANDIDATE))
         return plans.ordinary.NativeState(generation, None, None)
 
-    def __call__(self):
+    def _observer(self, read_clock):
+        plan = self.plan
+        layouts = {item.slug: item for item in plan.layouts}
+        collector = plans.host.FilesCollector(
+            layouts[base.NORMAL],
+            layouts[base.CANDIDATE],
+            plans.host.recording.Collector(self.projected.host),
+            lambda: plans.host.Capture("pristine"),
+        )
+        supervisor = plans.ordinary.SupervisorReads(
+            self.docker, image=plan.cli_image, incarnation=plan.cli_generation
+        )
+        return plans.host.HostObserver(
+            self.docker,
+            supervisor,
+            seals=(plan.normal, plan.candidate),
+            installed_versions=dict(plan.installed_versions),
+            other_scanner_apps=frozenset(plan.other_scanner_apps),
+            core_image=plan.core_image,
+            core_generation=plan.core_generation,
+            core_version=plan.core_version,
+            read_clock=read_clock,
+            collect_files=collector,
+            read_native=self._unknown_native,
+            network=plans.ordinary.AUDIO_NETWORK,
+        )
+
+    def prepare(self):
+        """Start only a fixed read-only host sample, without returning evidence.
+
+        This permits Supervisor/file I/O to overlap independent runtime hashing.
+        Idle/namespace/pidfd ownership stays on the original calling thread. The
+        worker never performs a native probe, journal append, App control or
+        recording action. Its original start and two-second deadline are held
+        across collection/join; finishing never renews freshness. A failed outer
+        qualification must discard this object, even if its worker later finishes.
+
+        A blocked kernel/Engine read still needs the independent outer process
+        supervisor. discard() invalidates a pending result, not that outstanding
+        read; its thread handle is retained and never supplies process-exit proof.
+        """
         acquired = False
         try:
             require(not self.failed and self.owner == (os.getpid(), get_ident()))
             require(self.lock.acquire(blocking=False))
             acquired = True
+            require(self.pending is None)
+            started = time.monotonic()
             boot, began = self._clock()
-            self._guard()  # Include the first identity/manifest checks in freshness.
+            self._guard()
             before = self.idle.read()
             require(type(before) is idle_module.Evidence)
-            plan = self.plan
-            layouts = {item.slug: item for item in plan.layouts}
-            collector = plans.host.FilesCollector(
-                layouts[base.NORMAL],
-                layouts[base.CANDIDATE],
-                plans.host.recording.Collector(self.projected.host),
-                lambda: plans.host.Capture("pristine"),
+            pending = _PreparedHostRead(
+                self, boot, began, before, min(started + 2, self.plan.lease["ready_by"])
             )
-            supervisor = plans.ordinary.SupervisorReads(
-                self.docker, image=plan.cli_image, incarnation=plan.cli_generation
-            )
-            observer = plans.host.HostObserver(
-                self.docker,
-                supervisor,
-                seals=(plan.normal, plan.candidate),
-                installed_versions=dict(plan.installed_versions),
-                other_scanner_apps=frozenset(plan.other_scanner_apps),
-                core_image=plan.core_image,
-                core_generation=plan.core_generation,
-                core_version=plan.core_version,
-                read_clock=self._clock,
-                collect_files=collector,
-                read_native=self._unknown_native,
-                network=plans.ordinary.AUDIO_NETWORK,
-            )
-            sample = observer.read()
-            after = self.idle.read()
-            require(type(after) is idle_module.Evidence)
-            require(replace(after, sampled_at=before.sampled_at) == before)
-            require(after.sampled_at >= before.sampled_at)
-            end_boot, ended = self._guard()
-            require(boot == end_boot == sample.boot_id and began <= sample.now <= ended)
-            require(0 <= ended - began <= 2)
-            require(began <= before.sampled_at <= after.sampled_at <= ended)
-            require(
-                (before.plan_sha256, before.generation, before.init, before.lease_sha256)
-                == (plan.sha256, self.generation, self.init, plan.lease_sha256)
-            )
-            observation = sample.observation
-            require(observation.normal.state == "stopped")
-            candidate = observation.candidate
-            require(candidate.state == "running" and candidate.generation == self.generation)
-            require(candidate.healthy is None and candidate.recording is None)
-            require(
-                observation.files
-                == bootstrap.recording.Files(
-                    plan.candidate.contract.sha256,
-                    "pristine",
-                    plan.candidate.contract.baseline_sha256,
-                )
-            )
-            return bootstrap.recovery.Sample(
-                boot, ended, replace(observation, sampled_at=min(began, observation.sampled_at))
-            )
+            self.pending = pending
+            pending.worker.start()
         except BaseException as error:
             self._fail(error)
         finally:
             if acquired:
                 self.lock.release()
 
+    def discard(self):
+        """Permanently consume pending evidence; never signal or close pidfds."""
+        require(self.owner == (os.getpid(), get_ident()))
+        self.failed = True
+        if self.pending is not None:
+            self.pending.cancelled.set()
+
+    def __call__(self):
+        acquired = False
+        try:
+            require(not self.failed and self.owner == (os.getpid(), get_ident()))
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            if self.pending is not None:
+                pending = self.pending
+                self._guard()
+                sample = pending.finish()
+                result = self._complete(pending.boot, pending.began, pending.before, sample)
+                require(self.pending is pending and not self.failed)
+                self.pending = None
+                return result
+            boot, began = self._clock()
+            self._guard()  # Include the first identity/manifest checks in freshness.
+            before = self.idle.read()
+            require(type(before) is idle_module.Evidence)
+            return self._complete(boot, began, before, self._observer(self._clock).read())
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _complete(self, boot, began, before, sample):
+        require(type(sample) is bootstrap.recovery.Sample)
+        after = self.idle.read()
+        require(type(after) is idle_module.Evidence)
+        require(replace(after, sampled_at=before.sampled_at) == before)
+        require(after.sampled_at >= before.sampled_at)
+        end_boot, ended = self._guard()
+        require(boot == end_boot == sample.boot_id and began <= sample.now <= ended)
+        require(0 <= ended - began <= 2)
+        require(began <= before.sampled_at <= after.sampled_at <= ended)
+        plan = self.plan
+        require(
+            (before.plan_sha256, before.generation, before.init, before.lease_sha256)
+            == (plan.sha256, self.generation, self.init, plan.lease_sha256)
+        )
+        observation = sample.observation
+        require(observation.normal.state == "stopped")
+        candidate = observation.candidate
+        require(candidate.state == "running" and candidate.generation == self.generation)
+        require(candidate.healthy is None and candidate.recording is None)
+        require(
+            observation.files
+            == bootstrap.recording.Files(
+                plan.candidate.contract.sha256, "pristine", plan.candidate.contract.baseline_sha256
+            )
+        )
+        return bootstrap.recovery.Sample(
+            boot, ended, replace(observation, sampled_at=min(began, observation.sampled_at))
+        )
+
     def _fail(self, error):
         self.failed = True
+        if self.pending is not None:
+            self.pending.cancelled.set()
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedHostLaunch(MESSAGE) from None
+
+
+class _PreparedHostRead:
+    """Internal, one fixed read-only worker; not a caller-supplied result API."""
+
+    def __init__(self, host, boot, began, before, deadline):
+        self.host, self.boot, self.began, self.before = host, boot, began, before
+        self.deadline = deadline
+        self.done, self.cancelled = Event(), Event()
+        self.sample = self.error = None
+        self.worker = Thread(target=self._run, name="sdsctl-bootstrap-host-read", daemon=True)
+        self.original = (host, boot, began, before, deadline, self.worker)
+
+    def _fixed(self):
+        require(
+            (self.host, self.boot, self.began, self.before, self.deadline, self.worker)
+            == self.original
+        )
+        require(self.host.pending is self)
+
+    def _clock(self):
+        self._fixed()
+        require(current_thread() is self.worker and os.getpid() == self.host.owner[0])
+        require(not self.cancelled.is_set() and not self.host.failed)
+        require(time.monotonic() < self.deadline)
+        observed = plans.clock.read()
+        self.host.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(
+            observed.boot == self.boot and self.began <= now < self.host.plan.deadlines.ready_by
+        )
+        return observed.boot, now
+
+    def _run(self):
+        try:
+            self._clock()
+            self.sample = self.host._observer(self._clock).read()
+            self._clock()
+        except BaseException as error:
+            self.error = error
+        finally:
+            self.done.set()
+
+    def finish(self):
+        self._fixed()
+        require(self.host.owner == (os.getpid(), get_ident()))
+        require(self.host.pending is self and not self.cancelled.is_set())
+        require(time.monotonic() < self.deadline)
+        require(self.done.wait(max(0, self.deadline - time.monotonic())))
+        self.worker.join(max(0, self.deadline - time.monotonic()))
+        require(not self.worker.is_alive() and time.monotonic() < self.deadline)
+        require(not self.cancelled.is_set() and not self.host.failed)
+        if self.error is not None:
+            raise self.error
+        require(type(self.sample) is bootstrap.recovery.Sample)
+        return self.sample
 
 
 class CandidateQualification:
@@ -660,7 +774,9 @@ class Launch:
         is prepared immediately after Ready. Its one current status read and a
         fresh full host observation are bracketed by complete new source/runtime
         inventories. The original Ready timestamp and two-second journal bound
-        remain unchanged. The separate start()/confirm_ready() path is unchanged.
+        remain unchanged. An actual bound BootstrapHost may prepare its fixed
+        read-only I/O concurrently with those inventories, then join on this
+        original thread. The separate start()/confirm_ready() path is unchanged.
         """
         return self._start(combined=True)
 
@@ -673,6 +789,13 @@ class Launch:
             and qualifier.witness is self.witness
         )
         require(qualifier.generation == self.pins.generation and qualifier.init == self.pins.init)
+        if type(self.read) is BootstrapHost:
+            require(
+                self.read.plan is self.plan
+                and self.read.idle is self.idle
+                and self.read.witness is self.witness
+                and self.read.projected == self.projected
+            )
         return qualifier
 
     def _start(self, *, combined):
@@ -722,6 +845,9 @@ class Launch:
 
     def _fail(self, error):
         self.failed = True
+        collector = getattr(self, "read", None)
+        if type(collector) is BootstrapHost and collector.owner == (os.getpid(), get_ident()):
+            collector.discard()
         if self.ready is not None:
             self.ready.failed = True
         if self.client is not None:
@@ -752,6 +878,8 @@ class Launch:
                 _, began = self._guard("starting_operator")
                 self.probe = probe_exec.Sample(self.ready)
                 require(self.probe.prepare() is None)
+                if type(self.read) is BootstrapHost:
+                    require(self.read.prepare() is None)
 
                 def observe():
                     self.ready.check_before_begin()
@@ -828,6 +956,9 @@ class Launch:
         if self.closed:
             return
         self.closed = True
+        collector = getattr(self, "read", None)
+        if type(collector) is BootstrapHost:
+            collector.discard()
         if self.probe is not None:
             self.probe.close()
         if self.ready is not None:
