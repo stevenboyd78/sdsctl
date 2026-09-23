@@ -841,6 +841,41 @@ prove container-init exit and qualify restoration. Wiring this watchdog into an
 installed fixed guardian, including fail-closed handling of watchdog death,
 remains a source/host-plan/platform gate.
 
+## Offline isolated child entrypoint and source inventory
+
+`scripts/accept_supplemental_recording.py` is a private, uninstalled entrypoint
+for the dedicated native runtime. It requires isolated Python (`-I -B`), a
+closed set of pinned launch arguments, the exact guardian identity, two inherited
+anonymous directional channels, and a one-use inherited pipe gate. It installs
+and verifies parent-death termination before waiting at that gate. Extra
+inherited descriptors, ordinary daemon arguments, environment configuration,
+invalid pins and absent or malformed gate release cannot start the runtime.
+Descriptors created after exec by Python's native library loader are not mistaken
+for inherited capabilities. Errors expose only a fixed diagnostic.
+
+Actual exec-isolated tests run the child under the separate watchdog against
+synthetic TCP RTSP and UDP RTP peers. They cover recording and PCM finalization,
+readiness-only cancellation, refusal paths, an extra inherited socket and an
+unreleased gate. This proves the local executable boundary, not an installed
+image, host permission, browser behavior or physical scanner result.
+
+`scripts/supplemental_recording_source.py` supplies read-only source evidence for
+the trusted host/guardian. It inventories the complete package, including assets
+and existing bytecode, and a closed native helper bundle. Two matching bounded
+observations are required; symlinks, hardlinks, special files, extra native files
+or directories, unsafe file modes, overlapping roots and drift are refused.
+Candidate code is never imported to calculate its fingerprint. Tests also check
+the helper bundle's static and lazy private import closure.
+
+The expected digest must be reconstructed independently from reviewed immutable
+source. A matching self-supplied digest does not authenticate the image,
+interpreter, third-party dependencies or this collector itself. The legacy
+three-launcher/two-entry fingerprint and installed host-plan schemas remain
+unchanged and do not grant recording permission. A fixed guardian must qualify
+this complete source boundary and arm its watchdog **before** releasing the
+child gate. Installed guardian/relay/probe, new host-plan and isolated recovery
+qualification remain required before any new live case.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
