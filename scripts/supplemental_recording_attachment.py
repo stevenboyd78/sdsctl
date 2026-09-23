@@ -300,5 +300,88 @@ class ProbeAttachment(Attachment):
             self._fail(error)
 
 
+class WebAttachment(Attachment):
+    """One original startup request/listening reply, then a held-open channel.
+
+    Distinct from the short passive probe and recording operator. No begin,
+    keepalive command, second request, success or EOF/finish acknowledgment is
+    allowed. Closing this channel asks only the already bound web process to
+    end; actual process and Engine exit observations remain separate. The host
+    must persist a unique web-exec intent and bind actual original Ready/PIDs
+    before sending anything. This class provides bounded byte I/O only.
+    """
+
+    def __init__(self, channel, execution_id, *, ready_by, finish_by, sender=None):
+        super().__init__(
+            channel, execution_id, ready_by=ready_by, finish_by=finish_by, sender=sender
+        )
+        self.decoder = framing.Decoder(message_limit=1)
+
+    def _read(self, deadline):
+        while True:
+            self._wait(deadline, writing=False)
+            try:
+                raw = self._receive_bytes()
+            except BlockingIOError:
+                continue
+            self._check(deadline)
+            if not raw:
+                return False
+            values = self.decoder.feed(raw)
+            self._check(deadline)
+            for value in values:
+                require(self.begun and self.reads + len(self.pending) == 0)
+                require(value.get("kind") == "finite-recording-web-listening")
+                self.pending.append(value)
+            return True
+
+    def send_request(self, value, *, deadline):
+        try:
+            self._check(deadline, ready=True)
+            require(self.started and not self.begun and self.reads == 0 and not self.pending)
+            require(
+                not self.decoder.pending
+                and not self.decoder.stdout
+                and self.decoder.segments == 0
+                and self.decoder.remaining is None
+            )
+            require(not select.select([self.channel], [], [], 0)[0])
+            self.begun = True
+            require(type(value) is dict and value.get("kind") == "finite-recording-web-startup")
+            raw = framing.wire.encode(value)
+            self._write(framing.wire.HEADER.pack(len(raw)) + raw, deadline)
+            self._check(deadline, ready=True)
+        except BaseException as error:
+            self._fail(error)
+
+    def receive(self, *, deadline):
+        try:
+            require(self.begun and self.reads == 0)
+            return super().receive(deadline=deadline)
+        except BaseException as error:
+            self._fail(error)
+
+    def check_quiet(self, *, deadline):
+        """No later output or EOF may silently become continuing web health."""
+        try:
+            self._check(deadline)
+            require(self.started and self.begun and self.reads == 1 and not self.pending)
+            require(
+                not self.decoder.pending
+                and not self.decoder.stdout
+                and self.decoder.remaining is None
+            )
+            require(not select.select([self.channel], [], [], 0)[0])
+            self._check(deadline)
+        except BaseException as error:
+            self._fail(error)
+
+    def send_begin(self, value, *, deadline):
+        self._fail(UnconfirmedAttachment(MESSAGE))
+
+    def finish(self, *, deadline):
+        self._fail(UnconfirmedAttachment(MESSAGE))
+
+
 if __name__ == "__main__":
     raise SystemExit("Private attachment I/O only; no installed host action enabled.")

@@ -1245,6 +1245,17 @@ Ready-to-web Engine join, durable one-use host dispatch and installed recovery
 remain separate gates. Neither the ordinary WebUI nor Home Assistant/Pi
 services are switched by this implementation.
 
+The committed launcher has also been exercised in a read-only, network-none
+local image with synthetic scanner/RTSP peers and fresh synthetic profile/media.
+Actual HTTP requests from loopback, including a forged forwarded address, were
+rejected by native ingress authentication; recording-start and HA administration
+routes remained absent. Three fresh cases covered original attachment EOF, a
+second input byte and native readiness expiry without begin. The original web
+pidfd observed exit separately from listener closure; native/watch/operator and
+container-init exits were checked independently. No recording or supplemental
+demand was started. This does not qualify successful authenticated ingress/media
+playback, a real Engine Ready-to-web join or installed failure/restoration.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
@@ -1281,6 +1292,24 @@ This closes the local byte-transport gap only. The new host plan still needs
 independently qualified image/source/interpreter, authenticated exact exec and
 PID-namespace binding, durable dispatch and installed isolated recovery tests.
 Legacy schemas and source policies remain idle-only; no live case is enabled.
+
+### Separate finite-web exec transport — uninstalled
+
+`WebCommand` and `inspect_web` describe and check only the fixed finite ingress
+entrypoint with its original request fingerprint and readiness cutoff. The
+operator and passive-probe inspectors reject this distinct command type. It
+cannot supply arbitrary listener, authentication, environment or command options.
+Created, starting, running and not-running states remain separate observations,
+not proof that the listener is ready or a process has exited.
+
+`WebAttachment` is a distinct one-request/one-listening-reply byte channel using
+the existing bounded Engine upgrade and response-sender validation. After the
+reply it must remain quiet and open within the original lifetime. Extra output,
+partial trailing data or EOF is not continuing web health. It cannot send a
+recording begin, request twice, reconnect or produce a success/finish receipt.
+Closing it ends only that web attachment; original process/Engine exit still
+requires independent observation. Durable one-use web dispatch and binding to
+the actual original Ready are not supplied by these metadata/framing types.
 
 ## Offline exact execution and namespace binding
 

@@ -18,6 +18,7 @@ MESSAGE = "Finite recording execution is unconfirmed; preserve the case and do n
 PYTHON = "/usr/local/bin/python"
 ENTRY = "/opt/sdsctl-supplemental-recording/accept_supplemental_recording_operator.py"
 PROBE_ENTRY = "/opt/sdsctl-supplemental-recording/accept_supplemental_recording_probe.py"
+WEB_ENTRY = "/opt/sdsctl-supplemental-recording/accept_supplemental_recording_web.py"
 RUNTIME = "/usr/local/lib/python3.14/site-packages/sds200"
 
 
@@ -123,6 +124,33 @@ class ProbeCommand:
         return body
 
 
+@dataclass(frozen=True)
+class WebCommand:
+    """Fixed finite ingress exec, never accepted as operator/probe authority.
+
+    Request digest and readiness cutoff must come from the same authenticated
+    original Ready. No caller-selected listen address, auth or renewed lifetime.
+    This pure description creates neither an exec nor a durable one-use claim.
+    """
+
+    plan: str
+    plan_sha256: str
+    source_sha256: str
+    ready_by: float
+    request_sha256: str
+
+    def argv(self):
+        _digest(self.request_sha256)
+        args = list(Command(self.plan, self.plan_sha256, self.source_sha256, self.ready_by).argv())
+        args[3] = WEB_ENTRY
+        return tuple(args) + ("--request-sha256", self.request_sha256)
+
+    def create_body(self):
+        body = Command(self.plan, self.plan_sha256, self.source_sha256, self.ready_by).create_body()
+        body["Cmd"] = list(self.argv())
+        return body
+
+
 def _inspect(value, *, execution_id, container_id, command, command_type):
     """Check exact fixed exec metadata; never infer process exit from a reply.
 
@@ -211,6 +239,17 @@ def inspect_probe(value, *, execution_id, container_id, command):
         container_id=container_id,
         command=command,
         command_type=ProbeCommand,
+    )
+
+
+def inspect_web(value, *, execution_id, container_id, command):
+    """Web-only metadata; not listener readiness, health or process-exit proof."""
+    return _inspect(
+        value,
+        execution_id=execution_id,
+        container_id=container_id,
+        command=command,
+        command_type=WebCommand,
     )
 
 
