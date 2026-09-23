@@ -1349,8 +1349,21 @@ The closed host source inventory now contains45 modules; native29 and product
 bytes are unchanged by this host join. Related local tests exercise durable
 files, Unix HTTP, original owned pidfds, post-begin continuity and negative
 returns. Their Engine/namespace/listener metadata are explicitly synthetic.
-Actual image/runtime/Engine qualification, the assembled host adapter and
-independently installed failure/recovery checks remain separate requirements.
+Separate local immutable-image/source/runtime qualification and an actual
+Engine-to-native-Ready-to-web trial now pass. Actual kernel listener inode and
+web70 exit were matched to the retained original web process. A second isolated
+trial froze only that test web process: live/exit checks refused it, and the
+independent original finite container lifetime later yielded separately
+observed init0/web137 exits. That forced web termination is not recording
+success. A host-side signal attempt was denied by the OS and retained as an
+unconfirmed case; the fresh trial used an exact-identity helper inside its owned
+test container without changing confinement settings.
+
+These use synthetic loopback scanner peers, host path aliases and a finite test
+init, not the installed idle service or full host adapter. There was no recording
+begin, successful trusted-ingress media claim, user-data change or live scanner
+action. The assembled host adapter and independently installed failure/recovery
+checks remain separate requirements.
 No installed idle-only schema or existing acceptance case gains this authority.
 
 ## Offline exact execution and namespace binding

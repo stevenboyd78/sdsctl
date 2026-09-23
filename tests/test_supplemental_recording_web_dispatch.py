@@ -182,8 +182,11 @@ def test_web_and_operator_apis_cannot_cross_authorities(web, prepared):
     claim = create(web)
     denied(lambda: m.load(web.directory, web.pins))
     denied(lambda: m.load(web.directory, prepared.pins))
+    # Exact Endpoint type isolates the claim-type gate. It is deliberately
+    # uninitialized: rejection must happen before any endpoint I/O or use.
+    endpoint = object.__new__(original.m.Endpoint)
     with pytest.raises(original.m.UnconfirmedEngine):
-        original.m.Client(object(), claim)
+        original.m.Client(endpoint, claim)
     assert m.load_web(web.directory, web.pins) == claim.state
 
 
