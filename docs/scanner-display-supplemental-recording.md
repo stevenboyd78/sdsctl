@@ -203,8 +203,14 @@ An explicit observation-only allowlist is applied at the native shared dispatch
 boundary used by payload, JSON, control and authorized-JSON entry points. Peer
 permissions are intersected with that list and redaction is preserved. Native
 capabilities reflect the same restriction. Recording start/stop, scanner controls
-(including hold-state wire queries), profile reload and supplemental demand are
-unavailable. New product operations are not implicitly granted. Manager/runtime
+(including hold-state wire queries) and profile reload are unavailable.
+Supplemental demand is also denied by default. One explicit internal binding may
+enable only that operation for the **same exact native finite acquisition owner**,
+runtime, frame feed and delivery service. Binding neither arms acquisition nor
+creates demand. Failed binding cannot be retried; changed owner/feed/service
+bindings fail closed. Peer permissions are still intersected, and the native
+arm/window/quota/context checks remain authoritative for every demand.
+New product operations are not implicitly granted. Manager/runtime
 replacement fails closed. Restriction stays in place after the finite owner is
 closed or failed; a client cannot retry an uncertain recording operation.
 
@@ -213,8 +219,9 @@ facade or second recorder. Local tests exercise all request entry points, real
 Unix clients, successful native PCM finalization and failed start/metadata paths.
 This component is not installed in the current launcher or normal product. It
 does not authenticate clients or prevent trusted in-process code from calling a
-manager directly. A future native assembly must qualify every transport binding,
-exclude other mutators and schedule start/stop under independent host supervision.
+manager directly. The narrow offline assembly below qualifies its supported
+transport bindings; the installed launcher and independent host supervision
+remain separate gates.
 
 ## Isolated process-failure qualification
 
@@ -261,9 +268,75 @@ is dispatched here.
 
 Tests combine deterministic clock/fault cases with an actual monotonic/event-wait
 run using the real recorder and synthetic PCM; the latter finalizes without a
-manual stop. No launcher has installed this scheduler. Native assembly binding,
-supplemental-window coordination, host policy and isolated installed-container
-qualification remain required before live use.
+manual stop. No launcher has installed this scheduler.
+
+An optional exact native acquisition owner can now be supplied by the offline
+assembly. Only **after acknowledged recording start**, a fresh cached-context
+check and a remaining-time check may it be armed. The full read window must fit
+before the original recording stop; a slow start or context check never shifts
+that deadline. Arming still sends no GET requests. Reads require a separate
+explicit consumer demand through the narrowly bound API. The scheduler checks
+the native acquisition status on each loop; only ordinary window expiry or
+quota exhaustion is an accepted ending. Cancellation, disconnect or another
+ending remains unconfirmed. The optional window is ended on every consumed
+terminal path, including failure. It cannot be rearmed by replaying the schedule.
+
+Recorded read counts and end reason are separate from the file verdict. A valid
+recording with zero requested reads is not a passed supplemental-read test, and
+a counted optional read is not proof of a successful reply.
+
+## Offline native daemon assembly
+
+`scripts/supplemental_recording_assembly.py` now coordinates the actual
+`DaemonProcess`, `DaemonRuntime`, native recording manager, shared frame owner,
+restricted API and finite schedule. It does not replace the scanner/runtime,
+install CLI hooks, start anything on import, or provide a live command. The
+ready/request interface is an **in-process fixture gate**, not an authenticated
+or durable host/operator protocol.
+
+The supported graph requires the same manager for the API, native event stream,
+recording-file server and daemon shutdown. The original PCM fanout must contain
+only its matching, initially empty router. An optional native PCMU server must
+subscribe to the same audio transport. Existing services, changed bindings,
+pre-existing PCM sinks and an already-started runtime are refused. This first
+assembly rejects destination coordinators/reloaders, MQTT, remote services,
+live-audio encoders and waterfall services; it does not silently remove them
+from a normal product configuration. Consequently it is not a drop-in wrapper
+for the ordinary CLI's complete construction path.
+
+Readiness requires native startup, the expected cached scanner identity and a
+supported cached display context. Readiness alone starts no recording and arms
+no reads. The one explicit request creates a fixed monotonic recording plan and
+durable owner journal. Successful finalization precedes the request for ordinary
+native shutdown. A pre-start timeout cannot lose its stop request when native
+signal-handler installation resets the signal controller. Cancellation and
+failures request shutdown, retain evidence and never retry the scheduled start
+or stop. A two-second worker join is bounded, but native shutdown or kernel I/O
+can still block; an independently qualified process deadline is mandatory.
+
+Local tests exercise the real native process, loopback scanner UDP, Unix API and
+recording-file/event servers, PCM fanout and WAV/sidecar finalization. Additional
+cases use actual localhost RTP and a real PCMU Unix consumer with synthetic RTSP
+negotiation: FQK/DTM replies and timeouts coexist with the same eight received
+audio packets, exactly decoded WAV bytes, continuing PSI and one audio session.
+Native cleanup closes servers, sockets, the optional reader and the audio source.
+These are not physical-scanner, real-browser, audible or installed-App results.
+
+Separate parent-owned subprocess tests pin a Linux pidfd **before** releasing the
+start gate. They exercise successful native shutdown, blocked scheduled stop,
+blocked metadata publication, lost stop return and lost receipt-publication
+return. The real native SIGTERM handler may request cleanup without causing exit;
+the parent independently escalates to SIGKILL and reaps the exact child under its
+deadline. Ordinary native `close()` may finalize a recording even when the
+scheduled worker never acknowledged stop. Such complete-looking files, a stopped
+receipt left before a lost return, and proven process exit are **not** promoted
+to a successful recording verdict. No partial artifacts are deleted or repaired.
+
+Still required before live use: the separately reviewed CLI/source assembly,
+durable generation-bound operator gate, recording-capable host policy,
+container-init exit/restoration reconciliation, and isolated installed-container
+qualification. Existing handoff plans and their idle/inventory checks remain
+unchanged; none of these offline results activates live recording permissions.
 
 ## Required live ownership and recovery contract
 

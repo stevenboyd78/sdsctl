@@ -3,7 +3,8 @@
 
 Keep the real recording manager visible for status and library reads, but reserve
 all recording start/stop dispatch for the separate finite owner. Scanner controls,
-profile reload and supplemental demand are also unavailable through this API.
+profile reload are also unavailable through this API. Supplemental demand is
+denied unless separately bound to the exact native finite acquisition owner.
 This is not authentication, process ownership, a scheduler or recovery authority.
 """
 
@@ -18,6 +19,8 @@ from sds200.daemon_api import (
     DaemonApiOperation as Operation,
 )
 from sds200.daemon_recording import DaemonRecordingManager
+from sds200.daemon_supplemental_acquisition import DaemonSupplementalAcquisition
+from sds200.scanner_display_supplemental_transport import SupplementalDeliveryService
 
 # Deliberately explicit: a newly added product operation needs separate review.
 OBSERVATIONS = frozenset(
@@ -57,6 +60,35 @@ class FiniteRecordingApi(DaemonReadOnlyApi):
         super().__init__(runtime, **kwargs)
         self._bound_runtime = runtime
         self._bound_manager = manager
+        self._acquisition = None
+        self._delivery = None
+        self._acquisition_binding_attempted = False
+
+    def bind_acquisition(self, acquisition, delivery) -> None:
+        """Bind once, without arming or renewing demand; never grant controls.
+
+        The native owner still gates every demand by its explicit arm, deadline,
+        read quota and current scanner context. A failed binding is not retried.
+        This is an internal assembly operation, not an API request.
+        """
+        if self._acquisition_binding_attempted:
+            raise ValueError("Finite acquisition binding cannot be retried.")
+        self._acquisition_binding_attempted = True
+        self._acquisition, self._delivery = acquisition, delivery
+        if not self.acquisition_binding_valid():
+            raise ValueError("The finite acquisition binding is unconfirmed.")
+
+    def acquisition_binding_valid(self) -> bool:
+        owner, delivery = self._acquisition, self._delivery
+        return (
+            type(owner) is DaemonSupplementalAcquisition
+            and type(delivery) is SupplementalDeliveryService
+            and self.runtime is self._bound_runtime is owner._runtime
+            and self._bound_runtime._supplemental_acquisition is owner
+            and delivery._acquisition is owner
+            and delivery._frames is owner.frames is self.display_frames
+            and self.supplemental_display is delivery
+        )
 
     def _handle_payload(
         self,
@@ -70,6 +102,7 @@ class FiniteRecordingApi(DaemonReadOnlyApi):
             self.runtime is not self._bound_runtime
             or self.recording_manager is not self._bound_manager
             or self._bound_manager.runtime is not self._bound_runtime
+            or (self._acquisition_binding_attempted and not self.acquisition_binding_valid())
         ):
             return DaemonApiResponse.failure(
                 None,
@@ -77,6 +110,8 @@ class FiniteRecordingApi(DaemonReadOnlyApi):
                 "The finite recording API owner binding is unconfirmed.",
             )
         allowed = OBSERVATIONS
+        if self._acquisition_binding_attempted:
+            allowed = allowed | {Operation.DISPLAY_SUPPLEMENTAL_DEMAND}
         if allowed_operations is not None:
             allowed = allowed.intersection(allowed_operations)
         return super()._handle_payload(

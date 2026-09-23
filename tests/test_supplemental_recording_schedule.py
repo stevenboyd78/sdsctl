@@ -73,6 +73,13 @@ def test_fixed_stop_joins_owner_monitor_api_and_final_content_verifier(scheduled
     assert n.runtime.attach_calls == n.runtime.detach_calls == 1
 
 
+def test_default_schedule_cannot_silently_gain_an_unscheduled_reader(scheduled):
+    scheduled.schedule.api._acquisition_binding_attempted = True
+    refusal(lambda: scheduled.schedule.run(scheduled.cancel))
+    assert scheduled.runtime.attach_calls == 0
+    assert scheduled.schedule.phase == "unconfirmed"
+
+
 @pytest.mark.parametrize("point", ("before_start", "active", "after_stop"))
 def test_cancellation_never_dispatches_an_implicit_stop_or_retry(scheduled, monkeypatch, point):
     n = scheduled
