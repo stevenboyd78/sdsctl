@@ -681,10 +681,47 @@ count and are separately reaped by the test parent. Kernel-credential identity
 does **not** prove that the child executed the approved source; the installed
 fixed launcher and full source inventory remain mandatory qualification gates.
 
-This channel is not yet wired into an installed guardian, the host-ledger bridge,
-a durable operator request or a recording-capable host plan. Receiving a report
+This channel is not yet wired into an installed guardian, a durable operator
+request or a recording-capable host plan. Receiving a report
 is not proof of process exit, unchanged current files, audible quality or App
 restoration. Tests do not contact the physical scanner.
+
+## Offline projected return-to-host bridge
+
+`scripts/supplemental_recording_bridge.py` joins the exact-child receiver to the
+independent host ledger. It accepts only a new, already durable start intent with
+the same source, projection, generation, native manifest and fixed deadlines.
+Each operation replays the host evidence before consuming the next actual
+kernel-authenticated receive. It does not accept a caller-supplied serialized
+`Received` object as authentication or infer a lost return from native receipts.
+
+The start's native plan must follow the host intent. The exact start expectation
+has the same case, generation, endpoint and timestamp in both namespaces; only
+the explicitly projected root/manifest/contract hashes differ. Completion maps
+the acknowledgment to the original **host** contract, independently verifies
+current host files and every old file, compares all native artifact fields to
+the host result, and replays any independently pinned progress checkpoint.
+An unpinned later checkpoint is not adopted. No fresh baseline is captured.
+
+Receipt, verification and durable host publication must return before the fixed
+deadline. A lost or late publication return consumes this bridge even if a
+complete log entry exists. Neither that entry nor native `started.json` or
+`stopped.json` enables another start/completion attempt. Cancellation also consumes
+the bridge. These cooperative checks do not interrupt blocked I/O and still need
+the independent outer guardian.
+
+The qualification combines actual child processes, the dedicated native runtime,
+localhost RTP, real WAV/metadata verification and the durable host log. Namespace
+aliases are explicitly routed test fixtures, **not** installed mount-namespace
+qualification. The bridge itself is a same-process adapter; the installed,
+source-pinned cross-container relay/operator path remains a separate gate. It
+does not grant authority to launch a scanner-owning process on the host.
+
+If the start return is lost, the log remains start-intent-only and no successful
+expectation is invented. Independent termination and conservative preservation
+of unconfirmed output must still be qualified; missing acknowledgment must not
+be mistaken for an idle recorder or permission to replay. Native/container-init
+exit, restoration and audible quality remain separate from this bridge's result.
 
 ## Required live ownership and recovery contract
 
