@@ -10,6 +10,7 @@ import importlib.util
 import io
 import json
 import os
+import select
 import subprocess
 import sys
 import time
@@ -50,18 +51,27 @@ def prepared(tmp_path, monkeypatch):
     )
     plan = m.host_plan.decode(supplied)
     child = subprocess.Popen(
-        [sys.executable, "-I", "-B", "-c", "import sys;sys.stdin.read()"], stdin=subprocess.PIPE
+        [sys.executable, "-I", "-B", "-c", "import sys;print('ready',flush=True);sys.stdin.read()"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
     )
     witness = None
     objects = []
     try:
+        # Do not bind a supposedly quiescent fixture during interpreter startup
+        # I/O. This is only a bounded test-process barrier, not native readiness.
+        poller = select.poll()
+        poller.register(child.stdout.fileno(), select.POLLIN | select.POLLHUP)
+        assert poller.poll(3000), "Owned fixture startup did not complete"
+        assert child.stdout.readline() == b"ready\n"
         ticks = int(Path(f"/proc/{child.pid}/stat").read_text().rpartition(") ")[2].split()[19])
         identity = m.process.ProcessIdentity(child.pid, ticks, "a" * 64)
 
         def read_identity(pid, cid):
             assert (pid, cid) == (child.pid, identity.container_id)
             fields = Path(f"/proc/{pid}/stat").read_text().rpartition(") ")[2].split()
-            assert fields[0] in ("R", "S", "I") and int(fields[19]) == ticks
+            assert fields[0] in ("R", "S", "I"), f"Fixture process state: {fields[0]}"
+            assert int(fields[19]) == ticks
             return identity
 
         monkeypatch.setattr(m.process, "read_identity", read_identity)
@@ -143,6 +153,7 @@ def prepared(tmp_path, monkeypatch):
             witness.close()
         child.stdin.close()
         child.wait(timeout=3)
+        child.stdout.close()
         assert child.returncode == 0
 
 
