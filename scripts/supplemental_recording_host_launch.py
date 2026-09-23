@@ -330,6 +330,7 @@ class CandidateQualification:
         )
     )
     MAX_SECONDS = 2.0
+    EVIDENCE = idle_module.Evidence
 
     def __init__(
         self,
@@ -364,7 +365,7 @@ class CandidateQualification:
             self.fd_identity = runtime.identity(os.fstat(self.fd))
             self.original = self._pins()
             self.layout = next(item for item in plan.layouts if item.slug == base.CANDIDATE)
-            self._guard(min(time.monotonic() + self.MAX_SECONDS, plan.lease["ready_by"]))
+            self._guard(min(time.monotonic() + self.MAX_SECONDS, self._bounds()[1]))
         except BaseException as error:
             self._fail(error)
 
@@ -378,6 +379,16 @@ class CandidateQualification:
             self.hostname,
             self.architecture,
         )
+
+    def _bounds(self):
+        return self.plan.deadlines.ready_by, self.plan.lease["ready_by"]
+
+    def _evidence(self):
+        return self.idle.read()
+
+    @staticmethod
+    def _original(evidence):
+        return evidence
 
     def _guard(self, deadline):
         require(not self.failed and self.owner == (os.getpid(), get_ident()))
@@ -406,8 +417,9 @@ class CandidateQualification:
         )
         observed = plans.clock.read()
         self.plan.check_clock(observed)
-        require(observed.boottime_ns / plans.clock.NS < self.plan.deadlines.ready_by)
-        require(time.monotonic() < min(deadline, self.plan.lease["ready_by"]))
+        policy_end, native_end = self._bounds()
+        require(observed.boottime_ns / plans.clock.NS < policy_end)
+        require(time.monotonic() < min(deadline, native_end))
 
     def _metadata(self, deadline):
         self._guard(deadline)
@@ -508,12 +520,14 @@ class CandidateQualification:
             require(self.lock.acquire(blocking=False))
             acquired = True
             began = time.monotonic()
-            deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
+            deadline = min(began + self.MAX_SECONDS, self._bounds()[1])
             self._guard(deadline)
-            before = self.idle.read()
-            require(type(before) is idle_module.Evidence and before.init == self.init)
+            before = self._evidence()
+            require(type(before) is self.EVIDENCE)
+            original = self._original(before)
+            require(type(original) is idle_module.Evidence and original.init == self.init)
             require(
-                (before.plan_sha256, before.generation, before.lease_sha256)
+                (original.plan_sha256, original.generation, original.lease_sha256)
                 == (self.plan.sha256, self.generation, self.plan.lease_sha256)
             )
             merged, stamp, configured = self._metadata(deadline)
@@ -555,8 +569,8 @@ class CandidateQualification:
                 require(began <= environment_before.observed_at <= evidence.observed_at)
             after_root, after_stamp, _ = self._metadata(deadline)
             require((after_root, after_stamp) == (merged, stamp))
-            after = self.idle.read()
-            require(type(after) is idle_module.Evidence)
+            after = self._evidence()
+            require(type(after) is self.EVIDENCE)
             # Evidence timestamps must advance; immutable process/claim/files
             # and original clock domain must not change beneath that freshness.
             require(replace(after, sampled_at=before.sampled_at) == before)
@@ -576,6 +590,64 @@ class CandidateQualification:
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedHostLaunch(MESSAGE) from None
+
+
+class RetainedQualification(CandidateQualification):
+    """Same fresh source/runtime bracket, only after an actual retained begin.
+
+    Uses PostBegin's ORIGINAL init/lease/actor continuity and already fixed stop
+    bounds, never an expired Idle.read or renewed readiness. Source, environment,
+    mounts, image and original process reads are identical to the bootstrap
+    qualifier; nothing is cached from a previous successful call. A worker exit
+    during collection refuses that sample. No health, recording completion,
+    independent host recovery or permission to begin is produced by this class.
+    Launch/Start continue requiring the exact pre-begin qualification type.
+    """
+
+    EVIDENCE = idle_module.Continuity
+
+    def __init__(self, continuity, witness, docker, **profile):
+        self.failed, self.elapsed_seconds = False, None
+        try:
+            require(type(continuity) is idle_module.PostBegin)
+            require(not continuity.closed and not continuity.failed)
+            self.continuity = continuity
+            self.continuity_objects = (
+                continuity,
+                continuity.plan,
+                continuity.idle,
+                continuity.guard,
+                continuity.ready,
+            )
+            self.continuity_finish = continuity.finish_by
+            super().__init__(continuity.plan, continuity.idle, witness, docker, **profile)
+        except BaseException as error:
+            self._fail(error)
+
+    def _bounds(self):
+        continued = self.continuity
+        require(type(continued) is idle_module.PostBegin)
+        require(continued.plan is self.plan and continued.idle is self.idle)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (continued, self.plan, self.idle, continued.guard, continued.ready),
+                    self.continuity_objects,
+                    strict=True,
+                )
+            )
+        )
+        require(continued.finish_by == self.continuity_finish == self.plan.lease["stop_by"])
+        continued._guard(min(time.monotonic() + self.MAX_SECONDS, self.continuity_finish))
+        return self.plan.deadlines.stop_by, self.continuity_finish
+
+    def _evidence(self):
+        return self.continuity.read()
+
+    @staticmethod
+    def _original(evidence):
+        return evidence.original
 
 
 class Launch:

@@ -620,6 +620,19 @@ synthetic platform/projection and `Retained` inputs. Full phase-specific host
 and recording-file observation, fresh source/runtime qualification, installed
 service supervision and a new user-observed trial remain separate gates.
 
+`RetainedQualification` now supplies the source/runtime portion for that
+post-begin path. It requires the actual `PostBegin` object and uses the same
+complete source, interpreter, environment, image, mount and original-init checks
+as bootstrap qualification. It brackets each read-only observation with fresh
+inventories, retains the two-second limit, and compares original continuity
+before and after. It uses only the original stop bound; the exact bootstrap
+qualifier remains readiness-limited and cannot be replaced with this class in
+`Launch` or `Start`. A worker exit during a sample invalidates that sample; a
+stable retained exit does not turn code qualification into native health or
+recording success. Local tests join real file inventories and owned init handles
+with explicit synthetic platform/continuity inputs. Installed qualification and
+the full phase-aware recording collector remain outstanding.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently
