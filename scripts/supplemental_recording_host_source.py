@@ -65,6 +65,7 @@ MODULES = frozenset(
             "clock",
             "dispatch",
             "engine",
+            "engine_sender",
             "evidence",
             "exec_stream",
             "execution",

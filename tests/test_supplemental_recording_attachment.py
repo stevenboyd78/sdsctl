@@ -12,6 +12,7 @@ from threading import Thread
 
 import pytest
 
+from . import test_supplemental_recording_engine_sender as senders
 from . import test_supplemental_recording_exec_stream as stream
 
 NAME = "supplemental_recording_attachment"
@@ -19,6 +20,7 @@ SPEC = importlib.util.spec_from_file_location(NAME, Path(stream.m.__file__).with
 m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
+assert m.senders is senders.m
 EXEC = "e" * 64
 BEGIN = {"phase": "begin", "private": "PRIVATE"}
 
@@ -321,7 +323,9 @@ def test_constructor_refuses_and_closes_owned_socket(fault):
 def test_no_default_endpoint_or_connect_action():
     import inspect
 
-    assert str(inspect.signature(m.Attachment)) == "(channel, execution_id, *, ready_by, finish_by)"
+    assert str(inspect.signature(m.Attachment)) == (
+        "(channel, execution_id, *, ready_by, finish_by, sender=None)"
+    )
     assert not any(
         hasattr(m.Attachment, name) for name in ("connect", "create", "restart", "restore")
     )

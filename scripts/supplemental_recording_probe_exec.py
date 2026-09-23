@@ -194,7 +194,7 @@ class Sample:
             require(self._inspect().phase == "created")
             sock = self.endpoint.connect(deadline=self.probe_by)
             self.channel = engine.attachment.ProbeAttachment(
-                sock, self.execution_id, probe_by=self.probe_by
+                sock, self.execution_id, probe_by=self.probe_by, sender=self.endpoint.sender
             )
             self.channel.start(deadline=self.probe_by)
             self._bind()

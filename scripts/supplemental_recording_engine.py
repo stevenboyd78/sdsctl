@@ -24,6 +24,7 @@ from threading import get_ident
 import supplemental_handoff_files as files
 import supplemental_recording_attachment as attachment
 import supplemental_recording_dispatch as dispatch
+import supplemental_recording_engine_sender as senders
 import supplemental_recording_namespace as namespace
 
 SOCKET = Path("/run/docker.sock")
@@ -75,16 +76,23 @@ class Endpoint:
     Every connection checks the root-owned, non-world-writable socket and its
     root-owned non-writable parent, then kernel SO_PEERCRED against root. The
     first peer is retained by pidfd/start ticks; later connections must be that
-    same live peer and unchanged socket. No TCP, path argument or reconnect after
+    same live peer and unchanged socket. Explicit sender_credentials=True instead
+    binds the actual response writer using a fixed read-only ping and kernel
+    credentials on EVERY read; socket creator PID1 alone is never Engine proof.
+    The default remains unchanged. No TCP, path argument or reconnect after
     failure. Host root is trusted; this is not protection against malicious root.
     """
 
-    def __init__(self):
+    def __init__(self, *, sender_credentials=False):
         self.owner = (os.getpid(), get_ident())
         self.parent, self.peer_fd, self.peer = -1, -1, None
+        self.sender = None
         self.closed = False
         try:
+            require(type(sender_credentials) is bool)
             require(os.geteuid() == ROOT_UID)
+            if sender_credentials:
+                self.sender = senders.Sender()
             self.parent = os.open(str(SOCKET.parent), files.DIRECTORY)
             info = os.fstat(self.parent)
             require(info.st_uid == ROOT_UID and info.st_mode & 0o7022 == 0)
@@ -110,6 +118,9 @@ class Endpoint:
         if self.peer is not None:
             _alive(self.peer_fd)
             require(_ticks(self.peer[0]) == self.peer[1])
+        if self.sender is not None:
+            require(type(self.sender) is senders.Sender)
+            self.sender.check()
 
     def connect(self, *, deadline):
         channel = None
@@ -121,16 +132,21 @@ class Endpoint:
             channel.settimeout(_deadline(end))
             channel.connect(str(SOCKET))
             _deadline(end)
-            pid, uid, gid = struct.unpack(
-                "3i",
-                channel.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")),
-            )
-            require(uid == ROOT_UID and gid == ROOT_GID)
-            observed = (pid, _ticks(pid), uid, gid)
-            if self.peer is None:
-                self.peer_fd = os.pidfd_open(pid, 0)
-                self.peer = observed
-            require(self.peer == observed)
+            if self.sender is not None:
+                self.sender.ping(channel, deadline=end)
+            else:
+                pid, uid, gid = struct.unpack(
+                    "3i",
+                    channel.getsockopt(
+                        socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")
+                    ),
+                )
+                require(uid == ROOT_UID and gid == ROOT_GID)
+                observed = (pid, _ticks(pid), uid, gid)
+                if self.peer is None:
+                    self.peer_fd = os.pidfd_open(pid, 0)
+                    self.peer = observed
+                require(self.peer == observed)
             self.check()
             _deadline(end)
             channel.setblocking(False)
@@ -138,6 +154,20 @@ class Endpoint:
         except BaseException as error:
             if channel is not None:
                 channel.close()
+            self._fail(error)
+
+    def receive(self, channel, limit):
+        """Never discard sender credentials in the explicit sender profile."""
+        try:
+            self.check()
+            raw = (
+                channel.recv(limit) if self.sender is None else self.sender.receive(channel, limit)
+            )
+            self.check()
+            return raw
+        except BlockingIOError:
+            raise
+        except BaseException as error:
             self._fail(error)
 
     def _fail(self, error):
@@ -148,6 +178,8 @@ class Endpoint:
 
     def close(self):
         self.closed = True
+        if self.sender is not None:
+            self.sender.close()
         for name in ("peer_fd", "parent"):
             fd = getattr(self, name)
             setattr(self, name, -1)
@@ -195,7 +227,7 @@ def _json_request(endpoint, method, path, body, expected, *, deadline):
         while True:
             _wait(channel, end)
             try:
-                chunk = channel.recv(4096)
+                chunk = endpoint.receive(channel, 4096)
             except BlockingIOError:
                 continue
             require(chunk)
@@ -305,7 +337,11 @@ class Client:
             self._check()
             channel = self.endpoint.connect(deadline=pins.command.ready_by)
             self.attachment = attachment.Attachment(
-                channel, execution_id, ready_by=pins.command.ready_by, finish_by=finish_by
+                channel,
+                execution_id,
+                ready_by=pins.command.ready_by,
+                finish_by=finish_by,
+                sender=self.endpoint.sender,
             )
             self.attachment.start(deadline=pins.command.ready_by)
             self._check()

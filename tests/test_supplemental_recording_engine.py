@@ -63,7 +63,7 @@ def reply(value, status=200):
 
 
 @contextmanager
-def engine(prepared, monkeypatch, handlers):
+def engine(prepared, monkeypatch, handlers, *, sender_credentials=False):
     endpoint = client = None
     path = prepared.directory.parent / "PRIVATE_engine.sock"
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -75,6 +75,8 @@ def engine(prepared, monkeypatch, handlers):
     monkeypatch.setattr(m, "SOCKET", path)
     monkeypatch.setattr(m, "ROOT_UID", os.geteuid())
     monkeypatch.setattr(m, "ROOT_GID", os.getegid())
+    monkeypatch.setattr(m.senders, "ROOT_UID", os.geteuid())
+    monkeypatch.setattr(m.senders, "ROOT_GID", os.getegid())
 
     def serve():
         while not stop.is_set():
@@ -87,6 +89,16 @@ def engine(prepared, monkeypatch, handlers):
                 request = read_request(peer)
                 if request is None:
                     continue
+                if sender_credentials:
+                    assert request == (
+                        "GET /v1.47/_ping HTTP/1.1",
+                        {"Host": "localhost", "Connection": "keep-alive", "Content-Length": "0"},
+                        None,
+                    )
+                    peer.sendall(attached.senders.REPLY)
+                    request = read_request(peer)
+                    if request is None:
+                        continue
                 requests.append(request)
                 assert len(requests) <= len(handlers), "Never send an extra request"
                 handler = handlers[len(requests) - 1]
@@ -103,7 +115,7 @@ def engine(prepared, monkeypatch, handlers):
     worker.start()
     try:
         claim = intents.create(prepared)
-        endpoint = m.Endpoint()
+        endpoint = m.Endpoint(sender_credentials=sender_credentials)
         client = m.Client(endpoint, claim)
         yield client, requests
     finally:
@@ -126,7 +138,10 @@ def refused(action, client):
         client.create()
 
 
-def test_fixed_create_inspect_and_upgrade_follow_actual_durable_intents(prepared, monkeypatch):
+@pytest.mark.parametrize("sender_credentials", [False, True])
+def test_fixed_create_inspect_and_upgrade_follow_actual_durable_intents(
+    prepared, monkeypatch, sender_credentials
+):
     assert m.namespace is namespaces.m
 
     def created(peer, request):
@@ -160,7 +175,9 @@ def test_fixed_create_inspect_and_upgrade_follow_actual_durable_intents(prepared
             )
         )
 
-    with engine(prepared, monkeypatch, [created, inspected, upgraded]) as (client, requests):
+    with engine(
+        prepared, monkeypatch, [created, inspected, upgraded], sender_credentials=sender_credentials
+    ) as (client, requests):
         assert client.create() == attached.EXEC
         channel = client.attach(finish_by=prepared.pins.command.ready_by + 5)
         assert channel.receive(deadline=channel.ready_by) == {"phase": "ready"}
@@ -171,13 +188,22 @@ def test_fixed_create_inspect_and_upgrade_follow_actual_durable_intents(prepared
         ] == attached.stream.MESSAGES[1:]
         channel.finish(deadline=channel.finish_by)
         assert len(requests) == 3 and channel.finished
-        assert client.endpoint.peer[0] == os.getpid()
-        assert client.endpoint.peer_fd >= 0  # Actual retained kernel pidfd.
+        if sender_credentials:
+            sender = client.endpoint.sender
+            assert channel.sender is sender and sender.peer[0] == os.getpid()
+            assert sender.peer_fd >= 0 and not sender.closed
+        else:
+            assert channel.sender is None and client.endpoint.sender is None
+            assert client.endpoint.peer[0] == os.getpid()
+            assert client.endpoint.peer_fd >= 0  # Actual retained kernel pidfd.
         assert not hasattr(client, "native_exit") and not hasattr(client, "begin")
 
 
 @pytest.mark.parametrize("stage", ["create", "inspect", "start"])
-def test_lost_response_consumes_exact_dispatch_without_retry(prepared, monkeypatch, stage):
+@pytest.mark.parametrize("sender_credentials", [False, True])
+def test_lost_response_consumes_exact_dispatch_without_retry(
+    prepared, monkeypatch, stage, sender_credentials
+):
     handlers = [
         reply({"Id": attached.EXEC}, 201),
         reply(intents.metadata(prepared)),
@@ -185,7 +211,9 @@ def test_lost_response_consumes_exact_dispatch_without_retry(prepared, monkeypat
     ]
     index = ["create", "inspect", "start"].index(stage)
     handlers[index] = b""  # Request was read; response was lost.
-    with engine(prepared, monkeypatch, handlers[: index + 1]) as (client, requests):
+    with engine(
+        prepared, monkeypatch, handlers[: index + 1], sender_credentials=sender_credentials
+    ) as (client, requests):
         if index:
             client.create()
         refused(

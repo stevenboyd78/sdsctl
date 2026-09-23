@@ -1059,13 +1059,61 @@ required; none is recorder/guardian/init exit or recording completion. A failed
 sample is consumed and keeps its probe ID/handle for explicit cleanup, without
 closing the borrowed operator connection or retrying. No signal is exposed.
 
-The host source inventory is now43 modules. Local tests use actual private Unix
+The probe join expanded the host source inventory to43 modules; the explicit
+Engine sender profile below expands it to44. Local tests use actual private Unix
 transport, owned processes/pidfds and original intent files, but synthetic Engine
 and namespace metadata and cached replies. They do not establish installed
 image/source/runtime authentication or live daemon health. The host adapter must
 still establish and recheck those independent properties, full file protection
 and whole-observation freshness around this mechanism before using the result.
 No installed observer or service selects this path.
+
+### Explicit Engine response-sender profile — local qualification
+
+The default Engine endpoint continues to require a live root socket peer with
+PID greater than1. It does not silently accept PID1. A local socket-activated
+Engine exposed why a separate profile is needed: `SO_PEERCRED` identified the
+listener creator (PID1), while actual reply `SCM_CREDENTIALS` identified Docker's
+different live root process. Creator lifetime alone is not Engine lifetime.
+These credential semantics follow the
+[Linux Unix-socket API](https://www.man7.org/linux/man-pages/man7/unix.7.html);
+[systemd socket activation](https://www.freedesktop.org/software/systemd/man/latest/systemd.socket.html)
+can pass an already-created listener to a service.
+
+Only explicit `Endpoint(sender_credentials=True)` selects the new local
+mechanism. Each connection sends one fixed bounded read-only API v1.47 ping
+before any operation. The witness retains both the original kernel-reported
+creator and actual response writer by pidfd/start ticks. Every subsequent
+JSON, operator-attachment and passive-probe read uses `recvmsg` and requires
+the same live root writer. Later connections cannot silently adopt another
+Engine. Malformed, truncated, missing or changed credentials consume the case;
+received file descriptors are closed and refused, never adopted as evidence.
+
+An empty orderly EOF may carry Linux's all-zero credential record. That exact
+case is accepted only as framing EOF, never as a sender identity or process
+exit, and both original process witnesses must still be live. Attachments
+borrow this witness; closing an attachment does not close the endpoint's
+original pidfds. No arbitrary receive callback or caller-provided PID is used.
+
+Local tests cover an inherited listener and a distinct actual child writer,
+changed writers, original-writer exit, framing/refusal and both attachment
+types. A read-only local root Engine ping also distinguished creator from
+writer. These results do not qualify an installed image, a complete host
+adapter, scanner ownership, recording completion or recovery. The host source
+inventory now contains44 modules; native source remains24. Older43-module
+image qualification is historical, not proof of the expanded host bundle.
+No installed plan enables the new profile.
+
+A separate scanner-free local Docker qualification exercised the explicit
+sender transport against the actual Engine: one new read-only/network-disabled
+container, no mounts, and the already source-qualified fixed probe. Actual
+running exec inspections surrounded its retained pidfd and container namespace
+checks. The intentionally invalid request produced no health reply; the
+probe's retained pidfd exited and its exact Engine inspection reported70.
+The harmless container init stayed alive until its own finite lifetime ended;
+its separate original pidfd and Engine exit0 were then checked. No signal,
+recorder, scanner or installed App was involved. This confirms that narrow
+transport/refusal boundary, not the still-pending complete host handoff.
 
 ## Offline private exec attachment I/O
 

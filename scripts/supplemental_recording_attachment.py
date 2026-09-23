@@ -18,6 +18,7 @@ import socket
 import time
 from threading import get_ident
 
+import supplemental_recording_engine_sender as senders
 import supplemental_recording_exec_stream as framing
 
 MESSAGE = "Finite recording attachment is unconfirmed; preserve the case and do not reconnect."
@@ -46,18 +47,20 @@ class Attachment:
     method/path/body, caller argv, restart, attach-again or exit-inspection API.
     """
 
-    def __init__(self, channel, execution_id, *, ready_by, finish_by):
+    def __init__(self, channel, execution_id, *, ready_by, finish_by, sender=None):
         self.owner = (os.getpid(), get_ident())
         self.channel = channel if type(channel) is socket.socket else None
         self.closed = self.started = self.begun = self.finished = False
         self.reads, self.pending = 0, []
         self.decoder = framing.Decoder()
+        self.sender = sender  # Borrowed original witness; never owned or rebound here.
         try:
             require(self.channel is not None and channel.fileno() >= 0)
             require(channel.family == socket.AF_UNIX)
             require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM)
             channel.getpeername()  # Reject unconnected/listening descriptors.
             require(not channel.get_inheritable())
+            self._sender_check()
             require(type(execution_id) is str and re.fullmatch(r"[0-9a-f]{64}", execution_id))
             for deadline in (ready_by, finish_by):
                 require(type(deadline) in (int, float) and math.isfinite(deadline))
@@ -71,9 +74,21 @@ class Attachment:
 
     def _check(self, deadline, *, ready=False):
         require(not self.closed and self.owner == (os.getpid(), get_ident()))
+        self._sender_check()
         require(type(deadline) in (int, float) and math.isfinite(deadline))
         require(0 < deadline - time.monotonic() <= 780)
         require(deadline <= (self.ready_by if ready else self.finish_by))
+
+    def _sender_check(self):
+        if self.sender is not None:
+            require(type(self.sender) is senders.Sender and self.sender.peer is not None)
+            self.sender.check()
+            require(self.channel.getsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED) == 1)
+
+    def _receive_bytes(self):
+        if self.sender is not None:
+            return self.sender.receive(self.channel, framing.MAX_CHUNK)
+        return self.channel.recv(framing.MAX_CHUNK)
 
     def _wait(self, deadline, *, writing):
         self._check(deadline)
@@ -102,7 +117,7 @@ class Attachment:
         while True:
             self._wait(deadline, writing=False)
             try:
-                raw = self.channel.recv(framing.MAX_CHUNK)
+                raw = self._receive_bytes()
             except BlockingIOError:
                 continue
             self._check(deadline)
@@ -201,18 +216,20 @@ class ProbeAttachment(Attachment):
     Clean framing/EOF is not cached health, process exit or restoration authority.
     """
 
-    def __init__(self, channel, execution_id, *, probe_by):
+    def __init__(self, channel, execution_id, *, probe_by, sender=None):
         self.owner = (os.getpid(), get_ident())
         self.channel = channel if type(channel) is socket.socket else None
         self.closed = self.started = self.begun = self.finished = False
         self.reads, self.pending = 0, []
         self.decoder = framing.Decoder(message_limit=1)
+        self.sender = sender
         try:
             require(self.channel is not None and channel.fileno() >= 0)
             require(channel.family == socket.AF_UNIX)
             require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_STREAM)
             channel.getpeername()
             require(not channel.get_inheritable())
+            self._sender_check()
             require(type(execution_id) is str and re.fullmatch(r"[0-9a-f]{64}", execution_id))
             require(type(probe_by) in (int, float) and math.isfinite(probe_by))
             require(0 < probe_by - time.monotonic() <= 8)
@@ -226,7 +243,7 @@ class ProbeAttachment(Attachment):
         while True:
             self._wait(deadline, writing=False)
             try:
-                raw = self.channel.recv(framing.MAX_CHUNK)
+                raw = self._receive_bytes()
             except BlockingIOError:
                 continue
             self._check(deadline)
