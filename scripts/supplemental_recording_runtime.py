@@ -56,6 +56,7 @@ MAX_DEPTH = 24
 MAX_FILE_BYTES = 16 * 1024 * 1024
 MAX_TOTAL_BYTES = 256 * 1024 * 1024
 MAX_SECONDS = 20.0
+CONTROL_CHARACTER = re.compile(r"[\x00-\x1f]")
 ENV_KEYS = frozenset(
     {"PATH", "PYTHON_VERSION", "PYTHON_SHA256", "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
 )
@@ -358,8 +359,9 @@ class Layout:
             nonlocal total, count
             timely()
             require(depth <= MAX_DEPTH and len(entries) < MAX_ENTRIES and relative not in entries)
-            require(0 < len(name.encode()) <= 255 and all(ord(c) >= 32 for c in name))
+            require(0 < len(name.encode()) <= 255 and CONTROL_CHARACTER.search(name) is None)
             before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+            before_identity = identity(before)
             link = stat.S_ISLNK(before.st_mode)
             safe(before, link=link)
             meta = {
@@ -371,16 +373,18 @@ class Layout:
                 entries[relative] = {"kind": "directory", **meta}
                 child = os.open(name, DIRECTORY, dir_fd=parent)
                 try:
-                    require(identity(os.fstat(child)) == identity(before))
+                    require(identity(os.fstat(child)) == before_identity)
                     with os.scandir(child) as children:
                         for entry in children:
                             record(child, entry.name, relative + "/" + entry.name, depth + 1)
-                    require(identity(os.fstat(child)) == identity(before))
+                    require(identity(os.fstat(child)) == before_identity)
                 finally:
                     os.close(child)
             elif link:
                 target = os.readlink(name, dir_fd=parent)
-                require(0 < len(target.encode()) <= 4096 and all(ord(c) >= 32 for c in target))
+                require(
+                    0 < len(target.encode()) <= 4096 and CONTROL_CHARACTER.search(target) is None
+                )
                 entries[relative] = {"kind": "symlink", "target": target, **meta}
             else:
                 require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1)
@@ -392,7 +396,7 @@ class Layout:
                     name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent
                 )
                 try:
-                    require(identity(os.fstat(fd)) == identity(before))
+                    require(identity(os.fstat(fd)) == before_identity)
                     hashed, size = hashlib.sha256(), 0
                     while True:
                         timely()
@@ -402,7 +406,7 @@ class Layout:
                         size += len(chunk)
                         require(size <= before.st_size)
                         hashed.update(chunk)
-                    require(size == before.st_size and identity(os.fstat(fd)) == identity(before))
+                    require(size == before.st_size and identity(os.fstat(fd)) == before_identity)
                     entries[relative] = {
                         "kind": "file",
                         "size": size,
@@ -412,7 +416,7 @@ class Layout:
                 finally:
                     os.close(fd)
             require(
-                identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == identity(before)
+                identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == before_identity
             )
 
         try:
@@ -449,12 +453,15 @@ class Layout:
             for path, entry in entries.items():
                 if entry["kind"] == "symlink":
                     _resolve(path, entries)
+                # These are already canonical relative POSIX inventory names,
+                # assembled from fixed roots and scandir names. Avoid repeatedly
+                # constructing Path objects for every entry in both full reads.
+                name = path.rpartition("/")[2]
                 if path.startswith("usr/local/"):
-                    require(not PurePosixPath(path).name.endswith("._pth"))
+                    require(not name.endswith("._pth"))
                 # Startup executes .pth and customization code before the
                 # application can verify itself; none is allowed in this image.
                 if path.startswith("usr/local/lib/python3.14/"):
-                    name = PurePosixPath(path).name
                     require(not name.endswith(".pth"))
                     require(not re.match(r"(?:sitecustomize|usercustomize)(?:\.|$)", name))
             for path in REQUIRED:

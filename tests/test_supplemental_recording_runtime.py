@@ -157,6 +157,33 @@ def test_python_startup_hooks_are_refused_even_when_inventoried(layout, path):
     denied(layout.observe)
 
 
+@pytest.mark.parametrize("character", ["\x01", "\t", "\n", "\r", "\x1f"])
+@pytest.mark.parametrize("kind", ["file", "directory", "symlink", "target"])
+def test_inventory_names_and_link_targets_keep_control_character_rejection(layout, character, kind):
+    root = layout.root / "usr/local"
+    unsafe = "before" + character + "after"
+    if kind == "file":
+        (root / unsafe).write_bytes(b"untrusted")
+    elif kind == "directory":
+        (root / unsafe).mkdir()
+    elif kind == "symlink":
+        (root / unsafe).symlink_to("bin/python3.14")
+    else:
+        (root / "ordinary-link").symlink_to(unsafe)
+    denied(layout.observe)
+
+
+@pytest.mark.parametrize("name", ["a.b", "space name", "caf\u00e9", "\u6e2c\u8a66", "\x7f"])
+def test_legal_non_hook_names_keep_identical_inventory_semantics(layout, name):
+    relative = "usr/local/lib/python3.14/site-packages/" + name
+    (layout.root / relative).write_bytes(b"unchanged bytes")
+    observed = layout.observe()
+    entries, _, _ = layout._snapshot(m.time.monotonic() + m.MAX_SECONDS)
+    assert entries[relative]["kind"] == "file"
+    assert entries[relative]["sha256"] == m.hashlib.sha256(b"unchanged bytes").hexdigest()
+    assert observed == layout.verify(observed.sha256)
+
+
 @pytest.mark.parametrize(
     "fault",
     [
