@@ -1074,6 +1074,62 @@ they are not a claim of installed Docker authentication. The authenticated host
 connection, durable dispatch, new host plan and installed recovery tests are
 still required before a physical test.
 
+## Offline durable exec dispatch intents
+
+`scripts/supplemental_recording_dispatch.py` records three strictly ordered,
+bounded host-private events: create intent before an exec/create attempt, the
+actual returned execution ID before inspecting it, and attach intent after an
+independent exact created-state inspection but before exec/start. Each event is
+exclusively created, flushed and fsynced, together with its containing directory,
+then reread before returning. The original source, launch command, host binding,
+container generation, retained live init identity and readiness deadline remain
+fixed. Directory replacement, changed history, malformed files, lost publication
+confirmation, late returns and interruption permanently consume the controller.
+
+Reopening is read-only reconciliation, never another create or attach capability.
+The future qualified host plan must fix the unique directory for the case;
+selecting some other empty directory is not evidence that no earlier create
+occurred. The ledger does not send HTTP, authenticate caller-supplied source or
+inspection values, authorize recording begin, or infer process exit. A separate
+durable recording-start intent is still required before the one begin message.
+Elapsed-time checks reject late filesystem results; independent outer supervision
+must bound kernel I/O stalls.
+
+Tests use actual private files, fsync calls and retained owned process pidfds,
+with explicitly synthetic container identities. They cover all three lost-return
+positions, actual init exit, closed/foreign witnesses, wrong-thread writes,
+partial/corrupt or unsafe entries, replaced directories, altered history and
+directory mutation during a read. No installed host service or live case is
+enabled by these tests.
+
+## Offline fixed Engine connection and dispatch
+
+`scripts/supplemental_recording_engine.py` joins the durable intents to fixed
+Engine create, inspect and upgraded start requests. Its endpoint has no path or
+TCP option: the qualified host must expose `/run/docker.sock`. It verifies the
+root-owned socket and non-writable root-owned parent, kernel peer credentials,
+and the same retained live peer pidfd/start identity on later connections. Host
+root is trusted. These checks authenticate the local transport, not candidate
+source, container configuration, interpreter bytes or the native launch plan.
+
+Create and inspection responses have bounded HTTP/1.1 Content-Length JSON
+framing and a one-second absolute request deadline. Redirects, duplicate fields,
+unknown framing (including chunked responses), private errors and late or lost
+responses consume the client without retry. Installed Engine compatibility must
+be checked independently; there is no fallback to a weaker parser. The returned
+exec ID is durable before inspection; a matching created-state inspection and
+durable attach intent precede the one upgraded start. Full original intent
+directory identity and history are rechecked before each external request.
+
+Local tests use a real Unix listener, kernel peer credentials/pidfds, actual
+intent files and fsync, but substitute the fixture-owned socket and UID/GID for
+the fixed root endpoint. A separate disposable process supplies a real peer-exit
+test. These are synthetic Engine replies, not installed Docker/source evidence.
+The client exposes neither arbitrary commands nor recording begin or restoration.
+The returned attachment still supplies raw, unaccepted operator frames; independent
+source/container/namespace checks and the recording-start ledger remain required.
+No installed host plan invokes this component.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
