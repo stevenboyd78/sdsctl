@@ -63,6 +63,7 @@ def plan(prepared, calibration, monkeypatch):
     )
     plan = m.plans.decode(value)
     monkeypatch.setattr(m.plans.Plan, "root", property(lambda _: prepared.directory.parent))
+    (plan.root / "journal").mkdir(mode=0o700)
     prepared.pins = replace(
         prepared.pins,
         host=replace(
@@ -78,6 +79,176 @@ def plan(prepared, calibration, monkeypatch):
         ),
     )
     return plan
+
+
+@pytest.fixture
+def journal(prepared, plan):
+    """Real journal3 bytes; baseline/App/Core/CLI/idle observations are fixtures."""
+    base, policy = m.plans.base, m.plans.bootstrap.recording
+    normal = base.App(plan.normal.pin, "running", plan.normal_generation, True, False)
+    stopped_normal = base.App(plan.normal.pin, "stopped")
+    candidate = base.App(plan.candidate.pin, "stopped")
+    idle = base.App(plan.candidate.pin, "running", prepared.pins.generation, None, None)
+    files = policy.Files(
+        plan.candidate.contract.sha256, "pristine", plan.candidate.contract.baseline_sha256
+    )
+
+    def now():
+        return m.plans.clock.read().boottime_ns / m.plans.clock.NS
+
+    def observation(a=stopped_normal, c=idle, at=None):
+        return policy.Observation(now() if at is None else at, a, c, True, True, True, files)
+
+    with m.plans.bootstrap.Journal(plan.root / "journal") as journal:
+        baseline = observation(normal, candidate, plan.deadlines.issued_at)
+        journal.append(plan.preparation(baseline, prepared.pins.host.projection))
+
+        def append(kind, **values):
+            return journal.append(dict(kind=kind, boot_id=plan.boot, now=now(), **values))
+
+        append(
+            "bind_process",
+            process=asdict(base.ProcessRecord(base.NORMAL, normal.generation, "8" * 64, 1234, 100)),
+        )
+        append("request")
+        assert (
+            append("observe", observation=asdict(observation(normal, candidate))).slug
+            == base.NORMAL
+        )
+        append("bind_execution", container_id="a" * 64, execution_id="1" * 64)
+        append("execution_completed", execution_id="1" * 64, exit_code=0)
+        append("process_exited", generation=normal.generation)
+        assert (
+            append("observe", observation=asdict(observation(c=candidate))).slug == base.CANDIDATE
+        )
+        append("bind_execution", container_id="a" * 64, execution_id="2" * 64)
+        append("execution_completed", execution_id="2" * 64, exit_code=0)
+        init = prepared.pins.init
+        append(
+            "bind_process",
+            process=asdict(
+                base.ProcessRecord(
+                    base.CANDIDATE, idle.generation, init.container_id, init.pid, init.start_ticks
+                )
+            ),
+        )
+        append("observe", observation=asdict(observation()))
+        assert journal.machine.state.phase == "candidate_idle"
+        append(
+            "authorize_operator",
+            generation=idle.generation,
+            bootstrap_sha256=plan.bootstrap.sha256,
+            launch_plan_sha256=prepared.pins.command.plan_sha256,
+            idle_evidence_sha256="f" * 64,
+            observation=asdict(observation()),
+        )
+        assert journal.machine.state.phase == "starting_operator"
+        yield journal
+
+
+@pytest.mark.parametrize("code", [0, 70, 137])
+def test_actual_exit_publication_changes_only_finish_and_operator_exit(
+    prepared, actors, calibration, plan, journal, family, monkeypatch, code
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch, code=code) as case:
+        before = journal.machine.state
+        originals = {path: path.read_bytes() for path in journal.path.iterdir()}
+        case.ready.close()
+        finish(family)
+        result = case.holder.poll()
+        assert case.holder.publish(journal) == result.sha256
+        assert journal.machine.state == replace(
+            before, operator_exit_sha256=result.sha256, finish_requested=True
+        )
+        assert journal.machine.state.authorization_generation is None
+        assert journal.machine.state.ready_evidence_sha256 is None
+        assert len(list(journal.path.iterdir())) == len(originals) + 1
+        assert all(path.read_bytes() == raw for path, raw in originals.items())
+        count = len(journal.entries)
+        with pytest.raises(m.UnconfirmedReconciliation):
+            case.holder.publish(journal)
+        assert len(journal.entries) == count and len(case.requests) == 7
+
+
+@pytest.mark.parametrize(
+    "fault", ["still_live", "receipt", "history", "directory", "review", "late"]
+)
+def test_no_uncertainty_or_review_can_publish_or_revive_the_case(
+    prepared, actors, calibration, plan, journal, family, monkeypatch, fault
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        if fault != "still_live":
+            case.ready.close()
+            finish(family)
+            case.holder.poll()
+        if fault == "receipt":
+            case.holder.result = replace(case.holder.result, returncode=0)
+        elif fault == "history":
+            (journal.path / "0000.json").write_bytes(b"{}")
+        elif fault == "directory":
+            original = journal.path.with_name("retained-journal")
+            journal.path.rename(original)
+            journal.path.mkdir(mode=0o700)
+            for path in original.iterdir():
+                destination = journal.path / path.name
+                destination.write_bytes(path.read_bytes())
+                destination.chmod(0o600)
+        elif fault in ("review", "late"):
+            read = m.plans.clock.read
+            shift = (121 if fault == "review" else 3) * m.plans.clock.NS
+
+            def later():
+                value = read()
+                return replace(
+                    value,
+                    before_ns=value.before_ns + shift,
+                    after_ns=value.after_ns + shift,
+                    boottime_ns=value.boottime_ns + shift,
+                )
+
+            if fault == "review":
+                journal.append(
+                    dict(kind="tick", boot_id=plan.boot, now=later().boottime_ns / m.plans.clock.NS)
+                )
+                assert journal.machine.state.phase == "review"
+            else:
+                monkeypatch.setattr(m.plans.clock, "read", later)
+        count, state = len(journal.entries), journal.machine.state
+        with pytest.raises(m.UnconfirmedReconciliation):
+            case.holder.publish(journal)
+        assert case.holder.failed and not case.holder.closed
+        assert journal.machine.state == state and len(journal.entries) == count
+        assert journal.machine.state.operator_exit_sha256 is None
+
+
+def test_lost_exit_journal_fsync_return_preserves_consumed_case_no_retry(
+    prepared, actors, calibration, plan, journal, family, monkeypatch
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        finish(family)
+        evidence = case.holder.poll()
+        real_fsync, calls = os.fsync, []
+
+        def lost(fd):
+            real_fsync(fd)
+            calls.append(fd)
+            if len(calls) == 2:
+                raise OSError("PRIVATE exit publication acknowledgement lost")
+
+        with monkeypatch.context() as patch:
+            patch.setattr(m.os, "fsync", lost)
+            with pytest.raises(m.UnconfirmedReconciliation):
+                case.holder.publish(journal)
+        assert journal.fd == -1 and case.holder.publish_attempted and case.holder.failed
+        assert not case.holder.closed
+        with m.plans.bootstrap.Journal(plan.root / "journal") as replay:
+            assert replay.machine.state.operator_exit_sha256 == evidence.sha256
+            count = len(replay.entries)
+            with pytest.raises(m.UnconfirmedReconciliation):
+                case.holder.publish(replay)
+            assert len(replay.entries) == count
+        assert len(case.requests) == 7
 
 
 @contextmanager

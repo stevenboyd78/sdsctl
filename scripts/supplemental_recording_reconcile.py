@@ -4,7 +4,9 @@
 Capture while the actual original Ready is live, before begin. An independently
 authenticated Engine endpoint and duplicated original pidfds survive closure of
 the recording transport. No process discovery, signals, replay, recording-file
-inference, journal promotion or App action. Installed recovery supervision and
+inference, completion promotion or App action. The separate publish() operation
+can record only this observer's actual exit evidence in the original journal3.
+Installed recovery supervision and
 source/protection qualification remain separate, required responsibilities.
 """
 
@@ -15,7 +17,7 @@ import os
 import select
 import time
 from contextlib import suppress
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from threading import get_ident
 
 import supplemental_recording_host_plan as plans
@@ -88,6 +90,8 @@ class Operator:
         self.owner = os.getpid(), get_ident()
         self.handles, self.identities = {}, {}
         self.closed = self.failed = self.done = False
+        self.publish_attempted = False
+        self.result = self.result_sha256 = None
         try:
             require(type(plan) is plans.Plan and type(ready) is received.Ready)
             require(plans.load_bytes(plan.raw, plan.sha256) == plan)
@@ -235,7 +239,109 @@ class Operator:
                 observed_at,
             )
             self.done = True
+            self.result, self.result_sha256 = result, result.sha256
             return result
+        except BaseException as error:
+            self._fail(error)
+
+    def _journal(self, journal, end):
+        """Recheck actual original journal bytes before/after exit publication."""
+        base = plans.base
+        require(
+            type(journal) is plans.bootstrap.Journal and journal.path == self.plan.root / "journal"
+        )
+        journal.check_directory()
+        require(0 < len(journal.entries) <= journal.max_events)
+        require(
+            sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
+        )
+        for index, entry in enumerate(journal.entries):
+            name = journal.name(index)
+            before = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
+            require(before.st_uid == os.geteuid() and before.st_mode & 0o7777 == 0o600)
+            raw = dispatch.binding.protected.evidence.read_bytes(
+                journal.fd, name, limit=base.MAX_BYTES, deadline=end
+            )
+            require(raw == base.encode(entry))
+            require(
+                dispatch.binding.identity(os.stat(name, dir_fd=journal.fd, follow_symlinks=False))
+                == dispatch.binding.identity(before)
+            )
+        journal.check_directory()
+        machine = journal.machine
+        require(type(machine) is plans.bootstrap.Machine)
+        require(
+            base.encode(journal.entries[0]["event"])
+            == base.encode(self.plan.preparation(machine.baseline, self.pins.host.projection))
+        )
+        require((machine.case_id, machine.boot_id) == (self.plan.case, self.plan.boot))
+        require(machine.created_at == self.plan.deadlines.issued_at)
+        require(machine.hard_deadline == self.plan.deadlines.recover_by)
+        require(
+            machine.bootstrap == self.plan.bootstrap
+            and machine.contract == self.plan.candidate.contract
+        )
+        require(machine.state.candidate_generation == self.pins.generation)
+        require(machine.state.launch_plan_sha256 == self.pins.command.plan_sha256)
+        require(machine.state.launch_intent_sha256 is not None)
+        record = next(item for item in machine.state.processes if item.slug == base.CANDIDATE)
+        require(
+            (record.container_id, record.pid, record.start_ticks)
+            == (self.pins.init.container_id, self.pins.init.pid, self.pins.init.start_ticks)
+        )
+        require(time.monotonic() < end)
+        return machine
+
+    def publish(self, journal):
+        """Durably record ONLY the actual retained exit, once, without an action.
+
+        No caller-supplied receipt/digest is accepted. A late/failed fsync return
+        consumes this publication; the on-disk case is preserved, never retried.
+        A review/expired policy cannot be revived. This marks finish_requested,
+        not successful recording, init exit, restoration, or fresh authorization.
+        The independent recovery session must still qualify all other gates.
+        """
+        try:
+            require(self.owner == (os.getpid(), get_ident()))
+            require(
+                not self.closed and not self.failed and self.done and not self.publish_attempted
+            )
+            self.publish_attempted = True
+            require(type(self.result) is Evidence and self.result.sha256 == self.result_sha256)
+            now = self._clock()
+            require(0 <= now - self.result.observed_at <= 2)
+            end = time.monotonic() + min(2, self.plan.deadlines.recover_by - now)
+            require(_peer(self.endpoint) == self.peer)
+            self._history(end)
+            require(set(ROLES[1:]) <= self._actors())
+            machine = self._journal(journal, end)
+            before = machine.state
+            require(
+                before.phase in ("starting_operator", "candidate_running", "stopping_candidate")
+            )
+            require(before.operator_exit_sha256 is None)
+            count = len(journal.entries)
+            now = self._clock()
+            require(0 <= now - self.result.observed_at <= 2)
+            event = dict(
+                kind="operator_exited",
+                boot_id=self.plan.boot,
+                now=now,
+                generation=self.pins.generation,
+                intent_sha256=before.launch_intent_sha256,
+                exit_evidence_sha256=self.result_sha256,
+            )
+            require(journal.append(event) is None)  # No App action is returned.
+            after = self._journal(journal, end).state
+            require(len(journal.entries) == count + 1 and journal.entries[-1]["event"] == event)
+            require(
+                after
+                == replace(before, operator_exit_sha256=self.result_sha256, finish_requested=True)
+            )
+            require(_peer(self.endpoint) == self.peer)
+            require(set(ROLES[1:]) <= self._actors())
+            require(self._clock() - self.result.observed_at <= 2 and time.monotonic() < end)
+            return self.result_sha256
         except BaseException as error:
             self._fail(error)
 
@@ -255,4 +361,4 @@ class Operator:
 
 
 if __name__ == "__main__":
-    raise SystemExit("Read-only original exit reconciliation only; no restoration enabled.")
+    raise SystemExit("Private original-exit journal join only; no restoration enabled.")

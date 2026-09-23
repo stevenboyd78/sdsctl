@@ -1617,8 +1617,8 @@ any worker remains live. A terminal result requires all three original worker
 pidfds to report exit plus an exact terminal Engine inspection for the original
 execution and command. Init exit is reported separately, never substituted for
 worker exit. Even returncode0 is only an exit fact: it cannot recover a lost
-recording-completion return, acknowledge a WAV, publish a journal transition or
-restore the normal App. An uncertain read consumes this observer and retains its
+recording-completion return, acknowledge a WAV or restore the normal App. An
+uncertain read consumes this observer and retains its
 handles until explicit cleanup. Partial capture failure releases only the new
 duplicates, leaving caller-owned Ready evidence intact.
 
@@ -1630,6 +1630,24 @@ handles, init-before-worker exit, frozen workers, changed histories/domains,
 wrong execution identity, expired recovery and both Engine credential profiles.
 The host inventory is now 47 modules; the qualified 46-module image does not
 qualify these newer bytes. Installed assembly and qualification remain required.
+
+After polling returns genuine exit evidence, its separate one-use `publish()`
+operation can persist that evidence in the original schema3 journal. It accepts
+no caller-supplied receipt or digest. Original preparation, actual journal bytes,
+case, command, candidate init/generation, launch intent and recovery clock are
+rechecked. The receipt must remain at most two seconds old. The sole permitted
+policy change is recording `operator_exit_sha256` and setting `finish_requested`;
+authorization, file checkpoints, completion and phase are not promoted. No App
+action is returned. Review/expired cases cannot be revived, and an uncertain
+fsync acknowledgment consumes publication while preserving its on-disk evidence.
+The independent recovery session must still qualify actual init/CLI exits,
+recording preservation and every other restoration gate.
+
+A fresh local Engine/native check also verified capture and reconciliation after
+closing the original Ready object and its own process handles, then separately
+observed the original fixture init expiry. This is actual transport/worker
+evidence, but its App/Core/idle facts and host paths are explicitly synthetic;
+it does not qualify installed recovery or the new journal publication on HAOS.
 
 Qualification uses actual local Unix framing, durable files, owned processes
 and retained pidfds, with explicit synthetic Engine, namespace and operator
