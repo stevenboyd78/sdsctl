@@ -1832,6 +1832,40 @@ The separate path remains available with its existing checks. Local tests cover
 the real file/process brackets and synthetic host/Engine ordering independently;
 assembled real-Engine timing and installed host integration remain separate gates.
 
+Two isolated local trials have now joined actual Engine/Ready/probe traffic to
+complete fresh file inventories and the original init environment, publishing
+readiness at about 1.96 and 1.93 seconds. They used synthetic installed metadata,
+idle claims and full host observations; the second used the actual bounded Unix
+Engine reader. Both deliberately closed the attachment before recording began,
+then separately verified original worker pidfd exits, Engine status and finite
+init exit. The small timing margin is not an installed readiness pass. Read-only
+timing on the existing Home Assistant host measured roughly 0.43 seconds for the
+seven status commands alone, without the remaining protected-file/Engine work.
+The original two-second bounds have not been enlarged to accommodate that cost.
+
+`BootstrapHost` now supplies the full host-observation side of this join from
+the same canonical schema3 plan, original media projection, idle observer and
+retained init witness. It constructs the fixed Supervisor reader with the pinned
+CLI image/generation, and the recording-aware `HostObserver` with the original
+App seals, complete installed-version inventory, other scanner owners, Core
+identity and required RTP network policy. Each read verifies all normal protected
+files and the candidate static files plus its complete pristine recording root.
+It cannot choose a different capture stage or adopt the current files as a new
+baseline. Failed reads poison this collector without closing caller-owned handles.
+
+This bootstrap-only reader does not execute a native health probe. It keeps
+health/recording unknown, requires the normal App stopped and the original
+candidate running, and brackets the full observation with original idle evidence
+and process/clock checks. Changed protected pins and busy-job facts still reach
+the policy; file uncertainty, changed incarnation, stale evidence or elapsed
+time beyond two seconds return no usable sample. The oldest start timestamp is
+preserved. Local tests run the full observer, real temporary recording inventories
+and a retained owned pidfd with explicitly synthetic Supervisor/container/static
+metadata and a declared path alias. Installed-source/runtime qualification,
+assembled full-host timing, normal restoration, recording authorization and
+independent host-service recovery remain separate gates. No installed service or
+legacy plan selects this reader yet.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

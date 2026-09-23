@@ -40,6 +40,153 @@ def require(value):
         raise UnconfirmedHostLaunch(MESSAGE)
 
 
+class BootstrapHost:
+    """Full read-only host sample for one original idle candidate, before begin.
+
+    Reuses the fixed Supervisor reader, complete host observer and pristine
+    recording collector. It never selects a native exec/cache query: PID1 idle
+    evidence leaves both health flags unknown, even after the operator starts.
+    Launch joins its separately authenticated one-use probe only after this
+    sample. This is not the normal-App readiness or active-recording collector.
+
+    All images/files/options/versions/jobs/Core/network/other owners are freshly
+    collected by HostObserver. Original manifests are never recaptured as a new
+    baseline. Installed source/runtime qualification, original pidfd provenance,
+    independent recovery and outer I/O supervision remain separate obligations.
+    Construction does not dispatch or perform a host request. A failed read
+    permanently consumes this instance; caller-owned handles are never closed.
+    """
+
+    def __init__(self, plan, projected, idle, witness, docker):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = False
+        try:
+            require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
+            plan.check_projection(projected)
+            require(type(idle) is idle_module.Idle and idle.plan is plan)
+            require(type(witness) is engine.dispatch.process.ProcessWitness)
+            require(idle.init == witness.identity)
+            require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
+            base.digest(idle.generation)
+            self.plan, self.projected, self.idle = plan, projected, idle
+            self.witness, self.docker = witness, docker
+            self.init, self.generation = witness.identity, idle.generation
+            self.fd, self.fd_identity = witness.fd, runtime.identity(os.fstat(witness.fd))
+            self.original = (plan.raw, projected.sha256, self.init, self.generation)
+        except BaseException as error:
+            self._fail(error)
+
+    def _clock(self):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(now < self.plan.deadlines.ready_by)
+        return observed.boot, now
+
+    def _guard(self):
+        require(type(self.plan) is plans.Plan)
+        require(plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan)
+        self.plan.check_projection(self.projected)
+        require((self.plan.raw, self.projected.sha256, self.init, self.generation) == self.original)
+        require(type(self.idle) is idle_module.Idle and self.idle.plan is self.plan)
+        require(type(self.witness) is engine.dispatch.process.ProcessWitness)
+        require(self.witness.identity == self.idle.init == self.init)
+        require(self.idle.generation == self.generation and self.witness.fd == self.fd)
+        require(runtime.identity(os.fstat(self.fd)) == self.fd_identity)
+        require(not self.witness.exited())
+        require(
+            engine.dispatch.process.read_identity(self.init.pid, self.init.container_id)
+            == self.init
+        )
+        require(
+            type(self.docker) is plans.ordinary.Docker
+            and self.docker.path == "/var/run/docker.sock"
+        )
+        return self._clock()
+
+    @staticmethod
+    def _unknown_native(slug, generation):
+        require(slug in (base.NORMAL, base.CANDIDATE))
+        return plans.ordinary.NativeState(generation, None, None)
+
+    def __call__(self):
+        acquired = False
+        try:
+            require(not self.failed and self.owner == (os.getpid(), get_ident()))
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            boot, began = self._clock()
+            self._guard()  # Include the first identity/manifest checks in freshness.
+            before = self.idle.read()
+            require(type(before) is idle_module.Evidence)
+            plan = self.plan
+            layouts = {item.slug: item for item in plan.layouts}
+            collector = plans.host.FilesCollector(
+                layouts[base.NORMAL],
+                layouts[base.CANDIDATE],
+                plans.host.recording.Collector(self.projected.host),
+                lambda: plans.host.Capture("pristine"),
+            )
+            supervisor = plans.ordinary.SupervisorReads(
+                self.docker, image=plan.cli_image, incarnation=plan.cli_generation
+            )
+            observer = plans.host.HostObserver(
+                self.docker,
+                supervisor,
+                seals=(plan.normal, plan.candidate),
+                installed_versions=dict(plan.installed_versions),
+                other_scanner_apps=frozenset(plan.other_scanner_apps),
+                core_image=plan.core_image,
+                core_generation=plan.core_generation,
+                core_version=plan.core_version,
+                read_clock=self._clock,
+                collect_files=collector,
+                read_native=self._unknown_native,
+                network=plans.ordinary.AUDIO_NETWORK,
+            )
+            sample = observer.read()
+            after = self.idle.read()
+            require(type(after) is idle_module.Evidence)
+            require(replace(after, sampled_at=before.sampled_at) == before)
+            require(after.sampled_at >= before.sampled_at)
+            end_boot, ended = self._guard()
+            require(boot == end_boot == sample.boot_id and began <= sample.now <= ended)
+            require(0 <= ended - began <= 2)
+            require(began <= before.sampled_at <= after.sampled_at <= ended)
+            require(
+                (before.plan_sha256, before.generation, before.init, before.lease_sha256)
+                == (plan.sha256, self.generation, self.init, plan.lease_sha256)
+            )
+            observation = sample.observation
+            require(observation.normal.state == "stopped")
+            candidate = observation.candidate
+            require(candidate.state == "running" and candidate.generation == self.generation)
+            require(candidate.healthy is None and candidate.recording is None)
+            require(
+                observation.files
+                == bootstrap.recording.Files(
+                    plan.candidate.contract.sha256,
+                    "pristine",
+                    plan.candidate.contract.baseline_sha256,
+                )
+            )
+            return bootstrap.recovery.Sample(
+                boot, ended, replace(observation, sampled_at=min(began, observation.sampled_at))
+            )
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostLaunch(MESSAGE) from None
+
+
 class CandidateQualification:
     """Fresh source/runtime/environment join for one retained original idle init.
 
