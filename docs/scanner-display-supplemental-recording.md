@@ -1628,8 +1628,10 @@ transport, original Ready objects and owned process handles, with synthetic
 Engine replies, namespaces and host facts. They cover closure of the original
 handles, init-before-worker exit, frozen workers, changed histories/domains,
 wrong execution identity, expired recovery and both Engine credential profiles.
-The host inventory is now 47 modules; the qualified 46-module image does not
-qualify these newer bytes. Installed assembly and qualification remain required.
+The host inventory is now 47 modules. A fresh independently reconstructed local
+47-module image passed read-only/network-none source/runtime/import checks;
+the previous 46-module image remains historical. Installed assembly and
+qualification remain required.
 
 After polling returns genuine exit evidence, its separate one-use `publish()`
 operation can persist that evidence in the original schema3 journal. It accepts
@@ -1645,7 +1647,9 @@ recording preservation and every other restoration gate.
 
 A fresh local Engine/native check also verified capture and reconciliation after
 closing the original Ready object and its own process handles, then separately
-observed the original fixture init expiry. This is actual transport/worker
+observed the original fixture init expiry. A separate fresh case exercised the
+actual one-use exit publication and verified only the permitted journal changes,
+with no recording authorization or App action. This is actual transport/worker
 evidence, but its App/Core/idle facts and host paths are explicitly synthetic;
 it does not qualify installed recovery or the new journal publication on HAOS.
 
