@@ -1002,6 +1002,43 @@ scanner reads. These are local process/IPC results, not an installed probe wrapp
 or authenticated cross-container execution. The new host plan, qualified private
 attachment, namespace binding and independent exit/recovery gates remain pending.
 
+## Offline private exec attachment I/O
+
+`scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
+upgrade, non-TTY Docker stdout segments and four canonical private operator
+frames. Docker segments and application frames may have different boundaries.
+Unexpected stderr, raw-TTY fallback, malformed/ambiguous headers, excessive or
+partial data and extra frames make the connection unconfirmed.
+
+`scripts/supplemental_recording_attachment.py` owns one already-connected private
+Unix socket. It sends only the fixed API v1.47 interactive exec/start upgrade
+request, receives the ordered ready/started/completed/exited frames and sends at
+most one begin frame. It has no connection opener, default Docker endpoint,
+exec-creation method or arbitrary command API. An independent host must qualify
+that socket and exact exec, and durably save start intent before sending begin.
+Neither input dictionaries nor correctly framed messages authenticate themselves.
+
+All I/O is nonblocking with step deadlines constrained by the original ready and
+final deadlines. A partial, interrupted, failed or late operation consumes and
+closes the attachment without reconnect or replay. Four messages alone are not
+clean EOF, and clean EOF is not proof of native, operator or container-init exit.
+Those observations remain separate. The protocol follows the
+[pinned Engine implementation](https://github.com/moby/moby/blob/v27.5.1/api/server/router/container/exec.go);
+this reference does not establish the installed Engine version or compatibility.
+
+Local tests use actual private Unix sockets and a synthetic Engine peer. They
+exercise fragmentation, backpressure, lost send returns, deadline expiry, partial
+messages and missing/invalid EOF. An integration test forwards the real isolated
+operator through that byte transport to synthetic scanner/RTSP/RTP peers: actual
+cached IPC observes idle then active recording, the native writer finalizes 1280
+samples, original files remain unchanged and native/watcher exits are checked
+separately. No Docker daemon or installed App is contacted by these tests.
+
+This closes the local byte-transport gap only. The new host plan still needs
+independently qualified image/source/interpreter, authenticated exact exec and
+PID-namespace binding, durable dispatch and installed isolated recovery tests.
+Legacy schemas and source policies remain idle-only; no live case is enabled.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
