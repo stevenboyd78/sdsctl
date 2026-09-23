@@ -14,6 +14,15 @@ import pytest
 from . import test_supplemental_recording_checkpoints as progress_tests
 from . import test_supplemental_recording_projection as projection_tests
 
+PRESERVATION = "supplemental_recording_preservation"
+if PRESERVATION not in sys.modules:
+    preservation_spec = importlib.util.spec_from_file_location(
+        PRESERVATION, Path(projection_tests.m.__file__).with_name(PRESERVATION + ".py")
+    )
+    preservation_module = importlib.util.module_from_spec(preservation_spec)
+    sys.modules[PRESERVATION] = preservation_module
+    preservation_spec.loader.exec_module(preservation_module)
+
 NAME = "supplemental_recording_binding"
 SPEC = importlib.util.spec_from_file_location(
     NAME, Path(projection_tests.m.__file__).with_name(NAME + ".py")

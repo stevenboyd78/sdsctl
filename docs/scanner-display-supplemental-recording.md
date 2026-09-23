@@ -723,6 +723,37 @@ of unconfirmed output must still be qualified; missing acknowledgment must not
 be mistaken for an idle recorder or permission to replay. Native/container-init
 exit, restoration and audible quality remain separate from this bridge's result.
 
+## Offline preservation after a lost start return
+
+`scripts/supplemental_recording_preservation.py` provides a separate, read-only
+failure path. The original `prepared.json`, `start-intent.json` and `started.json`
+must agree with the sealed native baseline/projection, host intent, exact
+generation, endpoint and fixed plan window. Bounded private files, no-follow
+opens, strict canonical data, directory locking and two complete observations
+reject unsafe or changing evidence. It does not scan for a convenient filename
+or invent a timestamp if a required record is missing.
+
+The result is a **preservation scope**, not a successful start acknowledgment.
+It identifies the possible case-specific output for the existing retained-file
+collector. Optional stop records may be incomplete, including empty files;
+their bounded bytes are pinned but never interpreted as successful stop or
+completion. The full original recording inventory and exact allowed new files
+still require independent verification. No receipt is repaired or deleted.
+
+The host log can close a start-intent-only case with
+`preserve_unconfirmed_start`. Its successful-start and completion-acknowledgment
+fields remain empty. The preservation scope has a distinct field, survives
+read-only replay, and cannot be followed by start, progress or completion entries.
+Lost publication returns and cancellation consume the writer without retry.
+
+A real child-process failure test loses the return after native `started.json`
+publication, independently reaps the child, scopes its unchanged receipts, and
+verifies retained output through the original host projection. The recording
+remains unconfirmed even if native shutdown finalized its files. This test does
+not prove installed container-init exit or authorize restoration. Those remain
+separate host-policy gates; missing/malformed required receipts still require
+administrative review, never an inferred idle state or a fresh recording attempt.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.

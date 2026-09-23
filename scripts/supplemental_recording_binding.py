@@ -19,6 +19,7 @@ from pathlib import Path
 from threading import Lock
 
 import supplemental_recording_checkpoints as checkpoints
+import supplemental_recording_preservation as preservation
 import supplemental_recording_projection as projection
 import supplemental_recording_protected as protected
 from supplemental_handoff_files import identity
@@ -76,6 +77,7 @@ class State:
     tip: checkpoints.Tip | None = None
     acknowledgment: protected.Acknowledgment | None = None
     closed: bool = False
+    preservation: preservation.Scope | None = None
 
 
 def _fields(event, fields):
@@ -147,6 +149,20 @@ def _apply(state, event, binding):
             )
         )
         return replace(state, acknowledgment=ack, closed=True)
+    if kind == "preserve_unconfirmed_start":
+        _fields(event, {"scope"})
+        require(state.generation is not None and state.expected is None and state.tip is None)
+        raw = protected._mapping(event["scope"], set(preservation.Scope.__dataclass_fields__))
+        expected = protected.evidence.RecordingExpectation(
+            **protected._mapping(
+                raw["expected"], set(protected.evidence.RecordingExpectation.__dataclass_fields__)
+            )
+        )
+        scope = preservation.Scope(**(raw | {"expected": expected}))
+        protected.Collector(binding.projection.host)._expected(expected)
+        require(expected.generation == state.generation)
+        require(scope.native_contract_sha256 == binding.projection.native.contract.sha256)
+        return replace(state, preservation=scope, closed=True)
     require(kind == "abandoned")
     _fields(event, set())
     return replace(state, closed=True)
@@ -331,6 +347,17 @@ class Ledger:
 
     def abandon(self, *, now):
         return self._append("abandoned", now)
+
+    def preserve_unconfirmed_start(self, scope, *, now):
+        """Close a lost-start case with naming scope only, NEVER acknowledgment.
+
+        Caller must qualify the original native receipt path/binding and obtain
+        Scope through read_scope. This entry cannot be followed by started,
+        progress or completed. Retained-file verification and exact exit remain
+        independent gates. A failed publication is not retried.
+        """
+        require(type(scope) is preservation.Scope)
+        return self._append("preserve_unconfirmed_start", now, scope=asdict(scope))
 
 
 if __name__ == "__main__":
