@@ -10,6 +10,7 @@ import json
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -106,8 +107,131 @@ def attached(prepared, actors, monkeypatch, *, change=None, tap=None):
     )
 
 
-def capture(client, calibration):
-    return m.Ready(client, profile_sha256=PROFILE, original_clock=calibration.original)
+def capture(client, calibration, *, zero_domain=None):
+    return m.Ready(
+        client, profile_sha256=PROFILE, original_clock=calibration.original, zero_domain=zero_domain
+    )
+
+
+@pytest.fixture
+def explicit_domain(prepared, actors, calibration, monkeypatch):
+    """Synthetic kernel proof for threading only; real kernel tests are separate.
+
+    Keep actual Engine framing, child pidfds, original intents and process-tree
+    checks. No test here claims to create a real different Linux time namespace.
+    """
+    module = m.engine.namespace.time_domain
+    native_time = (4, 901)
+    actors.values = tuple(
+        replace(actor, namespaces=(*actor.namespaces[:4], native_time)) for actor in actors.values
+    )
+    actors.lookup.update({actor.host_pid: actor for actor in actors.values})
+    proof = object.__new__(module.ZeroDomain)
+    proof.evidence = module.Evidence(
+        prepared.pins.init,
+        calibration.original.namespace,
+        native_time,
+        joined.ns.NS[3],
+        calibration.original,
+    )
+    state = SimpleNamespace(proof=proof, calls=0, failed=False)
+
+    def refresh(self):
+        assert self is proof
+        state.calls += 1
+        if state.failed:
+            raise module.UnconfirmedDomain(module.MESSAGE)
+        return self.evidence
+
+    monkeypatch.setattr(module.ZeroDomain, "refresh", refresh)
+    return state
+
+
+def with_domain(client, calibration, explicit_domain):
+    return m.Ready(
+        client,
+        profile_sha256=PROFILE,
+        original_clock=calibration.original,
+        zero_domain=explicit_domain.proof,
+    )
+
+
+def test_explicit_domain_reaches_engine_binding_and_keeps_actual_host_clock(
+    prepared, actors, calibration, explicit_domain, monkeypatch
+):
+    with attached(prepared, actors, monkeypatch) as (client, requests):
+        result = with_domain(client, calibration, explicit_domain)
+        try:
+            assert result.processes.zero_domain is explicit_domain.proof
+            assert result.processes.host_time == calibration.original.namespace
+            assert result.processes.actors[0].namespaces[4] != result.processes.host_time
+            assert result.processes.domain_sha256 == explicit_domain.proof.evidence.sha256
+            before = explicit_domain.calls
+            result.check_before_begin()
+            assert explicit_domain.calls > before
+            assert len(requests) == 5 and not client.attachment.begun
+        finally:
+            result.close()
+
+
+def test_distinct_namespace_without_explicit_proof_stays_refused(
+    prepared, actors, calibration, explicit_domain, monkeypatch
+):
+    with attached(prepared, actors, monkeypatch) as (client, _):
+        denied(lambda: capture(client, calibration), client)
+        assert explicit_domain.calls == 0
+
+
+@pytest.mark.parametrize(
+    "fault", ["failed", "serialized", "original_clock", "init", "host_time", "user", "native_time"]
+)
+def test_unconfirmed_domain_never_qualifies_ready(
+    prepared, actors, calibration, explicit_domain, monkeypatch, fault
+):
+    proof = explicit_domain.proof
+    if fault == "failed":
+        explicit_domain.failed = True
+    elif fault == "serialized":
+        explicit_domain.proof = proof.evidence
+    elif fault == "original_clock":
+        proof.evidence = replace(proof.evidence, original_clock=m.clock.read())
+    elif fault == "init":
+        proof.evidence = replace(
+            proof.evidence,
+            init=replace(prepared.pins.init, start_ticks=prepared.pins.init.start_ticks + 1),
+        )
+    else:
+        proof.evidence = replace(proof.evidence, **{fault: (4, 999)})
+    with attached(prepared, actors, monkeypatch) as (client, _):
+        denied(lambda: with_domain(client, calibration, explicit_domain), client)
+
+
+@pytest.mark.parametrize("fault", ["failed", "replacement", "digest", "native_actor"])
+def test_domain_continuity_is_retained_not_rebaselined(
+    prepared, actors, calibration, explicit_domain, monkeypatch, fault
+):
+    with attached(prepared, actors, monkeypatch) as (client, _):
+        result = with_domain(client, calibration, explicit_domain)
+        original = result.processes.domain_sha256
+        try:
+            if fault == "failed":
+                explicit_domain.failed = True
+            elif fault == "replacement":
+                result.processes.zero_domain = None
+            elif fault == "digest":
+                result.processes.domain_sha256 = "0" * 64
+            else:
+                actor = actors.values[2]
+                actors.lookup[actor.host_pid] = replace(
+                    actor, namespaces=(*actor.namespaces[:4], (4, 902))
+                )
+            denied(result.check_before_begin, client)
+            assert result.failed
+            # Original handles remain for exact exits even when live proof fails.
+            assert not result.processes.exited("init")
+            assert original == explicit_domain.proof.evidence.sha256
+        finally:
+            result.close()
 
 
 def denied(callback, client):

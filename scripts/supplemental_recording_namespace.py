@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from threading import get_ident
 
 import supplemental_handoff_process as host_process
+import supplemental_recording_time_domain as time_domain
 
 NAMESPACES = ("pid", "mnt", "net", "user", "time")
 MESSAGE = "Finite recording process namespace is unconfirmed; do not dispatch or restore."
@@ -173,9 +174,13 @@ class Witness:
     those prerequisites is established by accepting caller arguments here.
     A failed refresh prevents further live claims but keeps retained handles
     available for exact exit observation until explicitly closed.
+    An optional live ZeroDomain is caller-owned and rechecked on every mapping;
+    it changes only the allowed helper/init time-domain relationship. All native
+    actors must still share the exact init namespaces. No serialized proof or
+    inferred numeric-clock equivalence is accepted.
     """
 
-    def __init__(self, init_witness, guardian_pid, reported):
+    def __init__(self, init_witness, guardian_pid, reported, *, zero_domain=None):
         self.owner = os.getpid(), get_ident()
         self.handles, self.actors = {}, None
         self.closed = self.failed = False
@@ -183,6 +188,8 @@ class Witness:
             require(type(init_witness) is host_process.ProcessWitness and not init_witness.exited())
             require(type(guardian_pid) is int and 1 < guardian_pid < 2**31)
             self.expected_init = init_witness.identity
+            require(zero_domain is None or type(zero_domain) is time_domain.ZeroDomain)
+            self.zero_domain, self.domain_sha256 = zero_domain, None
             require(guardian_pid != self.expected_init.pid)
             require(type(reported) is dict and set(reported) == {"guardian", "native", "watchdog"})
             self.reported = {}
@@ -244,12 +251,22 @@ class Witness:
         return tuple(result)
 
     def _match(self, actors):
+        native_time = self.host_time
+        if self.zero_domain is not None:
+            require(type(self.zero_domain) is time_domain.ZeroDomain)
+            proof = self.zero_domain.refresh()
+            require(proof.init == self.expected_init)
+            require((proof.user, proof.host_time) == (self.host_user, self.host_time))
+            native_time = proof.native_time
+            if self.domain_sha256 is None:
+                self.domain_sha256 = proof.sha256
+            require(proof.sha256 == self.domain_sha256)
         return match(
             *actors,
             expected_init=self.expected_init,
             reported=self.reported,
             host_user=self.host_user,
-            host_time=self.host_time,
+            host_time=native_time,
         )
 
     def refresh(self):

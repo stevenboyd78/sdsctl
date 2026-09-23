@@ -59,7 +59,7 @@ class Ready:
     This class intentionally has no begin(), start(), resume() or success API.
     """
 
-    def __init__(self, client, *, profile_sha256, original_clock):
+    def __init__(self, client, *, profile_sha256, original_clock, zero_domain=None):
         self.owner = os.getpid(), get_ident()
         self.client, self.processes = client, None
         self.failed = self.closed = False
@@ -70,6 +70,11 @@ class Ready:
             require(original_clock.boot == pins.host.boot_id)
             original_clock.check_later(clock.read())
             self.clock = original_clock
+            if zero_domain is not None:
+                require(type(zero_domain) is engine.namespace.time_domain.ZeroDomain)
+                proof = zero_domain.refresh()
+                require(proof.original_clock == original_clock and proof.init == pins.init)
+            self.zero_domain = zero_domain
             channel = client.attachment
             require(type(channel) is engine.attachment.Attachment and channel.reads == 0)
             require(not channel.closed and not channel.begun and channel.started)
@@ -133,7 +138,7 @@ class Ready:
             )
             # Neither the outer dictionary nor the embedded return is accepted
             # as authentication until actual Engine and kernel mapping agree.
-            self.processes = client.bind_processes(identities)
+            self.processes = client.bind_processes(identities, zero_domain=zero_domain)
             require(self.processes.host_time == original_clock.namespace)
             self.ready_raw = engine.dispatch.binding.encode(value)
             self.check_before_begin()
@@ -155,6 +160,9 @@ class Ready:
             channel = self.client.attachment
             require(not channel.closed and channel.reads == 1 and not channel.begun)
             self.clock.check_later(clock.read())
+            require(self.processes.zero_domain is self.zero_domain)
+            if self.zero_domain is not None:
+                require(self.zero_domain.evidence.original_clock == self.clock)
             self.processes.refresh()
             require(self.processes.host_time == self.clock.namespace)
             require(time.monotonic() < self.ready_by)

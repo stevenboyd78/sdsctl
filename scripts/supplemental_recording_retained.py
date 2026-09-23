@@ -69,6 +69,8 @@ class Retained:
             self.handles = dict(self.processes.handles)
             self.actors = self.processes.actors
             self.host_domains = self.processes.host_user, self.processes.host_time
+            self.zero_domain = self.processes.zero_domain
+            self.domain_sha256 = self.processes.domain_sha256
             self.exits = frozenset()
             self.check()
         except BaseException as error:
@@ -93,6 +95,11 @@ class Retained:
         require(witness.handles == self.handles and tuple(self.handles) == ROLES)
         require(witness.actors == self.actors and witness.expected_init == self.pins.init)
         require((witness.host_user, witness.host_time) == self.host_domains)
+        require(
+            witness.zero_domain is self.zero_domain and witness.domain_sha256 == self.domain_sha256
+        )
+        if self.zero_domain is not None:
+            require(self.zero_domain.evidence.original_clock == self.clock)
         require(witness._host_domains() == self.host_domains)
         witness._match(self.actors)
         exited = set()
@@ -126,6 +133,7 @@ class Retained:
             ready, client, claim = self.ready, self.client, self.claim
             require(not ready.failed and not ready.closed and ready.owner == self.owner)
             require(ready.client is client and ready.processes is self.processes)
+            require(ready.zero_domain is self.zero_domain)
             require(ready.clock == self.clock and ready.context_raw == self.context_raw)
             require(ready.ready_raw == self.ready_raw)
             require((ready.ready_by, ready.watch_deadline) == (self.ready_by, self.watch_deadline))

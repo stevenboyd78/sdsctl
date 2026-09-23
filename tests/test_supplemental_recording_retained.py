@@ -46,11 +46,14 @@ SPEC.loader.exec_module(m)
 )
 
 
+explicit_domain = begin.ready_tests.explicit_domain
+
+
 @contextmanager
-def begun(prepared, actors, calibration, ledger, monkeypatch):
+def begun(prepared, actors, calibration, ledger, monkeypatch, *, zero_domain=None):
     peers = []
     with begin.ready_tests.attached(prepared, actors, monkeypatch, tap=peers) as (client, requests):
-        ready = begin.ready_tests.capture(client, calibration)
+        ready = begin.ready_tests.capture(client, calibration, zero_domain=zero_domain)
         try:
             begin.intent(ledger, prepared)
             binding = begin.m.send_once(ready, ledger)
@@ -83,6 +86,45 @@ def test_post_ready_observation_does_not_renew_any_dispatch_deadline(
         assert len(requests) == 5 and not select.select([peer], [], [], 0)[0]
         assert ledger.state.expected is None
         assert not any(hasattr(guard, method) for method in ("begin", "start", "attach", "restore"))
+
+
+def test_original_domain_proof_remains_required_after_begin_and_child_exit(
+    prepared, actors, calibration, ledger, explicit_domain, monkeypatch
+):
+    with begun(
+        prepared, actors, calibration, ledger, monkeypatch, zero_domain=explicit_domain.proof
+    ) as (ready, _peer, requests):
+        guard = m.Retained(ready)
+        assert guard.zero_domain is explicit_domain.proof
+        original = guard.domain_sha256
+        signal.pidfd_send_signal(guard.handles["native"], signal.SIGKILL)
+        assert select.select([guard.handles["native"]], [], [], 3)[0]
+        assert guard.check() == frozenset({"native"})
+        assert guard.domain_sha256 == original and len(requests) == 5
+        explicit_domain.failed = True
+        refused(guard.check, ready)
+        assert ready.processes.exited("native") and not ready.processes.exited("init")
+
+
+@pytest.mark.parametrize("fault", ["ready_proof", "witness_proof", "digest", "clock"])
+def test_post_begin_domain_or_original_clock_cannot_be_replaced(
+    prepared, actors, calibration, ledger, explicit_domain, monkeypatch, fault
+):
+    with begun(
+        prepared, actors, calibration, ledger, monkeypatch, zero_domain=explicit_domain.proof
+    ) as (ready, _peer, _requests):
+        guard = m.Retained(ready)
+        if fault == "ready_proof":
+            ready.zero_domain = None
+        elif fault == "witness_proof":
+            ready.processes.zero_domain = None
+        elif fault == "digest":
+            ready.processes.domain_sha256 = "0" * 64
+        else:
+            proof = explicit_domain.proof
+            proof.evidence = replace(proof.evidence, original_clock=m.received.clock.read())
+        refused(guard.check, ready)
+        assert not ready.processes.exited("init")
 
 
 @pytest.mark.parametrize("role", ["guardian", "native", "watchdog"])

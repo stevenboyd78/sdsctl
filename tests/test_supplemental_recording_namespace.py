@@ -10,6 +10,15 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_handoff_process as processes
+from . import test_supplemental_recording_clock as clocks  # noqa: F401
+
+DOMAIN_NAME = "supplemental_recording_time_domain"
+DOMAIN_SPEC = importlib.util.spec_from_file_location(
+    DOMAIN_NAME, Path(processes.w.__file__).with_name(DOMAIN_NAME + ".py")
+)
+domain_module = importlib.util.module_from_spec(DOMAIN_SPEC)
+sys.modules[DOMAIN_NAME] = domain_module
+DOMAIN_SPEC.loader.exec_module(domain_module)
 
 NAME = "supplemental_recording_namespace"
 SPEC = importlib.util.spec_from_file_location(

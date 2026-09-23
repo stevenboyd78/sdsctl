@@ -7,6 +7,7 @@ must refuse an ordinary non-PID1 launch. No socket/daemon/scanner is opened.
 import ast
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import signal
@@ -61,6 +62,71 @@ def test_closed_lease_retains_original_ready_and_stop_times():
     with pytest.raises(ValueError):
         decode(value, now=40)
     assert Path("/data") == m.DATA and m.ROOT_UID == m.ROOT_GID == 0
+
+
+def test_actual_local_zero_clock_domain_is_read_only():
+    fd = os.open("/proc/self/ns/time", os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        before = os.fstat(fd)
+        m._clock_domain(fd)
+        assert os.fstat(fd) == before
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b"PRIVATE",
+        b"x" * 257,
+        b"monotonic 1 0\nboottime 0 0\n",
+        b"monotonic 0 0\nboottime -1 0\n",
+        b"monotonic 0 0\n",
+        b"monotonic -0 0\nboottime 0 0\n",
+        b"monotonic 0 0\nboottime 0 0\nextra\n",
+    ],
+)
+def test_native_clock_offset_or_unknown_format_cannot_consume_lease(monkeypatch, raw):
+    fd = os.open("/proc/self/ns/time", os.O_RDONLY | os.O_CLOEXEC)
+    streams = []
+
+    def opened(path, mode, *, buffering):
+        assert path == "/proc/self/timens_offsets" and mode == "rb" and buffering == 0
+        stream = io.BytesIO(raw)
+        streams.append(stream)
+        return stream
+
+    monkeypatch.setattr(m, "open", opened, raising=False)
+    try:
+        with pytest.raises(ValueError):
+            m._clock_domain(fd)
+        assert all(stream.closed for stream in streams)
+        assert os.fstat(fd)  # This check never takes ownership of its caller's fd.
+    finally:
+        os.close(fd)
+
+
+@pytest.mark.parametrize("name", ["time", "time_for_children"])
+@pytest.mark.parametrize("when", [1, 2])
+def test_native_child_only_or_changed_time_namespace_refused(monkeypatch, name, when):
+    fd = os.open("/proc/self/ns/time", os.O_RDONLY | os.O_CLOEXEC)
+    original, calls = os.stat, []
+
+    def observed(path, *args, **kwargs):
+        result = original(path, *args, **kwargs)
+        if path == "/proc/self/ns/" + name:
+            calls.append(path)
+            if len(calls) == when:
+                return SimpleNamespace(st_dev=result.st_dev, st_ino=result.st_ino + 1)
+        return result
+
+    monkeypatch.setattr(m.os, "stat", observed)
+    try:
+        with pytest.raises(ValueError):
+            m._clock_domain(fd)
+    finally:
+        os.close(fd)
 
 
 @pytest.mark.parametrize(
@@ -155,6 +221,9 @@ m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
 # accepts no such options. All I/O, deadlines, signals and claim fsync are real.
 m.DATA=Path(sys.argv[2]);m.ROOT_UID=os.geteuid();m.ROOT_GID=os.getegid()
 m.os.getpid=lambda:1
+if sys.argv[5]=='clock_refused':
+    def refused(*args): raise ValueError('PRIVATE')
+    m._clock_domain=refused
 if sys.argv[5]=='lost':
     original=os.fsync
     def lost(fd):
@@ -164,7 +233,7 @@ sys.exit(m.main(['--lease',sys.argv[3],'--lease-sha256',sys.argv[4]]))
 """
 
 
-def start(lease, *, lost=False):
+def start(lease, *, lost=False, clock_refused=False):
     return subprocess.Popen(
         [
             sys.executable,
@@ -176,7 +245,7 @@ def start(lease, *, lost=False):
             str(lease.data),
             str(lease.path),
             lease.pin,
-            "lost" if lost else "normal",
+            "clock_refused" if clock_refused else "lost" if lost else "normal",
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -249,6 +318,12 @@ def test_lost_claim_fsync_is_consumed_not_repaired(lease):
     assert json.loads(before)["lease_sha256"] == lease.pin
     finished(start(lease), 70)
     assert path.read_bytes() == before
+
+
+def test_native_clock_refusal_publishes_no_claim(lease):
+    finished(start(lease, clock_refused=True), 70)
+    assert not lease.path.with_name("consumed.json").exists()
+    assert lease.path.read_bytes() == lease.raw
 
 
 @pytest.mark.parametrize("fault", ["lease", "claim", "extra", "directory"])

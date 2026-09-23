@@ -1467,10 +1467,25 @@ remains unchanged. The helper's original clock must be sampled inside that
 continuing helper, not transplanted from a separate driver. No deadline is
 renewed or converted for a nonzero namespace.
 
-This option is not yet selected by the Engine/ready/native launch path or any
-installed host service. Source/runtime, Engine incarnation, mount/proc
-provenance and independent recovery checks remain separate. An idle-init proof
-still reports both daemon health and recording state as unconfirmed.
+The standalone idle PID-1 also retains its own time-namespace descriptor and
+checks both zero offsets before publishing its one-use claim and on each lease
+continuity check. A nonzero, changed or unconfirmed clock domain cannot consume
+the lease. This does not replace the host's independent BOOTTIME recovery
+deadline or turn the idle process into a healthy daemon.
+
+The private Engine/ready join can also explicitly carry this witness. Readiness
+requires its original clock to match the plan clock and its retained init to
+match the exact dispatch target. Every native actor must still share the exact
+init namespaces; only the independently verified helper/init time-domain
+relationship may differ. The original witness and digest remain required after
+begin and while consuming buffered returns after child exit. Transport closure
+does not close this caller-owned witness, renew a deadline or prove process exit.
+
+No installed host service selects this option. Source/runtime, Engine incarnation,
+mount/proc provenance and independent recovery checks remain separate. An
+idle-init proof still reports both daemon health and recording as unconfirmed.
+Synthetic Engine tests exercise argument propagation and fail-closed continuity;
+they do not establish installed platform or real native-container readiness.
 
 ## Required live ownership and recovery contract
 

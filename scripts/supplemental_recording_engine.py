@@ -320,7 +320,7 @@ class Client:
             raise error
         raise UnconfirmedEngine(MESSAGE) from None
 
-    def bind_processes(self, reported):
+    def bind_processes(self, reported, *, zero_domain=None):
         """Bind one actual ready-frame actor set to this exact Engine execution.
 
         The caller must validate the actual received ready envelope, original
@@ -366,7 +366,9 @@ class Client:
                 return observed.pid
 
             guardian_pid = running()
-            witness = namespace.Witness(self.claim.witness, guardian_pid, reported)
+            witness = namespace.Witness(
+                self.claim.witness, guardian_pid, reported, zero_domain=zero_domain
+            )
             require(running() == guardian_pid)
             witness.refresh()
             self._check()

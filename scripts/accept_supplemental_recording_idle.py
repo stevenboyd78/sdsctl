@@ -93,6 +93,29 @@ def _boot():
     return value.hex
 
 
+def _clock_domain(descriptor):
+    """Verify the retained current namespace and both kernel zero offsets.
+
+    The absolute lease may originate in a distinct zero-offset helper domain.
+    Reject a local offset before publishing any claim, even if the host has not
+    yet attached. The offset file describes time_for_children, so both namespace
+    identities must agree. No namespace entry, clock conversion or timer renewal.
+    """
+    original = os.fstat(descriptor)
+    expected = original.st_dev, original.st_ino
+
+    def same():
+        for name in ("time", "time_for_children"):
+            info = os.stat("/proc/self/ns/" + name)
+            require((info.st_dev, info.st_ino) == expected)
+
+    same()
+    with open("/proc/self/timens_offsets", "rb", buffering=0) as stream:
+        raw = stream.read(257)
+    require(re.fullmatch(rb"monotonic[ \t]+0[ \t]+0\nboottime[ \t]+0[ \t]+0\n", raw))
+    same()
+
+
 def decode(raw, *, sha256, path, now, boot):
     """Pure closed lease parsing; neither a launch nor readiness authorization."""
     require(type(raw) is bytes and 0 < len(raw) <= MAX_BYTES)
@@ -143,7 +166,10 @@ def run(argv):
     stopped = Event()
     previous = {}
     opened = []
+    namespace_fd = -1
     try:
+        namespace_fd = os.open("/proc/self/ns/time", os.O_RDONLY | os.O_CLOEXEC)
+        _clock_domain(namespace_fd)
         for sig in (signal.SIGTERM, signal.SIGINT):
             previous[sig] = signal.signal(sig, lambda *_: stopped.set())
         root = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -173,6 +199,7 @@ def run(argv):
         lease = decode(raw, sha256=sha256, path=path, now=time.monotonic(), boot=boot)
 
         def unchanged():
+            _clock_domain(namespace_fd)
             for ancestor, name, fd, identity in opened:
                 require(_identity(os.fstat(fd))[:6] == identity)
                 if ancestor is not None:
@@ -218,6 +245,8 @@ def run(argv):
             stopped.wait(min(0.1, remaining))
         return 0
     finally:
+        if namespace_fd >= 0:
+            os.close(namespace_fd)
         for _, _, fd, _ in reversed(opened):
             os.close(fd)
         for sig, handler in previous.items():
