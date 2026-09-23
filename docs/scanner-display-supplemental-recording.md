@@ -1723,6 +1723,18 @@ still must collect original pidfd-bound startup bytes and check process/containe
 identity around that read. Neither function is selected by the installed helper
 or changes any App, credential, command or default admission policy.
 
+The corresponding `collect_supervised_process_environment()` performs two
+matching bounded `/proc/<original-pid>/environ` reads through a no-follow file
+descriptor, bracketed by the already-bound original `ProcessWitness`. It checks
+the live pidfd, its descriptor identity, exact original start/cgroup identity,
+and stable proc-file identity before returning only the environment fingerprint,
+original process identity and observation start time. Its caller-supplied
+absolute monotonic deadline has at most one second remaining and is never
+refreshed. It neither discovers/rebinds a PID nor closes the caller's witness.
+Unknown, replaced, exited or changed evidence remains unconfirmed. Original
+container/image/namespace/command qualification and independently supervised
+outer timeout still belong to the host adapter; this is not an installed service.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

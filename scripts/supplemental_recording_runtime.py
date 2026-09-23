@@ -10,6 +10,7 @@ themselves or authorize an App, host helper, exec, recording or recovery action.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import posixpath
 import re
@@ -18,6 +19,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+import supplemental_handoff_process as processes
 from supplemental_handoff_files import DIRECTORY, identity
 from supplemental_handoff_policy import checksum, digest
 
@@ -207,6 +209,81 @@ def supervised_process_environment(
         )
     except Exception:
         raise UnconfirmedRuntime(MESSAGE) from None
+
+
+@dataclass(frozen=True)
+class ProcessEnvironment:
+    sha256: str
+    process: processes.ProcessIdentity
+    observed_at: float
+
+
+def collect_supervised_process_environment(witness, *, deadline, **profile):
+    """Two bounded startup reads through an already live-bound original pidfd.
+
+    No process lookup/rebinding, exec, signal, environment rewrite or authority.
+    Caller retains the witness and independently checks original container,
+    image, namespace and fixed command around this collection. The absolute
+    monotonic deadline must have at most one second remaining and is never
+    refreshed here; an independently supervised outer bound covers kernel I/O.
+    Only a digest, original identity and observation START time are returned.
+    """
+    fd = -1
+    try:
+        require(type(witness) is processes.ProcessWitness and os.geteuid() == ROOT_UID)
+        require(type(deadline) in (int, float) and math.isfinite(deadline))
+        started = time.monotonic()
+        require(0 < deadline - started <= 1)
+        original = witness.identity
+        require(type(original) is processes.ProcessIdentity)
+        original_fd = witness.fd
+        require(type(original_fd) is int and original_fd >= 0)
+        original_fd_identity = identity(os.fstat(original_fd))
+
+        def check():
+            require(time.monotonic() < deadline)
+            require(witness.identity == original and witness.fd == original_fd)
+            require(identity(os.fstat(original_fd)) == original_fd_identity)
+            require(not witness.exited())
+            require(processes.read_identity(original.pid, original.container_id) == original)
+            require(time.monotonic() < deadline and not witness.exited())
+
+        check()
+        path = f"/proc/{original.pid}/environ"
+        fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == ROOT_UID)
+        file_identity = identity(info)
+
+        def read():
+            require(time.monotonic() < deadline)
+            os.lseek(fd, 0, os.SEEK_SET)
+            result = bytearray()
+            while True:
+                require(time.monotonic() < deadline)
+                chunk = os.read(fd, 16385 - len(result))
+                if not chunk:
+                    break
+                result.extend(chunk)
+                require(len(result) <= 16384)
+            require(identity(os.fstat(fd)) == file_identity)
+            return bytes(result)
+
+        first = read()
+        check()
+        require(read() == first)
+        require(identity(os.stat(path, follow_symlinks=False)) == file_identity)
+        result = supervised_process_environment(first, **profile)
+        check()
+        return ProcessEnvironment(result, original, started)
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+    finally:
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except Exception:
+                raise UnconfirmedRuntime(MESSAGE) from None
 
 
 def _resolve(path, entries):
