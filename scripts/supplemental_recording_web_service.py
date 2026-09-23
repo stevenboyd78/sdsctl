@@ -10,6 +10,7 @@ separately qualify exact web/native exits before restoring any scanner owner.
 from __future__ import annotations
 
 import asyncio
+from contextlib import ExitStack
 
 from fastapi.responses import JSONResponse
 from supplemental_recording_web_peer import Peers
@@ -86,21 +87,36 @@ class Service:
             # The scope gate always rejects WebSockets and unknown scope types.
             await self._surface(scope, receive, send)
             return
-        try:
-            self._peers.check()
-        except DaemonUnavailableError:
-            await self._reject(scope, receive, send, False)
-            return
+        with ExitStack() as cleanup:
+            try:
+                ticket = cleanup.enter_context(self._peers.request_scope())
+            except DaemonUnavailableError:
+                await self._reject(scope, receive, send, False)
+                return
+            await self._http(scope, receive, send, ticket)
+
+    async def _http(self, scope, receive, send, ticket):
         started = False
+        disconnected = False
+
+        async def guarded_receive():
+            nonlocal disconnected
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                disconnected = True
+                self._peers.release_request(ticket)
+            return message
 
         async def guarded_send(message):
             nonlocal started
-            self._peers.check()
+            if disconnected:
+                raise asyncio.CancelledError
+            self._peers.check_request(ticket)
             if message["type"] == "http.response.start":
                 started = True
             await send(message)
 
-        native = asyncio.create_task(self._surface(scope, receive, guarded_send))
+        native = asyncio.create_task(self._surface(scope, guarded_receive, guarded_send))
         watch = asyncio.create_task(self._unavailable())
         self._active.add(native)
         native.add_done_callback(self._finished)
@@ -109,11 +125,17 @@ class Service:
             if native in done:
                 try:
                     await native
+                except asyncio.CancelledError:
+                    if not disconnected:
+                        raise
                 except DaemonUnavailableError:
                     await self._reject(scope, receive, send, started)
             else:
                 await self._reject(scope, receive, send, started)
         finally:
+            # Wake exactly this request's blocked socket I/O BEFORE awaiting
+            # native cancellation/finalizers (which may wait on a read lock).
+            self._peers.release_request(ticket)
             native.cancel()
             watch.cancel()
             # Bound cleanup without equating cancellation with actual worker

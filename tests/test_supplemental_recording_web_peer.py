@@ -14,6 +14,7 @@ import sys
 import threading
 import time
 from contextlib import suppress
+from contextvars import copy_context
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -64,6 +65,11 @@ try:
                             reply.update(ok=True,result={'pong':True})
                             peer.sendall((json.dumps(reply)+'\n').encode())
                         else:
+                            if request.endswith(b'blocked.wav'):
+                                peer.sendall(encode_recording_file_response(
+                                    RecordingFileResponseStatus.OK,content_length=8)+b'RIFF')
+                                peer.recv(1)
+                                return
                             peer.sendall(encode_recording_file_response(RecordingFileResponseStatus.OK,content_length=8)+b'RIFFtest')
                 threading.Thread(target=connection,daemon=True).start()
         for name in ('api','events','pcmu','recordings'):
@@ -323,3 +329,31 @@ def test_changed_socket_permissions_refuse_and_close_without_protocol(tree, name
     owner = tree.bind()
     os.chmod(tree.sockets / name, 0o666)
     wait_closed(owner)
+
+
+def test_request_cleanup_closes_only_its_connections_and_rejects_late_workers(tree):
+    owner = tree.bind()
+    outside = owner.pcmu().connect()
+    with owner.request_scope() as ticket:
+        peer = owner.events().connect()
+        old_worker = copy_context()
+        assert peer._ticket is ticket and outside._ticket is None
+        assert owner.check_request(ticket) > 0
+    assert peer.fileno() == -1 and outside.fileno() >= 0
+    with pytest.raises(DaemonUnavailableError):
+        old_worker.run(lambda: owner.events().connect())
+    assert owner.check() > 0 and owner._connections == {outside}
+    with pytest.raises(DaemonUnavailableError):
+        owner.check_request(ticket)
+    with owner.request_scope() as fresh:
+        assert fresh is not ticket
+        with owner.api() as client:
+            assert client.request("ping") == {"pong": True}
+    assert owner.check() > 0
+    outside.close()
+
+
+def test_native_clients_keep_default_timeouts_with_original_deadline_clamp(tree):
+    owner = tree.bind()
+    for factory in (owner.api, owner.events, owner.pcmu, owner.recordings):
+        assert factory().timeout == 5.0

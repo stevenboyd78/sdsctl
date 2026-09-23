@@ -23,7 +23,8 @@ import stat
 import struct
 import threading
 import time
-from contextlib import suppress
+from contextlib import contextmanager, suppress
+from contextvars import ContextVar
 from pathlib import Path
 
 from supplemental_recording_probe import Expected, _identity
@@ -38,6 +39,7 @@ MESSAGE = "The original finite dashboard peer is unavailable."
 NAMES = ("api.sock", "events.sock", "pcmu.sock", "recordings.sock")
 NAMESPACES = ("pid", "mnt", "net", "user", "time")
 MAX_CONNECTIONS = 64
+_REQUEST = ContextVar("finite_dashboard_request", default=None)
 
 
 def require(value):
@@ -74,8 +76,9 @@ class _Peer(socket.socket):
     This is not a general-purpose socket or an HTTP worker-exit witness.
     """
 
-    def __init__(self, owner, raw, timeout):
+    def __init__(self, owner, raw, timeout, ticket):
         self._owner, self._limit = owner, timeout
+        self._ticket = ticket
         super().__init__(socket.AF_UNIX, socket.SOCK_STREAM, fileno=raw.detach())
 
     def _before(self):
@@ -86,7 +89,9 @@ class _Peer(socket.socket):
 
     def _remaining(self):
         try:
-            return self._owner.check()
+            if self._ticket is None:
+                return self._owner.check()
+            return self._owner.check_request(self._ticket)
         except DaemonUnavailableError:
             # Preserve the native socket-error cleanup/disconnect path.
             raise OSError(MESSAGE) from None
@@ -143,6 +148,7 @@ class Peers:
         self._lock = threading.RLock()
         self._stop = threading.Event()
         self._connections = set()
+        self._requests = set()
         self._handles, self._namespace_handles = [], []
         self._directory_fd = None
         self._thread = None
@@ -216,6 +222,14 @@ class Peers:
     def _connect(self, name, timeout):
         raw = peer = None
         with self._lock:
+            context = _REQUEST.get()
+            ticket = None
+            if context is not None:
+                # An already-ended HTTP worker must not create a late stream.
+                # This is request cancellation, not loss of the original actor;
+                # do not revoke unrelated requests merely for a late worker.
+                require(context[0] is self and context[1] in self._requests)
+                ticket = context[1]
             try:
                 require(name in NAMES)
                 require(type(timeout) in (int, float) and math.isfinite(timeout) and timeout > 0)
@@ -232,7 +246,7 @@ class Peers:
                 require(actual == (native.pid, native.uid, native.gid))
                 require(not raw.get_inheritable())
                 self._check_locked()
-                peer = _Peer(self, raw, float(timeout))
+                peer = _Peer(self, raw, float(timeout), ticket)
                 self._connections.add(peer)
                 peer.settimeout(timeout)
                 return peer
@@ -243,6 +257,40 @@ class Peers:
                     raw.close()
                 self._close_locked()
                 raise DaemonUnavailableError(MESSAGE) from None
+
+    @contextmanager
+    def request_scope(self):
+        """Tag this request's connections, including copied worker contexts.
+
+        Ending a request revokes only its own streams. A later worker carrying
+        the old context cannot reopen one, even while other requests continue.
+        This is not a process/worker-exit acknowledgment or lifetime renewal.
+        """
+        with self._lock:
+            self.check()
+            require(_REQUEST.get() is None and len(self._requests) < MAX_CONNECTIONS)
+            ticket = object()
+            self._requests.add(ticket)
+        marker = _REQUEST.set((self, ticket))
+        try:
+            yield ticket
+        finally:
+            self.release_request(ticket)
+            _REQUEST.reset(marker)
+
+    def check_request(self, ticket):
+        with self._lock:
+            remaining = self.check()
+            require(ticket in self._requests)
+            return remaining
+
+    def release_request(self, ticket):
+        with self._lock:
+            self._requests.discard(ticket)
+            for peer in tuple(self._connections):
+                if peer._ticket is ticket:
+                    peer._abort()
+                    self._connections.discard(peer)
 
     def _watch(self):
         try:
@@ -259,6 +307,7 @@ class Peers:
         for peer in self._connections:
             peer._abort()
         self._connections.clear()
+        self._requests.clear()
         for handles in (self._handles, self._namespace_handles):
             while handles:
                 os.close(handles.pop())
@@ -279,19 +328,19 @@ class Peers:
 
     def api(self):
         self.check()
-        return DaemonApiClient(_Transport(self, "api.sock"), timeout=0.5)
+        return DaemonApiClient(_Transport(self, "api.sock"))
 
     def events(self):
         self.check()
-        return DaemonEventClient(_Transport(self, "events.sock"), timeout=0.5)
+        return DaemonEventClient(_Transport(self, "events.sock"))
 
     def pcmu(self):
         self.check()
-        return DaemonPcmuClient(_Transport(self, "pcmu.sock"), timeout=0.5)
+        return DaemonPcmuClient(_Transport(self, "pcmu.sock"))
 
     def recordings(self):
         self.check()
-        return DaemonRecordingFileClient(_Transport(self, "recordings.sock"), timeout=0.5)
+        return DaemonRecordingFileClient(_Transport(self, "recordings.sock"))
 
 
 if __name__ == "__main__":

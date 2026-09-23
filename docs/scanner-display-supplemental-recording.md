@@ -1197,6 +1197,16 @@ is not proof that a synchronous HTTP worker has exited. The new web modules are
 not included in the older qualified host/native image, and the product change
 also requires a fresh source/image pin before use in any new case.
 
+Each finite HTTP request now has its own connection scope, propagated through
+the native worker-thread context. Closing or cancelling that request shuts down
+its sockets before awaiting native cleanup; unrelated browser streams remain
+open. A late worker carrying an ended request cannot establish a new connection
+or report a successful response. A blocked saved-file read therefore cannot
+make its native close/finalizer wait indefinitely on the read lock. The ordinary
+five-second client timeouts remain unchanged and are still clamped to the
+original overall deadline. Local tests cover two simultaneous quiet audio
+streams and a deliberately stalled saved-file body; no user recording is used.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP

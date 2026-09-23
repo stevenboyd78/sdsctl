@@ -232,3 +232,77 @@ def test_uncancellable_fixture_task_is_retained_and_never_claimed_exited(tree):
         assert not app._active
 
     asyncio.run(run())
+
+
+def test_quiet_browser_audio_disconnect_preserves_other_request(tree):
+    app, owner = service(tree)
+
+    async def run():
+        started = [asyncio.Event(), asyncio.Event()]
+        disconnect = [asyncio.Event(), asyncio.Event()]
+
+        async def request(index):
+            async def receive():
+                await disconnect[index].wait()
+                return {"type": "http.disconnect"}
+
+            async def send(value):
+                if value["type"] == "http.response.start":
+                    assert value["status"] == 200
+                    started[index].set()
+
+            await app(http("/api/v1/audio"), receive, send)
+
+        tasks = [asyncio.create_task(request(index)) for index in range(2)]
+        try:
+            await asyncio.wait_for(asyncio.gather(*(value.wait() for value in started)), 2)
+            assert len(owner._connections) == len(owner._requests) == 2
+            disconnect[0].set()
+            await asyncio.wait_for(tasks[0], 1)
+            assert not tasks[1].done()
+            assert len(owner._connections) == len(owner._requests) == 1
+            assert owner.check() > 0
+            disconnect[1].set()
+            await asyncio.wait_for(tasks[1], 1)
+            assert owner.check() > 0 and not owner._connections and not owner._requests
+            assert not app._active
+        finally:
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    asyncio.run(run())
+
+
+def test_browser_file_disconnect_wakes_read_before_native_close_lock(tree):
+    app, owner = service(tree)
+
+    async def run():
+        started, disconnect = asyncio.Event(), asyncio.Event()
+
+        async def receive():
+            await disconnect.wait()
+            return {"type": "http.disconnect"}
+
+        async def send(value):
+            if value["type"] == "http.response.start":
+                assert value["status"] == 200
+                started.set()
+
+        task = asyncio.create_task(app(http("/api/v1/recordings/file/blocked.wav"), receive, send))
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            # Let the real native download enter its locked read. This fixture
+            # intentionally supplies only half its declared body, no user file.
+            await asyncio.sleep(0.05)
+            began = time.monotonic()
+            disconnect.set()
+            await asyncio.wait_for(task, 1)
+            assert time.monotonic() - began < 1
+            assert owner.check() > 0 and not owner._connections and not owner._requests
+            assert not app._active
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(run())
