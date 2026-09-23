@@ -24,6 +24,7 @@ import supplemental_handoff_files as files
 import supplemental_handoff_process as process
 import supplemental_recording_host_plan as host_plan
 import supplemental_recording_namespace as namespace
+import supplemental_recording_time_domain as time_domain
 
 MESSAGE = "Recording idle-init evidence is unconfirmed; preserve the case and do not launch."
 ROOT_UID = ROOT_GID = 0
@@ -51,6 +52,7 @@ class Evidence:
     claim_sha256: str
     started_at: float
     sampled_at: float
+    time_domain_sha256: str | None = None
 
     @property
     def sha256(self):
@@ -110,9 +112,11 @@ class Idle:
     it around use. Failed refresh poisons this collector and keeps the pidfd for
     its owner to close; neither a retry nor another current baseline is adopted.
     close() closes only this object's descriptors, never the caller's witness.
+    An explicitly supplied ZeroDomain remains caller-owned and is refreshed on
+    every process observation; omission retains the strict same-time-domain rule.
     """
 
-    def __init__(self, plan, witness, generation):
+    def __init__(self, plan, witness, generation, *, zero_domain=None):
         self.opened, self.pidfd = [], -1
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.closed = False
@@ -127,6 +131,8 @@ class Idle:
                 == witness.identity
             )
             self.plan, self.init, self.generation = plan, witness.identity, generation
+            require(zero_domain is None or type(zero_domain) is time_domain.ZeroDomain)
+            self.zero_domain, self.domain_sha256 = zero_domain, None
             self.pidfd = os.dup(witness.fd)
             layout = next(item for item in plan.layouts if item.slug == host_plan.base.CANDIDATE)
             self.directory = layout.data / plan.native_root.relative_to("/data") / "idle"
@@ -211,10 +217,19 @@ class Idle:
             == (self.init.pid, self.init.start_ticks, self.init.container_id)
         )
         domain = os.stat("/proc/self/ns/user")
-        require(
-            actor.namespaces[3:]
-            == ((domain.st_dev, domain.st_ino), self.plan.original_clock.namespace)
-        )
+        user, native_time = (domain.st_dev, domain.st_ino), self.plan.original_clock.namespace
+        if self.zero_domain is not None:
+            # Explicit retained kernel proof only. Never turn a numeric clock
+            # sample or serialized Evidence into cross-namespace permission.
+            require(type(self.zero_domain) is time_domain.ZeroDomain)
+            proof = self.zero_domain.refresh()
+            require(proof.init == self.init and proof.original_clock == self.plan.original_clock)
+            require(proof.user == user and proof.host_time == self.plan.original_clock.namespace)
+            native_time = proof.native_time
+            if self.domain_sha256 is None:
+                self.domain_sha256 = proof.sha256
+            require(proof.sha256 == self.domain_sha256)
+        require(actor.namespaces[3:] == (user, native_time))
         with open(f"/proc/{self.init.pid}/cmdline", "rb", buffering=0) as stream:
             raw = stream.read(MAX_BYTES + 1)
         require(raw == b"\0".join(part.encode("ascii") for part in self.plan.idle_argv) + b"\0")
@@ -271,6 +286,7 @@ class Idle:
                 hashlib.sha256(claim).hexdigest(),
                 started,
                 after.boottime_ns / host_plan.clock.NS,
+                self.domain_sha256,
             )
         except BaseException as error:
             self.failed = True

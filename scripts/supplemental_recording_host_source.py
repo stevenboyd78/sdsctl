@@ -86,6 +86,7 @@ MODULES = frozenset(
             "runtime",
             "source",
             "static",
+            "time_domain",
             "wire",
         )
     }

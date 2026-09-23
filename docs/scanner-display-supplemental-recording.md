@@ -1442,6 +1442,36 @@ HAOS paths and PID1 namespace/argv facts; those fixtures are not installed-host
 qualification. An actual source-pinned idle image and isolated platform recovery
 still require separate checks before physical testing.
 
+### Explicit zero-offset time namespaces
+
+Some container runtimes create a separate time namespace even with host PID
+visibility. Matching numeric timestamps do not prove that two clock domains are
+equivalent. `scripts/supplemental_recording_time_domain.py` therefore offers a
+separate, read-only `ZeroDomain` witness: the continuing helper retains both
+namespace descriptors and an already bound native-init pidfd, checks the actual
+current and child time namespaces, and reads both kernel offsets twice. Only
+exactly zero MONOTONIC and BOOTTIME offsets qualify. Missing, nonzero, changing
+or unknown evidence, process exit, suspend or a changed original clock refuses
+use and poisons the witness. No clock or namespace is entered or changed.
+
+The current namespace must equal `time_for_children` on both sides because the
+kernel's offset file describes the child namespace. With a live member, its
+offsets are frozen; retained descriptors prevent namespace inode recycling.
+See the [Linux time namespace implementation](https://github.com/torvalds/linux/blob/v6.18/kernel/time/namespace.c).
+
+The idle observer may explicitly receive this live witness. It checks the
+original plan clock and exact init identity, rechecks the witness on every
+process observation, and retains its digest in the idle evidence. Serialized
+evidence is not accepted. Without this option, the exact same-namespace rule
+remains unchanged. The helper's original clock must be sampled inside that
+continuing helper, not transplanted from a separate driver. No deadline is
+renewed or converted for a nonzero namespace.
+
+This option is not yet selected by the Engine/ready/native launch path or any
+installed host service. Source/runtime, Engine incarnation, mount/proc
+provenance and independent recovery checks remain separate. An idle-init proof
+still reports both daemon health and recording state as unconfirmed.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
