@@ -32,6 +32,7 @@ MODULES = frozenset(
         "supplemental_recording_construction",
         "supplemental_recording_control",
         "supplemental_recording_evidence",
+        "supplemental_recording_guardian",
         "supplemental_recording_handoff",
         "supplemental_recording_launch_plan",
         "supplemental_recording_monitor",

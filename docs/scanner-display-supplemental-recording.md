@@ -876,6 +876,43 @@ this complete source boundary and arm its watchdog **before** releasing the
 child gate. Installed guardian/relay/probe, new host-plan and isolated recovery
 qualification remain required before any new live case.
 
+## Offline fixed guardian integration
+
+`scripts/supplemental_recording_guardian.py` connects the private launch plan,
+closed source inventory, child entrypoint, ready/begin protocol and independent
+watchdog. It requires isolated Python and checks that its loaded private helpers
+and installed package come from the exact inventoried locations. The guardian is
+part of the closed helper inventory. Source/image/interpreter qualification and
+expected pins still originate with the independent host, not the candidate.
+
+Before creating a child, it exclusively publishes and synchronizes a one-use
+claim in the existing private `guardian` directory beside the exact host-qualified
+`launch.json`. The caller cannot choose an alternate claim namespace. Partial or
+complete claims are preserved and refuse reuse. It launches only the fixed child with three inherited
+descriptors, a minimal environment and no ordinary daemon options. It binds the
+exact child and arms the watchdog before rechecking source and launch inputs and
+releasing the gate. Readiness does not start a recording; begin still requires a
+separately durable, authenticated host intent.
+
+The guardian consumes ready/start/completion phases once, watches native and
+watchdog exit alongside the report channel, and cancels its exact child when a
+phase becomes unconfirmed. A dead watchdog while the native child remains alive
+cannot be interpreted as normal completion. Native exit is independently waited
+and reaped; after native exit, an unresponsive watchdog also has bounded cleanup.
+Forced watchdog cleanup is unconfirmed, not a successful outcome. All failures
+retain the original claim and recording evidence, without replaying stop or
+finalization. A successful native return and actual child exit remain different
+facts, and neither proves container-init exit or authorizes another scanner owner.
+
+Isolated staged-Python tests exercise actual child/watchdog processes and real
+loopback RTSP/RTP recording. Fault cases include wrong source/plan origins, unsafe
+interpreter flags, lost claim synchronization, failed spawn or watchdog arming,
+source drift before gate release, lost child identity, failed gate write,
+duplicate ready/begin, invalid deadlines, killed and frozen watchers, native
+termination and inherited-descriptor isolation. Each driver checks that its
+owned children are reaped and descriptors closed. These local results do not
+qualify an installed container, host relay, image pin or physical scanner.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.

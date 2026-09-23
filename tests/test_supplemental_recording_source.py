@@ -54,7 +54,7 @@ def test_read_only_deterministic_closed_evidence(layout):
     )
     assert first.runtime_sha256 == m.checksum(runtime)
     assert first.native_sha256 == m.checksum(native)
-    assert first.file_count == len(before) == 24
+    assert first.file_count == len(before) == len(m.NATIVE_FILES) + len(m.REQUIRED_RUNTIME)
     assert first.total_bytes == sum(item.st_size for item in before.values())
     for p, stated in before.items():
         assert m.files.identity(p.stat()) == m.files.identity(stated)
