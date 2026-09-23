@@ -640,6 +640,52 @@ unsafe links, changed directories, fixed deadlines and read-only restart. This
 qualifies durable host binding offline; the native authentication channel and
 installed source/guardian/operator integration remain the next live gates.
 
+## Offline exact-child native-return channel
+
+`scripts/supplemental_recording_channel.py` adds an anonymous Unix `SEQPACKET`
+channel for the future native guardian. It has no listening pathname, public
+API, process launcher, signal sender or recording command. The caller must pass
+only the sender endpoint to its source-pinned child and close the unused endpoint
+in each process. The receiver is bound while that exact owned child is alive,
+using its parent relationship, start ticks and a retained pidfd.
+
+Per-message kernel `SCM_CREDENTIALS` must match the child's PID, UID and GID.
+Socketpair `SO_PEERCRED` alone would identify the creating parent after a fork,
+so it is deliberately not used as the sender identity. A descendant with an
+inherited descriptor cannot report as the expected child. Unexpected descriptor
+passing is rejected and any installed descriptors are closed, including truncated
+ancillary data. Messages are canonical, at most 8 KiB, and bound to the original
+native manifest/contract, generation, projection and source hashes.
+
+There are exactly two allowed success messages: started, then completed. Both
+receipt and validation must finish before their fixed deadlines. Early, late,
+duplicate, malformed, missing, wrong-peer or wrong-case reports consume that
+receiver without retry. Sender operations have a maximum 200 ms cooperative
+socket timeout; validation and publication do not extend the existing run window.
+The channel cannot interrupt blocked kernel I/O or replace the outer guardian.
+
+The optional **in-process** native assembly request now accepts a separately
+constructed return sender. It validates the original baseline/writer/endpoint,
+generation and sufficient remaining fixed window before accepting the request.
+The scheduler reports start only after `FiniteRecordingOwner.start()` actually
+returns. The assembly reports completion only after final content verification
+and successful native cleanup. Normal callers that do not supply a sender retain
+their existing behavior. Nothing is added to the public daemon API or CLI.
+
+Isolated child tests now connect this path to the actual dedicated construction,
+native lifecycle and localhost RTP writer. A lost return after writing
+`started.json` produces no start acknowledgment. An exception after the native
+process closes produces no completion acknowledgment even though `stopped.json`
+and finalized output exist. Successful runs report the exact decoded sample
+count and are separately reaped by the test parent. Kernel-credential identity
+does **not** prove that the child executed the approved source; the installed
+fixed launcher and full source inventory remain mandatory qualification gates.
+
+This channel is not yet wired into an installed guardian, the host-ledger bridge,
+a durable operator request or a recording-capable host plan. Receiving a report
+is not proof of process exit, unchanged current files, audible quality or App
+restoration. Tests do not contact the physical scanner.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.

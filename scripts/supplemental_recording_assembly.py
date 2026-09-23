@@ -94,6 +94,7 @@ class NativeRecordingAssembly:
         self.result: Result | None = None
         self.worker_error = False
         self.cleanup_complete = False
+        self._returns = None
         try:
             require(type(process) is DaemonProcess and type(api) is FiniteRecordingApi)
             require(type(acquisition) is DaemonSupplementalAcquisition)
@@ -191,11 +192,34 @@ class NativeRecordingAssembly:
     def ready(self) -> bool:
         return self._ready.is_set()
 
-    def request_start(self) -> None:
+    def request_start(self, *, returns=None) -> None:
         """An explicit local-fixture request; readiness alone never starts I/O."""
         with self._lock:
             require(self.ready and not self._requested.is_set() and not self._cancel.is_set())
             require(not self.signals.stop_requested)
+            if returns is not None:
+                from supplemental_recording_channel import Sender
+
+                require(type(returns) is Sender and returns.phase == "started")
+                returns.binding.payload()
+                require(returns.binding.stored.baseline == self.baseline)
+                require(returns.binding.stored.writer == self.writer)
+                require(returns.binding.generation == self.generation)
+                require(
+                    returns.binding.stored.contract.audio_endpoint_sha256
+                    == self.audio_endpoint_sha256
+                )
+                now = monotonic()
+                require(now + 3 <= returns.binding.start_by)
+                require(
+                    now + 3 + self.acquisition._policy.window_seconds + 10
+                    <= returns.binding.finish_by
+                )
+                require(
+                    3 + self.acquisition._policy.window_seconds + 10
+                    <= returns.binding.stored.contract.maximum_recording_seconds
+                )
+            self._returns = returns
             self._ready.clear()
             self._requested.set()
 
@@ -248,7 +272,11 @@ class NativeRecordingAssembly:
                         self.manager, self.baseline, plan, self.journal
                     )
                     self.schedule = FiniteRecordingSchedule(
-                        self.controller, self.api, self.writer, acquisition=self.acquisition
+                        self.controller,
+                        self.api,
+                        self.writer,
+                        acquisition=self.acquisition,
+                        returns=self._returns,
                     )
                     require(not self.signals.stop_requested)
                     self.result = self.schedule.run(self._cancel)
@@ -315,6 +343,13 @@ class NativeRecordingAssembly:
             and self.cleanup_complete
             and self.result is not None
         )
+        if self._returns is not None:
+            try:
+                # This call is after the successful native run and cleanup, not
+                # a filesystem-poll inference from stopped.json or WAV bytes.
+                self._returns.completed(self.result.artifact, self.result.stopped)
+            except Exception:
+                raise UnconfirmedAssembly(MESSAGE) from None
         return self.result
 
 

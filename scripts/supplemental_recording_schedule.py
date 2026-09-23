@@ -40,6 +40,7 @@ class Result:
     artifact: FinalizedRecording
     active_observations: int
     last_observation: Observation
+    stopped: dict
 
 
 class FiniteRecordingSchedule:
@@ -58,6 +59,7 @@ class FiniteRecordingSchedule:
         writer: Writer,
         *,
         acquisition: DaemonSupplementalAcquisition | None = None,
+        returns=None,
     ):
         self._lock = Lock()
         self._phase = "unconfirmed"
@@ -68,6 +70,14 @@ class FiniteRecordingSchedule:
             self.owner, self.api, self.writer = owner, api, writer
             require(acquisition is None or type(acquisition) is DaemonSupplementalAcquisition)
             self.acquisition = acquisition
+            self.returns = returns
+            if returns is not None:
+                from supplemental_recording_channel import Sender
+
+                require(type(returns) is Sender and returns.phase == "started")
+                require(returns.binding.stored.baseline == owner.baseline)
+                require(returns.binding.stored.writer == writer)
+                require(returns.binding.generation == owner.plan.generation)
             self.acquisition_status = None
             self._plan, self._manager, self._baseline = owner.plan, owner.manager, owner.baseline
             self._runtime = owner.manager.runtime
@@ -115,6 +125,10 @@ class FiniteRecordingSchedule:
             require(type(cancel) is Event and not cancel.is_set())
             self._binding()
             expected = self.owner.start()
+            if self.returns is not None:
+                # Only an actual successful owner return can publish this
+                # event. A receipt left behind by an exception is insufficient.
+                self.returns.started(expected, self._plan)
             if self.acquisition is not None:
                 status = self.acquisition.status()
                 require(not status.armed and not status.ended and not cancel.is_set())
@@ -179,7 +193,7 @@ class FiniteRecordingSchedule:
             self._binding()
             require(not cancel.is_set() and self.owner._now() < self._plan.finish_by)
             self._phase = "verified"
-            return Result(proof, count, final)
+            return Result(proof, count, final, stopped)
         except BaseException as error:
             if consumed:
                 # Consume the native controller even if cancellation occurred
