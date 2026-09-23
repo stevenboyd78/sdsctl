@@ -86,7 +86,7 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph():
                     pending.append(dependency)
                 elif dependency.startswith("sds200"):
                     product.add(dependency)
-    assert seen == m.MODULES and len(seen) == 51
+    assert seen == m.MODULES and len(seen) == 52
     assert product == {
         "sds200.daemon_recording",
         "sds200.scanner_display_configuration",
@@ -138,7 +138,7 @@ print(json.dumps({"private": len(private), "product": len(product)}))
     )
     assert not result.stderr
     report = json.loads(result.stdout)
-    assert report["private"] == 51 and report["product"] >= 1
+    assert report["private"] == 52 and report["product"] >= 1
 
 
 @pytest.mark.parametrize(

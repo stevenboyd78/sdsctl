@@ -558,7 +558,7 @@ that generation does not prove the original owners exited or authorize an
 ownership transfer. Complete normal profile, package, options and recording-file
 protection, plus all independent process/CLI recovery gates, remain mandatory.
 
-The closed prospective host bundle now includes 51 private modules, including
+The normal-read join expanded the prospective host bundle to 51 private modules, including
 both reviewed code fragments embedded in this fixed probe. Earlier 47-module
 source/image qualification does not authenticate the new bytes. Local tests join
 the actual recording HostObserver to the fixed probe with explicitly synthetic
@@ -566,6 +566,35 @@ Engine/HA metadata and clocks. They cover normal-file drift, jobs, lost replies,
 clock changes and at-most-once reads; they do not establish installed readiness,
 normal restoration or live scanner behavior. No installed service selects this
 path yet, and no existing idle-only plan gains recording authority.
+
+### Original host permission to one private begin
+
+`supplemental_recording_host_begin.Start` joins the original confirmed `Launch`
+and pre-existing host `recording-ledger` to the existing `Relay`. Construction
+only checks evidence; `start_once()` consumes the attempt before any new probe.
+It requires the actual `BootstrapHost` and `CandidateQualification`, preserves
+the original Ready proof and process handles, and obtains a new passive probe
+inside fresh complete source/runtime and host-file observations. Earlier health
+is not reused. The earliest contributing timestamp remains subject to the
+two-second policy bound, including durable-publication delays.
+
+The actual returned journal authorization must precede a returned ledger intent.
+Its digest comes from that exact persisted event, not a caller assertion. The
+native finish deadline is converted conservatively from the original policy
+clock and clamped to original stop/watch bounds. Only then is the existing
+`Relay` constructed; it performs the sole begin send. Sent, started, finalized,
+worker-exited and restored remain distinct outcomes. A cancellation, late or lost
+return, changed directory, mutated plan or failed source check closes transport
+without retrying or releasing the original actor handles. The separate probe
+handle remains available until explicitly closed.
+
+This extends the prospective closed host source graph to 52 modules; prior
+51-module image evidence does not qualify the new bytes. Tests use actual
+journals, fsync, ledger files and an owned init pidfd, but explicitly synthetic
+host/Engine/readiness/Relay responses for ordering and interruption cases. No
+installed service selects this path. Phase-specific active-recording observation,
+independent host supervision/recovery and fresh deployment qualification are
+still required before a new physical-scanner recording trial.
 
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
