@@ -1238,6 +1238,29 @@ interpreter/dependency and mount qualification, a new recording-capable host
 plan, independent recovery supervision and a fresh live case are still required
 before this mechanism can be used with the scanner.
 
+The joined native-relay test also exercises the real isolated operator and
+recorder: localhost RTP becomes a verified 1280-sample WAV, the actual private
+native messages cross the framed relay, and the host checks its original file
+baseline, ledger and retained process handles. Only the fixture's Engine,
+container/root-namespace metadata and media alias mapping are synthetic. Losing
+the completion leaves the ledger unconfirmed; losing just the exit report or
+returning a failed final Engine status cannot qualify exit even when the actual
+recording and all worker exits are genuine. Receipt hashes bind sender identity
+and receipt time as well as raw message bytes. This does not qualify installed
+namespaces, image bytes or the eventual host execution environment.
+
+The prospective host-side mechanism has a separate source inventory in
+`scripts/supplemental_recording_host_source.py`: 38 fixed private modules plus
+the complete product package. The host return verifier imports recording types
+from that package; copying the older 14-file idle helper is insufficient. Static
+import-closure and isolated local import tests check the reviewed helper graph.
+The collector itself uses only the standard library and trusted filesystem
+helpers, hashes observations twice, includes package assets/bytecode, and refuses
+extra helper files/directories, links, unsafe modes or changed observations.
+Neither native-source nor legacy-helper digests substitute for its distinct
+schema. This is not the future host service entrypoint, interpreter/stdlib or
+third-party dependency attestation, and it does not start or install anything.
+
 ## Offline finite idle-container bootstrap
 
 `scripts/accept_supplemental_recording_idle.py` is a separate, uninstalled PID-1
@@ -1283,6 +1306,44 @@ refuses further dispatch. No conversion renews readiness or replaces the
 independent host recovery timer. Tests cover synthetic offsets and fault cases,
 plus read-only observations of the real kernel clocks; they do not suspend the
 host or qualify an installed container's time namespace.
+
+### Separate idle-to-operator policy
+
+`scripts/supplemental_recording_bootstrap.py` adds a distinct offline journal
+format3. This is **not** an installed host-plan version and is not selected by
+any existing service. Old journal formats1/2 and installed host plans1/2 retain
+their existing meanings and refuse the new journal.
+
+After the original normal-owner exit and candidate-start CLI exit are separately
+proven, the retained candidate init may enter `candidate_idle`. Both native
+health and recording remain unknown (`null`), because idle PID-1 runs neither
+service. A running old daemon, an idle claim alone, or synthesized healthy/idle
+flags cannot supply this transition.
+
+One durable `authorize_operator` event binds the observed init generation,
+fixed bootstrap/lease/source contract, immutable native launch-plan digest and
+qualified idle evidence. The resulting permission is returned only after journal
+publication; replay never returns it again. This is separate from the actual
+Engine create/attach ledger and does not authorize recording. An ambiguous
+publication keeps the case consumed even if its entry exists on disk.
+
+The `starting_operator` phase advances only on separately qualified actual
+readiness **and** a fresh truthful cached probe reporting healthy with recording
+inactive. A healthy-looking observation alone cannot advance it. Only then may
+the existing independent recording-start authorization be recorded, still before
+the original begin deadline. These transitions never reset the original phase,
+trial, readiness, lease-stop or total recovery bounds. Policy times are in the
+host recovery clock domain; native timestamps require the qualified clock
+binding, not direct numeric reuse.
+
+If an operator launch was authorized, restoration additionally requires distinct
+worker/exec-closure evidence, including failed or lost-return cases. Neither
+good files nor candidate-init/CLI exit substitutes for it. A never-launched idle
+candidate may follow the original init/CLI-exit restoration path. Unknown facts
+withhold actions; expiry or conflicting identities require review and the
+independent recovery supervisor. The pure policy authenticates none of its
+observation inputs: the future host adapter must qualify the exact source,
+environment, mount, process, lease, return and cached-probe facts separately.
 
 ## Required live ownership and recovery contract
 
