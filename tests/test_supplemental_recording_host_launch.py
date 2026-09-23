@@ -24,6 +24,7 @@ from . import test_supplemental_recording_host_plan as plans
 from . import test_supplemental_recording_idle_observer as idle_tests  # noqa: F401
 from . import test_supplemental_recording_probe_exec as probe_tests  # noqa: F401
 from . import test_supplemental_recording_ready as ready_tests  # noqa: F401
+from . import test_supplemental_recording_runtime as runtime_tests  # noqa: F401
 
 NAME = "supplemental_recording_host_launch"
 SPEC = importlib.util.spec_from_file_location(NAME, Path(plans.m.__file__).with_name(NAME + ".py"))

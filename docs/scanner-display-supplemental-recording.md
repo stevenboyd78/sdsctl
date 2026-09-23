@@ -1757,6 +1757,32 @@ Separate fresh container checks verified the complete helper/product source and
 import origins without import-time network/process actions. These do not prove
 installed Home Assistant qualification, recorded audio, recovery or restoration.
 
+`CandidateQualification` in `scripts/supplemental_recording_host_launch.py` now
+provides the read-only candidate side of the trusted launch qualifier. It retains
+the original canonical schema3 plan, idle observer, init identity/pidfd, Engine
+generation, image-environment pin, hostname, architecture and timezone. Each call
+checks the actual container/image before and after fresh native/product source,
+complete supervised runtime and original-init startup-environment reads. The
+fixed idle command, root user, manual restart policy and exact protected data/media
+mount mappings remain required. Mounts cannot shadow certificate/loader files,
+timezone inputs or any executable tree. No candidate source is imported.
+
+The complete call must finish inside its original two-second local bound and
+the plan's original readiness deadline. Neither a late result nor failure can
+refresh a deadline or replace a pin. A failed collector remains consumed; a
+successful call returns no reusable report or authorization. Credentials are not
+retained or printed. Original witness ownership stays with the caller. Independent
+outer supervision is still required for blocked kernel or Engine I/O; a local
+elapsed-time check cannot interrupt such a block.
+
+Related local regression covers real file/proc reads and owned pidfds with
+explicitly synthetic Engine, idle-claim and HAOS path fixtures. It checks source,
+environment, identity, mount and claim drift, lost handles, and late observations.
+This is not an installed host adapter qualification: complete host files/jobs/Core,
+network/other-owner observations, helper provenance, actual cached native health,
+independent recovery and a measured combined post-Ready timing window remain
+separate gates. The installed idle-only helper does not select this class.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

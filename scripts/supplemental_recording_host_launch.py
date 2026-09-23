@@ -16,11 +16,13 @@ import os
 import time
 from dataclasses import asdict, replace
 from decimal import Decimal
-from threading import get_ident
+from pathlib import Path
+from threading import Lock, get_ident
 
 import supplemental_recording_idle_observer as idle_module
 import supplemental_recording_probe_exec as probe_exec
 import supplemental_recording_ready as received
+import supplemental_recording_runtime as runtime
 
 plans = idle_module.host_plan
 bootstrap, base = plans.bootstrap, plans.base
@@ -36,6 +38,232 @@ class UnconfirmedHostLaunch(ValueError):
 def require(value):
     if not value:
         raise UnconfirmedHostLaunch(MESSAGE)
+
+
+class CandidateQualification:
+    """Fresh source/runtime/environment join for one retained original idle init.
+
+    Read-only, uninstalled adapter segment. Independently reviewed image, source,
+    runtime and environment pins are inputs, never learned from this observation.
+    The environment pin is explicitly the supervised Config.Env profile, not the
+    legacy five-key image profile. No credentials are retained in this object.
+
+    Full host files/jobs/Core/network/other owners, helper qualification, native
+    cached health and independent recovery remain separate obligations. A call
+    returns None only after fresh checks; elapsed_seconds is diagnostic, never
+    reusable authority. Failure permanently consumes this collector. It never
+    closes caller-owned handles. Kernel/Engine stalls still require independent
+    outer supervision; elapsed checks cannot interrupt blocked kernel I/O.
+    """
+
+    CODE_ROOTS = plans.host.candidate_static.CODE_ROOTS + tuple(
+        Path(name)
+        for name in (
+            "/etc/ssl",
+            "/etc/ld.so.conf",
+            "/etc/ld.so.cache",
+            "/etc/ld.so.conf.d",
+            "/etc/ld.so.preload",
+            "/etc/localtime",
+            "/etc/timezone",
+        )
+    )
+    MAX_SECONDS = 2.0
+
+    def __init__(
+        self,
+        plan,
+        idle,
+        witness,
+        docker,
+        *,
+        image_environment_sha256,
+        timezone,
+        hostname,
+        architecture,
+    ):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed, self.elapsed_seconds = False, None
+        try:
+            require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
+            require(type(idle) is idle_module.Idle and idle.plan == plan)
+            require(type(witness) is engine.dispatch.process.ProcessWitness)
+            require(idle.init == witness.identity)
+            require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
+            base.digest(idle.generation)
+            base.digest(image_environment_sha256)
+            runtime._timezone_name(timezone)
+            plans.text(hostname, r"[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}")
+            require(architecture in ("amd64", "arm64"))
+            self.plan, self.idle, self.witness, self.docker = plan, idle, witness, docker
+            self.image_environment_sha256 = image_environment_sha256
+            self.timezone, self.hostname, self.architecture = timezone, hostname, architecture
+            self.init, self.generation = witness.identity, idle.generation
+            self.fd = witness.fd
+            self.fd_identity = runtime.identity(os.fstat(self.fd))
+            self.original = self._pins()
+            self.layout = next(item for item in plan.layouts if item.slug == base.CANDIDATE)
+            self._guard(min(time.monotonic() + self.MAX_SECONDS, plan.lease["ready_by"]))
+        except BaseException as error:
+            self._fail(error)
+
+    def _pins(self):
+        return (
+            self.plan.raw,
+            self.init,
+            self.generation,
+            self.image_environment_sha256,
+            self.timezone,
+            self.hostname,
+            self.architecture,
+        )
+
+    def _guard(self, deadline):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        require(os.geteuid() == runtime.ROOT_UID and time.monotonic() < deadline)
+        require(self._pins() == self.original)
+        require(
+            type(self.plan) is plans.Plan
+            and plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan
+        )
+        require(
+            type(self.docker) is plans.ordinary.Docker
+            and self.docker.path == "/var/run/docker.sock"
+        )
+        require(type(self.idle) is idle_module.Idle and self.idle.plan == self.plan)
+        require(type(self.witness) is engine.dispatch.process.ProcessWitness)
+        require(self.idle.init == self.witness.identity == self.init)
+        require(self.idle.generation == self.generation and self.witness.fd == self.fd)
+        require(runtime.identity(os.fstat(self.fd)) == self.fd_identity)
+        require(not self.witness.exited())
+        require(
+            engine.dispatch.process.read_identity(self.init.pid, self.init.container_id)
+            == self.init
+        )
+        require(
+            self.layout == next(item for item in self.plan.layouts if item.slug == base.CANDIDATE)
+        )
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        require(observed.boottime_ns / plans.clock.NS < self.plan.deadlines.ready_by)
+        require(time.monotonic() < min(deadline, self.plan.lease["ready_by"]))
+
+    def _metadata(self, deadline):
+        self._guard(deadline)
+        plan = self.plan
+        container = self.docker.container("app_" + base.CANDIDATE)
+        require(container.get("Id") == self.init.container_id)
+        require(
+            plans.ordinary.generation(
+                container, name="app_" + base.CANDIDATE, image=plan.candidate_runtime.image
+            )
+            == self.generation
+        )
+        require(container["State"]["Pid"] == self.init.pid)
+        plans.ordinary.manual_container(container)
+        require(
+            container.get("Path") == plan.idle_argv[0]
+            and container.get("Args") == list(plan.idle_argv[1:])
+        )
+        config = container.get("Config")
+        require(type(config) is dict and config.get("User") in ("0", "0:0"))
+        require(config.get("Hostname") == self.hostname and config.get("WorkingDir") in ("", "/"))
+        command = []
+        for key in ("Entrypoint", "Cmd"):
+            parts = config.get(key)
+            require(parts is None or type(parts) is list)
+            command.extend(parts or [])
+        require(command == list(plan.idle_argv))
+        require(
+            runtime.supervised_environment(
+                config.get("Env"),
+                image_environment_sha256=self.image_environment_sha256,
+                timezone=self.timezone,
+            )
+            == plan.candidate_runtime.environment
+        )
+        merged = plans.fixed._merged_root(self.layout, container, code_roots=self.CODE_ROOTS)
+        require(merged is not None)
+        self._guard(deadline)
+        image = self.docker.image(plan.candidate_runtime.image)
+        require(image.get("Id") == plan.candidate_runtime.image and image.get("Os") == "linux")
+        require(
+            image.get("Architecture") == self.architecture and type(image.get("Config")) is dict
+        )
+        require(runtime.environment(image["Config"].get("Env")) == self.image_environment_sha256)
+        # Compare all configuration/mount inputs, not changing counters or health.
+        # Tokens are represented only by the separately tagged one-way digest.
+        stamp = base.checksum(
+            {
+                "config": config | {"Env": plan.candidate_runtime.environment},
+                "host": container["HostConfig"],
+                "mounts": container["Mounts"],
+                "driver": container["GraphDriver"],
+                "generation": self.generation,
+            }
+        )
+        self._guard(deadline)
+        return merged, stamp, config["Env"]
+
+    def __call__(self):
+        acquired = False
+        self.elapsed_seconds = None
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            began = time.monotonic()
+            deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
+            self._guard(deadline)
+            before = self.idle.read()
+            require(type(before) is idle_module.Evidence and before.init == self.init)
+            require(
+                (before.plan_sha256, before.generation, before.lease_sha256)
+                == (self.plan.sha256, self.generation, self.plan.lease_sha256)
+            )
+            merged, stamp, configured = self._metadata(deadline)
+            native = plans.host.candidate_static
+            native.source.Layout(merged / plans.fixed.PACKAGE, merged / native.NATIVE).verify(
+                self.plan.candidate_runtime.source
+            )
+            self._guard(deadline)
+            runtime.Layout(merged).verify_supervised(
+                self.plan.candidate_runtime.interpreter, self.timezone
+            )
+            self._guard(deadline)
+            evidence = runtime.collect_supervised_process_environment(
+                self.witness,
+                deadline=min(deadline, time.monotonic() + 1),
+                configured=configured,
+                configured_sha256=self.plan.candidate_runtime.environment,
+                image_environment_sha256=self.image_environment_sha256,
+                timezone=self.timezone,
+                hostname=self.hostname,
+                fixed_exec=False,
+            )
+            require(type(evidence) is runtime.ProcessEnvironment and evidence.process == self.init)
+            require(began <= evidence.observed_at < deadline)
+            after_root, after_stamp, _ = self._metadata(deadline)
+            require((after_root, after_stamp) == (merged, stamp))
+            after = self.idle.read()
+            require(type(after) is idle_module.Evidence)
+            # Evidence timestamps must advance; immutable process/claim/files
+            # and original clock domain must not change beneath that freshness.
+            require(replace(after, sampled_at=before.sampled_at) == before)
+            require(after.sampled_at >= before.sampled_at)
+            self._guard(deadline)
+            self.elapsed_seconds = time.monotonic() - began
+            require(0 <= self.elapsed_seconds < self.MAX_SECONDS)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed, self.elapsed_seconds = True, None
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostLaunch(MESSAGE) from None
 
 
 class Launch:
