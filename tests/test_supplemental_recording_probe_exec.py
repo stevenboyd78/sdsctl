@@ -508,6 +508,64 @@ def test_success_is_single_use_and_close_preserves_original_readiness(
         assert not c.ready.client.endpoint.closed and not c.ready.processes.closed
 
 
+def test_explicit_prepare_binds_once_but_does_not_request_health_or_renew_deadline(
+    prepared, actors, probe_child, calibration, monkeypatch
+):
+    with case(prepared, actors, probe_child, calibration, monkeypatch) as c:
+        original = c.sample.probe_by, c.sample.command, c.ready.received_at
+        assert c.sample.prepare() is None
+        assert c.sample.prepared and c.sample.preparation_attempted and not c.sample.used
+        assert c.request is None and len(c.requests) == 10
+        assert not c.sample.channel.begun and c.sample.channel.reads == 0
+        assert not select.select([c.sample.fd], [], [], 0)[0]
+        assert c.sample.actor == probe_child.actor and not c.ready.client.attachment.begun
+        assert c.sample.read() == m.observer.NativeState(prepared.pins.generation, True, False)
+        assert c.request == json.loads(c.sample.request_raw) and len(c.requests) == 11
+        assert original == (c.sample.probe_by, c.sample.command, c.ready.received_at)
+        denied(c.sample)
+
+
+@pytest.mark.parametrize(
+    "fault", ["second_prepare", "close", "expired", "extended", "command", "actor_exit"]
+)
+def test_prepared_probe_cannot_replay_renew_or_ignore_lost_original_actor(
+    prepared, actors, probe_child, calibration, monkeypatch, fault
+):
+    with case(prepared, actors, probe_child, calibration, monkeypatch) as c:
+        c.sample.prepare()
+        original = c.sample.probe_by
+        if fault == "second_prepare":
+            with pytest.raises(m.UnconfirmedProbeExec):
+                c.sample.prepare()
+        elif fault == "close":
+            c.sample.close()
+        elif fault == "expired":
+            c.sample.probe_by = time.monotonic() - 1
+        elif fault == "extended":
+            c.sample.probe_by = original + 0.1
+        elif fault == "command":
+            c.sample.command = replace(c.sample.command, probe_by=original + 0.1)
+        else:
+            probe_child.process.stdin.close()
+            assert select.select([probe_child.fd], [], [], 2)[0]
+        denied(c.sample)
+        assert c.request is None and len(c.requests) == 10
+        assert not c.ready.client.endpoint.closed and not c.ready.client.attachment.begun
+
+
+@pytest.mark.parametrize("lost_at", [5, 6, 7, 8, 9])
+def test_lost_preparation_result_is_consumed_without_sending_request(
+    prepared, actors, probe_child, calibration, monkeypatch, lost_at
+):
+    with case(prepared, actors, probe_child, calibration, monkeypatch, lost_at=lost_at) as c:
+        with pytest.raises(m.UnconfirmedProbeExec):
+            c.sample.prepare()
+        assert c.sample.preparation_attempted and c.sample.failed and not c.sample.prepared
+        denied(c.sample)
+        assert c.request is None and len(c.requests) == lost_at + 1
+        assert not c.ready.client.closed
+
+
 def test_retained_probe_after_ready_expiry_keeps_original_watch_deadline(
     prepared, actors, probe_child, calibration, ledger, monkeypatch
 ):

@@ -1783,6 +1783,24 @@ network/other-owner observations, helper provenance, actual cached native health
 independent recovery and a measured combined post-Ready timing window remain
 separate gates. The installed idle-only helper does not select this class.
 
+A bounded local one-CPU timing fixture measured the complete native/product plus
+supervised-runtime input checks at 1.25–1.39 seconds per pair. This is not full
+host/Engine/probe timing. In particular, repeating that pair three times in the
+current post-Ready path cannot fit the unchanged two-second policy window on
+that fixture. The individual component results must not be reported as a passing
+assembled readiness path or used to enable a live handoff.
+
+The passive probe's optional `Sample.prepare()` now separates its one-time fixed
+Engine create/start/process binding from the one-time cached-state request. It
+can let interpreter/import startup overlap fresh host qualification; it returns
+no health, sends no cached request, and cannot renew its original deadline or
+command. `read()` then uses that same attachment and original process handle,
+rechecks the original actors, sends exactly one request and still requires the
+fresh closed reply, actual probe exit and independent Engine exit status. The
+existing immediate `read()` path retains its full checks. Failed or abandoned
+preparation cannot be retried or counted as healthy. No installed launch path
+selects this timing seam; combined sequencing and timing remain to be qualified.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

@@ -54,6 +54,7 @@ class Sample:
         self.channel = self.actor = self.execution_id = None
         self.fd = -1
         self.used = self.closed = self.failed = False
+        self.preparation_attempted = self.prepared = False
         try:
             require(type(original) in (retained.received.Ready, retained.Retained))
             self.ready = original if type(original) is retained.received.Ready else original.ready
@@ -72,6 +73,7 @@ class Sample:
             self.command = execution.ProbeCommand(
                 command.plan, command.plan_sha256, command.source_sha256, self.probe_by
             )
+            self.original_command = self.command
             self._check()
             report = json.loads(self.ready_raw)
             request = {
@@ -87,6 +89,7 @@ class Sample:
 
     def _check(self):
         require(not self.closed and not self.failed and self.owner == (os.getpid(), get_ident()))
+        require(self.command == self.original_command and self.probe_by == self.command.probe_by)
         require(time.monotonic() < self.probe_by <= self.original_end)
         ready = self.ready
         require(ready.client is self.client and ready.processes is self.processes)
@@ -173,31 +176,58 @@ class Sample:
         require(body["peer_start_ticks"] == str(native.start_ticks))
         return observer.NativeState(self.pins.generation, body["healthy"], body["recording"]), end
 
+    def _prepare(self):
+        self._check()
+        require(not self.preparation_attempted and not self.prepared)
+        self.preparation_attempted = True  # A lost create return can never be replayed.
+        value = engine._json_request(
+            self.endpoint,
+            "POST",
+            f"/containers/{self.pins.init.container_id}/exec",
+            self.command.create_body(),
+            201,
+            deadline=self.probe_by,
+        )
+        require(set(value) == {"Id"})
+        execution._digest(value["Id"])
+        require(value["Id"] != self.client.claim.state.execution_id)
+        self.execution_id = value["Id"]
+        require(self._inspect().phase == "created")
+        sock = self.endpoint.connect(deadline=self.probe_by)
+        self.channel = engine.attachment.ProbeAttachment(
+            sock, self.execution_id, probe_by=self.probe_by, sender=self.endpoint.sender
+        )
+        self.channel.start(deadline=self.probe_by)
+        self._bind()
+        self._check()
+        self.prepared = True
+
+    def prepare(self):
+        """Start/bind once, without sending the cached-state request.
+
+        Explicit uninstalled timing seam: a trusted caller may overlap this
+        process's interpreter/import startup with its own fresh qualification.
+        Image/source/environment/actor checks are prerequisites before prepare,
+        and must still surround read. This method returns no health or timestamp
+        and never renews the original probe deadline. No installed launch path
+        selects it yet. Close/failure is not probe exit or permission to retry.
+        """
+        try:
+            require(not self.used)
+            self._prepare()
+        except BaseException as error:
+            self._fail(error)
+
     def read(self):
         """Consume once; return truthful cached flags, never a success receipt."""
         try:
             self._check()
             require(not self.used)
-            self.used = True  # Even a lost create return consumes this sample.
-            value = engine._json_request(
-                self.endpoint,
-                "POST",
-                f"/containers/{self.pins.init.container_id}/exec",
-                self.command.create_body(),
-                201,
-                deadline=self.probe_by,
-            )
-            require(set(value) == {"Id"})
-            execution._digest(value["Id"])
-            require(value["Id"] != self.client.claim.state.execution_id)
-            self.execution_id = value["Id"]
-            require(self._inspect().phase == "created")
-            sock = self.endpoint.connect(deadline=self.probe_by)
-            self.channel = engine.attachment.ProbeAttachment(
-                sock, self.execution_id, probe_by=self.probe_by, sender=self.endpoint.sender
-            )
-            self.channel.start(deadline=self.probe_by)
-            self._bind()
+            self.used = True
+            if not self.prepared:
+                self._prepare()
+            require(self.preparation_attempted)
+            self._check()
             self._probe_live()
             sent_at = time.monotonic()
             self.channel.send_request(json.loads(self.request_raw), deadline=self.probe_by)
