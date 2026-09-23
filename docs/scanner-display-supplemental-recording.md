@@ -1746,6 +1746,17 @@ The original runtime profile/digest remains separate and unchanged; neither can
 substitute for the other. Expected fingerprints still need independent image
 reconstruction, and live mounts must not shadow any of these inputs.
 
+The environment additions have local-only qualification: synthetic-credential
+startup and fixed-PATH execs matched independently constructed fingerprints in
+fresh root/read-only/network-disabled containers, including a real original
+pidfd-bound startup read and refusal after that process exited. A new immutable
+47-module host / 29-module native image was then reconstructed from the reviewed
+source. Its complete timezone-inclusive runtime inventory matched an independent
+never-started-container export: 6,576 entries, 5,536 files, 125,825,089 bytes.
+Separate fresh container checks verified the complete helper/product source and
+import origins without import-time network/process actions. These do not prove
+installed Home Assistant qualification, recorded audio, recovery or restoration.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with
