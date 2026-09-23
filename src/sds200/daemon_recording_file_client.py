@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import errno
-import os
 import socket as socket_module
 import threading
 from contextlib import suppress
@@ -16,6 +14,7 @@ from .daemon_recording_file_protocol import (
     decode_recording_file_response,
     encode_recording_file_request,
 )
+from .daemon_transport import DaemonClientTransport, UnixDaemonClientTransport
 from .exceptions import (
     DaemonDisconnectedError,
     DaemonProtocolError,
@@ -31,14 +30,9 @@ class DaemonRecordingFileRequestError(RuntimeError):
 
     def __init__(self, status: RecordingFileResponseStatus) -> None:
         if not isinstance(status, RecordingFileResponseStatus):
-            raise TypeError(
-                "Recording-file request status must be a "
-                "RecordingFileResponseStatus."
-            )
+            raise TypeError("Recording-file request status must be a RecordingFileResponseStatus.")
         if status is RecordingFileResponseStatus.OK:
-            raise ValueError(
-                "Successful recording-file responses are not request errors."
-            )
+            raise ValueError("Successful recording-file responses are not request errors.")
         self.status = status
         super().__init__(_status_message(status))
 
@@ -80,9 +74,7 @@ class DaemonRecordingFileDownload:
             if size == 0:
                 return b""
 
-            target = (
-                self._remaining if size < 0 else min(size, self._remaining)
-            )
+            target = self._remaining if size < 0 else min(size, self._remaining)
             payload = bytearray()
             while len(payload) < target:
                 try:
@@ -90,14 +82,11 @@ class DaemonRecordingFileDownload:
                 except OSError as error:
                     self._close_locked()
                     raise DaemonDisconnectedError(
-                        "The daemon recording-file response disconnected "
-                        "while receiving content."
+                        "The daemon recording-file response disconnected while receiving content."
                     ) from error
                 if not chunk:
                     self._close_locked()
-                    raise DaemonProtocolError(
-                        "The daemon recording-file response was truncated."
-                    )
+                    raise DaemonProtocolError("The daemon recording-file response was truncated.")
                 payload.extend(chunk)
 
             self._remaining -= len(payload)
@@ -129,15 +118,13 @@ class DaemonRecordingFileDownload:
         except OSError as error:
             self._close_locked()
             raise DaemonProtocolError(
-                "The daemon recording-file response did not terminate "
-                "after its declared content."
+                "The daemon recording-file response did not terminate after its declared content."
             ) from error
 
         if extra:
             self._close_locked()
             raise DaemonProtocolError(
-                "The daemon recording-file response exceeded its declared "
-                "content length."
+                "The daemon recording-file response exceeded its declared content length."
             )
 
         self._verified = True
@@ -151,32 +138,42 @@ class DaemonRecordingFileDownload:
 
 
 class DaemonRecordingFileClient:
-    """Fetch one finalized recording per private Unix-domain connection."""
+    """Fetch one finalized recording per separately established connection.
+
+    A socket location retains the ordinary private Unix transport. An explicit
+    transport can additionally bind that connection to a qualified local peer;
+    it does not change inventory validation, the file protocol or size limits.
+    """
 
     def __init__(
         self,
-        location: DaemonSocketLocation,
+        location: DaemonSocketLocation | DaemonClientTransport,
         *,
         timeout: float = DAEMON_RECORDING_FILE_CLIENT_DEFAULT_TIMEOUT,
         max_identifier_bytes: int = RECORDING_FILE_DEFAULT_MAX_IDENTIFIER_BYTES,
-        max_content_bytes: int = (
-            DAEMON_RECORDING_FILE_CLIENT_DEFAULT_MAX_CONTENT_BYTES
-        ),
+        max_content_bytes: int = (DAEMON_RECORDING_FILE_CLIENT_DEFAULT_MAX_CONTENT_BYTES),
     ) -> None:
-        if not isinstance(location, DaemonSocketLocation):
+        if isinstance(location, DaemonSocketLocation):
+            resolved_location: DaemonSocketLocation | None = location
+            transport: DaemonClientTransport = UnixDaemonClientTransport(
+                location, service_label="Daemon recording-file"
+            )
+        elif isinstance(location, DaemonClientTransport):
+            resolved_location = (
+                location.location if isinstance(location, UnixDaemonClientTransport) else None
+            )
+            transport = location
+        else:
             raise TypeError(
-                "Daemon recording-file client location must be a "
-                "DaemonSocketLocation."
+                "Daemon recording-file client endpoint must be a "
+                "DaemonSocketLocation or DaemonClientTransport."
             )
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)):
-            raise TypeError(
-                "Daemon recording-file connect timeout must be a number."
-            )
+            raise TypeError("Daemon recording-file connect timeout must be a number.")
         normalized_timeout = float(timeout)
         if not isfinite(normalized_timeout) or normalized_timeout <= 0:
             raise ValueError(
-                "Daemon recording-file connect timeout must be finite and "
-                "greater than zero."
+                "Daemon recording-file connect timeout must be finite and greater than zero."
             )
         _require_positive_integer(
             max_identifier_bytes,
@@ -187,7 +184,8 @@ class DaemonRecordingFileClient:
             label="Maximum daemon recording-file content size",
         )
 
-        self.location = location
+        self.location = resolved_location
+        self.transport = transport
         self.timeout = normalized_timeout
         self.max_identifier_bytes = max_identifier_bytes
         self.max_content_bytes = max_content_bytes
@@ -206,9 +204,7 @@ class DaemonRecordingFileClient:
                 RECORDING_FILE_RESPONSE_HEADER_BYTES,
             )
             try:
-                status, content_length = decode_recording_file_response(
-                    header
-                )
+                status, content_length = decode_recording_file_response(header)
             except RecordingFileProtocolError as error:
                 raise DaemonProtocolError(
                     "Invalid daemon recording-file response header."
@@ -218,8 +214,7 @@ class DaemonRecordingFileClient:
                 raise DaemonRecordingFileRequestError(status)
             if content_length > self.max_content_bytes:
                 raise DaemonProtocolError(
-                    "The daemon recording-file response exceeds the maximum "
-                    "accepted content size."
+                    "The daemon recording-file response exceeds the maximum accepted content size."
                 )
 
             return DaemonRecordingFileDownload(
@@ -232,44 +227,22 @@ class DaemonRecordingFileClient:
             raise
 
     def _connect(self) -> socket_module.socket:
-        client = socket_module.socket(
-            socket_module.AF_UNIX,
-            socket_module.SOCK_STREAM,
-        )
-        client.settimeout(self.timeout)
+        client: socket_module.socket | None = None
         try:
-            client.connect(os.fspath(self.location.path))
+            client = self.transport.connect(timeout=self.timeout)
+            client.settimeout(self.timeout)
+        except DaemonUnavailableError:
+            if client is not None:
+                _close_socket(client)
+            raise
         except OSError as error:
-            _close_socket(client)
-            self._raise_connect_error(error)
+            if client is not None:
+                _close_socket(client)
+            raise DaemonUnavailableError(
+                "Could not establish daemon recording-file transport."
+            ) from error
+        assert client is not None
         return client
-
-    def _raise_connect_error(self, error: OSError) -> None:
-        path = self.location.path
-        if error.errno == errno.ENOENT:
-            raise DaemonUnavailableError(
-                f"Daemon recording-file socket was not found: {path}"
-            ) from error
-        if error.errno == errno.ECONNREFUSED:
-            raise DaemonUnavailableError(
-                "Daemon recording-file socket is present but not accepting "
-                f"connections: {path}"
-            ) from error
-        if error.errno in {errno.EACCES, errno.EPERM}:
-            raise DaemonUnavailableError(
-                "Permission denied while connecting to daemon recording-file "
-                f"socket: {path}"
-            ) from error
-        if isinstance(error, TimeoutError):
-            raise DaemonUnavailableError(
-                f"Timed out connecting to daemon recording-file socket: {path}"
-            ) from error
-
-        detail = error.strerror or error.__class__.__name__
-        raise DaemonUnavailableError(
-            "Could not connect to daemon recording-file socket "
-            f"{path}: {detail}"
-        ) from error
 
 
 def _status_message(status: RecordingFileResponseStatus) -> str:
@@ -277,9 +250,7 @@ def _status_message(status: RecordingFileResponseStatus) -> str:
         RecordingFileResponseStatus.INVALID_IDENTIFIER: (
             "The daemon rejected the recording identifier."
         ),
-        RecordingFileResponseStatus.NOT_FOUND: (
-            "The requested daemon recording was not found."
-        ),
+        RecordingFileResponseStatus.NOT_FOUND: ("The requested daemon recording was not found."),
         RecordingFileResponseStatus.NOT_PLAYABLE: (
             "The requested daemon recording is not playable."
         ),
@@ -304,12 +275,8 @@ def _receive_exact(client: socket_module.socket, size: int) -> bytes:
             ) from error
         if not chunk:
             if not payload:
-                raise DaemonDisconnectedError(
-                    "The daemon recording-file response disconnected."
-                )
-            raise DaemonProtocolError(
-                "The daemon recording-file response header was truncated."
-            )
+                raise DaemonDisconnectedError("The daemon recording-file response disconnected.")
+            raise DaemonProtocolError("The daemon recording-file response header was truncated.")
         payload.extend(chunk)
     return bytes(payload)
 

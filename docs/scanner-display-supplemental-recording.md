@@ -1162,6 +1162,41 @@ separate qualification. The module is deliberately not added to the host44 or
 native24 inventories; neither existing image proof qualifies a new web bundle.
 The ordinary dashboard and previous acceptance wrapper remain unchanged.
 
+### Original native peer and in-flight HTTP guards — uninstalled
+
+`scripts/supplemental_recording_web_peer.py` supplies exactly the native API,
+event, PCMU and recording-file clients. The recording-file client now accepts
+the same explicit transport interface as the other three clients; its ordinary
+Unix behavior, identifier protocol, inventory admission and content limits are
+unchanged. A new connection checks the actual kernel peer PID/UID/GID before
+sending a protocol byte. Correct socket permissions alone are not sufficient.
+
+The finite peer component retains the original guardian/native/watch pidfds,
+five namespace identities, private socket directory and all four socket inodes.
+Its original deadline is copied once, not renewed by requests or reconnections.
+Lost actor continuity, a frozen actor, changed socket/directory or expiry closes
+its existing client streams and permanently refuses more connections. A bounded
+monitor also wakes blocking native event/audio reads. Socket operations retain
+the native error/cleanup path; no remote owner is signaled or restarted.
+
+`scripts/supplemental_recording_web_service.py` joins those four factories to the
+closed HTTP scope. It checks continuity at HTTP admission and before response
+chunks, ends a stalled request body on original expiry, and refuses late success.
+If streaming headers were already sent, failure closes the response rather than
+manufacturing a successful final chunk. Already delivered bytes cannot be
+withdrawn. An uncooperative task is retained as unconfirmed, not declared exited.
+
+Local tests use real disposable process trees, Unix peer credentials and native
+clients/HTTP handlers. They include replacement sockets, frozen actors, original
+expiry, blocked native audio, stalled HTTP bodies and cancellation failures.
+These guards do **not** authenticate caller-supplied actor facts or install a
+listener. The fixed launcher/source graph, original authenticated Ready-to-web
+join, independent process deadline, actual worker/process exits and installed
+recovery still require separate qualification. In particular, task cancellation
+is not proof that a synchronous HTTP worker has exited. The new web modules are
+not included in the older qualified host/native image, and the product change
+also requires a fresh source/image pin before use in any new case.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
