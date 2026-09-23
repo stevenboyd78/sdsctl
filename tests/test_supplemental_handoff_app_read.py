@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from . import test_supplemental_handoff_guard_state as guard_tests  # noqa: F401
 from . import test_supplemental_handoff_host as host_tests
 from . import test_supplemental_handoff_observer as observer_tests
 

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
+import supplemental_handoff_cached as cached
+import supplemental_handoff_guard_state as guard_state
 from supplemental_handoff_host import (
     Docker,
     docker_output,
@@ -54,7 +56,9 @@ def probe_command(
     require(type(firmware) is str and re.fullmatch(r"[A-Za-z0-9._ -]{1,64}", firmware) is not None)
     require(type(paths) is ProbePaths)
     program = "import sys,types,json\nfrom pathlib import Path\n"
-    for name in ("supplemental_handoff_cached", "supplemental_handoff_guard_state"):
+    # Static imports close the helper graph; only these two sealed sibling files
+    # become the fixed program. Neither import performs IPC or process work.
+    for name in (cached.__name__, guard_state.__name__):
         code = Path(__file__).with_name(name + ".py").read_text()
         require(0 < len(code.encode()) <= 32768)
         program += (
@@ -113,59 +117,65 @@ class AppReads:
 
     def read(self, slug: str, incarnation: str) -> NativeState:
         require(slug in (NORMAL, CANDIDATE))
-        digest(incarnation)
-        seal, command = self.seals[slug], self.commands[slug]
-        name = "app_" + slug
-        before = self.docker.container(name)
-        require(generation(before, name=name, image=seal.image) == incarnation)
-        # Fixed reviewed program; never a caller-provided argv or shell. Direct
-        # transport is private to this collector, not an expanded command API.
-        value = object_json(
-            self.docker._request(
-                "POST",
-                f"/containers/{before['Id']}/exec",
-                {
-                    "AttachStdin": False,
-                    "AttachStdout": True,
-                    "AttachStderr": True,
-                    "Tty": False,
-                    "Privileged": False,
-                    "User": "0",
-                    "Cmd": command,
-                },
-                expected=201,
-            )
+        return _read_probe(self.docker, self.seals[slug], self.commands[slug], incarnation)
+
+
+def _read_probe(
+    docker: Docker, seal: AppSeal, command: tuple[str, ...], incarnation: str
+) -> NativeState:
+    """Shared fixed transport; callers construct the reviewed command locally."""
+    require(type(seal) is AppSeal and seal.slug in (NORMAL, CANDIDATE))
+    slug = seal.slug
+    digest(incarnation)
+    name = "app_" + slug
+    before = docker.container(name)
+    require(generation(before, name=name, image=seal.image) == incarnation)
+    # Fixed reviewed program; never a caller-provided argv or shell. Direct
+    # transport is private to this collector, not an expanded command API.
+    value = object_json(
+        docker._request(
+            "POST",
+            f"/containers/{before['Id']}/exec",
+            {
+                "AttachStdin": False,
+                "AttachStdout": True,
+                "AttachStderr": True,
+                "Tty": False,
+                "Privileged": False,
+                "User": "0",
+                "Cmd": command,
+            },
+            expected=201,
         )
-        execution = value.get("Id")
-        digest(execution)
-        execution = cast(str, execution)
-        require(
-            execution_state(
-                self.docker.inspect_execution(execution),
-                execution_id=execution,
-                container_id=before["Id"],
-                command=command,
-            )
-            == "created"
+    )
+    execution = value.get("Id")
+    digest(execution)
+    execution = cast(str, execution)
+    require(
+        execution_state(
+            docker.inspect_execution(execution),
+            execution_id=execution,
+            container_id=before["Id"],
+            command=command,
         )
-        require(generation(self.docker.container(name), name=name, image=seal.image) == incarnation)
-        raw = self.docker.start_execution(execution, attach=True)
-        after = self.docker.inspect_execution(execution)
-        require(
-            execution_state(
-                after, execution_id=execution, container_id=before["Id"], command=command
-            )
-            == "not_running"
-            and after["ExitCode"] == 0
-        )
-        require(generation(self.docker.container(name), name=name, image=seal.image) == incarnation)
-        evidence: dict[str, Any] = object_json(docker_output(raw))
-        require(set(evidence) == {"schema", "profile", "healthy", "recording", "supplemental"})
-        require(type(evidence["schema"]) is int and evidence["schema"] == 1)
-        require(evidence["profile"] == seal.files.profile)
-        require(evidence["supplemental"] is (slug == CANDIDATE))
-        require(type(evidence["recording"]) is bool)
-        return NativeState(incarnation, evidence["healthy"], evidence["recording"])
+        == "created"
+    )
+    require(generation(docker.container(name), name=name, image=seal.image) == incarnation)
+    raw = docker.start_execution(execution, attach=True)
+    after = docker.inspect_execution(execution)
+    require(
+        execution_state(after, execution_id=execution, container_id=before["Id"], command=command)
+        == "not_running"
+        and after["ExitCode"] == 0
+    )
+    require(generation(docker.container(name), name=name, image=seal.image) == incarnation)
+    evidence: dict[str, Any] = object_json(docker_output(raw))
+    require(set(evidence) == {"schema", "profile", "healthy", "recording", "supplemental"})
+    require(type(evidence["schema"]) is int and evidence["schema"] == 1)
+    require(evidence["profile"] == seal.files.profile)
+    require(evidence["supplemental"] is (slug == CANDIDATE))
+    require(type(evidence["recording"]) is bool)
+    return NativeState(incarnation, evidence["healthy"], evidence["recording"])
 
 
 if __name__ == "__main__":

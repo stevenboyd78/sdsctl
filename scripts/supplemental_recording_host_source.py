@@ -27,6 +27,7 @@ ROOTS = frozenset(
         "host_source",
         "host_plan",
         "host_launch",
+        "normal_read",
         "idle_observer",
         "probe_exec",
         "web_exec",
@@ -45,9 +46,12 @@ MODULES = frozenset(
     {
         "supplemental_handoff_" + name
         for name in (
+            "app_read",
+            "cached",
             "executor",
             "files",
             "host",
+            "guard_state",
             "observer",
             "policy",
             "process",
@@ -82,6 +86,7 @@ MODULES = frozenset(
             "idle_observer",
             "monitor",
             "namespace",
+            "normal_read",
             "owner",
             "preservation",
             "projection",

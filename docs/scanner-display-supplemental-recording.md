@@ -539,6 +539,34 @@ this component does not authenticate assertions or publish checkpoint tips.
 Tests use synthetic Docker/Supervisor responses, fixed-path routing fixtures and
 actual temporary growing/retained files. No host installation is implied.
 
+### Schema3 normal-App cached health
+
+`supplemental_recording_normal_read.Sample` provides one fixed normal-App cache
+read for the original recording plan. Deployment and recording paths are derived
+from its normal protected layout; callers cannot select a candidate, command,
+scanner operation or arbitrary path. It reuses the reviewed ordinary cached
+probe and exact Engine create/start/exit checks, without manufacturing an
+old-style candidate seal. The shared transport leaves the legacy two-App reader's
+role and response checks unchanged.
+
+The sample preserves the original plan bytes, clock domain and recovery deadline,
+checks the current normal generation before and after execution, and consumes
+each attempt once. An unhealthy, unknown or recording-active reply is retained
+truthfully; a missing, malformed, late or wrong-profile reply cannot become idle
+health. A separately restored normal App may have a new generation, but observing
+that generation does not prove the original owners exited or authorize an
+ownership transfer. Complete normal profile, package, options and recording-file
+protection, plus all independent process/CLI recovery gates, remain mandatory.
+
+The closed prospective host bundle now includes 51 private modules, including
+both reviewed code fragments embedded in this fixed probe. Earlier 47-module
+source/image qualification does not authenticate the new bytes. Local tests join
+the actual recording HostObserver to the fixed probe with explicitly synthetic
+Engine/HA metadata and clocks. They cover normal-file drift, jobs, lost replies,
+clock changes and at-most-once reads; they do not establish installed readiness,
+normal restoration or live scanner behavior. No installed service selects this
+path yet, and no existing idle-only plan gains recording authority.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently

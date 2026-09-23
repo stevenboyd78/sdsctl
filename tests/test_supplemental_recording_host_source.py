@@ -86,8 +86,13 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph():
                     pending.append(dependency)
                 elif dependency.startswith("sds200"):
                     product.add(dependency)
-    assert seen == m.MODULES and len(seen) == 47
-    assert product == {"sds200.daemon_recording"}
+    assert seen == m.MODULES and len(seen) == 51
+    assert product == {
+        "sds200.daemon_recording",
+        "sds200.scanner_display_configuration",
+        "sds200.scanner_display_profile_storage",
+        "sds200.scanner_display_upload",
+    }
     # That product module imports more product code. The FULL package, not just
     # this one .py file, is pinned by Layout; third-party/stdlib remain separate.
     assert m.MODULES != native.m.MODULES
@@ -133,7 +138,7 @@ print(json.dumps({"private": len(private), "product": len(product)}))
     )
     assert not result.stderr
     report = json.loads(result.stdout)
-    assert report["private"] == 47 and report["product"] >= 1
+    assert report["private"] == 51 and report["product"] >= 1
 
 
 @pytest.mark.parametrize(
