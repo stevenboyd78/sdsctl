@@ -1042,6 +1042,31 @@ EOF is framing evidence only. The default four-return operator decoder and its
 original deadlines remain unchanged. Synthetic Engine metadata and actual Unix
 socket tests qualify this transport, not an installed probe dispatcher.
 
+`scripts/supplemental_recording_probe_exec.py` joins that transport to the actual
+original `Ready` or post-begin `Retained` instance. It derives the request from
+their received context and mapped actors; callers cannot provide replacement
+PIDs, a new generation, a request body or an extended recording deadline. One
+fixed exec is created through the retained Engine peer. Two actual running
+inspections surround a retained probe pidfd and the exact container namespace
+mapping before the request is written. Every original recorder actor must remain
+live, including when retained return processing would otherwise permit an exit.
+
+The closed reply must match the request digest, original profile and native
+identity, with bounded sampling timestamps in the original qualified clock
+domain. Its real boolean health/recording flags are preserved. Clean framing,
+that probe's actual pidfd exit and its separate exact Engine exit0 are all
+required; none is recorder/guardian/init exit or recording completion. A failed
+sample is consumed and keeps its probe ID/handle for explicit cleanup, without
+closing the borrowed operator connection or retrying. No signal is exposed.
+
+The host source inventory is now43 modules. Local tests use actual private Unix
+transport, owned processes/pidfds and original intent files, but synthetic Engine
+and namespace metadata and cached replies. They do not establish installed
+image/source/runtime authentication or live daemon health. The host adapter must
+still establish and recheck those independent properties, full file protection
+and whole-observation freshness around this mechanism before using the result.
+No installed observer or service selects this path.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
