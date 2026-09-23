@@ -184,6 +184,14 @@ class Machine:
         clock(now)
         require(type(observation) is Observation and 0 <= now - observation.sampled_at <= 2)
 
+    @staticmethod
+    def decode_observation(value: Any) -> Observation:
+        return decode_observation(value)
+
+    @staticmethod
+    def preconditions(observation: Observation) -> str:
+        return preconditions(observation)
+
     def event(self, event: dict[str, Any]) -> Action | None:
         kind = event.get("kind")
         require(
@@ -323,7 +331,7 @@ class Machine:
             require(self.state.phase == "candidate_running" and not self.state.finish_requested)
             self.state = replace(self.state, finish_requested=True)
         else:
-            observation = decode_observation(event["observation"])
+            observation = self.decode_observation(event["observation"])
             self.fresh(now, observation)
             action = self.observe(now, observation)
             self.last_at = now
@@ -347,7 +355,7 @@ class Machine:
         )
         if phase == "starting_candidate":
             self.state = replace(self.state, trial_deadline=now + TRIAL_SECONDS)
-        return Action(operation, slug, self.case_id, preconditions(observation))
+        return Action(operation, slug, self.case_id, self.preconditions(observation))
 
     def observe(self, now: float, obs: Observation) -> Action | None:
         state = self.state
@@ -467,6 +475,9 @@ class Journal:
     corruption or uncertainty never triggers deletion/reinitialization.
     """
 
+    schema = 1
+    max_events = MAX_EVENTS
+
     def __init__(self, path: Path):
         require(path.is_absolute() and ".." not in path.parts)
         descriptor = os.open("/", os.O_DIRECTORY | os.O_RDONLY)
@@ -489,7 +500,9 @@ class Journal:
         self.machine: Machine | None = None
         try:
             names = sorted(os.listdir(self.fd))
-            require(len(names) <= MAX_EVENTS and names == [self.name(i) for i in range(len(names))])
+            require(
+                len(names) <= self.max_events and names == [self.name(i) for i in range(len(names))]
+            )
             for name in names:
                 fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=self.fd)
                 try:
@@ -524,7 +537,7 @@ class Journal:
                         type(entry) is dict
                         and set(entry) == {"schema", "previous", "event"}
                         and type(entry["schema"]) is int
-                        and entry["schema"] == 1
+                        and entry["schema"] == self.schema
                     )
                     require(
                         entry["previous"] == checksum(self.entries[-1] if self.entries else None)
@@ -593,7 +606,7 @@ class Journal:
         return action
 
     def append(self, event: dict[str, Any]) -> Action | None:
-        require(self.fd >= 0 and len(self.entries) < MAX_EVENTS)
+        require(self.fd >= 0 and len(self.entries) < self.max_events)
         try:
             self.check_directory()
             require(sorted(os.listdir(self.fd)) == [self.name(i) for i in range(len(self.entries))])
@@ -616,7 +629,7 @@ class Journal:
             else:
                 action = self.apply(event)
             entry = {
-                "schema": 1,
+                "schema": self.schema,
                 "previous": checksum(self.entries[-1] if self.entries else None),
                 "event": event,
             }

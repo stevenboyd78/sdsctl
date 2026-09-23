@@ -333,15 +333,104 @@ receipt left before a lost return, and proven process exit are **not** promoted
 to a successful recording verdict. No partial artifacts are deleted or repaired.
 
 Still required before live use: the separately reviewed CLI/source assembly,
-durable generation-bound operator gate, recording-capable host policy,
-container-init exit/restoration reconciliation, and isolated installed-container
-qualification. Existing handoff plans and their idle/inventory checks remain
-unchanged; none of these offline results activates live recording permissions.
+durable generation-bound operator gate, recording-aware host collection and
+sealed plan, and isolated installed-container qualification. The offline recovery
+policy below is not an installed permission. Existing handoff plans and their
+idle/inventory checks remain unchanged.
+
+## Offline recording-aware recovery policy and dispatch
+
+`scripts/supplemental_recording_handoff.py` defines a separate pure policy and
+private journal. `scripts/supplemental_recording_recovery.py` connects it to the
+existing fixed-command executor, tracked CLI executions and exact init-process
+receipt machinery. Tests use an injected local fake host, not Home Assistant or
+Docker. No CLI entry point, background loop, automatic recording start or new
+live host-plan schema is installed by these modules.
+
+The new journal requires `prepare_recording` and entry schema 2. This is a
+**journal format**, not the existing schema-2 browser-audio host plan. Each
+reader rejects the other journal format, including an attempted schema-only
+downgrade. The base policy retains its recording-idle rules, default 24-event
+bound and original entry format. The recording journal allows at most 48
+8-KiB entries and retains exclusive locking, no-follow paths, hash chaining,
+file/directory fsync and no replay of previously emitted actions.
+
+The recording contract binds a new UUID case to hashes of its old-file baseline,
+recording root, audio endpoint and writer identity. Normal-App protection remains
+unchanged. A future recording-aware collector must separately verify the
+candidate's immutable source/image/options/profile protections and its complete
+changing recording inventory. The old collector's full-inventory pin cannot be
+used by omitting the recording root or pretending it is unchanged.
+
+After candidate readiness and live init-process binding, a separate
+`authorize_recording` event requires a fresh, complete, healthy, recording-idle
+observation and the original pristine inventory. It durably permits one
+generation and sets a fixed maximum 180-second recording deadline within the
+original candidate window. This event starts nothing and is not acknowledgment
+that recording began. Failed publication consumes the controller; reopening
+cannot reauthorize the attempt or extend its deadline. A future operator adapter
+still must bind its one-use child trigger to this durable permission.
+
+Qualified file observations distinguish:
+
+- **Pristine:** every original file and the exact original inventory still match.
+- **Active/finalizing:** unchanged old files plus only the bounded, exact
+  case/start-bound WAV and native metadata publication states.
+- **Finalized:** separately verified complete content and timely native success
+  acknowledgment, not merely the presence of a WAV or stopped receipt.
+- **Retained:** scoped failed/partial artifacts preserved after independently
+  proven writer exit. This is not a successful artifact verdict or an exclusion.
+- **Unknown:** no authority to advance or dispatch recovery.
+
+These are qualified collector inputs, not assertions authenticated by the policy.
+Their future durable collection/reconstruction is still required. The policy
+rejects another generation, changed contract, disappearing new evidence,
+regressing file stages, altered final evidence and changes to preserved evidence
+during normal-App restoration. Terminal retained failure cannot become a later
+invented finalized success.
+
+The candidate's active-recording flag remains truthful throughout. Only the
+authorized candidate can be stopped with recording active: at its fixed bound,
+an explicit finish request or a confirmed unhealthy state. Native shutdown may
+finalize the writer, but submitting a stop never proves that it did so. Invalid
+or missing observations cannot extend the recording recovery deadline. An
+independent process-level termination mechanism remains necessary if collection,
+native cleanup or the host service itself stalls.
+
+Before either next scanner owner starts, the policy requires the previous init
+process's durable exact-exit receipt, a separately completed tracked CLI
+execution, fresh App state, idle jobs and all protections. A nonzero/lost CLI
+reply is reconciled from observed state without retrying the command. A missing
+container or stopped-looking App is insufficient. A healthy restored normal App
+also requires the corresponding CLI execution to have exited.
+
+The normal App may be restored while a failed recording is retained, provided
+its scoped preservation and independent owner exit are both verified. The
+terminal phase records **restoration** separately from recording outcome
+`not_attempted`, `unconfirmed` or `verified`. None means audible quality,
+successful supplemental replies, scanner continuity or complete live acceptance.
+
+Every emitted command is journaled before a second fresh observation. For active
+and finalizing files, two independently qualified samples may have different
+growth-evidence hashes: normal audio growth must not consume and withhold the
+one shutdown intent. Contract, stage, generation, truthful recording state and
+all other safety preconditions must still match. Changes or lost replies consume
+the intent without retry. This does not permit skipping either full file check.
+
+Offline tests cover the actual journal/executor/tracked-process bridge using
+fake host I/O, natural and requested/deadline shutdown, incomplete CLI or init
+exit, lost replies, restart reconciliation, publication failure, mismatched
+generations, inventory uncertainty, source/protection drift, expiry and format
+separation. Previously sealed installed bundles and consumed cases are untouched.
+Shared base modules only gained explicit subclass hooks; their default behavior
+continues to be regression-tested. New source hashes must be independently
+qualified before any future bundle installation.
 
 ## Required live ownership and recovery contract
 
-The following remain design gates, not implemented host-service permissions.
-The offline owner, monitor and API restriction above do not install this contract:
+The following remain live design gates, not installed host-service permissions.
+The offline owner, monitor, recovery policy and API restriction above do not
+install this contract:
 
 | Phase | Required evidence and constraint |
 | --- | --- |

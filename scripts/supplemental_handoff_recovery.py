@@ -177,6 +177,9 @@ class RecoverySession:
     once before polling; closing preserves journal evidence and signals nothing.
     """
 
+    sample_type = Sample
+    executor_type = Executor
+
     def __init__(
         self,
         journal: Journal,
@@ -189,7 +192,7 @@ class RecoverySession:
         require(processes.journal is journal and dispatch.journal is journal)
         self.journal, self.processes, self.dispatch, self.read = journal, processes, dispatch, read
         self.consume_operator = consume_operator
-        self.executor = Executor(journal, self._read, self._send)
+        self.executor = self.executor_type(journal, self._read, self._send)
 
     def _read(self) -> Sample:
         require(self.journal.machine is not None)
@@ -205,7 +208,7 @@ class RecoverySession:
         except Exception:
             pass
         sample = self.read()
-        require(type(sample) is Sample)
+        require(type(sample) is self.sample_type)
         machine = self.journal.machine
         assert machine is not None
         apps = {}
@@ -232,7 +235,7 @@ class RecoverySession:
             apps[slug] = App(app.pin, "unknown") if uncertain else app
         boot, now = self.processes.read_clock()
         require(boot == sample.boot_id)
-        return Sample(
+        return self.sample_type(
             boot,
             now,
             replace(

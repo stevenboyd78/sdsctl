@@ -23,7 +23,6 @@ from supplemental_handoff_policy import (
     UnsafeHandoff,
     clock,
     identifier,
-    preconditions,
     require,
 )
 
@@ -63,6 +62,8 @@ class Executor:
     caller timeout never means that the underlying job was cancelled.
     """
 
+    sample_type = Sample
+
     def __init__(
         self,
         journal: Journal,
@@ -90,7 +91,7 @@ class Executor:
             return Result(machine.state.phase, "terminal")
         try:
             first = self.read()
-            require(type(first) is Sample)
+            require(type(first) is self.sample_type)
         except Exception:
             # No observation means no authority to advance or issue any action.
             return Result(machine.state.phase, "observation_unavailable")
@@ -111,13 +112,13 @@ class Executor:
         # crash, withholds rather than recreates/retries it on the next poll.
         try:
             second = self.read()
-            require(type(second) is Sample)
+            require(type(second) is self.sample_type)
             require(second.boot_id == first.boot_id == machine.boot_id)
             require(0 <= second.now - first.now <= 2)
             clock(second.now)
-            Machine.fresh(second.now, second.observation)
+            machine.fresh(second.now, second.observation)
             require(second.now < min(machine.state.deadline, machine.hard_deadline))
-            require(preconditions(second.observation) == action.preconditions_sha256)
+            require(machine.preconditions(second.observation) == action.preconditions_sha256)
             self.journal.check_directory()
             command = cli_arguments(action)
         except Exception:
