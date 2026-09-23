@@ -118,7 +118,25 @@ def child(binding, action, *, expected_changes=None):
             action(send)
             send.close()
             os._exit(0)
-        except BaseException:
+        except BaseException as error:
+            # Preserve useful child failure locations for a failed parent
+            # assertion without dumping private payloads or exception text.
+            # A finalized WAV is not proof that this child returned completion.
+            frames = []
+            current = error
+            while current is not None and len(frames) < 64:
+                trace = current.__traceback__
+                while trace is not None and len(frames) < 64:
+                    frames.append(
+                        (
+                            Path(trace.tb_frame.f_code.co_filename).name,
+                            trace.tb_lineno,
+                            type(current).__name__,
+                        )
+                    )
+                    trace = trace.tb_next
+                current = current.__context__
+            os.write(2, (json.dumps({"owned_child_failure_locations": frames}) + "\n").encode())
             os._exit(71)
     os.close(wait)
     send.close()

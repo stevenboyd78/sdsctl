@@ -265,6 +265,7 @@ def test_native_success_cannot_hide_changed_host_files_or_artifact(joined, monke
         bridge = m.Bridge(joined.ledger, receiver)
         expected = bridge.started()
         original = receiver.receive
+        injected = []
 
         def receive():
             report = original()
@@ -284,10 +285,12 @@ def test_native_success_cannot_hide_changed_host_files_or_artifact(joined, monke
                 value = json.loads(report.raw)
                 value["body"]["artifact"]["wav_sha256"] = "f" * 64
                 report = replace(report, raw=n.encode(value))
+            injected.append(fault)
             return report
 
         monkeypatch.setattr(receiver, "receive", receive)
         refused(bridge.completed)
+        assert injected == [fault], "Native completion unavailable before host fault injection"
         assert joined.ledger.state.acknowledgment is None and not joined.ledger.state.closed
         assert bridge.phase == "unconfirmed" and receiver.phase == "closed"
         refused(bridge.completed)
