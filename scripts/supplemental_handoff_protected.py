@@ -75,7 +75,21 @@ class ProtectedLayout:
         return self.deployment, self.configuration, self.accepted, self.source
 
 
-def collect(layout: ProtectedLayout, container: dict[str, Any] | None) -> ProtectedFiles:
+@dataclass(frozen=True)
+class StaticFiles:
+    """Source/profile evidence ONLY; never a substitute for ProtectedFiles."""
+
+    context: str
+    package: str
+    profile: str
+
+    def __post_init__(self) -> None:
+        for value in asdict(self).values():
+            digest(value)
+
+
+def _collect_static(layout: ProtectedLayout, container: dict[str, Any] | None) -> StaticFiles:
+    """Shared checks; callers must ALSO qualify their complete recording root."""
     require(type(layout) is ProtectedLayout)
     package = layout.image_package_sha256
     if container is not None:
@@ -135,10 +149,19 @@ def collect(layout: ProtectedLayout, container: dict[str, Any] | None) -> Protec
             )
         }
     )
-    return ProtectedFiles(
+    return StaticFiles(
         checksum(inventory(layout.context)),
         package,
         profile,
+    )
+
+
+def collect(layout: ProtectedLayout, container: dict[str, Any] | None) -> ProtectedFiles:
+    fixed = _collect_static(layout, container)
+    return ProtectedFiles(
+        fixed.context,
+        fixed.package,
+        fixed.profile,
         checksum(inventory(layout.recordings, max_file_bytes=16 * 1024 * 1024)),
     )
 

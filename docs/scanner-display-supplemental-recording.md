@@ -496,6 +496,10 @@ independent outer process deadline.
 All private evidence directories must be prepared before the native owner pins
 its ancestor identities. Creating a new sibling directory later can change an
 ancestor's link count and correctly invalidate that protection.
+This also applies to automated qualification: overlapping test sessions that
+create/remove directories beneath shared temporary ancestors can invalidate one
+another's evidence. Serialize these filesystem/lifecycle runs or isolate their
+mount ancestry; do not relax the identity guard to obtain a passing test.
 
 Local integration tests now combine actual native PCM files, original baseline
 reloads, durable progress checkpoints and the recording-aware recovery journal.
@@ -504,6 +508,81 @@ output and missing process-exit evidence. App/CLI lifecycle and init witnesses
 in these integration tests remain fake; this is not installed-container testing.
 The source bundle, live observer, independent tip binding, native acknowledgment
 authentication and restricted operator launch path are still not installed.
+
+## Offline recording-aware host observation
+
+`scripts/supplemental_recording_host.py` joins the existing Docker/Supervisor
+observations with the actual recording collector. Its candidate uses an explicit
+`CandidateSeal`, containing the fixed context/package/profile hashes plus the
+recording contract. It is deliberately incompatible with the ordinary `AppSeal`.
+Growing recording proofs accompany every observation separately; they are never
+put into an old full-inventory field or omitted from protection. The normal App
+continues to use its original complete recording inventory and pin.
+
+The joined observer retains the existing version, image, container-incarnation,
+Core, additional-owner, jobs, restart-policy and elapsed-time checks. It requires
+the audio-specific network policy and cannot downgrade to reader-only networking.
+Each running candidate's recording evidence must match its observed generation
+and sealed contract. Changed source/settings pins are reported without executing
+the native probe inside that unqualified App. Missing or concurrent observations
+cannot reuse evidence left over from a previous read.
+
+Cached native recording flags remain truthful and separate from artifact stage.
+For example, finalized-looking files plus a missing native reply do not become
+healthy/idle evidence. A stopped Docker container or retained partial artifact
+does not supply the independent init-exit receipt required by recovery policy.
+
+The file join checks that candidate recordings cannot overlap either App's
+profile, context or data trees, or the normal recording root. Its stage and
+acknowledgment inputs must come from separately qualified durable host evidence;
+this component does not authenticate assertions or publish checkpoint tips.
+Tests use synthetic Docker/Supervisor responses, fixed-path routing fixtures and
+actual temporary growing/retained files. No host installation is implied.
+
+One remaining namespace constraint is explicit: a host path beneath
+`/mnt/data/supervisor/media` is not the same path string as its native `/media`
+alias. Their root-path hashes must not be compared as if equal, nor silently
+rewritten. The future sealed adapter must independently qualify the bind-mount
+projection, both namespace identities and their shared original inventory before
+binding native acknowledgments. The old five-wrapper package inventory also
+does not qualify a future recording-specific launch bundle by itself.
+
+## Offline dedicated native construction
+
+`scripts/supplemental_recording_construction.py` constructs the narrow candidate
+directly from an explicit specification and independently pinned baseline/profile
+inputs. It does **not** modify or wrap the ordinary daemon CLI, which constructs
+destination/reload services even without configured destinations. The dedicated
+specification cannot accept and silently discard ordinary daemon arguments.
+
+Construction validates the endpoint, firmware/window/quota, writer identity,
+maximum recording duration and complete original inventory. Socket and receipt
+directories must already be private, empty and disjoint from recordings/profile
+storage and each other. Explicit Unix socket paths do not inherit environment
+defaults. DNS names and IPv4 addresses are supported without resolving them at
+construction time; ephemeral RTP ports are restricted to loopback fixtures. A
+future installed plan still must qualify its actual fixed RTP publication.
+
+The constructed native services are the scanner/runtime, recording manager,
+restricted API, events, saved-recording file server and same-source PCMU server.
+There are no destination/reload, MQTT, remote-control, encoder or waterfall
+services to disable after construction. No network sockets, threads, recording
+or scanner commands start merely by constructing the object graph.
+
+An explicit native `run()` starts the normal shared scanner/audio runtime;
+readiness does not start recording or optional GET requests. The existing
+assembly's separate one-use start request and explicit consumer demand remain
+required. Pre-run construction failures close only objects already constructed.
+Once native run is attempted, that lifecycle owns cleanup: this context does not
+repeat an uncertain stop or finalization on exit. Independent process termination
+and restoration remain mandatory.
+
+New loopback integration tests construct the actual native network transports,
+use synthetic RTSP negotiation plus real UDP RTP/Unix IPC, and verify exact
+decoded WAV bytes with and without optional-read demand. They prove one shared
+audio session, denied public recording mutations, preserved old recordings and
+native cleanup. They do not qualify an installed CLI, authenticated operator
+trigger, container guardian, physical scanning or audible playback.
 
 ## Required live ownership and recovery contract
 

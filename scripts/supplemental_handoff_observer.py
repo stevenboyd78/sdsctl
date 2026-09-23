@@ -52,6 +52,12 @@ def image_id(value: Any) -> None:
     digest(value[7:])
 
 
+def seal_identity(version, image, settings) -> None:
+    require(type(version) is str and re.fullmatch(r"[A-Za-z0-9._-]{1,128}", version) is not None)
+    image_id(image)
+    digest(settings)
+
+
 @dataclass(frozen=True)
 class ProtectedFiles:
     context: str
@@ -76,12 +82,7 @@ class AppSeal:
 
     def __post_init__(self) -> None:
         require(self.slug in (NORMAL, CANDIDATE))
-        require(
-            type(self.version) is str
-            and re.fullmatch(r"[A-Za-z0-9._-]{1,128}", self.version) is not None
-        )
-        image_id(self.image)
-        digest(self.settings)
+        seal_identity(self.version, self.image, self.settings)
         require(type(self.files) is ProtectedFiles)
 
     @property
@@ -247,6 +248,26 @@ class HostObserver:
     before dispatch and checks its preconditions. Every collection has a 2s bound.
     """
 
+    @staticmethod
+    def validate_seals(seals) -> None:
+        require(type(seals) is tuple and len(seals) == 2 and all(type(s) is AppSeal for s in seals))
+        require({s.slug for s in seals} == {NORMAL, CANDIDATE})
+
+    def file_pin(self, slug, config, files) -> str:
+        require(type(files) is ProtectedFiles)
+        return AppSeal(
+            slug, config.version, self.seals[slug].image, config.settings_sha256, files
+        ).pin
+
+    def sample(self, boot, now, began, observed, other_stopped, jobs_idle) -> Sample:
+        return Sample(
+            boot,
+            now,
+            Observation(
+                began, observed[NORMAL], observed[CANDIDATE], other_stopped, jobs_idle, True
+            ),
+        )
+
     def __init__(
         self,
         docker: Docker,
@@ -265,8 +286,7 @@ class HostObserver:
     ):
         network_policy(network)
         self.network = network
-        require(type(seals) is tuple and len(seals) == 2 and all(type(s) is AppSeal for s in seals))
-        require({s.slug for s in seals} == {NORMAL, CANDIDATE})
+        self.validate_seals(seals)
         require(type(installed_versions) is dict and 2 <= len(installed_versions) <= 256)
         for slug, version in installed_versions.items():
             require(
@@ -361,10 +381,9 @@ class HostObserver:
                     )
                     exited[slug] = (listing["Id"], proof)
             files = self.collect_files(slug, container)
-            require(type(files) is ProtectedFiles)
             # Report actual fingerprints to policy; a changed pin ends the case
             # instead of hiding a known mismatch as a transient read failure.
-            pin = AppSeal(slug, config.version, seal.image, config.settings_sha256, files).pin
+            pin = self.file_pin(slug, config, files)
             if incarnation is not None:
                 # Do not execute/import a collector inside an App whose code,
                 # options or protected inputs no longer match the reviewed seal.
@@ -410,13 +429,7 @@ class HostObserver:
         require(end_boot == boot)
         clock(now)
         require(0 <= now - began <= 2)
-        return Sample(
-            boot,
-            now,
-            Observation(
-                began, observed[NORMAL], observed[CANDIDATE], other_stopped, jobs_idle, True
-            ),
-        )
+        return self.sample(boot, now, began, observed, other_stopped, jobs_idle)
 
     def _audio_network(self, listed: list[dict[str, Any]]) -> tuple[str, ...]:
         if self.network == READER_NETWORK:
