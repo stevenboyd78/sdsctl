@@ -10,6 +10,7 @@ service or installed host plan invokes this mechanism yet.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -110,7 +111,16 @@ class Relay(local.Bridge):
             deadline = state.start_by
         else:
             require(phase == "completed" and self.plan is not None)
+            expected, plan, started = self._started_context
+            require(self.expected is expected and self.plan is plan)
+            require(started.count == 3 and started.expected == expected)
             deadline = min(state.finish_by, self.plan.finish_by)
+            with host.protected._private_directory(self.directory, exclusive=False) as fd:
+                require(host.identity(os.fstat(fd))[:6] == self.directory_identity)
+                raw = host.protected.evidence.read_bytes(
+                    fd, "0002.json", limit=host.MAX_BYTES, deadline=deadline
+                )
+                require(hashlib.sha256(raw).hexdigest() == started.sha256)
         channel = self.ready.client.attachment
         require(channel.reads == (1 if phase == "started" else 2))
         require(time.monotonic() < deadline)
@@ -151,18 +161,122 @@ class Relay(local.Bridge):
             self.guard.check()
             require(self._state().expected == expected)
             require(time.monotonic() < min(self.native_binding.start_by, self.plan.start_by))
+            # Only the actually received, durably acknowledged start anchors
+            # later phase selection. No caller-selected schedule or disk receipt.
+            self._started_context = (self.expected, self.plan, self.ledger.state)
+            self._progress_context = None
             return expected
         except BaseException as error:
             self._fail(error)
 
+    def read_progress(self, directory):
+        """Fresh intermediate files under the original authenticated owner plan.
+
+        First read binds an empty private checkpoint directory, before any tip
+        is published. Later reads accept only the original ledger's acknowledged
+        chain, preserving its previously seen prefix and directory identity.
+        This method never writes a checkpoint, receives a return or infers native
+        health, finalized audio, worker exit or restoration.
+        """
+        acquired = False
+        try:
+            began = time.monotonic()
+            require(self._lock.acquire(blocking=False))
+            acquired = True
+            require(self.phase == "completed")
+            expected, plan, started = self._started_context
+            require(self.expected is expected and self.plan is plan)
+            require(type(plan) is native.owner.Plan and started.count == 3)
+            require(started.expected == expected and started.tip is None)
+            end = min(
+                began + 2, self.guard.finish_by, self.native_binding.finish_by, plan.finish_by
+            )
+            before_exits = self.guard.check()
+            state = self._state()
+            require(state.expected == expected and state.count >= started.count)
+            with host.protected._private_directory(self.directory, exclusive=False) as fd:
+                require(host.identity(os.fstat(fd))[:6] == self.directory_identity)
+                raw = host.protected.evidence.read_bytes(
+                    fd, "0002.json", limit=host.MAX_BYTES, deadline=end
+                )
+                require(hashlib.sha256(raw).hexdigest() == started.sha256)
+            directory_identity = self._progress_identity(directory)
+            require(directory is not None)
+            previous_tip = None
+            last_observed = None
+            prior_context = self._progress_context
+            if prior_context is None:
+                require(state == started and state.tip is None)
+            else:
+                original_directory, original_identity, previous_tip, last_observed = prior_context
+                require((directory, directory_identity) == (original_directory, original_identity))
+                require(previous_tip is None or state.tip is not None)
+            collector = local.protected.Collector(self.binding.projection.host)
+
+            def progress():
+                context = local.checkpoints._context(directory, collector, expected)
+                with host.protected._private_directory(directory, exclusive=False) as fd:
+                    require(host.identity(os.fstat(fd))[:6] == directory_identity)
+                    return local.checkpoints._read(
+                        fd, collector, expected, context, state.tip, end, previous_tip
+                    )
+
+            previous = progress()
+            finalizing = began >= plan.stop_at
+            result = collector.active(expected, finalizing=finalizing, previous=previous)
+            if last_observed is not None:
+                local.checkpoints._follows(last_observed, result.progress)
+            require(progress() == previous)
+            require(self._progress_identity(directory) == directory_identity)
+            require(self.guard.check() == before_exits)
+            require(self._state() == state and self.phase == "completed")
+            require(self._started_context == (expected, plan, started))
+            require(self.expected is expected and self.plan is plan)
+            require(self._progress_context is prior_context)
+            ended = time.monotonic()
+            require(began <= ended < end)
+            require(finalizing or ended < plan.stop_at)
+            self._progress_context = (directory, directory_identity, state.tip, result.progress)
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self._lock.release()
+
     def completed(self, *, progress_directory=None):
         try:
             progress_identity = self._progress_identity(progress_directory)
+            progress_context = self._progress_context
+            acknowledged_tip = None
+            if progress_context is not None:
+                # An intermediate read may not be forgotten when finalizing.
+                # Require its original directory and a returned durable chain
+                # that reaches at least the last observation, even if that
+                # observation had not been published when read_progress returned.
+                began = time.monotonic()
+                end = min(began + 2, self.native_binding.finish_by, self.plan.finish_by)
+                directory, identity, previous_tip, observed = progress_context
+                require((progress_directory, progress_identity) == (directory, identity))
+                state = self._state()
+                acknowledged_tip = state.tip
+                require(acknowledged_tip is not None)
+                collector = local.protected.Collector(self.binding.projection.host)
+                context = local.checkpoints._context(directory, collector, self.expected)
+                with host.protected._private_directory(directory, exclusive=False) as fd:
+                    require(host.identity(os.fstat(fd))[:6] == identity)
+                    previous = local.checkpoints._read(
+                        fd, collector, self.expected, context, state.tip, end, previous_tip
+                    )
+                local.checkpoints._follows(observed, previous)
+                require(self._state() == state and began <= time.monotonic() < end)
             result = super().completed(progress_directory=progress_directory)
             self.guard.check()
             state = self._state(closed=True)
             require(state.acknowledgment == result.acknowledgment)
             require(self._progress_identity(progress_directory) == progress_identity)
+            require(self._progress_context is progress_context)
+            require(progress_context is None or state.tip == acknowledged_tip)
             require(time.monotonic() < min(self.native_binding.finish_by, self.plan.finish_by))
             self.completion = result
             self._completion_context = (

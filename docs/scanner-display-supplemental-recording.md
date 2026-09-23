@@ -815,6 +815,22 @@ ledger and process bindings still supply authority; a constructed completion
 value or a previous good WAV check cannot authorize finalization or restoration.
 Later file observations must also match the originally verified artifact.
 
+The cross-container relay also retains the exact authenticated start schedule
+and its returned durable ledger entry. `Relay.read_progress(directory)` selects
+active versus finalizing from that original schedule, not a caller-supplied
+stage or daemon status flag. The first read requires an empty private checkpoint
+directory before any publication; later reads recheck the same directory and
+only the ledger's acknowledged chain. In-memory file continuity is preserved
+even between reads that have not yet been published. Changed start records,
+unacknowledged tails, replaced files, late reads and reads crossing the scheduled
+stop boundary refuse without renewing any deadline. The read does not publish a
+checkpoint or prove successful finalization, health, process exit or restoration.
+Once progress has been read this way, completion requires the same original
+checkpoint directory and a returned durable chain reaching the last observation.
+An unpublished observation cannot be discarded in favor of older evidence, nor
+can a byte-for-byte copy in a replacement directory substitute for its identity.
+Whole-host policy/source/runtime qualification remains a separate requirement.
+
 The actual cross-container `Relay.recheck_completed()` performs that read-only
 check before the separate exit collection. It requires its own original returned
 completion and unchanged closed ledger, reloads the exact acknowledged progress
