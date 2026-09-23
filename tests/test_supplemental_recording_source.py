@@ -189,7 +189,7 @@ def test_combined_inventory_and_elapsed_bounds(layout, monkeypatch, bound):
 
 
 def test_fixed_bundle_closes_all_private_imports_including_lazy_entry_import():
-    assert len(m.MODULES) == 24
+    assert len(m.MODULES) == 29
     found = set()
     for module in sorted(m.MODULES):
         tree = ast.parse((SCRIPTS / (module + ".py")).read_text())

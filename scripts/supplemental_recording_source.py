@@ -26,6 +26,7 @@ MODULES = frozenset(
         "accept_supplemental_recording_idle",
         "accept_supplemental_recording_operator",
         "accept_supplemental_recording_probe",
+        "accept_supplemental_recording_web",
         "supplemental_handoff_cached",
         "supplemental_handoff_files",
         "supplemental_handoff_policy",
@@ -45,6 +46,10 @@ MODULES = frozenset(
         "supplemental_recording_schedule",
         "supplemental_recording_source",
         "supplemental_recording_watchdog",
+        "supplemental_recording_web_peer",
+        "supplemental_recording_web_plan",
+        "supplemental_recording_web_scope",
+        "supplemental_recording_web_service",
         "supplemental_recording_wire",
     }
 )

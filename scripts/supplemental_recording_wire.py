@@ -64,8 +64,8 @@ class Stream:
 
     The operator receives one begin frame and sends at most ready, started,
     completed and exited. The host has the opposite budget.
-    A separate probe role permits exactly one request and one reply; it grants
-    no operator messages or recording authority. Semantic validation and actual
+    Separate probe and web roles each permit exactly one request and one reply;
+    neither grants operator messages or recording authority. Semantic validation and actual
     exec/native provenance are the caller's separate responsibilities.
     Failed/late I/O poisons both directions; closing restores original flags on
     the retained descriptions, then closes the duplicates (never caller's fds).
@@ -77,13 +77,14 @@ class Stream:
         self.owner = (os.getpid(), get_ident())
         self.reads = self.writes = 0
         try:
-            require(role in ("host", "operator", "probe"))
+            require(role in ("host", "operator", "probe", "web"))
             require(type(incoming) is int and type(outgoing) is int and incoming != outgoing)
             require(incoming >= 0 and outgoing >= 0)
             self.read_limit, self.write_limit = {
                 "host": (4, 1),
                 "operator": (1, 4),
                 "probe": (1, 1),
+                "web": (1, 1),
             }[role]
             identities = set()
             for index, fd in enumerate((incoming, outgoing)):

@@ -1158,8 +1158,9 @@ This module is not an executable or a deadline/peer-identity guard. The separate
 web launcher still needs source/runtime qualification, binding of all four
 native client factories to the original daemon actor, and enforcement of the
 independent original lifetime. In-flight media and worker teardown require
-separate qualification. The module is deliberately not added to the host44 or
-native24 inventories; neither existing image proof qualifies a new web bundle.
+separate qualification. The current native source inventory now includes the
+five finite-web modules described below (29 modules total). The older host44 /
+native24 image proofs do not qualify these new bytes.
 The ordinary dashboard and previous acceptance wrapper remain unchanged.
 
 ### Original native peer and in-flight HTTP guards — uninstalled
@@ -1206,6 +1207,43 @@ make its native close/finalizer wait indefinitely on the read lock. The ordinary
 five-second client timeouts remain unchanged and are still clamped to the
 original overall deadline. Local tests cover two simultaneous quiet audio
 streams and a deliberately stalled saved-file body; no user recording is used.
+
+### Fixed finite ingress entrypoint — uninstalled
+
+`scripts/supplemental_recording_web_plan.py` reads the existing sealed live
+launch inputs without repeating the launch-only pristine-recording preflight
+or recapturing any baseline. Its immutable request binds the original context,
+actor facts, readiness cutoff and native watchdog cutoff. Startup must finish
+before the original readiness cutoff. This input reader does not authenticate
+caller-supplied PIDs, acquire readiness or permit a retry.
+
+`scripts/accept_supplemental_recording_web.py` is a separate fixed isolated
+Python entrypoint. It accepts only the original plan/source/request pins,
+runtime root and readiness cutoff; there are no arbitrary command, listener,
+authentication or service options. It requires the full closed native29 source
+bundle, installed product origin and the same original inputs before opening
+HTTP admission. The listener is fixed to Home Assistant ingress on port8099;
+native ingress peer authentication remains active, with forwarded-header trust
+and WebSockets disabled. It is never a third native-guardian child.
+
+The distinct private `web` framing role allows one request and one listening
+reply, not operator recording messages. Any extra input, attachment EOF, actor
+failure, unexpected server return or original expiry ends admission and closes
+owned native clients before bounded HTTP cleanup. The terminal executable uses
+`os._exit` so Python executor joining cannot extend an unconfirmed shutdown.
+This does **not** protect frozen/blocked process code by itself: the independently
+armed original container/host recovery cutoff is still mandatory, as are exact
+web-process and Engine exit observations. A listening reply is neither healthy
+daemon evidence nor recording-start/finish/restore authority. Exit70 is a fixed
+terminal/unconfirmed result, not a successful recording acknowledgment.
+
+Local tests cover fixed configuration using a synthetic TCP server, actual
+owned Unix peers and pipes, original expiry and attachment loss, plus actual
+isolated executable rejection of malformed/expanded inputs before any listener
+is created. Real listener/image/runtime qualification, the authenticated
+Ready-to-web Engine join, durable one-use host dispatch and installed recovery
+remain separate gates. Neither the ordinary WebUI nor Home Assistant/Pi
+services are switched by this implementation.
 
 ## Offline private exec attachment I/O
 
