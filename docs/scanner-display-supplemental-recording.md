@@ -383,7 +383,8 @@ Qualified file observations distinguish:
 - **Unknown:** no authority to advance or dispatch recovery.
 
 These are qualified collector inputs, not assertions authenticated by the policy.
-Their future durable collection/reconstruction is still required. The policy
+The offline collector and checkpoint chain below now provide file collection and
+reconstruction; integration with a sealed live host plan is still required. The policy
 rejects another generation, changed contract, disappearing new evidence,
 regressing file stages, altered final evidence and changes to preserved evidence
 during normal-App restoration. Terminal retained failure cannot become a later
@@ -425,6 +426,84 @@ separation. Previously sealed installed bundles and consumed cases are untouched
 Shared base modules only gained explicit subclass hooks; their default behavior
 continues to be regression-tested. New source hashes must be independently
 qualified before any future bundle installation.
+
+## Offline protected-file collector and restart evidence
+
+`scripts/supplemental_recording_protected.py` connects actual bounded filesystem
+observations to the recording-aware policy's `Files` inputs. It does not launch,
+stop or signal anything. It distinguishes a pristine root, growing recording,
+metadata finalization, preserved partial output and acknowledged final content.
+It never excludes the recording directory from protection or recaptures an
+in-progress recording as part of a new pristine baseline.
+
+Before recording, the collector can exclusively save the original baseline in
+one private `0600` manifest inside a separate `0700` directory. File and directory
+are fsynced. Every old file is rechecked before and after publication; ancestors,
+directory identity, manifest identity, ownership and permissions are held or
+rechecked without following links. Any incomplete publication remains for review.
+The manifest's hash and recording contract must be pinned separately in a future
+host plan; the manifest cannot authenticate itself. Root paths and old filenames
+remain private and do not appear in failure messages.
+
+Reload validates that original manifest against both external pins, even while
+the current recording grows. The manifest is limited to 2 MiB, 4,093 old files,
+16 MiB per old file and 64 MiB total. Before start it reserves room within that
+total for the entire permitted new WAV and both native metadata publication
+names, rather than exhausting the observation budget halfway through recording.
+The reserved case prefix is forbidden among
+old files, including hidden native metadata temporaries. Decoding rejects
+duplicate fields, unknown fields, noncanonical JSON, unsafe paths, numeric
+coercions and unsupported permissions. Existing inventory/monitor limits still
+apply independently.
+
+Active/finalizing observations use the qualified native monitor. Preserved
+partial output is hashed in full twice and bracketed by complete monitor checks:
+empty or malformed WAVs, incomplete metadata and the native intermediate
+two-link metadata publication can be retained, but unrelated files, replacements,
+unsafe links, changed old files or unstable reads cannot. This is preservation
+evidence only. The recovery policy separately requires exact writer exit before
+accepting it, and records the recording outcome as unconfirmed.
+
+Finalized content additionally requires the native stopped snapshot and a
+**separately authenticated successful-return acknowledgment** bound to the case,
+generation, contract and start timestamp. A `stopped.json` receipt is not that
+acknowledgment. The host still must verify the source, fixed deadline and complete
+successful return; this collector does not turn a caller-supplied hash into
+authentication. Audio duration and elapsed recording time must both fit the
+contract. Complete WAV/sidecar hashes are checked again after the last progress
+monitor because a same-size WAV rewrite would pass size-only continuity checks.
+The root remains held across final verification. A good file is still not proof
+of OS process exit, audible quality or normal-App restoration.
+
+`scripts/supplemental_recording_checkpoints.py` durably retains active/finalizing
+observations in a separate append-only hash chain. Each entry contains the exact
+qualified file-proof hash and strictly decoded progress, bound to the original
+contract, root and start expectation. File and directory fsync precede a returned
+tip. The host must independently retain that exact count/hash tip before restart
+recovery may rely on it. The chain has no recording or dispatch authority.
+
+Reload checks every entry and every transition, including file identity and
+nondecreasing length, metadata publication order, frozen published metadata and
+temporary-name continuity. Shrinkage, replacement, stage regression, stale tips,
+missing/extra entries, partial writes and lost publication returns are refused.
+An additional on-disk entry cannot be silently adopted as an acknowledged tip.
+No entry is overwritten, truncated, deleted or repaired. The chain is limited
+to 192 entries of at most 16 KiB; exceeding the bound is uncertainty, not permission
+to discard history. Collection, manifest operations and checkpoint operations
+have five-second cooperative budgets; blocked kernel I/O still requires the
+independent outer process deadline.
+
+All private evidence directories must be prepared before the native owner pins
+its ancestor identities. Creating a new sibling directory later can change an
+ancestor's link count and correctly invalidate that protection.
+
+Local integration tests now combine actual native PCM files, original baseline
+reloads, durable progress checkpoints and the recording-aware recovery journal.
+They distinguish successful finalization, lost native acknowledgment, partial
+output and missing process-exit evidence. App/CLI lifecycle and init witnesses
+in these integration tests remain fake; this is not installed-container testing.
+The source bundle, live observer, independent tip binding, native acknowledgment
+authentication and restricted operator launch path are still not installed.
 
 ## Required live ownership and recovery contract
 
