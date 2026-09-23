@@ -1345,8 +1345,8 @@ a recording succeeded. It must run before the operator exit collector closes
 the borrowed Engine endpoint. Frozen/blocked code still requires independent
 original container/host recovery; this join never signals or restores ownership.
 
-The closed host source inventory now contains45 modules; native29 and product
-bytes are unchanged by this host join. Related local tests exercise durable
+This web join expanded the closed host source inventory to45 modules; native29
+and product bytes were unchanged by it. Related local tests exercise durable
 files, Unix HTTP, original owned pidfds, post-begin continuity and negative
 returns. Their Engine/namespace/listener metadata are explicitly synthetic.
 Separate local immutable-image/source/runtime qualification and an actual
@@ -1365,6 +1365,40 @@ begin, successful trusted-ingress media claim, user-data change or live scanner
 action. The assembled host adapter and independently installed failure/recovery
 checks remain separate requirements.
 No installed idle-only schema or existing acceptance case gains this authority.
+
+### Schema3 host bootstrap join — uninstalled
+
+`supplemental_recording_host_launch.Launch` connects the original closed host
+plan and bootstrap journal to one fixed operator execution. It rechecks the
+actual journal bytes, original preparation and deadlines, retained idle/init
+identity, and independently collected host preconditions. A durable
+`authorize_operator` event must return before the distinct `operator-exec`
+claim permits Engine create or attach. The fixed claim directory must already
+exist before idle PID1 starts. Lost returns consume the attempt; journal replay
+cannot return another launch authorization.
+
+Receiving the actual bound `Ready` does not yet mark the daemon healthy.
+`confirm_ready()` separately runs the fixed passive probe through the original
+Engine peer, checks its actual retained process exit and exact Engine result,
+and joins its reported flags to a fresh complete host observation. A malformed
+reply or nonzero probe exit cannot supply health. Only then is `operator_ready`
+durably recorded. This still does not authorize recording or send begin.
+
+The original Ready receipt time is conservatively converted through the
+original clock interval, never replaced by the time a later check succeeds.
+The oldest contributing observation remains subject to the existing two-second
+policy bound. Full qualification, probe and host-read latency must fit that
+unchanged bound; installed timing has not been established. Failures close the
+owned transport while retaining acquired actor/probe handles until explicit
+descriptor release. That release proves neither process exit nor restoration.
+
+The host inventory is now46 modules. The earlier45-module image qualification
+does not qualify these new host bytes. Local joined tests cover real Unix
+transport, durable journals and original pidfds with synthetic Engine metadata,
+host observations and native replies, under both supported sender profiles.
+Actual installed source/runtime qualification, the polling health selector,
+separate recording authorization, and independently supervised exit/recovery
+still need to be assembled and qualified. No live handoff is enabled.
 
 ## Offline exact execution and namespace binding
 
