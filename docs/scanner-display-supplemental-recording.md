@@ -1168,6 +1168,29 @@ independent exit/recovery checks remain required. Tests use actual Unix framing,
 intent files and owned processes, with synthetic Engine, namespace and clock
 metadata; they do not qualify a live scanner or installed App.
 
+## Offline one-use begin dispatch
+
+`scripts/supplemental_recording_begin.py` joins the actual received-readiness
+object to the live host recording ledger. A start intent must already have been
+durably authorized and acknowledged, after the host received readiness, for the
+same generation, source and projection. The full ledger chain and its original
+directory identity are checked around the write. A byte-identical replacement
+directory, partial publication, poisoned writer or changed history is refused.
+
+Only the fixed private begin message is constructed, with the original intent
+hash, timestamp and native binding. No caller-supplied request body, new deadline
+or second begin is accepted. Its bounded send leaves the guardian's existing
+preparation margin; the native guardian still checks its entire pinned read and
+finalization budget. A lost write return or a failed post-write check closes the
+transport and preserves exact process handles and intent evidence for recovery.
+Neither a successful send nor durable intent is recorded as a native start
+acknowledgment. Actual started/completed returns remain separate required work.
+
+Local tests join actual private framing, fsynced ledgers and owned process handles
+with synthetic Engine/namespace metadata. They exercise replaced/corrupt ledgers,
+lost file/directory fsync returns, stale readiness, partial/lost transport outcomes
+and insufficient original time. No live App, scanner or recorder is started.
+
 ## Offline finite idle-container bootstrap
 
 `scripts/accept_supplemental_recording_idle.py` is a separate, uninstalled PID-1
