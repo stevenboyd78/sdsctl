@@ -1735,6 +1735,17 @@ Unknown, replaced, exited or changed evidence remains unconfirmed. Original
 container/image/namespace/command qualification and independently supervised
 outer timeout still belong to the host adapter; this is not an installed service.
 
+The explicit `Layout.observe_supervised(timezone)` / `verify_supervised()` runtime
+profile also inventories the complete `/usr/share/zoneinfo` tree and the
+`/etc/localtime` link, and requires `/etc/timezone` to be absent in this qualified
+image layout. The selected timezone and localtime must resolve lexically to
+inventoried files inside that tree. Unused zones, aliases and metadata are included,
+not filtered out. This closes a dependency of the geographical `TZ` setting:
+[glibc resolves relative geographical timezone names beneath its zoneinfo directory](https://sourceware.org/glibc/manual/2.42/html_node/TZ-Variable.html).
+The original runtime profile/digest remains separate and unchanged; neither can
+substitute for the other. Expected fingerprints still need independent image
+reconstruction, and live mounts must not shadow any of these inputs.
+
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
 compares a no-extraction archive inventory from a never-started container with

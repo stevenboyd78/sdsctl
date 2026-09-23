@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
+from . import test_supplemental_handoff_process as process
 from . import test_supplemental_recording_source as native
+
+assert sys.modules["supplemental_handoff_process"] is process.w
 
 NAME = "supplemental_recording_runtime"
 SPEC = importlib.util.spec_from_file_location(NAME, native.SCRIPTS / (NAME + ".py"))

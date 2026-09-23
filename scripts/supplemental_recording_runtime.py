@@ -65,6 +65,8 @@ PATH_PARTS = frozenset(
 SUPERVISED_KEYS = ENV_KEYS | {"TZ", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"}
 PROCESS_KEYS = SUPERVISED_KEYS | {"HOME", "HOSTNAME"}
 FIXED_EXEC_PATH = "/usr/local/bin:/usr/bin:/bin"
+ZONEINFO = "usr/share/zoneinfo"
+SUPERVISED_ABSENT = (*ABSENT, "etc/timezone")
 
 
 class UnconfirmedRuntime(ValueError):
@@ -119,12 +121,16 @@ def _environment_values(values, keys):
     return parsed
 
 
-def _supervised_values(values, *, image_environment_sha256, timezone):
-    digest(image_environment_sha256)
+def _timezone_name(timezone):
     require(type(timezone) is str and 1 <= len(timezone) <= 64)
     # A pinned zoneinfo name, not a TZ file path or arbitrary POSIX TZ program.
     # Existence/zoneinfo bytes belong to independent runtime qualification.
     require(re.fullmatch(r"[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z][A-Za-z0-9_+-]*)*", timezone))
+
+
+def _supervised_values(values, *, image_environment_sha256, timezone):
+    digest(image_environment_sha256)
+    _timezone_name(timezone)
     parsed = _environment_values(values, SUPERVISED_KEYS)
     require(parsed["TZ"] == timezone)
     require(
@@ -325,7 +331,12 @@ class Evidence:
 class Layout:
     root: Path
 
-    def _snapshot(self, deadline):
+    def _snapshot(self, deadline, *, timezone=None):
+        if timezone is not None:
+            _timezone_name(timezone)
+        trees = TREES if timezone is None else (*TREES, ZONEINFO)
+        aliases = tuple(ALIASES) if timezone is None else (*ALIASES, "etc/localtime")
+        absent = ABSENT if timezone is None else SUPERVISED_ABSENT
         opened, entries, total, count = [], {}, 0, 0
 
         def timely():
@@ -420,14 +431,14 @@ class Layout:
                     safe(os.fstat(parent))
                 return parent
 
-            for path in (*TREES, *FILES, *ALIASES):
+            for path in (*trees, *FILES, *aliases):
                 parent = parent_for(path)
                 record(parent, PurePosixPath(path).name, path)
-                expected = "directory" if path in TREES else "file" if path in FILES else "symlink"
+                expected = "directory" if path in trees else "file" if path in FILES else "symlink"
                 require(entries[path]["kind"] == expected)
                 if path in ALIASES:
                     require(entries[path]["target"] == ALIASES[path])
-            for path in ABSENT:
+            for path in absent:
                 parent = parent_for(path)
                 try:
                     os.stat(PurePosixPath(path).name, dir_fd=parent, follow_symlinks=False)
@@ -450,6 +461,10 @@ class Layout:
                 final = _resolve(path, entries)
                 expected = "directory" if path.endswith("site-packages") else "file"
                 require(entries[final]["kind"] == expected)
+            if timezone is not None:
+                for path in ("etc/localtime", ZONEINFO + "/" + timezone):
+                    final = _resolve(path, entries)
+                    require(final.startswith(ZONEINFO + "/") and entries[final]["kind"] == "file")
             for parent, name, fd, before in opened:
                 require(identity(os.fstat(fd)) == before)
                 if parent is not None:
@@ -490,6 +505,52 @@ class Layout:
         try:
             digest(expected_sha256)
             observed = self.observe()
+            require(observed.sha256 == expected_sha256)
+            return observed
+        except Exception:
+            raise UnconfirmedRuntime(MESSAGE) from None
+
+    def observe_supervised(self, timezone):
+        """Separate full runtime profile including the complete timezone tree.
+
+        Same closed image layout plus /usr/share/zoneinfo, /etc/localtime as a
+        lexical link into that tree, and absence of /etc/timezone. The selected
+        pinned zone name must resolve to an inventoried file, never an external
+        TZ path or a silent missing-zone fallback. Includes unused zones, aliases
+        and metadata files too; no parser or code from the observed tree runs.
+        Original observe()/verify() fingerprints and behavior remain unchanged.
+        Unshadowed actual mounts and actual process environment are still separate.
+        """
+        try:
+            _timezone_name(timezone)
+            require(type(self.root) is type(Path()) and self.root.is_absolute())
+            require(".." not in self.root.parts and not str(self.root).startswith("//"))
+            deadline = time.monotonic() + MAX_SECONDS
+            first, count, size = self._snapshot(deadline, timezone=timezone)
+            second, count2, size2 = self._snapshot(deadline, timezone=timezone)
+            require((first, count, size) == (second, count2, size2))
+            require(time.monotonic() < deadline)
+            return Evidence(
+                checksum(
+                    {
+                        "schema": 1,
+                        "kind": KIND + "-supervised",
+                        "timezone": timezone,
+                        "entries": first,
+                        "absent": SUPERVISED_ABSENT,
+                    }
+                ),
+                len(first),
+                count,
+                size,
+            )
+        except Exception:
+            raise UnconfirmedRuntime(MESSAGE) from None
+
+    def verify_supervised(self, expected_sha256, timezone):
+        try:
+            digest(expected_sha256)
+            observed = self.observe_supervised(timezone)
             require(observed.sha256 == expected_sha256)
             return observed
         except Exception:
