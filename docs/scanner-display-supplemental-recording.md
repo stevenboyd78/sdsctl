@@ -913,6 +913,42 @@ termination and inherited-descriptor isolation. Each driver checks that its
 owned children are reaped and descriptors closed. These local results do not
 qualify an installed container, host relay, image pin or physical scanner.
 
+## Offline fixed operator and bounded framing
+
+`scripts/accept_supplemental_recording_operator.py` is a private, uninstalled
+executable for the fixed guardian. It accepts only isolated Python, five exact
+launch arguments, and private stdin/stdout pipes. It forwards the guardian's
+actual ready, started and completed messages, then separately reports native
+and watchdog exit facts. It does not accept a caller's serialized native report
+as an acknowledgment. A single begin frame must match the original source,
+profile, launch, generation and recording pins and original readiness deadline.
+Readiness alone still performs no recording or supplemental read.
+
+`scripts/supplemental_recording_wire.py` provides length-prefixed canonical JSON
+with a 16 KiB limit, absolute deadlines and fixed directional frame counts. It
+uses nonblocking private pipe/Unix-stream descriptors and rejects malformed,
+duplicate-key, oversized, incomplete or late frames. A failed read or write
+consumes the connection; there is no reconnect, replay or replacement timestamp.
+Both helpers belong to the closed native source inventory. This framing is not
+authentication: an independent host must qualify the source, image, interpreter,
+exact execution and durable start intent before any use.
+
+Exec-isolated tests use actual synthetic scanner/RTSP/RTP peers and check the
+real recording, native reaping, readiness expiry, malformed begin and native
+death before or after start. They also deliberately close the host's report
+pipe after start: even when the WAV subsequently finalizes with the expected
+samples, the operator returns unconfirmed, preserves evidence and does not
+start again. Old files remain unchanged. Framing tests separately exercise
+fragmentation, partial and failed writes, EOF, descriptor ownership and deadlines.
+
+These local results do not qualify a Docker exec attachment, host-side durable
+intent, current container namespace, cached health probe or installed image.
+The host still needs a new recording-aware source/static collector and host plan,
+an authenticated one-use attachment, and independent operator/container-init exit
+observations. Legacy host-plan schemas and source fingerprints remain unchanged.
+Neither a finalized WAV nor this operator's exit alone authorizes restoration of
+another scanner owner or marks a live browser/scanner test accepted.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.

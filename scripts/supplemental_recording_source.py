@@ -23,6 +23,7 @@ MAX_SECONDS = 8.0
 MODULES = frozenset(
     {
         "accept_supplemental_recording",
+        "accept_supplemental_recording_operator",
         "supplemental_handoff_cached",
         "supplemental_handoff_files",
         "supplemental_handoff_policy",
@@ -41,6 +42,7 @@ MODULES = frozenset(
         "supplemental_recording_schedule",
         "supplemental_recording_source",
         "supplemental_recording_watchdog",
+        "supplemental_recording_wire",
     }
 )
 NATIVE_FILES = frozenset(name + ".py" for name in MODULES)

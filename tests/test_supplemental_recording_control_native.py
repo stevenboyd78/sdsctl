@@ -140,6 +140,17 @@ def test_exact_child_runs_only_after_one_authenticated_begin(prepared, context, 
                         control.binding(context), intent_at=time.monotonic(), intent_sha256="1" * 64
                     )
                 )
+                # Observe the real queued start frame only to synchronize this
+                # fixture before closing its report channel. started.json is
+                # published BEFORE that send; closing as soon as the file exists
+                # races the send and can legitimately prevent stopped.json.
+                # The lost begin remains unconfirmed and cannot be retried or
+                # upgraded to a host acknowledgment by this raw fixture read.
+                guardian.channel.incoming.settimeout(2)
+                assert json.loads(guardian.channel.incoming.recv(m.returns.MAX_BYTES))["phase"] == (
+                    "started"
+                )
+                assert guardian.phase == "unconfirmed"
                 construction.wait_for(lambda: (spec.receipts / "started.json").exists())
                 control.refused(
                     lambda: guardian.begin(
