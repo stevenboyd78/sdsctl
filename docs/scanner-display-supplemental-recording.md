@@ -1261,6 +1261,36 @@ Neither native-source nor legacy-helper digests substitute for its distinct
 schema. This is not the future host service entrypoint, interpreter/stdlib or
 third-party dependency attestation, and it does not start or install anything.
 
+### Separate interpreter and startup-environment evidence
+
+`scripts/supplemental_recording_runtime.py` is a separate read-only collector for
+the prospective Linux/amd64 CPython3.14 image. It does not run the candidate
+interpreter, `ldd`, a package manager, or any observed source. It inventories the
+complete `/usr/local`, `/usr/lib`, `/usr/lib64`, TLS configuration/certificate
+trees, loader cache/configuration, and the fixed `/lib` aliases. Files, bytecode,
+assets, empty directories, modes, owners and link targets are included. Link
+resolution is lexical within the observed image namespace, never through host
+symlinks; missing, cyclic or out-of-inventory targets refuse qualification.
+
+Two complete observations must agree within one bounded collection deadline.
+Unsafe permissions, special files, hard-linked files, changed descriptors,
+unbounded trees and unknown expected pins fail with a fixed sanitized error.
+Loader-preload, virtual-environment and zip overrides, Python startup hooks and
+`._pth` path overrides are refused. A separate closed image/container `Config.Env`
+check rejects duplicate or extra keys, including dynamic-loader injection. It
+does not silently filter or rewrite the environment. The initial offline profile
+does not admit Supervisor credentials or claim to qualify a general HA App.
+
+The expected runtime pin must be reconstructed independently from a reviewed
+immutable image, not taken from the process being qualified. Local qualification
+compares a no-extraction archive inventory from a never-started container with
+actual read-only, network-disabled container observations. This proves only that
+the selected runtime inputs matched in those tests. Product/helper source,
+image provenance, unshadowed mounts, actual process environment, command,
+namespace and process identity, installed host integration and independent
+termination/recovery remain separate gates. This collector is not yet selected
+by the installed host service or an existing host-plan schema.
+
 ## Offline finite idle-container bootstrap
 
 `scripts/accept_supplemental_recording_idle.py` is a separate, uninstalled PID-1
@@ -1285,6 +1315,15 @@ restart, with explicitly substituted root/PID-1 facts. The real CLI refuses a
 normal non-PID-1 process. Installed namespace teardown and exact init/native exit
 remain unqualified. The closed native source inventory includes this entrypoint,
 but no existing image, App configuration or legacy host schema selects it.
+
+Separate local Docker qualification has also exercised the actual root/PID-1
+entrypoint, without substituted process identity: normal TERM, original lease
+expiry, and a deliberately changed fixture lease. Each case used its own new
+volume, network disabled and a read-only image/code mount, with no scanner or
+user profile. A real retained host pidfd and independent exact-container status
+both confirmed exit (respectively0,75,70); consumed claims and original lease
+backups were preserved. These local tests do not qualify the installed HAOS
+host adapter, native worker teardown, or normal-App restoration.
 
 The future host plan must create all fixed case branches before pinning ancestor
 identities, retain the actual idle init, and only then produce the native launch
