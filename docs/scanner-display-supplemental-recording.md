@@ -1130,6 +1130,44 @@ The returned attachment still supplies raw, unaccepted operator frames; independ
 source/container/namespace checks and the recording-start ledger remain required.
 No installed host plan invokes this component.
 
+After the actual ready frame has been received and before any begin, the client's
+one-use `bind_processes` operation performs two fixed, authenticated live-exec
+inspections around namespace-witness construction. Both must identify the same
+running guardian for the original execution, command and container. PID-zero
+startup, changed or stopped execution, lost replies, changed intent history and
+failed process mapping refuse without polling or replay. Successful witnesses
+remain owned by the caller independently of transport closure; partial failures
+close only newly opened handles. Tests join actual local connections and owned
+pidfds with explicitly synthetic Engine and Docker namespace facts.
+
+## Offline received-readiness binding
+
+`scripts/supplemental_recording_ready.py` consumes the client's actual first
+operator frame; it does not accept a caller-provided ready dictionary. Both the
+outer envelope and canonical embedded native ready message must match the
+original launch, source, profile, projection, host plan, manifests, contract,
+container generation and readiness deadline. Embedded sender identities and
+monotonic timestamps are checked, including their order after the durable attach
+intent. The original watchdog deadline and three-second grace must fit inside
+the already fixed attachment deadline; they cannot be shortened to make a late
+case fit.
+
+Only then does it join the message to independently obtained Engine inspections
+and the exact live init/guardian/native/watchdog pidfds. The original clock window
+must agree with both fresh host clock observations and the processes' time
+namespace. Checks before a future begin repeat the original deadline, claim,
+clock and process checks. Failure cannot renew readiness, retry attachment or
+stand in for a native success. Once constructed, failed live checks retain exact
+pidfds for separate exit observation until explicitly closed.
+
+This remains a readiness mechanism, not permission to record. The separately
+qualified image/interpreter/source and host plan are prerequisites, and no
+installed host service invokes it. The durable recording-start intent, relayed
+started/completed returns, complete original-file/checkpoint verification and
+independent exit/recovery checks remain required. Tests use actual Unix framing,
+intent files and owned processes, with synthetic Engine, namespace and clock
+metadata; they do not qualify a live scanner or installed App.
+
 ## Offline finite idle-container bootstrap
 
 `scripts/accept_supplemental_recording_idle.py` is a separate, uninstalled PID-1

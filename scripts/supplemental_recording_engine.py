@@ -24,6 +24,7 @@ from threading import get_ident
 import supplemental_handoff_files as files
 import supplemental_recording_attachment as attachment
 import supplemental_recording_dispatch as dispatch
+import supplemental_recording_namespace as namespace
 
 SOCKET = Path("/run/docker.sock")
 ROOT_UID = ROOT_GID = 0
@@ -255,6 +256,7 @@ class Client:
         self.endpoint, self.claim = endpoint, claim
         self.owner = (os.getpid(), get_ident())
         self.create_attempted = self.attach_attempted = self.closed = False
+        self.binding_attempted = False
         self.attachment = None
 
     def _check(self):
@@ -317,6 +319,63 @@ class Client:
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedEngine(MESSAGE) from None
+
+    def bind_processes(self, reported):
+        """Bind one actual ready-frame actor set to this exact Engine execution.
+
+        The caller must validate the actual received ready envelope, original
+        context and source independently; a supplied identity dictionary is not
+        authorization. This method obtains both exec inspections itself through
+        the retained Engine peer. PID 0, stopped/changed execs and any namespace
+        uncertainty refuse binding, without polling, restarting or resending.
+
+        On success the caller owns the returned Witness and must retain it for
+        separate native/watchdog/guardian/init exit checks, then close it. Closing
+        this transport never closes that independent witness or proves any exit.
+        This operation sends no recording begin and does not grant one.
+        """
+        witness = None
+        try:
+            self._check()
+            require(self.create_attempted and self.attach_attempted and not self.binding_attempted)
+            require(self.claim.state.phase == "attach_intent")
+            channel = self.attachment
+            require(type(channel) is attachment.Attachment and not channel.closed)
+            require(channel.started and channel.reads == 1 and not channel.begun)
+            self.binding_attempted = True
+
+            def running():
+                self._check()
+                pins, execution_id = self.claim.pins, self.claim.state.execution_id
+                value = _json_request(
+                    self.endpoint,
+                    "GET",
+                    f"/exec/{execution_id}/json",
+                    None,
+                    200,
+                    deadline=pins.command.ready_by,
+                )
+                observed = dispatch.execution.inspect(
+                    value,
+                    execution_id=execution_id,
+                    container_id=pins.init.container_id,
+                    command=pins.command,
+                )
+                self._check()
+                require(observed.phase == "running")
+                return observed.pid
+
+            guardian_pid = running()
+            witness = namespace.Witness(self.claim.witness, guardian_pid, reported)
+            require(running() == guardian_pid)
+            witness.refresh()
+            self._check()
+            return witness
+        except BaseException as error:
+            if witness is not None:
+                with suppress(Exception):
+                    witness.close()
+            self._fail(error)
 
     def close(self):
         self.closed = True

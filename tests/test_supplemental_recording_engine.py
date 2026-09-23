@@ -19,6 +19,7 @@ import pytest
 
 from . import test_supplemental_recording_attachment as attached
 from . import test_supplemental_recording_dispatch as intents
+from . import test_supplemental_recording_namespace as namespaces
 
 NAME = "supplemental_recording_engine"
 SPEC = importlib.util.spec_from_file_location(
@@ -126,6 +127,8 @@ def refused(action, client):
 
 
 def test_fixed_create_inspect_and_upgrade_follow_actual_durable_intents(prepared, monkeypatch):
+    assert m.namespace is namespaces.m
+
     def created(peer, request):
         state = intents.m.load(prepared.directory, prepared.pins)
         assert state.phase == "create_intent"
