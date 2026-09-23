@@ -198,6 +198,9 @@ def test_actual_wire_returns_and_original_files_required_separately_from_exit(
             result.collected.files.stage == "finalized" and result.collected.artifact.samples == 800
         )
         assert result.acknowledgment.completion_sha256 == result.native_return_sha256
+        raw = json.loads(completed["body"]["received"]["raw"])
+        assert result.stopped_raw == m.host.encode(raw["body"]["stopped"])
+        assert case.relay.completion is result
         assert case.ready.client.attachment.reads == 3 and len(case.requests) == 5
         assert not case.ready.processes.exited("init")
         assert case.ready.processes.exited("native") is exit_before_completion

@@ -33,9 +33,18 @@ def require(value):
 
 @dataclass(frozen=True)
 class Completion:
+    """Verified return data retained for fresh checks, not an exit capability.
+
+    stopped_raw is the canonical payload from the actual authenticated return,
+    never a later read of stopped.json. Consumers still need the original relay,
+    ledger and retained process capability; constructing this value is not proof
+    of receipt, immutable files, successful exit or permission to restore.
+    """
+
     acknowledgment: protected.Acknowledgment
     collected: protected.Collected
     native_return_sha256: str
+    stopped_raw: bytes
 
 
 class Bridge:
@@ -159,11 +168,12 @@ class Bridge:
                 expected, stopped=stopped, acknowledgment=acknowledgment, previous=previous
             )
             require(asdict(collected.artifact) == value["body"]["artifact"])
+            stopped_raw = host.encode(stopped)
             require(time.monotonic() < deadline)
             self.ledger.completed(acknowledgment, now=time.monotonic())
             require(time.monotonic() < deadline)
             self.phase = "closed"
-            return Completion(acknowledgment, collected, report.sha256)
+            return Completion(acknowledgment, collected, report.sha256, stopped_raw)
         except BaseException as error:
             self.phase = "unconfirmed"
             if not isinstance(error, Exception):

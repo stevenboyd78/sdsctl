@@ -403,6 +403,9 @@ def test_actual_native_recording_returns_join_host_evidence_and_separate_exit(
             # raw message. This fixture maps only namespace credentials above.
             expected_receipt = state.envelopes[2]["body"]["received"] | {"uid": 0, "gid": 0}
             assert result.native_return_sha256 == returned.host.checksum(expected_receipt)
+            stopped = json.loads(expected_receipt["raw"])["body"]["stopped"]
+            assert result.stopped_raw == returned.host.encode(stopped)
+            assert state.relay.completion is result
             if fault in ("lost_exited", "engine_exit"):
                 with pytest.raises(m.UnconfirmedExit):
                     m.collect(state.relay)

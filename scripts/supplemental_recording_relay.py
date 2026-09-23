@@ -157,14 +157,92 @@ class Relay(local.Bridge):
 
     def completed(self, *, progress_directory=None):
         try:
+            progress_identity = self._progress_identity(progress_directory)
             result = super().completed(progress_directory=progress_directory)
             self.guard.check()
-            require(self._state(closed=True).acknowledgment == result.acknowledgment)
+            state = self._state(closed=True)
+            require(state.acknowledgment == result.acknowledgment)
+            require(self._progress_identity(progress_directory) == progress_identity)
             require(time.monotonic() < min(self.native_binding.finish_by, self.plan.finish_by))
             self.completion = result
+            self._completion_context = (
+                result,
+                self.expected,
+                self.plan,
+                state,
+                progress_directory,
+                progress_identity,
+            )
             return result
         except BaseException as error:
             self._fail(error)
+
+    @staticmethod
+    def _progress_identity(directory):
+        if directory is None:
+            return None
+        with host.protected._private_directory(directory, exclusive=False) as fd:
+            return host.identity(os.fstat(fd))[:6]
+
+    def recheck_completed(self):
+        """Fresh files under the original timely completion, before exit collection.
+
+        Does not receive another frame or adopt a disk receipt, changed artifact,
+        new progress tail, process exit or renewed recording budget. Requires
+        this original Relay and returned completion; copied Completion values
+        alone are insufficient. The retained attachment's fixed finish bound
+        limits this read-only tail, and the full read must fit within two seconds.
+        Independent outer supervision is still needed for blocked kernel I/O.
+        """
+        acquired = False
+        try:
+            require(self._lock.acquire(blocking=False))
+            acquired = True
+            require(self.phase == "closed")
+            began = time.monotonic()
+            end = min(began + 2, self.guard.finish_by)
+            self.guard.check()
+            original = self._completion_context
+            result, expected, plan, state, directory, directory_identity = original
+            require(self.completion is result and type(result) is local.Completion)
+            require(self.expected == expected and self.plan == plan)
+            require(self._state(closed=True) == state)
+            require(state.expected == expected and state.acknowledgment == result.acknowledgment)
+            require(result.native_return_sha256 == state.acknowledgment.completion_sha256)
+            require(type(result.stopped_raw) is bytes)
+            stopped = json.loads(result.stopped_raw)
+            require(host.encode(stopped) == result.stopped_raw)
+            require(host.checksum(stopped) == state.acknowledgment.stopped_sha256)
+            require(self._progress_identity(directory) == directory_identity)
+            collector = local.protected.Collector(self.binding.projection.host)
+            if state.tip is None:
+                require(directory is None)
+            else:
+                require(directory is not None)
+                local.checkpoints.load_progress(
+                    directory, collector, expected, expected_tip=state.tip
+                )
+            collected = collector.finalized(
+                expected,
+                stopped=stopped,
+                acknowledgment=result.acknowledgment,
+                previous=result.collected.progress,
+            )
+            # An internally valid, same-sized replacement WAV or sidecar is
+            # still not the artifact bound to the actual native completion.
+            require(collected == result.collected)
+            require(self._progress_identity(directory) == directory_identity)
+            self.guard.check()
+            require(self._state(closed=True) == state)
+            require(self._completion_context is original and self.completion is result)
+            require(self.expected == expected and self.plan == plan)
+            require(began <= time.monotonic() < end)
+            return collected
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self._lock.release()
 
 
 if __name__ == "__main__":

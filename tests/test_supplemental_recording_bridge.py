@@ -1,5 +1,6 @@
 """Real child/ledger/native files; explicit synthetic namespace mapping only."""
 
+import hashlib
 import importlib.util
 import json
 import sys
@@ -142,6 +143,12 @@ def test_real_native_return_to_projected_host_ledger_and_files(joined, fault):
                     result.acknowledgment.contract_sha256 != joined.binding.stored.contract.sha256
                 )
                 assert result.native_return_sha256 == result.acknowledgment.completion_sha256
+                assert type(result.stopped_raw) is bytes
+                assert result.stopped_raw == h.encode(json.loads(result.stopped_raw))
+                assert (
+                    hashlib.sha256(result.stopped_raw).hexdigest()
+                    == result.acknowledgment.stopped_sha256
+                )
                 assert h.load(joined.ledger.directory, joined.ledger.binding) == joined.ledger.state
                 assert joined.calls and not hasattr(result, "exited")
                 refused(bridge.completed)
@@ -329,7 +336,9 @@ def test_completion_replays_the_independently_host_pinned_progress(joined, fault
     assert receiver.fixture_returncode == 0
 
 
-@pytest.mark.parametrize("fault", ["late_publication", "lost_publication", "late_verification"])
+@pytest.mark.parametrize(
+    "fault", ["late_publication", "lost_publication", "late_verification", "cancelled_publication"]
+)
 def test_completion_deadline_includes_file_validation_and_host_publication(
     joined, monkeypatch, fault
 ):
@@ -339,6 +348,14 @@ def test_completion_deadline_includes_file_validation_and_host_publication(
     with channel.child(joined.binding, run) as receiver:
         bridge = m.Bridge(joined.ledger, receiver)
         bridge.started()
+        returned = []
+        original_completion = m.Completion
+
+        def completion(*args, **kwargs):
+            returned.append(original_completion(*args, **kwargs))
+            return returned[-1]
+
+        monkeypatch.setattr(m, "Completion", completion)
         if fault == "late_verification":
             original = p.Collector.finalized
 
@@ -356,13 +373,51 @@ def test_completion_deadline_includes_file_validation_and_host_publication(
                 result = original(*args, **kwargs)
                 if fault == "lost_publication":
                     raise TimeoutError("PRIVATE completion return lost")
+                if fault == "cancelled_publication":
+                    raise KeyboardInterrupt
                 late = bridge.plan.finish_by + 1
                 monkeypatch.setattr(m.time, "monotonic", lambda: late)
                 return result
 
             monkeypatch.setattr(joined.ledger, "completed", publish)
-        refused(bridge.completed)
+        if fault == "cancelled_publication":
+            with pytest.raises(KeyboardInterrupt):
+                bridge.completed()
+        else:
+            refused(bridge.completed)
+        assert not returned, "No completion payload is exposed after a lost or untimely return"
         assert bridge.phase == "unconfirmed"
         assert joined.ledger.state.closed == (fault != "late_verification")
         refused(bridge.completed)
+    assert receiver.fixture_returncode == 0
+
+
+def test_completion_payload_is_immutable_and_independent_of_later_native_receipts(joined):
+    def run(send):
+        return native_tests.native_run(joined.prepared, joined.binding, send, None)
+
+    with channel.child(joined.binding, run) as receiver:
+        bridge = m.Bridge(joined.ledger, receiver)
+        expected = bridge.started()
+        result = bridge.completed()
+        stopped = json.loads(result.stopped_raw)
+        original_payload = result.stopped_raw
+        stopped["samples"] += 1
+        assert json.loads(result.stopped_raw)["samples"] == 1280
+        # Test-only corruption of a native disk receipt. No disk receipt can
+        # supply or replace the already authenticated return's retained bytes.
+        receipt = joined.prepared.spec.receipts / "stopped.json"
+        assert receipt.is_file()
+        receipt.write_bytes(b"PRIVATE changed receipt")
+        assert result.stopped_raw == original_payload
+        collector = p.Collector(joined.ledger.binding.projection.host)
+        reread = collector.finalized(
+            expected,
+            stopped=json.loads(result.stopped_raw),
+            acknowledgment=result.acknowledgment,
+            previous=result.collected.progress,
+        )
+        assert reread.artifact == result.collected.artifact
+        assert reread.files == result.collected.files
+        assert not hasattr(result, "exited") and not hasattr(result, "restored")
     assert receiver.fixture_returncode == 0

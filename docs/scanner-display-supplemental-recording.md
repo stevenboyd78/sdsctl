@@ -797,6 +797,24 @@ current host files and every old file, compares all native artifact fields to
 the host result, and replays any independently pinned progress checkpoint.
 An unpinned later checkpoint is not adopted. No fresh baseline is captured.
 
+Only after those checks and a timely returned durable publication does the
+completion result retain immutable canonical bytes of the actual stopped
+payload. A later fresh file check can reuse that payload and its acknowledgment
+without reading or trusting a native `stopped.json` receipt. The original relay,
+ledger and process bindings still supply authority; a constructed completion
+value or a previous good WAV check cannot authorize finalization or restoration.
+Later file observations must also match the originally verified artifact.
+
+The actual cross-container `Relay.recheck_completed()` performs that read-only
+check before the separate exit collection. It requires its own original returned
+completion and unchanged closed ledger, reloads the exact acknowledged progress
+chain from its original directory, and verifies all old files plus the current
+WAV and sidecar again. Even a valid same-size replacement must match the original
+artifact and file identity. It consumes no new native frame and writes nothing.
+The original attachment finish bound and a two-second read limit still apply;
+a failed or cancelled check retains the process handles for independent recovery.
+This is not native-health evidence, worker/init exit proof or restoration.
+
 Receipt, verification and durable host publication must return before the fixed
 deadline. A lost or late publication return consumes this bridge even if a
 complete log entry exists. Neither that entry nor native `started.json` or
