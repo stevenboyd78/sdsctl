@@ -633,6 +633,16 @@ recording success. Local tests join real file inventories and owned init handles
 with explicit synthetic platform/continuity inputs. Installed qualification and
 the full phase-aware recording collector remain outstanding.
 
+The same original `Start` now exposes a separate read-only `retained_history()`
+join for its own successfully returned Relay. It rechecks the whole original
+policy journal, the immutable authorization bytes, the recording ledger and
+its original start-intent prefix under the retained process capability. It
+does not call startup readiness or grant another begin. The original recording
+recovery, trial and stop deadlines remain binding, including after readiness
+expires. Cancellation, replaced objects, rewritten history and late reads refuse
+without discarding the original process handles. This supplies authorization
+continuity only, not a recording observation, completion or restoration action.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently

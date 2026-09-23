@@ -48,6 +48,7 @@ class Start:
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.used = self.failed = self.closed = False
         self.probe = self.authorization = self.intent = self.relay = None
+        self._begin_result = None
         self.run = None
         try:
             require(type(run) is launch.Launch and type(ledger) is binding.Ledger)
@@ -124,7 +125,8 @@ class Start:
         require(event["intent_sha256"] == run.action.intent_sha256)
         return proof
 
-    def _guard(self):
+    def _identity(self):
+        """Original object/plan bindings only; deliberately no phase authority."""
         require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
         run, plan, ready, ledger = self.run, self.plan, self.ready, self.ledger
         current = (
@@ -177,6 +179,10 @@ class Start:
         require(run.read.docker is run.qualify.docker)
         require(run.client.claim.pins == run.pins and run.pins.host == ledger.binding)
         require(run.witness.identity == run.idle.init == run.pins.init and not run.witness.exited())
+        return run, plan, ready, ledger
+
+    def _guard(self):
+        run, plan, ready, _ = self._identity()
         ready.check_before_begin()
         machine = run._history()
         state = machine.state
@@ -215,15 +221,26 @@ class Start:
             )
         return machine, now
 
-    def _ledger(self):
+    def _read_ledger(self, end):
+        base.clock(end)
+        require(time.monotonic() < end <= min(time.monotonic() + 2, self.plan.lease["stop_by"]))
         ledger = self.ledger
         require(type(ledger) is binding.Ledger and not ledger._poisoned)
         binding._location(ledger.directory, ledger.binding)
-        end = min(time.monotonic() + 2, self.ready.ready_by)
         with binding.protected._private_directory(ledger.directory, exclusive=False) as fd:
             require(binding.identity(os.fstat(fd))[:6] == ledger._directory_identity)
             state = binding._read(fd, ledger.binding, end)
             require(state == ledger.state and time.monotonic() < end)
+            if self.intent is not None:
+                raw = binding.protected.evidence.read_bytes(
+                    fd, "0001.json", limit=binding.MAX_BYTES, deadline=end
+                )
+                require(hashlib.sha256(raw).hexdigest() == self.intent.sha256)
+                require(time.monotonic() < end)
+        return state
+
+    def _ledger(self):
+        state = self._read_ledger(min(time.monotonic() + 2, self.ready.ready_by))
         require(state.expected is None and state.tip is None and state.acknowledgment is None)
         require(not state.closed and state.preservation is None)
         if self.intent is None:
@@ -233,6 +250,93 @@ class Start:
         else:
             require(state == self.intent and state.count == 2)
         return state
+
+    def retained_history(self):
+        """Read the original authorization after begin, without renewed readiness.
+
+        Requires this Start's actual returned Relay and its original retained
+        Ready/process capability. Both complete journals and their original
+        authorized prefixes are checked. No native health, recording return,
+        file verdict, App action or new policy event is produced by this read.
+        Only the live candidate phase before independent exit/recovery is in
+        scope; cancellation, lost begin or original stop expiry refuses.
+        """
+        acquired = False
+        try:
+            began = time.monotonic()  # Include the initial plan/process checks in freshness.
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            run, plan, ready, ledger = self._identity()
+            require(self.used and self.authorization is not None and self.intent is not None)
+            relay = self.relay
+            returned_relay, authorization_raw, intent = self._begin_result
+            require(relay is returned_relay and type(relay) is relayed.Relay)
+            require(base.encode(self.authorization) == authorization_raw and self.intent is intent)
+            require(relay.ready is ready and relay.ledger is ledger)
+            require(type(relay.guard) is relayed.retained.Retained and relay.guard.ready is ready)
+            require(relay.phase in ("started", "completed", "closed"))
+            require(relay.guard.finish_by == plan.lease["stop_by"])
+            end = min(began + 2, plan.lease["stop_by"])
+            relay.guard.check()
+            machine = run._history_until(end)
+            entries = run.journal.entries
+            require(tuple(base.encode(e) for e in entries[: len(self.history)]) == self.history)
+            require(len(entries) > len(self.history))
+            require(
+                base.encode(entries[len(self.history)]["event"]) == base.encode(self.authorization)
+            )
+            state = machine.state
+            require(state.phase == "candidate_running" and not state.finish_requested)
+            require(
+                state.operator_exit_sha256 is None and state.ready_evidence_sha256 == self.proof
+            )
+            require(state.launch_intent_sha256 == run.action.intent_sha256)
+            require(state.launch_plan_sha256 == run.command.plan_sha256)
+            require(
+                state.candidate_generation == state.authorization_generation == run.pins.generation
+            )
+            require(machine.process_bound(base.CANDIDATE, exited=False))
+            require(machine.execution_closed("starting_candidate"))
+            require(
+                state.recording_deadline
+                == self.authorization["now"] + machine.contract.maximum_recording_seconds
+            )
+            current = self._read_ledger(end)
+            require(current.count >= self.intent.count == 2 and current.preservation is None)
+            require(relay.intent_sha256 == self.intent.sha256)
+            require(current.generation == self.intent.generation == run.pins.generation)
+            require(
+                (current.start_by, current.finish_by)
+                == (self.intent.start_by, self.intent.finish_by)
+            )
+            require(
+                (relay.native_binding.start_by, relay.native_binding.finish_by)
+                == (current.start_by, current.finish_by)
+            )
+            require(current.expected == relay.expected)
+            require(current.closed is (relay.phase == "closed"))
+            require((current.acknowledgment is not None) is current.closed)
+            relay.guard.check()
+            self._identity()
+            observed = plans.clock.read()
+            plan.check_clock(observed)
+            now = observed.boottime_ns / plans.clock.NS
+            require(
+                machine.last_at
+                <= now
+                < min(
+                    state.trial_deadline,
+                    state.recording_deadline + base.COMMAND_SECONDS,
+                    plan.deadlines.stop_by,
+                )
+            )
+            require(began <= time.monotonic() < end)
+            return machine
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
 
     def _observe(self):
         self._guard()
@@ -309,6 +413,7 @@ class Start:
             # Relay owns the only send_once call. A returned Relay is not a
             # received start/completion or a worker/process exit acknowledgment.
             self.relay = relayed.Relay(self.ledger, self.ready)
+            self._begin_result = (self.relay, base.encode(self.authorization), self.intent)
             return self.relay
         except BaseException as error:
             self._fail(error)

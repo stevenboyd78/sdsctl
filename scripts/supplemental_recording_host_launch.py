@@ -720,6 +720,17 @@ class Launch:
 
     def _history(self):
         """Recheck actual original journal bytes, not only a cached intent."""
+        return self._history_until(min(time.monotonic() + 2, self.command.ready_by))
+
+    def _history_until(self, end):
+        """Read only; the caller must independently establish its lifecycle phase.
+
+        Bootstrap always supplies its original ready bound above. An actual
+        retained begin may instead supply the original stop bound, never a new
+        readiness window. This routine itself grants no launch/begin permission.
+        """
+        base.clock(end)
+        require(time.monotonic() < end <= min(time.monotonic() + 2, self.plan.lease["stop_by"]))
         journal, plan = self.journal, self.plan
         require(type(journal) is bootstrap.Journal and journal.path == plan.root / "journal")
         journal.check_directory()
@@ -727,7 +738,6 @@ class Launch:
         require(
             sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
         )
-        end = min(time.monotonic() + 2, self.command.ready_by)
         for index, entry in enumerate(journal.entries):
             name = journal.name(index)
             info = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
