@@ -1311,6 +1311,48 @@ Closing it ends only that web attachment; original process/Engine exit still
 requires independent observation. Durable one-use web dispatch and binding to
 the actual original Ready are not supplied by these metadata/framing types.
 
+### Original-Ready-bound web dispatch — uninstalled
+
+`supplemental_recording_web_exec.Launch` now supplies the distinct local join.
+It accepts only the actual received `Ready`, derives the fixed request from
+that object's original context and actor report, and uses the unchanged original
+readiness/watchdog deadlines. Its `web-exec` sibling directory must be fixed by
+the qualified host plan and precreated before idle continuity begins; the join
+does not create directories or choose a new case after a failure.
+
+Distinct `WebPins` / `WebClaim` records use their own durable wire kind and exact
+web-command inspection. Create intent precedes Engine create; the returned ID
+is recorded before inspection; attach intent precedes start. Lost responses
+consume the case. Operator `Claim`, `load`, and Engine `Client` remain exact-type
+operator-only. Reopening history is read-only and never recreates or reattaches
+a web process. Shared file-writing mechanics do not grant recording authority.
+
+The join obtains two actual running Engine inspections around a retained web
+pidfd and exact original container/PID-namespace binding. The web process must
+be distinct from init/guardian/native/watchdog and outside the guardian's child
+tree. Its one closed listening reply must name that process, match the original
+request/deadline and have an observation time within this request's original
+readiness window. It is not a daemon-health or recording-success receipt.
+
+After the separately authorized single begin, only a `Retained` of the same
+Ready can continue the web checks. Neither original deadline is renewed. Changed
+identities, original journal/directory replacement, extra output, EOF or expired
+time close the web attachment and preserve the retained web process handle.
+Closing a channel is not exit proof. `observe_exit()` independently requires
+the original web pidfd's exit and exact Engine terminal70 while original init
+remains alive. That terminal code means the finite dashboard ended, never that
+a recording succeeded. It must run before the operator exit collector closes
+the borrowed Engine endpoint. Frozen/blocked code still requires independent
+original container/host recovery; this join never signals or restores ownership.
+
+The closed host source inventory now contains45 modules; native29 and product
+bytes are unchanged by this host join. Related local tests exercise durable
+files, Unix HTTP, original owned pidfds, post-begin continuity and negative
+returns. Their Engine/namespace/listener metadata are explicitly synthetic.
+Actual image/runtime/Engine qualification, the assembled host adapter and
+independently installed failure/recovery checks remain separate requirements.
+No installed idle-only schema or existing acceptance case gains this authority.
+
 ## Offline exact execution and namespace binding
 
 `scripts/supplemental_recording_execution.py` describes only the fixed isolated

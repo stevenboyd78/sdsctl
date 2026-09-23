@@ -57,6 +57,44 @@ class Pins:
 
 
 @dataclass(frozen=True)
+class WebPins:
+    """Separate dashboard intent, bound to an original operator and Ready hash.
+
+    Pure metadata, not Ready authentication. The separate web join must derive
+    these from its actual received Ready; an operator Client cannot use them.
+    """
+
+    original: Pins
+    command: execution.WebCommand
+    ready_sha256: str
+
+    @property
+    def host(self):
+        return self.original.host
+
+    @property
+    def init(self):
+        return self.original.init
+
+    def payload(self):
+        require(type(self.original) is Pins and type(self.command) is execution.WebCommand)
+        original = self.original.payload()
+        self.command.argv()
+        execution._digest(self.ready_sha256)
+        # Compare canonical bytes, not bool/int-equal dictionaries. No new
+        # launch/source/deadline can be smuggled into the web description.
+        require(
+            binding.encode({k: v for k, v in asdict(self.command).items() if k != "request_sha256"})
+            == binding.encode(asdict(self.original.command))
+        )
+        return {
+            "original": original,
+            "command": asdict(self.command),
+            "ready_sha256": self.ready_sha256,
+        }
+
+
+@dataclass(frozen=True)
 class State:
     count: int
     sha256: str
@@ -71,6 +109,12 @@ def _location(directory, pins):
     binding._location(directory, pins.host)  # Host-only, outside App mount roots.
 
 
+def _web_location(directory, pins):
+    require(type(pins) is WebPins)
+    pins.payload()
+    binding._location(directory, pins.host)
+
+
 def _event(state, event, pins):
     fields = binding.protected._mapping
     require(type(event) is dict)
@@ -79,7 +123,8 @@ def _event(state, event, pins):
     require(at < pins.command.ready_by)
     if state is None:
         fields(event, {"kind", "at", "pins"})
-        require(event["kind"] == "create_intent" and event["pins"] == pins.payload())
+        require(event["kind"] == "create_intent")
+        require(binding.encode(event["pins"]) == binding.encode(pins.payload()))
         require(0 < pins.command.ready_by - at <= 600)
         return State(1, "", at, None, "create_intent")
     require(at >= state.at)
@@ -95,7 +140,7 @@ def _event(state, event, pins):
     return State(3, "", at, state.execution_id, "attach_intent")
 
 
-def _read(fd, pins, deadline):
+def _read_entries(fd, pins, deadline, kind):
     before = binding.identity(os.fstat(fd))
     names = []
     with os.scandir(fd) as entries:
@@ -120,7 +165,7 @@ def _read(fd, pins, deadline):
         )
         binding.protected._mapping(value, {"schema", "kind", "previous", "event"})
         require(type(value["schema"]) is int and value["schema"] == 1)
-        require(value["kind"] == "finite-recording-exec-intents" and binding.encode(value) == raw)
+        require(value["kind"] == kind and binding.encode(value) == raw)
         require(value["previous"] == previous)
         following = _event(state, value["event"], pins)
         previous = hashlib.sha256(raw).hexdigest()
@@ -129,6 +174,16 @@ def _read(fd, pins, deadline):
         )
     require(binding.identity(os.fstat(fd)) == before and time.monotonic() < deadline)
     return state
+
+
+def _read(fd, pins, deadline):
+    require(type(pins) is Pins)
+    return _read_entries(fd, pins, deadline, "finite-recording-exec-intents")
+
+
+def _read_web(fd, pins, deadline):
+    require(type(pins) is WebPins)
+    return _read_entries(fd, pins, deadline, "finite-recording-web-exec-intents")
 
 
 def load(directory: Path, pins: Pins):
@@ -165,7 +220,7 @@ class Claim:
         self.state, self.identity = None, None
         self.owner, self.lock, self.poisoned = (os.getpid(), get_ident()), Lock(), False
         try:
-            require(type(pins) is Pins)
+            require(type(pins) is _profile(self)[0])
             self._append({"kind": "create_intent", "pins": pins.payload()})
         except BaseException as error:
             self.poisoned = True
@@ -175,7 +230,7 @@ class Claim:
 
     def _live(self):
         require(not self.poisoned and self.owner == (os.getpid(), get_ident()))
-        _location(self.directory, self.pins)
+        _profile(self)[1](self.directory, self.pins)
         require(
             type(self.witness) is process.ProcessWitness and self.witness.identity == self.pins.init
         )
@@ -194,14 +249,14 @@ class Claim:
                 identity = binding.identity(os.fstat(fd))[:6]
                 require(self.identity is None or self.identity == identity)
                 self.identity = identity
-                require(_read(fd, self.pins, deadline) == self.state)
+                require(_profile(self)[2](fd, self.pins, deadline) == self.state)
                 at = time.monotonic()
                 event = dict(values, at=at)
                 following = _event(self.state, event, self.pins)
                 raw = binding.encode(
                     {
                         "schema": 1,
-                        "kind": "finite-recording-exec-intents",
+                        "kind": _profile(self)[3],
                         "previous": self.state.sha256
                         if self.state is not None
                         else binding.checksum(self.pins.payload()),
@@ -228,7 +283,7 @@ class Claim:
                     following.execution_id,
                     following.phase,
                 )
-                require(_read(fd, self.pins, deadline) == result)
+                require(_profile(self)[2](fd, self.pins, deadline) == result)
             self._live()
             require(time.monotonic() < deadline)
             self.state = result
@@ -251,7 +306,10 @@ class Claim:
             deadline = min(time.monotonic() + 2, self.pins.command.ready_by)
             with binding.protected._private_directory(self.directory, exclusive=False) as fd:
                 require(binding.identity(os.fstat(fd))[:6] == self.identity)
-                require(self.state is not None and _read(fd, self.pins, deadline) == self.state)
+                require(
+                    self.state is not None
+                    and _profile(self)[2](fd, self.pins, deadline) == self.state
+                )
             self._live()
             require(time.monotonic() < deadline)
         except BaseException as error:
@@ -264,7 +322,7 @@ class Claim:
         try:
             self._live()
             require(self.state is not None and self.state.phase == "created")
-            observed = execution.inspect(
+            observed = _profile(self)[4](
                 inspected,
                 execution_id=self.state.execution_id,
                 container_id=self.pins.init.container_id,
@@ -283,6 +341,44 @@ class Claim:
             if not isinstance(error, Exception):
                 raise
             raise UnconfirmedDispatch(MESSAGE) from None
+
+
+class WebClaim(Claim):
+    """Distinct one-use dashboard journal; never an operator/begin capability.
+
+    Shares only private durable-file mechanics with Claim. Exact-type selection
+    below fixes its pins, wire kind and web inspection. Original Claim/load and
+    Engine Client remain operator-only; existing evidence is never reclassified.
+    The eventual host must precreate/fix the one web directory for this case.
+    """
+
+
+def _profile(claim):
+    # No caller-selectable kind/command/validation callback, and no subclass
+    # override may grant a different external dispatch authority.
+    if type(claim) is Claim:
+        return Pins, _location, _read, "finite-recording-exec-intents", execution.inspect
+    require(type(claim) is WebClaim)
+    return (
+        WebPins,
+        _web_location,
+        _read_web,
+        "finite-recording-web-exec-intents",
+        execution.inspect_web,
+    )
+
+
+def load_web(directory: Path, pins: WebPins):
+    """Read-only consumed dashboard history; no launch or reconnect authority."""
+    try:
+        _web_location(directory, pins)
+        deadline = time.monotonic() + 2
+        with binding.protected._private_directory(directory, exclusive=False) as fd:
+            result = _read_web(fd, pins, deadline)
+        require(result is not None and time.monotonic() < deadline)
+        return result
+    except Exception:
+        raise UnconfirmedDispatch(MESSAGE) from None
 
 
 if __name__ == "__main__":

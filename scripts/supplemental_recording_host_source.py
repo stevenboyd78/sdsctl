@@ -28,6 +28,7 @@ ROOTS = frozenset(
         "host_plan",
         "idle_observer",
         "probe_exec",
+        "web_exec",
         "runtime",
         "bootstrap",
         "ready",
@@ -91,6 +92,7 @@ MODULES = frozenset(
             "static",
             "time_domain",
             "wire",
+            "web_exec",
         )
     }
 )
