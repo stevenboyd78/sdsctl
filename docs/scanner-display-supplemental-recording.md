@@ -810,6 +810,37 @@ relay and independent hard termination still require qualification. Parent-death
 signals cannot bound a living but stuck guardian. A successful native return is
 not child/container-init exit proof or permission to restore another owner.
 
+## Offline independent process deadline
+
+`scripts/supplemental_recording_watchdog.py` arms a separate watchdog process for
+an actual owned `Popen`, with independently supplied start ticks and live-bound
+native/guardian pidfds. Arming must happen in a single-threaded, source-qualified
+guardian before it releases its child's launch gate. Invalid unbound inputs do
+not signal anything; an arming failure after binding kills only that exact native
+child. It does not start a process by a caller-supplied command or discover a
+replacement owner by PID after failure.
+
+The watchdog closes unrelated inherited descriptors before acknowledging that it
+is armed. It watches native exit and guardian exit independently of the guardian's
+Python execution. At the original deadline it sends `SIGTERM`, then `SIGKILL` if
+needed at the original deadline plus the bounded grace period. Guardian death
+triggers immediate `SIGKILL` of the bound native child. There is no disarm,
+extension or restart operation; closing the guardian's observation handles does
+not cancel the cutoff.
+
+Actual process tests cover ordinary exit, graceful and forced termination,
+zero grace, a blocked guardian, a guardian frozen with `SIGSTOP`, guardian death,
+failed arming, lost wait returns, dropped inherited sockets and a killed watchdog.
+The orphan-process tests use an isolated child subreaper and reap all synthetic
+descendants. No live application, scanner or unrelated process is targeted.
+
+A watchdog outcome records only its own action/exit mode. Its signal is not native
+exit proof, and its death is not evidence that the native child stopped. The owner
+must still independently wait/reap the native child; the host must separately
+prove container-init exit and qualify restoration. Wiring this watchdog into an
+installed fixed guardian, including fail-closed handling of watchdog death,
+remains a source/host-plan/platform gate.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
