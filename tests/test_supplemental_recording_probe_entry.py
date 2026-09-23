@@ -7,9 +7,11 @@ processes. Probe subprocesses use the actual closed bundle and cached API.
 
 import copy
 import hashlib
+import importlib.util
 import subprocess
 import time
 from dataclasses import asdict, replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,6 +29,79 @@ tree, configured, cached, prepared, staged = (
     operator.staged,
 )
 MESSAGE = (probe.MESSAGE + "\n").encode()
+
+
+def test_prepare_imports_qualified_reader_but_does_not_collect_before_request(monkeypatch):
+    entry = plans.Path(plans.m.__file__).with_name("accept_supplemental_recording_probe.py")
+    spec = importlib.util.spec_from_file_location("probe_entry_order_fixture", entry)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    trace = []
+    runtime = plans.Path("/trusted/fixture/sds200")
+
+    class Layout:
+        def __init__(self, product, native):
+            assert product == runtime and native == entry.parent
+            self.runtime = product
+
+        def verify(self, pin):
+            assert pin == "a" * 64
+            trace.append("verify")
+
+    class Stream:
+        def __init__(self, *args, **kwargs):
+            trace.append("stream")
+
+        def receive(self, *, deadline):
+            trace.append("receive")
+            raise EOFError("test stops before a request")
+
+        def close(self):
+            trace.append("close")
+
+    def imported(name):
+        trace.append(name)
+        if name == "supplemental_recording_source":
+            return SimpleNamespace(Layout=Layout)
+        if name == "supplemental_recording_wire":
+            return SimpleNamespace(Stream=Stream)
+        # No sample/probe_inputs method: any premature observation would fail.
+        assert name in ("supplemental_recording_probe", "supplemental_recording_launch_plan")
+        return SimpleNamespace()
+
+    monkeypatch.setattr(
+        module,
+        "sys",
+        SimpleNamespace(flags=SimpleNamespace(isolated=1, dont_write_bytecode=1), path=[]),
+    )
+    monkeypatch.setattr(module, "logging", SimpleNamespace(CRITICAL=50, disable=lambda _: None))
+    monkeypatch.setattr(
+        module,
+        "importlib",
+        SimpleNamespace(
+            import_module=imported,
+            util=SimpleNamespace(
+                find_spec=lambda _: SimpleNamespace(origin=str(runtime / "__init__.py"))
+            ),
+        ),
+    )
+    monkeypatch.setattr(
+        module,
+        "arguments",
+        lambda _: {"runtime-root": str(runtime), "source-sha256": "a" * 64, "probe-by": 10},
+    )
+    with pytest.raises(EOFError):
+        module.run([])
+    assert trace == [
+        "supplemental_recording_source",
+        "verify",
+        "supplemental_recording_probe",
+        "supplemental_recording_launch_plan",
+        "supplemental_recording_wire",
+        "stream",
+        "receive",
+        "close",
+    ]
 
 
 @pytest.fixture

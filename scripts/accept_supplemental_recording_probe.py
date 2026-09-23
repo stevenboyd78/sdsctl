@@ -62,6 +62,10 @@ def run(argv):
     require(runtime is not None and runtime.origin == str(layout.runtime / "__init__.py"))
     layout.verify(args["source-sha256"])
     probe = importlib.import_module("supplemental_recording_probe")
+    # Load the already source-qualified reader graph while waiting for the
+    # single request. Do NOT read a plan, profile, cache or process here: those
+    # observations must remain fresh and request/actor-bound in probe.sample().
+    importlib.import_module("supplemental_recording_launch_plan")
     wire = importlib.import_module("supplemental_recording_wire")
     stream = wire.Stream(0, 1, role="probe")
     try:

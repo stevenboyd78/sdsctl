@@ -1800,6 +1800,10 @@ fresh closed reply, actual probe exit and independent Engine exit status. The
 existing immediate `read()` path retains its full checks. Failed or abandoned
 preparation cannot be retried or counted as healthy. No installed launch path
 selects this timing seam; combined sequencing and timing remain to be qualified.
+The fixed native wrapper preloads its already source-qualified launch-plan reader
+module before waiting for the request. It does not read any plan, profile, cache
+or actor state during that preload. Both actual input reads and the cached-state
+observation still occur inside the authenticated one-request sampling step.
 
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification
