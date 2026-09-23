@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from sds200.network_audio import NetworkAudioTransport
+
 from . import test_supplemental_handoff_cached as cached_tests
 from . import test_supplemental_recording_construction as construction_tests
 
@@ -39,7 +41,7 @@ def prepared(tree, cached, tmp_path):
     specification = m.construction.Specification(
         host, 50536, 554, "127.0.0.1", 50000, sockets, receipts, "Version 1.26.01", 64, 60, 600
     )
-    endpoint = m.construction.NetworkAudioTransport(host).endpoint
+    endpoint = NetworkAudioTransport(host).endpoint
     stored = p.save_baseline(
         baseline, tree.baseline, tree.writer, hashlib.sha256(endpoint.encode()).hexdigest()
     )
@@ -96,7 +98,7 @@ def test_plan_is_exact_read_only_preflight_not_an_ordinary_cli(prepared, monkeyp
     for name in ("socket", "getaddrinfo"):
         monkeypatch.setattr(socket, name, forbidden)
     monkeypatch.setattr(m.construction, "construct", forbidden)
-    monkeypatch.setattr(m.construction, "NetworkAudioTransport", forbidden)
+    monkeypatch.setattr(m.construction, "_services", forbidden)
     monkeypatch.setenv("XDG_RUNTIME_DIR", "/PRIVATE_unrelated")
     monkeypatch.setenv("SDS200_HOST", "unrelated.example.test")
     result = load(prepared)

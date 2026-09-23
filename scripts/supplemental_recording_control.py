@@ -306,10 +306,12 @@ class Child(_Peer):
         self.phase = "ready"
 
     def request_when_ready(self, trial, done):
+        from supplemental_recording_assembly import NativeRecordingAssembly
+
         try:
             require(self.phase == "ready")
             self.phase = "unconfirmed"
-            require(type(trial) is launch.construction.NativeRecordingAssembly)
+            require(type(trial) is NativeRecordingAssembly)
             p = self.context.plan
             require(trial.baseline == p.stored.baseline and trial.writer == p.stored.writer)
             require(trial.generation == p.generation and trial.journal == p.specification.receipts)
@@ -336,7 +338,7 @@ class Child(_Peer):
             self.phase = "closed"
         except BaseException as error:
             self.phase = "unconfirmed"
-            if type(trial) is launch.construction.NativeRecordingAssembly:
+            if type(trial) is NativeRecordingAssembly:
                 trial.cancel()
             if isinstance(error, Exception):
                 raise UnconfirmedControl(MESSAGE) from None

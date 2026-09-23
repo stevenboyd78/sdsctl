@@ -27,6 +27,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from sds200.network_audio import NetworkAudioTransport
+
 from . import test_supplemental_recording_exit as exits
 from . import test_supplemental_recording_operator as operator
 
@@ -110,9 +112,7 @@ def setup(staged, prepared, tmp_path, monkeypatch):
         mode = base / "writer-mode"
         mode.touch(mode=0o666)
         writer = p.monitor.Writer(os.geteuid(), os.getegid(), mode.stat().st_mode & 0o777)
-        endpoint = child.plans.m.construction.NetworkAudioTransport(
-            "127.0.0.1", rtsp_port=rtsp.port
-        ).endpoint
+        endpoint = NetworkAudioTransport("127.0.0.1", rtsp_port=rtsp.port).endpoint
         native = p.save_baseline(
             baseline, prepared.tree.baseline, writer, hashlib.sha256(endpoint.encode()).hexdigest()
         )

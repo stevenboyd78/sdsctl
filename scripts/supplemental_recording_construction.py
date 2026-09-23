@@ -17,34 +17,13 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from pathlib import Path
+from types import SimpleNamespace
 
 import supplemental_recording_protected as protected
-from supplemental_recording_api import FiniteRecordingApi
-from supplemental_recording_assembly import NativeRecordingAssembly
 from supplemental_recording_evidence import template
 
-from sds200.audio import AudioStream
-from sds200.audio_sinks import AudioFanoutSession, PcmSinkRouter
-from sds200.daemon_display_profile import DaemonDisplayProfile
-from sds200.daemon_event_server import DaemonEventServer
-from sds200.daemon_event_stream import DaemonEventStream
-from sds200.daemon_ipc import DaemonSocketListener, resolve_daemon_socket_location
-from sds200.daemon_pcmu_server import DaemonPcmuServer
-from sds200.daemon_process import DaemonProcess
-from sds200.daemon_recording import DaemonRecordingManager
-from sds200.daemon_recording_file_server import DaemonRecordingFileServer
-from sds200.daemon_runtime import DaemonRuntime
-from sds200.daemon_server import DaemonApiServer
-from sds200.daemon_supplemental_acquisition import (
-    DaemonSupplementalAcquisition,
-    SupplementalAcquisitionPolicy,
-)
-from sds200.network import UdpTransport
-from sds200.network_audio import NetworkAudioTransport
-from sds200.pcmu_stream import PcmuStream
-from sds200.radio import SDS200
+from sds200.daemon_supplemental_acquisition import SupplementalAcquisitionPolicy
 from sds200.scanner_display_configuration import ScannerDisplayConfiguration
-from sds200.scanner_display_supplemental_transport import SupplementalDeliveryService
 
 MESSAGE = "Finite candidate construction is unconfirmed; preserve the case."
 
@@ -125,6 +104,61 @@ def _empty_private(path):
         require(next(items, None) is None)
 
 
+def _services():
+    """Import construction-only services only for an actual construction call.
+
+    A read-only launch-plan/probe validator needs Specification, not an API,
+    event server, recording manager or lifecycle assembly. Imports do not create
+    any services; the fixed native source-origin checks still cover this graph.
+    """
+    from supplemental_recording_api import FiniteRecordingApi
+    from supplemental_recording_assembly import NativeRecordingAssembly
+
+    from sds200.audio import AudioStream
+    from sds200.audio_sinks import AudioFanoutSession, PcmSinkRouter
+    from sds200.daemon_display_profile import DaemonDisplayProfile
+    from sds200.daemon_event_server import DaemonEventServer
+    from sds200.daemon_event_stream import DaemonEventStream
+    from sds200.daemon_ipc import DaemonSocketListener, resolve_daemon_socket_location
+    from sds200.daemon_pcmu_server import DaemonPcmuServer
+    from sds200.daemon_process import DaemonProcess
+    from sds200.daemon_recording import DaemonRecordingManager
+    from sds200.daemon_recording_file_server import DaemonRecordingFileServer
+    from sds200.daemon_runtime import DaemonRuntime
+    from sds200.daemon_server import DaemonApiServer
+    from sds200.daemon_supplemental_acquisition import DaemonSupplementalAcquisition
+    from sds200.network import UdpTransport
+    from sds200.network_audio import NetworkAudioTransport
+    from sds200.pcmu_stream import PcmuStream
+    from sds200.radio import SDS200
+    from sds200.scanner_display_supplemental_transport import SupplementalDeliveryService
+
+    return SimpleNamespace(
+        FiniteRecordingApi=FiniteRecordingApi,
+        NativeRecordingAssembly=NativeRecordingAssembly,
+        AudioStream=AudioStream,
+        AudioFanoutSession=AudioFanoutSession,
+        PcmSinkRouter=PcmSinkRouter,
+        DaemonDisplayProfile=DaemonDisplayProfile,
+        DaemonEventServer=DaemonEventServer,
+        DaemonEventStream=DaemonEventStream,
+        DaemonSocketListener=DaemonSocketListener,
+        resolve_daemon_socket_location=resolve_daemon_socket_location,
+        DaemonPcmuServer=DaemonPcmuServer,
+        DaemonProcess=DaemonProcess,
+        DaemonRecordingManager=DaemonRecordingManager,
+        DaemonRecordingFileServer=DaemonRecordingFileServer,
+        DaemonRuntime=DaemonRuntime,
+        DaemonApiServer=DaemonApiServer,
+        DaemonSupplementalAcquisition=DaemonSupplementalAcquisition,
+        UdpTransport=UdpTransport,
+        NetworkAudioTransport=NetworkAudioTransport,
+        PcmuStream=PcmuStream,
+        SDS200=SDS200,
+        SupplementalDeliveryService=SupplementalDeliveryService,
+    )
+
+
 @contextmanager
 def construct(
     specification: Specification,
@@ -163,16 +197,17 @@ def construct(
             _empty_private(location)
         _disjoint(specification.sockets, specification.receipts)
         collector.pristine()  # Complete original inventory; never recapture it.
+        services = _services()
 
-        scanner = SDS200.from_transport(
-            UdpTransport(
+        scanner = services.SDS200.from_transport(
+            services.UdpTransport(
                 specification.host, remote_port=specification.control_port, reconnect=False
             )
         )
         cleanup.callback(scanner.close)
         configuration.require_scanner_target(scanner.endpoint)
-        profile = DaemonDisplayProfile(configuration, lambda: scanner.endpoint)
-        source = NetworkAudioTransport(
+        profile = services.DaemonDisplayProfile(configuration, lambda: scanner.endpoint)
+        source = services.NetworkAudioTransport(
             specification.host,
             rtsp_port=specification.rtsp_port,
             local_host=specification.rtp_bind_address,
@@ -183,32 +218,36 @@ def construct(
             hashlib.sha256(source.endpoint.encode()).hexdigest()
             == stored.contract.audio_endpoint_sha256
         )
-        router = PcmSinkRouter(name="finite-recording-pcm")
-        audio = AudioFanoutSession(AudioStream(source), (router,))
-        runtime = DaemonRuntime(scanner, audio, router)
-        manager = DaemonRecordingManager(runtime, root, template=template(stored.baseline.case))
+        router = services.PcmSinkRouter(name="finite-recording-pcm")
+        audio = services.AudioFanoutSession(services.AudioStream(source), (router,))
+        runtime = services.DaemonRuntime(scanner, audio, router)
+        manager = services.DaemonRecordingManager(
+            runtime, root, template=template(stored.baseline.case)
+        )
         cleanup.callback(manager.close)
-        api = FiniteRecordingApi(runtime, recording_manager=manager)
+        api = services.FiniteRecordingApi(runtime, recording_manager=manager)
         api.display_profile = profile
-        acquisition = DaemonSupplementalAcquisition(runtime, profile, specification.policy())
+        acquisition = services.DaemonSupplementalAcquisition(
+            runtime, profile, specification.policy()
+        )
         cleanup.callback(acquisition.close)
-        delivery = SupplementalDeliveryService(acquisition.frames, acquisition=acquisition)
+        delivery = services.SupplementalDeliveryService(acquisition.frames, acquisition=acquisition)
         api.display_frames, api.supplemental_display = acquisition.frames, delivery
 
         def listener(name):
-            return DaemonSocketListener(
-                resolve_daemon_socket_location(specification.sockets / name)
+            return services.DaemonSocketListener(
+                services.resolve_daemon_socket_location(specification.sockets / name)
             )
 
-        server = DaemonApiServer(listener("api.sock"), api)
-        events = DaemonEventStream(runtime, recording_manager=manager)
+        server = services.DaemonApiServer(listener("api.sock"), api)
+        events = services.DaemonEventStream(runtime, recording_manager=manager)
         cleanup.callback(events.close)
-        event_server = DaemonEventServer(listener("events.sock"), events)
-        files = DaemonRecordingFileServer(listener("recordings.sock"), manager)
-        packets = PcmuStream(source)
+        event_server = services.DaemonEventServer(listener("events.sock"), events)
+        files = services.DaemonRecordingFileServer(listener("recordings.sock"), manager)
+        packets = services.PcmuStream(source)
         cleanup.callback(packets.close)
-        pcmu = DaemonPcmuServer(listener("pcmu.sock"), packets)
-        process = DaemonProcess(
+        pcmu = services.DaemonPcmuServer(listener("pcmu.sock"), packets)
+        process = services.DaemonProcess(
             runtime,
             recording_manager=manager,
             api_server=server,
@@ -216,7 +255,7 @@ def construct(
             recording_file_server=files,
             pcmu_server=pcmu,
         )
-        trial = NativeRecordingAssembly(
+        trial = services.NativeRecordingAssembly(
             process,
             api,
             acquisition,

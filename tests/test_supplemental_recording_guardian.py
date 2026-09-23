@@ -24,6 +24,8 @@ from types import SimpleNamespace
 import pytest
 import serial
 
+from sds200.network_audio import NetworkAudioTransport
+
 from . import test_supplemental_recording_child as child
 from . import test_supplemental_recording_source as sources
 
@@ -331,9 +333,7 @@ def test_fixed_guardian_real_native_loopback(staged, prepared, monkeypatch, faul
         mode = base / "writer-mode"
         mode.touch(mode=0o666)
         writer = p.monitor.Writer(os.geteuid(), os.getegid(), mode.stat().st_mode & 0o777)
-        endpoint = child.plans.m.construction.NetworkAudioTransport(
-            "127.0.0.1", rtsp_port=rtsp.port
-        ).endpoint
+        endpoint = NetworkAudioTransport("127.0.0.1", rtsp_port=rtsp.port).endpoint
         stored = p.save_baseline(
             baseline, prepared.tree.baseline, writer, hashlib.sha256(endpoint.encode()).hexdigest()
         )

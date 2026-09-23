@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import os
 import socket
+import subprocess
 import sys
 import wave
 from concurrent.futures import ThreadPoolExecutor
@@ -38,6 +39,40 @@ c = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = c
 SPEC.loader.exec_module(c)
 tree, configured = protection.tree, profiles.configured
+
+
+def test_passive_plan_import_does_not_load_construction_only_services():
+    """A fresh isolated interpreter proves the light path, not warm sys.modules."""
+    root = Path(__file__).resolve().parents[1]
+    script = r"""
+import sys, socket, threading
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path[:0] = [str(root / "scripts"), str(root / "src")]
+def forbidden(*args, **kwargs):
+    raise AssertionError("Passive import attempted activity")
+socket.socket.connect = socket.socket.bind = socket.socket.listen = forbidden
+threading.Thread.start = forbidden
+import supplemental_recording_launch_plan as launch
+spec = launch.construction.Specification(
+    "127.0.0.1", 50536, 554, "127.0.0.1", 0,
+    Path("/tmp/passive-sockets"), Path("/tmp/passive-receipts"),
+    "Version 1.26.01", 1.0, 2, 3,
+)
+assert spec.policy().window_seconds == 1.0
+assert not {
+    "supplemental_recording_api", "supplemental_recording_assembly",
+    "sds200.daemon_api", "sds200.daemon_server", "sds200.daemon_process",
+} & sys.modules.keys()
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", script, str(root)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
 
 
 @pytest.fixture
@@ -259,6 +294,8 @@ def test_private_directories_cannot_overlap_or_adopt_old_state(prepared, fault):
 )
 def test_construction_fault_unwinds_only_objects_already_built(prepared, monkeypatch, point):
     made = []
+    services = c._services()
+    monkeypatch.setattr(c, "_services", lambda: services)
     for name in (
         "SDS200",
         "NetworkAudioTransport",
@@ -269,23 +306,23 @@ def test_construction_fault_unwinds_only_objects_already_built(prepared, monkeyp
         # Preserve concrete classes used by strict native bindings. Track the
         # returned actual instances without replacing their types.
         if name == "SDS200":
-            original = c.SDS200.from_transport
+            original = services.SDS200.from_transport
 
             def from_transport(*args, original=original, **kwargs):
                 value = original(*args, **kwargs)
                 made.append(value)
                 return value
 
-            monkeypatch.setattr(c.SDS200, "from_transport", from_transport)
+            monkeypatch.setattr(services.SDS200, "from_transport", from_transport)
         else:
-            original = getattr(c, name)
+            original = getattr(services, name)
 
             def make(*args, original=original, **kwargs):
                 value = original(*args, **kwargs)
                 made.append(value)
                 return value
 
-            monkeypatch.setattr(c, name, make)
+            monkeypatch.setattr(services, name, make)
     target = {
         "profile": "DaemonDisplayProfile",
         "manager": "DaemonRecordingManager",
@@ -298,7 +335,7 @@ def test_construction_fault_unwinds_only_objects_already_built(prepared, monkeyp
     def fail(*_, **__):
         raise RuntimeError("PRIVATE construction failure")
 
-    monkeypatch.setattr(c, target, fail)
+    monkeypatch.setattr(services, target, fail)
     refused(lambda: enter(prepared))
     assert not made[0].connected
     for value in made:

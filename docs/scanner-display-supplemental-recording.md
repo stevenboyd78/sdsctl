@@ -1804,6 +1804,12 @@ The fixed native wrapper preloads its already source-qualified launch-plan reade
 module before waiting for the request. It does not read any plan, profile, cache
 or actor state during that preload. Both actual input reads and the cached-state
 observation still occur inside the authenticated one-request sampling step.
+Launch-plan validation imports the specification and its real policy validator,
+but construction-only API/server/recording-assembly imports are deferred until
+actual native construction. A separate isolated-interpreter test verifies that
+passive validation does not load those services or start network/thread activity.
+The native construction and lifecycle tests still exercise the same real classes;
+no scanner, audio, recording or cleanup behavior is replaced by a lightweight stub.
 
 The uninstalled `Launch.start_confirmed()` adds a combined, single-use path. It
 requires the actual `CandidateQualification` bound to the same original plan,
