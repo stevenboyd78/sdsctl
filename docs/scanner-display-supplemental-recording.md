@@ -778,6 +778,38 @@ Source/plan hashes supplied by an untrusted caller do not authenticate themselve
 The operator protocol, cross-container relay, independent hard deadline and new
 recording-capable host plan remain installation gates.
 
+## Offline private native start gate
+
+`scripts/supplemental_recording_control.py` connects the dedicated native
+construction to a one-use ready/begin handshake. Two directional anonymous Unix
+socket pairs carry per-message kernel credentials. Only receiving endpoints use
+`SO_PASSCRED`, avoiding Linux auto-binding a name when such an endpoint sends.
+Both sides pin live process identity and retain a pidfd; the guardian must bind
+its child before releasing the child's initial launch gate.
+
+Readiness means the native runtime is ready, the recorder is idle and supplemental
+acquisition is unarmed. It does not create a recording or optional-read demand.
+The separately source-authenticated host must durably record the intent first;
+its hash alone is not authorization. Exactly one begin message must match the
+original launch/profile/manifest/generation/source/projection/host-plan pins and
+fit the unextended start, read and cleanup deadlines. Wrong peers, malformed or
+late messages, cancellation and lost sends consume the attempt without retry.
+
+The child installs and verifies parent-death `SIGKILL` on its main thread before
+runtime construction. Its control worker requests recording only after the
+authenticated begin. Native start and post-cleanup returns use the existing
+exact-child return receiver. The execution path uses no ordinary CLI options,
+implicit consumer or public operator API. Real fork/loopback tests verify native
+PCM finalization, readiness-only cancellation, malformed begin and a delivered
+begin whose guardian return is lost. Lost returns remain unconfirmed even when
+the native receipts and recording files exist.
+
+These are private offline functions, not an installed executable launcher. The
+fixed source bundle, durable guardian launch guard, authenticated cross-container
+relay and independent hard termination still require qualification. Parent-death
+signals cannot bound a living but stuck guardian. A successful native return is
+not child/container-init exit proof or permission to restore another owner.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
