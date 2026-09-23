@@ -23,6 +23,7 @@ MAX_SECONDS = 8.0
 MODULES = frozenset(
     {
         "accept_supplemental_recording",
+        "accept_supplemental_recording_idle",
         "accept_supplemental_recording_operator",
         "supplemental_handoff_cached",
         "supplemental_handoff_files",

@@ -1130,6 +1130,52 @@ The returned attachment still supplies raw, unaccepted operator frames; independ
 source/container/namespace checks and the recording-start ledger remain required.
 No installed host plan invokes this component.
 
+## Offline finite idle-container bootstrap
+
+`scripts/accept_supplemental_recording_idle.py` is a separate, uninstalled PID-1
+entrypoint for the future recording candidate. It does not import scanner or
+audio services, open a network socket, start an operator, or claim native health.
+The old supplemental App entrypoint already starts its own scanner owner and
+must not be reused as an idle container for another operator.
+
+The new entrypoint accepts only a pinned, closed lease at
+`/data/sdsctl-recording-<case>/idle/lease.json`. It requires isolated Python, root
+and PID 1, the original host boot ID, private no-follow paths, and original bounded
+ready/stop times. It exclusively publishes and fsyncs one consumed claim before
+waiting. Existing or partially acknowledged claims refuse restart; the entrypoint
+never deletes or resets them. TERM/INT exit normally; original lease expiration
+returns75, and invalid/changed files or startup failures return70 with a fixed
+message. The lease and its namespace are rechecked while waiting.
+
+This is a local elapsed-time bound, not protection against SIGSTOP or blocked
+kernel I/O; independent host termination is still required. Local subprocess
+tests exercise actual files, deadlines, claim fsync, signals and refusal to
+restart, with explicitly substituted root/PID-1 facts. The real CLI refuses a
+normal non-PID-1 process. Installed namespace teardown and exact init/native exit
+remain unqualified. The closed native source inventory includes this entrypoint,
+but no existing image, App configuration or legacy host schema selects it.
+
+The future host plan must create all fixed case branches before pinning ancestor
+identities, retain the actual idle init, and only then produce the native launch
+plan for that observed container generation. Idle-container evidence must have
+its own startup phase; it cannot be reported as a healthy native scanner runtime.
+The lease explicitly declares `CLOCK_MONOTONIC`, matching native deadlines.
+The legacy host recovery clock uses `CLOCK_BOOTTIME`; its numeric values must not
+be copied into native leases. The new host adapter must explicitly bind the
+domains and retain independent suspend-aware recovery deadlines.
+
+`scripts/supplemental_recording_clock.py` provides a read-only, uninstalled
+conversion component. It brackets a real `CLOCK_BOOTTIME` sample with
+`CLOCK_MONOTONIC` samples, retains the boot and time-namespace identity, and
+rejects sampling intervals longer than 5 ms. Conversion subtracts the maximum
+possible offset and rounds down, so it cannot silently extend the original host
+deadline. A later sample must retain the same domain and an overlapping offset
+interval; a detected suspend-offset jump, reversed clock, or changed namespace
+refuses further dispatch. No conversion renews readiness or replaces the
+independent host recovery timer. Tests cover synthetic offsets and fault cases,
+plus read-only observations of the real kernel clocks; they do not suspend the
+host or qualify an installed container's time namespace.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
