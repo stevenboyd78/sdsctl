@@ -226,6 +226,51 @@ class Plan:
         except Exception:
             raise UnconfirmedPlan(MESSAGE) from None
 
+    def preparation(self, baseline, projected):
+        """Bind the ORIGINAL qualified baseline to a fresh bootstrap journal.
+
+        No file is written and no action is issued. The caller authenticates the
+        plan, original observation and retained manifests independently. A later
+        observation may not replace this baseline or extend the recovery clock;
+        fresh current observations remain necessary for every later dispatch.
+        """
+        try:
+            self.check_projection(projected)
+            require(type(baseline) is bootstrap.recording.Observation)
+            require(baseline.normal.pin == self.normal.pin)
+            require(baseline.normal.generation == self.normal_generation)
+            require(baseline.candidate.pin == self.candidate.pin)
+            require(
+                baseline.files
+                == bootstrap.recording.Files(
+                    self.candidate.contract.sha256,
+                    "pristine",
+                    self.candidate.contract.baseline_sha256,
+                )
+            )
+            # This validates all original idle/health/recording/job flags and
+            # freshness against issued_at, NEVER a newly sampled current time.
+            machine = bootstrap.Machine(
+                self.case,
+                self.boot,
+                self.deadlines.issued_at,
+                baseline,
+                self.candidate.contract,
+                self.bootstrap,
+            )
+            require(machine.hard_deadline == self.deadlines.recover_by)
+            return {
+                "kind": "prepare_bootstrap",
+                "case_id": self.case,
+                "boot_id": self.boot,
+                "now": self.deadlines.issued_at,
+                "observation": asdict(baseline),
+                "contract": asdict(self.candidate.contract),
+                "bootstrap": asdict(self.bootstrap),
+            }
+        except Exception:
+            raise UnconfirmedPlan(MESSAGE) from None
+
 
 INPUT_FIELDS = {
     "schema",

@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, replace
 
 import supplemental_recording_handoff as recording
+import supplemental_recording_recovery as recovery
 
 base = recording.base
 BOOTSTRAPPING = ("starting_candidate", "candidate_idle", "starting_operator")
@@ -299,6 +300,33 @@ class Journal(base.Journal):
             )
             return None
         return super().apply(event)
+
+
+class Executor(recovery.dispatch.Executor):
+    """Exact journal3 bridge; never reinterpret the older recording journal.
+
+    Only fixed App start/stop actions from fresh, durable policy intents reach
+    the supplied qualified dispatch. Polling never authorizes an operator or
+    recording begin. Those separate events and authentication remain required.
+    """
+
+    sample_type = recovery.Sample
+
+    def __init__(self, journal, read, send):
+        base.require(type(journal) is Journal and type(journal.machine) is Machine)
+        super().__init__(journal, read, send)
+
+
+class RecoverySession(recovery.BaseRecoverySession):
+    """Original init/CLI exit reconciliation with the explicit bootstrap policy.
+
+    Retains the inherited independent tick, one-use dispatch and exact process
+    tracking. No observer, actual Ready, operator-exit receipt, source check or
+    automatic launch permission is invented by constructing this bridge.
+    """
+
+    sample_type = recovery.Sample
+    executor_type = Executor
 
 
 if __name__ == "__main__":

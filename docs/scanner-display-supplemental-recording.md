@@ -1489,6 +1489,21 @@ they do not establish installed platform or real native-container readiness.
 
 ## Required live ownership and recovery contract
 
+The private schema3 plan can construct an initial bootstrap-journal event only
+from its original qualified observation and retained host/native projection. It
+checks the normal App's full seal and original generation, the distinct candidate
+seal, and the exact pristine recording baseline. Journal time is the plan's
+original `issued_at`; a newer clock or file snapshot cannot extend its recovery
+deadline. This pure join does not collect or authenticate those inputs itself.
+
+The uninstalled bootstrap recovery bridge uses the new journal3 explicitly. It
+retains independent ticks, exact init/CLI exit reconciliation and one-use fixed
+App dispatch. Old recording executors still reject this journal, and the new
+bridge rejects old journals. It never launches the native operator or grants a
+recording start from polling alone. If an operator launch was authorized, its
+separate exit proof is required before restoration, even when the container
+init has exited and the recording artifact is finalized.
+
 The following remain live design gates, not installed host-service permissions.
 The offline owner, monitor, recovery policy and API restriction above do not
 install this contract:

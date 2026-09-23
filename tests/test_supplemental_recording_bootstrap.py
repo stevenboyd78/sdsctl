@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from . import test_supplemental_recording_handoff as recording
+from . import test_supplemental_recording_recovery as recovery_tests  # noqa: F401
 
 NAME = "supplemental_recording_bootstrap"
 SPEC = importlib.util.spec_from_file_location(

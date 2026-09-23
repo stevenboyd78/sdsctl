@@ -398,9 +398,7 @@ layout, tree, routing, projection = (
 )
 
 
-def test_plan_checks_original_host_native_projection_not_a_current_recapture(
-    projection, monkeypatch
-):
+def projected_plan(projection):
     v = value()
     v["case"] = projection.host.baseline.case
     v["candidate"]["contract"] = asdict(projection.host.contract)
@@ -412,7 +410,13 @@ def test_plan_checks_original_host_native_projection_not_a_current_recapture(
     v["candidate_runtime"]["source"] = projection.layout.image_package_sha256
     v["projection_sha256"] = projection.sha256
     v["native_baseline_sha256"] = projection.native.manifest_sha256
-    plan = m.decode(v)
+    return m.decode(v), v
+
+
+def test_plan_checks_original_host_native_projection_not_a_current_recapture(
+    projection, monkeypatch
+):
+    plan, v = projected_plan(projection)
     monkeypatch.setattr(
         m.projection.recording.evidence, "capture_baseline", lambda *_: pytest.fail("recapture")
     )
@@ -421,3 +425,125 @@ def test_plan_checks_original_host_native_projection_not_a_current_recapture(
         wrong = m.decode(v | {field: "0" * 64})
         denied(lambda wrong=wrong: wrong.check_projection(projection))
     denied(lambda: plan.check_projection(None))
+
+
+@pytest.fixture
+def initial_observation(projection):
+    plan, _ = projected_plan(projection)
+    baseline = m.bootstrap.recording.Observation(
+        plan.deadlines.issued_at - 1,
+        m.base.App(plan.normal.pin, "running", plan.normal_generation, True, False),
+        m.base.App(plan.candidate.pin, "stopped"),
+        True,
+        True,
+        True,
+        m.bootstrap.recording.Files(
+            plan.candidate.contract.sha256, "pristine", plan.candidate.contract.baseline_sha256
+        ),
+    )
+    return plan, baseline, projection
+
+
+def test_preparation_joins_original_plan_and_baseline_without_rewriting_time(
+    initial_observation, tmp_path, monkeypatch
+):
+    plan, baseline, projected = initial_observation
+    monkeypatch.setattr(m.clock, "read", lambda: pytest.fail("Must not renew clock"))
+    monkeypatch.setattr(
+        m.projection.recording.evidence,
+        "capture_baseline",
+        lambda *_: pytest.fail("Must not recapture"),
+    )
+    event = plan.preparation(baseline, projected)
+    assert event["now"] == plan.deadlines.issued_at
+    assert event["observation"] == asdict(baseline)
+    assert event["bootstrap"]["host_plan_sha256"] == plan.sha256
+    assert event["contract"] == asdict(projected.host.contract)
+    assert event["bootstrap"]["idle_lease_sha256"] == plan.lease_sha256
+    directory = tmp_path / "bootstrap"
+    directory.mkdir(mode=0o700)
+    with m.bootstrap.Journal(directory) as journal:
+        assert journal.append(event) is None
+        assert journal.machine.created_at == plan.deadlines.issued_at
+        assert journal.machine.hard_deadline == plan.deadlines.recover_by
+        assert journal.machine.state.phase == "prepared"
+        assert journal.machine.state.launch_intent_sha256 is None
+        assert journal.machine.state.authorization_generation is None
+    with m.bootstrap.Journal(directory) as reopened:
+        assert reopened.machine.created_at == plan.deadlines.issued_at
+        assert reopened.machine.hard_deadline == plan.deadlines.recover_by
+        assert reopened.machine.baseline == baseline
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "normal_pin",
+        "normal_generation",
+        "normal_stopped",
+        "normal_health",
+        "normal_recording",
+        "candidate_pin",
+        "candidate_running",
+        "contract",
+        "baseline_digest",
+        "unknown_files",
+        "active_files",
+        "stale",
+        "future",
+        "other_owner",
+        "jobs",
+        "core",
+        "serialized",
+    ],
+)
+def test_preparation_never_adopts_a_different_or_later_baseline(initial_observation, fault):
+    plan, baseline, projected = initial_observation
+    if fault == "normal_pin":
+        baseline = replace(baseline, normal=replace(baseline.normal, pin="0" * 64))
+    elif fault == "normal_generation":
+        baseline = replace(baseline, normal=replace(baseline.normal, generation="0" * 64))
+    elif fault == "normal_stopped":
+        baseline = replace(baseline, normal=m.base.App(plan.normal.pin, "stopped"))
+    elif fault in ("normal_health", "normal_recording"):
+        change = dict(healthy=None) if fault == "normal_health" else dict(recording=True)
+        baseline = replace(baseline, normal=replace(baseline.normal, **change))
+    elif fault == "candidate_pin":
+        baseline = replace(baseline, candidate=replace(baseline.candidate, pin="0" * 64))
+    elif fault == "candidate_running":
+        baseline = replace(
+            baseline, candidate=m.base.App(plan.candidate.pin, "running", "0" * 64, None, None)
+        )
+    elif fault in ("contract", "baseline_digest"):
+        field = "contract_sha256" if fault == "contract" else "evidence_sha256"
+        baseline = replace(baseline, files=replace(baseline.files, **{field: "0" * 64}))
+    elif fault == "unknown_files":
+        baseline = replace(
+            baseline, files=m.bootstrap.recording.Files(plan.candidate.contract.sha256, "unknown")
+        )
+    elif fault == "active_files":
+        baseline = replace(
+            baseline, files=replace(baseline.files, stage="active", generation="0" * 64)
+        )
+    elif fault in ("stale", "future"):
+        delta = -3 if fault == "stale" else 0.1
+        baseline = replace(baseline, sampled_at=plan.deadlines.issued_at + delta)
+    elif fault in ("other_owner", "jobs", "core"):
+        field = {
+            "other_owner": "other_owners_stopped",
+            "jobs": "jobs_idle",
+            "core": "core_running",
+        }[fault]
+        baseline = replace(baseline, **{field: False})
+    else:
+        baseline = asdict(baseline)
+    denied(lambda: plan.preparation(baseline, projected))
+
+
+def test_preparation_requires_original_retained_projection(initial_observation):
+    plan, baseline, projected = initial_observation
+    denied(lambda: plan.preparation(baseline, None))
+    value = m.json.loads(plan.raw)
+    value["projection_sha256"] = "0" * 64
+    other = m.decode(value)
+    denied(lambda: other.preparation(baseline, projected))
