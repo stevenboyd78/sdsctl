@@ -17,6 +17,7 @@ from threading import Thread
 import pytest
 
 from . import test_supplemental_recording_guardian as guard
+from . import test_supplemental_recording_probe as probing
 from . import test_supplemental_recording_wire as framing
 
 tree, configured, cached, prepared, staged = (
@@ -27,6 +28,7 @@ tree, configured, cached, prepared, staged = (
     guard.staged,
 )
 p, w, child = guard.p, framing.m, guard.child
+REAL_CACHED_CLIENT = probing.m.cached.CachedClient
 MESSAGE = b"Finite recording operator is unconfirmed; preserve this case and do not replay.\n"
 
 
@@ -149,6 +151,9 @@ def test_fixed_arguments_and_early_failures(staged, prepared, fault):
     ],
 )
 def test_fixed_operator_actual_session(staged, prepared, monkeypatch, fault):
+    # The reused accepted-profile fixture also installs a cache double for its
+    # own tests. Restore the real client explicitly before qualifying live IPC.
+    monkeypatch.setattr(probing.m.cached, "CachedClient", REAL_CACHED_CLIENT)
     with monkeypatch.context() as patch:
         patch.setattr(Thread, "start", lambda self: None)
         scanner = child.construction.LoopbackScanner()
@@ -210,6 +215,29 @@ def test_fixed_operator_actual_session(staged, prepared, monkeypatch, fault):
             native_fd = os.pidfd_open(native["pid"])
             assert child.c.returns._identity(native["pid"]) == (process.pid, native["start_ticks"])
             assert not select.select([native_fd], [], [], 0)[0]
+            bound = probing.m.Expected(
+                probing.m.Process(**ready["guardian"]),
+                probing.m.Process(**ready["native"]),
+                probing.m.Process(
+                    **{key: ready["watchdog"][key] for key in ("pid", "start_ticks", "uid", "gid")}
+                ),
+                ready["context"]["profile"],
+                ready["watchdog"]["deadline"],
+            )
+            assert child.c.returns._identity(bound.watchdog.pid) == (
+                process.pid,
+                bound.watchdog.start_ticks,
+            )
+            # Real cached IPC from the actual isolated native child. No mocked
+            # CachedClient, profile, health flag or extra scanner demand here.
+            observed = probing.m.collect(
+                bound,
+                deployment,
+                stored.baseline.root,
+                sockets / "api.sock",
+                firmware=spec.firmware,
+            )
+            assert observed.healthy is True and observed.recording is False
             assert not list(receipts.iterdir())
             assert p.Collector(stored).pristine().files.stage == "pristine"
             if fault == "partial_begin":
@@ -253,6 +281,14 @@ def test_fixed_operator_actual_session(staged, prepared, monkeypatch, fault):
                 started = stream.receive(deadline=time.monotonic() + 5)
                 assert started["phase"] == "started" and started["context"] == context
                 assert json.loads(started["body"]["received"]["raw"])["phase"] == "started"
+                active = probing.m.collect(
+                    bound,
+                    deployment,
+                    stored.baseline.root,
+                    sockets / "api.sock",
+                    firmware=spec.firmware,
+                )
+                assert active.healthy is True and active.recording is True
                 if fault == "native_after_start":
                     signal.pidfd_send_signal(native_fd, signal.SIGKILL)
                     assert select.select([native_fd], [], [], 3)[0]
@@ -282,6 +318,7 @@ def test_fixed_operator_actual_session(staged, prepared, monkeypatch, fault):
                 assert exited["phase"] == "exited" and exited["native"] == native
                 assert exited["body"]["pid"] == native["pid"]
                 assert exited["body"]["returncode"] == exited["body"]["watchdog"]["returncode"] == 0
+                assert exited["body"]["watchdog"]["watchdog_pid"] == bound.watchdog.pid
                 assert select.select([native_fd], [], [], 0)[0]
             if stream is not None:
                 stream.close()

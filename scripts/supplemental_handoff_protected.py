@@ -88,57 +88,83 @@ class StaticFiles:
             digest(value)
 
 
-def _collect_static(layout: ProtectedLayout, container: dict[str, Any] | None) -> StaticFiles:
-    """Shared checks; callers must ALSO qualify their complete recording root."""
+def _merged_root(
+    layout: ProtectedLayout,
+    container: dict[str, Any] | None,
+    *,
+    code_roots: tuple[Path, ...],
+) -> Path | None:
+    """Validate mount/overlay routing without selecting a source policy.
+
+    Fixed callers supply their own closed code roots and fingerprint. This
+    helper neither imports an App nor authorizes a recording-capable source
+    graph. Actual image/incarnation checks remain the enclosing observer's job.
+    """
     require(type(layout) is ProtectedLayout)
-    package = layout.image_package_sha256
-    if container is not None:
-        require(type(container) is dict and container.get("Name") == "/app_" + layout.slug)
-        mounts = container.get("Mounts")
-        require(type(mounts) is list and len(mounts) <= 32)
-        destinations = set()
-        for mount in cast(list[Any], mounts):
-            require(type(mount) is dict and type(mount.get("Destination")) is str)
-            destination = Path(mount["Destination"])
-            require(destination.is_absolute() and ".." not in destination.parts)
-            require(str(destination) not in destinations)
-            destinations.add(str(destination))
-            # A bind over any source package ancestor or descendant could hide
-            # modified runtime bytes outside the independently inspected image.
-            code_roots = (
-                Path("/") / PACKAGE,
-                Path("/") / LAUNCHERS,
-                *(Path("/usr/local/bin") / name for name in ENTRIES),
-            )
-            for code in code_roots:
-                require(
-                    not destination.is_relative_to(code) and not code.is_relative_to(destination)
-                )
-            require(
-                not any(
-                    destination != root and destination.is_relative_to(root)
-                    for root in (Path("/data"), Path("/media"))
-                )
-            )
-            if str(destination) in ("/data", "/media"):
-                expected = layout.data if str(destination) == "/data" else layout.media
-                require(
-                    mount.get("Type") == "bind"
-                    and mount.get("Source") == str(expected)
-                    and mount.get("RW") is True
-                )
-        require({"/data", "/media"} <= destinations)
-        driver = container.get("GraphDriver")
-        require(type(driver) is dict and driver.get("Name") == "overlay2")
-        data = cast(dict[str, Any], driver).get("Data")
-        require(type(data) is dict and data.get("ID") == container.get("Id"))
-        merged = cast(dict[str, Any], data).get("MergedDir")
+    require(type(code_roots) is tuple and 0 < len(code_roots) <= 16)
+    for code in code_roots:
+        require(type(code) is type(Path()) and code.is_absolute() and ".." not in code.parts)
+    if container is None:
+        return None
+    require(type(container) is dict and container.get("Name") == "/app_" + layout.slug)
+    digest(container.get("Id"))
+    mounts = container.get("Mounts")
+    require(type(mounts) is list and len(mounts) <= 32)
+    destinations = set()
+    for mount in cast(list[Any], mounts):
+        require(type(mount) is dict and type(mount.get("Destination")) is str)
+        destination = Path(mount["Destination"])
         require(
-            type(merged) is str
-            and re.fullmatch(r"/mnt/data/docker/overlay2/[a-z0-9]{1,128}/merged", merged)
-            is not None
+            destination.is_absolute()
+            and destination.parts[0] == "/"
+            and ".." not in destination.parts
+            and str(destination) == mount["Destination"]
         )
-        package = package_fingerprint(Path(cast(str, merged)), candidate=layout.slug == CANDIDATE)
+        require(str(destination) not in destinations)
+        destinations.add(str(destination))
+        # A bind over a source ancestor or descendant could hide modified code
+        # outside the independently inspected image. No namespace entry needed.
+        for code in code_roots:
+            require(not destination.is_relative_to(code) and not code.is_relative_to(destination))
+        require(
+            not any(
+                destination != root and destination.is_relative_to(root)
+                for root in (Path("/data"), Path("/media"))
+            )
+        )
+        if str(destination) in ("/data", "/media"):
+            expected = layout.data if str(destination) == "/data" else layout.media
+            require(
+                mount.get("Type") == "bind"
+                and mount.get("Source") == str(expected)
+                and mount.get("RW") is True
+            )
+    require({"/data", "/media"} <= destinations)
+    driver = container.get("GraphDriver")
+    require(type(driver) is dict and driver.get("Name") == "overlay2")
+    data = cast(dict[str, Any], driver).get("Data")
+    require(type(data) is dict and data.get("ID") == container.get("Id"))
+    merged = cast(dict[str, Any], data).get("MergedDir")
+    require(
+        type(merged) is str
+        and re.fullmatch(r"/mnt/data/docker/overlay2/[a-z0-9]{1,128}/merged", merged) is not None
+    )
+    return Path(cast(str, merged))
+
+
+def _collect_static(layout: ProtectedLayout, container: dict[str, Any] | None) -> StaticFiles:
+    """Legacy fixed fingerprint; recording callers use their separate collector."""
+    roots = (
+        Path("/") / PACKAGE,
+        Path("/") / LAUNCHERS,
+        *(Path("/usr/local/bin") / name for name in ENTRIES),
+    )
+    merged = _merged_root(layout, container, code_roots=roots)
+    package = (
+        layout.image_package_sha256
+        if merged is None
+        else package_fingerprint(merged, candidate=layout.slug == CANDIDATE)
+    )
     profile = checksum(
         {
             key: private_file(path).sha256

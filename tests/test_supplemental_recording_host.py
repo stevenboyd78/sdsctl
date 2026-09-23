@@ -11,6 +11,7 @@ from . import test_supplemental_handoff_audio_network as audio
 from . import test_supplemental_handoff_protected as fixed
 from . import test_supplemental_recording_protected as protected
 from . import test_supplemental_recording_recovery as recovery
+from . import test_supplemental_recording_static as candidate_source
 
 NAME = "supplemental_recording_host"
 SPEC = importlib.util.spec_from_file_location(
@@ -362,6 +363,31 @@ def test_normal_route_still_hashes_entire_recording_tree(layout, disk, routing):
     assert disk[-1] == (layout.recordings, {"max_file_bytes": 16 * 1024 * 1024})
 
 
+def test_running_candidate_routes_to_new_bundle_then_complete_recordings(
+    layout, disk, routing, monkeypatch
+):
+    candidate, collector, calls = routing
+    assert r.candidate_static is candidate_source.m
+    observed = []
+
+    def forbidden(*_):
+        pytest.fail("Recording candidate must not use legacy idle-only source policy")
+
+    def fingerprint(root):
+        observed.append(root)
+        return "e" * 64
+
+    monkeypatch.setattr(f, "_collect_static", forbidden)
+    monkeypatch.setattr(r.candidate_static, "package_fingerprint", fingerprint)
+    result = r.FilesCollector(layout, candidate, collector, lambda: r.Capture("pristine"))(
+        p.CANDIDATE, fixed.container(candidate)
+    )
+    assert result.static.package == "e" * 64
+    assert observed == [Path("/mnt/data/docker/overlay2/abc123/merged")]
+    assert len(calls) == 1 and calls[0][0] == "pristine"
+    assert {path for path, _ in disk} == {candidate.context, *candidate.profile_paths}
+
+
 @pytest.mark.parametrize(
     "fault", ["same_root", "parent_root", "child_root", "normal_profile", "wrong_baseline"]
 )
@@ -404,8 +430,8 @@ def test_collection_does_not_return_partial_or_old_style_evidence(
             raise p.UnsafeHandoff("unconfirmed")
 
         monkeypatch.setattr(
-            f if fault == "static_failure" else collector,
-            "_collect_static" if fault == "static_failure" else "pristine",
+            r.candidate_static if fault == "static_failure" else collector,
+            "collect" if fault == "static_failure" else "pristine",
             fail,
         )
     with pytest.raises(p.UnsafeHandoff):

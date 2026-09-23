@@ -16,6 +16,7 @@ from threading import Lock
 import supplemental_handoff_observer as ordinary
 import supplemental_handoff_protected as static
 import supplemental_recording_protected as recording
+import supplemental_recording_static as candidate_static
 from supplemental_handoff_policy import CANDIDATE, NORMAL, checksum, require
 from supplemental_recording_handoff import Contract, Files, Observation
 from supplemental_recording_recovery import Sample
@@ -129,7 +130,7 @@ class FilesCollector:
         require(slug in (NORMAL, CANDIDATE))
         if slug == NORMAL:
             return static.collect(self.normal, container)
-        fixed = static._collect_static(self.candidate, container)
+        fixed = candidate_static.collect(self.candidate, container)
         request = self.capture()
         require(type(request) is Capture)
         if request.stage == "pristine":

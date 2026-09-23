@@ -77,6 +77,14 @@ def _envelope(guardian, session, phase, body):
             "uid": os.geteuid(),
             "gid": os.getegid(),
         },
+        "watchdog": {
+            "pid": session.watch.pid,
+            "start_ticks": session.watch.ticks,
+            "uid": os.geteuid(),
+            "gid": os.getegid(),
+            "deadline": session.watch.deadline,
+            "grace": session.watch.grace,
+        },
         "body": body,
     }
 

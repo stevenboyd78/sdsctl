@@ -943,11 +943,64 @@ fragmentation, partial and failed writes, EOF, descriptor ownership and deadline
 
 These local results do not qualify a Docker exec attachment, host-side durable
 intent, current container namespace, cached health probe or installed image.
-The host still needs a new recording-aware source/static collector and host plan,
-an authenticated one-use attachment, and independent operator/container-init exit
+The host still needs an installed recording-capable plan, an authenticated
+one-use attachment, and independent operator/container-init exit
 observations. Legacy host-plan schemas and source fingerprints remain unchanged.
 Neither a finalized WAV nor this operator's exit alone authorizes restoration of
 another scanner owner or marks a live browser/scanner test accepted.
+
+## Offline recording-aware host source collection
+
+`scripts/supplemental_recording_static.py` gives the recording candidate its own
+fixed source policy. Running candidates are checked against the complete native
+bundle under `/opt/sdsctl-supplemental-recording` and the complete package,
+including assets and bytecode. There is no fallback to the legacy idle-only
+wrapper fingerprint. When the candidate container is absent, the collector uses
+the separately qualified immutable-image pin; it does not claim to have inspected
+a nonexistent running process.
+
+The shared read-only mount/overlay validator rejects ambiguous mount paths,
+duplicate or missing data/media mounts and mismatched overlay/container identity
+before reading candidate code. The recording policy also rejects mounts over the
+interpreter, dependencies and executable/helper trees. Image, interpreter and
+dependency authentication still require separate host evidence; hashing the
+package does not establish those facts on its own.
+
+The recording host collector now joins these static checks to its original
+stage-specific full old/new recording inventory. It does not omit that inventory
+or classify active recording as idle. The normal App continues using its entire
+original protection policy, including all recordings. Legacy source fingerprints
+and installed host-plan schemas have not gained recording permission.
+
+Local tests check the new routing, closed source graph without importing candidate
+code, asset changes, missing operator source, unsafe/shadowing mounts, malformed
+container identities, complete recording-stage collection and unchanged normal
+protection. This closes the offline collector gap, not the installed host-plan,
+authenticated relay, cached native/watchdog probe or recovery gates.
+
+## Offline passive native/guardian/watchdog health binding
+
+`scripts/supplemental_recording_probe.py` adds live process-tree checks around the
+existing five cached IPC reads. Its expected identities, accepted profile and
+original deadline must come from the independently authenticated host/operator
+connection; matching caller-supplied facts is not authentication. The private
+operator reports its actual armed watcher's identity and deadline, separately
+from actual native return and exit facts.
+
+The probe retains pidfds for the exact guardian, native child and watchdog and
+checks their identity, credentials, PID namespace and parent relationships before
+and after cached IPC. Frozen or exited processes, stale/replaced identities,
+profile changes, wrong IPC peers or elapsed deadlines yield an unconfirmed result.
+It preserves the actual cached health and recording flags, including active
+recording, and makes no scanner requests, consumer demand, signals or ownership
+changes. It does not reuse an old successful result after a failed read.
+
+Disposable process-tree tests cover these failure paths. Separate tests query
+the actual isolated native process over its real Unix IPC before and during a
+synthetic recording, checking truthful idle/active flags and zero supplemental
+scanner reads. These are local process/IPC results, not an installed probe wrapper
+or authenticated cross-container execution. The new host plan, qualified private
+attachment, namespace binding and independent exit/recovery gates remain pending.
 
 ## Required live ownership and recovery contract
 
