@@ -142,6 +142,11 @@ def test_expired_lease_advances_once_and_no_cached_read_can_extend(rig, service)
     assert rig.owner.arm()
     first = service.demand(service.context()["context"], str(uuid4()))["context"]
     wait_for(lambda: rig.peer.reads == ["FQK"])
+    # Peer receipt precedes native completion. Jumping the fake clock while
+    # that read is pending deliberately creates a timeout/quarantine, not an
+    # ordinary expired lease. Exercise that separate boundary below.
+    wait_for(lambda: rig.owner._cache._pending is None)
+    assert rig.owner._cache.snapshot().blocked_until_reconnect is None
     rig.clock.now = 15
     wait_for(lambda: rig.owner.frames.supplemental_frame_set() is not None)
     current = service.context()["context"]
@@ -162,6 +167,24 @@ def test_expired_lease_advances_once_and_no_cached_read_can_extend(rig, service)
     assert rig.owner.status().reason == "window_expired"
     assert not rig.owner._cache.snapshot().active
     assert not rig.owner.arm()
+
+
+def test_expiry_during_pending_read_quarantines_and_cannot_be_renewed(rig, service):
+    assert rig.owner.arm()
+    with rig.peer.hold("FQK") as gate:
+        service.demand(service.context()["context"], str(uuid4()))
+        assert gate.entered.wait(1)
+        assert rig.owner._cache._pending is not None
+        rig.clock.now = 15
+        gate.release.set()
+        wait_for(lambda: rig.owner._cache._pending is None)
+    assert rig.owner._cache.snapshot().blocked_until_reconnect == "timeout"
+    wait_for(lambda: rig.owner.frames.supplemental_frame_set() is not None)
+    context = service.context()["context"]
+    with pytest.raises(SupplementalDemandUnconfirmed):
+        service.demand(context, str(uuid4()))
+    assert not rig.owner._cache.snapshot().active
+    assert rig.peer.reads == ["FQK"] and rig.owner.status().read_attempts == 1
 
 
 @pytest.mark.parametrize("retire_between_calls", [False, True])
