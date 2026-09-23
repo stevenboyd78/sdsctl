@@ -1,6 +1,7 @@
 """Actual read-only fixture trees, root IDs mapped to the local test account."""
 
 import os
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -139,3 +140,68 @@ def test_no_timezone_selection_can_bypass_the_runtime_tree(supervised):
     (supervised.root / "usr/local/lib/python3.14/sitecustomize.py").write_bytes(b"PRIVATE")
     runtime.denied(lambda: supervised.observe_supervised("America/Denver"))
     runtime.denied(lambda: replace(supervised, root=Path("relative")).observe_supervised("UTC"))
+
+
+def test_bracket_checks_every_runtime_file_before_and_after_callback(supervised, monkeypatch):
+    expected = supervised.observe_supervised("America/Denver")
+    snapshot, trace = m.Layout._snapshot, []
+
+    def read(self, deadline, **kwargs):
+        trace.append("snapshot")
+        return snapshot(self, deadline, **kwargs)
+
+    def observe():
+        trace.append("observe")
+        return result
+
+    result = object()
+    monkeypatch.setattr(m.Layout, "_snapshot", read)
+    assert (
+        supervised.verify_supervised_during(
+            expected.sha256, "America/Denver", observe, deadline=time.monotonic() + 2
+        )
+        is result
+    )
+    assert trace == ["snapshot", "observe", "snapshot"]
+
+
+@pytest.mark.parametrize("stage", ["before", "during", "late", "exception"])
+@pytest.mark.parametrize("path", ["usr/local/lib/python3.14/os.py", m.ZONEINFO + "/tzdata.zi"])
+def test_bracket_no_result_escapes_changed_runtime_or_failed_observation(
+    supervised, monkeypatch, stage, path
+):
+    expected = supervised.observe_supervised("America/Denver")
+    end, calls = time.monotonic() + 2, []
+    file = supervised.root / path
+    if stage == "before":
+        file.write_bytes(b"PRIVATE_CHANGED")
+
+    def observe():
+        calls.append(True)
+        if stage == "during":
+            file.write_bytes(b"PRIVATE_CHANGED")
+        elif stage == "late":
+            monkeypatch.setattr(m.time, "monotonic", lambda: end)
+        elif stage == "exception":
+            raise OSError("PRIVATE observation error")
+        return object()
+
+    before = len(os.listdir("/proc/self/fd"))
+    runtime.denied(
+        lambda: supervised.verify_supervised_during(
+            expected.sha256, "America/Denver", observe, deadline=end
+        )
+    )
+    assert len(calls) == (stage != "before")
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+@pytest.mark.parametrize("end", [None, True, float("nan"), float("inf"), -1])
+def test_bracket_requires_original_bounded_absolute_deadline(supervised, end):
+    expected, calls = supervised.observe_supervised("America/Denver"), []
+    runtime.denied(
+        lambda: supervised.verify_supervised_during(
+            expected.sha256, "America/Denver", lambda: calls.append(1), deadline=end
+        )
+    )
+    assert calls == []

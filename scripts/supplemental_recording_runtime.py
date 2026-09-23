@@ -556,6 +556,46 @@ class Layout:
         except Exception:
             raise UnconfirmedRuntime(MESSAGE) from None
 
+    def verify_supervised_during(self, expected_sha256, timezone, observe, *, deadline):
+        """Two fresh full inventories around one trusted read-only observation.
+
+        The first inventory must match the independently supplied supervised
+        runtime pin BEFORE observe. No callback result escapes until the second
+        inventory agrees, including every timezone, loader and dependency file.
+        This is no write/exec authority or reusable attestation. The original
+        caller deadline covers both reads and the callback, without renewal.
+        """
+        try:
+            digest(expected_sha256)
+            _timezone_name(timezone)
+            require(callable(observe))
+            require(type(deadline) in (int, float) and math.isfinite(deadline))
+            require(0 < deadline - time.monotonic() <= MAX_SECONDS)
+            require(type(self.root) is type(Path()) and self.root.is_absolute())
+            require(".." not in self.root.parts and not str(self.root).startswith("//"))
+            first, count, size = self._snapshot(deadline, timezone=timezone)
+            require(
+                checksum(
+                    {
+                        "schema": 1,
+                        "kind": KIND + "-supervised",
+                        "timezone": timezone,
+                        "entries": first,
+                        "absent": SUPERVISED_ABSENT,
+                    }
+                )
+                == expected_sha256
+            )
+            require(time.monotonic() < deadline)
+            result = observe()
+            require(time.monotonic() < deadline)
+            second, count2, size2 = self._snapshot(deadline, timezone=timezone)
+            require((first, count, size) == (second, count2, size2))
+            require(time.monotonic() < deadline)
+            return result
+        except Exception:
+            raise UnconfirmedRuntime(MESSAGE) from None
+
 
 if __name__ == "__main__":
     raise SystemExit("Read-only interpreter evidence only; no runtime launch enabled.")

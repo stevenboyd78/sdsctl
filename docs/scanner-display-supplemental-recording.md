@@ -1786,7 +1786,7 @@ separate gates. The installed idle-only helper does not select this class.
 A bounded local one-CPU timing fixture measured the complete native/product plus
 supervised-runtime input checks at 1.25–1.39 seconds per pair. This is not full
 host/Engine/probe timing. In particular, repeating that pair three times in the
-current post-Ready path cannot fit the unchanged two-second policy window on
+separate `start()` / `confirm_ready()` path cannot fit the unchanged two-second policy window on
 that fixture. The individual component results must not be reported as a passing
 assembled readiness path or used to enable a live handoff.
 
@@ -1804,6 +1804,27 @@ The fixed native wrapper preloads its already source-qualified launch-plan reade
 module before waiting for the request. It does not read any plan, profile, cache
 or actor state during that preload. Both actual input reads and the cached-state
 observation still occur inside the authenticated one-request sampling step.
+
+The uninstalled `Launch.start_confirmed()` adds a combined, single-use path. It
+requires the actual `CandidateQualification` bound to the same original plan,
+idle observer and init witness. Pre-create/attach qualification remains in place.
+Immediately after receiving Ready it prepares the passive probe, then uses
+`CandidateQualification.during()` to bracket a fresh full host observation and
+the probe's one current status read. Complete new native/product and supervised
+runtime inventories are taken before and after those reads. Each first inventory
+must match its independently supplied pin before the observation runs; no result
+escapes until the second inventories, original startup-environment reads, metadata
+and idle evidence agree. No previous successful hash is reused as current evidence.
+
+This path includes probe preparation, all inventories, observation and publication
+in the original two-second Ready-age check. It keeps the oldest contributing
+observation time and does not reset the original clock, deadline or Ready receipt.
+A failed preparation, changed file/environment, lost actor, late read or finish
+request consumes the attempt without publishing readiness. Readiness still does
+not authorize recording, send begin, start a browser listener or certify recovery.
+The separate path remains available with its existing checks. Local tests cover
+the real file/process brackets and synthetic host/Engine ordering independently;
+assembled real-Engine timing and installed host integration remain separate gates.
 
 The expected runtime pin must be reconstructed independently from a reviewed
 immutable image, not taken from the process being qualified. Local qualification

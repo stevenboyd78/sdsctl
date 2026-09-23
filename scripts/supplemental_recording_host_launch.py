@@ -206,6 +206,41 @@ class CandidateQualification:
         return merged, stamp, config["Env"]
 
     def __call__(self):
+        """Complete fresh qualification without a contributing observation."""
+        return self._collect(None)
+
+    def during(self, observe):
+        """Return one trusted read-only observation only after fresh qualification.
+
+        Full source and runtime inventories surround the callback, which may
+        read cached status/host state but must not authorize or perform writes.
+        Both original process-environment reads, metadata and idle evidence also
+        bracket it. Nothing is cached for a later call; failures poison this
+        instance. The entire collection keeps the same two-second maximum.
+        """
+        try:
+            require(callable(observe))
+        except BaseException as error:
+            self._fail(error)
+        return self._collect(observe)
+
+    def _environment(self, configured, deadline):
+        self._guard(deadline)
+        evidence = runtime.collect_supervised_process_environment(
+            self.witness,
+            deadline=min(deadline, time.monotonic() + 1),
+            configured=configured,
+            configured_sha256=self.plan.candidate_runtime.environment,
+            image_environment_sha256=self.image_environment_sha256,
+            timezone=self.timezone,
+            hostname=self.hostname,
+            fixed_exec=False,
+        )
+        require(type(evidence) is runtime.ProcessEnvironment and evidence.process == self.init)
+        self._guard(deadline)
+        return evidence
+
+    def _collect(self, observe):
         acquired = False
         self.elapsed_seconds = None
         try:
@@ -222,26 +257,41 @@ class CandidateQualification:
             )
             merged, stamp, configured = self._metadata(deadline)
             native = plans.host.candidate_static
-            native.source.Layout(merged / plans.fixed.PACKAGE, merged / native.NATIVE).verify(
-                self.plan.candidate_runtime.source
-            )
-            self._guard(deadline)
-            runtime.Layout(merged).verify_supervised(
-                self.plan.candidate_runtime.interpreter, self.timezone
-            )
-            self._guard(deadline)
-            evidence = runtime.collect_supervised_process_environment(
-                self.witness,
-                deadline=min(deadline, time.monotonic() + 1),
-                configured=configured,
-                configured_sha256=self.plan.candidate_runtime.environment,
-                image_environment_sha256=self.image_environment_sha256,
-                timezone=self.timezone,
-                hostname=self.hostname,
-                fixed_exec=False,
-            )
-            require(type(evidence) is runtime.ProcessEnvironment and evidence.process == self.init)
+            source = native.source.Layout(merged / plans.fixed.PACKAGE, merged / native.NATIVE)
+            result = None
+            if observe is None:
+                source.verify(self.plan.candidate_runtime.source)
+                self._guard(deadline)
+                runtime.Layout(merged).verify_supervised(
+                    self.plan.candidate_runtime.interpreter, self.timezone
+                )
+            else:
+                environment_before = self._environment(configured, deadline)
+
+                def guarded_observation():
+                    self._guard(deadline)
+                    value = observe()
+                    self._guard(deadline)
+                    return value
+
+                result = source.verify_during(
+                    self.plan.candidate_runtime.source,
+                    lambda: runtime.Layout(merged).verify_supervised_during(
+                        self.plan.candidate_runtime.interpreter,
+                        self.timezone,
+                        guarded_observation,
+                        deadline=deadline,
+                    ),
+                    deadline=deadline,
+                )
+            evidence = self._environment(configured, deadline)
             require(began <= evidence.observed_at < deadline)
+            if observe is not None:
+                require(
+                    (evidence.sha256, evidence.process)
+                    == (environment_before.sha256, environment_before.process)
+                )
+                require(began <= environment_before.observed_at <= evidence.observed_at)
             after_root, after_stamp, _ = self._metadata(deadline)
             require((after_root, after_stamp) == (merged, stamp))
             after = self.idle.read()
@@ -253,6 +303,7 @@ class CandidateQualification:
             self._guard(deadline)
             self.elapsed_seconds = time.monotonic() - began
             require(0 <= self.elapsed_seconds < self.MAX_SECONDS)
+            return result
         except BaseException as error:
             self._fail(error)
         finally:
@@ -434,6 +485,12 @@ class Launch:
 
     def _sample(self, phase):
         evidence = self._qualified(phase)
+        sample, machine, now = self._read_sample(phase)
+        return evidence, sample, machine, now
+
+    def _read_sample(self, phase):
+        """Fresh full host read; qualification belongs to the enclosing path."""
+        self._guard(phase)
         sample = self.read()
         require(type(sample) is bootstrap.recovery.Sample)
         machine, now = self._guard(phase)
@@ -442,13 +499,41 @@ class Launch:
         # This is the truthful idle PID1 collection, not healthy/recording-idle.
         candidate = sample.observation.candidate
         require(candidate.healthy is None and candidate.recording is None)
-        return evidence, sample, machine, now
+        return sample, machine, now
 
     def start(self):
         """Consume a fresh policy intent before any fixed Engine write, once."""
+        return self._start(combined=False)
+
+    def start_confirmed(self):
+        """Single-use combined launch/Ready collection; no recording begin.
+
+        Requires the actual original CandidateQualification, not an arbitrary
+        boolean/report or previous successful qualification. The passive probe
+        is prepared immediately after Ready. Its one current status read and a
+        fresh full host observation are bracketed by complete new source/runtime
+        inventories. The original Ready timestamp and two-second journal bound
+        remain unchanged. The separate start()/confirm_ready() path is unchanged.
+        """
+        return self._start(combined=True)
+
+    def _candidate_qualifier(self):
+        qualifier = self.qualify
+        require(type(qualifier) is CandidateQualification)
+        require(
+            qualifier.plan is self.plan
+            and qualifier.idle is self.idle
+            and qualifier.witness is self.witness
+        )
+        require(qualifier.generation == self.pins.generation and qualifier.init == self.pins.init)
+        return qualifier
+
+    def _start(self, *, combined):
         try:
             require(not self.used)
             self.used = True
+            if combined:
+                self._candidate_qualifier()
             evidence, sample, machine, now = self._sample("candidate_idle")
             event = dict(
                 kind="authorize_operator",
@@ -480,6 +565,8 @@ class Launch:
                 original_clock=self.plan.original_clock,
                 zero_domain=self.idle.zero_domain,
             )
+            if combined:
+                return self._confirm_ready(combined=True)
             self._qualified("starting_operator")
             self.ready.check_before_begin()
             return self.ready
@@ -506,20 +593,38 @@ class Launch:
         probe/actor pidfds for independent reconciliation. This is not recording
         authorization and never starts the recorder or a browser listener.
         """
+        return self._confirm_ready(combined=False)
+
+    def _confirm_ready(self, *, combined):
         try:
             require(self.used and self.ready is not None and not self.confirm_attempted)
             self.confirm_attempted = True
             self.ready.check_before_begin()
-            self._qualified("starting_operator")
-            _, began = self._guard("starting_operator")
-            self.probe = probe_exec.Sample(self.ready)
-            native = self.probe.read()
-            require(type(native) is plans.ordinary.NativeState)
-            require(native.generation == self.pins.generation)
-            require(native.healthy is True and native.recording is False)
-            _, sample, machine, now = self._sample("starting_operator")
+            if combined:
+                qualifier = self._candidate_qualifier()
+                _, began = self._guard("starting_operator")
+                self.probe = probe_exec.Sample(self.ready)
+                require(self.probe.prepare() is None)
+
+                def observe():
+                    self.ready.check_before_begin()
+                    sample, _, _ = self._read_sample("starting_operator")
+                    native = self.probe.read()
+                    self._check_native(native)
+                    self.ready.check_before_begin()
+                    return native, sample
+
+                native, sample = qualifier.during(observe)
+                require(self._candidate_qualifier() is qualifier)
+            else:
+                self._qualified("starting_operator")
+                _, began = self._guard("starting_operator")
+                self.probe = probe_exec.Sample(self.ready)
+                native = self.probe.read()
+                self._check_native(native)
+                _, sample, _, _ = self._sample("starting_operator")
             self.ready.check_before_begin()
-            _, now = self._guard("starting_operator")
+            machine, now = self._guard("starting_operator")
             # Preserve the oldest contributing observation, not the timestamp
             # of the most recent successful recheck.
             observation = replace(
@@ -565,6 +670,11 @@ class Launch:
             return native
         except BaseException as error:
             self._fail(error)
+
+    def _check_native(self, native):
+        require(type(native) is plans.ordinary.NativeState)
+        require(native.generation == self.pins.generation)
+        require(native.healthy is True and native.recording is False)
 
     def close(self):
         require(self.owner == (os.getpid(), get_ident()))

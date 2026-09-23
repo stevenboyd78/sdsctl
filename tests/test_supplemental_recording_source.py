@@ -5,6 +5,7 @@ import hashlib
 import importlib.util
 import os
 import sys
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -59,6 +60,61 @@ def test_read_only_deterministic_closed_evidence(layout):
     for p, stated in before.items():
         assert m.files.identity(p.stat()) == m.files.identity(stated)
     assert set(before) == {p for root in (layout.runtime, layout.native) for p in root.iterdir()}
+
+
+def test_current_full_inventories_surround_one_read_only_observation(layout, monkeypatch):
+    expected, trace = layout.observe(), []
+    snapshot = m.Layout._snapshot
+
+    def read(self):
+        trace.append("snapshot")
+        return snapshot(self)
+
+    def observe():
+        trace.append("observe")
+        return result
+
+    result = object()
+    monkeypatch.setattr(m.Layout, "_snapshot", read)
+    end = time.monotonic() + 2
+    assert layout.verify_during(expected.sha256, observe, deadline=end) is result
+    assert trace == ["snapshot", "observe", "snapshot"]
+    assert time.monotonic() < end
+
+
+@pytest.mark.parametrize("stage", ["before", "during", "exception", "late"])
+def test_bracket_never_returns_result_for_drift_or_late_callback(layout, monkeypatch, stage):
+    expected = layout.observe()
+    calls = []
+    real_clock = time.monotonic
+    end = real_clock() + 2
+    path = layout.runtime / "daemon_runtime.py"
+    if stage == "before":
+        path.write_bytes(b"PRIVATE_CHANGED")
+
+    def observe():
+        calls.append(True)
+        if stage == "during":
+            path.write_bytes(b"PRIVATE_CHANGED")
+        elif stage == "exception":
+            raise OSError("PRIVATE observation error")
+        elif stage == "late":
+            monkeypatch.setattr(m.time, "monotonic", lambda: end)
+        return object()
+
+    before = len(os.listdir("/proc/self/fd"))
+    denied(lambda: layout.verify_during(expected.sha256, observe, deadline=end))
+    assert len(calls) == (stage != "before")
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+@pytest.mark.parametrize("end", [None, True, float("nan"), float("inf"), -1])
+def test_bracket_rejects_invalid_absolute_deadline_before_callback(layout, end):
+    calls = []
+    denied(
+        lambda: layout.verify_during(layout.observe().sha256, lambda: calls.append(1), deadline=end)
+    )
+    assert calls == []
 
 
 @pytest.mark.parametrize(

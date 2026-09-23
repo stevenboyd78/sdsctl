@@ -221,6 +221,103 @@ def test_complete_fresh_join_returns_no_authority_and_retains_no_credentials(can
     assert env.TOKEN not in repr(vars(obj)) and capsys.readouterr() == ("", "")
 
 
+def test_actual_full_files_and_original_process_reads_surround_observation(candidate, monkeypatch):
+    obj, trace = candidate.make(), []
+    source = m.plans.host.candidate_static.source
+    source_snapshot, runtime_snapshot = source.Layout._snapshot, m.runtime.Layout._snapshot
+    environment = m.runtime.collect_supervised_process_environment
+
+    def read_source(self):
+        trace.append("source")
+        return source_snapshot(self)
+
+    def read_runtime(self, deadline, **kwargs):
+        trace.append("runtime")
+        return runtime_snapshot(self, deadline, **kwargs)
+
+    def read_environment(*args, **kwargs):
+        trace.append("environment")
+        return environment(*args, **kwargs)
+
+    def observe():
+        trace.append("observe")
+        assert not obj.failed and not candidate.witness.exited()
+        return result
+
+    result = object()
+    monkeypatch.setattr(source.Layout, "_snapshot", read_source)
+    monkeypatch.setattr(m.runtime.Layout, "_snapshot", read_runtime)
+    monkeypatch.setattr(m.runtime, "collect_supervised_process_environment", read_environment)
+    assert obj.during(observe) is result
+    assert trace == [
+        "environment",
+        "source",
+        "runtime",
+        "observe",
+        "runtime",
+        "source",
+        "environment",
+    ]
+    assert candidate.events == ["idle", "container", "image", "container", "image", "idle"]
+    assert 0 <= obj.elapsed_seconds < 2 and not candidate.witness.exited()
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["source", "runtime", "environment", "metadata", "idle", "exit", "late", "raise", "reentrant"],
+)
+def test_bracket_permanently_refuses_every_post_observation_failure(candidate, monkeypatch, fault):
+    obj = candidate.make()
+    end = time.monotonic() + 3
+    calls = []
+
+    def observe():
+        calls.append(True)
+        if fault == "source":
+            (
+                candidate.root
+                / m.plans.host.candidate_static.NATIVE
+                / "accept_supplemental_recording.py"
+            ).write_bytes(b"PRIVATE_DRIFT")
+        elif fault == "runtime":
+            (candidate.root / m.runtime.ZONEINFO / "tzdata.zi").write_bytes(b"PRIVATE_DRIFT")
+        elif fault == "environment":
+            original = m.runtime.collect_supervised_process_environment
+            monkeypatch.setattr(
+                m.runtime,
+                "collect_supervised_process_environment",
+                lambda *a, **k: replace(original(*a, **k), sha256="f" * 64),
+            )
+        elif fault == "metadata":
+            candidate.when = 2
+            candidate.fault = lambda c: c["Config"].update(Hostname="changed")
+        elif fault == "idle":
+            candidate.fault = "idle_files"
+        elif fault == "exit":
+            candidate.child.stdin.close()
+            candidate.child.wait(timeout=3)
+        elif fault == "late":
+            monkeypatch.setattr(m.time, "monotonic", lambda: end)
+        elif fault == "raise":
+            raise OSError("PRIVATE callback failed")
+        elif fault == "reentrant":
+            launch.denied(obj)
+        return object()
+
+    launch.denied(lambda: obj.during(observe))
+    assert obj.failed and obj.elapsed_seconds is None and calls == [True]
+    launch.denied(lambda: obj.during(observe))
+    assert calls == [True]
+    os.fstat(candidate.witness.fd)  # Failure never closes the caller's handle.
+
+
+def test_invalid_callback_is_a_consumed_failure(candidate):
+    obj = candidate.make()
+    launch.denied(lambda: obj.during(None))
+    assert obj.failed
+    launch.denied(obj)
+
+
 @pytest.mark.parametrize("when", [1, 2])
 @pytest.mark.parametrize(
     "fault",

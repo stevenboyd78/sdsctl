@@ -178,6 +178,11 @@ def setup(prepared, tmp_path, monkeypatch):
             self.ready, self.closed = ready, False
             self.execution_id, self.request_sha256 = "8" * 64, "9" * 64
 
+        def prepare(self):
+            state.trace.append("probe_prepare")
+            if state.fault == "probe_prepare":
+                raise ValueError("PRIVATE probe preparation failed")
+
         def read(self):
             state.trace.append("probe")
             self.ready.check_before_begin()
@@ -264,6 +269,7 @@ def setup(prepared, tmp_path, monkeypatch):
 
         state.plan, state.journal, state.idle, state.endpoint = plan, journal, idle, endpoint
         state.launch, state.append, state.creates = launch, append, 0
+        state.prepared, state.read = prepared, read
         try:
             yield state
         finally:
@@ -299,6 +305,125 @@ def test_durable_policy_then_exact_dispatch_and_ready_remain_separate(setup):
     denied(run.start)
     assert s.creates == 1 and ready.failed and not ready.closed
     assert run.client.closed  # Exact actor handles are retained until explicit close.
+
+
+def combined_qualifier(setup, monkeypatch):
+    """Explicit ordering fixture, NOT genuine source/runtime qualification.
+
+    Actual file/proc before/after qualification is exercised separately in
+    test_supplemental_recording_candidate_qualification. Installed timing and
+    full genuine Engine+host collection are not claimed by this fixture.
+    """
+    s = setup
+    obj = object.__new__(m.CandidateQualification)
+    obj.plan, obj.idle, obj.witness = s.plan, s.idle, s.prepared.witness
+    obj.generation, obj.init = s.idle.generation, s.idle.init
+
+    def qualify(self):
+        assert self is obj
+        s.qualifies += 1
+        s.trace.append("qualify")
+
+    def during(self, observe):
+        assert self is obj
+        s.trace.append("qualification_before")
+        if s.fault == "qualification_before":
+            raise ValueError("PRIVATE source drift")
+        result = observe()
+        s.trace.append("qualification_after")
+        if s.fault == "qualification_after":
+            raise ValueError("PRIVATE source drift")
+        return result
+
+    monkeypatch.setattr(m.CandidateQualification, "__call__", qualify)
+    monkeypatch.setattr(m.CandidateQualification, "during", during)
+    return obj
+
+
+def test_combined_path_prepares_before_one_bracket_and_does_not_begin(setup, monkeypatch):
+    s = setup
+    qualifier = combined_qualifier(s, monkeypatch)
+    run = s.launch(qualify=qualifier)
+    original = (run.command, s.plan.deadlines, s.journal.machine.hard_deadline)
+    state = run.start_confirmed()
+    assert state == m.plans.ordinary.NativeState(s.idle.generation, True, False)
+    assert s.qualifies == 4 and s.reads == 3 and s.creates == 1
+    assert s.trace.count("probe_prepare") == s.trace.count("probe") == 1
+    order = ["ready", "probe_prepare", "qualification_before", "probe", "qualification_after"]
+    assert [s.trace.index(item) for item in order] == sorted(s.trace.index(item) for item in order)
+    assert original == (run.command, s.plan.deadlines, s.journal.machine.hard_deadline)
+    assert run.confirm_attempted and s.journal.machine.state.phase == "candidate_running"
+    assert s.journal.machine.state.authorization_generation is None
+    assert s.journal.machine.state.recording_outcome == "not_attempted"
+    denied(run.confirm_ready)
+    denied(run.start_confirmed)
+    assert s.creates == 1 and run.failed
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "probe_prepare",
+        "qualification_before",
+        "probe",
+        "qualification_after",
+        "unhealthy",
+        "recording",
+        "probe_generation",
+    ],
+)
+def test_combined_failure_cannot_publish_ready_or_replay(setup, monkeypatch, fault):
+    s = setup
+    run = s.launch(qualify=combined_qualifier(s, monkeypatch))
+    s.fault = fault
+    denied(run.start_confirmed)
+    assert run.failed and run.confirm_attempted and run.ready.failed and run.client.closed
+    assert s.journal.machine.state.ready_evidence_sha256 is None
+    assert s.journal.machine.state.authorization_generation is None
+    denied(run.start_confirmed)
+    denied(run.confirm_ready)
+    assert s.creates == 1
+
+
+def test_combined_does_not_accept_an_arbitrary_qualifier(setup):
+    run = setup.launch()
+    denied(run.start_confirmed)
+    assert run.failed and setup.creates == 0
+
+
+@pytest.mark.parametrize("field", ["plan", "idle", "witness", "generation", "init"])
+def test_combined_requires_same_original_qualifier_bindings(setup, monkeypatch, field):
+    qualifier = combined_qualifier(setup, monkeypatch)
+    setattr(qualifier, field, object())
+    run = setup.launch(qualify=qualifier)
+    denied(run.start_confirmed)
+    assert setup.creates == 0
+
+
+@pytest.mark.parametrize("kind", ["original_ready", "host_sample", "finish"])
+def test_combined_rejects_old_ready_host_evidence_or_concurrent_finish(setup, monkeypatch, kind):
+    s = setup
+    qualifier = combined_qualifier(s, monkeypatch)
+    run = s.launch(qualify=qualifier)
+    observed = s.read
+
+    def read():
+        sample = observed()
+        if s.reads == 3:
+            if kind == "original_ready":
+                run.ready.received_at -= 3
+            elif kind == "host_sample":
+                sample = replace(
+                    sample, observation=replace(sample.observation, sampled_at=sample.now - 3)
+                )
+            else:
+                s.append("finish")
+        return sample
+
+    run.read = read
+    denied(run.start_confirmed)
+    assert s.journal.machine.state.ready_evidence_sha256 is None
+    assert s.journal.machine.state.authorization_generation is None
 
 
 @pytest.mark.parametrize(

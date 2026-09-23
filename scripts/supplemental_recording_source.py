@@ -9,6 +9,7 @@ container image, Python interpreter or third-party dependencies on its own.
 
 from __future__ import annotations
 
+import math
 import os
 import stat
 import time
@@ -146,6 +147,33 @@ class Layout:
             observed = self.observe()
             require(observed.sha256 == expected_sha256)
             return observed
+        except Exception:
+            raise UnconfirmedSource(MESSAGE) from None
+
+    def verify_during(self, expected_sha256, observe, *, deadline):
+        """Bracket one trusted read-only observation with two complete inventories.
+
+        No earlier digest or snapshot is reused. The first complete inventory
+        must already match the independently supplied pin before observe runs;
+        its result is returned only after an equal second inventory. This is
+        not a transaction, an execution gate, or permission for callback writes.
+        The caller's original absolute deadline includes the callback and is
+        never extended. Blocked kernel I/O still needs independent supervision.
+        """
+        try:
+            digest(expected_sha256)
+            require(callable(observe))
+            require(type(deadline) in (int, float) and math.isfinite(deadline))
+            require(0 < deadline - time.monotonic() <= MAX_SECONDS)
+            self.validate()
+            first, count, size = self._snapshot()
+            require(checksum(first) == expected_sha256 and time.monotonic() < deadline)
+            result = observe()
+            require(time.monotonic() < deadline)
+            second, count2, size2 = self._snapshot()
+            require((first, count, size) == (second, count2, size2))
+            require(time.monotonic() < deadline)
+            return result
         except Exception:
             raise UnconfirmedSource(MESSAGE) from None
 
