@@ -1115,6 +1115,53 @@ its separate original pidfd and Engine exit0 were then checked. No signal,
 recorder, scanner or installed App was involved. This confirms that narrow
 transport/refusal boundary, not the still-pending complete host handoff.
 
+A subsequent fresh local Docker case joined the actual operator's received
+Ready envelope to its init, guardian, native reader and watchdog pidfds and
+container namespaces. The fixed passive probe returned healthy=true and
+recording=false, with its own separately verified process/Engine exit. Closing
+the original attachment before any begin request was followed by independently
+observed native/watchdog/guardian exits and operator code70. The synthetic
+scanner saw only initial MDL, VER and PSI startup, and the original synthetic
+recording files stayed unchanged. No supplemental demand or recording began.
+The finite fixture init exited separately on its original deadline.
+
+This case used a qualified read-only local image and loopback-only peers, not
+Home Assistant or the physical scanner. Its declared host path aliases and
+host-plan digest were synthetic; the fixture init was not the installed idle
+entrypoint. It therefore qualifies the narrow actual Engine/Ready/probe join,
+not installed file protection, the assembled schema3 adapter or restoration.
+
+### Finite dashboard route scope — uninstalled
+
+`scripts/supplemental_recording_web_scope.py` provides one explicit construction
+of the existing dashboard behind a closed HTTP route gate. Restricting the
+native daemon API is not sufficient by itself: the ordinary HA dashboard also
+has web-process administration routes for integration setup and credentials.
+The finite surface refuses those routes before reading a request body or
+invoking any handler. It also refuses scanner controls, recording start/stop,
+profile administration, experimental browser-device routes, waterfall, API
+documentation and unknown future routes. No ordinary CLI services or global
+dashboard factories are patched or silently removed.
+
+Permitted traffic still passes through exactly one existing authentication
+path: trusted HA Ingress admission or native HTTPS session/origin checks.
+Display-only session restrictions are preserved, not widened to allow audio
+or recordings. An authenticated operator can read status/frames, receive
+events and existing PCMU audio, list finalized recordings and play/download
+them through the native daemon file service. The only additional non-session
+POST admitted is the existing validated supplemental-demand route. It neither
+arms acquisition nor expands the native owner's window/read quota. Browser
+login/logout affect only the existing bounded browser sessions.
+
+Construction starts no listener or client and admits only built-in themes.
+This module is not an executable or a deadline/peer-identity guard. The separate
+web launcher still needs source/runtime qualification, binding of all four
+native client factories to the original daemon actor, and enforcement of the
+independent original lifetime. In-flight media and worker teardown require
+separate qualification. The module is deliberately not added to the host44 or
+native24 inventories; neither existing image proof qualifies a new web bundle.
+The ordinary dashboard and previous acceptance wrapper remain unchanged.
+
 ## Offline private exec attachment I/O
 
 `scripts/supplemental_recording_exec_stream.py` strictly decodes a bounded HTTP
