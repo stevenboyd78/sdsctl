@@ -23,7 +23,18 @@ KIND = "finite-recording-host-source-v1"
 MAX_SECONDS = 8.0
 ROOTS = frozenset(
     "supplemental_recording_" + name
-    for name in ("host_source", "bootstrap", "ready", "begin", "relay", "exit", "host", "binding")
+    for name in (
+        "host_source",
+        "host_plan",
+        "runtime",
+        "bootstrap",
+        "ready",
+        "begin",
+        "relay",
+        "exit",
+        "host",
+        "binding",
+    )
 )
 MODULES = frozenset(
     {
@@ -58,6 +69,7 @@ MODULES = frozenset(
             "exit",
             "handoff",
             "host",
+            "host_plan",
             "host_source",
             "monitor",
             "namespace",
@@ -69,6 +81,7 @@ MODULES = frozenset(
             "recovery",
             "relay",
             "retained",
+            "runtime",
             "source",
             "static",
             "wire",

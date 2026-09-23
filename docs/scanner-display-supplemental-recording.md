@@ -1250,7 +1250,7 @@ and receipt time as well as raw message bytes. This does not qualify installed
 namespaces, image bytes or the eventual host execution environment.
 
 The prospective host-side mechanism has a separate source inventory in
-`scripts/supplemental_recording_host_source.py`: 38 fixed private modules plus
+`scripts/supplemental_recording_host_source.py`: 40 fixed private modules plus
 the complete product package. The host return verifier imports recording types
 from that package; copying the older 14-file idle helper is insufficient. Static
 import-closure and isolated local import tests check the reviewed helper graph.
@@ -1347,6 +1347,37 @@ plus read-only observations of the real kernel clocks; they do not suspend the
 host or qualify an installed container's time namespace.
 
 ### Separate idle-to-operator policy
+
+`scripts/supplemental_recording_host_plan.py` now defines a distinct closed
+schema3 with kind `finite-recording-host-plan-v1`. It is a **description and
+decoder only**, not an installed host service. Existing host schemas1/2 refuse
+it and it refuses their documents. It accepts no caller command, environment
+override, restart permission or guessed future native generation.
+
+The plan separately pins helper and candidate image/source/interpreter/environment,
+the original CLI/Core/normal incarnations, installed versions and other scanner
+owners. The normal App retains its entire `ProtectedFiles`, including recordings;
+the candidate uses its distinct static seal and original recording contract.
+Profile and recording paths remain disjoint. The original host/native manifest
+projection and native baseline require a separate matching retained-projection
+check; decoding does not recapture or adopt files.
+
+Original clock-window and BOOTTIME deadlines are included in canonical plan
+bytes. The fixed idle command and MONOTONIC lease derive conservatively from
+that original sample, without a current-time renewal. Recovery remains bounded
+by the original1500-second host budget. The subsequent bootstrap journal contract
+binds the completed plan digest and derived lease, avoiding a self-referential
+manifest. The native launch plan is intentionally deferred until real idle init
+has been independently observed and retained.
+
+Decoded fields use frozen records and immutable sequences. Their canonical
+reconstruction must match the original bytes, so even an in-process field
+replacement cannot retain an old plan digest. Duplicate keys, noncanonical
+bytes, unknown fields, changed case/source/layout bindings and unqualified
+deadline/clock inputs refuse decoding. These checks authenticate no external
+fact and grant no permission by themselves. The future adapter must bind this
+declaration to actual current source, runtime, environment, mount, process,
+cached-probe and recovery evidence before any lifecycle operation.
 
 `scripts/supplemental_recording_bootstrap.py` adds a distinct offline journal
 format3. This is **not** an installed host-plan version and is not selected by
