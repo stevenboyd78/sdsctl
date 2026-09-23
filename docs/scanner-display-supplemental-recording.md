@@ -754,6 +754,30 @@ not prove installed container-init exit or authorize restoration. Those remain
 separate host-policy gates; missing/malformed required receipts still require
 administrative review, never an inferred idle state or a fresh recording attempt.
 
+## Offline explicit native launch preflight
+
+`scripts/supplemental_recording_launch_plan.py` reads a bounded private
+`launch.json` against independently supplied plan and source digests. Its closed
+schema declares only the dedicated finite specification, original native baseline,
+accepted profile pin, generation, projection and host-plan binding. Extra ordinary
+daemon arguments, destination/reloader/MQTT/remote settings or environment input
+are rejected, not silently removed or inherited.
+
+Preflight verifies the original baseline and pristine files, the accepted profile's
+deployment/configuration/source/state fingerprint, the exact scanner target and
+the native read-window budget. It rechecks profile and plan bytes, requires existing
+empty private socket/receipt directories and rejects overlap with immutable inputs
+or recordings. No directory is created, no source is imported into the scanner's
+profile storage, and no recording or runtime is started. Socket/DNS/runtime creation
+is forbidden in the positive preflight fixture.
+
+This is a launch-input reader, not an executable launcher or authorization scheme.
+The fixed guardian must independently verify executable/source bytes and expected
+plan digest before using it, then recheck relevant pins at the actual launch.
+Source/plan hashes supplied by an untrusted caller do not authenticate themselves.
+The operator protocol, cross-container relay, independent hard deadline and new
+recording-capable host plan remain installation gates.
+
 ## Required live ownership and recovery contract
 
 The following remain live design gates, not installed host-service permissions.
