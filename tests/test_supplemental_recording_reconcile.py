@@ -424,6 +424,104 @@ def test_init_exit_cannot_substitute_for_any_worker_exit(
         assert result.init_exited is True and result.returncode == 70
 
 
+@pytest.mark.parametrize("role", m.ROLES)
+def test_missing_proc_while_original_pidfd_unready_is_pending_not_exit(
+    prepared, actors, calibration, plan, family, monkeypatch, role
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        holder = case.holder
+        handles, deadline = dict(holder.handles), plan.deadlines.recover_by
+        original_read = m.engine.namespace.read
+        target = holder.actors[m.ROLES.index(role)].host_pid
+
+        def unavailable(pid, cid):
+            if pid == target:
+                raise m.engine.namespace.ProcUnavailable(m.engine.namespace.MESSAGE)
+            return original_read(pid, cid)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(m.engine.namespace, "read", unavailable)
+            for _ in range(3):
+                assert holder.poll() is None and not holder._exited(role)
+                assert not holder.failed and not holder.done and holder.result is None
+                assert len(case.requests) == 6  # No terminal Engine read or publication.
+            # Pending is NOT a validated actor set for capture or receipt readers.
+            with pytest.raises(m.UnconfirmedReconciliation):
+                holder._actors()
+        assert holder.handles == handles and plan.deadlines.recover_by == deadline
+        assert all(os.fstat(fd) for fd in handles.values())
+        finish(family)
+        result = holder.poll()
+        assert result.returncode == 70 and not result.init_exited
+        assert len(case.requests) == 7
+
+
+def test_proc_disappearing_in_second_bracket_does_not_publish_partial_exit(
+    prepared, actors, calibration, plan, family, monkeypatch
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch, terminal_replies=2) as case:
+        case.ready.close()
+        finish(family)
+        original_read, calls = m.engine.namespace.read, []
+
+        def unavailable_second(pid, cid):
+            calls.append(pid)
+            if len(calls) == 2:
+                raise m.engine.namespace.ProcUnavailable(m.engine.namespace.MESSAGE)
+            return original_read(pid, cid)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(m.engine.namespace, "read", unavailable_second)
+            assert case.holder.poll() is None and len(case.requests) == 7
+            assert case.holder.result is case.holder._terminal_receipt is None
+            assert not case.holder.failed and not case.holder.done
+        assert case.holder.poll().returncode == 70
+        assert len(case.requests) == 8
+
+
+@pytest.mark.parametrize("fault", ["permission", "malformed", "changed_actor"])
+def test_pending_actor_never_masks_other_actor_failure(
+    prepared, actors, calibration, plan, monkeypatch, fault
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        holder, original_read = case.holder, m.engine.namespace.read
+
+        def read(pid, cid):
+            if pid == holder.actors[0].host_pid:
+                raise m.engine.namespace.ProcUnavailable(m.engine.namespace.MESSAGE)
+            if pid == holder.actors[1].host_pid:
+                if fault == "changed_actor":
+                    return replace(original_read(pid, cid), start_ticks=1)
+                raise (
+                    PermissionError("PRIVATE")
+                    if fault == "permission"
+                    else m.engine.namespace.UnconfirmedNamespace(m.engine.namespace.MESSAGE)
+                )
+            return original_read(pid, cid)
+
+        monkeypatch.setattr(m.engine.namespace, "read", read)
+        refused(holder)
+        assert len(case.requests) == 6
+
+
+def test_pending_proc_does_not_renew_original_recovery_deadline(
+    prepared, actors, calibration, plan, monkeypatch
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+
+        def unavailable(pid, cid):
+            raise m.engine.namespace.ProcUnavailable(m.engine.namespace.MESSAGE)
+
+        monkeypatch.setattr(m.engine.namespace, "read", unavailable)
+        assert case.holder.poll() is None and len(case.requests) == 6
+        monkeypatch.setattr(case.holder, "_clock", lambda: plan.deadlines.recover_by + 1)
+        refused(case.holder)
+        assert len(case.requests) == 6 and case.holder.result is None
+
+
 def test_frozen_live_worker_never_becomes_exit_evidence(
     prepared, actors, calibration, plan, family, monkeypatch
 ):

@@ -78,7 +78,10 @@ class Operator:
     failed/closed without destroying these independent handles. This remains a
     same-process object, not a cross-process recovery service or fd-transfer API.
 
-    poll() returns None for still-live workers, or one exact terminal Evidence.
+    poll() returns None for still-live workers or pending proc teardown, or one
+    exact terminal Evidence. A missing proc path with an unready original pidfd
+    is pending only during polling; it never proves life, exit or permission to
+    act. Capture and subsequent receipt checks still require complete evidence.
     Init exit is reported separately, never substituted for worker exit. No
     native success is asserted, even for Engine0. Uncertainty poisons this object
     without releasing evidence; explicit close() only releases its own handles.
@@ -174,25 +177,31 @@ class Operator:
         require(events[0][1] in (select.POLLIN, select.POLLIN | select.POLLHUP))
         return True
 
-    def _actors(self):
+    def _actors(self, *, allow_pending=False):
         require(tuple(self.handles) == tuple(self.identities) == ROLES)
         require(engine.namespace.Witness._host_domains() == self.host_domains)
-        exited = set()
+        exited, pending = set(), False
         for role, actor in zip(ROLES, self.actors, strict=True):
             if self._exited(role):
                 exited.add(role)
                 continue
             try:
                 current = engine.namespace.read(actor.host_pid, actor.container_id)
-            except Exception:
-                require(self._exited(role))  # Missing proc data alone proves nothing.
-                exited.add(role)
+            except Exception as error:
+                if self._exited(role):
+                    exited.add(role)
+                else:
+                    # Linux can tear down /proc namespace links before pidfd
+                    # readiness. Keep the original handles and original budget;
+                    # do not inspect Engine or claim this actor is live/exited.
+                    require(allow_pending and type(error) is engine.namespace.ProcUnavailable)
+                    pending = True
             else:
                 require(current == actor)
                 if self._exited(role):
                     exited.add(role)
         require(engine.namespace.Witness._host_domains() == self.host_domains)
-        return frozenset(exited)
+        return None if pending else frozenset(exited)
 
     def _inspect(self, end):
         raw = engine._json_request(
@@ -215,8 +224,8 @@ class Operator:
             require(time.monotonic() < end)
             require(_peer(self.endpoint) == self.peer)
             self._history(end)
-            exits = self._actors()
-            if not set(ROLES[1:]) <= exits:
+            exits = self._actors(allow_pending=True)
+            if exits is None or not set(ROLES[1:]) <= exits:
                 require(time.monotonic() < end and self._clock() - began <= 2)
                 return None
             raw, terminal = self._inspect(end)
@@ -224,7 +233,10 @@ class Operator:
             require(terminal.pid in (0, self.actors[1].host_pid))
             require(_peer(self.endpoint) == self.peer)
             self._history(end)
-            confirmed = self._actors()
+            confirmed = self._actors(allow_pending=True)
+            if confirmed is None:
+                require(time.monotonic() < end and self._clock() - began <= 2)
+                return None
             require(exits <= confirmed and set(ROLES[1:]) <= confirmed)
             observed_at = self._clock()
             require(time.monotonic() < end and observed_at - began <= 2)

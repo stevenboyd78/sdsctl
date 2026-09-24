@@ -240,6 +240,24 @@ def test_reader_has_only_fixed_bounded_proc_reads_and_closes_descriptors(proc_fi
     assert all(stream.closed for stream in proc_files.opened)
 
 
+@pytest.mark.parametrize("where", ["stat", "open"])
+@pytest.mark.parametrize("error", [FileNotFoundError, PermissionError, OSError])
+def test_only_missing_proc_path_has_distinct_unavailable_result(
+    proc_files, monkeypatch, where, error
+):
+    def fail(*args, **kwargs):
+        raise error("PRIVATE fixed proc path")
+
+    monkeypatch.setattr(m.os if where == "stat" else m, where, fail)
+    with pytest.raises(m.UnconfirmedNamespace) as caught:
+        m.read(1001, CID)
+    assert type(caught.value) is (
+        m.ProcUnavailable if error is FileNotFoundError else m.UnconfirmedNamespace
+    )
+    assert str(caught.value) == m.MESSAGE and caught.value.__suppress_context__
+    assert all(stream.closed for stream in proc_files.opened)
+
+
 @pytest.mark.parametrize("name,limit", [("stat", 4096), ("status", 16384), ("cgroup", 4096)])
 def test_oversize_proc_input_is_sanitized_and_closed(proc_files, name, limit):
     proc_files.files[name] = b"PRIVATE" * limit

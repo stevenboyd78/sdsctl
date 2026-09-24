@@ -27,6 +27,10 @@ class UnconfirmedNamespace(ValueError):
     """Namespace identity and process exit are separate observations."""
 
 
+class ProcUnavailable(UnconfirmedNamespace):
+    """A fixed proc path disappeared; this proves neither life nor exit."""
+
+
 def require(value):
     if not value:
         raise UnconfirmedNamespace(MESSAGE)
@@ -117,6 +121,8 @@ def read(pid, container_id):
         )
         require(time.monotonic() < deadline)
         return result
+    except FileNotFoundError:
+        raise ProcUnavailable(MESSAGE) from None
     except Exception:
         raise UnconfirmedNamespace(MESSAGE) from None
 

@@ -1876,6 +1876,16 @@ Engine endpoint. The complete read must fit within two seconds. Copied/equal
 receipts, changed process/command/Engine facts, lost handles, altered history or
 clock drift fail closed and retain evidence until explicit cleanup.
 
+During exit polling only, a disappeared fixed `/proc` path may precede readiness
+of the already-retained original pidfd. That narrow interval returns no evidence
+and remains pending under the original deadline. It neither proves exit nor
+validates a still-live actor. No terminal Engine read is started from that
+incomplete first bracket; an incomplete second bracket cannot publish a receipt.
+Other actors, original handle identities and host domains are still checked.
+Permission failures, malformed or changed identities and frozen live workers
+still refuse. Capture and post-publication custody checks do not admit pending
+actors, and no descriptor is rediscovered or deadline renewed.
+
 Rechecking returns the original historical result; it does not change its
 timestamp, publish it again or renew the two-second publication window. Init
 may have exited since that result, but its original `init_exited` value is not
