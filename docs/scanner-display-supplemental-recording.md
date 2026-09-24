@@ -2048,6 +2048,45 @@ ledger and journal remain caller-owned for preservation and review. Failed or
 lost recording completion requires the separate preservation path and is not
 accepted by this success-only continuation.
 
+The separate failure path now has an explicit original-lifetime join:
+`supplemental_recording_reconcile.Preserved`. It requires the original retained
+`Operator`, a closed and unpoisoned original recording ledger, and the original
+replayed recovery journal. A confirmed start may have been abandoned after a
+lost completion; a lost start requires the separately qualified, durably recorded
+preservation scope. That scope names possible output only: it is not a start or
+completion acknowledgment. No ledger is reopened and no missing custody is
+reconstructed from disk.
+
+All four original process handles, including candidate init, must independently
+show exit. The original operator-exit publication and candidate-init journal
+receipt are also required. The original authorization hash, start/finish limits,
+full ledger, pinned checkpoint chain and original recording baseline are
+rechecked. An unacknowledged checkpoint tail, changed directory/history, poisoned
+ledger or elapsed recovery budget refuses the join. The final bytes may extend
+the last acknowledged active checkpoint, but a changed retained result cannot
+be accepted as a new baseline. Constructor and each complete read have their own
+two-second bounds; the original recording/recovery deadlines never move.
+
+`PreservedHost` brackets those retained-file checks with full fresh host metadata
+and requires the same candidate container to remain stopped. It never returns
+an artifact or a finalized stage. `PreservedRestoredHost` adds the existing fixed
+normal-App cache read only after the durable normal-start intent.
+`recover_preserved` connects them to the **original** recovery session using the
+same continuation mechanism as the success path, but with separate reader type,
+custody and file-stage checks. It consumes this continuation once. Confirmed
+normal-App restoration still leaves the recording outcome **unconfirmed**.
+Lost CLI returns are inspected without replay; failed file reads remain failed
+while the session's independent clock can expire. There is no automatic fallback
+between finalized and preserved readers.
+
+Local tests join actual disposable process pidfds, private journals/checkpoints
+and partial recording bytes with explicitly synthetic Engine, HA health,
+namespace routing and native-return inputs. They also exercise the existing
+policy and tracked recovery dispatch. These are not installed service or live
+Home Assistant restoration evidence. The installed entrypoint, independent
+service supervision and full containerized/platform qualification remain
+required before another physical/audio acceptance window.
+
 Integrated offline tests exercise the actual journal, policy, dispatch tracking
 and loop across candidate stop, normal start and health verification, with
 explicitly synthetic host, cached-state, Engine and init-exit evidence. They

@@ -13,12 +13,13 @@ source/protection qualification remain separate, required responsibilities.
 from __future__ import annotations
 
 import hashlib
+import json
 import os
 import select
 import time
 from contextlib import suppress
 from dataclasses import asdict, dataclass, replace
-from threading import get_ident
+from threading import Lock, get_ident
 
 import supplemental_recording_host_plan as plans
 import supplemental_recording_ready as received
@@ -432,6 +433,229 @@ class Operator:
                 failed = True
         self.handles.clear()
         require(not failed)
+
+
+class Preserved:
+    """Original exited-operator custody plus closed failure-ledger files.
+
+    Construct only after the actual retained Operator published its exit and
+    the original recovery owner recorded the candidate init exit. A known start
+    may be abandoned; a lost start requires the existing durable naming scope.
+    Neither path accepts a completion acknowledgment or creates one. A poisoned
+    ledger, lost exit publication or lost host process requires review instead.
+
+    read() is read-only and returns only retained files, never an artifact or
+    App health. Full fresh host metadata and the existing recovery policy remain
+    separate gates. This borrows the original Operator/Ledger/Journal; closing
+    or failing this reader neither signals processes nor releases their custody.
+    """
+
+    def __init__(self, operator, ledger, journal):
+        began = time.monotonic()
+        end = began + 2
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = False
+        self.recovery_attempted = False
+        self.collected = None
+        self._retained_receipt = None
+        try:
+            require(type(operator) is Operator and type(ledger) is dispatch.binding.Ledger)
+            self.operator, self.ledger, self.journal = operator, ledger, journal
+            self.plan, self.pins = operator.plan, operator.pins
+            self.original_state = ledger.state
+            require(type(self.original_state) is dispatch.binding.State)
+            require(self.original_state.closed and self.original_state.acknowledgment is None)
+            if self.original_state.expected is not None:
+                require(self.original_state.preservation is None)
+                self.expected = self.original_state.expected
+            else:
+                scope = self.original_state.preservation
+                require(type(scope) is dispatch.binding.preservation.Scope)
+                require(
+                    scope.native_contract_sha256 == self.pins.host.projection.native.contract.sha256
+                )
+                self.expected = scope.expected  # Naming only, NOT a started acknowledgment.
+            require(self.expected.generation == self.pins.generation)
+            self.origins = (operator, ledger, journal, self.plan, self.pins, operator.endpoint)
+            self.location, self.location_id = ledger.directory, ledger._directory_identity
+            require(self.location == self.plan.root / "recording-ledger")
+            self.journal_fd = journal.fd
+            self.journal_identity = dispatch.binding.identity(os.fstat(journal.fd))[:6]
+            self.history = tuple(plans.base.encode(e) for e in journal.entries)
+            self.collector = dispatch.binding.protected.Collector(self.pins.host.projection.host)
+            self.progress_path = self.plan.root / "recording-progress"
+            with dispatch.binding.protected._private_directory(
+                self.progress_path, exclusive=False
+            ) as fd:
+                self.progress_identity = dispatch.binding.identity(os.fstat(fd))[:6]
+            self.previous = self._progress(end)
+            self.seal = self._values()
+            self._check(end)
+            require(began <= time.monotonic() < end)
+        except BaseException as error:
+            self._fail(error)
+
+    def _values(self):
+        return dispatch.binding.checksum(
+            dict(
+                plan=self.plan.sha256,
+                pins=self.pins.payload(),
+                state=asdict(self.original_state),
+                expected=asdict(self.expected),
+                ledger=str(self.location),
+                ledger_identity=self.location_id,
+                history=[hashlib.sha256(raw).hexdigest() for raw in self.history],
+                progress_path=str(self.progress_path),
+                progress_identity=self.progress_identity,
+                previous=None if self.previous is None else asdict(self.previous),
+            )
+        )
+
+    def _progress(self, end):
+        checkpoints = dispatch.binding.checkpoints
+        context = checkpoints._context(self.progress_path, self.collector, self.expected)
+        with dispatch.binding.protected._private_directory(
+            self.progress_path, exclusive=False
+        ) as fd:
+            require(dispatch.binding.identity(os.fstat(fd))[:6] == self.progress_identity)
+            # Even without an acknowledged tip the directory must be empty:
+            # an unacknowledged tail is uncertainty, not a new trusted history.
+            return checkpoints._read(
+                fd,
+                self.collector,
+                self.expected,
+                context,
+                self.original_state.tip,
+                end,
+            )
+
+    def _context(self):
+        require(not self.closed and not self.failed and self.owner == (os.getpid(), get_ident()))
+        operator, ledger, journal = self.operator, self.ledger, self.journal
+        require(type(operator) is Operator and operator.owner == self.owner)
+        require(not operator.closed and not operator.failed and operator.publish_attempted)
+        require(type(ledger) is dispatch.binding.Ledger and not ledger._poisoned)
+        require(type(journal) is plans.bootstrap.Journal and journal.fd == self.journal_fd)
+        require(
+            all(
+                current is original
+                for current, original in zip(
+                    (operator, ledger, journal, operator.plan, operator.pins, operator.endpoint),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        require(self.plan is operator.plan and self.pins is operator.pins)
+        require(ledger.binding == self.pins.host and ledger.state == self.original_state)
+        require(
+            ledger.directory == self.location and ledger._directory_identity == self.location_id
+        )
+        require(dispatch.binding.identity(os.fstat(journal.fd))[:6] == self.journal_identity)
+        require(type(self.collector) is dispatch.binding.protected.Collector)
+        require(self.collector.stored is self.pins.host.projection.host)
+        require(self.progress_path == self.plan.root / "recording-progress")
+        if self._retained_receipt is None:
+            require(self.collected is None)
+        else:
+            original, digest = self._retained_receipt
+            require(self.collected is original)
+            require(dispatch.binding.checksum(asdict(original)) == digest)
+        require(self._values() == self.seal)
+
+    def _check(self, end):
+        self._context()
+        operator, ledger, journal = self.operator, self.ledger, self.journal
+        now = operator._clock()
+        require(now < self.plan.deadlines.recover_by and time.monotonic() < end)
+        result = operator.recheck()  # Same historical receipt, never renewed or republished.
+        require(operator._actors() == frozenset(ROLES))
+        machine = operator._journal(journal, end)
+        require(machine.last_at <= operator._clock() < self.plan.deadlines.recover_by)
+        require(
+            machine.state.phase
+            in ("candidate_running", "stopping_candidate", "starting_normal", "complete")
+        )
+        require(
+            machine.state.operator_exit_sha256 == result.sha256 and machine.state.finish_requested
+        )
+        require(machine.state.authorization_generation == self.pins.generation)
+        require(machine.process_bound(plans.base.CANDIDATE, exited=True))
+        require(machine.state.recording_outcome != "verified")
+        require(machine.state.files_stage != "finalized")
+        entries = tuple(plans.base.encode(e) for e in journal.entries)
+        require(entries[: len(self.history)] == self.history)
+        authorization = [
+            e["event"] for e in journal.entries if e["event"]["kind"] == "authorize_recording"
+        ]
+        require(len(authorization) == 1)
+        with dispatch.binding.protected._private_directory(self.location, exclusive=False) as fd:
+            require(dispatch.binding.identity(os.fstat(fd))[:6] == self.location_id)
+            require(dispatch.binding._read(fd, ledger.binding, end) == self.original_state)
+            raw = dispatch.binding.protected.evidence.read_bytes(
+                fd,
+                "0001.json",
+                limit=dispatch.binding.MAX_BYTES,
+                deadline=end,
+            )
+            event = json.loads(raw)["event"]  # Canonical shape already checked by full replay.
+            require(event["kind"] == "start_intent" and event["generation"] == self.pins.generation)
+            require(event["authorization_sha256"] == plans.base.checksum(authorization[0]))
+            require(event["start_by"] == self.original_state.start_by)
+            require(event["finish_by"] == self.original_state.finish_by)
+            require(event["now"] <= self.original_state.now <= time.monotonic())
+            require(event["start_by"] <= self.plan.lease["ready_by"])
+            require(event["finish_by"] <= self.plan.lease["stop_by"])
+            require(
+                event["finish_by"]
+                <= self.plan.original_clock.native_deadline(machine.state.recording_deadline)
+            )
+        require(self._progress(end) == self.previous)
+        require(operator._journal(journal, end) is machine)
+        require(tuple(plans.base.encode(e) for e in journal.entries) == entries)
+        self._context()
+        require(time.monotonic() < end)
+        return machine
+
+    def read(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            began = time.monotonic()
+            end = began + 2
+            machine = self._check(end)
+            entries = tuple(plans.base.encode(e) for e in self.journal.entries)
+            collected = self.collector.retained(self.expected, previous=self.previous)
+            require(collected.files.stage == "retained" and collected.artifact is None)
+            require(collected.files.contract_sha256 == self.plan.candidate.contract.sha256)
+            require(collected.files.generation == self.pins.generation)
+            require(self._check(end) is machine)
+            require(tuple(plans.base.encode(e) for e in self.journal.entries) == entries)
+            require(self.collected is None or collected == self.collected)
+            require(
+                machine.state.preserved_sha256 is None
+                or machine.state.preserved_sha256 == collected.files.evidence_sha256
+            )
+            require(began <= time.monotonic() < end)
+            self.collected = collected
+            self._retained_receipt = collected, dispatch.binding.checksum(asdict(collected))
+            return collected
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedReconciliation(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        self.closed = True
 
 
 if __name__ == "__main__":

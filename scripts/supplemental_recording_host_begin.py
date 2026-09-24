@@ -885,6 +885,15 @@ class FinalizedHost:
         for app in (snapshot.normal, snapshot.candidate):
             require(app.healthy is None and app.recording is None)
 
+    def _history(self, end):
+        return self.reader._history(end)
+
+    def _exit_digest(self):
+        return self.reader.publication[0]
+
+    def _check_files(self, files):
+        require(files.files.stage == "finalized")
+
     def read(self):
         acquired = False
         try:
@@ -896,7 +905,7 @@ class FinalizedHost:
             self.end = min(began + 2, time.monotonic() + self.plan.deadlines.recover_by - now)
             end = self.end
             boot, started = self._clock()
-            machine = self.reader._history(end)
+            machine = self._history(end)
             entries = tuple(base.encode(entry) for entry in self.reader.journal.entries)
             self._candidate()
             snapshot = self._observer().read()
@@ -904,7 +913,7 @@ class FinalizedHost:
             self._clock()
             files = self.reader.read()
             self._candidate()
-            require(self.reader._history(end) is machine)
+            require(self._history(end) is machine)
             require(tuple(base.encode(entry) for entry in self.reader.journal.entries) == entries)
             self._guard()
             end_boot, ended = self._clock()
@@ -912,7 +921,7 @@ class FinalizedHost:
             require(boot == end_boot == snapshot.boot)
             require(started <= snapshot.began <= snapshot.ended <= ended)
             require(0 <= ended - started < 2)
-            require(files.files.stage == "finalized")
+            self._check_files(files)
             require(files.files.contract_sha256 == self.plan.candidate.contract.sha256)
             require(files.files.generation == self.run.pins.generation)
             self._check_native(snapshot)
@@ -946,7 +955,77 @@ class FinalizedHost:
         self.closed = True
 
 
-class RestoredHost(FinalizedHost):
+class PreservedHost(FinalizedHost):
+    """Explicit failure reader with the same full metadata/file bracket.
+
+    The original failed Launch supplies metadata bindings, not renewed Ready or
+    native health. Actual retained Operator/ledger custody is checked separately
+    by Preserved. Only a stopped original candidate and retained (never finalized)
+    files are accepted. No fallback from failed successful-recording validation.
+    """
+
+    def __init__(self, reader, run):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = False
+        self.end = None
+        try:
+            require(type(reader) is worker_exit.reconcile.Preserved)
+            require(type(run) is launch.Launch)
+            self.reader, self.run, self.plan = reader, run, reader.plan
+            self.docker = run.read.docker
+            self.origins = (reader, run, self.plan, self.docker, run.read, run.qualify, run.pins)
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        reader, run = self.reader, self.run
+        require(type(reader) is worker_exit.reconcile.Preserved and type(run) is launch.Launch)
+        require(run.owner == self.owner and run.used and run.confirm_attempted)
+        require(run.plan is reader.plan is self.plan and run.journal is reader.journal)
+        require(run.pins is reader.pins and run.projected == reader.pins.host.projection)
+        require(type(run.read) is launch.BootstrapHost)
+        require(type(run.qualify) is launch.CandidateQualification)
+        require(type(self.docker) is plans.ordinary.Docker)
+        require(self.docker.path == "/var/run/docker.sock" and self.docker is run.qualify.docker)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (reader, run, reader.plan, run.read.docker, run.read, run.qualify, run.pins),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        reader._context()
+
+    def _history(self, end):
+        return self.reader._check(end)
+
+    def _exit_digest(self):
+        return self.reader.operator._receipt().sha256
+
+    def _check_files(self, files):
+        require(files.files.stage == "retained" and files.artifact is None)
+
+    def _candidate(self):
+        self._clock()
+        plans.ordinary.retained_exit(
+            self.docker.container("app_" + base.CANDIDATE),
+            name="app_" + base.CANDIDATE,
+            image=self.plan.candidate.image,
+            cid=self.run.pins.init.container_id,
+        )
+        self._clock()
+
+    def _check_native(self, snapshot):
+        super()._check_native(snapshot)
+        require(snapshot.candidate.state == "stopped")
+
+
+class _RestoredNormal:
     """Join a fresh normal-App cache read only after original restoration intent.
 
     Reuses the complete finalized host/file bracket, without renewing Ready or
@@ -963,11 +1042,11 @@ class RestoredHost(FinalizedHost):
 
     def _restoration(self):
         self._clock()
-        machine = self.reader._history(self.end)
+        machine = self._history(self.end)
         require(machine.state.phase in ("starting_normal", "complete"))
         require(machine.process_bound(base.NORMAL, exited=True))
         require(machine.process_bound(base.CANDIDATE, exited=True))
-        require(machine.state.operator_exit_sha256 == self.reader.publication[0])
+        require(machine.state.operator_exit_sha256 == self._exit_digest())
         return machine
 
     def _candidate_exited(self):
@@ -1028,6 +1107,14 @@ class RestoredHost(FinalizedHost):
         )
 
 
+class RestoredHost(_RestoredNormal, FinalizedHost):
+    """Original successful completion plus fresh normal-App health."""
+
+
+class PreservedRestoredHost(_RestoredNormal, PreservedHost):
+    """Original unconfirmed recording plus fresh normal-App health, not success."""
+
+
 def recover_finalized(reader, session, wait):
     """Continue the ORIGINAL recovery session after successful worker closure.
 
@@ -1045,10 +1132,33 @@ def recover_finalized(reader, session, wait):
     require(type(reader) is AuthorizedFinalized)
     require(reader.owner == (os.getpid(), get_ident()) and not reader.recovery_attempted)
     reader.recovery_attempted = True
-    require(type(session) is launch.bootstrap.RecoverySession and callable(wait))
     reader._context()
     require(reader.phase == "published")
-    journal, plan, docker = reader.journal, reader.plan, reader.run.read.docker
+    return _recover_closed(reader, reader.run, session, wait)
+
+
+def recover_preserved(reader, run, session, wait):
+    """Continue the original session only after independently confirmed exits.
+
+    This explicit failure entry never substitutes for a failed finalized reader.
+    A closed, unpoisoned original ledger and original retained Operator are
+    required. A lost host or missing scope requires review, not reconstruction.
+    Reuses the same policy/session/deadlines; normal recovery does not mark an
+    unconfirmed recording verified. Caller owns original reader and custody.
+    """
+    require(type(reader) is worker_exit.reconcile.Preserved)
+    require(reader.owner == (os.getpid(), get_ident()) and not reader.recovery_attempted)
+    reader.recovery_attempted = True
+    reader._context()
+    return _recover_closed(reader, run, session, wait)
+
+
+def _recover_closed(reader, run, session, wait):
+    """Shared continuation mechanism; entry-specific readers retain their gates."""
+    require(type(session) is launch.bootstrap.RecoverySession and callable(wait))
+    require(type(reader) in (AuthorizedFinalized, worker_exit.reconcile.Preserved))
+    require(type(run) is launch.Launch)
+    journal, plan, docker = reader.journal, reader.plan, run.read.docker
     processes, dispatch, executor = session.processes, session.dispatch, session.executor
     require(type(processes) is TrackedProcesses and type(dispatch) is TrackedDispatch)
     require(type(executor) is launch.bootstrap.Executor)
@@ -1066,15 +1176,24 @@ def recover_finalized(reader, session, wait):
         require(not processes.closed and processes.images == images)
         require(dispatch.image == plan.cli_image and dispatch.generation == plan.cli_generation)
         require(journal is reader.journal and reader.plan is plan)
+        require(run.plan is plan and run.read.docker is docker)
         require(reader.recovery_attempted and not reader.closed)
 
     context()
-    reader._history(time.monotonic() + 2)
-    finalized = FinalizedHost(reader)
+    if type(reader) is AuthorizedFinalized:
+        reader._history(time.monotonic() + 2)
+        host = FinalizedHost(reader)
+    else:
+        reader._check(time.monotonic() + 2)
+        host = PreservedHost(reader, run)
     restored = None
     failed = False
     try:
-        restored = RestoredHost(reader)
+        restored = (
+            RestoredHost(reader)
+            if type(host) is FinalizedHost
+            else PreservedRestoredHost(reader, host.run)
+        )
 
         def read():
             nonlocal failed
@@ -1084,9 +1203,9 @@ def recover_finalized(reader, session, wait):
                 require(not failed)
                 context()
                 require(session.read is read)
-                machine = reader._history(end)
+                machine = host._history(end)
                 if machine.state.phase in ("candidate_running", "stopping_candidate"):
-                    sample = finalized.read()
+                    sample = host.read()
                 else:
                     require(machine.state.phase == "starting_normal")
                     sample = restored.read()
@@ -1109,7 +1228,7 @@ def recover_finalized(reader, session, wait):
         session.read = read
         return session.run(bounded_wait)
     finally:
-        finalized.close()
+        host.close()
         if restored is not None:
             restored.close()
 
