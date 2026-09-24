@@ -3154,14 +3154,48 @@ existing current-host/restored-normal checks; its outcome remains
 `not_attempted`, never an invented successful or abandoned recording. If capture
 was lost, it cannot reopen pidfds or fall back to never-launched recovery.
 Routing tests use real private files and policy journals, with explicitly
-synthetic native/exit/continuation boundaries. Whole-service real-process and
-installed-platform qualification remain separate gates.
+synthetic native/exit/continuation boundaries. A separate local process case
+also completed this whole original-service pre-recording cancellation route:
+actual native Ready and actor capture, cancellation, worker/init exits, unchanged
+baseline and prepared ledger, and restoration of the disposable normal fixture.
+Its Supervisor/Core/CLI/cache/network/source routing remained explicitly
+synthetic. It is not installed Home Assistant qualification or scanner acceptance.
+
+The distinct `RecordingPhase` now joins an explicit `start_recording()` to the
+same original service. It requires an uncancelled, confirmed native phase and
+its already captured Operator; the native phase retires **before** constructing
+the original `Start`. The existing fresh pre-begin checks, durable policy
+authorization, ledger intent and single Relay begin remain authoritative.
+The method reports a confirmed start only after the actual `Relay.started()`
+return. It cannot report recording success from permission or a sent command.
+No idle notice automatically selects this route, and old native cancellation
+cannot operate after the recording handoff.
+
+An explicit `finish_recording()` consumes the original bounded completion and
+exit collectors once. It keeps `AuthorizedFinalized` capture, original worker
+exit collection and exit publication in one owner step, with no generic journal
+tick inserted inside that exact-prefix evidence window. The independent outer
+supervisor and original native/attachment deadlines still bound blocking I/O.
+Successful completion publication is not restoration: original init exit and
+fresh finalized/current-host/restored-normal evidence must still pass through
+the **same** recovery session before its policy can report a verified recording.
+
+Start or completion uncertainty is sticky. In particular, a failed `Start`
+may have durably authorized recording while marking its Launch failed. The
+retired native owner does not disable original clock-only expiry or allow
+pristine/never-authorized fallback in that situation. No failed operation is
+retried, no abandoned ledger is invented, and no former Ready data is presented
+as active health. This join currently leaves uncertain recordings for review;
+integration with the separately qualified preserved-recording route and active
+full-host sampling remain work to complete. Its routing tests use real policy
+and intent journals with explicit synthetic native/completion boundaries.
 
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed
-confinement/source/runtime, establish independent external supervision, or
-support recording authorization/begin. Those host-launcher and platform checks remain
-required. Assembly tests use real private files and explicit synthetic
+confinement/source/runtime, or establish independent external supervision.
+The recording-phase join still requires its own whole-service real-process
+qualification, followed by installed host-launcher and platform checks.
+Assembly tests use real private files and explicit synthetic
 Engine/process/cache fixtures, not Home Assistant or scanner acceptance.
 
 The private schema3 plan can construct an initial bootstrap-journal event only

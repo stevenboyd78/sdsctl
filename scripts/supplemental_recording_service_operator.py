@@ -785,6 +785,7 @@ class NativePhase:
     def __init__(self, service, ledger, endpoint):
         self.owner = (os.getpid(), get_ident())
         self.used = self.uncertain = self.confirmed = False
+        self.retired = False
         self.cancel_attempted = self.recovery_attempted = False
         self.operator = self._original_operator = None
         self.reader = self._original_reader = None
@@ -834,8 +835,9 @@ class NativePhase:
         finally:
             self.ledger_lock.release()
 
-    def _context(self, *, recovering=False):
+    def _context(self, *, recovering=False, retired=False):
         service = self.service
+        require(type(retired) is bool and self.retired is retired)
         require(self.owner == service.owner == (os.getpid(), get_ident()))
         require(service.used and service.lock.locked() and service.native_attempted)
         require(service.native is service._original_native is self)
@@ -855,12 +857,19 @@ class NativePhase:
         if self.run_objects is not None:
             require(all(a is b for a, b in zip(self._run_objects(), self.run_objects, strict=True)))
         if self.confirmed:
-            require(self.run.used and self.run.confirm_attempted and not self.run.failed)
+            require(self.run.used and self.run.confirm_attempted)
+            if not retired:
+                require(not self.run.failed)
         if self.operator is not None:
             require(type(self.operator) is begin.worker_exit.reconcile.Operator)
             require(self.operator.plan is service.plan and self.operator.endpoint is self.endpoint)
         require(self.reader is self._original_reader)
-        if recovering:
+        if retired:
+            require(self.confirmed and not self.uncertain)
+            require(not self.cancel_attempted and not self.recovery_attempted)
+            require(self.reader is None and self.operator is not None)
+            require(service.recording is not None and service.recording.native is self)
+        elif recovering:
             require(self.recovery_attempted and self.reader is not None)
         else:
             require(service.session.read is self.read and self.read == self._unavailable)
@@ -886,7 +895,7 @@ class NativePhase:
 
     def start(self):
         self.service._context()
-        require(not self.used)
+        require(not self.used and not self.retired)
         self.used = True
         try:
             self.run.start_confirmed()
@@ -908,7 +917,7 @@ class NativePhase:
 
     def cancel(self):
         self.service._context()
-        require(self.used and self.confirmed and not self.uncertain)
+        require(self.used and self.confirmed and not self.uncertain and not self.retired)
         require(not self.cancel_attempted and not self.recovery_attempted)
         self.cancel_attempted = True
         self._ledger()
@@ -928,7 +937,7 @@ class NativePhase:
 
     def poll(self, wait):
         self.service._context()
-        require(self.used and not self.recovery_attempted and callable(wait))
+        require(self.used and not self.retired and not self.recovery_attempted and callable(wait))
         result = self.service.session.poll()
         if result.phase in ("complete", "review") or self.uncertain:
             return result
@@ -965,6 +974,170 @@ class NativePhase:
         )
 
 
+class RecordingPhase:
+    """Explicit one-use recording owner over the original captured native actors.
+
+    This separate handoff retires pre-recording cancellation BEFORE constructing
+    Start. Neither a returned Relay nor an EOF is recording success. Only actual
+    start/completion returns, finalized files, original worker/init exits and
+    the original session's recovery can establish success. No notices trigger it.
+
+    Uncertain begin/completion is sticky and preserves original clock expiry;
+    this owner never invents abandonment, retries, or falls back to pristine
+    recovery. Independent supervision and a separately qualified preserved route
+    remain required. Active full-host sampling is not provided by this join.
+    """
+
+    def __init__(self, service):
+        require(type(service) is IdleService)
+        service._context()
+        native = service.native
+        require(type(native) is NativePhase and native.used and native.confirmed)
+        require(not native.uncertain and not native.retired)
+        require(not native.cancel_attempted and not native.recovery_attempted)
+        require(native.operator is not None and not native.operator.done)
+        native._ledger()
+        state = native._history().state
+        require(state.phase == "candidate_running" and not state.finish_requested)
+        require(state.operator_exit_sha256 is None)
+        self.owner = service.owner
+        self.service, self.native = service, native
+        self.run, self.ledger, self.operator = native.run, native.ledger, native.operator
+        self.objects = service, native, self.run, self.ledger, self.operator, service.session
+        self.used = self.uncertain = self.started = False
+        self.finish_attempted = self.recovery_attempted = False
+        self.start_attempt = self._original_start = None
+        self.relay = self._original_relay = None
+        self.reader = self._original_reader = None
+        self.completion = self._original_completion = None
+        self.read = self._unavailable
+
+    def _context(self, *, recovering=False):
+        service, native = self.service, self.native
+        require(self.owner == service.owner == (os.getpid(), get_ident()))
+        require(service.used and service.lock.locked() and service.recording_attempted)
+        require(service.recording is service._original_recording is self)
+        require(native is service.native and native.retired)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (service, native, native.run, native.ledger, native.operator, service.session),
+                    self.objects,
+                    strict=True,
+                )
+            )
+        )
+        require(self.run is native.run and self.ledger is native.ledger)
+        require(self.operator is native.operator)
+        require(self.start_attempt is self._original_start)
+        if self.start_attempt is not None:
+            require(type(self.start_attempt) is begin.Start)
+            require(self.start_attempt.run is self.run and self.start_attempt.ledger is self.ledger)
+        require(self.relay is self._original_relay)
+        if self.relay is not None:
+            require(type(self.relay) is begin.relayed.Relay)
+            require(self.start_attempt.relay is self.relay)
+        require(self.reader is self._original_reader)
+        if self.reader is not None:
+            require(type(self.reader) is begin.AuthorizedFinalized)
+            require(
+                self.reader.start is self.start_attempt and self.reader.operator is self.operator
+            )
+        require(self.completion is self._original_completion)
+        if recovering:
+            require(self.recovery_attempted and self.reader is not None)
+        else:
+            require(service.session.read is self.read and self.read == self._unavailable)
+
+    def _unavailable(self):
+        # No former Ready/idle data masquerades as an active recording sample.
+        raise UnconfirmedOperator(MESSAGE)
+
+    def start(self):
+        self.service._context()
+        require(not self.used)
+        self.used = True
+        try:
+            start = begin.Start(self.run, self.ledger)
+            self.service._cleanup.append(start.close)
+            self.start_attempt = self._original_start = start
+            relay = start.start_once()
+            self.relay = self._original_relay = relay
+            require(type(relay) is begin.relayed.Relay and start.relay is relay)
+            expected = relay.started()
+            require(expected is relay.expected and relay.phase == "completed")
+            start.retained_history()
+            self.started = True
+        except Exception:
+            # Start may already have committed authorization or intent. Its
+            # failure can mark Launch failed; the retired native owner must not
+            # disable the same independent session's clock-only expiry.
+            self.uncertain = True
+        self.service._context()
+        return self.started and not self.uncertain
+
+    def finish(self):
+        """Receive bounded completion and publish actual exit, NOT restoration.
+
+        One uninterrupted owner step preserves AuthorizedFinalized's exact
+        journal prefix. No generic session tick is inserted between capture and
+        exit publication. Existing native/attachment/exit deadlines bound I/O;
+        the caller still needs independent outer supervision.
+        """
+        self.service._context()
+        require(self.used and self.started and not self.uncertain)
+        require(not self.finish_attempted and not self.recovery_attempted)
+        self.finish_attempted = True
+        try:
+            self.start_attempt.retained_history()
+            completion = self.relay.completed(progress_directory=None)
+            self.completion = self._original_completion = completion
+            require(self.relay.phase == "closed" and self.relay.completion is completion)
+            reader = begin.AuthorizedFinalized(self.start_attempt, self.operator)
+            self.service._cleanup.append(reader.close)
+            self.reader = self._original_reader = reader
+            reader.collect_exit()
+            self.run.ready.close()
+            receipt = self.operator.poll()
+            require(type(receipt) is begin.worker_exit.reconcile.Evidence)
+            require(receipt.returncode == 0)
+            require(reader.publish_exit() == self.operator.result_sha256)
+            require(reader.phase == "published")
+        except Exception:
+            self.uncertain = True
+        self.service._context()
+        return not self.uncertain
+
+    def poll(self, wait):
+        self.service._context()
+        require(self.used and not self.recovery_attempted and callable(wait))
+        result = self.service.session.poll()
+        if result.phase in ("complete", "review") or self.uncertain:
+            return result
+        if self.reader is None:
+            return result
+        try:
+            require(self.finish_attempted and self.reader.phase == "published")
+            if not self.operator._exited("init"):
+                return result
+            self.service.processes.reconcile()
+            self.reader._history(time.monotonic() + 2)
+        except Exception:
+            self.uncertain = True
+            return result
+        self.service._context()
+        self.recovery_attempted = True
+
+        def bounded_wait(seconds):
+            self.service._context(recovering=True)
+            require(seconds == 0.25)
+            wait(seconds)
+            self.service._context(recovering=True)
+
+        return begin.recover_finalized(self.reader, self.service.session, bounded_wait)
+
+
 class IdleService:
     """Finite idle-first assembly over a caller-owned ORIGINAL preparation.
 
@@ -977,8 +1150,9 @@ class IdleService:
     Missing/refused input still expires through the original session. Exiting
     the loop closes only its original process handles and Inbox, never files,
     containers, the borrowed plan or journal. Native execution requires a
-    separate explicit one-way handoff; there is no recording route or automatic
-    request/finish. A new object is NOT restart permission.
+    separate explicit one-way handoff. Recording has its own explicit one-use
+    handoff and finish, never an automatic request. A new object is NOT restart
+    permission.
 
     This is not an installed entrypoint. Root/confinement, source/runtime pins,
     independent outer supervision and original custody after helper loss must
@@ -993,6 +1167,8 @@ class IdleService:
         self.launch_preparation_attempted = False
         self.native_attempted = False
         self.native = self._original_native = None
+        self.recording_attempted = False
+        self.recording = self._original_recording = None
         self.candidate = self._original_candidate = None
         self.prepared_launch = self._original_launch = None
         self._launch_binding = None
@@ -1065,12 +1241,16 @@ class IdleService:
         require(self.original.recheck() is self.plan)
         require(self.candidate is self._original_candidate)
         require(self.native is self._original_native)
+        require(self.recording is self._original_recording)
         self._launch_context(unused=self.native is None)
         if self.native is not None:
             require(type(self.native) is NativePhase and self.native.service is self)
-            self.native._context(recovering=recovering)
+            self.native._context(recovering=recovering, retired=self.recording is not None)
+            if self.recording is not None:
+                require(type(self.recording) is RecordingPhase and self.recording.service is self)
+                self.recording._context(recovering=recovering)
         else:
-            require(not recovering)
+            require(not recovering and self.recording is None)
 
     def _launch_context(self, *, unused=True):
         """Only the explicit original native owner may have consumed this launch."""
@@ -1133,8 +1313,36 @@ class IdleService:
         """Explicit completion-stream close; never an App stop or a recorder call."""
         try:
             self._context()
-            require(type(self.native) is NativePhase)
+            require(type(self.native) is NativePhase and self.recording is None)
             return self.native.cancel()
+        except BaseException as error:
+            self._fail(error)
+
+    def start_recording(self):
+        """Explicit separately authorized handoff, never selected by idle input.
+
+        Requires the original confirmed native phase and captured exit observer.
+        False consumes the attempt, preserving clock expiry and evidence, not
+        pristine cancellation or retry. True acknowledges start only.
+        """
+        try:
+            self._context()
+            require(self.used and self.lock.locked() and not self.recording_attempted)
+            self.recording_attempted = True
+            recording = RecordingPhase(self)
+            self.native.retired = True
+            self.recording = self._original_recording = recording
+            self.session.read = recording.read
+            return recording.start()
+        except BaseException as error:
+            self._fail(error)
+
+    def finish_recording(self):
+        """One explicit bounded return/exit collection, not a verified outcome."""
+        try:
+            self._context()
+            require(type(self.recording) is RecordingPhase)
+            return self.recording.finish()
         except BaseException as error:
             self._fail(error)
 
@@ -1321,9 +1529,8 @@ class IdleService:
             require(callable(wait))
             for _ in range(IDLE_POLL_LIMIT):
                 self._context()
-                result = (
-                    self.coordinator.poll(wait) if self.native is None else self.native.poll(wait)
-                )
+                phase = self.recording or self.native or self.coordinator
+                result = phase.poll(wait)
                 if result.phase in ("complete", "review"):
                     return result
                 wait(0.25)
