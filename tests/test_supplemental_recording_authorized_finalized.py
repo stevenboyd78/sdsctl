@@ -265,6 +265,16 @@ def test_closing_reader_keeps_callers_journal_and_recovery_owner(completed):
     denied(c.reader)
 
 
+@pytest.mark.parametrize("caller", ["start", "run"])
+def test_retiring_original_caller_before_final_read_refuses(completed, caller):
+    c = completed
+    publish(c)
+    getattr(c.s, caller).close()
+    denied(c.reader)
+    assert "files" not in c.trace and not c.operator.closed
+    assert c.s.journal.fd >= 0
+
+
 @pytest.mark.parametrize("fault", ["close", "phase", "publication", "history"])
 def test_mid_read_changes_refuse(completed, monkeypatch, fault):
     c = completed
