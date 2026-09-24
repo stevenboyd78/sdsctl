@@ -2447,6 +2447,35 @@ restart/lost-acknowledgment protection, independent supervision and integration
 into the continuing service remain separate gates. Both new startup modules
 remain outside the qualified helper image and its command allowlist.
 
+#### Exclusive private plan publication
+
+The uninstalled `supplemental_recording_service_publish.Publisher` connects an
+original, still-unaccepted offer to the existing retained `CasePlan` reader.
+The caller must independently create and authenticate the empty private case
+directory. Publication walks every ancestor without following links and uses an
+exclusive nonblocking directory lock. An existing entry, an unexpected directory
+mode/owner, a replaced ancestor or lock contention refuses the attempt.
+
+It first creates a single-link, mode0600 `startup-claim.json` with exclusive
+creation, writes and verifies the exact claim, and synchronizes both file and
+directory. Only then may it exclusively create and synchronize `plan.json`.
+The original offer, clock, exact plan, directory identities and file metadata
+are checked throughout. The operation has its own two-second bound inside the
+offer's unchanged original limit. Independent outer supervision remains needed
+for blocked kernel I/O. Success returns retained read-only plan custody; it
+does not accept the proposal, prepare a journal or start a service.
+
+Both files remain as evidence. Partial writes, file/directory synchronization
+failures, missing close acknowledgments, expiry and interruptions do not trigger
+cleanup, overwrite, repair or another publication attempt. A close whose outcome
+is uncertain is not retried against a potentially reused descriptor. A failed
+publication closes only the offer model, leaving its original clock with the
+caller. Existing files also prevent a newly constructed publisher from replacing
+the case. Neither a claim file nor returned plan custody is independent approval.
+The external acceptance channel and continuing installed entrypoint still need
+implementation and qualification; this module is outside the qualified helper
+image and its command allowlist.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
