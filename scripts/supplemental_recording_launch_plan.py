@@ -91,7 +91,8 @@ def _probe_directory(path):
     """Inspect live output ancestry without acquiring the recorder's lock.
 
     No contents are read or published. Content changes are expected; descriptor
-    and name identity (including permissions/owner/link count) must still match.
+    and name identity (including permissions/owner) must still match. Only the
+    selected directory's link count is in scope, not its ancestors' siblings.
     The launch path and writer retain their original locking requirements.
     """
     opened, anchor = [], -1
@@ -111,8 +112,12 @@ def _probe_directory(path):
         info = os.fstat(parent)
         require(info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700)
         for parent, name, child, before in opened:
-            require(identity(os.fstat(child))[:6] == before)
-            require(identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:6] == before)
+            width = 6 if child == opened[-1][2] else 5
+            require(identity(os.fstat(child))[:width] == before[:width])
+            require(
+                identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:width]
+                == before[:width]
+            )
     finally:
         for _, _, child, _ in reversed(opened):
             os.close(child)

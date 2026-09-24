@@ -195,8 +195,14 @@ def _private_directory(path: Path, *, exclusive: bool):
         fcntl.flock(parent, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
         yield parent
         for parent, name, child, before in opened:
-            require(identity(os.fstat(child))[:6] == before)
-            require(identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:6] == before)
+            # External siblings may create directories; the selected private
+            # directory still retains its link-count guard as well as identity.
+            width = 6 if child == opened[-1][2] else 5
+            require(identity(os.fstat(child))[:width] == before[:width])
+            require(
+                identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:width]
+                == before[:width]
+            )
     finally:
         for _, _, child, _ in reversed(opened):
             os.close(child)

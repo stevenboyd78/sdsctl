@@ -29,6 +29,19 @@ def receive(child):
         remaining = deadline - time.monotonic()
         assert remaining > 0 and select.select([child.stdout], [], [], remaining)[0]
         chunk = os.read(child.stdout.fileno(), 1)
+        if not chunk:
+            # Test-owned, synthetic children only. Preserve bounded diagnostic
+            # stderr instead of discarding the cause when stdout closes early.
+            try:
+                code = child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                code = None
+            os.set_blocking(child.stderr.fileno(), False)
+            try:
+                detail = os.read(child.stderr.fileno(), 8192).decode("utf-8", errors="replace")
+            except BlockingIOError:
+                detail = "No stderr available"
+            raise AssertionError(f"Synthetic child stdout closed (exit={code}): {detail}")
         assert chunk and len(data) < 8192
         data.extend(chunk)
     return json.loads(data)

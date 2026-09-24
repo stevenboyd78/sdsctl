@@ -52,6 +52,83 @@ def test_empty_file_and_directory(tree):
     assert f.inventory(tree)["zero"]["sha256"] == hashlib.sha256(b"").hexdigest()
 
 
+@pytest.mark.parametrize("single", [False, True])
+def test_unrelated_sibling_directory_creation_does_not_change_selected_evidence(
+    tree, monkeypatch, single
+):
+    target = tree / "a.py"
+    target.chmod(0o600)
+    observe = (lambda: f.private_file(target)) if single else (lambda: f.inventory(tree))
+    expected = observe()
+    original, changed = f.os.read, []
+    inode = target.stat().st_ino
+
+    def reading(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == inode:
+            # Siblings are not part of either the selected tree or single file.
+            sibling = (tree if single else tree.parent) / "unrelated-directory"
+            sibling.mkdir()
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(f.os, "read", reading)
+    assert observe() == expected
+    assert changed == [True]
+
+
+@pytest.mark.parametrize("single", [False, True])
+@pytest.mark.parametrize("fault", ["mode", "replace", "symlink"])
+def test_external_ancestor_identity_still_checked_during_selected_read(
+    tree, monkeypatch, single, fault
+):
+    holder = tree.parent / "holder"
+    holder.mkdir()
+    tree.rename(holder / "tree")
+    tree = holder / "tree"
+    target = tree / "a.py"
+    target.chmod(0o600)
+    original, changed = f.os.read, []
+    inode = target.stat().st_ino
+
+    def reading(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == inode:
+            if fault == "mode":
+                holder.chmod(0o711)
+            else:
+                saved = holder.with_name("saved-holder")
+                holder.rename(saved)
+                if fault == "replace":
+                    holder.mkdir()
+                else:
+                    holder.symlink_to(saved, target_is_directory=True)
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(f.os, "read", reading)
+    with pytest.raises(f.UnconfirmedFiles):
+        f.private_file(target) if single else f.inventory(tree)
+    assert changed == [True]
+
+
+def test_creating_inside_selected_root_still_refuses(tree, monkeypatch):
+    original, changed = f.os.read, []
+    inode = (tree / "a.py").stat().st_ino
+
+    def reading(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == inode:
+            (tree / "unexpected-directory").mkdir()
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(f.os, "read", reading)
+    with pytest.raises(f.UnconfirmedFiles):
+        f.inventory(tree)
+    assert changed == [True]
+
+
 @pytest.mark.parametrize("kind", ["file_link", "dir_link", "hardlink", "fifo", "name"])
 def test_unsafe_entries_rejected_without_exposing_path(tree, kind):
     private = tree / "private-secret"

@@ -50,6 +50,10 @@ def test_native_sigterm_is_not_exit_or_finalize_proof(tmp_path, scenario):
         child.stdin.flush()
         assert receive(child) == {"stage": "recording"}
         if scenario == "complete":
+            # A different task can create a sibling of this recording/receipt
+            # namespace while the original handles remain open. Not tampering
+            # with any selected file or directory must not invalidate closure.
+            (tmp_path / "unrelated-task").mkdir()
             result = receive(child)
             assert result["stage"] == "verified" and result["artifact"]["samples"] > 0
             assert result["cleanup_complete"] and not result["runtime_running"]

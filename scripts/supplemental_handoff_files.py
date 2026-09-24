@@ -164,13 +164,13 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
 
         visit(parent, "", 0)
         timely()
-        # Parent directory mtimes can change for unrelated siblings. Their
+        # Parent directory timestamps/link counts can change for unrelated siblings. Their
         # identity/mode/owner must remain stable; the selected root must match
         # its entire original stat (including mtime and ctime).
         for index, (parent, name, child, before) in enumerate(opened):
             current = identity(os.fstat(child))
             entry = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
-            width = len(before) if index == len(opened) - 1 else 6
+            width = len(before) if index == len(opened) - 1 else 5
             require(current[:width] == entry[:width] == before[:width])
         return dict(sorted(result.items()))
     except Exception:
@@ -231,7 +231,9 @@ def _single_file(path: Path, mode: int) -> FileEvidence:
         for parent, name, child, before in opened:
             current = identity(os.fstat(child))
             named = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
-            require(current[:6] == named[:6] == before[:6])
+            # This API selects one file, not its sibling directories. Preserve
+            # device/inode/type/mode/owner checks on every external ancestor.
+            require(current[:5] == named[:5] == before[:5])
         require(time.monotonic() <= deadline)
         return FileEvidence(size, hashed.hexdigest(), mode, stated.st_uid, stated.st_gid)
     except Exception:

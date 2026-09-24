@@ -196,7 +196,7 @@ def opened_root(root: Path, *, deadline: float) -> Iterator[int]:
             named = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
             # Ancestor siblings may change. Selected root content must not change
             # during this final observation (it can differ from pre-start).
-            width = len(before) if child == opened[-1][2] else 6
+            width = len(before) if child == opened[-1][2] else 5
             require(current[:width] == named[:width] == before[:width])
         require(time.monotonic() <= deadline)
     finally:

@@ -202,11 +202,14 @@ class Idle:
         result = {name: self._file(directory, name) for name in sorted(names)}
         require(files.identity(os.fstat(directory)) == before)
         for parent, name, fd, original in self.opened:
-            require(files.identity(os.fstat(fd))[:6] == original)
+            # Retain selected claim-directory link count, not unrelated
+            # siblings created elsewhere under the App data/host ancestors.
+            width = 6 if fd == directory else 5
+            require(files.identity(os.fstat(fd))[:width] == original[:width])
             if parent is not None:
                 require(
-                    files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:6]
-                    == original
+                    files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:width]
+                    == original[:width]
                 )
         return before, result
 

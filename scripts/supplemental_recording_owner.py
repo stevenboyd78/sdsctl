@@ -129,8 +129,13 @@ class _Receipts:
     def check(self) -> None:
         require(self.fd >= 0)
         for parent, name, child, before in self.handles:
-            require(identity(os.fstat(child))[:6] == before[:6])
-            require(identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:6] == before[:6])
+            # Sibling directory activity is not part of this receipt journal.
+            width = 6 if child == self.fd else 5
+            require(identity(os.fstat(child))[:width] == before[:width])
+            require(
+                identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:width]
+                == before[:width]
+            )
         # scandir prevents an unexpected large directory from allocating a list.
         names = set()
         with os.scandir(self.fd) as children:

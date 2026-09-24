@@ -183,6 +183,18 @@ def test_real_claim_read_is_never_daemon_health_or_recording_idle(prepared):
     denied(observer.read)
 
 
+@pytest.mark.parametrize("location", ["root", "case"])
+def test_unrelated_sibling_directory_does_not_invalidate_retained_idle_claim(prepared, location):
+    observer = prepared.observe()
+    parent = prepared.root if location == "root" else prepared.directory.parent
+    (parent / "unrelated-sibling").mkdir(mode=0o700)
+    fresh = observer.read()
+    assert fresh.files_sha256 == observer.initial.files_sha256
+    assert fresh.actor_sha256 == observer.initial.actor_sha256
+    assert fresh.init == observer.initial.init
+    assert fresh.native.healthy is None and fresh.native.recording is None
+
+
 @pytest.mark.parametrize(
     "field, value",
     [
@@ -293,7 +305,7 @@ def test_namespace_or_ownership_not_adopted(prepared, monkeypatch, fault):
         "same_bytes_rewritten",
         "directory_replaced",
         "extra",
-        "new_sibling_directory",
+        "new_child_directory",
     ],
 )
 def test_continuity_failure_poisoned_without_rebaselining(prepared, fault):
@@ -312,7 +324,7 @@ def test_continuity_failure_poisoned_without_rebaselining(prepared, fault):
     elif fault == "extra":
         (prepared.directory / "PRIVATE").write_bytes(b"preserve")
     else:
-        (prepared.directory.parent / "late_child").mkdir(mode=0o700)
+        (prepared.directory / "late_child").mkdir(mode=0o700)
     denied(observer.read)
     assert observer.failed and observer.pidfd >= 0 and not observer.closed
     denied(observer.read)
