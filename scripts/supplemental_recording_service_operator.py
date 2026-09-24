@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private schema3 request/cancel input; not a publisher or service entrypoint.
+"""Private schema3 request/cancel publication and consumption, not an entrypoint.
 
 Only the existing service owner may consume a fresh independently submitted
 notice into its original journal. No App command, native operator, recording
@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import stat
 import time
+from contextlib import ExitStack, contextmanager
 from threading import Lock, get_ident
 
 import supplemental_recording_host_launch as launch
@@ -48,6 +49,168 @@ def notice(action, plan, preparation_sha256, issued_at):
         "preparation_sha256": preparation_sha256,
         "issued_at": issued_at,
     }
+
+
+@contextmanager
+def _reading_directory(path):
+    """Only lock acquisition contention means 'not yet'; read errors still fail."""
+    with ExitStack() as stack:
+        try:
+            fd = stack.enter_context(
+                launch.binding.protected._private_directory(path, exclusive=False)
+            )
+        except launch.binding.protected.DirectoryBusy:
+            yield None
+        else:
+            yield fd
+
+
+def _names(fd):
+    names = set()
+    with os.scandir(fd) as entries:
+        for entry in entries:
+            require(len(names) < 2 and entry.name in {a + ".json" for a in ACTIONS})
+            names.add(entry.name)
+    return names
+
+
+class Publisher:
+    """One explicit notice, one publication attempt; never an automatic action.
+
+    The caller supplies the original independently bound preparation digest and
+    issue time. This does not discover approval from a file, read the host, own
+    the journal, dispatch anything, or authorize native recording. The service
+    must independently check the notice against its original journal and phase.
+
+    A failed/uncertain attempt is consumed. Preserve every remaining file; do
+    not recreate this object to retry. Pending files prevent later publication
+    and consumption. Success removes only its own temporary hardlink after
+    publishing the durable payload; the destination is never overwritten.
+    """
+
+    def __init__(self, original, action, preparation_sha256, issued_at):
+        self.owner = (os.getpid(), get_ident(), os.geteuid(), os.getegid())
+        self.used = self.failed = False
+        self.lock = Lock()
+        try:
+            require(type(original) is intake.CasePlan)
+            self.original, self.plan = original, original.recheck()
+            self.action = action
+            self.raw = base.encode(notice(action, self.plan, preparation_sha256, issued_at))
+            require(len(self.raw) <= MAX_BYTES)
+            self.issued_at = issued_at
+            self.path = self.plan.root / "inbox"
+            self.originals = (original, self.plan, action, self.raw, issued_at, self.path)
+            with launch.binding.protected._private_directory(self.path, exclusive=False) as fd:
+                info = os.fstat(fd)
+                require(info.st_gid == os.getegid())
+                self.identity = intake.files.identity(info)[:6]
+        except BaseException as error:
+            self._fail(error)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedOperator(MESSAGE) from None
+
+    def publish(self):
+        acquired = False
+        output = -1
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(not self.used and not self.failed)
+            self.used = True
+            end = time.monotonic() + 2
+
+            def check():
+                require(not self.failed)
+                require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
+                current = (
+                    self.original,
+                    self.plan,
+                    self.action,
+                    self.raw,
+                    self.issued_at,
+                    self.path,
+                )
+                require(all(a is b for a, b in zip(current, self.originals, strict=True)))
+                require(self.original.recheck() is self.plan and time.monotonic() < end)
+                require(intake.files.identity(os.fstat(fd))[:6] == self.identity)
+                require(
+                    intake.files.identity(os.stat(self.path, follow_symlinks=False))[:6]
+                    == self.identity
+                )
+                observed = plans.clock.read()
+                self.plan.check_clock(observed)
+                now = observed.boottime_ns / plans.clock.NS
+                require(0 <= now - self.issued_at <= MAX_AGE and now < self.plan.deadlines.ready_by)
+                require(time.monotonic() < end)
+                return observed
+
+            with launch.binding.protected._private_directory(self.path, exclusive=True) as fd:
+                before = check()
+                names = _names(fd)
+                destination, temporary = self.action + ".json", ".pending-" + self.action
+                require(destination not in names)
+                output = os.open(
+                    temporary,
+                    os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
+                    0o600,
+                    dir_fd=fd,
+                )
+                opened = intake.files.identity(os.fstat(output))
+                require(stat.S_IMODE(opened[2]) == 0o600 and opened[3:6] == (*self.owner[2:], 1))
+                require(os.write(output, self.raw) == len(self.raw))
+                os.fsync(output)
+                require(os.pread(output, MAX_BYTES + 1, 0) == self.raw)
+                complete = intake.files.identity(os.fstat(output))
+                require(complete[:6] == opened[:6] and complete[6] == len(self.raw))
+                require(
+                    intake.files.identity(os.stat(temporary, dir_fd=fd, follow_symlinks=False))
+                    == complete
+                )
+                before.check_later(check())
+                os.link(temporary, destination, src_dir_fd=fd, dst_dir_fd=fd, follow_symlinks=False)
+                linked = intake.files.identity(os.fstat(output))
+                require(linked[:5] == complete[:5] and linked[5] == 2)
+                require(linked[6:8] == complete[6:8])
+                for name in (temporary, destination):
+                    require(
+                        intake.files.identity(os.stat(name, dir_fd=fd, follow_symlinks=False))
+                        == linked
+                    )
+                before.check_later(check())
+                # Remove only the checked temporary link created by this call.
+                # Failures leave pending/destination files untouched for review.
+                os.unlink(temporary, dir_fd=fd)
+                os.fsync(fd)
+                final = intake.files.identity(os.fstat(output))
+                require(final[:6] == complete[:6] and final[6:8] == complete[6:8])
+                require(
+                    intake.files.identity(os.stat(destination, dir_fd=fd, follow_symlinks=False))
+                    == final
+                )
+                require(_names(fd) == names | {destination})
+                require(os.pread(output, MAX_BYTES + 1, 0) == self.raw)
+                require(intake.files.identity(os.fstat(output)) == final)
+                require(
+                    intake.files.identity(os.stat(destination, dir_fd=fd, follow_symlinks=False))
+                    == final
+                )
+                after = check()
+                before.check_later(after)
+                require(0 <= (after.boottime_ns - before.boottime_ns) / plans.clock.NS < 2)
+            require(time.monotonic() < end)
+            return base.checksum(object_json(self.raw))
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if output >= 0:
+                os.close(output)
+            if acquired:
+                self.lock.release()
 
 
 class Inbox:
@@ -122,14 +285,6 @@ class Inbox:
         self._guard(end)
         return launch._journal_history(self.plan, self.projected, self.journal, end)
 
-    def _names(self, fd):
-        names = set()
-        with os.scandir(fd) as entries:
-            for entry in entries:
-                require(len(names) < 2 and entry.name in {a + ".json" for a in ACTIONS})
-                names.add(entry.name)
-        return names
-
     def consume(self):
         acquired = False
         try:
@@ -148,9 +303,12 @@ class Inbox:
             require(state.launch_intent_sha256 is None and state.authorization_generation is None)
             require(state.recording_outcome == "not_attempted" and not state.finish_requested)
             preparation = base.checksum(self.journal.entries[0]["event"])
-            with launch.binding.protected._private_directory(self.path, exclusive=False) as fd:
+            with _reading_directory(self.path) as fd:
+                if fd is None:
+                    self._guard(end)
+                    return False
                 require(intake.files.identity(os.fstat(fd))[:6] == self.identity)
-                if action + ".json" not in self._names(fd):
+                if action + ".json" not in _names(fd):
                     return False
                 name = action + ".json"
                 info = os.stat(name, dir_fd=fd, follow_symlinks=False)
@@ -170,8 +328,7 @@ class Inbox:
                 expected = notice(action, self.plan, preparation, issued)
                 require(value == expected and raw == base.encode(expected))
                 require(
-                    self._history(end) is machine
-                    and self._names(fd) <= {a + ".json" for a in ACTIONS}
+                    self._history(end) is machine and _names(fd) <= {a + ".json" for a in ACTIONS}
                 )
                 observed = self._guard(end)
                 before.check_later(observed)

@@ -1,5 +1,6 @@
 """Fresh schema3 notices with real files/journal and synthetic host fixtures."""
 
+import errno
 import fcntl
 import importlib.util
 import os
@@ -357,3 +358,221 @@ def test_wrong_thread_consumes_no_notice(transfer):
         assert not worker.is_alive() and errors == [m.MESSAGE]
         denied(inbox)
         assert inbox.journal.machine.state.phase == "prepared"
+
+
+def publisher(inbox, action="request", **changes):
+    values = dict(
+        original=inbox.original,
+        action=action,
+        preparation_sha256=m.base.checksum(inbox.journal.entries[0]["event"]),
+        issued_at=m.plans.clock.read().boottime_ns / m.plans.clock.NS,
+    )
+    return m.Publisher(**(values | changes))
+
+
+def publication_denied(value):
+    with pytest.raises(m.UnconfirmedOperator) as caught:
+        value.publish()
+    assert str(caught.value) == m.MESSAGE and caught.value.__suppress_context__
+    assert value.failed and not value.lock.locked()
+    with pytest.raises(m.UnconfirmedOperator):
+        value.publish()
+
+
+def test_explicit_atomic_publication_changes_only_notice_not_journal_or_host(transfer):
+    with opened(transfer) as inbox:
+        value = publisher(inbox)
+        old = tuple(transfer.journal.entries)
+        transfer.host.reads.clear()
+        descriptors = len(os.listdir("/proc/self/fd"))
+        pin = value.publish()
+        path = inbox.path / "request.json"
+        assert pin == m.base.checksum(m.object_json(path.read_bytes()))
+        assert path.read_bytes() == value.raw
+        assert path.stat().st_nlink == 1 and path.stat().st_mode & 0o777 == 0o600
+        assert {p.name for p in inbox.path.iterdir()} == {"request.json"}
+        assert tuple(transfer.journal.entries) == old and not transfer.host.reads
+        assert len(os.listdir("/proc/self/fd")) == descriptors
+        publication_denied(value)
+        assert inbox.consume() and transfer.journal.machine.state.phase == "requested"
+        assert not inbox.consume()
+
+
+def test_published_cancel_uses_original_pristine_restoration_session(cancel):
+    with opened(cancel) as inbox:
+        value = publisher(inbox, "cancel_idle")
+        value.publish()
+        assert len(cancel.engine.sent) == 2 and not cancel.journal.machine.state.finish_requested
+        assert inbox.consume()
+        result = cancellation.m.recover_never_launched(cancel.cancel, lambda _: None)
+        assert result.phase == "complete" and len(cancel.engine.sent) == 4
+        assert cancel.journal.machine.state.recording_outcome == "not_attempted"
+
+
+def test_busy_publisher_is_no_notice_yet_not_a_permanent_consumer_failure(transfer):
+    with opened(transfer) as inbox:
+        value = publisher(inbox)
+        with m.launch.binding.protected._private_directory(inbox.path, exclusive=True):
+            assert not inbox.consume() and not inbox.failed
+        value.publish()
+        assert inbox.consume()
+
+
+@pytest.mark.parametrize("where", ["open", "read"])
+def test_eagain_outside_flock_is_not_misreported_as_busy(transfer, monkeypatch, where):
+    with opened(transfer) as inbox:
+        submit(inbox)
+        if where == "read":
+
+            def failed(*args, **kwargs):
+                raise BlockingIOError(errno.EAGAIN, "PRIVATE read")
+
+            monkeypatch.setattr(m.launch.binding.protected.evidence, "read_bytes", failed)
+        else:
+            original = m.os.open
+
+            def failed(path, *args, **kwargs):
+                if path == "inbox":
+                    raise BlockingIOError(errno.EAGAIN, "PRIVATE open")
+                return original(path, *args, **kwargs)
+
+            monkeypatch.setattr(m.os, "open", failed)
+        denied(inbox)
+        assert transfer.journal.machine.state.phase == "prepared"
+
+
+@pytest.mark.parametrize(
+    "fault", ["existing", "pending", "replaced_inbox", "plan", "raw", "clock", "lock"]
+)
+def test_publisher_preflight_refusals_preserve_every_existing_file(transfer, monkeypatch, fault):
+    with opened(transfer) as inbox:
+        value = publisher(inbox)
+        if fault == "existing":
+            submit(inbox)
+        elif fault == "pending":
+            (inbox.path / ".pending-request").write_bytes(b"PRIVATE original")
+        elif fault == "replaced_inbox":
+            inbox.path.rename(inbox.path.with_name("saved-inbox"))
+            inbox.path.mkdir(mode=0o700)
+        elif fault == "plan":
+            (value.plan.root / "plan.json").write_bytes(b"PRIVATE original")
+        elif fault == "raw":
+            value.raw = b"PRIVATE replacement"
+        elif fault == "clock":
+            original = m.plans.clock.read
+
+            def late():
+                stamp = original()
+                shift = 31 * m.plans.clock.NS
+                return replace(
+                    stamp,
+                    before_ns=stamp.before_ns + shift,
+                    after_ns=stamp.after_ns + shift,
+                    boottime_ns=stamp.boottime_ns + shift,
+                )
+
+            monkeypatch.setattr(m.plans.clock, "read", late)
+        before = {p.name: p.read_bytes() for p in inbox.path.iterdir()}
+        if fault == "lock":
+            with m.launch.binding.protected._private_directory(inbox.path, exclusive=False):
+                publication_denied(value)
+        else:
+            publication_denied(value)
+        assert before == {p.name: p.read_bytes() for p in inbox.path.iterdir()}
+        assert transfer.journal.machine.state.phase == "prepared"
+
+
+@pytest.mark.parametrize("step", ["write", "file_sync", "link", "unlink", "directory_sync"])
+@pytest.mark.parametrize("after", [False, True])
+def test_lost_publication_reply_is_not_retried_or_cleaned(transfer, monkeypatch, step, after):
+    with opened(transfer) as inbox:
+        value = publisher(inbox)
+        name = {"file_sync": "fsync", "directory_sync": "fsync"}.get(step, step)
+        original, calls = getattr(m.os, name), []
+
+        def lost(*args, **kwargs):
+            if name == "fsync":
+                directory = m.stat.S_ISDIR(os.fstat(args[0]).st_mode)
+                if directory != (step == "directory_sync"):
+                    return original(*args, **kwargs)
+            calls.append(True)
+            if after:
+                original(*args, **kwargs)
+            raise OSError("PRIVATE lost publication reply")
+
+        descriptors = len(os.listdir("/proc/self/fd"))
+        with monkeypatch.context() as patch:
+            patch.setattr(m.os, name, lost)
+            publication_denied(value)
+        assert calls == [True] and len(os.listdir("/proc/self/fd")) == descriptors
+        names = {p.name for p in inbox.path.iterdir()}
+        assert names  # No error-path cleanup of partial or committed evidence.
+        assert transfer.journal.machine.state.phase == "prepared"
+        before = {p.name: p.read_bytes() for p in inbox.path.iterdir()}
+        replacement = publisher(inbox)
+        publication_denied(replacement)
+        assert before == {p.name: p.read_bytes() for p in inbox.path.iterdir()}
+        if names == {"request.json"}:
+            assert inbox.consume() and not inbox.consume()
+        else:
+            denied(inbox)
+
+
+@pytest.mark.parametrize(
+    "fault", ["short_write", "late", "reentrant", "replace_temp", "replace_destination"]
+)
+def test_changes_during_publication_leave_evidence_and_no_dispatch(transfer, monkeypatch, fault):
+    with opened(transfer) as inbox:
+        value = publisher(inbox)
+        original, changes = m.os.write, []
+        if fault == "replace_destination":
+            original_link = m.os.link
+
+            def linked(*args, **kwargs):
+                original_link(*args, **kwargs)
+                changes.append(True)
+                path = inbox.path / "request.json"
+                path.rename(path.with_name("saved-request"))
+                path.symlink_to("saved-request")
+
+            monkeypatch.setattr(m.os, "link", linked)
+        else:
+
+            def wrote(fd, data):
+                changes.append(True)
+                written = original(fd, data[:-1] if fault == "short_write" else data)
+                if fault == "late":
+                    monotonic = m.time.monotonic
+                    monkeypatch.setattr(m.time, "monotonic", lambda: monotonic() + 3)
+                elif fault == "reentrant":
+                    with pytest.raises(m.UnconfirmedOperator):
+                        value.publish()
+                elif fault == "replace_temp":
+                    path = inbox.path / ".pending-request"
+                    path.rename(path.with_name("saved-pending"))
+                    path.symlink_to("saved-pending")
+                return written
+
+            monkeypatch.setattr(m.os, "write", wrote)
+        publication_denied(value)
+        assert changes == [True] and list(inbox.path.iterdir())
+        assert transfer.journal.machine.state.phase == "prepared"
+        assert not transfer.journal.machine.state.executions
+
+
+def test_wrong_thread_cannot_publish_and_cannot_reset_the_attempt(transfer):
+    with opened(transfer) as inbox:
+        value, errors = publisher(inbox), []
+
+        def other():
+            try:
+                value.publish()
+            except m.UnconfirmedOperator as error:
+                errors.append(str(error))
+
+        worker = Thread(target=other)
+        worker.start()
+        worker.join(timeout=2)
+        assert not worker.is_alive() and errors == [m.MESSAGE]
+        publication_denied(value)
+        assert list(inbox.path.iterdir()) == []

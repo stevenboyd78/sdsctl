@@ -8,6 +8,7 @@ A private manifest or a good WAV cannot supply either of those facts.
 
 from __future__ import annotations
 
+import errno
 import fcntl
 import hashlib
 import json
@@ -33,6 +34,10 @@ MESSAGE = "Recording protection is unconfirmed; preserve the case and its origin
 
 class UnconfirmedProtection(ValueError):
     """Fixed error without private paths, filenames, source identities or contents."""
+
+
+class DirectoryBusy(UnconfirmedProtection):
+    """Only an actual nonblocking directory-flock contention, not an I/O error."""
 
 
 def require(value: bool) -> None:
@@ -192,7 +197,12 @@ def _private_directory(path: Path, *, exclusive: bool):
             parent = child
         info = os.fstat(parent)
         require(info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700)
-        fcntl.flock(parent, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(parent, (fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            if error.errno not in (errno.EAGAIN, errno.EACCES):
+                raise
+            raise DirectoryBusy(MESSAGE) from None
         yield parent
         for parent, name, child, before in opened:
             # External siblings may create directories; the selected private

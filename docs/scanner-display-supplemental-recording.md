@@ -2923,12 +2923,28 @@ anything. The exact journal event is the durable consumption receipt. A refused
 input reader cannot disable the separately owned expiry/recovery loop.
 
 The inbox retains its directory identity but does not retain an advisory lock
-between calls, so a separate publisher can acquire an exclusive lock. This is
-an input consumer and pure format builder, **not** that publisher, a service
-entrypoint, App dispatcher or restored-process proof. The helper graph now has
-54 modules, requiring a new independently pinned image. Local integration joins
-an explicit idle-cancel notice to the original never-launched recovery session;
-Engine and process outcomes in that test remain explicitly synthetic.
+between calls. Its separate `Publisher` accepts an explicit action, preparation
+digest and original issue time, retains the original `CasePlan`, and permits
+exactly one attempt. It uses an exclusive directory lock, exclusive temporary
+creation, a file sync, no-overwrite hardlink publication and a directory sync.
+Only its own verified temporary hardlink is removed on the successful path;
+any partial or uncertain files remain for review, with no retry or reset.
+Publication neither owns nor appends to the service journal and sends no App
+command. The consumer must still independently qualify the journal and phase.
+
+Actual directory-lock contention means no notice is available yet; it does not
+permanently poison a consumer polling during publication. This exception is
+classified only at the nonblocking `flock` call. A read/open error with the same
+OS error number remains an unconfirmed failure, not a lock-busy result. The
+caller still must run its independent deadline/recovery checks while input is
+absent or busy. No waiting loop or renewed time budget is introduced.
+
+These are library boundaries, **not** a service entrypoint, App dispatcher or
+restored-process proof. The helper graph has 54 modules; changes to the shared
+protection helper require rebuilding and independently pinning both host and
+native bundles. Local integration joins a published idle-cancel notice to the
+original never-launched recovery session; Engine and process outcomes in that
+test remain explicitly synthetic.
 
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
