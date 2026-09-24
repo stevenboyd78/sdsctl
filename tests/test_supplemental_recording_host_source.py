@@ -20,16 +20,19 @@ sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 
 
-@pytest.fixture
-def layout(tmp_path):
+@pytest.fixture(params=[False, True], ids=["original", "startup"])
+def layout(tmp_path, request):
     runtime, helper = tmp_path / "sds200", tmp_path / "helper"
-    for root, names in ((runtime, m.REQUIRED_RUNTIME), (helper, m.HELPER_FILES)):
+    for root, names in (
+        (runtime, m.REQUIRED_RUNTIME),
+        (helper, m.STARTUP_FILES if request.param else m.HELPER_FILES),
+    ):
         root.mkdir()
         for name in names:
             path = root / name
             path.write_bytes(b"raise RuntimeError('PRIVATE_UNTRUSTED_SOURCE')\n")
             path.chmod(0o644)
-    return m.Layout(runtime, helper)
+    return m.Layout(runtime, helper, startup=request.param)
 
 
 def denied(callback):
@@ -48,7 +51,12 @@ def test_whole_package_and_closed_helper_inventory_without_candidate_import(layo
     assert layout.verify(result.sha256) == result == layout.observe()
     runtime, helper = m.files.inventory(layout.runtime), m.files.inventory(layout.helper)
     assert result.sha256 == m.checksum(
-        {"schema": 1, "kind": m.KIND, "runtime": runtime, "helper": helper}
+        {
+            "schema": 1,
+            "kind": m.STARTUP_KIND if layout.startup else m.KIND,
+            "runtime": runtime,
+            "helper": helper,
+        }
     )
     assert result.runtime_sha256 == m.checksum(runtime)
     assert result.helper_sha256 == m.checksum(helper)
@@ -57,13 +65,15 @@ def test_whole_package_and_closed_helper_inventory_without_candidate_import(layo
     assert before == {p: m.files.identity(p.stat()) for p in before}
 
 
-def test_reviewed_roots_close_the_entire_private_static_import_graph():
-    pending, seen, product = list(m.ROOTS), set(), set()
+@pytest.mark.parametrize("startup", [False, True])
+def test_reviewed_roots_close_the_entire_private_static_import_graph(startup):
+    modules = m.STARTUP_MODULES if startup else m.MODULES
+    pending, seen, product = list(m.STARTUP_ROOTS if startup else m.ROOTS), set(), set()
     while pending:
         name = pending.pop()
         if name in seen:
             continue
-        assert name in m.MODULES
+        assert name in modules
         seen.add(name)
         tree = ast.parse((native.SCRIPTS / (name + ".py")).read_text())
         for node in ast.walk(tree):
@@ -86,7 +96,7 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph():
                     pending.append(dependency)
                 elif dependency.startswith("sds200"):
                     product.add(dependency)
-    assert seen == m.MODULES and len(seen) == 54
+    assert seen == modules and len(seen) == (62 if startup else 54)
     assert product == {
         "sds200.daemon_recording",
         "sds200.scanner_display_configuration",
@@ -98,7 +108,8 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph():
     assert m.MODULES != native.m.MODULES
 
 
-def test_real_isolated_import_closes_local_graph_without_starting_services():
+@pytest.mark.parametrize("startup", [False, True])
+def test_real_isolated_import_closes_local_graph_without_starting_services(startup):
     # Reviewed local source, not the untrusted inventory fixture. This is an
     # import smoke test in the test interpreter, NOT installed image attestation.
     script = r"""
@@ -118,10 +129,11 @@ for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "send
 subprocess.Popen = forbidden
 os.fork = os.system = forbidden
 bundle = importlib.import_module("supplemental_recording_host_source")
-for name in sorted(bundle.ROOTS):
+startup = sys.argv[2] == "True"
+for name in sorted(bundle.STARTUP_ROOTS if startup else bundle.ROOTS):
     importlib.import_module(name)
 private = {name for name in sys.modules if name.startswith("supplemental_")}
-assert private == bundle.MODULES
+assert private == (bundle.STARTUP_MODULES if startup else bundle.MODULES)
 for name in private:
     assert Path(sys.modules[name].__file__) == repository / "scripts" / (name + ".py")
 product = [name for name in sys.modules if name == "sds200" or name.startswith("sds200.")]
@@ -131,14 +143,14 @@ for name in product:
 print(json.dumps({"private": len(private), "product": len(product)}))
 """
     result = subprocess.run(
-        [sys.executable, "-I", "-B", "-c", script, str(native.SCRIPTS.parent)],
+        [sys.executable, "-I", "-B", "-c", script, str(native.SCRIPTS.parent), str(startup)],
         capture_output=True,
         timeout=5,
         check=True,
     )
     assert not result.stderr
     report = json.loads(result.stdout)
-    assert report["private"] == 54 and report["product"] >= 1
+    assert report["private"] == (62 if startup else 54) and report["product"] >= 1
 
 
 @pytest.mark.parametrize(
@@ -262,3 +274,31 @@ def test_native_and_legacy_fingerprints_are_not_host_source(layout):
         {"schema": 1, "kind": m.KIND, "runtime": {}, "helper": helper},
     ):
         denied(lambda foreign=foreign: layout.verify(m.checksum(foreign)))
+
+
+def test_graph_selection_is_explicit_and_old_digests_cannot_certify_startup(layout):
+    denied(replace(layout, startup=not layout.startup).observe)
+    runtime, helper = m.files.inventory(layout.runtime), m.files.inventory(layout.helper)
+    other_kind = m.KIND if layout.startup else m.STARTUP_KIND
+    foreign = {"schema": 1, "kind": other_kind, "runtime": runtime, "helper": helper}
+    denied(lambda: layout.verify(m.checksum(foreign)))
+
+
+@pytest.mark.parametrize("selection", [None, 0, 1, "startup", "False", [], {}])
+def test_nonboolean_graph_selection_refuses_before_io(layout, monkeypatch, selection):
+    monkeypatch.setattr(
+        m.files, "inventory", lambda *_a, **_k: pytest.fail("Invalid profile read files")
+    )
+    denied(replace(layout, startup=selection).observe)
+
+
+def test_extra_startup_file_is_not_allowed_in_old_graph_or_incomplete_startup(layout):
+    extra = m.STARTUP_FILES - m.HELPER_FILES
+    assert len(extra) == 8
+    selected = layout.helper / sorted(extra)[0]
+    if layout.startup:
+        selected.unlink()
+    else:
+        selected.write_bytes(b"pass\n")
+        selected.chmod(0o644)
+    denied(layout.observe)

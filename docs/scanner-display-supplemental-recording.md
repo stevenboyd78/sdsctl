@@ -2520,8 +2520,13 @@ mode0600 pending file, synchronizes and verifies its complete bytes, and links
 it to the fixed acceptance filename without replacing anything. Only its own
 verified temporary link is removed; the destination and every uncertain payload
 remain preserved. Directory synchronization and final original-plan/file checks
-precede a successful delivery return, under a separate two-second bound. A busy
-or refused writer consumes its attempt; it does not retry. The reader stays
+precede a successful delivery return, under a separate two-second bound. An
+initial, known directory-lock contention may wait inside that **same original
+attempt and two-second bound**, before any file is created. Only the private
+directory's actual pre-entry `DirectoryBusy` is eligible; other I/O errors and
+anything after acquisition are not. A defensive poll ceiling also bounds this
+pre-write wait. Expiry, interruption or refusal consumes the attempt and forbids
+resubmission. No write, publication or acknowledgment is retried. The reader stays
 pending only while the writer actually holds the lock, and refuses leftover
 pending state after the lock is released.
 
@@ -2600,6 +2605,21 @@ launch, scanner access or recording operation. Accepted input is not readiness
 or operator approval. The full expanded source/runtime graph, finite installed
 command, supervision and actual host qualification still gate installation;
 none of the old helper commands implicitly selects this startup protocol.
+
+The read-only `host_source.Layout` now offers an explicit `startup=True` source
+inventory profile for the expanded **62-module** graph. The default still
+requires exactly the original54 modules; it does not detect or adopt a different
+graph from observed files. The startup profile uses a separate versioned hash
+kind, so an original/native fingerprint cannot certify it. Both profiles retain
+the full product package, exact flat helper inventory, two complete reads and
+all original metadata, symlink, size and time checks. The eight startup modules
+and their complete static import closure are covered by separate tests.
+
+This profile does not change `HelperQualification`, its command allowlist,
+clock policy or mount configuration, and an old image qualification does not
+cover it. The caller must explicitly select and independently reconstruct the
+new source digest, then separately qualify runtime, original process custody
+and the actual startup command before it can participate in installed startup.
 
 #### Observer-side clock comparison for a service-owned plan
 

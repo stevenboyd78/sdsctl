@@ -20,6 +20,7 @@ import supplemental_handoff_files as files
 from supplemental_handoff_policy import checksum, digest
 
 KIND = "finite-recording-host-source-v1"
+STARTUP_KIND = "finite-recording-startup-host-source-v1"
 MAX_SECONDS = 8.0
 ROOTS = frozenset(
     "supplemental_recording_" + name
@@ -112,6 +113,25 @@ MODULES = frozenset(
     }
 )
 HELPER_FILES = frozenset(name + ".py" for name in MODULES)
+# Explicit, separately hashed profile for the new startup libraries. The
+# original 54-module policy remains the default; no graph is auto-detected.
+STARTUP_MODULES = MODULES | frozenset(
+    "supplemental_recording_service_" + name
+    for name in (
+        "template",
+        "offer",
+        "publish",
+        "acceptance",
+        "submit",
+        "clock_link",
+        "declaration",
+        "startup",
+    )
+)
+STARTUP_FILES = frozenset(name + ".py" for name in STARTUP_MODULES)
+STARTUP_ROOTS = ROOTS | frozenset(
+    "supplemental_recording_service_" + name for name in ("startup", "submit", "clock_link")
+)
 REQUIRED_RUNTIME = frozenset({"__init__.py", "daemon_recording.py"})
 MESSAGE = "Recording host source is unconfirmed; do not launch the private host helper."
 
@@ -138,10 +158,14 @@ class Evidence:
 class Layout:
     runtime: Path
     helper: Path
+    startup: bool = False
 
     def _snapshot(self):
+        require(type(self.startup) is bool)
+        expected = STARTUP_FILES if self.startup else HELPER_FILES
+        kind = STARTUP_KIND if self.startup else KIND
         runtime, helper = files.inventory(self.runtime), files.inventory(self.helper)
-        require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == HELPER_FILES)
+        require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == expected)
         # inventory() includes every file, but an extra empty namespace must
         # also fail. This helper tree is deliberately flat and closed.
         fd = os.open(self.helper, files.DIRECTORY)
@@ -149,12 +173,12 @@ class Layout:
             before, names = files.identity(os.fstat(fd)), set()
             with os.scandir(fd) as entries:
                 for entry in entries:
-                    require(entry.name in HELPER_FILES and entry.name not in names)
+                    require(entry.name in expected and entry.name not in names)
                     require(
                         stat.S_ISREG(os.stat(entry.name, dir_fd=fd, follow_symlinks=False).st_mode)
                     )
                     names.add(entry.name)
-            require(names == HELPER_FILES and files.identity(os.fstat(fd)) == before)
+            require(names == expected and files.identity(os.fstat(fd)) == before)
         finally:
             os.close(fd)
         count, size = len(runtime) + len(helper), 0
@@ -163,10 +187,11 @@ class Layout:
             require(item["mode"] & 0o7022 == 0)
             size += item["size"]
             require(size <= files.MAX_TOTAL_BYTES)
-        return {"schema": 1, "kind": KIND, "runtime": runtime, "helper": helper}, count, size
+        return {"schema": 1, "kind": kind, "runtime": runtime, "helper": helper}, count, size
 
     def observe(self):
         try:
+            require(type(self.startup) is bool)
             for path in (self.runtime, self.helper):
                 require(type(path) is type(Path()) and path.is_absolute() and path != Path("/"))
                 require(".." not in path.parts)
