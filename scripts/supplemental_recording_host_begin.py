@@ -812,5 +812,167 @@ class _RetainedHostRead:
         return self.snapshot
 
 
+class ActiveSample:
+    """One active host/files/native sample under original input qualification.
+
+    No caller callback, health flag, replacement Capture or new deadline. The
+    original Start/RetainedHost/PostBegin and full RetainedQualification must
+    already be bound together. Creates only one passive cached-status exec;
+    authorization, checkpoint publication, completion, worker exits and recovery
+    stay separate. This is not an installed polling loop or automatic retry.
+    """
+
+    def __init__(self, host, qualify):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.used = self.failed = self.closed = False
+        self.probe = self.host = None
+        try:
+            require(type(host) is RetainedHost)
+            require(type(qualify) is launch.RetainedQualification)
+            self.host, self.qualify = host, qualify
+            self.start, self.run, self.plan = host.start, host.run, host.plan
+            self.relay, self.continuity = host.relay, host.continuity
+            self.objects = (
+                host,
+                qualify,
+                self.start,
+                self.run,
+                self.plan,
+                self.relay,
+                self.continuity,
+                host.docker,
+            )
+            self.context = host._context()
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _bindings(self):
+        require(not self.failed and not self.closed)
+        require(self.owner == (os.getpid(), get_ident()))
+        host, qualify = self.host, self.qualify
+        require(type(host) is RetainedHost and type(qualify) is launch.RetainedQualification)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (
+                        host,
+                        qualify,
+                        host.start,
+                        host.run,
+                        host.plan,
+                        host.relay,
+                        host.continuity,
+                        host.docker,
+                    ),
+                    self.objects,
+                    strict=True,
+                )
+            )
+        )
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (self.start, self.run, self.plan, self.relay, self.continuity),
+                    (host.start, host.run, host.plan, host.relay, host.continuity),
+                    strict=True,
+                )
+            )
+        )
+        require(qualify.continuity is self.continuity and qualify.plan is self.plan)
+        require(qualify.idle is self.run.idle and qualify.witness is self.run.witness)
+        require(qualify.docker is host.docker is self.run.qualify.docker)
+        require(not qualify.failed and host._context() == self.context)
+        require(self.relay.phase == "completed" and self.relay.expected is not None)
+        require(time.monotonic() < self.relay.plan.stop_at)
+
+    def _guard(self):
+        self._bindings()
+        self.host._guard()
+        require(self.relay.guard.check() == frozenset())
+
+    def _join(self):
+        # RetainedHost joins its worker before CPU-heavy owner checks. Do not
+        # put another journal traversal in front of that join.
+        sample = self.host()
+        require(type(sample) is launch.bootstrap.recovery.Sample)
+        require(sample.boot_id == self.plan.boot)
+        self._bindings()
+        observation = sample.observation
+        boot, observed_now = self.host._clock()
+        require(boot == sample.boot_id)
+        require(self.began <= observation.sampled_at <= sample.now <= observed_now)
+        require(observation.files.stage == "active")
+        candidate = observation.candidate
+        require(candidate.generation == self.run.pins.generation)
+        require(candidate.healthy is None and candidate.recording is None)
+        native = self.probe.read()
+        require(type(native) is plans.ordinary.NativeState)
+        require(native.generation == candidate.generation)
+        require(type(native.healthy) is bool and type(native.recording) is bool)
+        self._bindings()
+        return replace(
+            observation,
+            sampled_at=self.began,
+            candidate=replace(candidate, healthy=native.healthy, recording=native.recording),
+        )
+
+    def read(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._guard()
+            require(not self.used and self.host.pending is None)
+            self.used = True
+            # Complete inputs are checked before a passive process is created.
+            # This check gives no health and is not reused for the actual read.
+            require(self.qualify() is None)
+            self._guard()
+            began = time.monotonic()
+            first = plans.clock.read()
+            self.plan.check_clock(first)
+            self.began = first.boottime_ns / plans.clock.NS
+            end = min(began + 2, self.relay.plan.stop_at, self.plan.lease["stop_by"])
+            self.probe = launch.probe_exec.Sample(self.relay.guard)
+            require(self.probe.original is self.relay.guard)
+            require(self.probe.prepare() is None)
+            require(self.host.prepare() is None)
+            observation = self.qualify.during(self._join)
+            self._guard()
+            last = plans.clock.read()
+            self.plan.check_clock(last)
+            now = last.boottime_ns / plans.clock.NS
+            require(first.boot == last.boot == self.plan.boot)
+            require(self.began <= now and began <= time.monotonic() < end)
+            launch.bootstrap.recording.Machine.fresh(now, observation)
+            return launch.bootstrap.recovery.Sample(last.boot, now, observation)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if self.probe is not None and self.probe.channel is not None:
+            with suppress(Exception):
+                self.probe.channel.close()
+        if type(self.host) is RetainedHost:
+            self.host._fail(error)  # Original process/probe descriptors stay retained.
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostBegin(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        if not self.closed:
+            self.closed = True
+            if self.probe is not None:
+                self.probe.close()  # No original actor, lease or host ownership transfer.
+
+
 if __name__ == "__main__":
     raise SystemExit("Uninstalled original-policy recording join only; no service enabled.")

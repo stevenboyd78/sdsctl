@@ -680,6 +680,26 @@ tests explicitly distinguish real original journals and owned pidfds from
 synthetic platform, continuity and recording inputs; they do not qualify an
 installed Home Assistant runtime.
 
+`ActiveSample` composes those components for one active observation. It accepts
+the exact original `RetainedHost` and `RetainedQualification`, not supplied
+health flags or a callback. A complete fresh input check precedes creation of
+one passive cached-status process. Another full source/runtime/environment
+check surrounds the host/file observation and the authenticated native reply.
+The final result retains the earliest timestamp from before probe preparation;
+the entire contributing window must fit within two seconds and remain before
+the original native recording-stop deadline.
+
+Only a current-generation native reply can fill the otherwise unknown health
+and recording fields. Known `false` values remain false for policy evaluation;
+they are not replaced with success merely because an active WAV exists. Unknown
+flags, changed journals or objects, cancellation, stale or late results, and
+reuse of the same sample refuse without discarding original actor handles.
+The separately owned probe handle is retained until explicit close. This read
+does not authorize recording, write policy or checkpoints, receive completion,
+stop an App, or grant restoration. Finalized/post-exit observations use separate
+mechanisms and must not call this active-only adapter. No installed service
+selects it yet; local composition tests are not installed-host qualification.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently
