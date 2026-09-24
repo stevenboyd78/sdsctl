@@ -12,12 +12,14 @@ from __future__ import annotations
 import os
 import stat
 import time
+from contextlib import ExitStack, contextmanager
 from threading import Lock, get_ident
 
 import supplemental_recording_service_acceptance as acceptance
 
 intake, publication = acceptance.intake, acceptance.publication
 PENDING = ".pending-startup-acceptance"
+LOCK_POLL_SECONDS, MAX_LOCK_POLLS = 0.01, 200
 MESSAGE = "Recording startup submission is unconfirmed; preserve the case and do not resubmit."
 
 
@@ -30,6 +32,33 @@ def require(value):
         raise UnconfirmedSubmission(MESSAGE)
 
 
+@contextmanager
+def _submission_directory(path, check):
+    """Wait only for a known PRE-WRITE flock contention inside one attempt.
+
+    Catch DirectoryBusy only from entering the private-directory context,
+    never from its body or exit. Once acquired, no operation may be repeated.
+    The caller's original two-second bound is checked throughout; no exception
+    from a write, publication, acknowledgment or other I/O is retryable here.
+    """
+    with ExitStack() as stack:
+        for _ in range(MAX_LOCK_POLLS):
+            check()
+            try:
+                directory = stack.enter_context(
+                    publication.protected._private_directory(path, exclusive=True)
+                )
+            except publication.protected.DirectoryBusy:
+                check()
+                time.sleep(LOCK_POLL_SECONDS)
+            else:
+                break
+        else:
+            require(False)
+        check()
+        yield directory
+
+
 class Submission:
     """One exclusive durable message in a borrowed original private CasePlan.
 
@@ -39,6 +68,8 @@ class Submission:
     A successful message hash proves only this publication path completed, not
     that a service accepted it. Lost acknowledgments and remaining pending files
     forbid resubmission. Caller-owned plan handles and all evidence are preserved.
+    Initial known directory-lock contention waits within this SAME bounded
+    attempt, before any file creation. It cannot retry publication or an error.
     """
 
     def __init__(self, original, expected_template_sha256, independently_reviewed_plan_sha256):
@@ -90,7 +121,7 @@ class Submission:
                 require(time.monotonic() < end)
 
             check()
-            with publication.protected._private_directory(self.path, exclusive=True) as directory:
+            with _submission_directory(self.path, check) as directory:
                 require(os.fstat(directory).st_gid == self.owner[3])
                 identity = intake.files.identity(os.fstat(directory))[:6]
 

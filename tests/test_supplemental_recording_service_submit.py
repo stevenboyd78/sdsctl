@@ -1,5 +1,6 @@
 """One-attempt independent-digest transport using temporary private files."""
 
+import fcntl
 import importlib.util
 import os
 import stat
@@ -56,6 +57,100 @@ def test_complete_publication_is_separate_from_original_owner_acceptance(ready, 
     files = snapshot(root)
     denied(submission.submit)
     assert snapshot(root) == files
+
+
+def test_genuine_reader_lock_waits_before_single_publication_within_same_attempt(
+    ready, monkeypatch
+):
+    root, offer, _, _, _, _, reader = ready
+    submission = sender(ready)
+    files = snapshot(root)
+    waits, writes = [], []
+    actual_write = os.write
+    with m.publication.protected._private_directory(root, exclusive=False) as held:
+
+        def release(seconds):
+            assert submission.used and not submission.failed and snapshot(root) == files
+            waits.append(seconds)
+            fcntl.flock(held, fcntl.LOCK_UN)
+
+        def once(fd, raw):
+            writes.append(raw)
+            return actual_write(fd, raw)
+
+        monkeypatch.setattr(m.time, "sleep", release)
+        monkeypatch.setattr(m.os, "write", once)
+        submission.submit()
+    assert waits == [m.LOCK_POLL_SECONDS] and writes == [submission.raw]
+    assert submission.used and not submission.failed and reader.poll() is offer.plan
+
+
+def test_persistent_reader_lock_expires_original_sender_attempt_without_writing(ready, monkeypatch):
+    root, _, _, now, _, _, _ = ready
+    submission = sender(ready)
+    files = snapshot(root)
+    waits = []
+
+    def wait(seconds):
+        waits.append(seconds)
+        now[0] += 0.5
+
+    monkeypatch.setattr(m.time, "sleep", wait)
+    with m.publication.protected._private_directory(root, exclusive=False):
+        denied(submission.submit)
+    assert len(waits) == 4
+    assert submission.used and submission.failed and snapshot(root) == files
+    denied(submission.submit)
+
+
+def test_lock_poll_ceiling_does_not_need_a_moving_test_clock(ready, monkeypatch):
+    root, _, _, _, _, _, _ = ready
+    submission = sender(ready)
+    waits = []
+    monkeypatch.setattr(m.time, "sleep", waits.append)
+    with m.publication.protected._private_directory(root, exclusive=False):
+        denied(submission.submit)
+    assert waits == [m.LOCK_POLL_SECONDS] * m.MAX_LOCK_POLLS
+    assert not (root / m.PENDING).exists() and not (root / m.acceptance.NAME).exists()
+
+
+@pytest.mark.parametrize("error", [OSError, KeyboardInterrupt, SystemExit])
+def test_interrupted_lock_wait_is_consumed_without_reopening_or_writing(ready, monkeypatch, error):
+    root, _, witness, _, _, original, _ = ready
+    submission = sender(ready)
+    calls = []
+
+    def interrupted(seconds):
+        calls.append(seconds)
+        raise error("private-secret")
+
+    monkeypatch.setattr(m.time, "sleep", interrupted)
+    with m.publication.protected._private_directory(root, exclusive=False):
+        if error is OSError:
+            denied(submission.submit)
+        else:
+            with pytest.raises(error):
+                submission.submit()
+    assert calls == [m.LOCK_POLL_SECONDS] and submission.failed and submission.used
+    assert not (root / m.PENDING).exists() and not original._closed and witness.closes == 0
+
+
+def test_directory_busy_after_file_creation_cannot_be_caught_as_initial_contention(
+    ready, monkeypatch
+):
+    root, _, _, _, _, _, _ = ready
+    submission = sender(ready)
+    calls = []
+
+    def failed(fd, raw):
+        calls.append(raw)
+        raise m.publication.protected.DirectoryBusy("private-secret AFTER creation")
+
+    monkeypatch.setattr(m.os, "write", failed)
+    monkeypatch.setattr(m.time, "sleep", lambda *_: pytest.fail("Post-write error retried"))
+    denied(submission.submit)
+    assert calls == [submission.raw] and (root / m.PENDING).exists()
+    assert submission.failed and submission.used
 
 
 def test_wrong_independent_final_plan_pin_refuses_before_any_write(ready):
