@@ -3121,6 +3121,16 @@ notices never select this route. The same plan, journal, process tracker,
 dispatcher, executor, session, clock callbacks and absolute deadlines survive;
 no session is rebuilt and no failed flag is cleared.
 
+The handoff holds the original inbox's exclusive publication lock from its
+final eligibility check through native dispatch and capture. An already
+published idle cancellation, incomplete/unrecognized entry, or lock contention
+refuses the start before native ownership or intent; none is interpreted as
+absence of cancellation. That explicit start attempt is spent, its files remain
+for review, and the independent outer lease still applies. Ordinary idle
+polling retains its existing nonblocking behavior. Publication after the
+handoff is not a consumption acknowledgement: the retired idle coordinator
+cannot turn a late idle notice into native cancellation or pristine recovery.
+
 After confirmed launch, the service captures independent duplicates of the
 actual Ready actor pidfds in an original `Operator`. Recording authorization is
 still absent: this route does not construct `Start`, write a start intent or

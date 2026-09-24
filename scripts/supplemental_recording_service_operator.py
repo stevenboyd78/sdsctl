@@ -290,6 +290,45 @@ class Inbox:
         self._guard(end)
         return launch._journal_history(self.plan, self.projected, self.journal, end)
 
+    @contextmanager
+    def native_handoff(self):
+        """Exclude idle publishers across the explicit one-way native transition.
+
+        Unlike consume(), lock contention is NOT absence of cancellation here.
+        Pending, malformed or already published cancellation refuses the start
+        without consuming/removing any notice. Keep the publication lock through
+        native intent, dispatch and capture; their existing deadlines and outer
+        supervision still apply. This guard creates no new launch/time budget.
+
+        Publication after this boundary is not consumption: the retired idle
+        coordinator cannot reinterpret such a notice as native cancellation.
+        """
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            end = time.monotonic() + 2
+            self._guard(end)
+            with launch.binding.protected._private_directory(self.path, exclusive=True) as fd:
+                require(intake.files.identity(os.fstat(fd))[:6] == self.identity)
+                state = self._history(end).state
+                require(state.phase == "candidate_idle" and not state.finish_requested)
+                require(state.launch_intent_sha256 is state.authorization_generation is None)
+                require(state.recording_outcome == "not_attempted")
+                names = _names(fd)
+                require(names <= {"request.json"})
+                self._guard(end)
+                yield
+                # No renewed evidence window or phase check after the handoff.
+                # Verify the held directory and publication set are unchanged.
+                require(intake.files.identity(os.fstat(fd))[:6] == self.identity)
+                require(_names(fd) == names)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
     def consume(self):
         acquired = False
         try:
@@ -1065,6 +1104,8 @@ class IdleService:
         may invoke this. The passive Launch must already be prepared. The ledger
         is an original pristine writer and endpoint is a DISTINCT borrowed Engine
         observer. Old request/cancel notices cannot trigger this transition.
+        A pending/busy idle inbox refuses before retirement or native dispatch;
+        its original publication lock remains held through dispatch/capture.
 
         False means launch/capture was unconfirmed: the original session retains
         only clock expiry and review, never retries or falls back to idle. An
@@ -1077,13 +1118,14 @@ class IdleService:
             require(type(self.candidate) is IdleCandidate)
             self.candidate.recheck()
             require(type(self.prepared_launch) is launch.Launch)
-            native = NativePhase(self, ledger, endpoint)
-            self.candidate.recheck()
-            # Retire idle ownership and its reader BEFORE the first Engine write.
-            self.coordinator.finished = True
-            self.native = self._original_native = native
-            self.session.read = native.read
-            return native.start()
+            with self.inbox.native_handoff():
+                native = NativePhase(self, ledger, endpoint)
+                self.candidate.recheck()
+                # Retire idle ownership and its reader BEFORE the first Engine write.
+                self.coordinator.finished = True
+                self.native = self._original_native = native
+                self.session.read = native.read
+                return native.start()
         except BaseException as error:
             self._fail(error)
 

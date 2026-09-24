@@ -6,6 +6,7 @@ do not claim an installed service, actual native capture or normal restoration.
 """
 
 import time
+from contextlib import nullcontext
 from dataclasses import asdict, replace
 from threading import Thread
 from types import SimpleNamespace
@@ -554,3 +555,144 @@ def test_interrupt_does_not_become_a_recoverable_launch_failure(phase, monkeypat
         run(s, lambda: start(s))
     assert s.service.failed and s.service.closed and not s.recoveries
     assert s.service.coordinator.finished and len(s.engine.sent) == 2
+
+
+@pytest.mark.parametrize("kind", ["valid", "malformed", "pending", "unknown", "directory"])
+def test_unconsumed_idle_notice_refuses_native_before_retirement(phase, kind):
+    s = phase
+    retained = []
+
+    def action():
+        path = s.inbox.path / "cancel_idle.json"
+        if kind == "valid":
+            services.publish(s, "cancel_idle")
+        elif kind == "directory":
+            path.mkdir(mode=0o700)
+        else:
+            if kind == "pending":
+                path = s.inbox.path / ".pending-cancel_idle"
+            elif kind == "unknown":
+                path = s.inbox.path / "unrecognized.json"
+            path.write_bytes(b"PRIVATE incomplete cancellation")
+            path.chmod(0o600)
+        retained.append(path)
+        start(s)
+
+    resources.denied(lambda: run(s, action))
+    assert retained[0].exists()
+    assert s.service.native_attempted and s.service.native is None
+    assert not s.service.coordinator.finished and not s.run.used
+    assert not s.native_calls and not s.recoveries and len(s.engine.sent) == 2
+    assert not s.journal.machine.state.finish_requested
+    assert s.journal.machine.state.launch_intent_sha256 is None
+    assert s.inbox.failed and s.inbox.closed and not s.inbox.lock.locked()
+
+
+@pytest.mark.parametrize("kind", ["publisher", "reader", "inbox"])
+def test_busy_idle_inbox_is_not_treated_as_absent_cancellation(phase, kind):
+    s = phase
+
+    def action():
+        guard = (
+            nullcontext()
+            if kind == "inbox"
+            else m.launch.binding.protected._private_directory(
+                s.inbox.path, exclusive=kind == "publisher"
+            )
+        )
+        if kind == "inbox":
+            s.inbox.lock.acquire()
+        try:
+            with guard:
+                start(s)
+        finally:
+            if kind == "inbox":
+                # A failed acquisition must not unlock someone else's lock.
+                assert s.inbox.lock.locked()
+                s.inbox.lock.release()
+
+    resources.denied(lambda: run(s, action))
+    assert s.service.native is None and not s.run.used
+    assert not s.service.coordinator.finished and not s.native_calls
+    assert s.inbox.failed and len(s.engine.sent) == 2
+    assert s.journal.machine.state.launch_intent_sha256 is None
+
+
+@pytest.mark.parametrize("stage", ["before_intent", "after_ready", "capture"])
+def test_idle_publication_excluded_through_native_dispatch_and_capture(phase, monkeypatch, stage):
+    s, attempts = phase, []
+
+    def publish_during():
+        attempts.append(True)
+        resources.denied(s.publisher.publish)
+        assert s.publisher.used and s.publisher.failed
+        assert not (s.inbox.path / "cancel_idle.json").exists()
+        assert s.inbox.lock.locked()
+
+    original_start = m.launch.Launch.start_confirmed
+    original_capture = m.begin.worker_exit.reconcile.Operator.__init__
+
+    def launched(run):
+        if stage == "before_intent":
+            publish_during()
+        original_start(run)
+        if stage == "after_ready":
+            publish_during()
+
+    def captured(operator, *args):
+        if stage == "capture":
+            publish_during()
+        original_capture(operator, *args)
+
+    monkeypatch.setattr(m.launch.Launch, "start_confirmed", launched)
+    monkeypatch.setattr(m.begin.worker_exit.reconcile.Operator, "__init__", captured)
+
+    def action():
+        s.publisher = m.Publisher(
+            s.inbox.original,
+            "cancel_idle",
+            m.base.checksum(s.journal.entries[0]["event"]),
+            m.plans.clock.read().boottime_ns / m.plans.clock.NS,
+        )
+        assert start(s)
+        assert not s.inbox.lock.locked() and not s.inbox.failed
+        assert attempts == [True]
+        # A failed publisher remains spent after the lock has been released.
+        resources.denied(s.publisher.publish)
+
+    assert run(s, action).phase == "review"
+    assert len(s.native_calls) == len(s.native_captures) == 1
+    assert not s.service.failed and not s.recoveries and len(s.engine.sent) == 2
+
+
+def test_late_idle_publication_is_not_a_native_cancellation(phase):
+    s = phase
+
+    def action():
+        assert start(s)
+        services.publish(s, "cancel_idle")
+        assert (s.inbox.path / "cancel_idle.json").is_file()
+
+    assert run(s, action).phase == "review"
+    assert not s.closed_transports and not s.recoveries
+    assert not s.journal.machine.state.finish_requested
+    assert not s.service.native.cancel_attempted and not s.service.failed
+
+
+def test_noncooperating_inbox_mutation_after_dispatch_is_not_accepted(phase, monkeypatch):
+    s = phase
+    original_start = m.launch.Launch.start_confirmed
+
+    def changed(run):
+        original_start(run)
+        # Bypasses the publication protocol deliberately. It is NOT consumed or
+        # mistaken for confirmed cancellation after native activity has started.
+        (s.inbox.path / ".pending-cancel_idle").write_bytes(b"PRIVATE")
+
+    monkeypatch.setattr(m.launch.Launch, "start_confirmed", changed)
+    resources.denied(lambda: run(s, lambda: start(s)))
+    assert s.service.failed and s.service.closed and s.inbox.failed
+    assert s.native_captures[0].closed and len(s.native_calls) == 1
+    assert not s.closed_transports and not s.recoveries and len(s.engine.sent) == 2
+    assert (s.plan.root / "inbox" / ".pending-cancel_idle").exists()
+    assert not s.journal.machine.state.finish_requested
