@@ -2022,6 +2022,41 @@ a failed file read cannot suppress the bridge's independent clock-only expiry.
 Installed runtime/source qualification and independently supervised recovery
 remain separate gates; this is not a claim of a live App restoration.
 
+The success-only `recover_finalized` continuation now connects these readers to
+the **existing** bootstrap `RecoverySession`. It consumes an original published
+`AuthorizedFinalized` reader once, checks the same journal, Engine route, tracked
+processes, CLI image/generation and executor callbacks, and preserves the original
+dispatch tracker and all deadlines. It neither creates another session nor
+reconstructs missing worker, recording or process authority.
+
+The finalized metadata/file reader serves `candidate_running` and
+`stopping_candidate`. Only the original journal's durable `starting_normal`
+intent selects the restored-normal cache reader, including the existing fresh
+pre-dispatch check. Selection and the complete read share a two-second bound.
+The existing policy/dispatch bridge still decides every stop/start action and
+requires actual tracked init and CLI exits plus healthy, non-recording normal
+state before declaring restoration complete. A new observed generation can be
+pinned before health is established; that identity alone is not restoration.
+
+Lost command returns remain subject to read-only reconciliation, not replay.
+A failed file/context read permanently retires this continuation's observation
+route; the independent clock-only tick still expires the original policy. It
+does not downgrade to a pristine or retained file stage, retry initialization,
+or restore the earlier active reader. Loop exit closes its two observers and
+the session-owned process handles, while the original reader, Start, Operator,
+ledger and journal remain caller-owned for preservation and review. Failed or
+lost recording completion requires the separate preservation path and is not
+accepted by this success-only continuation.
+
+Integrated offline tests exercise the actual journal, policy, dispatch tracking
+and loop across candidate stop, normal start and health verification, with
+explicitly synthetic host, cached-state, Engine and init-exit evidence. They
+also cover changed files on either side of candidate shutdown, unavailable
+inspection, lost stop replies, foreign context, route replacement and stale
+combined observations. These tests are not installed-service, native process,
+scanner or audible-playback qualification; independent service supervision and
+installed-platform checks are still required.
+
 ### Local independent supervision and host-loss qualification
 
 Fresh scanner-free cases at `2d07cab` exercised the original native recording

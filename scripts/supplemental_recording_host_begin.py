@@ -21,6 +21,8 @@ import supplemental_recording_exit as worker_exit
 import supplemental_recording_host_launch as launch
 import supplemental_recording_normal_read as normal_read
 import supplemental_recording_relay as relayed
+from supplemental_handoff_host import TrackedDispatch
+from supplemental_handoff_recovery import TrackedProcesses
 
 plans, base, binding = launch.plans, launch.base, launch.binding
 MESSAGE = "Recording host begin is unconfirmed; retain the original case and do not retry."
@@ -509,6 +511,7 @@ class AuthorizedFinalized:
     def __init__(self, start, operator):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.closed = self.publish_attempted = False
+        self.recovery_attempted = False
         self.phase, self.publication, self.exited = "capturing", None, None
         self._publication_return = None
         self.files = None
@@ -1023,6 +1026,92 @@ class RestoredHost(FinalizedHost):
             (normal.generation, normal.healthy, normal.recording)
             == (result.generation, result.healthy, result.recording)
         )
+
+
+def recover_finalized(reader, session, wait):
+    """Continue the ORIGINAL recovery session after successful worker closure.
+
+    This joins the metadata-only finalized reader to the restored-normal reader
+    at the policy's durable normal-start intent. It does not create a new
+    journal, dispatch tracker, process witness, authorization or time budget.
+    The existing recovery loop still owns independent ticks and every App
+    action. Its process handles close on return; reader/Start/Operator custody
+    remains with the caller. An independently supervised caller is required.
+
+    This success-only entry cannot adopt a lost/failed completion. Any read
+    failure stays unavailable until the original policy expires; there is no
+    fallback to pristine files, reconstructed authority or a replacement read.
+    """
+    require(type(reader) is AuthorizedFinalized)
+    require(reader.owner == (os.getpid(), get_ident()) and not reader.recovery_attempted)
+    reader.recovery_attempted = True
+    require(type(session) is launch.bootstrap.RecoverySession and callable(wait))
+    reader._context()
+    require(reader.phase == "published")
+    journal, plan, docker = reader.journal, reader.plan, reader.run.read.docker
+    processes, dispatch, executor = session.processes, session.dispatch, session.executor
+    require(type(processes) is TrackedProcesses and type(dispatch) is TrackedDispatch)
+    require(type(executor) is launch.bootstrap.Executor)
+    images = {base.NORMAL: plan.normal.image, base.CANDIDATE: plan.candidate.image}
+    owner = reader.owner
+
+    def context():
+        require(owner == (os.getpid(), get_ident()))
+        require(session.journal is journal and executor.journal is journal)
+        require(session.processes is processes and session.dispatch is dispatch)
+        require(session.executor is executor and session.consume_operator is None)
+        require(executor.read == session._read and executor.send == session._send)
+        require(processes.journal is journal and dispatch.journal is journal)
+        require(processes.docker is docker and dispatch.docker is docker)
+        require(not processes.closed and processes.images == images)
+        require(dispatch.image == plan.cli_image and dispatch.generation == plan.cli_generation)
+        require(journal is reader.journal and reader.plan is plan)
+        require(reader.recovery_attempted and not reader.closed)
+
+    context()
+    reader._history(time.monotonic() + 2)
+    finalized = FinalizedHost(reader)
+    restored = None
+    failed = False
+    try:
+        restored = RestoredHost(reader)
+
+        def read():
+            nonlocal failed
+            try:
+                began = time.monotonic()
+                end = began + 2
+                require(not failed)
+                context()
+                require(session.read is read)
+                machine = reader._history(end)
+                if machine.state.phase in ("candidate_running", "stopping_candidate"):
+                    sample = finalized.read()
+                else:
+                    require(machine.state.phase == "starting_normal")
+                    sample = restored.read()
+                context()
+                require(session.read is read and began <= time.monotonic() < end)
+                return sample
+            except BaseException:
+                # Retain the failed observer and original session. A later
+                # tick can expire the policy without reading these files again.
+                failed = True
+                raise
+
+        def bounded_wait(seconds):
+            context()
+            require(session.read is read and seconds == 0.25)
+            wait(seconds)
+            context()
+            require(session.read is read)
+
+        session.read = read
+        return session.run(bounded_wait)
+    finally:
+        finalized.close()
+        if restored is not None:
+            restored.close()
 
 
 class RetainedHost:
