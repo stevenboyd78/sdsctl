@@ -688,9 +688,13 @@ class RetainedHost:
             acquired = True
             pending = self.pending
             require(type(pending) is _RetainedHostRead)
+            # Await the fixed read-only worker before decoding the owner's
+            # journals. Otherwise that CPU work can starve its real clock
+            # sampler at a GIL handoff. Keep both original sampling limits;
+            # history/context still bracket the worker and precede file reads.
+            snapshot = pending.finish()
             self._guard()
             require(self._context() == pending.context)
-            snapshot = pending.finish()
             collected = self.start.read_files()
             after = self.continuity.read()
             require(type(after) is launch.idle_module.Continuity)

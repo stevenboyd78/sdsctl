@@ -298,6 +298,50 @@ def test_blocked_worker_is_retained_and_cannot_publish_after_discard(host, monke
     assert not s.prepared.witness.exited()
 
 
+def test_join_waits_for_clock_sampling_before_cpu_heavy_owner_history(host, monkeypatch):
+    s = host
+    entered, release = Event(), Event()
+    original_observer = s.reader._observer
+
+    def blocked(clock):
+        def read():
+            entered.set()
+            assert release.wait(2)
+            return original_observer(clock).read()
+
+        return SimpleNamespace(read=read)
+
+    monkeypatch.setattr(s.reader, "_observer", blocked)
+    s.reader.prepare()
+    pending = s.reader.pending
+    guard, finish = s.reader._guard, pending.finish
+    ordering = []
+
+    def checked_guard():
+        # Journal decoding on the owner must not contend for the GIL with the
+        # worker's strict real-clock sampler. Do not widen that sampler's limit.
+        assert not pending.worker.is_alive()
+        ordering.append("history")
+        return guard()
+
+    def joined():
+        ordering.append("join")
+        release.set()
+        return finish()
+
+    monkeypatch.setattr(s.reader, "_guard", checked_guard)
+    monkeypatch.setattr(pending, "finish", joined)
+    try:
+        assert entered.wait(1)
+        sample = s.reader()
+        assert sample.observation.files.stage == "active"
+        assert ordering == ["join", "history", "history"]
+    finally:
+        release.set()
+        pending.worker.join(2)
+        assert not pending.worker.is_alive()
+
+
 def test_wrong_thread_cannot_prepare_a_new_host_read(host):
     errors = []
 
