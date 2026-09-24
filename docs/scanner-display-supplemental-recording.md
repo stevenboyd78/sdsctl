@@ -2022,6 +2022,58 @@ a failed file read cannot suppress the bridge's independent clock-only expiry.
 Installed runtime/source qualification and independently supervised recovery
 remain separate gates; this is not a claim of a live App restoration.
 
+### Local independent supervision and host-loss qualification
+
+Fresh scanner-free cases at `2d07cab` exercised the original native recording
+and custody path inside a separately launched local systemd service. The
+interactive launch returned while that service continued. Its original
+`Restart=no`, runtime limit and bounded stop escalation were independently
+inspected; a separate observer retained kernel process-exit handles. These
+cases used only synthetic loopback scanner/audio peers in a network-none
+container. No Home Assistant instance, Pi or physical scanner participated.
+
+The normal-completion case verified positive recording growth, the original
+completion/worker-exit evidence, and fresh finalized-file/host reads after the
+original container's finite lease expired. The host-loss case deliberately
+blocked the host after its actual recording-start return and ignored SIGTERM.
+Systemd killed that host at its independent limit. All original recording
+workers then exited within their unchanged native deadline, and the original
+container exited on its own lease. No candidate stop/restart command or
+replacement authority was used to obtain those exits.
+
+The lost host never published a recording-completion acknowledgment. A separate
+read-only postmortem used the existing naming-scope and retained-file collectors
+to confirm preservation against the original manifest. It returned `retained`
+with no verified artifact, left the three original ledger events unchanged, and
+did not invent a completion or restoration receipt. An Engine return code of
+zero was **not** promoted into recording success. Docker's historical exec PID
+may remain positive after exit; the existing exact-command verifier accepts
+that metadata, while independently retained pidfds provide process-exit proof.
+
+Earlier qualification failures remain preserved: a system-service Git trust
+check refused before container creation; another case refused before recording
+because the observation exceeded the original two-second freshness limit; and
+an observer incorrectly required an exited exec's historical PID to be zero.
+Corrections were confined to the private harness and fresh cases. In particular,
+the observer's heavy polling was reduced, not the product's timing requirements.
+No consumed case was restarted and no product guard was relaxed.
+
+A fresh immutable image of this commit also passed separate source/import and
+full interpreter qualification under bounded local systemd services. Expected
+source fingerprints were reconstructed from the Git archive; the interpreter
+fingerprint was reconstructed from a never-started container export before the
+image was executed. All 52 host and 29 native modules loaded from their expected
+read-only paths with network/process actions forbidden during import. This
+qualifies those image contents and local confinement checks, not installed
+Home Assistant mounts, Supervisor identity, credentials, or App restoration.
+
+The full recording-capable service assembly, failure-preservation integration,
+and installed-platform qualification remain required before another live
+acceptance window. The local host driver still used explicitly synthetic
+App/Core/CLI/Supervisor metadata and path aliases; its interpreter was not the
+new helper image. Those separate results must not be combined into a claim that
+an installed, independently supervised recovery service has already passed.
+
 The joined native-relay test also exercises the real isolated operator and
 recorder: localhost RTP becomes a verified 1280-sample WAV, the actual private
 native messages cross the framed relay, and the host checks its original file
