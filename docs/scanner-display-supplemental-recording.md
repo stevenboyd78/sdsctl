@@ -2660,6 +2660,22 @@ extra writable paths or credentials are accepted. **A read-only Engine socket
 mount does not restrict Engine API authority.** The helper remains trusted
 administrative code, never a browser-facing API.
 
+The `/mnt/data` bind must report `rslave`, not `rprivate`: it contains HAOS's
+Docker root `/mnt/data/docker`. Moby treats mounts containing the daemon root
+[specially to avoid retaining private references to its submounts](https://github.com/moby/moby/blob/v28.3.3/daemon/volumes_linux.go).
+The request may omit propagation (Engine's daemon-root default) or explicitly
+request only `BindOptions: {Propagation: rslave}`; either complete configuration
+must be independently pinned before startup. All four other binds remain exactly
+`rprivate`; shared propagation, additional bind options and changed requests
+refuse. This is a declared top-level read-only profile, not a guarantee that
+future propagated submounts are read-only. Docker's [bind-mount documentation](https://docs.docker.com/engine/storage/bind-mounts/#configure-bind-propagation)
+describes the incoming-only propagation and separate recursive read-only rules.
+The original root/proc descriptors and unchanged complete mount table still
+bracket source/runtime reads. A fresh helper-only HAOS case confirmed the live
+zero-offset namespace proof, but correctly refused the formerly all-`rprivate`
+policy at the data mount before source qualification. That failed case is
+preserved and is not a passing combined-read or installed-service result.
+
 `collect_helper_kernel()` retains the original pidfd and three bounded proc
 file descriptors while reading two security snapshots. It requires exact root
 UID/GID values, an unnested PID view, identity UID/GID maps, no tracer,

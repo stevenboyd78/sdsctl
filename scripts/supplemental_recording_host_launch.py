@@ -1055,14 +1055,17 @@ class HelperQualification:
         require(time.monotonic() < min(deadline, self.plan.lease["ready_by"]))
 
     def _mounts(self, container):
-        # Closed routing: only the private case is writable. No code, runtime,
-        # credential, native data alias, inherited volume or additional mount.
+        # Closed top-level routing: only the private case is declared writable.
+        # /mnt/data contains the HAOS daemon root, so Engine uses rslave there;
+        # all other binds remain rprivate. Source/root descriptor and complete
+        # mount-table checks still gate reads. Propagation is not a recursive
+        # read-only guarantee for future submounts or Engine API confinement.
         expected = {
-            "/var/run/docker.sock": ("/var/run/docker.sock", False),
-            "/mnt/data": ("/mnt/data", False),
-            str(self.plan.root): (str(self.plan.root), True),
-            "/opt/sdsctl-host-udp/udp": ("/proc/1/net/udp", False),
-            "/opt/sdsctl-host-udp/udp6": ("/proc/1/net/udp6", False),
+            "/var/run/docker.sock": ("/var/run/docker.sock", False, "rprivate"),
+            "/mnt/data": ("/mnt/data", False, "rslave"),
+            str(self.plan.root): (str(self.plan.root), True, "rprivate"),
+            "/opt/sdsctl-host-udp/udp": ("/proc/1/net/udp", False, "rprivate"),
+            "/opt/sdsctl-host-udp/udp6": ("/proc/1/net/udp6", False, "rprivate"),
         }
         mounts = container.get("Mounts")
         require(type(mounts) is list and len(mounts) == len(expected))
@@ -1074,9 +1077,9 @@ class HelperQualification:
                 type(destination) is str and destination in expected and destination not in seen
             )
             seen.add(destination)
-            source, writable = expected[destination]
+            source, writable, propagation = expected[destination]
             require(mount.get("Type") == "bind" and mount.get("Source") == source)
-            require(mount.get("RW") is writable and mount.get("Propagation") == "rprivate")
+            require(mount.get("RW") is writable and mount.get("Propagation") == propagation)
         require(seen == set(expected))
         host = container["HostConfig"]
         requested = host.get("Mounts")
@@ -1084,16 +1087,22 @@ class HelperQualification:
         seen = set()
         for mount in requested:
             require(type(mount) is dict)
+            keys = set(mount)
+            if "BindOptions" in mount:
+                # Admit only the explicit spelling of the required HAOS data
+                # propagation. No recursive-writable or other bind options.
+                require(mount.get("Target") == "/mnt/data")
+                require(mount["BindOptions"] == {"Propagation": "rslave"})
+                keys.remove("BindOptions")
             require(
-                set(mount)
-                in ({"Type", "Source", "Target"}, {"Type", "Source", "Target", "ReadOnly"})
+                keys in ({"Type", "Source", "Target"}, {"Type", "Source", "Target", "ReadOnly"})
             )
             destination = mount["Target"]
             require(
                 type(destination) is str and destination in expected and destination not in seen
             )
             seen.add(destination)
-            source, writable = expected[destination]
+            source, writable, _ = expected[destination]
             require(
                 mount["Type"] == "bind"
                 and mount["Source"] == source

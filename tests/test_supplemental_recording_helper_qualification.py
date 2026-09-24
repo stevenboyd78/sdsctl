@@ -132,7 +132,11 @@ def helper(supervised, image, configured, monkeypatch):
         witness = m.engine.dispatch.process.ProcessWitness(identity(child.pid, CID))
         mounts = [
             dict(
-                Type="bind", Source=source, Destination=target, RW=writable, Propagation="rprivate"
+                Type="bind",
+                Source=source,
+                Destination=target,
+                RW=writable,
+                Propagation="rslave" if target == "/mnt/data" else "rprivate",
             )
             for source, target, writable in (
                 ("/var/run/docker.sock", "/var/run/docker.sock", False),
@@ -348,6 +352,73 @@ def test_platform_label_disable_is_explicitly_pinned_not_implicitly_adopted(help
         )()
         is None
     )
+
+
+def test_explicit_data_propagation_needs_independent_configuration_pin(helper):
+    helper.container["HostConfig"]["Mounts"][1]["BindOptions"] = {"Propagation": "rslave"}
+    denied(helper.obj)
+    assert (
+        helper.make(
+            configuration_sha256=configuration_pin(helper.container, helper.plan.helper.environment)
+        )()
+        is None
+    )
+
+
+@pytest.mark.parametrize("index", range(5))
+@pytest.mark.parametrize(
+    "propagation", [None, "", "private", "shared", "rshared", "slave", "rslave", "rprivate"]
+)
+def test_observed_propagation_is_exact_for_each_mount(helper, index, propagation):
+    expected = "rslave" if index == 1 else "rprivate"
+    helper.container["Mounts"][index]["Propagation"] = propagation
+    obj = helper.make(
+        configuration_sha256=configuration_pin(helper.container, helper.plan.helper.environment)
+    )
+    if propagation == expected:
+        assert obj() is None
+    else:
+        denied(obj)
+
+
+@pytest.mark.parametrize("index", range(5))
+@pytest.mark.parametrize(
+    "options",
+    [
+        None,
+        {},
+        {"Propagation": "rslave"},
+        {"Propagation": "rprivate"},
+        {"Propagation": "rshared"},
+        {"Propagation": "rslave", "ReadOnlyNonRecursive": True},
+        {"Propagation": "rslave", "NonRecursive": False},
+    ],
+)
+def test_requested_bind_options_are_closed_even_with_matching_pin(helper, index, options):
+    helper.container["HostConfig"]["Mounts"][index]["BindOptions"] = options
+    obj = helper.make(
+        configuration_sha256=configuration_pin(helper.container, helper.plan.helper.environment)
+    )
+    if index == 1 and options == {"Propagation": "rslave"}:
+        assert obj() is None
+    else:
+        denied(obj)
+
+
+@pytest.mark.parametrize("requested", [False, True])
+def test_propagation_cannot_change_after_source_reads(helper, requested):
+    helper.when = 2
+    if requested:
+
+        def fault(container):
+            container["HostConfig"]["Mounts"][1]["BindOptions"] = {"Propagation": "rslave"}
+    else:
+
+        def fault(container):
+            container["Mounts"][1]["Propagation"] = "rprivate"
+
+    helper.fault = fault
+    denied(helper.obj)
 
 
 def test_original_worker_choice_is_immutable(helper):
