@@ -2526,6 +2526,24 @@ Unknown, replaced, exited or changed evidence remains unconfirmed. Original
 container/image/namespace/command qualification and independently supervised
 outer timeout still belong to the host adapter; this is not an installed service.
 
+The prospective host helper has a **separate credential-free profile**.
+`helper_environment()` accepts only the five original image keys and the
+independently pinned `TZ`; it rejects Supervisor/Hassio tokens rather than
+filtering them out. `helper_process_environment()` additionally requires exactly
+`HOME=/root` and the pinned hostname in bounded startup bytes. It preserves the
+image PATH and offers no Engine-exec override. Its configuration and process
+digests are separately tagged; neither an image-only pin nor an App environment
+pin qualifies this helper profile.
+
+`collect_helper_process_environment()` uses the same bounded two-read/original
+pidfd mechanism with that explicit helper comparator. It cannot discover a new
+helper after losing its original handle, renew a deadline, or read `os.environ`
+as proof of startup. Local tests use a harmless owned child and actual proc/pidfd
+reads, with a synthetic container-cgroup identity. These functions do not yet
+qualify a complete helper container, source mounts, confinement, launcher or
+independent supervision. Existing schema3 fixtures with image-only helper
+environment pins must not be described as passing this new profile.
+
 The explicit `Layout.observe_supervised(timezone)` / `verify_supervised()` runtime
 profile also inventories the complete `/usr/share/zoneinfo` tree and the
 `/etc/localtime` link, and requires `/etc/timezone` to be absent in this qualified
@@ -3235,8 +3253,14 @@ recording **unconfirmed**, with no completion acknowledgment or successful
 artifact, even if the native process returned zero. Lost exit publication,
 poisoned or replaced ledger state and failed retained-file checks require review.
 Routing tests exercise the actual private host ledger and policy with explicitly
-synthetic native, exit and recovery boundaries. This whole-service abandonment
-join still needs an independent actual-process qualification.
+synthetic native, exit and recovery boundaries. A separate independently
+supervised local whole-service process case also passed: actual start, active
+read, durable progress, abandonment, original worker/init exits, retained-file
+checks and same-session restoration of the disposable normal service. Its
+recording remained unconfirmed with no completion acknowledgment or artifact.
+The original outer process handles were retained through every bounded exit.
+Synthetic audio and platform/source aliases remain distinct from installed
+Home Assistant qualification or physical/audible acceptance.
 
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed

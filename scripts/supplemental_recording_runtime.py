@@ -74,6 +74,8 @@ PATH_PARTS = frozenset(
 )
 SUPERVISED_KEYS = ENV_KEYS | {"TZ", "SUPERVISOR_TOKEN", "HASSIO_TOKEN"}
 PROCESS_KEYS = SUPERVISED_KEYS | {"HOME", "HOSTNAME"}
+HELPER_KEYS = ENV_KEYS | {"TZ"}
+HELPER_PROCESS_KEYS = HELPER_KEYS | {"HOME", "HOSTNAME"}
 FIXED_EXEC_PATH = "/usr/local/bin:/usr/bin:/bin"
 ZONEINFO = "usr/share/zoneinfo"
 SUPERVISED_ABSENT = (*ABSENT, "etc/timezone")
@@ -234,6 +236,83 @@ class ProcessEnvironment:
     observed_at: float
 
 
+def _helper_values(values, *, image_environment_sha256, timezone):
+    digest(image_environment_sha256)
+    _timezone_name(timezone)
+    parsed = _environment_values(values, HELPER_KEYS)
+    require(parsed["TZ"] == timezone)
+    require(
+        environment([key + "=" + parsed[key] for key in sorted(ENV_KEYS)])
+        == image_environment_sha256
+    )
+    return parsed
+
+
+def helper_environment(values, *, image_environment_sha256, timezone):
+    """Distinct six-key helper Config.Env, not the supervised App profile.
+
+    No Supervisor/Hassio credentials, loader hooks, shell variables or runtime
+    defaults are accepted or filtered. Pin the original image environment and
+    explicit timezone independently. This pure digest establishes no container,
+    mount, process, installed-service or action authority.
+    """
+    try:
+        parsed = _helper_values(
+            values, image_environment_sha256=image_environment_sha256, timezone=timezone
+        )
+        return checksum({"schema": 1, "kind": KIND + "-helper-environment", "values": parsed})
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+
+
+def helper_process_environment(
+    raw, *, configured, configured_sha256, image_environment_sha256, timezone, hostname
+):
+    """Pure comparison for the original helper init, never an Engine exec.
+
+    The image PATH remains exact; only HOME=/root and the pinned HOSTNAME are
+    runtime additions. Unlike the App comparator, no fixed-exec PATH override
+    is available. Bytes must come from separately retained original custody,
+    not os.environ or a replacement process found after helper loss.
+    """
+    try:
+        digest(configured_sha256)
+        require(type(hostname) is str)
+        require(re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?", hostname))
+        expected = _helper_values(
+            configured, image_environment_sha256=image_environment_sha256, timezone=timezone
+        )
+        require(
+            checksum({"schema": 1, "kind": KIND + "-helper-environment", "values": expected})
+            == configured_sha256
+        )
+        expected.update(HOME="/root", HOSTNAME=hostname)
+        require(type(raw) is bytes and 0 < len(raw) <= 16384 and raw.endswith(b"\0"))
+        parsed = _environment_values(raw[:-1].decode("ascii").split("\0"), HELPER_PROCESS_KEYS)
+        require(parsed == expected)
+        return checksum(
+            {
+                "schema": 1,
+                "kind": KIND + "-helper-process-environment",
+                "configured": configured_sha256,
+                "values": parsed,
+            }
+        )
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+
+
+def collect_helper_process_environment(witness, *, deadline, **profile):
+    """Read only the retained original helper's startup bytes, with no rebinding.
+
+    Same two-read, identity, descriptor and original one-second deadline checks
+    as App process collection, but a distinct credential-free helper comparator.
+    Container/image/namespace/command/confinement and outer supervision remain
+    independently required. The returned digest is not service readiness.
+    """
+    return _collect_process_environment(witness, deadline, helper_process_environment, profile)
+
+
 def collect_supervised_process_environment(witness, *, deadline, **profile):
     """Two bounded startup reads through an already live-bound original pidfd.
 
@@ -244,8 +323,13 @@ def collect_supervised_process_environment(witness, *, deadline, **profile):
     refreshed here; an independently supervised outer bound covers kernel I/O.
     Only a digest, original identity and observation START time are returned.
     """
+    return _collect_process_environment(witness, deadline, supervised_process_environment, profile)
+
+
+def _collect_process_environment(witness, deadline, compare, profile):
     fd = -1
     try:
+        require(compare is helper_process_environment or compare is supervised_process_environment)
         require(type(witness) is processes.ProcessWitness and os.geteuid() == ROOT_UID)
         require(type(deadline) in (int, float) and math.isfinite(deadline))
         started = time.monotonic()
@@ -289,7 +373,7 @@ def collect_supervised_process_environment(witness, *, deadline, **profile):
         check()
         require(read() == first)
         require(identity(os.stat(path, follow_symlinks=False)) == file_identity)
-        result = supervised_process_environment(first, **profile)
+        result = compare(first, **profile)
         check()
         return ProcessEnvironment(result, original, started)
     except Exception:
