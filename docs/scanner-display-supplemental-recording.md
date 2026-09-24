@@ -2379,6 +2379,44 @@ A real launcher still needs continuing plan/clock ownership, independent
 supervision and a qualified service entrypoint. App plan fields in isolated
 helper tests may be explicitly synthetic; they cannot authorize a live handoff.
 
+#### Clock-free declaration groundwork
+
+The eventual service cannot safely inherit a clock sample from a preparation
+container that has already exited. Its original clock must belong to the same
+continuing process that will own the service. This creates a startup dependency:
+an independently reviewed command cannot already contain the final plan digest
+before that process has captured its own original clock.
+
+`scripts/supplemental_recording_service_template.py` adds a **pure, offline
+declaration codec**, not a solution that activates the service. Its separate
+versioned format pins every schema3 non-clock field, including boot identity,
+case, source/runtime/image pins, generations, protected inventories and recording
+contract. It also pins integer readiness and stop budgets within the existing
+limits. Recovery remains fixed to the existing total budget; no recovery-duration
+option is added. Old absolute clocks or deadlines cannot enter this format.
+
+The codec can preview exact final schema3 bytes for a supplied original clock
+and check a proposed final plan against those bytes. The complete existing plan
+validator is reused: a private fixed clock sentinel is used only to validate
+non-clock declarations and then discarded. It is never published as a clock
+observation or retained in the template. Actual previews use the supplied clock
+unchanged, and checking against the original clock refuses a later sample,
+another namespace, altered protected fields or extended deadlines. Parsing
+rejects duplicate keys, noncanonical bytes, unknown fields, invalid budgets and
+an incorrect independently supplied digest. Errors contain no private values.
+
+These operations read no clock or file and make no Engine request. They do not
+retain a `ClockWitness`, establish clock provenance, publish a one-use offer,
+authenticate acceptance, write a plan or journal, claim readiness, or authorize
+recording. A caller can use a pure preview for review; it cannot use it to reset
+an existing service lease. The prospective one-use offer/accept lifecycle,
+original-owner custody, bounded private publication and independent supervision
+still need implementation and qualification before installation.
+
+This module is deliberately outside the currently qualified 54-module helper
+image/command allowlist. Existing image checks do not certify it, and neither
+the default helper command nor the passive startup probe invokes it.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
