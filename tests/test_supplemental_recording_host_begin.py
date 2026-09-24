@@ -17,6 +17,7 @@ import pytest
 
 from . import test_supplemental_recording_exit as exit_tests  # noqa: F401
 from . import test_supplemental_recording_host_launch as launches
+from . import test_supplemental_recording_normal_read as normal_reads  # noqa: F401
 from . import test_supplemental_recording_relay as relay_tests  # noqa: F401
 
 NAME = "supplemental_recording_host_begin"

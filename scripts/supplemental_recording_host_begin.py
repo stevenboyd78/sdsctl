@@ -19,6 +19,7 @@ from threading import Event, Lock, Thread, current_thread, get_ident
 
 import supplemental_recording_exit as worker_exit
 import supplemental_recording_host_launch as launch
+import supplemental_recording_normal_read as normal_read
 import supplemental_recording_relay as relayed
 
 plans, base, binding = launch.plans, launch.base, launch.binding
@@ -877,6 +878,10 @@ class FinalizedHost:
             network=plans.ordinary.AUDIO_NETWORK,
         )
 
+    def _check_native(self, snapshot):
+        for app in (snapshot.normal, snapshot.candidate):
+            require(app.healthy is None and app.recording is None)
+
     def read(self):
         acquired = False
         try:
@@ -907,8 +912,7 @@ class FinalizedHost:
             require(files.files.stage == "finalized")
             require(files.files.contract_sha256 == self.plan.candidate.contract.sha256)
             require(files.files.generation == self.run.pins.generation)
-            for app in (snapshot.normal, snapshot.candidate):
-                require(app.healthy is None and app.recording is None)
+            self._check_native(snapshot)
             if snapshot.candidate.state == "running":
                 require(snapshot.candidate.generation == self.run.pins.generation)
             observation = launch.bootstrap.recording.Observation(
@@ -937,6 +941,88 @@ class FinalizedHost:
     def close(self):
         require(self.owner == (os.getpid(), get_ident()))
         self.closed = True
+
+
+class RestoredHost(FinalizedHost):
+    """Join a fresh normal-App cache read only after original restoration intent.
+
+    Reuses the complete finalized host/file bracket, without renewing Ready or
+    running any candidate probe. The original replayed journal must already
+    contain the separately witnessed original init/worker exits and normal-start
+    intent. A running normal App must have a new, consistently observed Engine
+    generation. Every observation constructs its own single-use fixed reader;
+    unknown native state stays unknown and a failed exec is never replayed.
+
+    This is not installed helper/runtime qualification or independent recovery.
+    It neither dispatches restoration nor publishes completion. RecoverySession
+    must still join actual process/CLI custody and apply its existing policy.
+    """
+
+    def _restoration(self):
+        self._clock()
+        machine = self.reader._history(self.end)
+        require(machine.state.phase in ("starting_normal", "complete"))
+        require(machine.process_bound(base.NORMAL, exited=True))
+        require(machine.process_bound(base.CANDIDATE, exited=True))
+        require(machine.state.operator_exit_sha256 == self.reader.publication[0])
+        return machine
+
+    def _candidate_exited(self):
+        self._clock()
+        plans.ordinary.retained_exit(
+            self.docker.container("app_" + base.CANDIDATE),
+            name="app_" + base.CANDIDATE,
+            image=self.plan.candidate.image,
+            cid=self.run.pins.init.container_id,
+        )
+        self._clock()
+
+    def _observer(self):
+        self._restoration()
+        observer = super()._observer()
+        reader = normal_read.Sample(self.plan, self.docker)
+        self.normal_reader, self.normal_result = reader, None
+
+        def read_native(slug, generation):
+            require(slug in (base.NORMAL, base.CANDIDATE))
+            if slug == base.CANDIDATE:
+                return launch.BootstrapHost._unknown_native(slug, generation)
+            machine = self._restoration()
+            require(generation != self.plan.normal_generation)
+            require(machine.state.restored_generation in (None, generation))
+            self._candidate_exited()
+            require(self.normal_reader is reader and self.normal_result is None)
+            result = reader.read(slug, generation)
+            self._candidate_exited()
+            require(self._restoration() is machine)
+            require(self.normal_reader is reader and not reader.failed)
+            self.normal_result = result
+            return result
+
+        observer.read_native = read_native
+        return observer
+
+    def _check_native(self, snapshot):
+        machine = self._restoration()
+        normal, candidate = snapshot.normal, snapshot.candidate
+        require(candidate.healthy is None and candidate.recording is None)
+        result = self.normal_result
+        if result is None:
+            # HostObserver intentionally keeps container identity visible when
+            # startup IPC is unavailable. Do not promote an earlier good read.
+            require(normal.healthy is None and normal.recording is None)
+            return
+        require(type(result) is plans.ordinary.NativeState)
+        require(type(self.normal_reader) is normal_read.Sample)
+        require(self.normal_reader.used and not self.normal_reader.failed)
+        require(candidate.state == "stopped")
+        require(normal.state == "running" and normal.pin == self.plan.normal.pin)
+        require(normal.generation != self.plan.normal_generation)
+        require(machine.state.restored_generation in (None, normal.generation))
+        require(
+            (normal.generation, normal.healthy, normal.recording)
+            == (result.generation, result.healthy, result.recording)
+        )
 
 
 class RetainedHost:

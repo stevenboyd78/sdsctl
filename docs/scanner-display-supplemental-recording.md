@@ -1996,6 +1996,30 @@ qualify an installed App, independent host recovery, restoration, or a physical
 scanner case. No user data, installed service, Pi, HA instance, browser, or
 scanner was changed.
 
+The separate `RestoredHost` composition now joins that same original
+authorization/finalized-file bracket to the fixed, single-use normal-App cache
+reader. It is available only after pure replay of the original journal reaches
+`starting_normal` (or `complete`), with both original init exits and the original
+worker-exit publication retained. The ordinary host observer still checks full
+settings, images, protected content, versions, Core, jobs and other owners before
+using native health. The normal App must have a new Engine generation; the
+candidate remains the exact stopped original container and is never probed.
+
+Each complete sample constructs a fresh single-use cached reader inside the
+original two-second/recovery deadline. Unknown, unhealthy and recording-active
+results are not promoted to healthy/idle. An unavailable cache keeps the current
+container identity visible with unknown native flags; it cannot reuse a prior
+successful result or replay a lost exec. Journal drift, stale time, replacement
+containers or retired original custody refuse the join. The metadata-only
+`FinalizedHost` keeps its prior behavior: both native flags remain unknown.
+
+Neither collector appends a completion event or dispatches an App command.
+Tests using real original journals and explicitly synthetic host/IPC evidence
+exercise the existing policy through restoration, including withholding
+completion until the separately tracked normal-start CLI exit is recorded.
+Installed runtime/source qualification and independently supervised recovery
+remain separate gates; this is not a claim of a live App restoration.
+
 The joined native-relay test also exercises the real isolated operator and
 recorder: localhost RTP becomes a verified 1280-sample WAV, the actual private
 native messages cross the framed relay, and the host checks its original file
