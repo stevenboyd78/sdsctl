@@ -2152,6 +2152,30 @@ both modes' mutation/timeout rejection, and the existing concurrent-budget and
 worker-cleanup checks. This read-only timing result does not itself qualify
 combined readiness, real Supervisor latency or the installed service.
 
+An isolated check on the actual Home Assistant OS host exposed the hardware
+limit more clearly. With one CPU, a complete native-source/runtime bracket took
+about 1.98 seconds without added query delay; a sample with 430 ms of synthetic
+delay correctly refused at the unchanged two-second bound. Profiling attributed
+about one second to hashing alone across both complete runtime inventories.
+The running Mimic App retained its original container, PID and start time.
+
+A fresh isolated two-CPU/two-worker check kept the identical runtime fingerprint
+and passed three predetermined samples: about 1.53 seconds without added delay,
+and 1.99 seconds for each of two delayed samples. That still leaves almost no
+margin in the delayed case and is **not** full service/readiness qualification.
+The helper had no network, Engine socket, App data, recordings or credentials;
+an independent finite systemd unit bounded its lifetime. No App resources were
+changed. A profiling-driver failure was closed separately, not counted as a pass.
+
+The candidate and post-begin qualification adapters now accept an explicit
+`runtime_workers` choice of integer one or two from their trusted assembly.
+The default remains one. Each collector retains its original choice, rejecting
+later changes (including equal-valued floats or booleans), and never changes
+width or retries after a timeout. Both ordinary and bracketed reads use that
+same choice. CPU allocation, helper confinement and combined elapsed time must
+still be qualified separately; this option does not configure Docker resources,
+relax the two-second bound, cache observed bytes or enable a service.
+
 The host's repeated plan checks now retain a separately decoded canonical plan
 and compare every field, nested type and original byte string against it. They
 also require the same original plan object. This removes repeated JSON decoding
@@ -2203,6 +2227,15 @@ installed mounts, the original recovery session and fresh user readiness remain
 separate requirements. The closed host source graph now includes this input
 module (53 modules); prior 52-module image qualifications remain historical,
 not qualifications of this expanded graph.
+
+The 53-module immutable input bundle subsequently passed isolated local and
+actual-HAOS checks. Both checked complete source/runtime inventories, exact
+import origins, original retained plan bytes/object/deadlines, and refusal of
+closed or wrong-digest inputs. On HAOS the input checks took about 14 ms. Only
+the verifier and a synthetic private plan were mounted read-only, with no
+Engine socket, App data, recordings or credentials. The normal Mimic App was
+not restarted or reconfigured. This qualifies the packaged read-only input
+boundary on that host, not an installed recording service or real plan authority.
 
 ### Recovery routes inside the pinned helper
 

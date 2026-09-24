@@ -24,8 +24,8 @@ candidate, supervised, image, configured = (
 )
 
 
-@pytest.fixture
-def joined(candidate, image, monkeypatch):
+@pytest.fixture(params=[1, 2])
+def joined(candidate, image, monkeypatch, request):
     s = candidate
     idle_read = s.idle.read
     initial = idle_read()
@@ -70,6 +70,7 @@ def joined(candidate, image, monkeypatch):
         timezone=candidate_tests.env.TIMEZONE,
         hostname=candidate_tests.env.HOSTNAME,
         architecture="amd64",
+        runtime_workers=request.param,
     )
     return s
 
@@ -202,6 +203,7 @@ def test_construction_after_ready_expiry_keeps_exact_original_bounds(joined, mon
             timezone=s.qualify.timezone,
             hostname=s.qualify.hostname,
             architecture=s.qualify.architecture,
+            runtime_workers=s.qualify.runtime_workers,
         )
         assert follow.during(lambda: "retained observation") == "retained observation"
         assert follow.continuity_finish == s.plan.lease["stop_by"]

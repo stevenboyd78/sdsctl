@@ -209,8 +209,11 @@ def denied(obj):
     launch.denied(obj)  # Failure is permanently consumed, never refreshed.
 
 
-def test_complete_fresh_join_returns_no_authority_and_retains_no_credentials(candidate, capsys):
-    obj = candidate.make()
+@pytest.mark.parametrize("workers", [1, 2])
+def test_complete_fresh_join_returns_no_authority_and_retains_no_credentials(
+    candidate, capsys, workers
+):
+    obj = candidate.make(runtime_workers=workers)
     original = (candidate.plan.raw, candidate.plan.lease, candidate.witness.fd)
     before = len(os.listdir("/proc/self/fd"))
     assert obj() is None and 0 <= obj.elapsed_seconds < 2
@@ -221,8 +224,11 @@ def test_complete_fresh_join_returns_no_authority_and_retains_no_credentials(can
     assert env.TOKEN not in repr(vars(obj)) and capsys.readouterr() == ("", "")
 
 
-def test_actual_full_files_and_original_process_reads_surround_observation(candidate, monkeypatch):
-    obj, trace = candidate.make(), []
+@pytest.mark.parametrize("workers", [1, 2])
+def test_actual_full_files_and_original_process_reads_surround_observation(
+    candidate, monkeypatch, workers
+):
+    obj, trace = candidate.make(runtime_workers=workers), []
     source = m.plans.host.candidate_static.source
     source_snapshot, runtime_snapshot = source.Layout._snapshot, m.runtime.Layout._snapshot
     environment = m.runtime.collect_supervised_process_environment
@@ -232,6 +238,7 @@ def test_actual_full_files_and_original_process_reads_surround_observation(candi
         return source_snapshot(self)
 
     def read_runtime(self, deadline, **kwargs):
+        assert self.workers == workers
         trace.append("runtime")
         return runtime_snapshot(self, deadline, **kwargs)
 
@@ -504,3 +511,57 @@ def test_runtime_overrun_cannot_refresh_original_deadline(candidate, monkeypatch
 def test_invalid_independent_profile_fails_before_read(candidate, kwargs):
     launch.denied(lambda: candidate.make(**kwargs))
     assert not candidate.events
+
+
+def test_runtime_worker_default_remains_one(candidate):
+    assert candidate.make().runtime_workers == 1
+
+
+@pytest.mark.parametrize("workers", [None, False, True, 0, -1, 3, 10000, 1.0, "2"])
+def test_runtime_worker_choice_is_closed_before_any_host_read(candidate, workers):
+    launch.denied(lambda: candidate.make(runtime_workers=workers))
+    assert not candidate.events
+
+
+@pytest.mark.parametrize("initial,replaced", [(1, 2), (2, 1), (1, True), (1, 1.0), (2, 2.0)])
+@pytest.mark.parametrize("during", [False, True])
+def test_original_runtime_worker_choice_cannot_change(candidate, initial, replaced, during):
+    obj = candidate.make(runtime_workers=initial)
+
+    def observe():
+        obj.runtime_workers = replaced
+        return "PRIVATE unqualified result"
+
+    if during:
+        launch.denied(lambda: obj.during(observe))
+        assert candidate.containers == 1
+    else:
+        obj.runtime_workers = replaced
+        denied(obj)
+        assert not candidate.events
+    assert obj.failed and obj.elapsed_seconds is None
+    obj.runtime_workers = initial
+    launch.denied(obj)  # Restoring the original value never revives a failed collector.
+    assert not candidate.witness.exited()
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_worker_choice_keeps_deadline_and_all_reads_without_adaptive_retry(
+    candidate, monkeypatch, workers
+):
+    obj = candidate.make(runtime_workers=workers)
+    before = (candidate.plan.raw, candidate.plan.deadlines, candidate.plan.lease)
+    original = m.runtime.Layout.verify_supervised
+    attempts = []
+
+    def read(layout, *args):
+        attempts.append(layout.workers)
+        result = original(layout, *args)
+        time.sleep(0.025)
+        return result
+
+    monkeypatch.setattr(m.CandidateQualification, "MAX_SECONDS", 0.02)
+    monkeypatch.setattr(m.runtime.Layout, "verify_supervised", read)
+    denied(obj)
+    assert attempts == [workers]
+    assert before == (candidate.plan.raw, candidate.plan.deadlines, candidate.plan.lease)

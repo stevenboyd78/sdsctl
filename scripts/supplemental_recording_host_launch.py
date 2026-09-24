@@ -314,6 +314,11 @@ class CandidateQualification:
     reusable authority. Failure permanently consumes this collector. It never
     closes caller-owned handles. Kernel/Engine stalls still require independent
     outer supervision; elapsed checks cannot interrupt blocked kernel I/O.
+
+    A trusted assembly may explicitly select one or two runtime workers before
+    construction. The original choice is retained across all checks; it never
+    changes on timeout or discovers resources itself. Helper CPU/confinement
+    qualification is separate, and no file or deadline changes with this choice.
     """
 
     CODE_ROOTS = plans.host.candidate_static.CODE_ROOTS + tuple(
@@ -342,10 +347,12 @@ class CandidateQualification:
         timezone,
         hostname,
         architecture,
+        runtime_workers=1,
     ):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed, self.elapsed_seconds = False, None
         try:
+            require(type(runtime_workers) is int and runtime_workers in (1, 2))
             self.plan_pin = plans.PinnedPlan(plan)
             require(type(idle) is idle_module.Idle and idle.plan == plan)
             require(type(witness) is engine.dispatch.process.ProcessWitness)
@@ -359,6 +366,7 @@ class CandidateQualification:
             self.plan, self.idle, self.witness, self.docker = plan, idle, witness, docker
             self.image_environment_sha256 = image_environment_sha256
             self.timezone, self.hostname, self.architecture = timezone, hostname, architecture
+            self.runtime_workers = runtime_workers
             self.init, self.generation = witness.identity, idle.generation
             self.fd = witness.fd
             self.fd_identity = runtime.identity(os.fstat(self.fd))
@@ -377,6 +385,7 @@ class CandidateQualification:
             self.timezone,
             self.hostname,
             self.architecture,
+            (type(self.runtime_workers), self.runtime_workers),
         )
 
     def _bounds(self):
@@ -533,7 +542,7 @@ class CandidateQualification:
             if observe is None:
                 source.verify(self.plan.candidate_runtime.source)
                 self._guard(deadline)
-                runtime.Layout(merged).verify_supervised(
+                runtime.Layout(merged, workers=self.runtime_workers).verify_supervised(
                     self.plan.candidate_runtime.interpreter, self.timezone
                 )
             else:
@@ -547,7 +556,9 @@ class CandidateQualification:
 
                 result = source.verify_during(
                     self.plan.candidate_runtime.source,
-                    lambda: runtime.Layout(merged).verify_supervised_during(
+                    lambda: runtime.Layout(
+                        merged, workers=self.runtime_workers
+                    ).verify_supervised_during(
                         self.plan.candidate_runtime.interpreter,
                         self.timezone,
                         guarded_observation,
