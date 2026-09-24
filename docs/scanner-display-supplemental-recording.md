@@ -1869,6 +1869,33 @@ rewritten or treated as new recovery evidence. This does not verify recording
 files or grant restoration. Post-exit file verification still needs the actual
 original native completion and independent source/runtime/host qualification.
 
+`supplemental_recording_exit.Finalized` supplies a lower-level post-exit file
+check, not the full host-policy join. It must capture the original actual Relay
+and pre-begin Operator while the completed recording can still be freshly
+verified. It accepts no caller-provided completion, exit receipt, stopped payload
+or replacement baseline. `collect_exit()` invokes the existing fourth-return,
+clean-EOF, original-pidfd and Engine collector exactly once and privately retains
+its actual return. A lost return stays unconfirmed even if the workers exited.
+
+After the original Ready and transport close and the separate Operator has
+polled successfully, `read()` brackets finalized-file collection with that
+Operator's read-only custody checks. Original completion values, plan, closed
+recording ledger, intent bytes, optional checkpoint chain and directory
+identities remain pinned. Both old recordings and the complete new WAV/metadata
+artifact must still match; a same-sized or same-byte replacement inode cannot
+substitute. The whole read must fit within two seconds and the original recovery
+deadline. It never receives another frame, publishes evidence, recaptures a
+baseline, renews a deadline or dispatches an App action.
+
+This reader borrows its inputs and owns no process handles. Failure consumes
+the reader while leaving the caller's independent recovery handles and evidence
+intact; closing it does not close the Operator. The live Start/Relay APIs remain
+invalid after transport closure. This component does **not** verify the full
+host authorization journal, source/runtime, init/CLI recovery or restoration
+conditions. Those must still be joined and independently supervised before an
+installed trial. Local tests use real private files, wire framing and owned
+processes with explicitly synthetic Engine/platform facts, not a scanner test.
+
 A fresh local Engine/native check also verified capture and reconciliation after
 closing the original Ready object and its own process handles, then separately
 observed the original fixture init expiry. A separate fresh case exercised the

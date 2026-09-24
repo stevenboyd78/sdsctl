@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from . import test_supplemental_recording_reconcile as custody_tests  # noqa: F401
 from . import test_supplemental_recording_relay as relay_tests
 
 NAME = "supplemental_recording_exit"
