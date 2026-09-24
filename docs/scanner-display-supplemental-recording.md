@@ -2501,11 +2501,39 @@ is not retried, and failure does not close the caller's original clock or plan.
 Successful consumption calls the same original offer's one-use structural
 acceptance. It performs no write, disk synchronization, journal transition,
 Engine request, App command or recording action. There is no durable success
-acknowledgment or restart/resume path. A separately qualified submission writer,
+acknowledgment or restart/resume path. Qualification of the separate submission writer,
 independent review/supervision and installed continuing-service assembly remain
 required. The intake module remains outside the qualified helper image and
 command allowlist; its private-file and real-local-clock tests are not installed
 platform qualification.
+
+`supplemental_recording_service_submit.Submission` provides that separate writer
+as an uninstalled library. The external caller supplies a retained read-only
+`CasePlan`, the independently authenticated template digest and the independently
+reviewed final-plan digest. The writer checks the final pin against those exact
+retained bytes, but cannot authenticate the caller's review or infer permission
+from the claim file. It does not capture or relabel clocks: the continuing owner
+enforces its own original domain and expiry when consuming the message.
+
+Submission takes the cooperating directory lock exclusively, writes a new
+mode0600 pending file, synchronizes and verifies its complete bytes, and links
+it to the fixed acceptance filename without replacing anything. Only its own
+verified temporary link is removed; the destination and every uncertain payload
+remain preserved. Directory synchronization and final original-plan/file checks
+precede a successful delivery return, under a separate two-second bound. A busy
+or refused writer consumes its attempt; it does not retry. The reader stays
+pending only while the writer actually holds the lock, and refuses leftover
+pending state after the lock is released.
+
+A lost sender acknowledgment remains **uncertain delivery**. If the complete
+message was already published, the original reader may still accept it once;
+the sender cannot assume it was rejected or submit again. Delivery and acceptance
+are distinct from service readiness and recording authorization. Temporary-file
+tests cover both sides of this boundary, and a separate real local Python
+process has submitted into the same original owner's retained clock/plan chain.
+That test uses synthetic App/contract data and a temporary path alias, not an
+installed helper or real App handoff. The writer also remains outside the
+qualified helper image and its command allowlist.
 
 ### Recovery routes inside the pinned helper
 
