@@ -3406,6 +3406,12 @@ bounded reads, descriptor cleanup and sanitized failures. They also run the real
 daemon recording manager on synthetic localhost RTP, checking decoded PCM bytes
 and preserving older files.
 
+For failing supplemental tests, pytest also reports a bounded list of source
+locations behind sanitized refusals. This test-only diagnostic includes no
+exception messages, source text, local variables or absolute paths. It does not
+change production error handling, deadlines or retry policy; a passing rerun
+does not by itself explain or erase an earlier refusal.
+
 Additional integration cases keep one real PCMU Unix consumer and the recorder
 on the same RTP owner while native FQK or DTM acquisition succeeds or times out.
 The finalized WAV/sidecar pass the content verifier in each case; subsequent
