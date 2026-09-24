@@ -17,6 +17,7 @@ from contextlib import suppress
 from dataclasses import asdict, dataclass, replace
 from threading import Event, Lock, Thread, current_thread, get_ident
 
+import supplemental_recording_exit as worker_exit
 import supplemental_recording_host_launch as launch
 import supplemental_recording_relay as relayed
 
@@ -493,6 +494,259 @@ class Start:
             self.closed = True
             if self.probe is not None:
                 self.probe.close()
+
+
+class AuthorizedFinalized:
+    """Original successful Start/history plus one existing finalized-file reader.
+
+    This is not full host/source/runtime qualification or independent recovery.
+    The caller still owns Start, Operator, journals and all process descriptors.
+    A file failure cannot establish that a process remains alive or prevent the
+    separate recovery owner from reconciling actual exits.
+    """
+
+    def __init__(self, start, operator):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = self.publish_attempted = False
+        self.phase, self.publication, self.exited = "capturing", None, None
+        self._publication_return = None
+        self.files = None
+        try:
+            began = time.monotonic()
+            require(type(start) is Start and type(operator) is worker_exit.reconcile.Operator)
+            machine = start.retained_history()
+            require(start.relay.phase == "closed")
+            require(not operator.publish_attempted)
+            self.start, self.operator = start, operator
+            self.run, self.plan, self.ready = start.run, start.plan, start.ready
+            self.relay, self.ledger, self.journal = start.relay, start.ledger, start.run.journal
+            require(operator.plan is self.plan and operator.clock is self.plan.original_clock)
+            require(operator.pins == self.run.pins)
+            self.origins, self.original = start.objects, start.original
+            self.begin = start._begin_result
+            self.before, self.proof = machine.state, start.proof
+            self.history = tuple(base.encode(entry) for entry in self.journal.entries)
+            self.fd = self.journal.fd
+            self.dir_id = binding.identity(os.fstat(self.fd))[:6]
+            self.files = worker_exit.Finalized(self.relay, operator)
+            require(start.read_files() == self.files.completion.collected)
+            self.seal = self._values()
+            self.phase = "completed"
+            self._context()
+            self._history(min(began + 2, self.relay.guard.finish_by))
+            require(began <= time.monotonic() < min(began + 2, self.relay.guard.finish_by))
+        except BaseException as error:
+            self._fail(error)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostBegin(MESSAGE) from None
+
+    def _values(self):
+        start, run = self.start, self.run
+        return base.checksum(
+            dict(
+                before=asdict(self.before),
+                authorization=start.authorization,
+                intent=asdict(start.intent),
+                proof=start.proof,
+                prefix=[hashlib.sha256(raw).hexdigest() for raw in start.history],
+                journal_prefix=[hashlib.sha256(raw).hexdigest() for raw in self.history],
+                launch_sha256=run.launch_sha256,
+                profile_sha256=run.profile_sha256,
+                ready_context_sha256=hashlib.sha256(self.ready.context_raw).hexdigest(),
+                ready_received_at=self.ready.received_at,
+                ready_by=self.ready.ready_by,
+                watch_deadline=self.ready.watch_deadline,
+            )
+        )
+
+    def _context(self):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        start, run = self.start, self.run
+        require(type(start) is Start and type(run) is launch.Launch)
+        require(not start.failed and not start.closed and start.owner == self.owner and start.used)
+        require(not run.failed and not run.closed and run.used and run.confirm_attempted)
+        require(run.owner == self.owner)
+        require(start.run is run and start.plan is self.plan is run.plan)
+        require(self.operator.plan is self.plan and self.operator.clock is self.plan.original_clock)
+        require(start.ready is self.ready is run.ready and self.ready.client is run.client)
+        require(start.relay is self.relay and start.ledger is self.ledger)
+        require(start.objects is self.origins and start.original is self.original)
+        current = (
+            run.plan,
+            run.projected,
+            run.journal,
+            run.ready,
+            run.read,
+            run.qualify,
+            run.idle,
+            run.witness,
+            run.client,
+            run.probe,
+            self.ledger,
+        )
+        require(all(a is b for a, b in zip(current, self.origins, strict=True)))
+        require(
+            (
+                self.plan.raw,
+                run.pins,
+                run.command,
+                run.launch_sha256,
+                run.profile_sha256,
+                self.ready.ready_raw,
+                self.ready.context_raw,
+                self.ready.received_at,
+                self.ready.ready_by,
+                self.ready.watch_deadline,
+                self.ledger.directory,
+                self.ledger.binding,
+                self.ledger._directory_identity,
+            )
+            == self.original
+        )
+        require(start._begin_result is self.begin and self.begin[0] is self.relay)
+        require(self.begin[1] == base.encode(start.authorization) and self.begin[2] is start.intent)
+        require(start.proof == self.proof and self._values() == self.seal)
+        require(run.journal is self.journal and self.journal.fd == self.fd)
+        require(binding.identity(os.fstat(self.fd))[:6] == self.dir_id)
+        require(type(self.files) is worker_exit.Finalized)
+        require(self.files.relay is self.relay and self.files.operator is self.operator)
+        self.files._context()
+        require(self.publication is self._publication_return)
+        if self.exited is not None:
+            result, digest = self.exited
+            require(self.files.used and self.relay.phase == "exited")
+            require(self.files._exit_receipt[0] is result)
+            require(self.files._exit_receipt[1] == digest == base.checksum(asdict(result)))
+
+    def _history(self, end):
+        self._context()
+        machine = self.operator._journal(self.journal, end)
+        entries = tuple(base.encode(entry) for entry in self.journal.entries)
+        require(entries[: len(self.history)] == self.history)
+        if self.publication is None:
+            require(entries == self.history and machine.state == self.before)
+        else:
+            digest, published = self.publication
+            require(entries[: len(published)] == published)
+            require(machine.state.operator_exit_sha256 == digest == self.operator.result_sha256)
+            require(machine.state.finish_requested)
+            require(
+                machine.state.phase
+                in ("candidate_running", "stopping_candidate", "starting_normal", "complete")
+            )
+            for name in (
+                "candidate_generation",
+                "authorization_generation",
+                "recording_deadline",
+                "ready_evidence_sha256",
+                "launch_intent_sha256",
+                "launch_plan_sha256",
+            ):
+                require(getattr(machine.state, name) == getattr(self.before, name))
+        require(machine.last_at <= self.operator._clock() < self.plan.deadlines.recover_by)
+        require(time.monotonic() < end)
+        return machine
+
+    def collect_exit(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._context()
+            require(self.phase == "completed")
+            self.phase = "collecting"
+            self._history(min(time.monotonic() + 2, self.relay.guard.finish_by))
+            result = self.files.collect_exit()
+            self.exited = result, base.checksum(asdict(result))
+            self._history(time.monotonic() + 2)
+            self.phase = "exited"
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def publish_exit(self):
+        """Only existing actual Operator publication, never a file verdict."""
+        acquired = False
+        try:
+            began = time.monotonic()
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._context()
+            require(self.phase == "exited" and not self.publish_attempted)
+            self.publish_attempted = True
+            now = self.operator._clock()
+            end = min(began + 2, time.monotonic() + self.plan.deadlines.recover_by - now)
+            self._history(end)
+            require(self.ready.closed and self.ready.processes.closed and self.ready.client.closed)
+            require(self.exited is not None)
+            receipt = self.operator.recheck()
+            require(receipt.returncode == 0)
+            require(receipt.engine_sha256 == self.exited[0].execution_inspection_sha256)
+            digest = self.operator.publish(self.journal)
+            after = self.operator._journal(self.journal, end)
+            entries = tuple(base.encode(entry) for entry in self.journal.entries)
+            require(len(entries) == len(self.history) + 1 and entries[:-1] == self.history)
+            require(
+                after.state
+                == replace(self.before, operator_exit_sha256=digest, finish_requested=True)
+            )
+            self._context()
+            require(began <= time.monotonic() < end)
+            self.publication = digest, entries
+            self._publication_return = self.publication
+            self.phase = "published"
+            return digest
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def read(self):
+        acquired = False
+        try:
+            began = time.monotonic()
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._context()
+            require(
+                self.phase == "published"
+                and self.publish_attempted
+                and self.publication is not None
+            )
+            now = self.operator._clock()
+            end = min(began + 2, time.monotonic() + self.plan.deadlines.recover_by - now)
+            machine = self._history(end)
+            context = tuple(base.encode(entry) for entry in self.journal.entries)
+            publication = self.publication
+            result = self.files.read()
+            require(self._history(end) is machine)
+            require(tuple(base.encode(entry) for entry in self.journal.entries) == context)
+            self._context()
+            require(self.phase == "published" and self.publication is publication)
+            ended = self.operator._clock()
+            require(0 <= ended - now <= 2 and began <= time.monotonic() < end)
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        if self.closed:
+            return
+        self.closed = True
+        if self.files is not None:
+            self.files.close()
 
 
 @dataclass(frozen=True)

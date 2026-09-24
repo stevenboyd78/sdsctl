@@ -1910,6 +1910,37 @@ conditions. Those must still be joined and independently supervised before an
 installed trial. Local tests use real private files, wire framing and owned
 processes with explicitly synthetic Engine/platform facts, not a scanner test.
 
+`supplemental_recording_host_begin.AuthorizedFinalized` adds the original host
+authorization to that file reader. It captures the actual successful `Start`,
+its original returned begin tuple, plan, authorization, intent, complete journal
+prefix and pre-begin Operator while the completion is still freshly readable.
+It constructs the existing `Finalized` reader itself; callers cannot supply
+replacement completion, exit or publication receipts.
+
+Its one-use `collect_exit()` delegates to the existing collector. After the
+caller closes Ready and the independent Operator polls successfully,
+`publish_exit()` delegates once to that Operator's existing publication and
+requires exactly its permitted journal change. Publication does not depend on
+a new successful WAV read: bad files must not block independent process-exit
+reconciliation. A lost return consumes this adapter without adopting an event
+that merely appears durable.
+
+After publication, `read()` brackets the existing finalized-file check with
+fresh replay-backed, on-disk authorization checks. Original generation,
+deadlines, Ready proof, intent and publication prefix remain pinned. Later valid
+events from the existing recovery policy may extend that prefix, but review
+cannot be reopened as successful file evidence. Reads retain the whole
+two-second and original recovery limits. Changed or copied returns, altered
+cached policy, mid-read state changes and reentrant reads fail closed.
+
+This adapter neither owns nor closes the caller's recovery handles, and it
+does not introduce another recovery state machine. Its unit tests deliberately
+use synthetic completion/exit/file facts to isolate ordering; lower-level
+transport and file tests remain separate. It is still **not** a full current
+host/source/runtime observation, an independently supervised recovery service,
+proof of original init/CLI exit, or permission to restore an App. Those gates
+remain required before an installed trial.
+
 A fresh local Engine/native check also verified capture and reconciliation after
 closing the original Ready object and its own process handles, then separately
 observed the original fixture init expiry. A separate fresh case exercised the

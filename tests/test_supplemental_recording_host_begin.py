@@ -15,6 +15,7 @@ from threading import Thread
 
 import pytest
 
+from . import test_supplemental_recording_exit as exit_tests  # noqa: F401
 from . import test_supplemental_recording_host_launch as launches
 from . import test_supplemental_recording_relay as relay_tests  # noqa: F401
 
