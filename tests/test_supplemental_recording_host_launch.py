@@ -21,6 +21,7 @@ import pytest
 
 from . import test_supplemental_recording_dispatch as dispatch
 from . import test_supplemental_recording_host_plan as plans
+from . import test_supplemental_recording_host_source as host_source_tests  # noqa: F401
 from . import test_supplemental_recording_idle_observer as idle_tests  # noqa: F401
 from . import test_supplemental_recording_normal_read as normal_tests  # noqa: F401
 from . import test_supplemental_recording_probe_exec as probe_tests  # noqa: F401

@@ -19,6 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread, get_ident
 
+import supplemental_recording_host_source as helper_source
 import supplemental_recording_idle_observer as idle_module
 import supplemental_recording_normal_read as normal_read
 import supplemental_recording_probe_exec as probe_exec
@@ -838,6 +839,340 @@ class _PreparedHostRead:
             raise self.error
         require(type(self.sample) is bootstrap.recovery.Sample)
         return self.sample
+
+
+class HelperQualification:
+    """Read-only startup qualification of one independently captured helper.
+
+    Inputs come from the reviewed launcher, not the container being observed.
+    The exact command and complete Engine configuration fingerprint are supplied
+    separately from the plan's image/source/runtime/environment pins. The
+    original live witness remains caller-owned. A replacement, late observation
+    or failed read permanently consumes this instance; nothing is launched.
+
+    This checks Engine-declared confinement, not effective kernel namespace,
+    capability or seccomp enforcement, independent supervision, or the helper's
+    own continuing clock domain. Those are separate installation gates. A
+    read-only Docker socket mount DOES NOT restrict Engine API authority.
+    """
+
+    MAX_SECONDS = 2.0
+    HELPER = Path("opt/sdsctl-recording-host")
+
+    def __init__(
+        self,
+        plan,
+        witness,
+        docker,
+        *,
+        generation,
+        command,
+        configuration_sha256,
+        image_environment_sha256,
+        timezone,
+        hostname,
+        architecture,
+        runtime_workers=1,
+    ):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed, self.elapsed_seconds = False, None
+        try:
+            self.plan_pin = plans.PinnedPlan(plan)
+            require(type(witness) is engine.dispatch.process.ProcessWitness)
+            require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
+            for pin in (generation, configuration_sha256, image_environment_sha256):
+                base.digest(pin)
+            runtime._timezone_name(timezone)
+            plans.text(hostname, r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?")
+            require(architecture in ("amd64", "arm64"))
+            require(type(runtime_workers) is int and runtime_workers in (1, 2))
+            require(type(command) is tuple and len(command) == 6)
+            require(all(type(part) is str for part in command))
+            require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
+            require(
+                command[3]
+                in {str(Path("/") / self.HELPER / name) for name in helper_source.HELPER_FILES}
+                and command[4:] == (str(plan.root), plan.sha256)
+            )
+            self.plan, self.witness, self.docker = plan, witness, docker
+            self.objects = plan, witness, docker
+            self.init, self.fd = witness.identity, witness.fd
+            self.fd_identity = runtime.identity(os.fstat(self.fd))
+            self.generation, self.command = generation, command
+            self.configuration_sha256 = configuration_sha256
+            self.image_environment_sha256 = image_environment_sha256
+            self.timezone, self.hostname, self.architecture = timezone, hostname, architecture
+            self.runtime_workers = runtime_workers
+            self.original = self._pins()
+            self._guard(min(time.monotonic() + self.MAX_SECONDS, plan.lease["ready_by"]))
+        except BaseException as error:
+            self._fail(error)
+
+    def _pins(self):
+        return (
+            self.plan.raw,
+            self.init,
+            self.generation,
+            self.command,
+            self.configuration_sha256,
+            self.image_environment_sha256,
+            self.timezone,
+            self.hostname,
+            self.architecture,
+            (type(self.runtime_workers), self.runtime_workers),
+        )
+
+    def _guard(self, deadline):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        require(os.geteuid() == runtime.ROOT_UID and time.monotonic() < deadline)
+        require(
+            all(
+                current is original
+                for current, original in zip(
+                    (self.plan, self.witness, self.docker), self.objects, strict=True
+                )
+            )
+        )
+        self.plan_pin.check(self.plan)
+        require(self._pins() == self.original)
+        require(
+            type(self.docker) is plans.ordinary.Docker
+            and self.docker.path == "/var/run/docker.sock"
+        )
+        require(self.witness.identity == self.init and self.witness.fd == self.fd)
+        require(runtime.identity(os.fstat(self.fd)) == self.fd_identity)
+        require(not self.witness.exited())
+        require(
+            engine.dispatch.process.read_identity(self.init.pid, self.init.container_id)
+            == self.init
+        )
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        require(observed.boottime_ns / plans.clock.NS < self.plan.deadlines.ready_by)
+        require(time.monotonic() < min(deadline, self.plan.lease["ready_by"]))
+
+    def _mounts(self, container):
+        # Closed routing: only the private case is writable. No code, runtime,
+        # credential, native data alias, inherited volume or additional mount.
+        expected = {
+            "/var/run/docker.sock": ("/var/run/docker.sock", False),
+            "/mnt/data": ("/mnt/data", False),
+            str(self.plan.root): (str(self.plan.root), True),
+            "/opt/sdsctl-host-udp/udp": ("/proc/1/net/udp", False),
+            "/opt/sdsctl-host-udp/udp6": ("/proc/1/net/udp6", False),
+        }
+        mounts = container.get("Mounts")
+        require(type(mounts) is list and len(mounts) == len(expected))
+        seen = set()
+        for mount in mounts:
+            require(type(mount) is dict)
+            destination = mount.get("Destination")
+            require(
+                type(destination) is str and destination in expected and destination not in seen
+            )
+            seen.add(destination)
+            source, writable = expected[destination]
+            require(mount.get("Type") == "bind" and mount.get("Source") == source)
+            require(mount.get("RW") is writable and mount.get("Propagation") == "rprivate")
+        require(seen == set(expected))
+        host = container["HostConfig"]
+        requested = host.get("Mounts")
+        require(type(requested) is list and len(requested) == len(expected))
+        seen = set()
+        for mount in requested:
+            require(type(mount) is dict)
+            require(
+                set(mount)
+                in ({"Type", "Source", "Target"}, {"Type", "Source", "Target", "ReadOnly"})
+            )
+            destination = mount["Target"]
+            require(
+                type(destination) is str and destination in expected and destination not in seen
+            )
+            seen.add(destination)
+            source, writable = expected[destination]
+            require(
+                mount["Type"] == "bind"
+                and mount["Source"] == source
+                # Engine omits the false zero value for the sole RW case mount.
+                # Absence cannot qualify ANY of the required read-only mounts.
+                and mount.get("ReadOnly", False) is (not writable)
+            )
+        require(seen == set(expected))
+
+    def _metadata(self, deadline):
+        self._guard(deadline)
+        container = self.docker.container(self.init.container_id)
+        require(type(container) is dict and container.get("Id") == self.init.container_id)
+        name = "sdsctl-recording-handoff-" + self.plan.case
+        require(
+            plans.ordinary.generation(container, name=name, image=self.plan.helper.image)
+            == self.generation
+        )
+        require(container["State"]["Pid"] == self.init.pid)
+        plans.ordinary.manual_container(container)
+        require(
+            container.get("Path") == self.command[0]
+            and container.get("Args") == list(self.command[1:])
+        )
+        config, host = container.get("Config"), container.get("HostConfig")
+        require(type(config) is dict and type(host) is dict)
+        require(config.get("User") == "0:0" and config.get("WorkingDir") == "/")
+        require(config.get("Hostname") == self.hostname)
+        require(config.get("Tty") is False and config.get("OpenStdin") is False)
+        require(config.get("Volumes") in (None, {}))
+        parts = []
+        for key in ("Entrypoint", "Cmd"):
+            value = config.get(key)
+            require(value is None or type(value) is list)
+            parts.extend(value or [])
+        require(parts == list(self.command))
+        require(
+            runtime.helper_environment(
+                config.get("Env"),
+                image_environment_sha256=self.image_environment_sha256,
+                timezone=self.timezone,
+            )
+            == self.plan.helper.environment
+        )
+        required = {
+            "ReadonlyRootfs": True,
+            "Privileged": False,
+            "AutoRemove": False,
+            "NetworkMode": "none",
+            "PidMode": "host",
+            "CgroupnsMode": "host",
+            "IpcMode": "private",
+            "UTSMode": "",
+            "UsernsMode": "",
+            "Runtime": "runc",
+            "PublishAllPorts": False,
+            "NanoCpus": 1_000_000_000,
+            "Memory": 512 * 1024 * 1024,
+            "MemorySwap": 1024 * 1024 * 1024,
+            "PidsLimit": 64,
+        }
+        require(
+            all(
+                type(host.get(key)) is type(value) and host[key] == value
+                for key, value in required.items()
+            )
+        )
+        require(host.get("CapDrop") == ["ALL"])
+        added = host.get("CapAdd")
+        require(
+            type(added) is list
+            and len(added) == 2
+            and set(added) == {"DAC_READ_SEARCH", "SYS_PTRACE"}
+        )
+        security = host.get("SecurityOpt")
+        require(security in (["no-new-privileges"], ["no-new-privileges", "label=disable"]))
+        for key in (
+            "Binds",
+            "VolumesFrom",
+            "Devices",
+            "DeviceRequests",
+            "DeviceCgroupRules",
+            "GroupAdd",
+            "ExtraHosts",
+        ):
+            require(host.get(key) in (None, []))
+        for key in ("Tmpfs", "Sysctls", "PortBindings", "StorageOpt"):
+            require(host.get(key) in (None, {}))
+        self._mounts(container)
+        # This exact complete configuration pin is independently provided. It
+        # also covers unknown Engine settings: no observation becomes a default.
+        stamp = base.checksum(
+            {
+                "schema": 1,
+                "kind": "finite-recording-helper-configuration-v1",
+                "config": config | {"Env": self.plan.helper.environment},
+                "host": host,
+                "mounts": container["Mounts"],
+            }
+        )
+        require(stamp == self.configuration_sha256)
+        driver = container.get("GraphDriver")
+        require(type(driver) is dict and driver.get("Name") == "overlay2")
+        data = driver.get("Data")
+        require(type(data) is dict and data.get("ID") == self.init.container_id)
+        merged = data.get("MergedDir")
+        plans.text(merged, r"/mnt/data/docker/overlay2/[a-z0-9]{1,128}/merged")
+        self._guard(deadline)
+        image = self.docker.image(self.plan.helper.image)
+        require(image.get("Id") == self.plan.helper.image and image.get("Os") == "linux")
+        require(
+            image.get("Architecture") == self.architecture and type(image.get("Config")) is dict
+        )
+        require(runtime.environment(image["Config"].get("Env")) == self.image_environment_sha256)
+        self._guard(deadline)
+        return Path(merged), base.checksum(driver), config["Env"]
+
+    def _environment(self, configured, deadline):
+        self._guard(deadline)
+        result = runtime.collect_helper_process_environment(
+            self.witness,
+            deadline=min(deadline, time.monotonic() + 1),
+            configured=configured,
+            configured_sha256=self.plan.helper.environment,
+            image_environment_sha256=self.image_environment_sha256,
+            timezone=self.timezone,
+            hostname=self.hostname,
+        )
+        require(type(result) is runtime.ProcessEnvironment and result.process == self.init)
+        self._guard(deadline)
+        return result
+
+    def _command(self, deadline):
+        self._guard(deadline)
+        with open(f"/proc/{self.init.pid}/cmdline", "rb", buffering=0) as stream:
+            raw = stream.read(8193)
+        require(len(raw) <= 8192)
+        require(raw == b"\0".join(part.encode("ascii") for part in self.command) + b"\0")
+        self._guard(deadline)
+
+    def __call__(self):
+        """No cached report or action authority; every successful call is fresh."""
+        acquired = False
+        self.elapsed_seconds = None
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            began = time.monotonic()
+            deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
+            self._guard(deadline)
+            root, driver, configured = self._metadata(deadline)
+            self._command(deadline)
+            before = self._environment(configured, deadline)
+            source = helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
+            source.verify(self.plan.helper.source)
+            self._guard(deadline)
+            runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
+                self.plan.helper.interpreter, self.timezone
+            )
+            self._guard(deadline)
+            source.verify(self.plan.helper.source)
+            self._guard(deadline)
+            after = self._environment(configured, deadline)
+            self._command(deadline)
+            require((before.sha256, before.process) == (after.sha256, after.process))
+            require(began <= before.observed_at <= after.observed_at < deadline)
+            end_root, end_driver, _ = self._metadata(deadline)
+            require((root, driver) == (end_root, end_driver))
+            self._guard(deadline)
+            self.elapsed_seconds = time.monotonic() - began
+            require(0 <= self.elapsed_seconds < self.MAX_SECONDS)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed, self.elapsed_seconds = True, None
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostLaunch(MESSAGE) from None
 
 
 class CandidateQualification:

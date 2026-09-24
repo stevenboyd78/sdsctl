@@ -2544,6 +2544,47 @@ qualify a complete helper container, source mounts, confinement, launcher or
 independent supervision. Existing schema3 fixtures with image-only helper
 environment pins must not be described as passing this new profile.
 
+Separate fresh local and HAOS-host containers have now passed complete source,
+import and runtime checks plus actual original-pidfd startup-environment reads
+for themselves and their harmless owned child. They rejected App credentials,
+image-only pins, an exec PATH override and a subsequent read of the exited
+original child. Both were network-disabled and root-read-only with only a
+read-only verifier mount, no Engine socket, App data, media or credentials.
+These bounded checks do not qualify an installed service or combined host timing.
+
+`HelperQualification` in `scripts/supplemental_recording_host_launch.py` joins
+the separate helper pins to an independently captured original process and
+Engine incarnation. The trusted launcher supplies the exact command and a
+separately reconstructed fingerprint of the complete container configuration;
+the collector never learns expected values from the object it is checking.
+It checks the original process command and credential-free startup bytes before
+and after full helper/product source and timezone-inclusive runtime reads.
+Source is rechecked after runtime inspection. A successful call returns no
+report or action authority, and subsequent calls cannot reuse its observations.
+
+The prospective helper profile requires a read-only root, no network, host PID
+and cgroup views, private IPC, root user, no automatic restart/removal, one CPU,
+512 MiB memory, 1 GiB memory-plus-swap limit and 64 PIDs. All capabilities are
+dropped except the explicitly pinned `DAC_READ_SEARCH` and `SYS_PTRACE` needed
+for host reads; `no-new-privileges` is mandatory. HAOS's `label=disable` setting
+is admitted only as an explicit part of the independent configuration pin.
+Only five bind mounts are accepted: the Engine socket read-only, `/mnt/data`
+read-only, the exact private case writable, and the two host UDP tables
+read-only. No code/loader/timezone shadow mounts, devices, inherited volumes,
+extra writable paths or credentials are accepted. **A read-only Engine socket
+mount does not restrict Engine API authority.** The helper remains trusted
+administrative code, never a browser-facing API.
+
+The whole read keeps the original two-second maximum and readiness deadline.
+Unexpected settings, changed bytes/identities, lost handles or late reads are
+sticky failures. Tests use actual source/runtime/proc-environment reads and an
+owned pidfd with explicitly synthetic Engine, cgroup, command-line and host-path
+fixtures. This checks Engine-declared settings, not effective kernel namespace,
+capability/seccomp enforcement, independent supervision, or a continuing helper
+clock-domain witness. Those remain separate gates; no installed entrypoint or
+existing live service selects this collector. Its accepted command shape does
+not make any library module a usable service or authorize its execution.
+
 The explicit `Layout.observe_supervised(timezone)` / `verify_supervised()` runtime
 profile also inventories the complete `/usr/share/zoneinfo` tree and the
 `/etc/localtime` link, and requires `/etc/timezone` to be absent in this qualified
