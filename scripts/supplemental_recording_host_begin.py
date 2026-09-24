@@ -14,8 +14,8 @@ import math
 import os
 import time
 from contextlib import suppress
-from dataclasses import asdict, replace
-from threading import Lock, get_ident
+from dataclasses import asdict, dataclass, replace
+from threading import Event, Lock, Thread, current_thread, get_ident
 
 import supplemental_recording_host_launch as launch
 import supplemental_recording_relay as relayed
@@ -488,6 +488,324 @@ class Start:
             self.closed = True
             if self.probe is not None:
                 self.probe.close()
+
+
+@dataclass(frozen=True)
+class _StaticHostSnapshot:
+    """Incomplete internal evidence: explicitly no recording or health result."""
+
+    boot: str
+    began: float
+    ended: float
+    normal: base.App
+    candidate: base.App
+    other_stopped: bool
+    jobs_idle: bool
+
+
+class _StaticHostObserver(plans.ordinary.HostObserver):
+    """The complete ordinary metadata checks, without an invented file stage."""
+
+    validate_seals = staticmethod(plans.host.HostObserver.validate_seals)
+
+    def file_pin(self, slug, config, files):
+        if slug == base.NORMAL:
+            return super().file_pin(slug, config, files)
+        require(slug == base.CANDIDATE and type(files) is plans.host.static.StaticFiles)
+        seal = self.seals[slug]
+        return plans.host.CandidateSeal(
+            config.version, seal.image, config.settings_sha256, files, seal.contract
+        ).pin
+
+    def sample(self, boot, now, began, observed, other_stopped, jobs_idle):
+        return _StaticHostSnapshot(
+            boot,
+            began,
+            now,
+            observed[base.NORMAL],
+            observed[base.CANDIDATE],
+            other_stopped,
+            jobs_idle,
+        )
+
+
+class RetainedHost:
+    """Full host/file sample after actual begin; native flags remain unknown.
+
+    Only fixed Supervisor/static-file reads run in the background. Actual
+    authorization, Relay file selection, PostBegin lease and actor checks remain
+    on the owning thread. The earliest original two-second window includes all
+    contributing reads, and no worker result can supply a false pristine stage.
+
+    The caller must surround the join with the actual RetainedQualification and
+    separately join any cached native probe. This class never starts a probe,
+    receives a native return, publishes progress, changes policy or grants exit
+    or restoration. It is invalid after the Relay exit collector closes transport.
+    """
+
+    def __init__(self, start, continuity):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = False
+        self.pending = None
+        self.start = None
+        try:
+            require(type(start) is Start and type(continuity) is launch.idle_module.PostBegin)
+            self.start, self.continuity = start, continuity
+            self.run, self.plan, self.relay = start.run, start.plan, start.relay
+            self.docker = self.run.read.docker
+            self.objects = (
+                start,
+                self.run,
+                self.plan,
+                self.relay,
+                continuity,
+                self.docker,
+                self.run.read,
+                self.run.witness,
+                self.run.qualify,
+            )
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        start, run, plan, relay, continuity = (
+            self.start,
+            self.run,
+            self.plan,
+            self.relay,
+            self.continuity,
+        )
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (
+                        start,
+                        run,
+                        plan,
+                        relay,
+                        continuity,
+                        self.docker,
+                        run.read,
+                        run.witness,
+                        run.qualify,
+                    ),
+                    self.objects,
+                    strict=True,
+                )
+            )
+        )
+        require(type(start) is Start and start.run is run and start.plan is plan)
+        require(start.relay is relay and relay.phase in ("completed", "closed"))
+        require(type(continuity) is launch.idle_module.PostBegin)
+        require(continuity.idle is run.idle and continuity.guard is relay.guard)
+        require(continuity.plan is plan and continuity.ready is run.ready)
+        require(continuity.finish_by == plan.lease["stop_by"])
+        require(
+            type(self.docker) is plans.ordinary.Docker
+            and self.docker.path == "/var/run/docker.sock"
+        )
+        require(self.docker is run.read.docker is run.qualify.docker)
+        start.retained_history()
+
+    def _context(self):
+        return (
+            self.relay.phase,
+            self.relay.expected,
+            self.relay.plan,
+            self.start.ledger.state,
+            tuple(base.encode(entry) for entry in self.run.journal.entries),
+        )
+
+    def _clock(self):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(now < self.plan.deadlines.stop_by)
+        return observed.boot, now
+
+    def _observer(self, clock):
+        plan = self.plan
+        layouts = {item.slug: item for item in plan.layouts}
+
+        def collect_files(slug, container):
+            require(slug in (base.NORMAL, base.CANDIDATE))
+            if slug == base.NORMAL:
+                return plans.host.static.collect(layouts[slug], container)
+            return plans.host.candidate_static.collect(layouts[slug], container)
+
+        supervisor = plans.ordinary.SupervisorReads(
+            self.docker, image=plan.cli_image, incarnation=plan.cli_generation
+        )
+        return _StaticHostObserver(
+            self.docker,
+            supervisor,
+            seals=(plan.normal, plan.candidate),
+            installed_versions=dict(plan.installed_versions),
+            other_scanner_apps=frozenset(plan.other_scanner_apps),
+            core_image=plan.core_image,
+            core_generation=plan.core_generation,
+            core_version=plan.core_version,
+            read_clock=clock,
+            collect_files=collect_files,
+            read_native=launch.BootstrapHost._unknown_native,
+            network=plans.ordinary.AUDIO_NETWORK,
+        )
+
+    def prepare(self):
+        acquired = False
+        try:
+            require(not self.failed and self.owner == (os.getpid(), get_ident()))
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(self.pending is None)
+            started = time.monotonic()
+            boot, began = self._clock()
+            self._guard()
+            context = self._context()
+            before = self.continuity.read()
+            require(type(before) is launch.idle_module.Continuity)
+            require(self._context() == context)
+            pending = _RetainedHostRead(
+                self, boot, began, before, context, min(started + 2, self.plan.lease["stop_by"])
+            )
+            self.pending = pending
+            pending.worker.start()
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def __call__(self):
+        acquired = False
+        try:
+            require(not self.failed and self.owner == (os.getpid(), get_ident()))
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            pending = self.pending
+            require(type(pending) is _RetainedHostRead)
+            self._guard()
+            require(self._context() == pending.context)
+            snapshot = pending.finish()
+            collected = self.start.read_files()
+            after = self.continuity.read()
+            require(type(after) is launch.idle_module.Continuity)
+            require(replace(after, sampled_at=pending.before.sampled_at) == pending.before)
+            require(after.sampled_at >= pending.before.sampled_at)
+            self._guard()
+            boot, ended = self._clock()
+            require(self.pending is pending and self._context() == pending.context)
+            require(boot == pending.boot == snapshot.boot)
+            require(pending.began <= snapshot.began <= snapshot.ended <= ended)
+            require(pending.began <= pending.before.sampled_at <= after.sampled_at <= ended)
+            require(0 <= ended - pending.began < 2 and time.monotonic() < pending.deadline)
+            require(snapshot.normal.state == "stopped")
+            candidate = snapshot.candidate
+            require(
+                candidate.state == "running" and candidate.generation == self.run.pins.generation
+            )
+            require(candidate.healthy is None and candidate.recording is None)
+            require(collected.files.stage != "active" or time.monotonic() < self.relay.plan.stop_at)
+            observation = launch.bootstrap.recording.Observation(
+                pending.began,
+                snapshot.normal,
+                candidate,
+                snapshot.other_stopped,
+                snapshot.jobs_idle,
+                True,
+                collected.files,
+            )
+            result = launch.bootstrap.recovery.Sample(boot, ended, observation)
+            self.pending = None
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def discard(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        self.failed = True
+        if self.pending is not None:
+            self.pending.cancelled.set()
+
+    def _fail(self, error):
+        self.failed = True
+        if self.pending is not None:
+            self.pending.cancelled.set()
+        if type(self.start) is Start:
+            self.start._fail(error)  # Retain original actor/probe descriptors.
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostBegin(MESSAGE) from None
+
+
+class _RetainedHostRead:
+    """One fixed incomplete snapshot; never contains a recording file verdict."""
+
+    def __init__(self, host, boot, began, before, context, deadline):
+        self.host, self.boot, self.began, self.before = host, boot, began, before
+        self.context, self.deadline = context, deadline
+        self.done, self.cancelled = Event(), Event()
+        self.snapshot = self.error = None
+        self.worker = Thread(target=self._run, name="sdsctl-retained-host-read", daemon=True)
+        self.original = (host, host.plan, boot, began, before, context, deadline, self.worker)
+
+    def _fixed(self):
+        require(
+            (
+                self.host,
+                self.host.plan,
+                self.boot,
+                self.began,
+                self.before,
+                self.context,
+                self.deadline,
+                self.worker,
+            )
+            == self.original
+        )
+        require(self.host.pending is self)
+
+    def _clock(self):
+        self._fixed()
+        require(current_thread() is self.worker and os.getpid() == self.host.owner[0])
+        require(not self.cancelled.is_set() and not self.host.failed)
+        require(time.monotonic() < self.deadline)
+        observed = plans.clock.read()
+        self.host.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(observed.boot == self.boot and self.began <= now < self.host.plan.deadlines.stop_by)
+        return observed.boot, now
+
+    def _run(self):
+        try:
+            self._clock()
+            self.snapshot = self.host._observer(self._clock).read()
+            self._clock()
+        except BaseException as error:
+            self.error = error
+        finally:
+            self.done.set()
+
+    def finish(self):
+        self._fixed()
+        require(self.host.owner == (os.getpid(), get_ident()))
+        require(not self.cancelled.is_set() and not self.host.failed)
+        require(time.monotonic() < self.deadline)
+        require(self.done.wait(max(0, self.deadline - time.monotonic())))
+        self.worker.join(max(0, self.deadline - time.monotonic()))
+        require(not self.worker.is_alive() and time.monotonic() < self.deadline)
+        require(not self.cancelled.is_set() and not self.host.failed)
+        if self.error is not None:
+            raise self.error
+        require(type(self.snapshot) is _StaticHostSnapshot)
+        return self.snapshot
 
 
 if __name__ == "__main__":

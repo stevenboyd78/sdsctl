@@ -655,6 +655,31 @@ This remains an uninstalled file adapter, not a full host/source/runtime/native
 health observation, checkpoint publication, exit witness or restoration action.
 It cannot be used after the separate exit collector closes the Relay transport.
 
+`RetainedHost` supplies the post-begin host/file portion without pretending that
+the candidate is pristine. A fixed read-only worker performs the complete
+ordinary host checks: Supervisor options and jobs, installed versions, Core,
+other scanner owners, current container generation and audio publication, the
+normal App's entire protected inventory, and the candidate's static files. Its
+internal snapshot has no recording stage and no native-health verdict. The
+owning thread brackets that work with the original `Start` authorization and
+`PostBegin` continuity, and selects files only through `Start.read_files()`.
+
+The earliest two-second budget includes every contributing read. A changed
+phase, history, actor-exit set, clock, Docker route or original object refuses
+the sample; active data may not cross the original recording-stop boundary.
+A refused or discarded worker remains retained and cannot supply a later
+result or a new readiness window. No retries, process signals, handle disposal,
+policy writes or progress acknowledgments occur in this adapter. Blocked system
+I/O still requires independent host supervision.
+
+The caller must separately surround the whole read with actual
+`RetainedQualification` and join an authenticated cached native probe before
+claiming full host/source/runtime/health evidence. This uninstalled adapter is
+not a replacement for either component or for post-exit restoration. Local
+tests explicitly distinguish real original journals and owned pidfds from
+synthetic platform, continuity and recording inputs; they do not qualify an
+installed Home Assistant runtime.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently
