@@ -2056,6 +2056,12 @@ waiting. Existing or partially acknowledged claims refuse restart; the entrypoin
 never deletes or resets them. TERM/INT exit normally; original lease expiration
 returns75, and invalid/changed files or startup failures return70 with a fixed
 message. The lease and its namespace are rechecked while waiting.
+The TERM/INT handler only sets a main-thread boolean; it never acquires an event
+or condition lock. This avoids reentrant signal deadlock during the wait. The
+original 100 ms polling cadence and absolute lease deadline remain unchanged.
+Regression tests force both real signals while a wait-condition lock is held;
+the old implementation deadlocked, and the lock-free handler exits normally
+without changing the consumed claim or permitting restart.
 
 This is a local elapsed-time bound, not protection against SIGSTOP or blocked
 kernel I/O; independent host termination is still required. Local subprocess

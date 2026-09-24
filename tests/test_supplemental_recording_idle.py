@@ -213,12 +213,13 @@ def lease(tmp_path):
 
 
 HARNESS = """
-import importlib.util,os,sys
+import importlib.util,os,signal,sys,threading
 from pathlib import Path
 spec=importlib.util.spec_from_file_location('idle_fixture',sys.argv[1])
 m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-# Only test namespaces/credentials are substituted. The actual executable
-# accepts no such options. All I/O, deadlines, signals and claim fsync are real.
+# The normal path substitutes only namespaces/credentials. Optional faults and
+# scheduling below are test-only; the actual executable accepts no such options.
+# All I/O, deadlines, signals and claim fsync are real.
 m.DATA=Path(sys.argv[2]);m.ROOT_UID=os.geteuid();m.ROOT_GID=os.getegid()
 m.os.getpid=lambda:1
 if sys.argv[5]=='clock_refused':
@@ -229,11 +230,31 @@ if sys.argv[5]=='lost':
     def lost(fd):
         original(fd);raise OSError('PRIVATE')
     m.os.fsync=lost
-sys.exit(m.main(['--lease',sys.argv[3],'--lease-sha256',sys.argv[4]]))
+delivered=[]
+if sys.argv[5].startswith('signal_locked_'):
+    # Force the same non-reentrant condition-lock window as Event.wait().
+    # This is test-only scheduling; the signal itself and handler are real.
+    held=threading.Event()
+    m.Event=lambda:held
+    check_domain=m._clock_domain
+    def locked_signal(fd):
+        check_domain(fd)
+        if not delivered and Path(sys.argv[3]).with_name('consumed.json').exists():
+            delivered.append(True)
+            with held._cond:
+                signal.raise_signal(int(sys.argv[5].rsplit('_',1)[1]))
+    m._clock_domain=locked_signal
+result=m.main(['--lease',sys.argv[3],'--lease-sha256',sys.argv[4]])
+if sys.argv[5].startswith('signal_locked_') and not delivered:
+    raise SystemExit(71)
+sys.exit(result)
 """
 
 
-def start(lease, *, lost=False, clock_refused=False):
+def start(lease, *, lost=False, clock_refused=False, signal_locked=None):
+    mode = "clock_refused" if clock_refused else "lost" if lost else "normal"
+    if signal_locked is not None:
+        mode = "signal_locked_" + str(int(signal_locked))
     return subprocess.Popen(
         [
             sys.executable,
@@ -245,7 +266,7 @@ def start(lease, *, lost=False, clock_refused=False):
             str(lease.data),
             str(lease.path),
             lease.pin,
-            "clock_refused" if clock_refused else "lost" if lost else "normal",
+            mode,
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -308,6 +329,24 @@ def test_actual_original_lease_expiration_not_renewed(lease):
     finally:
         if child.poll() is None:
             child.terminate()
+        child.wait(timeout=3)
+
+
+@pytest.mark.parametrize("sig", [signal.SIGTERM, signal.SIGINT])
+def test_signal_handler_never_reenters_the_wait_condition_lock(lease, sig):
+    child = start(lease, signal_locked=sig)
+    try:
+        finished(child, 0)
+        claim = lease.path.with_name("consumed.json")
+        before = claim.read_bytes()
+        assert json.loads(before)["lease_sha256"] == lease.pin
+        finished(start(lease), 70)
+        assert claim.read_bytes() == before and lease.path.read_bytes() == lease.raw
+    finally:
+        # An intentionally forced deadlock must not leak this exact owned test
+        # process. Never select a pid from a file, process name, or system list.
+        if child.poll() is None:
+            child.kill()
         child.wait(timeout=3)
 
 
@@ -413,6 +452,5 @@ def test_actual_cli_refuses_non_pid1_and_imports_no_scanner_services(lease):
         "sys",
         "time",
         "pathlib",
-        "threading",
         "uuid",
     }

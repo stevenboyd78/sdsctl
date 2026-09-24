@@ -19,7 +19,6 @@ import stat
 import sys
 import time
 from pathlib import Path
-from threading import Event
 from uuid import UUID
 
 DATA = Path("/data")
@@ -163,7 +162,15 @@ def run(argv):
     relative = path.relative_to(DATA)
     require(len(relative.parts) == 3 and relative.parts[1] == "idle")
     require(re.fullmatch(r"sdsctl-recording-[0-9a-f]{32}", relative.parts[0]))
-    stopped = Event()
+    # A Python signal may interrupt Event.wait() while its non-reentrant
+    # condition lock is held. Never acquire that (or any other) lock here.
+    # The single main thread observes this flag at the original 100 ms cadence.
+    stopped = False
+
+    def stop(*_):
+        nonlocal stopped
+        stopped = True
+
     previous = {}
     opened = []
     namespace_fd = -1
@@ -171,7 +178,7 @@ def run(argv):
         namespace_fd = os.open("/proc/self/ns/time", os.O_RDONLY | os.O_CLOEXEC)
         _clock_domain(namespace_fd)
         for sig in (signal.SIGTERM, signal.SIGINT):
-            previous[sig] = signal.signal(sig, lambda *_: stopped.set())
+            previous[sig] = signal.signal(sig, stop)
         root = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
         opened.append((None, None, root, None))  # Retain before a fallible stat.
         info = os.fstat(root)
@@ -235,14 +242,15 @@ def run(argv):
         require(claim_evidence[0] == claim)
         unchanged()
         require(time.monotonic() < lease["ready_by"])
-        while not stopped.is_set():
+        while not stopped:
             remaining = lease["stop_by"] - time.monotonic()
             if remaining <= 0:
                 return LEASE_EXPIRED
             unchanged()
             require(sorted(os.listdir(parent)) == ["consumed.json", "lease.json"])
             require(_file(parent, "consumed.json") == claim_evidence)
-            stopped.wait(min(0.1, remaining))
+            if not stopped:
+                time.sleep(min(0.1, remaining))
         return 0
     finally:
         if namespace_fd >= 0:
