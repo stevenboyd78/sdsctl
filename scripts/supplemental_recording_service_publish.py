@@ -58,6 +58,8 @@ class Publisher:
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.lock = Lock()
         self.used = self.failed = False
+        self.published = None
+        self.acceptance_owner = None
         try:
             require(type(offer) is offers.Offer)
             self.offer = self.original_offer = offer
@@ -174,6 +176,7 @@ class Publisher:
             # The private-directory context verifies every original ancestor on
             # exit. No durable file, claim or partial payload is ever removed.
             check()
+            self.published = original
             return original
         except BaseException as error:
             try:

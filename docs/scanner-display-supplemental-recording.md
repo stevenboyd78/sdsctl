@@ -2476,6 +2476,37 @@ The external acceptance channel and continuing installed entrypoint still need
 implementation and qualification; this module is outside the qualified helper
 image and its command allowlist.
 
+#### Original-owner startup acceptance intake
+
+`supplemental_recording_service_acceptance` adds a closed canonical message
+format containing the separately reviewed template and final-plan digests, plus
+a bounded reader over the **original successful publisher**. Each publisher can
+lend its original retained `CasePlan` and offer to only one acceptance reader.
+Constructing another reader, changing the plan/owner objects or reopening a
+previous case cannot replace that custody. The external launcher is still
+responsible for independent review: neither message bytes nor a private file
+authenticate that review by themselves.
+
+The reader accepts only a mode0600, caller-owned, single-link regular
+`startup-acceptance.json` of at most1024 bytes. It checks the original plan and
+clock before and after the read, pins file identity/content, and rejects unknown,
+duplicate or noncanonical fields and any wrong digest. Missing input or a real
+cooperating directory-lock contention is pending within the original offer's
+deadline, never a refreshed wait. Any pending-publication residue or unexpected
+case entry refuses. Once a submission exists, malformed input, replacement,
+expiry, interruption or an uncertain acknowledgment consumes the attempt and
+withholds a successful return. The file remains untouched. An uncertain close
+is not retried, and failure does not close the caller's original clock or plan.
+
+Successful consumption calls the same original offer's one-use structural
+acceptance. It performs no write, disk synchronization, journal transition,
+Engine request, App command or recording action. There is no durable success
+acknowledgment or restart/resume path. A separately qualified submission writer,
+independent review/supervision and installed continuing-service assembly remain
+required. The intake module remains outside the qualified helper image and
+command allowlist; its private-file and real-local-clock tests are not installed
+platform qualification.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
