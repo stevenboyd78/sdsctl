@@ -972,20 +972,7 @@ class HelperQualification:
             require(architecture in ("amd64", "arm64"))
             require(type(runtime_workers) is int and runtime_workers in (1, 2))
             require(zero_domain is None or type(zero_domain) is time_domain.ZeroDomain)
-            require(type(command) is tuple and len(command) == (6 if zero_domain is None else 7))
-            require(all(type(part) is str for part in command))
-            require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
-            require(
-                command[3]
-                in {str(Path("/") / self.HELPER / name) for name in helper_source.HELPER_FILES}
-                and command[4:6] == (str(plan.root), plan.sha256)
-            )
-            if zero_domain is not None:
-                require(
-                    command[3]
-                    == "/opt/sdsctl-recording-host/supplemental_recording_service_input.py"
-                    and command[6] == "--zero-offset-probe"
-                )
+            self._command_policy(plan, command, zero_domain)
             self.plan, self.witness, self.docker = plan, witness, docker
             self.zero_domain = zero_domain
             self.objects = plan, witness, docker, zero_domain
@@ -1016,6 +1003,30 @@ class HelperQualification:
             (type(self.runtime_workers), self.runtime_workers),
             self.domain_sha256,
         )
+
+    def _command_policy(self, plan, command, zero_domain):
+        """Original policy; explicit external adapters must define their own."""
+        require(type(command) is tuple and len(command) == (6 if zero_domain is None else 7))
+        require(all(type(part) is str for part in command))
+        require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
+        require(
+            command[3]
+            in {str(Path("/") / self.HELPER / name) for name in helper_source.HELPER_FILES}
+            and command[4:6] == (str(plan.root), plan.sha256)
+        )
+        if zero_domain is not None:
+            require(
+                command[3] == "/opt/sdsctl-recording-host/supplemental_recording_service_input.py"
+                and command[6] == "--zero-offset-probe"
+            )
+
+    def _clock_sample(self):
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        return observed
+
+    def _source_layout(self, root):
+        return helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
 
     def _guard(self, deadline):
         require(not self.failed and self.owner == (os.getpid(), get_ident()))
@@ -1049,8 +1060,7 @@ class HelperQualification:
             require(proof.sha256 == self.domain_sha256)
             require(proof.init == self.init and proof.original_clock == self.plan.original_clock)
             require(proof.host_time == self.plan.original_clock.namespace)
-        observed = plans.clock.read()
-        self.plan.check_clock(observed)
+        observed = self._clock_sample()
         require(observed.boottime_ns / plans.clock.NS < self.plan.deadlines.ready_by)
         require(time.monotonic() < min(deadline, self.plan.lease["ready_by"]))
 
@@ -1398,7 +1408,7 @@ class HelperQualification:
                 kernel_before = self._kernel(deadline)
                 self._command(deadline)
                 before = self._environment(configured, deadline)
-                source = helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
+                source = self._source_layout(root)
                 check_root()
                 source.verify(self.plan.helper.source)
                 check_root()

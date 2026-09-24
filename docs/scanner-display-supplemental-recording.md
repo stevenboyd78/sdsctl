@@ -2642,6 +2642,32 @@ cover it. The caller must explicitly select and independently reconstruct the
 new source digest, then separately qualify runtime, original process custody
 and the actual startup command before it can participate in installed startup.
 
+The uninstalled outer `qualify_supplemental_recording_startup.StartupQualification`
+adapter makes that selection explicit for **only** the finite `--startup-probe`
+command. It borrows the independent observer's original `ObserverClock` and
+requires its exact target to be the original helper process. The independently
+pinned clock-free template must match every final-plan field and budget, and
+the exact command must name that template digest and its fixed sibling directory.
+The ordinary collector still accepts only its previous commands and source
+profile; it never auto-detects this adapter from a plan or observed files.
+
+This adapter inherits the complete existing read-only Engine/configuration,
+confinement, original-proc/mount binding, source/runtime, environment, kernel and
+original-pidfd checks, including their two-second qualification limit. Only
+command selection, source-profile selection and explicit cross-domain clock
+comparison differ. It retires at the finite probe's original cutoff, even if
+the plan's later ready/stop limits have not expired. Exact immutable template
+bytes are fully decoded and matched at construction, then pinned across each
+guard; unchanged bytes are not repeatedly re-decoded. The final plan and original
+clock/domain handles are still checked, including after the last clock read.
+
+It creates/submits nothing, returns no action authority, and closes no borrowed
+handles on failure. The trusted **outer observer** adapter is not included in
+the observed helper bundle or invoked by an installed launcher. Its own code,
+runtime and proc provenance, plus an actual-host qualification of the expanded
+helper, remain separate gates. Synthetic Engine/path/kernel fixtures and local
+clock-handle tests are not a real App handoff or an installed qualification.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

@@ -7,6 +7,7 @@ confinement and effective kernel enforcement remain distinct evidence.
 import builtins
 import copy
 import io
+import json
 import os
 import subprocess
 import sys
@@ -40,13 +41,18 @@ def configuration_pin(container, environment):
 
 
 @pytest.fixture
-def helper(supervised, image, configured, monkeypatch):
+def helper(supervised, image, configured, monkeypatch, request):
+    startup_profile = getattr(request, "param", False)
+    assert type(startup_profile) is bool
     monkeypatch.setattr(m.time_domain, "ROOT_UID", os.geteuid())
     product = supervised.root / m.plans.fixed.PACKAGE
     helpers = supervised.root / m.HelperQualification.HELPER
     for root, names in (
         (product, m.helper_source.REQUIRED_RUNTIME),
-        (helpers, m.helper_source.HELPER_FILES),
+        (
+            helpers,
+            m.helper_source.STARTUP_FILES if startup_profile else m.helper_source.HELPER_FILES,
+        ),
     ):
         root.mkdir(parents=True, exist_ok=True)
         for name in names:
@@ -63,7 +69,7 @@ def helper(supervised, image, configured, monkeypatch):
         ),
     )
     value["helper"].update(
-        source=m.helper_source.Layout(product, helpers).observe().sha256,
+        source=m.helper_source.Layout(product, helpers, startup=startup_profile).observe().sha256,
         interpreter=supervised.observe_supervised(env.env.TIMEZONE).sha256,
         environment=env.pin(configured, image),
     )
@@ -76,6 +82,33 @@ def helper(supervised, image, configured, monkeypatch):
         str(plan.root),
         plan.sha256,
     )
+    template = None
+    if startup_profile:
+        from .test_supplemental_recording_service_template import m as template_codec
+
+        raw = json.loads(plan.raw)
+        template = template_codec.decode(
+            dict(
+                schema=1,
+                kind=template_codec.KIND,
+                plan={
+                    key: value
+                    for key, value in raw.items()
+                    if key not in {"original_clock", "deadlines"}
+                },
+                budget=dict(ready_seconds=120, stop_seconds=400),
+            )
+        )
+        template.check_plan(plan, plan.original_clock)
+        command = (
+            "/usr/local/bin/python",
+            "-I",
+            "-B",
+            "/opt/sdsctl-recording-host/supplemental_recording_service_startup.py",
+            "/mnt/data/sdsctl-recording-startup-" + plan.case,
+            template.sha256,
+            "--startup-probe",
+        )
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.env.HOSTNAME)
     child = subprocess.Popen(
@@ -302,7 +335,8 @@ def helper(supervised, image, configured, monkeypatch):
         state.make = lambda **overrides: m.HelperQualification(
             plan, witness, docker, **(args | overrides)
         )
-        state.obj = state.make()
+        state.template = template
+        state.obj = None if startup_profile else state.make()
         yield state
     finally:
         child.stdin.close()
