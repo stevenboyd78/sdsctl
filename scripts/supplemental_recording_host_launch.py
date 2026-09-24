@@ -24,6 +24,8 @@ import supplemental_recording_normal_read as normal_read
 import supplemental_recording_probe_exec as probe_exec
 import supplemental_recording_ready as received
 import supplemental_recording_runtime as runtime
+from supplemental_handoff_host import TrackedDispatch
+from supplemental_handoff_recovery import TrackedProcesses
 
 plans = idle_module.host_plan
 bootstrap, base = plans.bootstrap, plans.base
@@ -42,9 +44,16 @@ def require(value):
 
 
 def _verified_history(plan, projected, journal, end):
-    """Fresh original journal bytes and pure replay; no action is returned."""
+    """Launch/transfer history stays bounded by the original native stop time."""
     base.clock(end)
     require(time.monotonic() < end <= min(time.monotonic() + 2, plan.lease["stop_by"]))
+    return _journal_history(plan, projected, journal, end)
+
+
+def _journal_history(plan, projected, journal, end):
+    """Fresh bytes and pure replay; caller must also enforce its phase deadline."""
+    base.clock(end)
+    require(time.monotonic() < end <= time.monotonic() + 2)
     require(type(journal) is bootstrap.Journal and journal.path == plan.root / "journal")
     journal.check_directory()
     machine = journal.replayed(end)
@@ -113,7 +122,7 @@ class PreHandoffHost:
         except BaseException as error:
             self._fail(error)
 
-    def _guard(self):
+    def _context(self):
         require(not self.failed and self.owner == (os.getpid(), get_ident()))
         require(
             all(
@@ -133,8 +142,12 @@ class PreHandoffHost:
         observed = plans.clock.read()
         self.plan.check_clock(observed)
         now = observed.boottime_ns / plans.clock.NS
-        require(now < self.plan.deadlines.ready_by)
         return observed.boot, now
+
+    def _guard(self):
+        boot, now = self._context()
+        require(now < self.plan.deadlines.ready_by)
+        return boot, now
 
     def _candidate_absent(self):
         indexed = plans.ordinary.container_index(self.docker.containers())
@@ -328,6 +341,243 @@ class TransferHost(PreHandoffHost):
         finally:
             if acquired:
                 self.lock.release()
+
+
+class NeverLaunchedHost(TransferHost):
+    """Pristine cancellation observations using the ORIGINAL transfer session.
+
+    Construct while the original candidate is idle and its init witness is
+    still retained. Reads require an explicit durable finish, and refuse any
+    operator or recording authorization. No fallback from a failed Launch is
+    supported. This collector sends no command and never acquires a process.
+
+    Recovery may outlast native readiness/stop, but only within the ORIGINAL
+    recovery deadline and each original two-second observation window. The
+    session still supplies init/CLI exits and one-use App dispatch. Installed
+    source/runtime qualification and outside supervision remain separate gates.
+    """
+
+    PHASES = frozenset(("candidate_idle", "stopping_candidate", "starting_normal", "complete"))
+
+    def __init__(self, transfer, session):
+        require(type(transfer) is TransferHost and not transfer.failed)
+        super().__init__(transfer.plan, transfer.projected, transfer.journal, transfer.docker)
+        try:
+            require(type(session) is bootstrap.RecoverySession and session.read == transfer.read)
+            self.transfer, self.session = transfer, session
+            self.processes, self.dispatch, self.executor = (
+                session.processes,
+                session.dispatch,
+                session.executor,
+            )
+            self.origins = transfer, session, self.processes, self.dispatch, self.executor
+            state = self.journal.machine.state
+            require(state.phase == "candidate_idle")
+            self.records = state.processes
+            require(
+                len(self.records) == 2
+                and {r.slug for r in self.records} == {base.NORMAL, base.CANDIDATE}
+            )
+            self.candidate_record = next(r for r in self.records if r.slug == base.CANDIDATE)
+            self.candidate_witness = self.processes.witnesses.get(base.CANDIDATE)
+            require(self.candidate_witness is not None)
+            self.recovery_attempted = False
+            self.end = None
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        boot, now = PreHandoffHost._context(self)
+        require(now < self.plan.deadlines.recover_by)
+        require(self.journal is self.original_journal and self.journal.fd == self.journal_fd)
+        require(runtime.identity(os.fstat(self.journal_fd))[:5] == self.journal_identity)
+        transfer, session, processes, dispatch, executor = self.origins
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (self.transfer, self.session, self.processes, self.dispatch, self.executor),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        require(not transfer.failed and transfer.owner == self.owner)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (transfer.plan, transfer.projected, transfer.docker),
+                    transfer.objects,
+                    strict=True,
+                )
+            )
+        )
+        require(transfer.plan is self.plan and transfer.projected is self.projected)
+        require(transfer.journal is self.journal and transfer.docker is self.docker)
+        require(type(processes) is TrackedProcesses and type(dispatch) is TrackedDispatch)
+        require(type(executor) is bootstrap.Executor and session.executor is executor)
+        require(
+            session.journal
+            is processes.journal
+            is dispatch.journal
+            is executor.journal
+            is self.journal
+        )
+        require(session.processes is processes and session.dispatch is dispatch)
+        require(processes.docker is dispatch.docker is self.docker and not processes.closed)
+        require(
+            processes.images
+            == {base.NORMAL: self.plan.normal.image, base.CANDIDATE: self.plan.candidate.image}
+        )
+        require(
+            (dispatch.image, dispatch.generation) == (self.plan.cli_image, self.plan.cli_generation)
+        )
+        require(session.consume_operator is None and session.read in (transfer.read, self.read))
+        require(executor.read == session._read and executor.send == session._send)
+        require(self.journal.machine.state.processes == self.records)
+        record = self.candidate_record
+        require(
+            self.candidate_witness.identity
+            == runtime.processes.ProcessIdentity(
+                record.pid, record.start_ticks, record.container_id
+            )
+        )
+        if record.generation not in self.journal.machine.state.exited_processes:
+            require(processes.witnesses.get(base.CANDIDATE) is self.candidate_witness)
+        else:
+            require(base.CANDIDATE not in processes.witnesses)
+        return boot, now
+
+    def _history(self, end):
+        self._guard()
+        require(self.end == end and time.monotonic() < end)
+        machine = _journal_history(self.plan, self.projected, self.journal, end)
+        state = machine.state
+        require(state.phase in self.PHASES and state.finish_requested)
+        require(state.launch_intent_sha256 is None and state.launch_plan_sha256 is None)
+        require(state.idle_evidence_sha256 is None and state.ready_evidence_sha256 is None)
+        require(state.authorization_generation is None and state.operator_exit_sha256 is None)
+        require(state.recording_outcome == "not_attempted" and state.files_stage == "pristine")
+        require(
+            state.artifact_sha256 is None
+            and state.candidate_generation == self.candidate_record.generation
+        )
+        require(machine.process_bound(base.NORMAL, exited=True))
+        require(
+            machine.execution_closed("stopping_normal")
+            and machine.execution_closed("starting_candidate")
+        )
+        if state.phase in ("starting_normal", "complete"):
+            require(machine.process_bound(base.CANDIDATE, exited=True))
+            require(machine.execution_closed("stopping_candidate"))
+        return machine
+
+    def _candidate(self, *, exited=False):
+        self._guard()
+        current = self.docker.container("app_" + base.CANDIDATE)
+        require(type(current) is dict and current.get("Id") == self.candidate_record.container_id)
+        if exited:
+            plans.ordinary.retained_exit(
+                current,
+                name="app_" + base.CANDIDATE,
+                image=self.plan.candidate.image,
+                cid=self.candidate_record.container_id,
+            )
+        self._guard()
+
+    def _native(self, slug, generation):
+        machine = self._history(self.end)
+        if slug == base.CANDIDATE:
+            require(generation == self.candidate_record.generation)
+            return plans.ordinary.NativeState(generation, None, None)
+        require(slug == base.NORMAL and machine.state.phase in ("starting_normal", "complete"))
+        require(generation != self.plan.normal_generation)
+        require(machine.state.restored_generation in (None, generation))
+        self._candidate(exited=True)
+        result = self.normal_reader.read(slug, generation)
+        self._candidate(exited=True)
+        require(self._history(self.end) is machine)
+        return result
+
+    def read(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            began = time.monotonic()
+            boot, started = self._guard()
+            self.end = end = began + min(2, self.plan.deadlines.recover_by - started)
+            self.machine = machine = self._history(end)
+            entries = tuple(base.encode(entry) for entry in self.journal.entries)
+            restoring = machine.state.phase in ("starting_normal", "complete")
+            self._candidate(exited=restoring)
+            self.normal_reader = reader = normal_read.Sample(self.plan, self.docker)
+            sample = self._observer().read()
+            require(type(sample) is bootstrap.recovery.Sample)
+            self._candidate(exited=restoring)
+            require(self._history(end) is machine)
+            require(tuple(base.encode(entry) for entry in self.journal.entries) == entries)
+            require(self.normal_reader is reader and not reader.failed)
+            obs = sample.observation
+            require(obs.candidate.healthy is None and obs.candidate.recording is None)
+            if obs.candidate.state == "running":
+                require(
+                    not restoring and obs.candidate.generation == self.candidate_record.generation
+                )
+            if obs.normal.state == "running":
+                require(restoring and obs.normal.generation != self.plan.normal_generation)
+                require(machine.state.restored_generation in (None, obs.normal.generation))
+            require(
+                obs.files
+                == bootstrap.recording.Files(
+                    self.plan.candidate.contract.sha256,
+                    "pristine",
+                    self.plan.candidate.contract.baseline_sha256,
+                )
+            )
+            end_boot, ended = self._guard()
+            require(boot == sample.boot_id == end_boot)
+            require(started <= obs.sampled_at <= sample.now <= ended)
+            require(0 <= ended - started < 2 and began <= time.monotonic() < end)
+            return bootstrap.recovery.Sample(boot, ended, replace(obs, sampled_at=started))
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.end = None
+                self.lock.release()
+
+
+def recover_never_launched(reader, wait):
+    """Continue one original session after explicit, pristine idle cancellation.
+
+    No implicit finish, new session, native launch or reconstructed process
+    handle. The existing session closes its owned handles when its loop exits;
+    its journal and outside supervision remain the original caller's custody.
+    A successful result means normal restoration, never a recording success.
+    """
+    require(type(reader) is NeverLaunchedHost and callable(wait))
+    require(not reader.recovery_attempted and reader.owner == (os.getpid(), get_ident()))
+    reader.recovery_attempted = True
+    reader._guard()
+    session = reader.session
+    require(session.read == reader.transfer.read)
+    # Validate actual explicit-finish bytes and fresh pristine input before
+    # routing. This sample grants no action and is not reused by the executor.
+    reader.read()
+    require(reader.journal.machine.state.phase == "candidate_idle")
+    session.read = reader.read
+
+    def bounded_wait(seconds):
+        reader._guard()
+        require(session.read == reader.read and seconds == 0.25)
+        wait(seconds)
+        reader._guard()
+        require(session.read == reader.read)
+
+    return session.run(bounded_wait)
 
 
 class BootstrapHost:

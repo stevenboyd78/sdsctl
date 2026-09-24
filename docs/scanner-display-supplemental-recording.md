@@ -2860,11 +2860,35 @@ commands. Only the existing executor consumes fresh policy intents, including
 its second pre-dispatch observation. A failed read permanently consumes the
 reader; successful reads may continue only within the initial transfer phases.
 Operator authorization ends this reader's scope. Post-launch observation,
-never-launched restoration, service entrypoint assembly and installed-host
-qualification remain separate work. Local integration tests join one original
+service entrypoint assembly and installed-host qualification remain separate
+work. Local integration tests join one original
 RecoverySession through normal stop and candidate idle with explicit synthetic
 Engine/process receipts, including lost stop replies and missing exit proof;
 they are not installed App or actual pidfd qualification.
+
+`NeverLaunchedHost` supplies a separate pristine cancellation route. It retains
+the original TransferHost, journal, recovery session, dispatcher, process tracker
+and candidate init witness. Construction is limited to `candidate_idle`; reads
+require a durable explicit finish and no operator/recording authorization.
+The original protected files must remain pristine. Missing/replaced candidate
+containers, changed generation or journal, replaced session members, uncertain
+reads and unexpected recordings cannot qualify this route.
+
+Only after the original normal-start intent and original init/CLI exit receipts
+may it read the restored normal App's cached health. The normal generation must
+be new, and the original candidate must remain stopped. Native uncertainty is
+not converted into healthy/idle status. Every read keeps the two-second budget;
+recovery uses the plan's original recovery deadline, not renewed readiness.
+The existing launch/transfer journal checker retains its stricter stop bound.
+
+`recover_never_launched()` is a one-use continuation of that same session, not a
+new service or an automatic finish request. The existing executor independently
+rechecks preconditions and sends each durable App command at most once. Lost
+stop replies are reconciled, not retried; missing process or CLI exit prevents
+restoration. Success means normal-App restoration with recording `not_attempted`,
+never a successful recording. Synthetic integration covers the complete route,
+including cancellation just before readiness expires and restoration afterward;
+actual installed recovery/source/runtime and external custody are still gates.
 
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
