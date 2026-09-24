@@ -1983,6 +1983,19 @@ interpreter/dependency and mount qualification, a new recording-capable host
 plan, independent recovery supervision and a fresh live case are still required
 before this mechanism can be used with the scanner.
 
+A fresh settled local qualification of this exact composition then passed at
+commit `fb7f651`: the actual candidate/init, native Ready/probe, complete
+protected-file and recording inventories, host collector, positive active-file
+growth, finalized-file custody, retained operator exit publication, and the
+post-init-expiry stopped-candidate read all completed in their original bounds.
+The read-only host UDP-table check used the real `/proc/1/net/{udp,udp6}` files;
+the earlier fixture that omitted that declared alias correctly failed closed and
+was not retried. HA/Supervisor/Core/CLI metadata, path aliases, and the installed
+runtime remain explicit synthetic fixtures, so this evidence still does not
+qualify an installed App, independent host recovery, restoration, or a physical
+scanner case. No user data, installed service, Pi, HA instance, browser, or
+scanner was changed.
+
 The joined native-relay test also exercises the real isolated operator and
 recorder: localhost RTP becomes a verified 1280-sample WAV, the actual private
 native messages cross the framed relay, and the host checks its original file
