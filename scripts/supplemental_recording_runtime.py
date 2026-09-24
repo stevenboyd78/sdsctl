@@ -36,6 +36,10 @@ TREES = (
     "etc/ld.so.conf.d",
 )
 FILES = ("etc/ld.so.cache", "etc/ld.so.conf")
+# This required large file otherwise shares one worker with the entire Python
+# package tree. Its separate task is fixed, not selected from observed entries.
+# It is still hashed once per snapshot, with all selected ancestors retained.
+PARALLEL_FILES = ("usr/local/lib/libpython3.14.so.1.0",)
 ALIASES = {"lib": "usr/lib", "lib64": "usr/lib64"}
 ABSENT = (
     "etc/ld.so.preload",
@@ -343,10 +347,11 @@ class Layout:
         if timezone is not None:
             _timezone_name(timezone)
         trees = TREES if timezone is None else (*TREES, ZONEINFO)
+        delegated = PARALLEL_FILES if self.workers == 2 and "usr/local" in trees else ()
         aliases = tuple(ALIASES) if timezone is None else (*ALIASES, "etc/localtime")
         absent = ABSENT if timezone is None else SUPERVISED_ABSENT
         opened, entries, total, count = [], {}, 0, 0
-        # Only the fixed, disjoint root inventories run concurrently. A shared
+        # Only fixed, disjoint inventory tasks run concurrently. A shared
         # reservation budget is checked BEFORE any file is opened/read, rather
         # than accepting two independently oversized inventories after joining.
         reserved, budget, cancelled = set(), Lock(), Event()
@@ -371,10 +376,15 @@ class Layout:
             require(identity(os.fstat(child))[: len(original)] == original)
             return child
 
-        def record(parent, name, relative, depth=0):
+        def record(parent, name, relative, depth=0, *, scheduled=False):
             nonlocal total, count
             timely()
             require(depth <= MAX_DEPTH)
+            if relative in delegated and not scheduled:
+                # The separately scheduled task owns this exact file. Its
+                # parent chain stays open and fully checked until ALL tasks
+                # finish, even if this directory traversal finishes first.
+                return
             with budget:
                 require(len(reserved) < MAX_ENTRIES and relative not in reserved)
                 reserved.add(relative)
@@ -457,14 +467,18 @@ class Layout:
                 return parent
 
             paths = (*trees, *FILES, *aliases)
+            tasks = (*trees[:2], *delegated, *trees[2:], *FILES, *aliases)
 
-            # Fixed roots only, never one queued task per untrusted file. Both
+            # Fixed paths only, never one queued task per untrusted file. Both
             # workers finish before parent FDs close or any evidence escapes.
             # The original absolute deadline is shared by every read. Stalled
             # kernel I/O still requires the independently supervised caller.
             def collect(parent, name, path):
                 try:
-                    record(parent, name, path)
+                    # Match the original depth below usr/local, rather than
+                    # resetting the depth budget at the delegated file.
+                    depth = 2 if path in delegated else 0
+                    record(parent, name, path, depth, scheduled=True)
                 except BaseException:
                     cancelled.set()
                     raise
@@ -474,7 +488,7 @@ class Layout:
             ) as pool:
                 pending = [
                     pool.submit(collect, parent_for(path), PurePosixPath(path).name, path)
-                    for path in paths
+                    for path in tasks
                 ]
                 for future in pending:
                     future.result()

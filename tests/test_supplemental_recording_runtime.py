@@ -607,7 +607,100 @@ def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, mon
     monkeypatch.setattr(m, "ThreadPoolExecutor", Pool)
     assert layout.observe().file_count >= 50
     assert widths == [workers, workers]
-    assert submitted == [*m.TREES, *m.FILES, *m.ALIASES] * 2
+    delegated = m.PARALLEL_FILES if workers == 2 else ()
+    assert submitted == [*m.TREES[:2], *delegated, *m.TREES[2:], *m.FILES, *m.ALIASES] * 2
+
+
+def test_delegated_file_is_hashed_once_per_snapshot_with_same_evidence(layout, monkeypatch):
+    expected = layout.observe()
+    target = layout.root / m.PARALLEL_FILES[0]
+    inode = target.stat().st_ino
+    original, reads = m.os.read, []
+
+    def read(fd, size):
+        chunk = original(fd, size)
+        if chunk and os.fstat(fd).st_ino == inode:
+            reads.append(chunk)
+        return chunk
+
+    monkeypatch.setattr(m.os, "read", read)
+    assert replace(layout, workers=2).verify(expected.sha256) == expected
+    assert reads == [target.read_bytes()] * 2
+
+
+def test_delegated_library_link_keeps_original_resolution_semantics(layout):
+    target = layout.root / m.PARALLEL_FILES[0]
+    moved = target.with_name("libpython-versioned.so")
+    target.rename(moved)
+    target.symlink_to(moved.name)
+    expected = layout.observe()
+    assert replace(layout, workers=2).verify(expected.sha256) == expected
+
+
+@pytest.mark.parametrize("fault", ["replace", "parent_mode", "parent_entry", "directory", "depth"])
+def test_delegated_file_retains_selected_parent_and_depth_checks(layout, monkeypatch, fault):
+    target = layout.root / m.PARALLEL_FILES[0]
+    inode = target.stat().st_ino
+    original, changed = m.os.read, False
+    if fault == "directory":
+        target.unlink()
+        target.mkdir()
+    elif fault == "depth":
+        monkeypatch.setattr(m, "MAX_DEPTH", 1)
+    else:
+
+        def read(fd, size):
+            nonlocal changed
+            chunk = original(fd, size)
+            if chunk and os.fstat(fd).st_ino == inode and not changed:
+                changed = True
+                if fault == "replace":
+                    target.rename(target.with_name("old-library"))
+                    target.write_bytes(chunk)
+                elif fault == "parent_mode":
+                    target.parent.chmod(0o700)
+                else:
+                    (target.parent / "unexpected").mkdir()
+            return chunk
+
+        monkeypatch.setattr(m.os, "read", read)
+    denied(replace(layout, workers=2).observe)
+    assert fault in ("directory", "depth") or changed
+
+
+def test_delegated_parent_is_retained_after_ordinary_subtree_finishes(layout, monkeypatch):
+    target = layout.root / m.PARALLEL_FILES[0]
+    inode = target.stat().st_ino
+    original_pool, original_read = m.ThreadPoolExecutor, m.os.read
+    subtree_finished, changed = Event(), False
+    descriptors = len(os.listdir("/proc/self/fd"))
+
+    class Pool(original_pool):
+        def submit(self, function, *args, **kwargs):
+            def measured():
+                result = function(*args, **kwargs)
+                if args[-1] == "usr/local":
+                    subtree_finished.set()
+                return result
+
+            return super().submit(measured)
+
+    def read(fd, size):
+        nonlocal changed
+        chunk = original_read(fd, size)
+        if chunk and os.fstat(fd).st_ino == inode and not changed:
+            assert subtree_finished.wait(3)
+            changed = True
+            # The recursive walk already finished. Its separately retained
+            # ancestor FD still has to detect this selected-parent mutation.
+            (target.parent / "unexpected-after-walk").mkdir()
+        return chunk
+
+    monkeypatch.setattr(m, "ThreadPoolExecutor", Pool)
+    monkeypatch.setattr(m.os, "read", read)
+    denied(replace(layout, workers=2).observe)
+    assert changed and subtree_finished.is_set()
+    assert len(os.listdir("/proc/self/fd")) == descriptors
 
 
 def test_failed_worker_is_joined_before_parent_descriptors_close(layout, monkeypatch):

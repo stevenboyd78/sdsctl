@@ -2176,6 +2176,20 @@ same choice. CPU allocation, helper confinement and combined elapsed time must
 still be qualified separately; this option does not configure Docker resources,
 relax the two-second bound, cache observed bytes or enable a service.
 
+A later check of the updated bundle refused the delayed sample at 2.003 seconds;
+the earlier narrow pass was not stable timing margin. A separate read-only
+profile showed uneven work between the two workers. The explicit two-worker
+path now assigns the required `libpython3.14.so.1.0` file its own fixed task,
+instead of hashing it in the same task as the entire Python package tree.
+This is not an exclusion: the file is still read once in each full snapshot,
+with the original shared byte/entry budgets, file identity checks, absolute
+deadline and depth limit. Its selected parent descriptors remain open and fully
+checked until every task finishes, including after the ordinary tree walk ends.
+The default single-worker path is unchanged; no per-discovered-file work queue,
+adaptive retries, cached bytes or renewed deadline is introduced. Full inventory
+fingerprints must remain identical. Actual host timing and the complete service
+remain separate qualification gates.
+
 The host's repeated plan checks now retain a separately decoded canonical plan
 and compare every field, nested type and original byte string against it. They
 also require the same original plan object. This removes repeated JSON decoding
