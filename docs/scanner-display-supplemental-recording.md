@@ -2105,6 +2105,18 @@ interpreter verification. These are separate results, not a claim that the
 recording/recovery service has been assembled or qualified inside that image.
 No physical scanner, Home Assistant instance or Pi was changed by these checks.
 
+A subsequent containerized local trial found that Docker can change the exited
+exec's `CanRemove` metadata from `false` to `true` after the original container
+exits. The retained-custody reader now permits exactly that one-way bookkeeping
+change, only after the original init pidfd proves exit. Every other inspection
+field, including unknown fields, remains pinned to the original terminal reply.
+Missing/non-boolean flags, a reversal, a changed PID, command, container or result,
+and eligibility reported while init is still live all refuse reconciliation.
+The original raw reply and receipt hash remain unchanged; the flag is never
+authority to remove anything, accept a recording, or bypass restoration checks.
+This edge case is covered by a reproduced failing test and regression tests;
+fresh image/platform qualification is a separate requirement.
+
 Integrated offline tests exercise the actual journal, policy, dispatch tracking
 and loop across candidate stop, normal start and health verification, with
 explicitly synthetic host, cached-state, Engine and init-exit evidence. They

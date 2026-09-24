@@ -94,6 +94,7 @@ class Operator:
         self.publish_attempted = False
         self.result = self.result_sha256 = None
         self._terminal_receipt = None
+        self._terminal_engine_sha256 = None
         try:
             require(type(plan) is plans.Plan and type(ready) is received.Ready)
             require(plans.load_bytes(plan.raw, plan.sha256) == plan)
@@ -242,7 +243,8 @@ class Operator:
             )
             self.done = True
             self.result, self.result_sha256 = result, result.sha256
-            self._terminal_receipt = (result, result.sha256)
+            self._terminal_receipt = (result, result.sha256, dispatch.binding.encode(raw))
+            self._terminal_engine_sha256 = result.engine_sha256
             return result
         except BaseException as error:
             self._fail(error)
@@ -253,9 +255,16 @@ class Operator:
         require(type(self.plan) is plans.Plan)
         require(plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan)
         require(self.plan.original_clock is self.clock)
-        result, digest = self._terminal_receipt
+        result, digest, inspection = self._terminal_receipt
         require(type(result) is Evidence and self.result is result)
         require(result.sha256 == self.result_sha256 == digest)
+        require(type(inspection) is bytes)
+        require(hashlib.sha256(inspection).hexdigest() == result.engine_sha256)
+        original = json.loads(inspection)
+        allowed = {result.engine_sha256}
+        if original.get("CanRemove") is False:
+            allowed.add(dispatch.binding.checksum(original | {"CanRemove": True}))
+        require(self._terminal_engine_sha256 in allowed)
         require(
             (
                 result.execution_id,
@@ -277,6 +286,27 @@ class Operator:
             )
         )
         return result
+
+    def _terminal_metadata(self, raw, original, exited):
+        """Allow only Docker's observed false-to-true removal eligibility.
+
+        This flag is bookkeeping, never authority to remove an exec/container.
+        The original init pidfd must already prove exit before accepting the
+        change. Every other byte-equivalent field remains bound to the original
+        terminal inspection, including unknown fields. No receipt is rewritten,
+        deadline renewed, or PID/result change accepted. Once observed, the flag
+        cannot revert. Caller commits this read only after all custody checks.
+        """
+        current = dispatch.binding.checksum(raw)
+        if current != self._terminal_engine_sha256:
+            require(self._terminal_engine_sha256 == original.engine_sha256)
+            require("init" in exited and raw.get("CanRemove") is True)
+            initial = json.loads(self._terminal_receipt[2])
+            require(initial.get("CanRemove") is False)
+            require(dispatch.binding.checksum(raw | {"CanRemove": False}) == original.engine_sha256)
+        if current != original.engine_sha256:
+            require("init" in exited)
+        return current
 
     def recheck(self):
         """Fresh read-only custody checks AFTER this observer's terminal poll.
@@ -304,13 +334,14 @@ class Operator:
             raw, terminal = self._inspect(end)
             require(terminal.phase == "not_running" and terminal.returncode == original.returncode)
             require(terminal.pid in (0, self.actors[1].host_pid))
-            require(dispatch.binding.checksum(raw) == original.engine_sha256)
+            current_engine = self._terminal_metadata(raw, original, exited)
             require(_peer(self.endpoint) == self.peer)
             self._history(end)
             require(exited <= self._actors())
             require(self._receipt() is original)
             ended = self._clock()
             require(time.monotonic() < end and 0 <= ended - began <= 2)
+            self._terminal_engine_sha256 = current_engine
             return original
         except BaseException as error:
             self._fail(error)

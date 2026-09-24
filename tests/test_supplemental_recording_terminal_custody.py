@@ -40,6 +40,148 @@ m = exits.m
 journal = exits.journal
 
 
+@pytest.mark.parametrize("code", [0, 70])
+def test_engine_removability_after_original_init_exit_keeps_historical_receipt(
+    prepared, actors, calibration, plan, family, journal, monkeypatch, code
+):
+    with exits.captured(
+        prepared,
+        actors,
+        calibration,
+        plan,
+        monkeypatch,
+        code=code,
+        fault=lambda raw: raw.update(CanRemove=False),
+        recheck_fault=lambda raw: raw.update(CanRemove=True),
+        terminal_replies=3,
+    ) as case:
+        holder = case.holder
+        case.ready.close()
+        exits.finish(family)
+        original = holder.poll()
+        holder.publish(journal)
+        assert not original.init_exited
+        files = {path: path.read_bytes() for path in journal.path.iterdir()}
+        prepared.process.stdin.close()
+        prepared.process.wait(timeout=3)
+        for _ in range(2):
+            assert holder.recheck() is original
+        assert holder.result_sha256 == original.sha256 and not original.init_exited
+        assert files == {path: path.read_bytes() for path in journal.path.iterdir()}
+        assert journal.machine.state.recording_outcome != "verified"
+        assert len(case.requests) == 9
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "live_init",
+        "missing_initial",
+        "integer_initial",
+        "integer_current",
+        "reversed",
+        "extra_field",
+        "lost_field",
+        "code",
+        "pid",
+        "stdin",
+        "arguments",
+    ],
+)
+def test_removability_cannot_hide_other_changes_or_substitute_for_init_exit(
+    prepared, actors, calibration, plan, family, monkeypatch, fault
+):
+    def initial(raw):
+        if fault == "missing_initial":
+            raw.pop("CanRemove")
+        else:
+            raw["CanRemove"] = 0 if fault == "integer_initial" else fault == "reversed"
+
+    def changed(raw):
+        raw["CanRemove"] = 1 if fault == "integer_current" else fault != "reversed"
+        if fault == "extra_field":
+            raw["new_field"] = False
+        elif fault == "lost_field":
+            raw.pop("OpenStderr")
+        elif fault == "code":
+            raw["ExitCode"] = 0
+        elif fault == "pid":
+            raw["Pid"] = 0
+        elif fault == "stdin":
+            raw["OpenStdin"] = False
+        elif fault == "arguments":
+            raw["ProcessConfig"] = dict(raw["ProcessConfig"], arguments=["PRIVATE"])
+
+    with exits.captured(
+        prepared,
+        actors,
+        calibration,
+        plan,
+        monkeypatch,
+        fault=initial,
+        recheck_fault=changed,
+        terminal_replies=2,
+    ) as case:
+        case.ready.close()
+        exits.finish(family)
+        if fault in ("missing_initial", "integer_initial"):
+            # These malformed FIRST terminal replies are already rejected by
+            # the existing strict execution decoder, before recheck is possible.
+            exits.refused(case.holder)
+            assert case.holder.result is None and len(case.requests) == 7
+            return
+        original = case.holder.poll()
+        if fault != "live_init":
+            prepared.process.stdin.close()
+            prepared.process.wait(timeout=3)
+        refused(case.holder)
+        assert case.holder.result is original
+        assert case.holder.result_sha256 == original.sha256
+        assert len(case.requests) == 8
+
+
+def test_removability_cannot_revert_after_accepted_transition(
+    prepared, actors, calibration, plan, family, monkeypatch
+):
+    with exits.captured(
+        prepared,
+        actors,
+        calibration,
+        plan,
+        monkeypatch,
+        fault=lambda raw: raw.update(CanRemove=False),
+        recheck_fault=lambda raw: raw.update(CanRemove=True),
+        terminal_replies=3,
+    ) as case:
+        case.ready.close()
+        exits.finish(family)
+        original = case.holder.poll()
+        prepared.process.stdin.close()
+        prepared.process.wait(timeout=3)
+        assert case.holder.recheck() is original
+        inspect = case.holder._inspect
+
+        def reverted(end):
+            raw, terminal = inspect(end)
+            return raw | {"CanRemove": False}, terminal
+
+        monkeypatch.setattr(case.holder, "_inspect", reverted)
+        refused(case.holder)
+        assert case.holder.result is original and len(case.requests) == 9
+
+
+def test_retained_raw_inspection_cannot_be_replaced_while_keeping_original_evidence(
+    prepared, actors, calibration, plan, family, monkeypatch
+):
+    with exits.captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        exits.finish(family)
+        original = case.holder.poll()
+        case.holder._terminal_receipt = (original, original.sha256, b"{}")
+        refused(case.holder)
+        assert len(case.requests) == 7
+
+
 @pytest.mark.parametrize("code", [0, 70, 137])
 @pytest.mark.parametrize("sender", [False, True])
 def test_recheck_retains_original_receipt_and_custody_without_republication(
