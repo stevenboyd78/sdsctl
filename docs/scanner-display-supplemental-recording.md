@@ -2535,6 +2535,32 @@ That test uses synthetic App/contract data and a temporary path alias, not an
 installed helper or real App handoff. The writer also remains outside the
 qualified helper image and its command allowlist.
 
+#### Retained clock-free declaration input
+
+`supplemental_recording_service_declaration.Declaration` reads a separately
+prepared `template.json` from the fixed private sibling directory
+`/mnt/data/sdsctl-recording-startup-<case>`. It must not be placed in the empty
+writable case reserved for exclusive plan publication. The proposed path uses
+the existing read-only data view, not a new writable mount; an installed command
+and its exact source/configuration still require independent qualification.
+
+The caller supplies an independently authenticated template digest. Intake opens
+and retains every original ancestor and the file without following links. The
+directory must be mode0700 and contain only the mode0600, single-link, bounded
+regular template file, with the original effective uid/gid. Exact metadata,
+pathname identity, canonical bytes, decoded object and case-to-directory binding
+are checked around each two-second-bounded read. Changed input, a replacement
+file/ancestor, an extra entry, uncertain I/O or expiry fails without adopting a
+replacement. No file or directory is created, modified, synchronized or removed.
+
+This reader owns only its original read-only descriptors. It releases them on
+failure, attempts every original close once even after a close error, and never
+retries an uncertain close. A foreign thread cannot close the original owner's
+handles. Neither loading nor rechecking captures a clock or manufactures a
+deadline, publishes an offer, contacts Engine, prepares a journal or grants
+recording permission. It remains an uninstalled library outside the qualified
+helper graph and command allowlist.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`
