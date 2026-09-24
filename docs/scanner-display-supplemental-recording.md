@@ -2417,6 +2417,36 @@ This module is deliberately outside the currently qualified 54-module helper
 image/command allowlist. Existing image checks do not certify it, and neither
 the default helper command nor the passive startup probe invokes it.
 
+#### Original-clock one-use offer model
+
+`scripts/supplemental_recording_service_offer.py` adds an **uninstalled,
+in-memory lifecycle model** for that declaration. A caller supplies an exact
+template, its independently authenticated digest and its already retained
+original `ClockWitness`. The model borrows that witness; it cannot construct,
+replace or close it. The same process/thread and original objects must survive
+every check. A fresh read of the original witness brackets checks of the exact
+template, every final plan field and the nonextendable deadline.
+
+The wait expires at the earlier of fifteen seconds after the original clock
+sample or the plan's original readiness deadline. Constructing the model later
+does not start a fresh fifteen-second budget. `inspect()` returns the same
+proposal before acceptance without renewing clocks or publishing anything.
+`accept()` consumes one independently supplied exact final-plan digest. Invalid
+input, expiry, contention, lost clock evidence, changed objects or interruption
+leave the model failed; no replacement digest or second attempt is accepted.
+Changes during either acceptance clock read are checked again before return.
+Closing the model leaves the original witness with its caller for subsequent
+service custody and eventual cleanup.
+
+This is **structural acceptance only**, not evidence of independent review,
+readiness, recording permission or a durable acknowledgment. The caller still
+must establish digest provenance. No file, Engine request, publication, journal,
+App or recording operation is performed. A newly constructed model cannot
+grant permission to retry a failed case. Bounded private publication/intake,
+restart/lost-acknowledgment protection, independent supervision and integration
+into the continuing service remain separate gates. Both new startup modules
+remain outside the qualified helper image and its command allowlist.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
