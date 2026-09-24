@@ -240,8 +240,10 @@ def startup_probe(root, expected_sha256):
     synthetic-or-independently-provisioned case's claim and clock-bound plan.
     It may consume one independently submitted acceptance, but performs no
     Engine request, journal, operator notice, native launch or scanner action.
-    All original handles stay alive until the original offer's at-most-15-second
-    bound, even after acceptance. The bound is never restarted or extended.
+    All original handles stay alive during this observation, even after
+    acceptance. It retires before the original offer's at-most-15-second bound,
+    reserving the last two seconds rather than starting another bounded read at
+    the expiry edge. The bound is never restarted or extended.
     A separate supervisor must bound blocked kernel I/O. No signal is masked.
     Exit75 proves neither acceptance nor readiness; files remain for inspection.
     """
@@ -249,7 +251,10 @@ def startup_probe(root, expected_sha256):
         owner = Startup(original)
         try:
             owner.prepare()
-            end = owner.offer.deadline
+            # Observation may end early; it cannot claim a successful final
+            # custody read at expiry. Reserve one acceptance I/O budget instead
+            # of repeatedly beginning fresh reads immediately before expiry.
+            end = owner.offer.deadline - acceptance.MAX_SECONDS
             for _ in range(151):
                 # Expiry only ends this non-authorizing observation. It is not
                 # a successful custody check or a return of accepted handles.

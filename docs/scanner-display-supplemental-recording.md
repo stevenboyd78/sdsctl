@@ -2614,7 +2614,10 @@ its independently reviewed template digest, **not** a precomputed final plan.
 It publishes one claim/plan, may consume one independent acceptance, and keeps
 the original handles alive only within the original offer's at-most15-second
 bound. Acceptance does not restart that bound. A defensive iteration ceiling
-and unchanged inner I/O bounds apply; blocked kernel I/O still needs independent
+and unchanged inner I/O bounds apply. The observation reserves the last two
+seconds of the offer instead of beginning another bounded read immediately at
+expiry; this is an early non-authorizing exit, not a successful final custody
+check or a deadline extension. Blocked kernel I/O still needs independent
 outer supervision. Original clock closure is last; all case files are retained.
 
 This is not a read-only file probe: it explicitly creates private startup

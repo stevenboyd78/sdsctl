@@ -109,6 +109,25 @@ def test_finite_probe_wait_failure_closes_every_original_without_replay(case, mo
     assert inputs.fds() == before
 
 
+def test_probe_does_not_begin_another_custody_read_in_reserved_tail(case, monkeypatch):
+    _, source, template, _ = case
+    before, owners = inputs.fds(), []
+    prepare = m.Startup.prepare
+
+    def near_expiry(owner):
+        result = prepare(owner)
+        owners.append(owner)
+        monkeypatch.setattr(m.time, "monotonic", lambda: owner.offer.deadline - 1)
+        return result
+
+    monkeypatch.setattr(m.Startup, "prepare", near_expiry)
+    monkeypatch.setattr(m.Startup, "poll", lambda _: pytest.fail("Started read at expiry edge"))
+    monkeypatch.setattr(m.time, "sleep", lambda _: pytest.fail("Extended probe window"))
+    assert m.startup_probe(source, template.sha256) == 75
+    assert len(owners) == 1 and owners[0].closed and owners[0].clock.closed
+    assert not owners[0].accepted and inputs.fds() == before
+
+
 def test_finite_probe_loop_cap_cannot_be_renewed_by_an_unchanging_wait(case, monkeypatch):
     root, source, template, _ = case
     before, sleeps, owners = inputs.fds(), [], []
