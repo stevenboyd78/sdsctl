@@ -3025,10 +3025,30 @@ resources after the idle owner exits. Tests cover this read-only preparation
 inside the original request/cancellation loop with explicitly synthetic process
 and idle observations; installed timing and the native phase join remain pending.
 
+After preparation, an explicit `observe_candidate()` may join one complete
+read-only host observation to that original owner's candidate source/runtime
+qualification. It starts the fixed host reader before hashing, then joins that
+same worker inside the source/runtime bracket. The worker keeps its original
+start time and deadline, and the entire call—including custody checks and final
+validation—must fit the unchanged two-second window. It neither grants a second
+budget after preparation nor substitutes a later timestamp for older evidence.
+
+The original journal, phase, session, profile and live witness must survive the
+whole operation unchanged. Only the exact observation returned by the one fixed
+reader is accepted; skipped, repeated, replaced, stale or native-health results
+are refused. Every attempt is consumed, including interruptions. Refusal poisons
+the original service and discards its original pending reader; catching that
+error cannot resume the loop or dispatch another read. Successful results are
+diagnostic observations, not reusable Ready evidence, an approved host state,
+native intent or recording permission. No event is appended, no result is cached,
+and explicit pristine cancellation still uses the same original recovery session.
+Tests use the real host-reader worker and private files with explicitly synthetic
+HA/process/source-runtime evidence; installed combined timing remains unqualified.
+
 This finite library owner is still **not** an installed schema3 entrypoint. It
-does not authenticate its own input digests, check installed confinement or
-source/runtime, establish independent external supervision, or support native
-launch/recording. Those host-launcher and containerized/platform checks remain
+does not authenticate its own input digests, qualify its own helper's installed
+confinement/source/runtime, establish independent external supervision, or
+support native launch/recording. Those host-launcher and platform checks remain
 required. Assembly tests use real private files and explicit synthetic
 Engine/process/cache fixtures, not Home Assistant or scanner acceptance.
 

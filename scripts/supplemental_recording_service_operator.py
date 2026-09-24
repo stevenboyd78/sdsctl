@@ -14,6 +14,7 @@ import os
 import stat
 import time
 from contextlib import ExitStack, contextmanager
+from dataclasses import replace
 from threading import Lock, get_ident
 
 import supplemental_recording_host_launch as launch
@@ -742,6 +743,7 @@ class IdleService:
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.used = self.closed = False
         self.candidate_attempted = False
+        self.observation_attempted = False
         self.candidate = self._original_candidate = None
         self._cleanup = []
         try:
@@ -855,6 +857,74 @@ class IdleService:
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedOperator(MESSAGE) from None
+
+    def observe_candidate(self):
+        """One explicit full read-only observation in this original idle owner.
+
+        The fixed host read starts before source/runtime hashing, retaining its
+        original start time and deadline. Both checks join within one unchanged
+        two-second window, not two renewed budgets. The result is a diagnostic
+        observation with unknown native health, NOT Ready, native intent or
+        recording authorization. Nothing is journaled or cached for later use.
+
+        Every attempt is consumed, including refusal. The original service must
+        remain running; no replacement owner, background retry or loop-triggered
+        collection is supplied. Independent outer I/O supervision is required.
+        """
+        discard = None
+        try:
+            started = time.monotonic()
+            self._context()
+            require(self.used and self.lock.locked() and not self.observation_attempted)
+            self.observation_attempted = True
+            candidate = self.candidate
+            require(type(candidate) is IdleCandidate and candidate.service is self)
+            candidate.recheck()
+            before = plans.clock.read()
+            self.plan.check_clock(before)
+            began = before.boottime_ns / plans.clock.NS
+            entries = tuple(base.encode(e) for e in self.journal.entries)
+            reader, qualifier = candidate.reader, candidate.qualifier
+            discard = reader.discard  # Original cleanup, never a replaced member.
+            require(reader.prepare() is None)
+            pending = reader.pending
+            require(type(pending) is launch._PreparedHostRead)
+            joined = []
+
+            def observe():
+                require(not joined and self.candidate is candidate)
+                candidate._custody(candidate._phase())
+                require(candidate.reader is reader and candidate.qualifier is qualifier)
+                require(reader.pending is pending and time.monotonic() < started + 2)
+                sample = reader()
+                require(type(sample) is launch.bootstrap.recovery.Sample)
+                joined.append(sample)
+                return sample
+
+            sample = qualifier.during(observe)
+            require(len(joined) == 1 and sample is joined[0])
+            candidate.recheck()
+            require(tuple(base.encode(e) for e in self.journal.entries) == entries)
+            after = plans.clock.read()
+            self.plan.check_clock(after)
+            before.check_later(after)
+            now = after.boottime_ns / plans.clock.NS
+            require(sample.boot_id == before.boot == after.boot == self.plan.boot)
+            require(began <= sample.observation.sampled_at <= sample.now <= now)
+            require(0 <= now - began < 2 and time.monotonic() < started + 2)
+            observation = replace(sample.observation, sampled_at=began)
+            candidate._phase().fresh(now, observation)
+            require(
+                observation.candidate.healthy is None and observation.candidate.recording is None
+            )
+            require(time.monotonic() < started + 2)
+            return launch.bootstrap.recovery.Sample(sample.boot_id, now, observation)
+        except BaseException as error:
+            try:
+                if discard is not None:
+                    discard()
+            finally:
+                self._fail(error)
 
     def run(self, wait):
         """One finite loop; wait receives only the existing 0.25s interval.
