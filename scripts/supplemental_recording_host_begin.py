@@ -252,7 +252,7 @@ class Start:
             require(state == self.intent and state.count == 2)
         return state
 
-    def retained_history(self):
+    def retained_history(self, *, require_live=False):
         """Read the original authorization after begin, without renewed readiness.
 
         Requires this Start's actual returned Relay and its original retained
@@ -261,10 +261,13 @@ class Start:
         file verdict, App action or new policy event is produced by this read.
         Only the live candidate phase before independent exit/recovery is in
         scope; cancellation, lost begin or original stop expiry refuses.
+        Active reads may require no exited workers at both fresh checks. This
+        uses their actual returns, never the guard's cached exit field.
         """
         acquired = False
         try:
             began = time.monotonic()  # Include the initial plan/process checks in freshness.
+            require(type(require_live) is bool)
             require(self.lock.acquire(blocking=False))
             acquired = True
             run, plan, ready, ledger = self._identity()
@@ -278,7 +281,8 @@ class Start:
             require(relay.phase in ("started", "completed", "closed"))
             require(relay.guard.finish_by == plan.lease["stop_by"])
             end = min(began + 2, plan.lease["stop_by"])
-            relay.guard.check()
+            exited = relay.guard.check()
+            require(not require_live or exited == frozenset())
             machine = run._history_until(end)
             entries = run.journal.entries
             require(tuple(base.encode(e) for e in entries[: len(self.history)]) == self.history)
@@ -317,7 +321,8 @@ class Start:
             require(current.expected == relay.expected)
             require(current.closed is (relay.phase == "closed"))
             require((current.acknowledgment is not None) is current.closed)
-            relay.guard.check()
+            exited = relay.guard.check()
+            require(not require_live or exited == frozenset())
             self._identity()
             observed = plans.clock.read()
             plan.check_clock(observed)
@@ -568,7 +573,8 @@ class RetainedHost:
         except BaseException as error:
             self._fail(error)
 
-    def _guard(self):
+    def _guard(self, *, require_live=False):
+        require(type(require_live) is bool)
         require(not self.failed and self.owner == (os.getpid(), get_ident()))
         start, run, plan, relay, continuity = (
             self.start,
@@ -608,7 +614,7 @@ class RetainedHost:
             and self.docker.path == "/var/run/docker.sock"
         )
         require(self.docker is run.read.docker is run.qualify.docker)
-        start.retained_history()
+        start.retained_history(require_live=require_live)
 
     def _context(self):
         return (
@@ -890,8 +896,10 @@ class ActiveSample:
 
     def _guard(self):
         self._bindings()
-        self.host._guard()
-        require(self.relay.guard.check() == frozenset())
+        # The original history already checks actors on both sides. Require
+        # those fresh returns to be live instead of repeating a third full
+        # process/journal traversal inside the same two-second sample.
+        self.host._guard(require_live=True)
 
     def _join(self):
         # RetainedHost joins its worker before CPU-heavy owner checks. Do not

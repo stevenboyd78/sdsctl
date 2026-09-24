@@ -689,6 +689,12 @@ The final result retains the earliest timestamp from before probe preparation;
 the entire contributing window must fit within two seconds and remain before
 the original native recording-stop deadline.
 
+The active-only guard requires live actors at both fresh checks already
+surrounding the original authorization history. It does not use a cached exit
+set or repeat a third process/journal traversal. Both complete checks, all
+history validation, and the original two-second limit remain mandatory;
+non-active/finalized history can still observe exited workers separately.
+
 Only a current-generation native reply can fill the otherwise unknown health
 and recording fields. Known `false` values remain false for policy evaluation;
 they are not replaced with success merely because an active WAV exists. Unknown

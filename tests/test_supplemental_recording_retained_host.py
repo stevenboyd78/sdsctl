@@ -251,8 +251,8 @@ def test_entire_join_uses_the_earliest_two_second_budget(host, monkeypatch, when
     original = getattr(target, name)
     calls = []
 
-    def late(*args):
-        result = original(*args)
+    def late(*args, **kwargs):
+        result = original(*args, **kwargs)
         calls.append(True)
         if when != "last_continuity" or len(calls) == 2:
             continuity.advance(monkeypatch, 3)

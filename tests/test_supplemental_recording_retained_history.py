@@ -184,3 +184,55 @@ def test_late_history_collection_refuses_and_preserves_original_handles(begun, m
     monkeypatch.setattr(target, name, late)
     begins.denied(s.start.retained_history)
     assert not s.prepared.witness.exited() and s.start.failed
+
+
+@pytest.mark.parametrize("require_live", [False, True])
+def test_history_live_requirement_uses_both_fresh_checks_not_cached_exits(
+    begun, monkeypatch, require_live
+):
+    s = begun
+    guard = s.start.relay.guard
+    guard.exits = frozenset({"native"})  # An old field is not a fresh observation.
+    assert s.start.retained_history(require_live=require_live) is s.journal.machine
+    assert s.trace == ["retained", "retained"]
+    assert not s.start.failed and not s.prepared.witness.exited()
+
+
+@pytest.mark.parametrize("check_number", [1, 2])
+@pytest.mark.parametrize("role", ["guardian", "native", "watchdog"])
+def test_active_history_refuses_exit_at_either_original_boundary(
+    begun, monkeypatch, check_number, role
+):
+    guard = begun.start.relay.guard
+    original = guard.check
+    calls = []
+
+    def changed():
+        result = original()
+        calls.append(True)
+        return frozenset({role}) if len(calls) == check_number else result
+
+    monkeypatch.setattr(guard, "check", changed)
+    begins.denied(lambda: begun.start.retained_history(require_live=True))
+    assert len(calls) == check_number
+    assert begun.start.failed and begun.run.client.closed
+    assert not begun.prepared.witness.exited()
+
+
+def test_nonactive_history_still_allows_observed_worker_exit(begun, monkeypatch):
+    guard = begun.start.relay.guard
+    original = guard.check
+
+    def exited():
+        original()
+        return frozenset({"native", "watchdog", "guardian"})
+
+    monkeypatch.setattr(guard, "check", exited)
+    assert begun.start.retained_history() is begun.journal.machine
+    assert begun.trace == ["retained", "retained"]
+
+
+@pytest.mark.parametrize("require_live", [None, 0, 1, "false"])
+def test_history_rejects_nonboolean_live_requirement(begun, require_live):
+    begins.denied(lambda: begun.start.retained_history(require_live=require_live))
+    assert begun.start.failed and not begun.prepared.witness.exited()

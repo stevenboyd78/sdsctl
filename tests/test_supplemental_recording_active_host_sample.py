@@ -288,3 +288,28 @@ def test_complete_host_fault_flags_are_returned_truthfully_for_policy(active, mo
     assert result.observation.other_owners_stopped is False
     assert result.observation.candidate.healthy is True
     assert active.journal.machine.state.recording_outcome == "unconfirmed"
+
+
+def test_active_guard_uses_existing_fresh_history_bracket_without_third_traversal(active):
+    active.trace.clear()
+    active.active._guard()
+    assert active.trace == ["retained", "retained"]
+
+
+@pytest.mark.parametrize("check_number", [1, 2])
+def test_active_guard_requires_live_actors_on_both_history_boundaries(
+    active, monkeypatch, check_number
+):
+    guard = active.start.relay.guard
+    original = guard.check
+    calls = []
+
+    def changed():
+        result = original()
+        calls.append(True)
+        return frozenset({"native"}) if len(calls) == check_number else result
+
+    monkeypatch.setattr(guard, "check", changed)
+    begins.denied(active.active.read)
+    assert len(calls) == check_number
+    assert not active.probes and not active.prepared.witness.exited()
