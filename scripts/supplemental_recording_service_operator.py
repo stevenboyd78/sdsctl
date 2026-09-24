@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Private schema3 request/cancel publication and phase join, not an entrypoint.
+"""Private schema3 notices and original-owner phase joins, not an entrypoint.
 
 Only the existing service owner may consume a fresh independently submitted
 notice into its original journal. The idle coordinator may advance the ORIGINAL
-session's one-use App dispatch and pristine cancellation. No native operator,
-recording authorization, new session, replayed dispatch or automatic request
-exists here. Installed helper/runtime and independent recovery are separate gates.
+session's one-use App dispatch and pristine cancellation. A separate explicit
+native handoff retires idle ownership without granting recording authorization.
+No new session, replayed dispatch or automatic request exists here. Installed
+helper/runtime and independent recovery are separate gates.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from contextlib import ExitStack, contextmanager
 from dataclasses import replace
 from threading import Lock, get_ident
 
+import supplemental_recording_host_begin as begin
 import supplemental_recording_host_launch as launch
 import supplemental_recording_service_input as intake
 from supplemental_handoff_host import object_json
@@ -434,6 +436,12 @@ class IdleCoordinator:
 
     def _context(self):
         require(not self.failed and not self.finished and self.owner == (os.getpid(), get_ident()))
+        self._owned_context()
+        require(self.session.read == self.transfer.read)
+
+    def _owned_context(self):
+        """Original object custody only, never permission to poll the idle phase."""
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
         current = (
             self.inbox,
             self.transfer,
@@ -454,7 +462,7 @@ class IdleCoordinator:
         require(inbox.original is self.original and inbox.plan is transfer.plan is self.plan)
         require(inbox.projected is transfer.projected is self.projected)
         require(inbox.journal is transfer.journal is session.journal is self.journal)
-        require(session.read == transfer.read and session.consume_operator is None)
+        require(session.consume_operator is None)
         require(session.processes is self.processes and session.dispatch is self.dispatch)
         require(session.executor is self.executor and not self.processes.closed)
         require(type(self.processes) is launch.TrackedProcesses)
@@ -720,8 +728,206 @@ class IdleCandidate:
             self._fail(error)
 
 
+class NativePhase:
+    """One-way, pre-recording owner; never an idle fallback or a recorder.
+
+    The original service retires its idle coordinator BEFORE native dispatch.
+    A distinct endpoint captures original Ready pidfds before any cancellation.
+    Launch/capture uncertainty is sticky, but does not disable the SAME session's
+    clock-only expiry. No host observation is synthesized from former Ready.
+
+    Explicit cancellation closes only the original completion transport. It
+    sends no App stop, signal, recording begin or recording abandonment. Only
+    actual original worker/init exits plus the distinct NeverAuthorized reader
+    may continue original-session restoration. Otherwise the original deadline
+    enters review. Independent outer supervision remains mandatory.
+    """
+
+    def __init__(self, service, ledger, endpoint):
+        self.owner = (os.getpid(), get_ident())
+        self.used = self.uncertain = self.confirmed = False
+        self.cancel_attempted = self.recovery_attempted = False
+        self.operator = self._original_operator = None
+        self.reader = self._original_reader = None
+        self.run_objects = None
+        self.service, self.run = service, service.prepared_launch
+        self.ledger, self.endpoint = ledger, endpoint
+        require(type(service) is IdleService and type(self.run) is launch.Launch)
+        require(type(endpoint) is launch.engine.Endpoint and endpoint is not self.run.endpoint)
+        require(not endpoint.closed)
+        endpoint.check()
+        require(type(ledger) is launch.binding.Ledger and not ledger._poisoned)
+        self.ledger_state = ledger.state
+        require(type(self.ledger_state) is launch.binding.State)
+        require(
+            self.ledger_state
+            == launch.binding.State(1, self.ledger_state.sha256, self.ledger_state.now)
+        )
+        require(
+            self.run.plan.original_clock.after_ns / plans.clock.NS
+            <= self.ledger_state.now
+            <= time.monotonic()
+        )
+        self.ledger_identity = ledger._directory_identity
+        self.ledger_lock = ledger._lock
+        self.objects = service, self.run, ledger, endpoint, service.session
+        self.read = self._unavailable
+        self._ledger()
+
+    def _ledger(self):
+        """Actual prepared bytes, not an idle flag or a cached ledger count."""
+        ledger, run = self.ledger, self.run
+        require(type(ledger) is launch.binding.Ledger and not ledger._poisoned)
+        require(ledger._lock is self.ledger_lock and ledger.state is self.ledger_state)
+        require(ledger.directory == run.plan.root / "recording-ledger")
+        require(ledger.binding == run.pins.host)
+        require(ledger._directory_identity == self.ledger_identity)
+        require(self.ledger_lock.acquire(blocking=False))
+        try:
+            end = time.monotonic() + 2
+            launch.binding._location(ledger.directory, ledger.binding)
+            with launch.binding.protected._private_directory(
+                ledger.directory, exclusive=False
+            ) as fd:
+                require(launch.binding.identity(os.fstat(fd))[:6] == self.ledger_identity)
+                require(launch.binding._read(fd, ledger.binding, end) == self.ledger_state)
+            require(time.monotonic() < end)
+        finally:
+            self.ledger_lock.release()
+
+    def _context(self, *, recovering=False):
+        service = self.service
+        require(self.owner == service.owner == (os.getpid(), get_ident()))
+        require(service.used and service.lock.locked() and service.native_attempted)
+        require(service.native is service._original_native is self)
+        require(service.prepared_launch is self.run and service.coordinator.finished)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (service, self.run, self.ledger, self.endpoint, service.session),
+                    self.objects,
+                    strict=True,
+                )
+            )
+        )
+        service.coordinator._owned_context()
+        require(self.operator is self._original_operator)
+        if self.run_objects is not None:
+            require(all(a is b for a, b in zip(self._run_objects(), self.run_objects, strict=True)))
+        if self.confirmed:
+            require(self.run.used and self.run.confirm_attempted and not self.run.failed)
+        if self.operator is not None:
+            require(type(self.operator) is begin.worker_exit.reconcile.Operator)
+            require(self.operator.plan is service.plan and self.operator.endpoint is self.endpoint)
+        require(self.reader is self._original_reader)
+        if recovering:
+            require(self.recovery_attempted and self.reader is not None)
+        else:
+            require(service.session.read is self.read and self.read == self._unavailable)
+
+    def _run_objects(self):
+        run = self.run
+        return run.action, run.claim, run.client, run.ready, run.probe
+
+    def _history(self):
+        service = self.service
+        machine = launch._journal_history(
+            service.plan, service.projected, service.journal, time.monotonic() + 2
+        )
+        require(machine.state.authorization_generation is None)
+        require(machine.state.recording_outcome == "not_attempted")
+        require(all(e["event"]["kind"] != "authorize_recording" for e in service.journal.entries))
+        return machine
+
+    def _unavailable(self):
+        # Deliberately no BootstrapHost/Ready read here: native flags are unknown.
+        # RecoverySession still appends its original independent clock tick.
+        raise UnconfirmedOperator(MESSAGE)
+
+    def start(self):
+        self.service._context()
+        require(not self.used)
+        self.used = True
+        try:
+            self.run.start_confirmed()
+            operator = begin.worker_exit.reconcile.Operator(
+                self.service.plan, self.run.ready, self.endpoint
+            )
+            # Retain cleanup BEFORE any subsequent check can fail. Endpoint and
+            # Ledger remain borrowed; only the new original-pidfd duplicates close.
+            self.service._cleanup.append(operator.close)
+            self.operator = self._original_operator = operator
+            self._ledger()
+            require(self._history().state.phase == "candidate_running")
+        except Exception:
+            self.uncertain = True
+        self.run_objects = self._run_objects()
+        self.service._context()
+        self.confirmed = not self.uncertain
+        return self.confirmed
+
+    def cancel(self):
+        self.service._context()
+        require(self.used and self.confirmed and not self.uncertain)
+        require(not self.cancel_attempted and not self.recovery_attempted)
+        self.cancel_attempted = True
+        self._ledger()
+        state = self._history().state
+        require(state.phase == "candidate_running" and not state.finish_requested)
+        require(state.operator_exit_sha256 is None and not self.operator.done)
+        require(not self.run.closed and self.run.client is self.run.ready.client)
+        confirmed = True
+        try:
+            self.run.client.close()
+        except Exception:
+            # A lost close acknowledgement is not permission to close/send again.
+            # Original independent observation may still confirm actual exit.
+            confirmed = False
+        self.service._context()
+        return confirmed
+
+    def poll(self, wait):
+        self.service._context()
+        require(self.used and not self.recovery_attempted and callable(wait))
+        result = self.service.session.poll()
+        if result.phase in ("complete", "review") or self.uncertain:
+            return result
+        try:
+            self._history()
+            operator = self.operator
+            require(operator is not None)
+            if not operator.done:
+                if operator.poll() is None:
+                    return result
+                operator.publish(self.service.journal)
+            if not operator._exited("init"):
+                return result
+            self.service.processes.reconcile()
+            reader = begin.worker_exit.reconcile.NeverAuthorized(
+                operator, self.ledger, self.service.journal
+            )
+            self.service._cleanup.append(reader.close)
+            self.reader = self._original_reader = reader
+        except Exception:
+            self.uncertain = True
+            return result
+        self.service._context()
+        self.recovery_attempted = True
+
+        def bounded_wait(seconds):
+            self.service._context(recovering=True)
+            require(seconds == 0.25)
+            wait(seconds)
+            self.service._context(recovering=True)
+
+        return begin.recover_never_authorized(
+            self.reader, self.run, self.service.session, bounded_wait
+        )
+
+
 class IdleService:
-    """Finite idle-only assembly over a caller-owned ORIGINAL preparation.
+    """Finite idle-first assembly over a caller-owned ORIGINAL preparation.
 
     Construction opens an Inbox but publishes nothing, observes no host and
     sends no command. The original CasePlan, projection and preparation-only
@@ -731,8 +937,9 @@ class IdleService:
 
     Missing/refused input still expires through the original session. Exiting
     the loop closes only its original process handles and Inbox, never files,
-    containers, the borrowed plan or journal. There is no native/recording route
-    or automatic request/finish. A new object is NOT restart permission.
+    containers, the borrowed plan or journal. Native execution requires a
+    separate explicit one-way handoff; there is no recording route or automatic
+    request/finish. A new object is NOT restart permission.
 
     This is not an installed entrypoint. Root/confinement, source/runtime pins,
     independent outer supervision and original custody after helper loss must
@@ -745,6 +952,8 @@ class IdleService:
         self.candidate_attempted = False
         self.observation_attempted = False
         self.launch_preparation_attempted = False
+        self.native_attempted = False
+        self.native = self._original_native = None
         self.candidate = self._original_candidate = None
         self.prepared_launch = self._original_launch = None
         self._launch_binding = None
@@ -809,26 +1018,33 @@ class IdleService:
     def _now(self):
         return self._clock()[1]
 
-    def _context(self):
+    def _context(self, *, recovering=False):
         require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
         require(all(a is b for a, b in zip(self._objects(), self.objects, strict=True)))
         require(self.coordinator.session is self.session and self.coordinator.inbox is self.inbox)
         require(self.coordinator.transfer is self.transfer)
         require(self.original.recheck() is self.plan)
         require(self.candidate is self._original_candidate)
-        self._launch_context()
+        require(self.native is self._original_native)
+        self._launch_context(unused=self.native is None)
+        if self.native is not None:
+            require(type(self.native) is NativePhase and self.native.service is self)
+            self.native._context(recovering=recovering)
+        else:
+            require(not recovering)
 
-    def _launch_context(self):
-        """A prepared, UNUSED launch is not a route into a native phase."""
+    def _launch_context(self, *, unused=True):
+        """Only the explicit original native owner may have consumed this launch."""
         require(self.prepared_launch is self._original_launch)
         run = self.prepared_launch
         if run is None:
             require(self._launch_binding is None)
             return
         require(self.launch_preparation_attempted and type(run) is launch.Launch)
-        require(run.owner == self.owner and not run.used and not run.failed and not run.closed)
-        require(not run.confirm_attempted)
-        require(run.action is run.claim is run.client is run.ready is run.probe is None)
+        require(run.owner == self.owner and not run.closed)
+        if unused:
+            require(not run.used and not run.failed and not run.confirm_attempted)
+            require(run.action is run.claim is run.client is run.ready is run.probe is None)
         candidate = self._original_candidate
         require(type(candidate) is IdleCandidate and candidate.service is self)
         require(run.plan is self.plan and run.projected is self.projected)
@@ -838,7 +1054,47 @@ class IdleService:
         endpoint, pins, command, digests = self._launch_binding
         require(run.endpoint is endpoint and run.pins is pins and run.command is command)
         require((run.launch_sha256, run.profile_sha256) == digests)
-        require(type(endpoint) is launch.engine.Endpoint and not endpoint.closed)
+        require(type(endpoint) is launch.engine.Endpoint)
+        if unused:
+            require(not endpoint.closed)
+
+    def start_native(self, ledger, endpoint):
+        """Explicit one-use native handoff, NOT recording authorization.
+
+        Only the independently qualified caller inside the original running loop
+        may invoke this. The passive Launch must already be prepared. The ledger
+        is an original pristine writer and endpoint is a DISTINCT borrowed Engine
+        observer. Old request/cancel notices cannot trigger this transition.
+
+        False means launch/capture was unconfirmed: the original session retains
+        only clock expiry and review, never retries or falls back to idle. An
+        interruption still closes this owner under the independent outer lease.
+        """
+        try:
+            self._context()
+            require(self.used and self.lock.locked() and not self.native_attempted)
+            self.native_attempted = True
+            require(type(self.candidate) is IdleCandidate)
+            self.candidate.recheck()
+            require(type(self.prepared_launch) is launch.Launch)
+            native = NativePhase(self, ledger, endpoint)
+            self.candidate.recheck()
+            # Retire idle ownership and its reader BEFORE the first Engine write.
+            self.coordinator.finished = True
+            self.native = self._original_native = native
+            self.session.read = native.read
+            return native.start()
+        except BaseException as error:
+            self._fail(error)
+
+    def cancel_native(self):
+        """Explicit completion-stream close; never an App stop or a recorder call."""
+        try:
+            self._context()
+            require(type(self.native) is NativePhase)
+            return self.native.cancel()
+        except BaseException as error:
+            self._fail(error)
 
     def prepare_launch(self, endpoint, *, launch_sha256, profile_sha256):
         """Bind one passive Launch to this STILL RUNNING original idle owner.
@@ -849,9 +1105,9 @@ class IdleService:
         recording approval is created. The endpoint stays caller-owned because
         no Engine Client is constructed. Original Launch closure is service-owned.
 
-        This idle-only loop cannot dispatch the prepared object. A used/changed
-        launch refuses the loop instead of falling back to pristine cancellation.
-        Explicit native phase routing and its recovery remain separate gates.
+        Preparation cannot dispatch the object. Without the explicit native
+        handoff, a used/changed launch refuses the idle loop instead of falling
+        back to pristine cancellation. Recording permission remains separate.
         """
         try:
             started = time.monotonic()
@@ -1023,7 +1279,9 @@ class IdleService:
             require(callable(wait))
             for _ in range(IDLE_POLL_LIMIT):
                 self._context()
-                result = self.coordinator.poll(wait)
+                result = (
+                    self.coordinator.poll(wait) if self.native is None else self.native.poll(wait)
+                )
                 if result.phase in ("complete", "review"):
                     return result
                 wait(0.25)

@@ -3032,7 +3032,7 @@ protection helper require rebuilding and independently pinning both host and
 native bundles. Real notice/journal files are used in the coordinator tests,
 but Engine and process outcomes remain explicitly synthetic.
 
-`IdleService` now assembles that idle-only graph from the original `CasePlan`,
+`IdleService` assembles that idle-first graph from the original `CasePlan`,
 projection, preparation-only journal and Docker adapter. Construction is passive
 apart from retaining the Inbox descriptor: it neither observes the host nor
 publishes input or sends commands. Its single-use `run()` polls the same
@@ -3107,16 +3107,50 @@ the prepared launch before its idle readers; completed recovery has already
 closed its process tracker after verified exits and restoration. Preparation is
 one-attempt, with sticky failure and preserved evidence on interruptions, changed
 bindings, journal changes or expired budgets. A used, replaced or modified launch
-refuses this idle-only loop; it cannot silently route native activity through
-never-launched recovery. Actual native dispatch, explicit phase routing and
-post-native recovery have **not** been added to this service. Tests exercise the
-real passive Launch and original private journal with synthetic Engine/init
-metadata, not installed endpoint or native-process qualification.
+without an explicit native handoff refuses the idle loop; it cannot silently
+route native activity through never-launched recovery. Tests exercise the real
+passive Launch and original private journal with synthetic Engine/init metadata,
+not installed endpoint or native-process qualification.
+
+An explicit `start_native()` now performs a one-way, **pre-recording** handoff
+inside the original running owner. It requires that exact prepared launch, an
+original still-prepared ledger checked against current bytes, and a distinct
+caller-owned Engine observer endpoint. It retires the idle coordinator and
+replaces the idle read callback **before** native dispatch. Request/cancel-idle
+notices never select this route. The same plan, journal, process tracker,
+dispatcher, executor, session, clock callbacks and absolute deadlines survive;
+no session is rebuilt and no failed flag is cleared.
+
+After confirmed launch, the service captures independent duplicates of the
+actual Ready actor pidfds in an original `Operator`. Recording authorization is
+still absent: this route does not construct `Start`, write a start intent or
+send a Relay begin. An explicit `cancel_native()` closes only the original
+completion transport once. It neither sends an App stop nor claims process
+exit, recording success, current health or `recording=False`. A lost close
+acknowledgement cannot cause another cancellation attempt.
+
+While waiting for actual exits, the original recovery session keeps its
+clock-only expiry, but its host reader deliberately reports unavailable rather
+than reusing idle or former Ready evidence. Launch/capture/exit-observation
+uncertainty retires that native attempt without disabling those independent
+ticks or retrying the operation. Interruption, changed ownership or corrupted
+service bindings remain fatal to that owner; independent external supervision
+must still enforce the original lease.
+
+Only the retained Operator's actual worker-exit publication, separate original
+init exit, fresh pristine files and original prepared ledger can enter the
+distinct `NeverAuthorized` continuation. It uses the same recovery session and
+existing current-host/restored-normal checks; its outcome remains
+`not_attempted`, never an invented successful or abandoned recording. If capture
+was lost, it cannot reopen pidfds or fall back to never-launched recovery.
+Routing tests use real private files and policy journals, with explicitly
+synthetic native/exit/continuation boundaries. Whole-service real-process and
+installed-platform qualification remain separate gates.
 
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed
 confinement/source/runtime, establish independent external supervision, or
-support native launch/recording. Those host-launcher and platform checks remain
+support recording authorization/begin. Those host-launcher and platform checks remain
 required. Assembly tests use real private files and explicit synthetic
 Engine/process/cache fixtures, not Home Assistant or scanner acceptance.
 

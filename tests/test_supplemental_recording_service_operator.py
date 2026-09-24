@@ -12,6 +12,7 @@ from threading import Thread
 
 import pytest
 
+from . import test_supplemental_recording_host_begin as host_begin_tests  # noqa: F401
 from . import test_supplemental_recording_never_launched_host as cancellation
 from . import test_supplemental_recording_service_input as inputs
 
