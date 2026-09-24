@@ -9,7 +9,7 @@ independent process checks are still required before using the projection live.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import supplemental_handoff_host as host
@@ -19,6 +19,16 @@ from supplemental_handoff_policy import CANDIDATE, checksum, require
 
 HOST_MEDIA = Path("/mnt/data/supervisor/media")
 NATIVE_MEDIA = Path("/media")
+_PATH_TYPE = type(Path())
+_MISSING = object()
+_RECORD_TYPES = (
+    fixed.ProtectedLayout,
+    recording.StoredBaseline,
+    recording.evidence.RecordingBaseline,
+    recording.FileEvidence,
+    recording.monitor.Writer,
+    recording.Contract,
+)
 
 
 def _validated(value):
@@ -34,6 +44,36 @@ def _validated(value):
     return raw
 
 
+def _freeze(value):
+    """Copy strictly validated original data; no new or fresh file observation."""
+    kind = type(value)
+    if kind is tuple:
+        return kind, tuple(_freeze(item) for item in value)
+    if kind in _RECORD_TYPES:
+        require(all(item.name in vars(value) for item in fields(kind)))
+        return kind, tuple((item.name, _freeze(getattr(value, item.name))) for item in fields(kind))
+    if kind is _PATH_TYPE:
+        return kind, (str(value), value.parts)
+    require(kind in (str, bytes, int, float, bool, type(None)))
+    return kind, value
+
+
+def _matches(value, frozen):
+    kind, saved = frozen
+    if type(value) is not kind:
+        return False
+    if kind is tuple:
+        return len(value) == len(saved) and all(
+            _matches(item, pin) for item, pin in zip(value, saved, strict=True)
+        )
+    if kind in _RECORD_TYPES:
+        attributes = vars(value)
+        return all(name in attributes and _matches(attributes[name], pin) for name, pin in saved)
+    if kind is _PATH_TYPE:
+        return str(value) == saved[0] and value.parts == saved[1]
+    return value == saved
+
+
 @dataclass(frozen=True)
 class Projection:
     layout: fixed.ProtectedLayout
@@ -41,6 +81,18 @@ class Projection:
     native: recording.StoredBaseline
 
     def __post_init__(self):
+        # A repeated check must never reseal changed data, including changes that
+        # are internally consistent. No fresh file/clock/process/Engine result
+        # is reused here. Check lengths before descending into current tuples.
+        original = getattr(self, "_original_values", None)
+        if original is not None:
+            current = (
+                HOST_MEDIA,
+                NATIVE_MEDIA,
+                *(getattr(self, name, _MISSING) for name in ("layout", "host", "native")),
+            )
+            require(_matches(current, original))
+            return
         require(type(self.layout) is fixed.ProtectedLayout and self.layout.slug == CANDIDATE)
         require(self.layout.media == HOST_MEDIA)
         _validated(self.host)
@@ -57,6 +109,14 @@ class Projection:
             == self.native.contract
         )
         require(self.host.contract.root_sha256 != self.native.contract.root_sha256)
+        # Private derived state is deliberately not a dataclass field: the
+        # three-field serialization stays unchanged, and replace() constructs
+        # and strictly validates a new projection rather than copying this pin.
+        object.__setattr__(
+            self,
+            "_original_values",
+            _freeze((HOST_MEDIA, NATIVE_MEDIA, self.layout, self.host, self.native)),
+        )
 
     @property
     def sha256(self):

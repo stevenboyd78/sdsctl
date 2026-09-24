@@ -2164,6 +2164,18 @@ place. A local pure-plan benchmark reduced 1,000 such checks from about
 1.92–1.98 seconds to 0.049–0.052 seconds. That is an isolated CPU measurement,
 not a passing combined-readiness or installed-service timing result.
 
+The same boundary applies to repeated host/native manifest-projection checks.
+Each new projection still strictly validates both complete original manifests
+and their declared media aliases. Subsequent checks compare all original values
+and exact types, including tuple contents, file metadata and declared aliases,
+without repeatedly decoding the same JSON. This private derived state is not
+part of the serialized plan or journal; creating a new projection revalidates
+its inputs. Reinvoking validation cannot reseal a changed projection. Current
+files, process identities, container mounts and deadlines are still independently
+observed by their existing collectors. An isolated two-file prototype reduced
+1,000 projection-hash checks from about 0.76–0.82 seconds to 0.077–0.084 seconds;
+this does not establish live readiness or a larger observation budget.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
