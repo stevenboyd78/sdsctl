@@ -1,4 +1,4 @@
-"""Actual files/environ/pidfd; synthetic Engine, kernel profile and HAOS paths.
+"""Actual files/environ/pidfd; synthetic Engine/kernel/namespace and HAOS paths.
 
 No helper is launched or installed. No App/Engine/scanner operations. Declared
 confinement and effective kernel enforcement remain distinct evidence.
@@ -7,6 +7,7 @@ confinement and effective kernel enforcement remain distinct evidence.
 import builtins
 import copy
 import io
+import os
 import subprocess
 import sys
 import time
@@ -209,6 +210,36 @@ def helper(supervised, image, configured, monkeypatch):
             return supervised.root, stamp, values
 
         monkeypatch.setattr(m.HelperQualification, "_metadata", metadata)
+        # This child shares the pytest host root. Route its two root paths to
+        # the actual synthetic image directory, not an installed namespace.
+        original_os_open, original_os_stat = os.open, os.stat
+        state.root_path = f"/proc/{child.pid}/root"
+        state.namespace_path = f"/proc/{child.pid}/ns/mnt"
+        state.namespace_route = supervised.root.parent / "synthetic-mount-namespace"
+        state.namespace_route.write_bytes(b"Synthetic namespace identity only\n")
+        state.namespace_route.chmod(0o444)
+        state.root_fds = []
+        state.root_fault = None
+
+        def routed(path):
+            if path == state.root_path:
+                return state.root_fault or supervised.root
+            if path == state.namespace_path:
+                return state.namespace_route
+            return path
+
+        def os_open(path, flags, *args, **kwargs):
+            fd = original_os_open(routed(path), flags, *args, **kwargs)
+            if path in (supervised.root, state.root_path, state.namespace_path):
+                state.root_fds.append(fd)
+            return fd
+
+        def os_stat(path, *args, **kwargs):
+            return original_os_stat(routed(path), *args, **kwargs)
+
+        monkeypatch.setattr(m.os, "open", os_open)
+        monkeypatch.setattr(m.os, "stat", os_stat)
+        state.original_os_open, state.original_os_stat = original_os_open, original_os_stat
         state.kernels, state.kernel_fault = 0, None
 
         def kernel(original, *, deadline):
@@ -564,3 +595,128 @@ def test_overrun_keeps_original_limit_and_poisoned_state(helper, monkeypatch):
 
     monkeypatch.setattr(m.runtime.Layout, "verify_supervised", late)
     denied(helper.obj)
+
+
+def roots_closed(helper):
+    for fd in helper.root_fds:
+        with pytest.raises(OSError):
+            os.fstat(fd)
+    assert helper.witness.fd >= 0 and not helper.witness.exited()
+
+
+def test_root_and_namespace_handles_retained_through_hashing_then_closed(helper, monkeypatch):
+    original = m.runtime.Layout.verify_supervised
+
+    def during(self, *args, **kwargs):
+        assert len(helper.root_fds) == 3
+        for fd in helper.root_fds:
+            os.fstat(fd)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(m.runtime.Layout, "verify_supervised", during)
+    assert helper.obj() is None
+    roots_closed(helper)
+
+
+def test_engine_root_cannot_substitute_for_actual_original_process_root(helper, tmp_path):
+    unrelated = tmp_path / "unrelated-root"
+    unrelated.mkdir()
+    helper.root_fault = unrelated
+    denied(helper.obj)
+    assert helper.command_reads == 0
+    roots_closed(helper)
+
+
+def test_unrouted_process_root_refuses_synthetic_image(helper, monkeypatch):
+    # Actual child root is the host root, NOT the synthetic image directory.
+    monkeypatch.setattr(m.os, "open", helper.original_os_open)
+    monkeypatch.setattr(m.os, "stat", helper.original_os_stat)
+    denied(helper.obj)
+    assert helper.command_reads == 0 and helper.witness.fd >= 0
+
+
+@pytest.mark.parametrize("index", [1, 2, 3])
+@pytest.mark.parametrize("operation", ["open", "fstat"])
+def test_partial_root_binding_failure_closes_all_original_opened_fds(
+    helper, monkeypatch, index, operation
+):
+    actual = getattr(m.os, operation)
+
+    def failing(*args, **kwargs):
+        if operation == "open":
+            selected = args[0] in (helper.root, helper.root_path, helper.namespace_path)
+            at = len(helper.root_fds) + 1
+        else:
+            selected = args[0] in helper.root_fds
+            at = len(helper.root_fds)
+        if selected and at == index:
+            raise OSError("PRIVATE")
+        return actual(*args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.os, operation, failing)
+        denied(helper.obj)
+    assert len(helper.root_fds) == index - (operation == "open")
+    roots_closed(helper)
+
+
+@pytest.mark.parametrize("fault", ["proc_root", "root_path", "root_symlink", "namespace"])
+def test_root_or_namespace_replacement_during_runtime_read_refuses(helper, monkeypatch, fault):
+    original = m.runtime.Layout.verify_supervised
+
+    def changed(self, *args, **kwargs):
+        result = original(self, *args, **kwargs)
+        if fault == "proc_root":
+            helper.root_fault = helper.root.parent
+        elif fault == "namespace":
+            helper.namespace_route = helper.root.parent / "different-namespace"
+            helper.namespace_route.write_bytes(b"different fixture")
+        else:
+            retained = helper.root.with_name(helper.root.name + "-retained")
+            helper.root.rename(retained)
+            if fault == "root_path":
+                helper.root.mkdir()
+            else:
+                helper.root.symlink_to(retained, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(m.runtime.Layout, "verify_supervised", changed)
+    denied(helper.obj)
+    roots_closed(helper)
+
+
+def test_directory_is_not_a_mount_namespace_descriptor(helper):
+    helper.namespace_route = helper.root.parent
+    denied(helper.obj)
+    roots_closed(helper)
+
+
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(75)])
+def test_interrupted_hashing_closes_original_root_handles_without_releasing_pidfd(
+    helper, monkeypatch, error
+):
+    def interrupted(*args, **kwargs):
+        raise error
+
+    monkeypatch.setattr(m.runtime.Layout, "verify_supervised", interrupted)
+    with pytest.raises(type(error)):
+        helper.obj()
+    assert helper.obj.failed
+    roots_closed(helper)
+
+
+def test_root_close_failure_still_attempts_remaining_original_handles(helper, monkeypatch):
+    actual = m.os.close
+    closed = []
+
+    def close(fd):
+        actual(fd)
+        if fd in helper.root_fds:
+            closed.append(fd)
+            if len(closed) == 1:
+                raise OSError("PRIVATE")
+
+    monkeypatch.setattr(m.os, "close", close)
+    denied(helper.obj)
+    assert closed == list(reversed(helper.root_fds))
+    roots_closed(helper)

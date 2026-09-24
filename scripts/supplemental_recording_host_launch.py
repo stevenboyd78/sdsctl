@@ -13,7 +13,9 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import stat
 import time
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 from decimal import Decimal
 from pathlib import Path
@@ -1142,6 +1144,60 @@ class HelperQualification:
         self._guard(deadline)
         return result
 
+    @contextmanager
+    def _root_binding(self, root, deadline):
+        """Retain the original process root and mount namespace across hashing.
+
+        Engine's merged path must be the SAME directory as /proc/original/root.
+        Holding the mount namespace prevents inode recycling while this check
+        is active. It does not authenticate proc-mount provenance or inventory
+        every mount inside that namespace. No setns, chroot, signal or execution.
+        """
+        opened = []
+        try:
+            self._guard(deadline)
+            proc_root = f"/proc/{self.init.pid}/root"
+            namespace = f"/proc/{self.init.pid}/ns/mnt"
+            for path, flags in (
+                (root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW),
+                # These two fixed proc magic links must be followed; arbitrary
+                # caller paths are never used as their destinations.
+                (proc_root, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC),
+                (namespace, os.O_RDONLY | os.O_CLOEXEC),
+            ):
+                self._guard(deadline)
+                fd = os.open(path, flags)
+                opened.append((fd, path, None))
+                info = os.fstat(fd)
+                require(info.st_uid == runtime.ROOT_UID)
+                require(
+                    stat.S_ISDIR(info.st_mode) if path != namespace else stat.S_ISREG(info.st_mode)
+                )
+                opened[-1] = (fd, path, runtime.identity(info))
+            require(opened[0][2] == opened[1][2])
+
+            def check():
+                self._guard(deadline)
+                for fd, path, expected in opened:
+                    require(runtime.identity(os.fstat(fd)) == expected)
+                    require(
+                        runtime.identity(os.stat(path, follow_symlinks=path != root)) == expected
+                    )
+                require(opened[0][2] == opened[1][2])
+                self._guard(deadline)
+
+            check()
+            yield check
+            check()
+        finally:
+            failed_close = False
+            for fd, *_ in reversed(opened):
+                try:
+                    os.close(fd)
+                except Exception:
+                    failed_close = True
+            require(not failed_close)
+
     def __call__(self):
         """No cached report or action authority; every successful call is fresh."""
         acquired = False
@@ -1153,30 +1209,32 @@ class HelperQualification:
             deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
             self._guard(deadline)
             root, driver, configured = self._metadata(deadline)
-            kernel_before = self._kernel(deadline)
-            self._command(deadline)
-            before = self._environment(configured, deadline)
-            source = helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
-            source.verify(self.plan.helper.source)
-            self._guard(deadline)
-            runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
-                self.plan.helper.interpreter, self.timezone
-            )
-            self._guard(deadline)
-            source.verify(self.plan.helper.source)
-            self._guard(deadline)
-            after = self._environment(configured, deadline)
-            kernel_after = self._kernel(deadline)
-            require(
-                (kernel_before.sha256, kernel_before.process)
-                == (kernel_after.sha256, kernel_after.process)
-            )
-            require(began <= kernel_before.observed_at <= kernel_after.observed_at < deadline)
-            self._command(deadline)
-            require((before.sha256, before.process) == (after.sha256, after.process))
-            require(began <= before.observed_at <= after.observed_at < deadline)
-            end_root, end_driver, _ = self._metadata(deadline)
-            require((root, driver) == (end_root, end_driver))
+            with self._root_binding(root, deadline) as check_root:
+                kernel_before = self._kernel(deadline)
+                self._command(deadline)
+                before = self._environment(configured, deadline)
+                source = helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
+                check_root()
+                source.verify(self.plan.helper.source)
+                check_root()
+                runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
+                    self.plan.helper.interpreter, self.timezone
+                )
+                check_root()
+                source.verify(self.plan.helper.source)
+                check_root()
+                after = self._environment(configured, deadline)
+                kernel_after = self._kernel(deadline)
+                require(
+                    (kernel_before.sha256, kernel_before.process)
+                    == (kernel_after.sha256, kernel_after.process)
+                )
+                require(began <= kernel_before.observed_at <= kernel_after.observed_at < deadline)
+                self._command(deadline)
+                require((before.sha256, before.process) == (after.sha256, after.process))
+                require(began <= before.observed_at <= after.observed_at < deadline)
+                end_root, end_driver, _ = self._metadata(deadline)
+                require((root, driver) == (end_root, end_driver))
             self._guard(deadline)
             self.elapsed_seconds = time.monotonic() - began
             require(0 <= self.elapsed_seconds < self.MAX_SECONDS)

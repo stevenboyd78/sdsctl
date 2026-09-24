@@ -2563,6 +2563,16 @@ and timezone-inclusive runtime reads.
 Source is rechecked after runtime inspection. A successful call returns no
 report or action authority, and subsequent calls cannot reuse its observations.
 
+The Engine merged-root directory must also match the original process's actual
+`/proc/PID/root`. The collector keeps both root descriptors and the original
+mount-namespace descriptor open throughout hashing, and rechecks their identities
+and fixed paths between source/runtime reads and before releasing them. A changed
+root or mount namespace, substituted path, lost process, partial open or
+interrupted hash refuses qualification. Cleanup closes only collector-owned
+descriptors, never the caller's original pidfd. This binds the observed root to
+that process; it does not authenticate proc-mount provenance or enumerate every
+mount inside the namespace.
+
 The prospective helper profile requires a read-only root, no network, host PID
 and cgroup views, private IPC, root user, no automatic restart/removal, one CPU,
 512 MiB memory, 1 GiB memory-plus-swap limit and 64 PIDs. All capabilities are
@@ -2594,7 +2604,7 @@ The whole read keeps the original two-second maximum and readiness deadline.
 Unexpected settings, changed bytes/identities, lost handles or late reads are
 sticky failures. Tests use actual source/runtime/proc-environment reads and an
 owned pidfd with explicitly synthetic Engine, kernel-profile, command-line and
-host-path fixtures. Separate kernel-collector tests use actual descriptors and
+host-path/root/namespace fixtures. Separate kernel-collector tests use actual descriptors and
 an original owned pidfd with synthetic accepted proc bytes/cgroup routing; an
 actual unprivileged child is correctly refused. These checks do not establish
 namespace provenance, seccomp policy contents, independent supervision, or a
