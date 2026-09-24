@@ -6,18 +6,49 @@ caller supplies an independently reviewed digest; it cannot be learned from
 this file. Retain this object and recheck the original descriptors, bytes and
 decoded object instead of reopening/adopting a replacement plan. No directory,
 file, process, Engine request, journal or operator notice is created here.
+Direct execution is restricted to a finite, read-only startup observation probe;
+it does not run or enable the prospective recording service.
 """
 
 from __future__ import annotations
 
 import os
 import stat
+import sys
 import time
 from pathlib import Path
 from threading import get_ident
 
-import supplemental_handoff_files as files
-import supplemental_recording_host_plan as plans
+PROBE_MESSAGE = "Read-only recording startup probe is unconfirmed; preserve this case."
+
+# Direct execution is ONLY a finite read-only probe in the sealed helper image.
+# Isolated Python omits the script directory; never import helpers from cwd,
+# an environment override or an arbitrary directory supplied on the command line.
+if __name__ == "__main__":
+    try:
+        allowed = (
+            len(sys.argv) == 3
+            and sys.flags.isolated == sys.flags.dont_write_bytecode == 1
+            and os.geteuid() == os.getegid() == 0
+            and os.getcwd() == "/"
+            and Path(__file__)
+            == Path("/opt/sdsctl-recording-host/supplemental_recording_service_input.py")
+        )
+    except Exception:
+        allowed = False
+    if not allowed:
+        print(PROBE_MESSAGE, file=sys.stderr)
+        raise SystemExit(64)
+    sys.path.insert(0, "/opt/sdsctl-recording-host")
+
+try:
+    import supplemental_handoff_files as files
+    import supplemental_recording_host_plan as plans
+except Exception:
+    if __name__ == "__main__":
+        print(PROBE_MESSAGE, file=sys.stderr)
+        raise SystemExit(75) from None
+    raise
 
 MAX_SECONDS = 2.0
 MESSAGE = "Recording service input is unconfirmed; preserve the case and do not restart."
@@ -195,3 +226,43 @@ class CasePlan:
 
     def __exit__(self, *_):
         self.close()
+
+
+def startup_probe(root, expected_sha256):
+    """Hold only original read-only plan/clock handles for at most 30 seconds.
+
+    The bound starts at the PLAN's original clock, not this process's startup.
+    There is no journal, notice, Engine connection, listener or service assembly.
+    This process is an observation target for an independent trusted qualifier;
+    keeping it alive or seeing exit 75 proves no readiness or restoration.
+    Blocked kernel I/O still needs a separate outer process deadline. No signals
+    are masked and no case can be re-armed by this function.
+    """
+    with CasePlan(root, expected_sha256) as original:
+        plan = original.recheck()
+        clock = plans.clock.ClockWitness(plan.original_clock)
+        try:
+            end = min(plan.lease["ready_by"], plan.lease["issued_at"] + 30)
+            require(clock.read().after_ns / plans.clock.NS < end)
+            for _ in range(301):
+                require(original.recheck() is plan)
+                observed = clock.read()
+                plan.check_clock(observed)
+                remaining = end - observed.after_ns / plans.clock.NS
+                if remaining <= 0:
+                    return 75
+                time.sleep(min(0.1, remaining))
+            require(False)
+        finally:
+            clock.close()
+
+
+if __name__ == "__main__":
+    try:
+        root = Path(sys.argv[1])
+        require(str(root) == sys.argv[1] and root.is_absolute() and ".." not in root.parts)
+        code = startup_probe(root, sys.argv[2])
+    except Exception:
+        print(PROBE_MESSAGE, file=sys.stderr)
+        raise SystemExit(75) from None
+    raise SystemExit(code)

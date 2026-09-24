@@ -2318,6 +2318,35 @@ Engine socket, App data, recordings or credentials. The normal Mimic App was
 not restarted or reconfigured. This qualifies the packaged read-only input
 boundary on that host, not an installed recording service or real plan authority.
 
+#### Passive startup observation target
+
+Direct execution of `supplemental_recording_service_input.py` is now a **read-only
+probe**, not the recording service. It accepts only the existing case path and
+independently supplied plan digest. The sealed-image invocation requires isolated,
+no-bytecode Python, root UID/GID, working directory `/`, and the fixed helper
+module path. It adds only that fixed helper directory for its private imports;
+an arbitrary checkout, working directory or environment cannot select the code.
+These guards do not replace independent image/source/runtime qualification.
+
+The probe retains the original `CasePlan` and `ClockWitness`, repeatedly checks
+the same bytes/object/time domain, and exits at the earlier of the plan's
+original readiness deadline or 30 seconds after its original clock sample.
+Starting later cannot renew this interval. A separate 301-poll ceiling also
+limits the loop. It creates no journal, notice, Engine connection, listener,
+service assembly or output file. It never starts audio or contacts an App or
+scanner. Expiry returns exit 75, **not success or readiness**; refusal does not
+permit another initialization attempt. External supervision is still required
+for blocked kernel I/O, and the image's default command still refuses installed
+execution.
+
+This gives a trusted observer a real command/process to inspect without enabling
+the recording service. The observer must independently retain the original
+process/pidfd, verify the actual command/configuration/confinement and source/
+runtime, and observe its exit. The process staying alive, its exit code or a
+synthetic plan does not qualify an installed service or authorize restoration.
+Docker and native host time domains must be checked explicitly; never relabel a
+host clock sample to match a container or infer equivalence from nearby times.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
