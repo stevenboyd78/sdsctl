@@ -2140,6 +2140,45 @@ installed-platform performance guarantee or a completed recording/recovery trial
 The two-second observation limit and all native/readiness/recovery deadlines
 remain unchanged.
 
+### Recovery routes inside the pinned helper
+
+Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
+the immutable helper image, rather than in the host virtual environment. Both
+used network-isolated synthetic scanner/audio peers, actual native recording
+processes and files, and the original recovery session. The helper ran under
+independent systemd supervision; an outside observer retained the original
+helper and container-init pidfds through exit. Neither case changed Home
+Assistant, a Pi, the physical scanner or an existing user recording.
+
+The lost-completion case abandoned its original completion transport after an
+actual active checkpoint. Original process-exit evidence and two complete
+preserved-file reads preceded the original-session restoration continuation.
+The simulated normal App became healthy and idle, but the recording verdict
+remained **unconfirmed**, without an artifact or acknowledgment.
+
+The successful-completion case checked positive file growth, the original
+finalization acknowledgment, original worker/init exits, complete settled-file
+reads and exact artifact hashes. Its synthetic WAV contained 9.4 seconds,
+470 packets and 75,200 samples. The same recovery session then confirmed the
+simulated normal App and retained the verified artifact. Final source and
+interpreter rechecks passed in both cases. This is file/process verification,
+not an audible-quality check.
+
+App/Core/Supervisor metadata and the normal-start command in these cases were
+explicit fixtures. These results do **not** qualify an installed service
+entrypoint, installed mounts/platform, real Supervisor latency or the installed
+one-CPU helper. The successful cases used a four-CPU helper; the finalized case
+had no added synthetic status latency. Other cases still refused around the
+unchanged two-second freshness bound. Those refusals are not retry permission
+or evidence of a reliable installed timing margin.
+
+A subsequent helper-loss injection was refused by the operating system before
+signal delivery could be confirmed. Both disposable containers later stopped
+under their original bounds, but the outside observer had already closed its
+process handles. That attempt is retained as incomplete, not a host-loss or
+through-exit custody pass. No alternative signal route or host-security change
+was attempted. Every consumed case and driver remains closed without retry.
+
 Integrated offline tests exercise the actual journal, policy, dispatch tracking
 and loop across candidate stop, normal start and health verification, with
 explicitly synthetic host, cached-state, Engine and init-exit evidence. They
