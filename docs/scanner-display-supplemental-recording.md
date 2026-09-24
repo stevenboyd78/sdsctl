@@ -2835,9 +2835,9 @@ notice, App command, process handle or recovery permission is created.
 This current preflight sample does **not** replace the original preparation
 observation or reset `issued_at`. The original sealed baseline and bootstrap
 journal, fresh local operator request, actual helper/runtime qualification and
-independent recovery session still have to be assembled. The 53-module source
-graph is unchanged in membership; helper source bytes/pins change with the new
-collector, so earlier image results do not qualify the new bundle.
+independent recovery session still have to be assembled. The collector did not
+change source-graph membership when introduced; helper source bytes/pins changed,
+so earlier image results do not qualify the new bundle.
 
 `TransferHost` supplies the successive, freshly collected observations between
 the original prepared journal and `candidate_idle`. It retains the same plan,
@@ -2889,6 +2889,32 @@ restoration. Success means normal-App restoration with recording `not_attempted`
 never a successful recording. Synthetic integration covers the complete route,
 including cancellation just before readiness expires and restoration afterward;
 actual installed recovery/source/runtime and external custody are still gates.
+
+The uninstalled `supplemental_recording_service_operator.Inbox` now consumes
+explicit input for the initial request and never-launched cancellation. Its
+distinct canonical `finite-recording-service-notice-v1` format binds the action,
+case, boot, original plan digest, original preparation-event digest and issue
+time. Old idle-helper notices are not accepted. `request.json` is eligible only
+in `prepared`; `cancel_idle.json` is eligible only in `candidate_idle`, before
+operator or recording authorization. A notice is not native-launch or recording
+permission. No file is automatically submitted by constructing this reader.
+
+The caller's original `CasePlan`, projection and journal remain in custody. Each
+consumption rereads their actual bytes and checks the private inbox and notice
+identity, single-link 0600 ownership, canonical bounded JSON, original readiness
+deadline, maximum 30-second notice age and two-second observation window.
+Symlinks, pending/unknown entries, replaced inputs, changed files, concurrency
+and lost journal acknowledgements refuse without deleting or resubmitting
+anything. The exact journal event is the durable consumption receipt. A refused
+input reader cannot disable the separately owned expiry/recovery loop.
+
+The inbox retains its directory identity but does not retain an advisory lock
+between calls, so a separate publisher can acquire an exclusive lock. This is
+an input consumer and pure format builder, **not** that publisher, a service
+entrypoint, App dispatcher or restored-process proof. The helper graph now has
+54 modules, requiring a new independently pinned image. Local integration joins
+an explicit idle-cancel notice to the original never-launched recovery session;
+Engine and process outcomes in that test remain explicitly synthetic.
 
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
