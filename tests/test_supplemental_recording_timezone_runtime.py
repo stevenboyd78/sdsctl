@@ -142,7 +142,11 @@ def test_no_timezone_selection_can_bypass_the_runtime_tree(supervised):
     runtime.denied(lambda: replace(supervised, root=Path("relative")).observe_supervised("UTC"))
 
 
-def test_bracket_checks_every_runtime_file_before_and_after_callback(supervised, monkeypatch):
+@pytest.mark.parametrize("workers", [1, 2])
+def test_bracket_checks_every_runtime_file_before_and_after_callback(
+    supervised, monkeypatch, workers
+):
+    supervised = replace(supervised, workers=workers)
     expected = supervised.observe_supervised("America/Denver")
     snapshot, trace = m.Layout._snapshot, []
 
@@ -167,9 +171,11 @@ def test_bracket_checks_every_runtime_file_before_and_after_callback(supervised,
 
 @pytest.mark.parametrize("stage", ["before", "during", "late", "exception"])
 @pytest.mark.parametrize("path", ["usr/local/lib/python3.14/os.py", m.ZONEINFO + "/tzdata.zi"])
+@pytest.mark.parametrize("workers", [1, 2])
 def test_bracket_no_result_escapes_changed_runtime_or_failed_observation(
-    supervised, monkeypatch, stage, path
+    supervised, monkeypatch, stage, path, workers
 ):
+    supervised = replace(supervised, workers=workers)
     expected = supervised.observe_supervised("America/Denver")
     end, calls = time.monotonic() + 2, []
     file = supervised.root / path

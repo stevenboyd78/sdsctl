@@ -2140,6 +2140,18 @@ installed-platform performance guarantee or a completed recording/recovery trial
 The two-second observation limit and all native/readiness/recovery deadlines
 remain unchanged.
 
+A subsequent one-CPU measurement compared both worker widths against the same
+immutable runtime pin in alternating order. Two workers took about 1.30–1.36
+seconds; one worker took 1.07–1.09 seconds. The collector therefore defaults to
+one worker for the prospective CPU-limited helper. Trusted local callers can
+explicitly select two workers; no automatic retry, deadline renewal or inventory
+change follows that selection. Only integer widths one and two are accepted.
+Both modes retain full before/after inventories and shared limits. The affected
+regression passed 401 tests, including equal fingerprints, invalid selections,
+both modes' mutation/timeout rejection, and the existing concurrent-budget and
+worker-cleanup checks. This read-only timing result does not itself qualify
+combined readiness, real Supervisor latency or the installed service.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside

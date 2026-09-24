@@ -85,7 +85,9 @@ def env():
     ]
 
 
-def test_full_inventory_without_running_any_observed_code(layout):
+@pytest.mark.parametrize("workers", [1, 2])
+def test_full_inventory_without_running_any_observed_code(layout, workers):
+    layout = replace(layout, workers=workers)
     before = {p: m.identity(p.lstat()) for p in layout.root.rglob("*")}
     result = layout.observe()
     entries, count, total = layout._snapshot(m.time.monotonic() + m.MAX_SECONDS)
@@ -245,7 +247,9 @@ def test_absolute_links_are_resolved_in_image_namespace_not_host(layout):
 
 
 @pytest.mark.parametrize("fault", ["bytes", "metadata", "directory", "target", "absent"])
-def test_second_full_observation_must_remain_identical(layout, monkeypatch, fault):
+@pytest.mark.parametrize("workers", [1, 2])
+def test_second_full_observation_must_remain_identical(layout, monkeypatch, fault, workers):
+    layout = replace(layout, workers=workers)
     original, calls = m.Layout._snapshot, []
 
     def changed(self, deadline):
@@ -269,6 +273,27 @@ def test_second_full_observation_must_remain_identical(layout, monkeypatch, faul
 
     monkeypatch.setattr(m.Layout, "_snapshot", changed)
     denied(layout.observe)
+
+
+def test_default_worker_and_explicit_parallel_selection_have_identical_evidence(layout):
+    assert layout.workers == 1
+    serial = layout.observe()
+    assert replace(layout, workers=2).observe() == serial
+    assert layout.observe() == serial
+
+
+@pytest.mark.parametrize("workers", [False, True, None, 0, -1, 3, 10000, 1.0, "1"])
+def test_invalid_worker_choice_refuses_before_filesystem_access(layout, monkeypatch, workers):
+    opened = []
+    original = m.os.open
+
+    def opening(*args, **kwargs):
+        opened.append(True)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(m.os, "open", opening)
+    denied(replace(layout, workers=workers).observe)
+    assert opened == []
 
 
 def test_changed_file_during_read_is_refused(layout, monkeypatch):
@@ -338,6 +363,7 @@ def test_fallible_descriptor_reads_do_not_leak_open_handles(layout, monkeypatch,
 
 
 def test_disjoint_roots_overlap_but_both_snapshots_keep_the_original_digest(layout, monkeypatch):
+    layout = replace(layout, workers=2)
     expected = layout.observe()
     targets = {
         (layout.root / path).stat().st_ino
@@ -366,6 +392,7 @@ def test_disjoint_roots_overlap_but_both_snapshots_keep_the_original_digest(layo
 
 @pytest.mark.parametrize("budget", ["bytes", "entries"])
 def test_workers_share_budget_before_opening_files(layout, monkeypatch, budget):
+    layout = replace(layout, workers=2)
     for name in ("tree-a", "tree-b"):
         (layout.root / name).mkdir()
         (layout.root / name / "data").write_bytes(b"1234")
@@ -400,7 +427,9 @@ def test_workers_share_budget_before_opening_files(layout, monkeypatch, budget):
     assert budget != "bytes" or len(synchronized) == 2
 
 
-def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, monkeypatch):
+@pytest.mark.parametrize("workers", [1, 2])
+def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, monkeypatch, workers):
+    layout = replace(layout, workers=workers)
     original, submitted, widths = m.ThreadPoolExecutor, [], []
 
     class Pool(original):
@@ -416,11 +445,12 @@ def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, mon
         (layout.root / "usr/local" / f"file-{number}").write_bytes(b"one")
     monkeypatch.setattr(m, "ThreadPoolExecutor", Pool)
     assert layout.observe().file_count >= 50
-    assert widths == [2, 2]
+    assert widths == [workers, workers]
     assert submitted == [*m.TREES, *m.FILES, *m.ALIASES] * 2
 
 
 def test_failed_worker_is_joined_before_parent_descriptors_close(layout, monkeypatch):
+    layout = replace(layout, workers=2)
     first = (layout.root / "usr/local/bin/python3.14").stat().st_ino
     second = (layout.root / "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2").stat().st_ino
     original = m.os.read

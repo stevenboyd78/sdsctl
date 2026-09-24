@@ -333,8 +333,13 @@ class Evidence:
 @dataclass(frozen=True)
 class Layout:
     root: Path
+    # The prospective installed helper is CPU-limited. Two workers can contend
+    # on that single CPU; keep their explicitly selected option for separately
+    # qualified hosts. Scheduling never changes the inventory or its deadlines.
+    workers: int = 1
 
     def _snapshot(self, deadline, *, timezone=None):
+        require(type(self.workers) is int and self.workers in (1, 2))
         if timezone is not None:
             _timezone_name(timezone)
         trees = TREES if timezone is None else (*TREES, ZONEINFO)
@@ -458,7 +463,9 @@ class Layout:
                     cancelled.set()
                     raise
 
-            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="runtime-inventory") as pool:
+            with ThreadPoolExecutor(
+                max_workers=self.workers, thread_name_prefix="runtime-inventory"
+            ) as pool:
                 pending = [
                     pool.submit(collect, parent_for(path), PurePosixPath(path).name, path)
                     for path in paths
