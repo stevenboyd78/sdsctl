@@ -25,6 +25,7 @@ ROOTS = frozenset(
     "supplemental_recording_" + name
     for name in (
         "host_source",
+        "service_input",
         "host_plan",
         "host_launch",
         "host_begin",
@@ -85,6 +86,7 @@ MODULES = frozenset(
             "host_launch",
             "host_begin",
             "host_source",
+            "service_input",
             "idle_observer",
             "monitor",
             "namespace",

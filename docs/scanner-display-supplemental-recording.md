@@ -2176,6 +2176,34 @@ observed by their existing collectors. An isolated two-file prototype reduced
 1,000 projection-hash checks from about 0.76–0.82 seconds to 0.077–0.084 seconds;
 this does not establish live readiness or a larger observation budget.
 
+### Retained service-plan input
+
+`supplemental_recording_service_input.CasePlan` is the read-only input boundary
+for the prospective recording service, not an installed entrypoint. It opens
+only an existing private `plan.json`, requires the separately supplied reviewed
+digest and the exact case path encoded by the canonical schema3 plan, and
+retains the original file and no-follow ancestor descriptors. Schemas1/2 still
+belong exclusively to the older idle-only service; they cannot enter this path.
+
+Each recheck reads the complete original file again, compares its original
+inode, ownership, mode, link count and metadata, checks every retained ancestor,
+and verifies the original decoded plan object. Identical bytes in a replacement
+file are insufficient. Unrelated case entries may grow as the separate journal
+is written, but the plan cannot be replaced or adopted again. A failure closes
+the input descriptors and permanently refuses that intake object; putting a
+file back is not retry permission. Reads are bounded by the existing 64 KiB
+plan limit and a two-second read window, with no deadline renewal within a read.
+Independent supervision still covers blocked kernel I/O.
+
+This boundary never creates a case, writes a receipt, acquires a process,
+publishes readiness or sends an Engine/App/scanner command. It preserves the
+plan's original clocks and deadlines rather than treating a read as renewed
+consent. Expected-digest provenance, service UID, immutable source/runtime,
+installed mounts, the original recovery session and fresh user readiness remain
+separate requirements. The closed host source graph now includes this input
+module (53 modules); prior 52-module image qualifications remain historical,
+not qualifications of this expanded graph.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
@@ -2203,10 +2231,26 @@ not an audible-quality check.
 App/Core/Supervisor metadata and the normal-start command in these cases were
 explicit fixtures. These results do **not** qualify an installed service
 entrypoint, installed mounts/platform, real Supervisor latency or the installed
-one-CPU helper. The successful cases used a four-CPU helper; the finalized case
+one-CPU helper. These earlier successful cases used a four-CPU helper; the finalized case
 had no added synthetic status latency. Other cases still refused around the
 unchanged two-second freshness bound. Those refusals are not retry permission
 or evidence of a reliable installed timing margin.
+
+After the pure plan/projection comparison changes at `f788b6d`, two fresh local
+cases passed with a one-CPU helper, a two-CPU native container and 430 ms of
+added synthetic status-query latency. The lost-completion route preserved its
+unconfirmed recording; the finalized route verified a 9.42-second synthetic WAV
+with 471 packets and 75,360 samples. Both retained the original outside process
+handles through helper/native exit, rechecked source/runtime and continued the
+same recovery session through exactly one simulated normal-App restoration.
+The finalized case's Ready age was about 1.99 seconds and pre-begin checks took
+1.91 seconds: passing, but still close to the unchanged two-second limit. This
+does not establish dependable installed-platform timing or audible quality.
+
+An intervening finalized-case observer refused an outdated four-CPU assertion
+and closed its original process handles early. Its helper subsequently completed
+under independent supervision, but that case is not a full custody pass. The
+corrected observer ran only in a new case; the original evidence was retained.
 
 A subsequent helper-loss injection was refused by the operating system before
 signal delivery could be confirmed. Both disposable containers later stopped
