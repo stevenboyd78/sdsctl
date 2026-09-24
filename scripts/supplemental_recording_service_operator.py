@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Private schema3 request/cancel publication and consumption, not an entrypoint.
+"""Private schema3 request/cancel publication and phase join, not an entrypoint.
 
 Only the existing service owner may consume a fresh independently submitted
-notice into its original journal. No App command, native operator, recording
-authorization, new session, replayed dispatch or automatic request exists here.
-The installed helper/runtime and independent recovery remain separate gates.
+notice into its original journal. The idle coordinator may advance the ORIGINAL
+session's one-use App dispatch and pristine cancellation. No native operator,
+recording authorization, new session, replayed dispatch or automatic request
+exists here. Installed helper/runtime and independent recovery are separate gates.
 """
 
 from __future__ import annotations
@@ -366,6 +367,182 @@ class Inbox:
             os.close(self.fd)
             self.fd = -1
         self.closed = True
+
+
+class IdleCoordinator:
+    """Join explicit notices to ONE original pristine transfer/recovery session.
+
+    Construct before any request or process binding. poll() borrows the original
+    session and its independent clock tick, never the consume_operator callback.
+    At candidate idle it retains a NeverLaunchedHost BEFORE consuming cancellation.
+    An explicit durable finish routes the same session through its one-use
+    pristine recovery continuation. No launch, recording, implicit cancellation,
+    replacement reader/session, or automatic request is supplied here.
+
+    Missing or refused input cannot suppress the session's independent expiry;
+    a refused Inbox is never called again. A committed finish with a lost input
+    acknowledgement is still authoritative only after fresh journal verification.
+    Other failures are sticky and preserve caller custody/evidence. The caller
+    owns final closure and an independently enforced outer deadline: this is a
+    phase component, NOT an installed service or an unattended polling loop.
+    """
+
+    def __init__(self, inbox, transfer, session):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.finished = self.input_failed = False
+        self.cancel = self._original_cancel = None
+        try:
+            require(type(inbox) is Inbox and not inbox.failed and not inbox.closed)
+            require(type(transfer) is launch.TransferHost and not transfer.failed)
+            require(type(session) is launch.bootstrap.RecoverySession)
+            self.inbox, self.transfer, self.session = inbox, transfer, session
+            self.original, self.plan = inbox.original, inbox.plan
+            self.projected, self.journal = inbox.projected, inbox.journal
+            self.processes, self.dispatch, self.executor = (
+                session.processes,
+                session.dispatch,
+                session.executor,
+            )
+            self.objects = (
+                inbox,
+                transfer,
+                session,
+                self.original,
+                self.plan,
+                self.projected,
+                self.journal,
+                self.processes,
+                self.dispatch,
+                self.executor,
+            )
+            self.inbox_fd = inbox.fd
+            self.callbacks = self.processes.read_clock, self.dispatch.now
+            machine = self._history()
+            require(machine.state.phase == "prepared" and len(self.journal.entries) == 1)
+            require(not machine.state.processes and not machine.state.executions)
+            require(not self.processes.witnesses)
+        except BaseException as error:
+            self._fail(error)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedOperator(MESSAGE) from None
+
+    def _context(self):
+        require(not self.failed and not self.finished and self.owner == (os.getpid(), get_ident()))
+        current = (
+            self.inbox,
+            self.transfer,
+            self.session,
+            self.original,
+            self.plan,
+            self.projected,
+            self.journal,
+            self.processes,
+            self.dispatch,
+            self.executor,
+        )
+        require(all(a is b for a, b in zip(current, self.objects, strict=True)))
+        require(self.cancel is self._original_cancel)
+        require(self.original.recheck() is self.plan)
+        inbox, transfer, session = self.inbox, self.transfer, self.session
+        require(not inbox.closed and inbox.fd == self.inbox_fd)
+        require(inbox.original is self.original and inbox.plan is transfer.plan is self.plan)
+        require(inbox.projected is transfer.projected is self.projected)
+        require(inbox.journal is transfer.journal is session.journal is self.journal)
+        require(session.read == transfer.read and session.consume_operator is None)
+        require(session.processes is self.processes and session.dispatch is self.dispatch)
+        require(session.executor is self.executor and not self.processes.closed)
+        require(type(self.processes) is launch.TrackedProcesses)
+        require(type(self.dispatch) is launch.TrackedDispatch)
+        require(type(self.executor) is launch.bootstrap.Executor)
+        require(
+            self.processes.journal is self.dispatch.journal is self.executor.journal is self.journal
+        )
+        require(self.processes.docker is self.dispatch.docker is transfer.docker)
+        require(self.executor.read == session._read and self.executor.send == session._send)
+        require(
+            self.processes.read_clock is self.callbacks[0]
+            and self.dispatch.now is self.callbacks[1]
+        )
+        require(
+            self.processes.images
+            == {
+                base.NORMAL: self.plan.normal.image,
+                base.CANDIDATE: self.plan.candidate.image,
+            }
+        )
+        require(
+            (self.dispatch.image, self.dispatch.generation)
+            == (
+                self.plan.cli_image,
+                self.plan.cli_generation,
+            )
+        )
+
+    def _history(self):
+        self._context()
+        machine = launch._journal_history(
+            self.plan,
+            self.projected,
+            self.journal,
+            time.monotonic() + 2,
+        )
+        state = machine.state
+        require(state.phase in launch.TransferHost.PHASES | {"review"})
+        require(state.launch_intent_sha256 is state.authorization_generation is None)
+        require(state.ready_evidence_sha256 is state.operator_exit_sha256 is None)
+        require(state.recording_outcome == "not_attempted")
+        return machine
+
+    def _retain_idle(self, machine):
+        if machine.state.phase == "candidate_idle" and self.cancel is None:
+            self.cancel = launch.NeverLaunchedHost(self.transfer, self.session)
+            self._original_cancel = self.cancel
+        if self.cancel is not None:
+            require(type(self.cancel) is launch.NeverLaunchedHost)
+            require(self.cancel.transfer is self.transfer and self.cancel.session is self.session)
+            require(not self.cancel.recovery_attempted and not self.cancel.failed)
+
+    def poll(self, wait):
+        """One phase step; explicit cancellation runs bounded original recovery.
+
+        wait is used only by the existing cancellation continuation, with 0.25s
+        arguments and the original recovery deadline. No input is published here.
+        No terminal result except complete certifies normal restoration.
+        """
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(callable(wait))
+            machine = self._history()
+            self._retain_idle(machine)
+            if not self.input_failed and machine.state.phase in ACTIONS.values():
+                try:
+                    self.inbox.consume()
+                except UnconfirmedOperator:
+                    self.input_failed = True
+            machine = self._history()
+            if machine.state.phase == "candidate_idle" and machine.state.finish_requested:
+                require(self.cancel is not None)
+                # Mark this phase owner spent before any continuation I/O.
+                self.finished = True
+                return launch.recover_never_launched(self.cancel, wait)
+            result = self.session.poll()
+            machine = self._history()
+            require(result.phase == machine.state.phase)
+            self._retain_idle(machine)
+            if result.phase == "review":
+                self.finished = True
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
 
 
 if __name__ == "__main__":

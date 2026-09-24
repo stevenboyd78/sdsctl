@@ -2,6 +2,7 @@
 
 import copy
 import os
+from contextlib import contextmanager
 from dataclasses import asdict, replace
 from threading import Thread
 
@@ -35,9 +36,9 @@ m, b, audio = transfer_tests.m, transfer_tests.b, transfer_tests.audio
 )
 
 
-@pytest.fixture
-def cancel(transfer, monkeypatch):
-    s = transfer
+@contextmanager
+def owned_session(s, monkeypatch):
+    """One original synthetic Engine/session, before any request or dispatch."""
     previous = audio.ot.recovery_tests
     engine = previous.Host()
     engine.containers = s.host.values
@@ -93,16 +94,11 @@ def cancel(transfer, monkeypatch):
     )
     session = m.bootstrap.RecoverySession(s.journal, processes, dispatch, s.before.read)
     try:
-        s.append("request")
-        assert session.poll().phase == "stopping_normal"
-        assert session.poll().phase == "starting_candidate"
-        assert session.poll().phase == "candidate_idle"
-        s.cancel = m.NeverLaunchedHost(s.before, session)
         s.session, s.engine = session, engine
 
         def cached(docker, seal, command, generation):
             assert docker is s.docker and seal is s.plan.normal
-            assert command == s.cancel.normal_reader.command
+            assert command == session.read.__self__.normal_reader.command
             normal = s.host.values["app_" + b.NORMAL]
             assert generation == audio.h.generation(
                 normal, name="app_" + b.NORMAL, image=seal.image
@@ -116,6 +112,17 @@ def cancel(transfer, monkeypatch):
     finally:
         session.close()
     assert all(handle.closed for handle in engine.handles)
+
+
+@pytest.fixture
+def cancel(transfer, monkeypatch):
+    with owned_session(transfer, monkeypatch) as s:
+        s.append("request")
+        assert s.session.poll().phase == "stopping_normal"
+        assert s.session.poll().phase == "starting_candidate"
+        assert s.session.poll().phase == "candidate_idle"
+        s.cancel = m.NeverLaunchedHost(s.before, s.session)
+        yield s
 
 
 def finish(s):

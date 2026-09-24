@@ -2939,12 +2939,31 @@ OS error number remains an unconfirmed failure, not a lock-busy result. The
 caller still must run its independent deadline/recovery checks while input is
 absent or busy. No waiting loop or renewed time budget is introduced.
 
-These are library boundaries, **not** a service entrypoint, App dispatcher or
+`IdleCoordinator` joins these inputs to the original initial-transfer session.
+It must be constructed from the same `CasePlan`, projection, preparation-only
+journal, TransferHost and recovery session before any request or process binding.
+It never installs a `consume_operator` callback. Each step consumes eligible
+explicit input and calls the original session, retaining that session's independent
+expiry tick and one-use dispatch. At candidate idle it retains a separate pristine
+cancellation reader before accepting cancellation. A durable explicit finish
+routes the same session through `recover_never_launched`, even if the consumer's
+post-commit acknowledgement was lost; actual journal bytes are reverified first.
+
+The coordinator never retries a refused input reader. Missing, busy or refused
+input does not disable independent session expiry. Expiry enters review, not an
+invented finish or automatic restoration. Replaced/lost phase objects, changed
+plan/journal, a foreign thread or an interrupted continuation permanently refuse
+reuse. The original caller retains closure responsibility and must enforce the
+outer runtime deadline. There is no native-launch or recording branch here.
+Synthetic integration covers request publication through initial transfer,
+idle cancellation and normal restoration, lost acknowledgements, missing process
+exit and refusal to reinterpret an already authorized native launch as pristine.
+
+These are library boundaries, **not** an installed service entrypoint or
 restored-process proof. The helper graph has 54 modules; changes to the shared
 protection helper require rebuilding and independently pinning both host and
-native bundles. Local integration joins a published idle-cancel notice to the
-original never-launched recovery session; Engine and process outcomes in that
-test remain explicitly synthetic.
+native bundles. Real notice/journal files are used in the coordinator tests,
+but Engine and process outcomes remain explicitly synthetic.
 
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
