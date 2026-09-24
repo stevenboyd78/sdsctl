@@ -50,6 +50,7 @@ class Declaration:
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.lock, self.handles = Lock(), []
         self.failed = self.closed = False
+        self.startup_owner = None
         try:
             require(type(root) is type(Path()) and root.is_absolute() and root != Path("/"))
             require(1 < len(root.parts) <= 32 and ".." not in root.parts)

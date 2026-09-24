@@ -2561,6 +2561,46 @@ deadline, publishes an offer, contacts Engine, prepares a journal or grants
 recording permission. It remains an uninstalled library outside the qualified
 helper graph and command allowlist.
 
+#### Finite original-owner startup assembly
+
+The uninstalled `supplemental_recording_service_startup.Startup` connects the
+retained declaration to the tested offer/publication/acceptance components.
+Construction claims that original declaration in memory without capturing a
+clock or writing. Its one explicit `prepare()` attempt captures the continuing
+owner's actual original clock, retains its `ClockWitness`, and publishes the
+original plan. `poll()` waits only within the offer's unchanged original bound;
+it returns the same retained `CasePlan` only after separate acceptance.
+
+Missing input does not refresh the offer. Invalid input, changes in the original
+declaration, repeated preparation, premature use, substituted objects, lost
+acceptance returns or interruption fail without repair/replay. Published files
+remain preserved. A second startup object cannot claim the same declaration,
+and existing claim/plan files prevent re-publication by a newly constructed
+reader. These safeguards do not grant permission to restart a process or reuse
+a case, including after a failure before publication.
+
+The startup owner owns its clock/models/plan handles and borrows the original
+declaration. After independently qualified assembly, an `IdleService` can borrow
+the exact accepted plan and original clock; the startup owner must stay alive
+until that service has released them. Cleanup attempts original callbacks once,
+closes the original clock last, and never closes the borrowed declaration.
+The retained `CasePlan` reader also now attempts all original descriptor closes
+once when an earlier close is uncertain, rather than leaking the remaining
+handles or retrying a possibly reused descriptor. An original interruption is
+not hidden by an ordinary cleanup error.
+
+Real local subprocess tests cover independent acceptance and rejection while
+an observer holds the original process pidfd, clock and namespace evidence.
+The observer refuses to continue after that owner exits. These tests use
+temporary path aliases and explicitly synthetic Docker cgroup/App metadata;
+they do not certify an installed container, command or mount configuration.
+
+This assembly performs no Engine request, journal preparation, service/native
+launch, scanner access or recording operation. Accepted input is not readiness
+or operator approval. The full expanded source/runtime graph, finite installed
+command, supervision and actual host qualification still gate installation;
+none of the old helper commands implicitly selects this startup protocol.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

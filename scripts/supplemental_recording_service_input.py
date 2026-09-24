@@ -128,11 +128,7 @@ class CasePlan:
             self._check_directories(end)
             self._plan, self._pin = plan, pin
         except BaseException as error:
-            self._failed = True
-            self.close()
-            if not isinstance(error, Exception):
-                raise
-            raise UnconfirmedInput(MESSAGE) from None
+            self._fail(error)
 
     def _context(self, end):
         require(not self._closed and not self._failed)
@@ -200,26 +196,51 @@ class CasePlan:
             self._context(end)
             return self._plan
         except BaseException as error:
-            self._failed = True
+            self._fail(error)
+
+    def _fail(self, error):
+        self._failed = True
+        try:
             self.close()
-            if not isinstance(error, Exception):
-                raise
-            raise UnconfirmedInput(MESSAGE) from None
+        except BaseException as cleanup:
+            if isinstance(error, Exception) and not isinstance(cleanup, Exception):
+                raise cleanup
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedInput(MESSAGE) from None
 
     def close(self):
         """Release descriptors only; never remove evidence or certify anything."""
         if self._closed:
             return
         self._closed = True
-        if self._file >= 0:
-            os.close(self._file)
-            self._file = -1
-        for _, _, child, _ in reversed(self._directories):
-            os.close(child)
+        handles = [
+            self._file,
+            *(child for _, _, child, _ in reversed(self._directories)),
+            self._anchor,
+        ]
+        # Retire all owned descriptors first. An uncertain close may already
+        # have released its fd; it cannot be retried against a reused number.
+        self._file = self._anchor = -1
         self._directories.clear()
-        if self._anchor >= 0:
-            os.close(self._anchor)
-            self._anchor = -1
+        error = None
+        for fd in handles:
+            if fd < 0:
+                continue
+            try:
+                os.close(fd)
+            except BaseException as problem:
+                if (
+                    error is None
+                    or isinstance(error, Exception)
+                    and not isinstance(problem, Exception)
+                ):
+                    error = problem
+        if error is not None:
+            self._failed = True
+            if not isinstance(error, Exception):
+                raise error
+            raise UnconfirmedInput(MESSAGE) from None
 
     def __enter__(self):
         self.recheck()

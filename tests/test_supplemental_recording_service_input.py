@@ -366,3 +366,67 @@ def test_wrong_case_path_and_symlink_ancestor_never_accepted(case, monkeypatch):
 def test_invalid_arguments_do_not_open_anything(monkeypatch, root, expected):
     monkeypatch.setattr(m.os, "open", lambda *_a, **_k: pytest.fail("Invalid input opened a file"))
     denied(lambda: m.CasePlan(root, expected))
+
+
+@pytest.mark.parametrize("target", ["file", "directory", "anchor"])
+@pytest.mark.parametrize("after", [False, True])
+def test_uncertain_close_attempts_every_original_handle_once(case, monkeypatch, target, after):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    handles = [original._file, *(d[2] for d in reversed(original._directories)), original._anchor]
+    bad = {
+        "file": original._file,
+        "directory": original._directories[-1][2],
+        "anchor": original._anchor,
+    }[target]
+    actual, calls = os.close, []
+
+    def uncertain(fd):
+        calls.append(fd)
+        if fd == bad:
+            if after:
+                actual(fd)
+            raise OSError("PRIVATE close acknowledgment")
+        actual(fd)
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(m.os, "close", uncertain)
+            denied(original.close)
+            original.close()
+        assert calls == handles and original._file == original._anchor == -1
+        assert original._directories == [] and original._failed and original._closed
+    finally:
+        if not after:
+            actual(bad)  # Only test cleanup knows this fake failed before close.
+    assert descriptors() == before
+
+
+@pytest.mark.parametrize("primary", [OSError, KeyboardInterrupt, SystemExit])
+def test_cleanup_error_does_not_hide_original_interrupt_or_leak_remaining_handles(
+    case, monkeypatch, primary
+):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    actual, bad = os.close, original._file
+
+    def uncertain(fd):
+        actual(fd)
+        if fd == bad:
+            raise OSError("PRIVATE cleanup error")
+
+    def failed(*_):
+        raise primary("PRIVATE read error")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(m.os, "pread", failed)
+        patch.setattr(m.os, "close", uncertain)
+        if primary is OSError:
+            denied(original.recheck)
+        else:
+            with pytest.raises(primary):
+                original.recheck()
+    assert original._closed and descriptors() == before
+    assert (root / "plan.json").read_bytes() == plan.raw
