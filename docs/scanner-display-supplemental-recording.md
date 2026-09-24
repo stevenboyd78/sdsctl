@@ -2849,6 +2849,17 @@ independent host recovery timer. Tests cover synthetic offsets and fault cases,
 plus read-only observations of the real kernel clocks; they do not suspend the
 host or qualify an installed container's time namespace.
 
+The original service also retains a `ClockWitness` for its entire lifetime. It
+holds the actual current time-namespace descriptor, verifies both current and
+child time-namespace paths, and checks every service clock sample against both
+the original plan sample and the previous sample. Losing or replacing the
+descriptor, changing namespaces, reversing time or changing the suspend offset
+refuses further use. The witness never changes a clock or renews a deadline.
+It is owned by the original service thread and closes after the service's other
+owned resources; a replacement object cannot supply time or take over cleanup.
+This proves continuing local clock custody, not equivalence with a different
+host/native namespace, proc-mount provenance or independent outer supervision.
+
 ### Separate idle-to-operator policy
 
 `scripts/supplemental_recording_host_plan.py` now defines a distinct closed

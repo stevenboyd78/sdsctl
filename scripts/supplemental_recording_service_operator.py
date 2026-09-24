@@ -1355,14 +1355,15 @@ class RecordingPhase:
 class IdleService:
     """Finite idle-first assembly over a caller-owned ORIGINAL preparation.
 
-    Construction opens an Inbox but publishes nothing, observes no host and
-    sends no command. The original CasePlan, projection and preparation-only
+    Construction retains the local clock namespace and opens an Inbox, but
+    publishes nothing, observes no App and sends no command. The original
+    CasePlan, projection and preparation-only
     Journal must already be independently qualified. They remain borrowed and
     open for caller review. This owner assembles exactly one transfer reader,
     process tracker, dispatcher, session and coordinator; run() consumes it once.
 
     Missing/refused input still expires through the original session. Exiting
-    the loop closes only its original process handles and Inbox, never files,
+    the loop closes only its original clock/process handles and Inbox, never files,
     containers, the borrowed plan or journal. Native execution requires a
     separate explicit one-way handoff. Recording has its own explicit one-use
     handoff and finish, never an automatic request. A new object is NOT restart
@@ -1391,6 +1392,10 @@ class IdleService:
             require(type(original) is intake.CasePlan)
             self.original, self.plan = original, original.recheck()
             self.projected, self.journal, self.docker = projected, journal, docker
+            self.clock_witness = self._original_clock_witness = plans.clock.ClockWitness(
+                self.plan.original_clock
+            )
+            self._cleanup.append(self.clock_witness.close)
             self.transfer = launch.TransferHost(self.plan, projected, journal, docker)
             self.processes = launch.TrackedProcesses(
                 journal,
@@ -1435,12 +1440,16 @@ class IdleService:
             self.session,
             self.inbox,
             self.coordinator,
+            self.clock_witness,
         )
 
     def _clock(self):
         require(self.owner == (os.getpid(), get_ident()) and not self.closed and not self.failed)
         require(self.original.recheck() is self.plan)
-        observed = plans.clock.read()
+        require(self.clock_witness is self._original_clock_witness)
+        require(type(self.clock_witness) is plans.clock.ClockWitness)
+        require(self.clock_witness.original == self.plan.original_clock)
+        observed = self.clock_witness.read()
         self.plan.check_clock(observed)
         return observed.boot, observed.boottime_ns / plans.clock.NS
 

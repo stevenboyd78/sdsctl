@@ -101,6 +101,47 @@ def test_constructor_is_passive_and_borrows_original_plan_and_journal(service):
     assert not s.engine.sent
 
 
+def test_service_owns_original_clock_namespace_until_its_cleanup(service):
+    s = service
+    witness, fd = s.service.clock_witness, s.service.clock_witness.fd
+    assert witness.original is s.plan.original_clock and not witness.closed
+    assert s.service._clock()[0] == s.plan.boot
+    s.service.close()
+    assert witness.closed
+    with pytest.raises(OSError):
+        os.fstat(fd)
+    assert s.journal.fd >= 0 and s.service.original.recheck() is s.plan
+
+
+def test_service_releases_clock_after_all_later_owned_cleanup(service):
+    s = service
+    witness, observed = s.service.clock_witness, []
+
+    def later_cleanup():
+        assert not witness.closed
+        os.fstat(witness.fd)
+        observed.append(True)
+
+    s.service._cleanup.append(later_cleanup)
+    s.service.close()
+    assert observed == [True] and witness.closed
+    assert s.journal.fd >= 0 and not s.engine.sent
+
+
+def test_replacement_clock_is_not_adopted_or_closed_by_service(service):
+    s = service
+    original = s.service.clock_witness
+    replacement = m.plans.clock.ClockWitness(s.plan.original_clock)
+    try:
+        s.service.clock_witness = replacement
+        refused(s.service)
+        assert original.closed and not replacement.closed
+        os.fstat(replacement.fd)
+        assert not s.engine.sent
+    finally:
+        replacement.close()
+
+
 def test_single_owner_polls_explicit_request_cancel_and_normal_restoration(service):
     s, waits = service, []
     original_session = s.session
@@ -361,6 +402,7 @@ def test_closure_error_releases_other_resources_and_withholds_success(service):
     assert str(error.value) == m.MESSAGE and error.value.__suppress_context__
     assert s.service.failed and s.service.closed and closed == [True]
     assert s.session.processes.closed and s.inbox.closed and s.journal.fd >= 0
+    assert s.service.clock_witness.closed
     s.service.close()
     assert closed == [True] and s.service.original.recheck() is s.plan
 

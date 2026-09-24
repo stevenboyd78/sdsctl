@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import math
 import os
+import stat
 import time
 from dataclasses import dataclass
 from decimal import ROUND_FLOOR, Decimal
 from pathlib import Path
+from threading import Lock, get_ident
 from uuid import UUID
 
 NS = 1_000_000_000
@@ -133,6 +135,103 @@ def read():
         return result
     except Exception:
         raise UnconfirmedClock(MESSAGE) from None
+
+
+class ClockWitness:
+    """Continuing original-owner clock, retaining its actual namespace descriptor.
+
+    The supplied plan sample must already name this exact clock namespace. This
+    does not infer equivalence from timestamps or accept a serialized replacement
+    for the continuing owner. No namespace entry, clock adjustment or renewed
+    deadline. A separate ZeroDomain is still required for a distinct native domain.
+    """
+
+    def __init__(self, original):
+        self.owner = os.getpid(), get_ident()
+        self.lock = Lock()
+        self.fd = self._owned_fd = -1
+        self._owned_namespace = None
+        self.failed = self.closed = False
+        try:
+            require(type(original) is Window)
+            original.__post_init__()
+            self.original, self.original_pin = original, self._window(original)
+            self.path = f"/proc/{self.owner[0]}/ns/time"
+            self.children_path = f"/proc/{self.owner[0]}/ns/time_for_children"
+            end = time.monotonic() + 1
+            self.fd = self._owned_fd = os.open(self.path, os.O_RDONLY | os.O_CLOEXEC)
+            info = os.fstat(self.fd)
+            self._owned_namespace = info.st_dev, info.st_ino
+            require(stat.S_ISREG(info.st_mode))
+            self.namespace = info.st_dev, info.st_ino
+            require(self.namespace == original.namespace)
+            self._last = original
+            self._guard(end)
+            self._last = self._read(end)
+            require(time.monotonic() < end)
+        except BaseException as error:
+            self.close()
+            self._fail(error)
+
+    @staticmethod
+    def _window(value):
+        require(type(value) is Window)
+        return value.boot, value.namespace, value.before_ns, value.boottime_ns, value.after_ns
+
+    def _guard(self, deadline):
+        require(not self.failed and not self.closed and time.monotonic() < deadline)
+        require(self.owner == (os.getpid(), get_ident()))
+        require(self._window(self.original) == self.original_pin)
+        require(self.fd == self._owned_fd and self.fd >= 0)
+        require(self.path == f"/proc/{self.owner[0]}/ns/time")
+        require(self.children_path == f"/proc/{self.owner[0]}/ns/time_for_children")
+        for info in (os.fstat(self.fd), os.stat(self.path), os.stat(self.children_path)):
+            require(stat.S_ISREG(info.st_mode))
+            require((info.st_dev, info.st_ino) == self.namespace == self.original.namespace)
+        require(time.monotonic() < deadline)
+
+    def read(self):
+        return self._read(time.monotonic() + 1)
+
+    def _read(self, end):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._guard(end)
+            observed = read()
+            self.original.check_later(observed)
+            self._last.check_later(observed)
+            self._guard(end)
+            self._last = observed
+            return observed
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedClock(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        if self.closed:
+            return
+        self.closed = True
+        fd, self._owned_fd = self._owned_fd, -1
+        self.fd = -1
+        if fd >= 0:
+            try:
+                if self._owned_namespace is not None:
+                    info = os.fstat(fd)
+                    require((info.st_dev, info.st_ino) == self._owned_namespace)
+                os.close(fd)
+            except Exception as error:
+                self._fail(error)
 
 
 if __name__ == "__main__":
