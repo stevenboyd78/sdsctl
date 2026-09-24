@@ -895,6 +895,9 @@ class FinalizedHost:
     def _check_files(self, files):
         require(files.files.stage == "finalized")
 
+    def _check_file_generation(self, files):
+        require(files.files.generation == self.run.pins.generation)
+
     def read(self):
         acquired = False
         try:
@@ -924,7 +927,7 @@ class FinalizedHost:
             require(0 <= ended - started < 2)
             self._check_files(files)
             require(files.files.contract_sha256 == self.plan.candidate.contract.sha256)
-            require(files.files.generation == self.run.pins.generation)
+            self._check_file_generation(files)
             self._check_native(snapshot)
             if snapshot.candidate.state == "running":
                 require(snapshot.candidate.generation == self.run.pins.generation)
@@ -1026,6 +1029,63 @@ class PreservedHost(FinalizedHost):
         require(snapshot.candidate.state == "stopped")
 
 
+class NeverAuthorizedHost(PreservedHost):
+    """Full current host evidence for an exited, never-authorized native run.
+
+    Only the observation mechanism is shared with PreservedHost. Admission and
+    pristine/no-generation file checks are distinct. The exact original candidate
+    must be stopped; neither old Ready health nor pristine files can imply that.
+    This never permits an attempted recording to fall back to pristine recovery.
+    """
+
+    def __init__(self, reader, run):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = False
+        self.end = None
+        try:
+            require(type(reader) is worker_exit.reconcile.NeverAuthorized)
+            require(type(run) is launch.Launch)
+            self.reader, self.run, self.plan = reader, run, reader.plan
+            self.docker = run.read.docker
+            self.origins = (reader, run, self.plan, self.docker, run.read, run.qualify, run.pins)
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        reader, run = self.reader, self.run
+        require(
+            type(reader) is worker_exit.reconcile.NeverAuthorized and type(run) is launch.Launch
+        )
+        require(run.owner == self.owner and run.used and run.confirm_attempted)
+        require(run.plan is reader.plan is self.plan and run.journal is reader.journal)
+        require(run.pins is reader.pins and run.projected == reader.pins.host.projection)
+        require(type(run.read) is launch.BootstrapHost)
+        require(type(run.qualify) is launch.CandidateQualification)
+        require(type(self.docker) is plans.ordinary.Docker)
+        require(self.docker.path == "/var/run/docker.sock" and self.docker is run.qualify.docker)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (reader, run, reader.plan, run.read.docker, run.read, run.qualify, run.pins),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        reader._context()
+
+    def _check_files(self, files):
+        require(
+            files.files.stage == "pristine" and files.artifact is None and files.progress is None
+        )
+
+    def _check_file_generation(self, files):
+        require(files.files.generation is None)
+
+
 class _RestoredNormal:
     """Join a fresh normal-App cache read only after original restoration intent.
 
@@ -1116,6 +1176,10 @@ class PreservedRestoredHost(_RestoredNormal, PreservedHost):
     """Original unconfirmed recording plus fresh normal-App health, not success."""
 
 
+class NeverAuthorizedRestoredHost(_RestoredNormal, NeverAuthorizedHost):
+    """Pristine native-exited branch plus fresh normal-App health; not attempted."""
+
+
 def recover_finalized(reader, session, wait):
     """Continue the ORIGINAL recovery session after successful worker closure.
 
@@ -1154,10 +1218,32 @@ def recover_preserved(reader, run, session, wait):
     return _recover_closed(reader, run, session, wait)
 
 
+def recover_never_authorized(reader, run, session, wait):
+    """Continue the SAME session after actual native/init exits, without begin.
+
+    No fake authorization or abandoned ledger is written to enter this branch.
+    A failed/closed original observer or any recording intent requires its own
+    distinct recovery path or review. This one-shot continuation never launches
+    a candidate or extends a deadline. Installed supervision remains required.
+    """
+    require(type(reader) is worker_exit.reconcile.NeverAuthorized)
+    require(reader.owner == (os.getpid(), get_ident()) and not reader.recovery_attempted)
+    reader.recovery_attempted = True
+    reader._context()
+    return _recover_closed(reader, run, session, wait)
+
+
 def _recover_closed(reader, run, session, wait):
     """Shared continuation mechanism; entry-specific readers retain their gates."""
     require(type(session) is launch.bootstrap.RecoverySession and callable(wait))
-    require(type(reader) in (AuthorizedFinalized, worker_exit.reconcile.Preserved))
+    require(
+        type(reader)
+        in (
+            AuthorizedFinalized,
+            worker_exit.reconcile.Preserved,
+            worker_exit.reconcile.NeverAuthorized,
+        )
+    )
     require(type(run) is launch.Launch)
     journal, plan, docker = reader.journal, reader.plan, run.read.docker
     processes, dispatch, executor = session.processes, session.dispatch, session.executor
@@ -1186,15 +1272,20 @@ def _recover_closed(reader, run, session, wait):
         host = FinalizedHost(reader)
     else:
         reader._check(time.monotonic() + 2)
-        host = PreservedHost(reader, run)
+        host = (
+            NeverAuthorizedHost(reader, run)
+            if type(reader) is worker_exit.reconcile.NeverAuthorized
+            else PreservedHost(reader, run)
+        )
     restored = None
     failed = False
     try:
-        restored = (
-            RestoredHost(reader)
-            if type(host) is FinalizedHost
-            else PreservedRestoredHost(reader, host.run)
-        )
+        if type(host) is FinalizedHost:
+            restored = RestoredHost(reader)
+        elif type(host) is NeverAuthorizedHost:
+            restored = NeverAuthorizedRestoredHost(reader, host.run)
+        else:
+            restored = PreservedRestoredHost(reader, host.run)
 
         def read():
             nonlocal failed
@@ -1205,7 +1296,9 @@ def _recover_closed(reader, run, session, wait):
                 context()
                 require(session.read is read)
                 machine = host._history(end)
-                if machine.state.phase in ("candidate_running", "stopping_candidate"):
+                if machine.state.phase in ("candidate_running", "stopping_candidate") or (
+                    type(host) is NeverAuthorizedHost and machine.state.phase == "starting_operator"
+                ):
                     sample = host.read()
                 else:
                     require(machine.state.phase == "starting_normal")

@@ -29,8 +29,12 @@ directory, plan, journal, failure = files.directory, files.plan, files.journal, 
 
 @pytest.fixture
 def bridge(failure, monkeypatch):
-    c = failure
-    c.reader = files.reader(c)
+    yield from setup_bridge(failure, monkeypatch, files.reader(failure))
+
+
+def setup_bridge(c, monkeypatch, reader):
+    """Shared synthetic platform only; caller supplies its actual distinct reader."""
+    c.reader = reader
     c.normal = m.base.App(c.plan.normal.pin, "stopped")
     c.candidate = m.base.App(c.plan.candidate.pin, "stopped")
     c.native_values = True, False
@@ -295,3 +299,14 @@ def test_success_entry_never_accepts_a_preserved_recording(bridge):
     with pytest.raises(m.UnconfirmedHostBegin):
         m.recover_finalized(c.reader, c.session, c.wait)
     assert not c.reader.recovery_attempted and not c.created
+
+
+def test_never_authorized_entry_cannot_accept_an_attempted_recording(bridge):
+    c = bridge
+    for call in (
+        lambda: m.recover_never_authorized(c.reader, c.run, c.session, c.wait),
+        lambda: m.NeverAuthorizedHost(c.reader, c.run),
+    ):
+        with pytest.raises(m.UnconfirmedHostBegin):
+            call()
+        assert not c.reader.recovery_attempted and not c.created

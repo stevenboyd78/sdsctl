@@ -689,5 +689,226 @@ class Preserved:
         self.closed = True
 
 
+class NeverAuthorized:
+    """Read pristine files after native exit, without inventing a recording.
+
+    This distinct branch requires the actual retained Operator's published exit,
+    independent original init exit, a still-prepared original Ledger and empty
+    progress. It never accepts recording authorization, even when no start was
+    dispatched. Ready's former health is not current health; this reader cannot
+    supply recording=False for a running App, stop it or restore another App.
+
+    All inputs remain caller-owned. Reads replay current bytes and recheck the
+    original handles; saved evidence cannot reconstruct this object. No event,
+    completion acknowledgment, abandonment or native operation is produced.
+    """
+
+    def __init__(self, operator, ledger, journal):
+        began = time.monotonic()
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.closed = self.failed = False
+        self.recovery_attempted = False
+        self.collected = self._pristine_receipt = None
+        try:
+            require(type(operator) is Operator and type(ledger) is dispatch.binding.Ledger)
+            require(type(journal) is plans.bootstrap.Journal)
+            self.operator, self.ledger, self.journal = operator, ledger, journal
+            self.plan, self.pins = operator.plan, operator.pins
+            self.original_state = ledger.state
+            require(type(self.original_state) is dispatch.binding.State)
+            require(
+                self.original_state
+                == dispatch.binding.State(1, self.original_state.sha256, self.original_state.now)
+            )
+            self.origins = (
+                operator,
+                ledger,
+                journal,
+                self.plan,
+                self.pins,
+                operator.endpoint,
+                ledger._lock,
+            )
+            self.location, self.location_id = ledger.directory, ledger._directory_identity
+            require(self.location == self.plan.root / "recording-ledger")
+            self.journal_fd = journal.fd
+            self.journal_identity = dispatch.binding.identity(os.fstat(journal.fd))[:6]
+            self.history = tuple(plans.base.encode(e) for e in journal.entries)
+            self.collector = dispatch.binding.protected.Collector(self.pins.host.projection.host)
+            self.progress_path = self.plan.root / "recording-progress"
+            with dispatch.binding.protected._private_directory(
+                self.progress_path, exclusive=False
+            ) as fd:
+                self.progress_identity = dispatch.binding.identity(os.fstat(fd))[:6]
+            self.seal = self._values()
+            self._check(began + 2)
+            require(began <= time.monotonic() < began + 2)
+        except BaseException as error:
+            self._fail(error)
+
+    def _values(self):
+        return dispatch.binding.checksum(
+            dict(
+                plan=self.plan.sha256,
+                pins=self.pins.payload(),
+                state=asdict(self.original_state),
+                ledger=str(self.location),
+                ledger_identity=self.location_id,
+                history=[hashlib.sha256(raw).hexdigest() for raw in self.history],
+                progress_path=str(self.progress_path),
+                progress_identity=self.progress_identity,
+            )
+        )
+
+    def _context(self):
+        require(not self.closed and not self.failed and self.owner == (os.getpid(), get_ident()))
+        operator, ledger, journal = self.operator, self.ledger, self.journal
+        require(type(operator) is Operator and operator.owner == self.owner)
+        require(not operator.closed and not operator.failed and operator.publish_attempted)
+        require(type(ledger) is dispatch.binding.Ledger and not ledger._poisoned)
+        require(type(journal) is plans.bootstrap.Journal and journal.fd == self.journal_fd)
+        require(
+            all(
+                current is original
+                for current, original in zip(
+                    (
+                        operator,
+                        ledger,
+                        journal,
+                        operator.plan,
+                        operator.pins,
+                        operator.endpoint,
+                        ledger._lock,
+                    ),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        require(self.plan is operator.plan and self.pins is operator.pins)
+        require(ledger.binding == self.pins.host and ledger.state is self.original_state)
+        require(
+            ledger.directory == self.location and ledger._directory_identity == self.location_id
+        )
+        require(dispatch.binding.identity(os.fstat(journal.fd))[:6] == self.journal_identity)
+        require(type(self.collector) is dispatch.binding.protected.Collector)
+        require(self.collector.stored is self.pins.host.projection.host)
+        require(self.progress_path == self.plan.root / "recording-progress")
+        require(self._values() == self.seal)
+        if self._pristine_receipt is None:
+            require(self.collected is None)
+        else:
+            original, digest = self._pristine_receipt
+            require(self.collected is original)
+            require(dispatch.binding.checksum(asdict(original)) == digest)
+
+    def _check(self, end):
+        self._context()
+        operator, ledger, journal = self.operator, self.ledger, self.journal
+        now = operator._clock()
+        require(now < self.plan.deadlines.recover_by and time.monotonic() < end)
+        result = operator.recheck()  # Original receipt; never renew its observed_at.
+        require(operator._actors() == frozenset(ROLES))
+        machine = operator._journal(journal, end)
+        require(machine.last_at <= operator._clock() < self.plan.deadlines.recover_by)
+        state = machine.state
+        require(
+            state.phase
+            in (
+                "starting_operator",
+                "candidate_running",
+                "stopping_candidate",
+                "starting_normal",
+                "complete",
+            )
+        )
+        require(state.operator_exit_sha256 == result.sha256 and state.finish_requested)
+        require(machine.process_bound(plans.base.CANDIDATE, exited=True))
+        require(state.authorization_generation is None and state.recording_deadline == 0)
+        require(state.recording_outcome == "not_attempted" and state.files_stage == "pristine")
+        require(state.artifact_sha256 is None)
+        # Restoration pins the original pristine baseline too. That pin is not
+        # an attempted recording, retained artifact or successful completion.
+        require(
+            state.preserved_sha256
+            == (
+                self.plan.candidate.contract.baseline_sha256
+                if state.phase in ("starting_normal", "complete")
+                else None
+            )
+        )
+        entries = tuple(plans.base.encode(e) for e in journal.entries)
+        require(entries[: len(self.history)] == self.history)
+        require(all(e["event"]["kind"] != "authorize_recording" for e in journal.entries))
+        with dispatch.binding.protected._private_directory(self.location, exclusive=False) as fd:
+            require(dispatch.binding.identity(os.fstat(fd))[:6] == self.location_id)
+            require(dispatch.binding._read(fd, ledger.binding, end) == self.original_state)
+        require(
+            self.plan.original_clock.after_ns / plans.clock.NS
+            <= self.original_state.now
+            <= time.monotonic()
+        )
+        with dispatch.binding.protected._private_directory(
+            self.progress_path, exclusive=False
+        ) as fd:
+            require(dispatch.binding.identity(os.fstat(fd))[:6] == self.progress_identity)
+            require(not os.listdir(fd))  # No unacknowledged or adopted progress tail.
+        require(operator._journal(journal, end) is machine)
+        require(tuple(plans.base.encode(e) for e in journal.entries) == entries)
+        self._context()
+        require(time.monotonic() < end)
+        return machine
+
+    def read(self):
+        acquired = False
+        ledger_lock = None
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._context()
+            require(self.ledger._lock.acquire(blocking=False))
+            ledger_lock = self.ledger._lock
+            began = time.monotonic()
+            end = began + 2
+            machine = self._check(end)
+            entries = tuple(plans.base.encode(e) for e in self.journal.entries)
+            collected = self.collector.pristine()
+            require(type(collected) is dispatch.binding.protected.Collected)
+            require(
+                collected
+                == dispatch.binding.protected.Collected(
+                    dispatch.binding.protected.Files(
+                        self.plan.candidate.contract.sha256,
+                        "pristine",
+                        self.plan.candidate.contract.baseline_sha256,
+                    )
+                )
+            )
+            require(self._check(end) is machine)
+            require(tuple(plans.base.encode(e) for e in self.journal.entries) == entries)
+            require(self.collected is None or collected == self.collected)
+            require(began <= time.monotonic() < end)
+            self.collected = collected
+            self._pristine_receipt = collected, dispatch.binding.checksum(asdict(collected))
+            return collected
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if ledger_lock is not None:
+                ledger_lock.release()
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedReconciliation(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        self.closed = True
+
+
 if __name__ == "__main__":
     raise SystemExit("Private original-exit journal join only; no restoration enabled.")

@@ -2057,6 +2057,42 @@ preservation scope. That scope names possible output only: it is not a start or
 completion acknowledgment. No ledger is reopened and no missing custody is
 reconstructed from disk.
 
+Cancellation after native startup but **before recording authorization** has a
+distinct read-only evidence join: `supplemental_recording_reconcile.NeverAuthorized`.
+It requires the actual retained operator's published exit, all four original
+process handles independently showing exit, and the journaled candidate-init
+exit. The original recording ledger must still contain exactly its prepared
+entry, with no intent, acknowledgment, abandonment or progress. The journal must
+contain no recording authorization and retain the `not_attempted` outcome.
+Complete current ledger/journal bytes, original directory identities, empty
+progress and the exact unchanged recording baseline are checked on every read.
+A lost tail, changed evidence, active process or elapsed budget refuses the join;
+failure cannot be cleared by catching the exception. Reads hold the original
+ledger's nonblocking writer lock and remain bounded by two seconds without
+renewing the original recovery deadline. Closing releases no borrowed resources.
+
+This returns only pristine-file evidence, never an artifact, completion,
+current App health or a native `recording=False` assertion. It cannot justify
+stopping a still-running native process, launch a recording, or restore an App.
+It does not weaken `Preserved` or the separate never-launched cancellation path,
+and it is not yet connected to the service's native-phase transition.
+
+The separate `NeverAuthorizedHost` adapter brackets that evidence with full
+fresh host metadata and requires the **exact original candidate container** to
+remain stopped. `NeverAuthorizedRestoredHost` adds a fresh normal-App cache
+read only after durable restoration intent and checks its new process generation.
+`recover_never_authorized` consumes this continuation once using the original
+session, journal, process tracker, dispatch tracker and deadlines. The existing
+policy decides restoration; the outcome remains `not_attempted`, the prepared
+ledger remains unchanged, and no native launch or recording intent is issued.
+It can observe an already-exited run whose Ready publication was never completed;
+it cannot reconstruct missing original operator custody. A failed read remains
+failed while independent policy ticks can expire the original case. Lost command
+returns are reconciled, never replayed. Finalized/preserved entrypoints still
+refuse this reader, and this entrypoint refuses their evidence. Tests use actual
+original child pidfds and private files with explicit synthetic Engine, namespace,
+App metadata and launch bindings, not installed service or scanner qualification.
+
 All four original process handles, including candidate init, must independently
 show exit. The original operator-exit publication and candidate-init journal
 receipt are also required. The original authorization hash, start/finish limits,
