@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_recording_host_plan as fixtures
+from . import test_supplemental_recording_namespace as namespaces  # noqa: F401
 
 NAME = "supplemental_recording_service_input"
 SPEC = importlib.util.spec_from_file_location(

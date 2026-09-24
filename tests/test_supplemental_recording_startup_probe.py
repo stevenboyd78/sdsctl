@@ -197,6 +197,76 @@ def test_clock_constructor_failure_closes_retained_plan(case, monkeypatch):
     assert not case.sleeps and intake.descriptors() == before
 
 
+def foreign_plan(case, **updates):
+    value = m.plans.json.loads(case.plan.raw)
+    value["original_clock"].update(namespace=[0, 123], **updates)
+    raw = m.plans.base.encode(value)
+    (case.root / "plan.json").write_bytes(raw)
+    case.plan = m.plans.load_bytes(raw, m.plans.base.checksum(value))
+
+
+def test_foreign_plan_is_still_refused_by_default_before_any_sleep(case):
+    foreign_plan(case)
+    before = intake.descriptors()
+    with pytest.raises(m.plans.clock.UnconfirmedClock):
+        invoke(case)
+    assert not case.sleeps and intake.descriptors() == before
+
+
+def test_explicit_passive_zero_probe_never_relabels_own_samples(case, monkeypatch):
+    foreign_plan(case)
+    before = intake.descriptors()
+    raw, lease = case.plan.raw, case.plan.lease
+    actual_check = m.plans.Plan.check_clock
+
+    def strict(plan, sample):
+        assert sample.namespace == plan.original_clock.namespace
+        return actual_check(plan, sample)
+
+    monkeypatch.setattr(m.plans.Plan, "check_clock", strict)
+    assert m.startup_probe(case.root, case.plan.sha256, zero_offset_probe=True) == 75
+    assert 30 <= case.elapsed < 30.01 and intake.descriptors() == before
+    assert case.plan.raw == raw and case.plan.lease == lease
+
+
+@pytest.mark.parametrize("when", [1, 2, 4])
+def test_zero_probe_offset_failure_refuses_and_closes_handles(case, monkeypatch, when):
+    foreign_plan(case)
+    actual, calls = m.time_domain._offsets, []
+
+    def offsets(pid):
+        calls.append(pid)
+        if len(calls) == when:
+            raise m.time_domain.UnconfirmedDomain(m.time_domain.MESSAGE)
+        return actual(pid)
+
+    monkeypatch.setattr(m.time_domain, "_offsets", offsets)
+    before = intake.descriptors()
+    with pytest.raises(m.time_domain.UnconfirmedDomain):
+        m.startup_probe(case.root, case.plan.sha256, zero_offset_probe=True)
+    assert len(calls) == when and intake.descriptors() == before
+
+
+@pytest.mark.parametrize("enabled", [0, 1, "yes", None])
+def test_probe_mode_requires_an_explicit_boolean(case, enabled):
+    with pytest.raises(m.UnconfirmedInput):
+        m.startup_probe(case.root, case.plan.sha256, zero_offset_probe=enabled)
+    assert not case.sleeps
+
+
+def test_zero_probe_has_local_cap_even_with_foreign_future_numeric_clock(case):
+    value = m.plans.json.loads(case.plan.raw)
+    for name in ("before_ns", "boottime_ns", "after_ns"):
+        value["original_clock"][name] += 100 * m.plans.clock.NS
+    value["original_clock"]["namespace"] = [0, 123]
+    value["deadlines"] = {key: seconds + 100 for key, seconds in value["deadlines"].items()}
+    raw = m.plans.base.encode(value)
+    (case.root / "plan.json").write_bytes(raw)
+    case.plan = m.plans.load_bytes(raw, m.plans.base.checksum(value))
+    assert m.startup_probe(case.root, case.plan.sha256, zero_offset_probe=True) == 75
+    assert 30 <= case.elapsed < 30.02  # Not 130s; no foreign-domain success claim.
+
+
 def test_equal_but_replaced_decoded_plan_is_refused(case, monkeypatch):
     actual = m.CasePlan.recheck
     calls = []

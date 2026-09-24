@@ -27,7 +27,7 @@ PROBE_MESSAGE = "Read-only recording startup probe is unconfirmed; preserve this
 if __name__ == "__main__":
     try:
         allowed = (
-            len(sys.argv) == 3
+            (len(sys.argv) == 3 or (len(sys.argv) == 4 and sys.argv[3] == "--zero-offset-probe"))
             and sys.flags.isolated == sys.flags.dont_write_bytecode == 1
             and os.geteuid() == os.getegid() == 0
             and os.getcwd() == "/"
@@ -44,6 +44,7 @@ if __name__ == "__main__":
 try:
     import supplemental_handoff_files as files
     import supplemental_recording_host_plan as plans
+    import supplemental_recording_time_domain as time_domain
 except Exception:
     if __name__ == "__main__":
         print(PROBE_MESSAGE, file=sys.stderr)
@@ -228,7 +229,7 @@ class CasePlan:
         self.close()
 
 
-def startup_probe(root, expected_sha256):
+def startup_probe(root, expected_sha256, *, zero_offset_probe=False):
     """Hold only original read-only plan/clock handles for at most 30 seconds.
 
     The bound starts at the PLAN's original clock, not this process's startup.
@@ -237,17 +238,37 @@ def startup_probe(root, expected_sha256):
     keeping it alive or seeing exit 75 proves no readiness or restoration.
     Blocked kernel I/O still needs a separate outer process deadline. No signals
     are masked and no case can be re-armed by this function.
+
+    The explicit zero-offset variant is ONLY a passive target for a continuing
+    outside owner holding a live ZeroDomain witness. It checks its OWN actual
+    zero offsets and clock custody; it never relabels a sample as the plan's
+    domain or certifies that foreign domain. The outside owner must qualify both
+    domains. An additional local 30-second cap limits even an unqualified lease.
     """
+    require(type(zero_offset_probe) is bool)
     with CasePlan(root, expected_sha256) as original:
         plan = original.recheck()
-        clock = plans.clock.ClockWitness(plan.original_clock)
+        local = plans.clock.read() if zero_offset_probe else plan.original_clock
+        clock = plans.clock.ClockWitness(local)
         try:
             end = min(plan.lease["ready_by"], plan.lease["issued_at"] + 30)
+            if zero_offset_probe:
+                end = min(end, local.after_ns / plans.clock.NS + 30)
+                time_domain._offsets(os.getpid())
+                require(local.boot == plan.boot)
             require(clock.read().after_ns / plans.clock.NS < end)
             for _ in range(301):
                 require(original.recheck() is plan)
+                if zero_offset_probe:
+                    time_domain._offsets(os.getpid())
                 observed = clock.read()
-                plan.check_clock(observed)
+                if zero_offset_probe:
+                    # ClockWitness checks current AND child namespace identity
+                    # around the sample, so offsets describe this retained domain.
+                    time_domain._offsets(os.getpid())
+                    require(observed.boot == plan.boot)
+                else:
+                    plan.check_clock(observed)
                 remaining = end - observed.after_ns / plans.clock.NS
                 if remaining <= 0:
                     return 75
@@ -261,7 +282,7 @@ if __name__ == "__main__":
     try:
         root = Path(sys.argv[1])
         require(str(root) == sys.argv[1] and root.is_absolute() and ".." not in root.parts)
-        code = startup_probe(root, sys.argv[2])
+        code = startup_probe(root, sys.argv[2], zero_offset_probe=len(sys.argv) == 4)
     except Exception:
         print(PROBE_MESSAGE, file=sys.stderr)
         raise SystemExit(75) from None

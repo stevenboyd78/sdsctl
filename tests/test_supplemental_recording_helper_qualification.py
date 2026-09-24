@@ -41,6 +41,7 @@ def configuration_pin(container, environment):
 
 @pytest.fixture
 def helper(supervised, image, configured, monkeypatch):
+    monkeypatch.setattr(m.time_domain, "ROOT_UID", os.geteuid())
     product = supervised.root / m.plans.fixed.PACKAGE
     helpers = supervised.root / m.HelperQualification.HELPER
     for root, names in (
@@ -354,6 +355,114 @@ def test_original_worker_choice_is_immutable(helper):
     helper.obj.runtime_workers = 2
     denied(helper.obj)
     assert helper.reads == 0
+
+
+@pytest.mark.parametrize("fault", ["boot", "namespace"])
+@pytest.mark.parametrize("when", ["constructor", "call"])
+def test_foreign_clock_refuses_before_any_engine_read(helper, monkeypatch, fault, when):
+    actual = m.plans.clock.read
+
+    def foreign():
+        value = actual()
+        return replace(value, **({"boot": "b" * 32} if fault == "boot" else {"namespace": (0, 1)}))
+
+    monkeypatch.setattr(m.plans.clock, "read", foreign)
+    if when == "constructor":
+        launch.denied(helper.make)
+    else:
+        denied(helper.obj)
+    assert helper.reads == helper.images == 0 and helper.witness.fd >= 0
+
+
+def explicit_probe(helper, domain, **overrides):
+    command = (
+        *helper.args["command"][:3],
+        "/opt/sdsctl-recording-host/supplemental_recording_service_input.py",
+        *helper.args["command"][4:],
+        "--zero-offset-probe",
+    )
+    helper.container["Args"] = list(command[1:])
+    helper.container["Config"]["Entrypoint"] = [command[0]]
+    helper.container["Config"]["Cmd"] = list(command[1:])
+    helper.command_fault = b"\0".join(value.encode() for value in command) + b"\0"
+    return helper.make(
+        **(
+            dict(
+                command=command,
+                zero_domain=domain,
+                configuration_sha256=configuration_pin(
+                    helper.container, helper.plan.helper.environment
+                ),
+            )
+            | overrides
+        )
+    )
+
+
+def test_explicit_passive_probe_borrows_live_domain_until_original_exit(helper):
+    domain = m.time_domain.ZeroDomain(helper.plan.original_clock, helper.witness)
+    try:
+        obj = explicit_probe(helper, domain)
+        assert obj() is None and 0 <= obj.elapsed_seconds < 2
+        assert obj.zero_domain is domain and not domain.closed
+        assert helper.witness.fd >= 0 and not helper.witness.exited()
+        domain.close()
+        denied(obj)
+        assert helper.witness.fd >= 0  # Caller ownership remains separate.
+    finally:
+        if not domain.closed:
+            domain.close()
+
+
+@pytest.mark.parametrize("fault", ["missing", "serialized", "flag", "module", "extra", "short"])
+def test_zero_probe_requires_exact_opt_in_and_original_live_proof(helper, fault):
+    domain = m.time_domain.ZeroDomain(helper.plan.original_clock, helper.witness)
+    try:
+        if fault == "missing":
+            launch.denied(lambda: explicit_probe(helper, None))
+        elif fault == "serialized":
+            launch.denied(lambda: explicit_probe(helper, asdict(domain.evidence)))
+        else:
+            obj = explicit_probe(helper, domain)
+            command = list(obj.command)
+            if fault == "flag":
+                command[-1] = "--relax-clocks"
+            elif fault == "module":
+                command[3] = "/opt/sdsctl-recording-host/supplemental_recording_service_operator.py"
+            elif fault == "extra":
+                command.append("extra")
+            else:
+                command.pop()
+            launch.denied(lambda: helper.make(command=tuple(command), zero_domain=domain))
+        assert helper.reads == 0 and not domain.closed
+    finally:
+        domain.close()
+
+
+@pytest.mark.parametrize("fault", ["replace", "digest", "closed", "original", "target"])
+def test_live_domain_cannot_be_substituted_or_rebased(helper, fault):
+    domain = m.time_domain.ZeroDomain(helper.plan.original_clock, helper.witness)
+    other = None
+    try:
+        obj = explicit_probe(helper, domain)
+        if fault == "replace":
+            other = m.time_domain.ZeroDomain(helper.plan.original_clock, helper.witness)
+            obj.zero_domain = other
+        elif fault == "digest":
+            obj.domain_sha256 = "0" * 64
+        elif fault == "closed":
+            domain.close()
+        elif fault == "original":
+            domain.original = replace(domain.original, namespace=(0, 1))
+        else:
+            domain.init = replace(domain.init, start_ticks=domain.init.start_ticks + 1)
+        denied(obj)
+        assert helper.reads == 0 and helper.witness.fd >= 0
+    finally:
+        if not domain.closed:
+            domain.close()
+        if other is not None:
+            other.close()
 
 
 @pytest.mark.parametrize("when", [1, 2])

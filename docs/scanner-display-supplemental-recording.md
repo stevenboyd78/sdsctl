@@ -2347,6 +2347,38 @@ synthetic plan does not qualify an installed service or authorize restoration.
 Docker and native host time domains must be checked explicitly; never relabel a
 host clock sample to match a container or infer equivalence from nearby times.
 
+An isolated HAOS combined attempt exposed why the original owner must remain
+alive: its preparation container had exited before the helper and independent
+observer started. The observer then correctly refused the plan's foreign clock
+domain before the combined source/runtime check. A subsequently matching numeric
+namespace inode is not evidence that the original namespace survived. That case
+was preserved without retry; the original probe exited naturally with no App or
+recording operation.
+
+For **passive probes only**, the explicit `--zero-offset-probe` flag allows the
+target to retain its own local `ClockWitness` and check its actual zero offsets
+before and after each observation. It never changes a namespace ID in a clock
+sample, validates the foreign plan's domain, or publishes readiness. Both the
+original numeric lease cap and an additional local 30-second cap apply; expiry
+still returns75. The ordinary invocation retains its strict same-domain rule.
+The flag is not available to the recording service or any App command.
+
+The independent `HelperQualification` accepts this seven-argument passive
+command only when its continuing original-plan owner explicitly supplies a live
+`ZeroDomain` for that exact helper process. It retains the object/digest, checks
+the original plan clock, exact helper identity and both zero-offset domains on
+every guard, and never closes caller-owned handles. Missing, serialized,
+substituted, changed or expired evidence refuses before it can authorize anything.
+No timeout or domain mismatch selects this path automatically. The original
+two-second qualification limit remains unchanged. Separate containers need not
+share time namespaces; Linux documents their offsets and when those offsets
+become immutable in [time_namespaces(7)](https://man7.org/linux/man-pages/man7/time_namespaces.7.html).
+
+This is an opt-in helper-observation harness, **not installed service startup**.
+A real launcher still needs continuing plan/clock ownership, independent
+supervision and a qualified service entrypoint. App plan fields in isolated
+helper tests may be explicitly synthetic; they cannot authorize a live handoff.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside

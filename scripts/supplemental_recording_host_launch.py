@@ -28,6 +28,7 @@ import supplemental_recording_normal_read as normal_read
 import supplemental_recording_probe_exec as probe_exec
 import supplemental_recording_ready as received
 import supplemental_recording_runtime as runtime
+import supplemental_recording_time_domain as time_domain
 from supplemental_handoff_host import TrackedDispatch
 from supplemental_handoff_recovery import TrackedProcesses
 
@@ -932,6 +933,11 @@ class HelperQualification:
     supervision, or the helper's own continuing clock domain. Those remain
     separate installation gates. A
     read-only Docker socket mount DOES NOT restrict Engine API authority.
+
+    The explicit seven-argument passive probe additionally requires a live
+    caller-owned ZeroDomain for this exact process and original plan clock.
+    This never relaxes ordinary command/domain checks or enables a service;
+    the caller must be the continuing original clock owner, not a later driver.
     """
 
     MAX_SECONDS = 2.0
@@ -951,6 +957,7 @@ class HelperQualification:
         hostname,
         architecture,
         runtime_workers=1,
+        zero_domain=None,
     ):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed, self.elapsed_seconds = False, None
@@ -964,16 +971,24 @@ class HelperQualification:
             plans.text(hostname, r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,62}[A-Za-z0-9])?")
             require(architecture in ("amd64", "arm64"))
             require(type(runtime_workers) is int and runtime_workers in (1, 2))
-            require(type(command) is tuple and len(command) == 6)
+            require(zero_domain is None or type(zero_domain) is time_domain.ZeroDomain)
+            require(type(command) is tuple and len(command) == (6 if zero_domain is None else 7))
             require(all(type(part) is str for part in command))
             require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
             require(
                 command[3]
                 in {str(Path("/") / self.HELPER / name) for name in helper_source.HELPER_FILES}
-                and command[4:] == (str(plan.root), plan.sha256)
+                and command[4:6] == (str(plan.root), plan.sha256)
             )
+            if zero_domain is not None:
+                require(
+                    command[3]
+                    == "/opt/sdsctl-recording-host/supplemental_recording_service_input.py"
+                    and command[6] == "--zero-offset-probe"
+                )
             self.plan, self.witness, self.docker = plan, witness, docker
-            self.objects = plan, witness, docker
+            self.zero_domain = zero_domain
+            self.objects = plan, witness, docker, zero_domain
             self.init, self.fd = witness.identity, witness.fd
             self.fd_identity = runtime.identity(os.fstat(self.fd))
             self.generation, self.command = generation, command
@@ -981,6 +996,7 @@ class HelperQualification:
             self.image_environment_sha256 = image_environment_sha256
             self.timezone, self.hostname, self.architecture = timezone, hostname, architecture
             self.runtime_workers = runtime_workers
+            self.domain_sha256 = None if zero_domain is None else zero_domain.refresh().sha256
             self.original = self._pins()
             self._guard(min(time.monotonic() + self.MAX_SECONDS, plan.lease["ready_by"]))
         except BaseException as error:
@@ -998,6 +1014,7 @@ class HelperQualification:
             self.hostname,
             self.architecture,
             (type(self.runtime_workers), self.runtime_workers),
+            self.domain_sha256,
         )
 
     def _guard(self, deadline):
@@ -1007,7 +1024,9 @@ class HelperQualification:
             all(
                 current is original
                 for current, original in zip(
-                    (self.plan, self.witness, self.docker), self.objects, strict=True
+                    (self.plan, self.witness, self.docker, self.zero_domain),
+                    self.objects,
+                    strict=True,
                 )
             )
         )
@@ -1024,6 +1043,12 @@ class HelperQualification:
             engine.dispatch.process.read_identity(self.init.pid, self.init.container_id)
             == self.init
         )
+        if self.zero_domain is not None:
+            require(type(self.zero_domain) is time_domain.ZeroDomain)
+            proof = self.zero_domain.refresh()
+            require(proof.sha256 == self.domain_sha256)
+            require(proof.init == self.init and proof.original_clock == self.plan.original_clock)
+            require(proof.host_time == self.plan.original_clock.namespace)
         observed = plans.clock.read()
         self.plan.check_clock(observed)
         require(observed.boottime_ns / plans.clock.NS < self.plan.deadlines.ready_by)
