@@ -850,9 +850,10 @@ class HelperQualification:
     original live witness remains caller-owned. A replacement, late observation
     or failed read permanently consumes this instance; nothing is launched.
 
-    This checks Engine-declared confinement, not effective kernel namespace,
-    capability or seccomp enforcement, independent supervision, or the helper's
-    own continuing clock domain. Those are separate installation gates. A
+    This checks Engine-declared confinement and actual proc privilege state,
+    not namespace provenance or the seccomp filter's contents, independent
+    supervision, or the helper's own continuing clock domain. Those remain
+    separate installation gates. A
     read-only Docker socket mount DOES NOT restrict Engine API authority.
     """
 
@@ -1131,6 +1132,16 @@ class HelperQualification:
         require(raw == b"\0".join(part.encode("ascii") for part in self.command) + b"\0")
         self._guard(deadline)
 
+    def _kernel(self, deadline):
+        self._guard(deadline)
+        result = runtime.collect_helper_kernel(
+            self.witness, deadline=min(deadline, time.monotonic() + 1)
+        )
+        require(type(result) is runtime.HelperKernel and result.process == self.init)
+        base.digest(result.sha256)
+        self._guard(deadline)
+        return result
+
     def __call__(self):
         """No cached report or action authority; every successful call is fresh."""
         acquired = False
@@ -1142,6 +1153,7 @@ class HelperQualification:
             deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
             self._guard(deadline)
             root, driver, configured = self._metadata(deadline)
+            kernel_before = self._kernel(deadline)
             self._command(deadline)
             before = self._environment(configured, deadline)
             source = helper_source.Layout(root / plans.fixed.PACKAGE, root / self.HELPER)
@@ -1154,6 +1166,12 @@ class HelperQualification:
             source.verify(self.plan.helper.source)
             self._guard(deadline)
             after = self._environment(configured, deadline)
+            kernel_after = self._kernel(deadline)
+            require(
+                (kernel_before.sha256, kernel_before.process)
+                == (kernel_after.sha256, kernel_after.process)
+            )
+            require(began <= kernel_before.observed_at <= kernel_after.observed_at < deadline)
             self._command(deadline)
             require((before.sha256, before.process) == (after.sha256, after.process))
             require(began <= before.observed_at <= after.observed_at < deadline)

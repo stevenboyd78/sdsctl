@@ -1,4 +1,4 @@
-"""Actual files/environ/pidfd; synthetic Engine, cgroup, command and HAOS paths.
+"""Actual files/environ/pidfd; synthetic Engine, kernel profile and HAOS paths.
 
 No helper is launched or installed. No App/Engine/scanner operations. Declared
 confinement and effective kernel enforcement remain distinct evidence.
@@ -10,7 +10,7 @@ import io
 import subprocess
 import sys
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -209,6 +209,19 @@ def helper(supervised, image, configured, monkeypatch):
             return supervised.root, stamp, values
 
         monkeypatch.setattr(m.HelperQualification, "_metadata", metadata)
+        state.kernels, state.kernel_fault = 0, None
+
+        def kernel(original, *, deadline):
+            assert original is witness and time.monotonic() < deadline
+            state.kernels += 1
+            result = m.runtime.HelperKernel("6" * 64, witness.identity, time.monotonic())
+            if state.kernel_fault:
+                result = state.kernel_fault(state.kernels, result)
+            return result
+
+        # The effective privilege collector is tested separately with actual
+        # proc descriptors. This unprivileged join fixture supplies its result.
+        monkeypatch.setattr(m.runtime, "collect_helper_kernel", kernel)
         args = dict(
             generation=m.plans.ordinary.generation(
                 container, name=container["Name"][1:], image=plan.helper.image
@@ -252,6 +265,7 @@ def test_fresh_full_helper_join_returns_no_authority_and_keeps_original_handle(h
     assert (helper.reads, helper.images, helper.command_reads) == (2, 2, 2)
     assert helper.obj() is None
     assert (helper.reads, helper.images, helper.command_reads) == (4, 4, 4)
+    assert helper.kernels == 4
     assert helper.witness.fd == fd and not helper.witness.exited()
     assert capsys.readouterr() == ("", "")
 
@@ -287,6 +301,28 @@ def test_original_worker_choice_is_immutable(helper):
     helper.obj.runtime_workers = 2
     denied(helper.obj)
     assert helper.reads == 0
+
+
+@pytest.mark.parametrize("when", [1, 2])
+@pytest.mark.parametrize("fault", ["fail", "none", "identity", "timestamp", "changed"])
+def test_required_original_kernel_observations_cannot_be_fabricated_or_drift(helper, when, fault):
+    def changed(count, result):
+        if count != when:
+            return result
+        if fault == "fail":
+            raise m.runtime.UnconfirmedRuntime(m.runtime.MESSAGE)
+        if fault == "none":
+            return None
+        if fault == "identity":
+            return replace(
+                result, process=replace(result.process, start_ticks=result.process.start_ticks + 1)
+            )
+        if fault == "timestamp":
+            return replace(result, observed_at=0)
+        return replace(result, sha256="7" * 64)
+
+    helper.kernel_fault = changed
+    denied(helper.obj)
 
 
 def test_successful_check_is_not_cached_after_file_change(helper):

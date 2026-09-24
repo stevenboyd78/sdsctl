@@ -386,6 +386,167 @@ def _collect_process_environment(witness, deadline, compare, profile):
                 raise UnconfirmedRuntime(MESSAGE) from None
 
 
+def helper_kernel_profile(status, uid_map, gid_map, *, process):
+    """Pure Linux privilege comparison, not proof that supplied bytes are kernel data.
+
+    Exact root identities, an unnested host PID view, no tracer, no-new-privileges,
+    and ONLY DAC_READ_SEARCH/SYS_PTRACE in permitted/effective/bounding sets.
+    Seccomp filter mode/count is checked, not the contents of the filter policy.
+    Container/source/mount/namespace provenance and original pidfd custody must
+    be independently retained by the collector. No relaxation for test users.
+    """
+    try:
+        require(type(process) is processes.ProcessIdentity)
+        process.__post_init__()
+        require(type(status) is bytes and 0 < len(status) <= 16384)
+        keys = frozenset(
+            (
+                "State",
+                "Tgid",
+                "Pid",
+                "TracerPid",
+                "Uid",
+                "Gid",
+                "NSpid",
+                "CapInh",
+                "CapPrm",
+                "CapEff",
+                "CapBnd",
+                "CapAmb",
+                "NoNewPrivs",
+                "Seccomp",
+                "Seccomp_filters",
+            )
+        )
+        values = {}
+        for line in status.decode("ascii").splitlines():
+            key, separator, value = line.partition(":")
+            if key in keys:
+                require(separator == ":" and key not in values)
+                values[key] = value.split()
+        require(set(values) == keys)
+        require(values["State"] and values["State"][0] in ("R", "S", "I"))
+        for key in ("Tgid", "Pid", "NSpid"):
+            require(values[key] == [str(process.pid)])
+        require(values["Uid"] == values["Gid"] == ["0"] * 4)
+        require(values["TracerPid"] == ["0"] and values["NoNewPrivs"] == ["1"])
+        mask = (1 << 2) | (1 << 19)  # Linux CAP_DAC_READ_SEARCH / CAP_SYS_PTRACE.
+        for key in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"):
+            require(len(values[key]) == 1 and re.fullmatch(r"[0-9a-f]{16}", values[key][0]))
+            require(int(values[key][0], 16) == (0 if key in ("CapInh", "CapAmb") else mask))
+        require(values["Seccomp"] == ["2"])
+        filters = values["Seccomp_filters"]
+        require(len(filters) == 1 and re.fullmatch(r"[1-9][0-9]?", filters[0]))
+        require(1 <= int(filters[0]) <= 64)
+        for raw in (uid_map, gid_map):
+            require(type(raw) is bytes and 0 < len(raw) <= 256 and raw.endswith(b"\n"))
+            require(
+                [line.split() for line in raw.decode("ascii").splitlines()]
+                == [["0", "0", "4294967295"]]
+            )
+        # Running/sleeping is transient; all security fields must remain exact.
+        values.pop("State")
+        return checksum(
+            {
+                "schema": 1,
+                "kind": KIND + "-helper-kernel-profile",
+                "pid": process.pid,
+                "start_ticks": process.start_ticks,
+                "container_id": process.container_id,
+                "status": values,
+                "uid_map": [0, 0, 4294967295],
+                "gid_map": [0, 0, 4294967295],
+            }
+        )
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+
+
+@dataclass(frozen=True)
+class HelperKernel:
+    sha256: str
+    process: processes.ProcessIdentity
+    observed_at: float
+
+
+def collect_helper_kernel(witness, *, deadline):
+    """Two security snapshots through original proc files and an original pidfd.
+
+    No process discovery, signals, privilege changes, filter installation or
+    namespace entry. Original descriptor and inode identities bracket both reads.
+    Volatile status counters are ignored, never required security fields. At most
+    one original second; independent supervision must still bound kernel stalls.
+    The caller owns the pidfd and must preserve it even on an unconfirmed result.
+    """
+    opened = []
+    try:
+        require(type(witness) is processes.ProcessWitness and os.geteuid() == ROOT_UID)
+        require(type(deadline) in (int, float) and math.isfinite(deadline))
+        started = time.monotonic()
+        require(0 < deadline - started <= 1)
+        original, original_fd = witness.identity, witness.fd
+        require(type(original) is processes.ProcessIdentity)
+        require(type(original_fd) is int and original_fd >= 0)
+        fd_identity = identity(os.fstat(original_fd))
+
+        def check():
+            require(time.monotonic() < deadline)
+            require(witness.identity == original and witness.fd == original_fd)
+            require(identity(os.fstat(original_fd)) == fd_identity and not witness.exited())
+            require(processes.read_identity(original.pid, original.container_id) == original)
+            require(time.monotonic() < deadline and not witness.exited())
+
+        check()
+        for name, limit in (("status", 16384), ("uid_map", 256), ("gid_map", 256)):
+            check()
+            path = f"/proc/{original.pid}/{name}"
+            fd = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK)
+            # Retain before any fallible stat so refusal cannot leak a descriptor.
+            opened.append((fd, path, limit, None))
+            info = os.fstat(fd)
+            require(stat.S_ISREG(info.st_mode) and info.st_uid == ROOT_UID)
+            opened[-1] = (fd, path, limit, identity(info))
+
+        def read():
+            values = []
+            for fd, path, limit, info in opened:
+                check()
+                require(identity(os.stat(path, follow_symlinks=False)) == info)
+                os.lseek(fd, 0, os.SEEK_SET)
+                raw = bytearray()
+                while True:
+                    require(time.monotonic() < deadline)
+                    chunk = os.read(fd, limit + 1 - len(raw))
+                    if not chunk:
+                        break
+                    raw.extend(chunk)
+                    require(len(raw) <= limit)
+                require(identity(os.fstat(fd)) == info)
+                values.append(bytes(raw))
+            check()
+            return helper_kernel_profile(*values, process=original)
+
+        first = read()
+        require(read() == first)
+        for fd, path, _, info in opened:
+            require(
+                identity(os.fstat(fd)) == identity(os.stat(path, follow_symlinks=False)) == info
+            )
+        check()
+        return HelperKernel(first, original, started)
+    except Exception:
+        raise UnconfirmedRuntime(MESSAGE) from None
+    finally:
+        failed_close = False
+        for fd, *_ in reversed(opened):
+            try:
+                os.close(fd)
+            except Exception:
+                failed_close = True
+        if failed_close:
+            raise UnconfirmedRuntime(MESSAGE) from None
+
+
 def _resolve(path, entries):
     """Resolve only inventoried lexical links, never follow a filesystem link."""
     pending, seen = path.split("/"), set()

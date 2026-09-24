@@ -2557,8 +2557,9 @@ the separate helper pins to an independently captured original process and
 Engine incarnation. The trusted launcher supplies the exact command and a
 separately reconstructed fingerprint of the complete container configuration;
 the collector never learns expected values from the object it is checking.
-It checks the original process command and credential-free startup bytes before
-and after full helper/product source and timezone-inclusive runtime reads.
+It checks the original process command, credential-free startup bytes and
+effective Linux privilege state before and after full helper/product source
+and timezone-inclusive runtime reads.
 Source is rechecked after runtime inspection. A successful call returns no
 report or action authority, and subsequent calls cannot reuse its observations.
 
@@ -2575,13 +2576,28 @@ extra writable paths or credentials are accepted. **A read-only Engine socket
 mount does not restrict Engine API authority.** The helper remains trusted
 administrative code, never a browser-facing API.
 
+`collect_helper_kernel()` retains the original pidfd and three bounded proc
+file descriptors while reading two security snapshots. It requires exact root
+UID/GID values, an unnested PID view, identity UID/GID maps, no tracer,
+`NoNewPrivs=1`, only `DAC_READ_SEARCH`/`SYS_PTRACE` in the effective, permitted
+and bounding capability sets, empty ambient/inheritable capabilities, and
+seccomp filter mode with a bounded positive filter count. The count must remain
+unchanged, but this is **not proof of the filter policy's contents**. Process
+identity and proc-file identities bracket both reads; changing/exited processes,
+replaced files or late reads refuse. Only collector-owned descriptors are closed;
+the caller keeps its original pidfd. Nonsecurity counters and running/sleeping
+transitions are allowed without masking required security fields. The collector
+has one absolute one-second bound and cannot interrupt blocked kernel I/O itself.
+
 The whole read keeps the original two-second maximum and readiness deadline.
 Unexpected settings, changed bytes/identities, lost handles or late reads are
 sticky failures. Tests use actual source/runtime/proc-environment reads and an
-owned pidfd with explicitly synthetic Engine, cgroup, command-line and host-path
-fixtures. This checks Engine-declared settings, not effective kernel namespace,
-capability/seccomp enforcement, independent supervision, or a continuing helper
-clock-domain witness. Those remain separate gates; no installed entrypoint or
+owned pidfd with explicitly synthetic Engine, kernel-profile, command-line and
+host-path fixtures. Separate kernel-collector tests use actual descriptors and
+an original owned pidfd with synthetic accepted proc bytes/cgroup routing; an
+actual unprivileged child is correctly refused. These checks do not establish
+namespace provenance, seccomp policy contents, independent supervision, or a
+continuing helper clock-domain witness. Those remain separate gates; no installed entrypoint or
 existing live service selects this collector. Its accepted command shape does
 not make any library module a usable service or authorize its execution.
 
