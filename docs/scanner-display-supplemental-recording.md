@@ -2809,6 +2809,29 @@ they do not establish installed platform or real native-container readiness.
 
 ## Required live ownership and recovery contract
 
+The uninstalled `PreHandoffHost` collector now provides one complete current
+sample before ownership transfer. Its constructor is passive. Reading requires
+the exact original normal-App generation, independently sealed source/options/
+profile and unchanged recordings, a pristine candidate recording baseline,
+the pinned Core/CLI/installed versions, idle Supervisor jobs, stopped other
+scanner owners and the qualified RTP mapping. Only the fixed cached normal-App
+health reader may run; its healthy and recording-idle result must be confirmed.
+
+An existing candidate container, even exited, is refused before any cached App
+read. It is not deleted, restarted or treated as a fresh case. Unknown health,
+normal generation changes, lost reads, altered plan/projection objects and
+late observations permanently consume the collector. Successful instances are
+also single-use. The complete sample retains the earliest observation time,
+with the unchanged two-second limit in both clock domains. No journal, operator
+notice, App command, process handle or recovery permission is created.
+
+This current preflight sample does **not** replace the original preparation
+observation or reset `issued_at`. The original sealed baseline and bootstrap
+journal, fresh local operator request, actual helper/runtime qualification and
+independent recovery session still have to be assembled. The 53-module source
+graph is unchanged in membership; helper source bytes/pins change with the new
+collector, so earlier image results do not qualify the new bundle.
+
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
 checks the normal App's full seal and original generation, the distinct candidate

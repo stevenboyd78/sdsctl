@@ -20,6 +20,7 @@ from pathlib import Path
 from threading import Event, Lock, Thread, current_thread, get_ident
 
 import supplemental_recording_idle_observer as idle_module
+import supplemental_recording_normal_read as normal_read
 import supplemental_recording_probe_exec as probe_exec
 import supplemental_recording_ready as received
 import supplemental_recording_runtime as runtime
@@ -38,6 +39,148 @@ class UnconfirmedHostLaunch(ValueError):
 def require(value):
     if not value:
         raise UnconfirmedHostLaunch(MESSAGE)
+
+
+class PreHandoffHost:
+    """One current normal-running/candidate-absent sample, before any transfer.
+
+    Joins the complete existing host observer, original pristine recording
+    manifest and a fixed cached normal-App read. Construction is passive. This
+    does not create the plan's ORIGINAL baseline or replace its issued_at; that
+    separately sealed preparation observation is still required by the journal.
+
+    Only the exact original normal generation may receive the cached read. An
+    existing candidate container, even exited, refuses rather than becoming a
+    new case. No native candidate request, scanner command, journal/notice write,
+    App start/stop, process acquisition or recovery authorization exists here.
+    Expected-input provenance, actual helper/source/runtime and independent
+    supervision are separate gates. Every instance is single-use, including
+    failures; callers must not turn that API property into automatic retries.
+    """
+
+    def __init__(self, plan, projected, docker):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.used = False
+        self.normal_reader = None
+        try:
+            self.plan_pin = plans.PinnedPlan(plan)
+            plan.check_projection(projected)
+            require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
+            self.plan, self.projected, self.docker = plan, projected, docker
+            self.objects = plan, projected, docker
+            self.original = plan.raw, projected.sha256
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        require(not self.failed and self.owner == (os.getpid(), get_ident()))
+        require(
+            all(
+                current is original
+                for current, original in zip(
+                    (self.plan, self.projected, self.docker), self.objects, strict=True
+                )
+            )
+        )
+        self.plan_pin.check(self.plan)
+        self.plan.check_projection(self.projected)
+        require((self.plan.raw, self.projected.sha256) == self.original)
+        require(
+            type(self.docker) is plans.ordinary.Docker
+            and self.docker.path == "/var/run/docker.sock"
+        )
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(now < self.plan.deadlines.ready_by)
+        return observed.boot, now
+
+    def _candidate_absent(self):
+        indexed = plans.ordinary.container_index(self.docker.containers())
+        require("/app_" + base.CANDIDATE not in indexed)
+
+    def _native(self, slug, generation):
+        self._guard()
+        require(slug == base.NORMAL and generation == self.plan.normal_generation)
+        require(type(self.normal_reader) is normal_read.Sample)
+        return self.normal_reader.read(slug, generation)
+
+    def _observer(self):
+        plan = self.plan
+        layouts = {item.slug: item for item in plan.layouts}
+        collector = plans.host.FilesCollector(
+            layouts[base.NORMAL],
+            layouts[base.CANDIDATE],
+            plans.host.recording.Collector(self.projected.host),
+            lambda: plans.host.Capture("pristine"),
+        )
+        supervisor = plans.ordinary.SupervisorReads(
+            self.docker, image=plan.cli_image, incarnation=plan.cli_generation
+        )
+        return plans.host.HostObserver(
+            self.docker,
+            supervisor,
+            seals=(plan.normal, plan.candidate),
+            installed_versions=dict(plan.installed_versions),
+            other_scanner_apps=frozenset(plan.other_scanner_apps),
+            core_image=plan.core_image,
+            core_generation=plan.core_generation,
+            core_version=plan.core_version,
+            read_clock=self._guard,
+            collect_files=collector,
+            read_native=self._native,
+            network=plans.ordinary.AUDIO_NETWORK,
+        )
+
+    def read(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(not self.used)
+            self.used = True
+            started = time.monotonic()
+            boot, began = self._guard()
+            self._candidate_absent()
+            self.normal_reader = normal_read.Sample(self.plan, self.docker)
+            reader = self.normal_reader
+            sample = self._observer().read()
+            require(type(sample) is bootstrap.recovery.Sample)
+            self._candidate_absent()
+            end_boot, ended = self._guard()
+            require(boot == end_boot == sample.boot_id)
+            require(began <= sample.observation.sampled_at <= sample.now <= ended)
+            require(0 <= ended - began < 2 and 0 <= time.monotonic() - started < 2)
+            require(self.normal_reader is reader and reader.used and not reader.failed)
+            observed = sample.observation
+            require(
+                observed.normal
+                == base.App(
+                    self.plan.normal.pin, "running", self.plan.normal_generation, True, False
+                )
+            )
+            require(observed.candidate == base.App(self.plan.candidate.pin, "stopped"))
+            require(observed.jobs_idle and observed.core_running and observed.other_owners_stopped)
+            require(
+                observed.files
+                == bootstrap.recording.Files(
+                    self.plan.candidate.contract.sha256,
+                    "pristine",
+                    self.plan.candidate.contract.baseline_sha256,
+                )
+            )
+            return bootstrap.recovery.Sample(boot, ended, replace(observed, sampled_at=began))
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostLaunch(MESSAGE) from None
 
 
 class BootstrapHost:
