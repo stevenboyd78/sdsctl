@@ -23,6 +23,7 @@ from supplemental_handoff_host import object_json
 plans, base = intake.plans, intake.plans.base
 MAX_AGE, MAX_BYTES = 30, 1024
 ACTIONS = {"request": "prepared", "cancel_idle": "candidate_idle"}
+IDLE_POLL_LIMIT = base.TOTAL_SECONDS * 4 + 1
 MESSAGE = "Recording operator input is unconfirmed; preserve the case and do not resubmit."
 
 
@@ -543,6 +544,150 @@ class IdleCoordinator:
         finally:
             if acquired:
                 self.lock.release()
+
+
+class IdleService:
+    """Finite idle-only assembly over a caller-owned ORIGINAL preparation.
+
+    Construction opens an Inbox but publishes nothing, observes no host and
+    sends no command. The original CasePlan, projection and preparation-only
+    Journal must already be independently qualified. They remain borrowed and
+    open for caller review. This owner assembles exactly one transfer reader,
+    process tracker, dispatcher, session and coordinator; run() consumes it once.
+
+    Missing/refused input still expires through the original session. Exiting
+    the loop closes only its original process handles and Inbox, never files,
+    containers, the borrowed plan or journal. There is no native/recording route
+    or automatic request/finish. A new object is NOT restart permission.
+
+    This is not an installed entrypoint. Root/confinement, source/runtime pins,
+    independent outer supervision and original custody after helper loss must
+    be qualified by the eventual host launcher, not inferred from this loop.
+    """
+
+    def __init__(self, original, projected, journal, docker):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.used = self.closed = False
+        self._cleanup = []
+        try:
+            require(type(original) is intake.CasePlan)
+            self.original, self.plan = original, original.recheck()
+            self.projected, self.journal, self.docker = projected, journal, docker
+            self.transfer = launch.TransferHost(self.plan, projected, journal, docker)
+            self.processes = launch.TrackedProcesses(
+                journal,
+                docker,
+                images={
+                    base.NORMAL: self.plan.normal.image,
+                    base.CANDIDATE: self.plan.candidate.image,
+                },
+                read_clock=self._clock,
+            )
+            # Capture the ORIGINAL resources, not a later replaceable session
+            # attribute. Even refusal during construction must release these.
+            self._cleanup.append(self.processes.close)
+            self.dispatch = launch.TrackedDispatch(
+                journal,
+                docker,
+                cli_image=self.plan.cli_image,
+                cli_generation=self.plan.cli_generation,
+                now=self._now,
+            )
+            self.session = launch.bootstrap.RecoverySession(
+                journal, self.processes, self.dispatch, self.transfer.read
+            )
+            self.inbox = Inbox(original, projected, journal)
+            self._cleanup.append(self.inbox.close)
+            self.coordinator = IdleCoordinator(self.inbox, self.transfer, self.session)
+            self.objects = self._objects()
+        except BaseException as error:
+            self.close()
+            self._fail(error)
+
+    def _objects(self):
+        return (
+            self.original,
+            self.plan,
+            self.projected,
+            self.journal,
+            self.docker,
+            self.transfer,
+            self.processes,
+            self.dispatch,
+            self.session,
+            self.inbox,
+            self.coordinator,
+        )
+
+    def _clock(self):
+        require(self.owner == (os.getpid(), get_ident()) and not self.closed and not self.failed)
+        require(self.original.recheck() is self.plan)
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        return observed.boot, observed.boottime_ns / plans.clock.NS
+
+    def _now(self):
+        return self._clock()[1]
+
+    def _context(self):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        require(all(a is b for a, b in zip(self._objects(), self.objects, strict=True)))
+        require(self.coordinator.session is self.session and self.coordinator.inbox is self.inbox)
+        require(self.coordinator.transfer is self.transfer)
+        require(self.original.recheck() is self.plan)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedOperator(MESSAGE) from None
+
+    def run(self, wait):
+        """One finite loop; wait receives only the existing 0.25s interval.
+
+        The caller must bound wait and all host I/O independently. Only a
+        complete policy result certifies restoration. Review, interruption or
+        the defensive poll ceiling preserve evidence, never invent recovery.
+        """
+        acquired = entered = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(self.owner == (os.getpid(), get_ident()) and not self.used)
+            self.used = entered = True
+            require(callable(wait))
+            for _ in range(IDLE_POLL_LIMIT):
+                self._context()
+                result = self.coordinator.poll(wait)
+                if result.phase in ("complete", "review"):
+                    return result
+                wait(0.25)
+            self._context()
+            return launch.bootstrap.recovery.dispatch.Result(
+                self.journal.machine.state.phase, "poll_limit_unconfirmed"
+            )
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            try:
+                if entered:
+                    self.close()
+            finally:
+                if acquired:
+                    self.lock.release()
+
+    def close(self):
+        """Original owner only; release owned descriptors, preserve borrowed evidence."""
+        require(self.owner == (os.getpid(), get_ident()))
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            with ExitStack() as stack:
+                for callback in self._cleanup:
+                    stack.callback(callback)
+        except BaseException as error:
+            self._fail(error)
 
 
 if __name__ == "__main__":

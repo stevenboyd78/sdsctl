@@ -2965,6 +2965,30 @@ protection helper require rebuilding and independently pinning both host and
 native bundles. Real notice/journal files are used in the coordinator tests,
 but Engine and process outcomes remain explicitly synthetic.
 
+`IdleService` now assembles that idle-only graph from the original `CasePlan`,
+projection, preparation-only journal and Docker adapter. Construction is passive
+apart from retaining the Inbox descriptor: it neither observes the host nor
+publishes input or sends commands. Its single-use `run()` polls the same
+coordinator/session, using the existing 0.25-second interval, original phase and
+recovery deadlines, and a finite defensive iteration ceiling. The ceiling is an
+unconfirmed outcome, not a successful restoration. Explicit request and
+cancellation still come from the separate publisher; expiry never invents them.
+
+Success, review, interruption and refusal release the assembly's original Inbox
+and process handles. The caller's original plan and journal remain open, and all
+files remain intact. Even replaced component attributes cannot redirect cleanup
+away from the original owned handles. A foreign thread cannot run or close the
+owner; partial-construction and closure failures are sanitized, preserve evidence
+and cannot grant a successful result or retry. Creating another instance is not
+permission to reopen or resume a consumed case.
+
+This finite library owner is still **not** an installed schema3 entrypoint. It
+does not authenticate its own input digests, check installed confinement or
+source/runtime, establish independent external supervision, or support native
+launch/recording. Those host-launcher and containerized/platform checks remain
+required. Assembly tests use real private files and explicit synthetic
+Engine/process/cache fixtures, not Home Assistant or scanner acceptance.
+
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
 checks the normal App's full seal and original generation, the distinct candidate

@@ -37,7 +37,7 @@ m, b, audio = transfer_tests.m, transfer_tests.b, transfer_tests.audio
 
 
 @contextmanager
-def owned_session(s, monkeypatch):
+def owned_session(s, monkeypatch, create_session=None):
     """One original synthetic Engine/session, before any request or dispatch."""
     previous = audio.ot.recovery_tests
     engine = previous.Host()
@@ -79,20 +79,25 @@ def owned_session(s, monkeypatch):
         s.plan.check_clock(value)
         return value.boot, value.boottime_ns / m.plans.clock.NS
 
-    processes = m.TrackedProcesses(
-        s.journal,
-        s.docker,
-        images={b.NORMAL: s.plan.normal.image, b.CANDIDATE: s.plan.candidate.image},
-        read_clock=clock,
-    )
-    dispatch = m.TrackedDispatch(
-        s.journal,
-        s.docker,
-        cli_image=s.plan.cli_image,
-        cli_generation=s.plan.cli_generation,
-        now=lambda: clock()[1],
-    )
-    session = m.bootstrap.RecoverySession(s.journal, processes, dispatch, s.before.read)
+    if create_session is None:
+        processes = m.TrackedProcesses(
+            s.journal,
+            s.docker,
+            images={b.NORMAL: s.plan.normal.image, b.CANDIDATE: s.plan.candidate.image},
+            read_clock=clock,
+        )
+        dispatch = m.TrackedDispatch(
+            s.journal,
+            s.docker,
+            cli_image=s.plan.cli_image,
+            cli_generation=s.plan.cli_generation,
+            now=lambda: clock()[1],
+        )
+        session = m.bootstrap.RecoverySession(s.journal, processes, dispatch, s.before.read)
+    else:
+        # The service factory creates the ONLY session. No discarded temporary
+        # owner or reconstructed process tracker precedes the test's real join.
+        session = create_session()
     try:
         s.session, s.engine = session, engine
 
