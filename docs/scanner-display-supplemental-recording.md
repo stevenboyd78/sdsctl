@@ -2087,6 +2087,24 @@ Home Assistant restoration evidence. The installed entrypoint, independent
 service supervision and full containerized/platform qualification remain
 required before another physical/audio acceptance window.
 
+A fresh local supervised preservation trial also passed on 2026-09-24. After
+an actual native start and pinned active-file checkpoint, the host deliberately
+closed completion transport and abandoned the original ledger without accepting
+a completion reply. The original retained worker handles and exact Engine exec
+confirmed exit; the original init lease subsequently expired and its pidfd exit
+was separately journaled. Two full `PreservedHost` checks then passed in about
+0.62 seconds each. Even though the operator exited with code zero, the result
+remained retained files with no artifact or acknowledgment and an unconfirmed
+recording outcome. No restart, deletion or retry was used.
+
+This trial ran under an independent local systemd bound, using host-venv Python,
+network-isolated synthetic scanner/audio peers and explicitly synthetic
+installed metadata/path aliases. A separately built immutable helper image also
+passed actual read-only/network-isolated source, import-origin and complete
+interpreter verification. These are separate results, not a claim that the
+recording/recovery service has been assembled or qualified inside that image.
+No physical scanner, Home Assistant instance or Pi was changed by these checks.
+
 Integrated offline tests exercise the actual journal, policy, dispatch tracking
 and loop across candidate stop, normal start and health verification, with
 explicitly synthetic host, cached-state, Engine and init-exit evidence. They
