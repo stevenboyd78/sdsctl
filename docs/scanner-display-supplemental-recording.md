@@ -2676,6 +2676,20 @@ zero-offset namespace proof, but correctly refused the formerly all-`rprivate`
 policy at the data mount before source qualification. That failed case is
 preserved and is not a passing combined-read or installed-service result.
 
+The helper configuration fingerprint uses a separate version2 domain. It sorts
+only the already validated observed `Mounts` list by unique destination; every
+mount field, the requested `HostConfig.Mounts` order, and all other configuration
+fields remain pinned. Docker may reorder observed mounts at startup. On this
+cgroup-v2 profile, the running helper must explicitly report
+`OomKillDisable: null`, consistent with Docker [discarding the unsupported option
+on cgroup v2](https://docs.docker.com/engine/containers/runmetrics/#running-docker-on-cgroup-v2).
+A launcher must independently seal that expected startup value before start;
+the collector never converts an observed `false` or learns a replacement pin.
+Missing, false or true runtime values refuse, even with a matching supplied hash.
+The original version1 fingerprint cannot substitute for version2. A separate
+fresh passive case exposed these startup transitions and was preserved as a
+refusal, not counted as completed helper qualification.
+
 `collect_helper_kernel()` retains the original pidfd and three bounded proc
 file descriptors while reading two security snapshots. It requires exact root
 UID/GID values, an unnested PID view, identity UID/GID maps, no tracer,

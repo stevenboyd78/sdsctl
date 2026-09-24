@@ -30,11 +30,11 @@ CID = "9" * 64
 def configuration_pin(container, environment):
     return m.base.checksum(
         dict(
-            schema=1,
-            kind="finite-recording-helper-configuration-v1",
+            schema=2,
+            kind="finite-recording-helper-configuration-v2",
             config=container["Config"] | {"Env": environment},
             host=container["HostConfig"],
-            mounts=container["Mounts"],
+            mounts=sorted(container["Mounts"], key=lambda item: item["Destination"]),
         )
     )
 
@@ -191,6 +191,7 @@ def helper(supervised, image, configured, monkeypatch):
                 Memory=512 * 1024 * 1024,
                 MemorySwap=1024 * 1024 * 1024,
                 PidsLimit=64,
+                OomKillDisable=None,
                 CapDrop=["ALL"],
                 CapAdd=["CAP_DAC_READ_SEARCH", "CAP_SYS_PTRACE"],
                 SecurityOpt=["no-new-privileges"],
@@ -352,6 +353,60 @@ def test_platform_label_disable_is_explicitly_pinned_not_implicitly_adopted(help
         )()
         is None
     )
+
+
+def test_observed_mount_order_may_change_without_discarding_any_field(helper):
+    helper.container["Mounts"].reverse()
+    assert helper.obj() is None
+    helper.container["Mounts"][0]["EngineFutureField"] = "PRIVATE"
+    denied(helper.obj)
+
+
+def test_requested_mount_order_remains_part_of_configuration_pin(helper):
+    helper.container["HostConfig"]["Mounts"].reverse()
+    denied(helper.obj)
+
+
+@pytest.mark.parametrize("value", [False, True, 0, 1, "false", "", []])
+def test_started_oom_disable_must_be_explicit_null_even_with_new_pin(helper, value):
+    helper.container["HostConfig"]["OomKillDisable"] = value
+    denied(
+        helper.make(
+            configuration_sha256=configuration_pin(helper.container, helper.plan.helper.environment)
+        )
+    )
+
+
+def test_started_oom_disable_cannot_be_missing(helper):
+    del helper.container["HostConfig"]["OomKillDisable"]
+    denied(
+        helper.make(
+            configuration_sha256=configuration_pin(helper.container, helper.plan.helper.environment)
+        )
+    )
+
+
+def test_created_false_value_is_not_normalized_to_runtime_null(helper):
+    expected = copy.deepcopy(helper.container)
+    expected["HostConfig"]["OomKillDisable"] = False
+    denied(
+        helper.make(
+            configuration_sha256=configuration_pin(expected, helper.plan.helper.environment)
+        )
+    )
+
+
+def test_legacy_unordered_configuration_pin_is_not_a_v2_pin(helper):
+    old = m.base.checksum(
+        dict(
+            schema=1,
+            kind="finite-recording-helper-configuration-v1",
+            config=helper.container["Config"] | {"Env": helper.plan.helper.environment},
+            host=helper.container["HostConfig"],
+            mounts=helper.container["Mounts"],
+        )
+    )
+    denied(helper.make(configuration_sha256=old))
 
 
 def test_explicit_data_propagation_needs_independent_configuration_pin(helper):

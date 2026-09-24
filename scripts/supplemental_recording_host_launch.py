@@ -1163,6 +1163,10 @@ class HelperQualification:
             "Memory": 512 * 1024 * 1024,
             "MemorySwap": 1024 * 1024 * 1024,
             "PidsLimit": 64,
+            # HAOS/cgroup-v2 startup discards this unsupported option. The
+            # launcher must pin that explicit expected startup value before
+            # start, not copy the later observed setting into a new pin.
+            "OomKillDisable": None,
         }
         require(
             all(
@@ -1196,11 +1200,14 @@ class HelperQualification:
         # also covers unknown Engine settings: no observation becomes a default.
         stamp = base.checksum(
             {
-                "schema": 1,
-                "kind": "finite-recording-helper-configuration-v1",
+                "schema": 2,
+                "kind": "finite-recording-helper-configuration-v2",
                 "config": config | {"Env": self.plan.helper.environment},
                 "host": host,
-                "mounts": container["Mounts"],
+                # Engine's observed mount list is unordered and can change
+                # ordering at startup. _mounts already requires unique exact
+                # targets; preserve EVERY field, not merely selected values.
+                "mounts": sorted(container["Mounts"], key=lambda item: item["Destination"]),
             }
         )
         require(stamp == self.configuration_sha256)
