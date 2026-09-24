@@ -2535,6 +2535,39 @@ That test uses synthetic App/contract data and a temporary path alias, not an
 installed helper or real App handoff. The writer also remains outside the
 qualified helper image and its command allowlist.
 
+#### Observer-side clock comparison for a service-owned plan
+
+The uninstalled `supplemental_recording_service_clock_link.ObserverClock`
+models the reverse ownership direction needed by this startup protocol. The
+continuing service owns the plan's original clock; an independent observer
+retains its **own** original `ClockWitness`, the actual target process identity,
+and a live `ZeroDomain` retaining both namespace descriptors and the target's
+original pidfd. Equal numeric timestamps alone are never sufficient.
+
+Each bounded read brackets two original observer-clock observations with live
+kernel-domain checks. The exact original plan, clock, target and domain objects
+and evidence digest are rechecked, including after the final I/O boundary. The
+comparison requires the original boot, the separately verified namespace
+identities, forward time, overlapping suspend-offset intervals and the plan's
+unchanged readiness deadline. Zero namespace offsets do not mean that BOOTTIME
+equals MONOTONIC: both still include the same accumulated suspend difference.
+Linux describes those separate offsets in
+[time_namespaces(7)](https://man7.org/linux/man-pages/man7/time_namespaces.7.html).
+
+The returned sample remains explicitly in the **observer's** namespace. No
+sample is relabeled, no namespace is entered, no clock is adjusted, and the
+service's ordinary strict `Plan.check_clock` rule remains unchanged. Refusal is
+sticky; closing this comparison model leaves both borrowed witnesses with their
+caller. A real-local-child test exercises retained kernel handles on one host;
+synthetic different-domain tests do not certify distinct container namespaces.
+
+This comparison does not authenticate who produced a serialized service sample.
+Trusted source/runtime/command/template provenance, original process custody,
+independent supervision and actual distinct-container qualification remain
+separate requirements. It is not selected by the existing helper qualifier,
+command allowlist or installed service. The older observer-owned-clock probe
+qualification cannot stand in for this new service-owned-clock protocol.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
