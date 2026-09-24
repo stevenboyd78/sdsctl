@@ -41,6 +41,47 @@ def require(value):
         raise UnconfirmedHostLaunch(MESSAGE)
 
 
+def _verified_history(plan, projected, journal, end):
+    """Fresh original journal bytes and pure replay; no action is returned."""
+    base.clock(end)
+    require(time.monotonic() < end <= min(time.monotonic() + 2, plan.lease["stop_by"]))
+    require(type(journal) is bootstrap.Journal and journal.path == plan.root / "journal")
+    journal.check_directory()
+    machine = journal.replayed(end)
+    entries = tuple(base.encode(entry) for entry in journal.entries)
+    require(0 < len(journal.entries) <= journal.max_events)
+    require(
+        sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
+    )
+    for index, expected in enumerate(entries):
+        name = journal.name(index)
+        info = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
+        require(info.st_uid == os.geteuid() and info.st_mode & 0o7777 == 0o600)
+        raw = binding.protected.evidence.read_bytes(
+            journal.fd, name, limit=base.MAX_BYTES, deadline=end
+        )
+        require(raw == expected)
+        require(
+            binding.identity(os.stat(name, dir_fd=journal.fd, follow_symlinks=False))
+            == binding.identity(info)
+        )
+    journal.check_directory()
+    require(sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(entries))])
+    require(tuple(base.encode(entry) for entry in journal.entries) == entries)
+    require(journal.replayed(end) is machine)
+    require(time.monotonic() < end)
+    require(type(machine) is bootstrap.Machine)
+    require(
+        base.encode(journal.entries[0]["event"])
+        == base.encode(plan.preparation(machine.baseline, projected))
+    )
+    require((machine.case_id, machine.boot_id) == (plan.case, plan.boot))
+    require(machine.created_at == plan.deadlines.issued_at)
+    require(machine.hard_deadline == plan.deadlines.recover_by)
+    require(machine.bootstrap == plan.bootstrap and machine.contract == plan.candidate.contract)
+    return machine
+
+
 class PreHandoffHost:
     """One current normal-running/candidate-absent sample, before any transfer.
 
@@ -181,6 +222,112 @@ class PreHandoffHost:
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedHostLaunch(MESSAGE) from None
+
+
+class TransferHost(PreHandoffHost):
+    """Current pristine host observations during the ORIGINAL initial transfer.
+
+    Unlike the one-use preflight, this reader supports successive observations
+    while the same journal advances from prepared to candidate_idle. Each read
+    uses fresh complete host/files/cache evidence and original journal bytes.
+    An uncertain read permanently fails this instance; it cannot be reset.
+
+    Candidate native health and recording state remain UNKNOWN. Only the
+    original RecoverySession may bind init/CLI receipts and advance the policy;
+    Idle and Launch must independently qualify the candidate before any exec.
+    No notice, journal event, stop/start, scanner command or process acquisition
+    is performed here. This is not a post-launch or restoration reader.
+    """
+
+    PHASES = frozenset(
+        ("prepared", "requested", "stopping_normal", "starting_candidate", "candidate_idle")
+    )
+
+    def __init__(self, plan, projected, journal, docker):
+        super().__init__(plan, projected, docker)
+        try:
+            require(type(journal) is bootstrap.Journal)
+            require(journal.path == plan.root / "journal" and journal.fd >= 0)
+            self.journal = self.original_journal = journal
+            self.journal_fd = journal.fd
+            self.journal_identity = runtime.identity(os.fstat(journal.fd))[:5]
+            self.machine = None
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        observed = super()._guard()
+        require(self.journal is self.original_journal and type(self.journal) is bootstrap.Journal)
+        require(self.journal.fd == self.journal_fd)
+        require(runtime.identity(os.fstat(self.journal_fd))[:5] == self.journal_identity)
+        return observed
+
+    def _history(self, end):
+        self._guard()
+        machine = _verified_history(self.plan, self.projected, self.journal, end)
+        state = machine.state
+        require(state.phase in self.PHASES)
+        require(state.launch_intent_sha256 is None and state.ready_evidence_sha256 is None)
+        require(state.authorization_generation is None and state.operator_exit_sha256 is None)
+        require(not state.finish_requested)
+        if state.phase in ("prepared", "requested", "stopping_normal"):
+            self._candidate_absent()
+        return machine
+
+    def _native(self, slug, generation):
+        if slug == base.NORMAL:
+            return super()._native(slug, generation)
+        self._guard()
+        require(slug == base.CANDIDATE and self.machine is self.journal.machine)
+        require(self.machine.state.phase in ("starting_candidate", "candidate_idle"))
+        recorded = self.machine.state.candidate_generation
+        require(recorded is None or recorded == generation)
+        # Explicitly no candidate cache/exec/claim read. This is not idle proof.
+        return plans.ordinary.NativeState(generation, None, None)
+
+    def read(self):
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            began = time.monotonic()
+            boot, started = self._guard()
+            end = min(began + 2, self.plan.lease["ready_by"])
+            self.machine = machine = self._history(end)
+            entries = tuple(base.encode(entry) for entry in self.journal.entries)
+            self.normal_reader = normal_read.Sample(self.plan, self.docker)
+            reader = self.normal_reader
+            sample = self._observer().read()
+            require(type(sample) is bootstrap.recovery.Sample)
+            require(self._history(end) is machine)
+            require(tuple(base.encode(entry) for entry in self.journal.entries) == entries)
+            require(self.normal_reader is reader and not reader.failed)
+            observed = sample.observation
+            if observed.normal.state == "running":
+                require(observed.normal.generation == self.plan.normal_generation)
+            if observed.candidate.state == "running":
+                require(machine.state.phase in ("starting_candidate", "candidate_idle"))
+                recorded = machine.state.candidate_generation
+                require(recorded is None or observed.candidate.generation == recorded)
+                require(observed.candidate.healthy is None and observed.candidate.recording is None)
+            require(
+                observed.files
+                == bootstrap.recording.Files(
+                    self.plan.candidate.contract.sha256,
+                    "pristine",
+                    self.plan.candidate.contract.baseline_sha256,
+                )
+            )
+            end_boot, ended = self._guard()
+            require(boot == sample.boot_id == end_boot)
+            require(started <= observed.sampled_at <= sample.now <= ended)
+            require(0 <= ended - started < 2 and began <= time.monotonic() < end)
+            return bootstrap.recovery.Sample(boot, ended, replace(observed, sampled_at=started))
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
 
 
 class BootstrapHost:
@@ -879,44 +1026,7 @@ class Launch:
         retained begin may instead supply the original stop bound, never a new
         readiness window. This routine itself grants no launch/begin permission.
         """
-        base.clock(end)
-        require(time.monotonic() < end <= min(time.monotonic() + 2, self.plan.lease["stop_by"]))
-        journal, plan = self.journal, self.plan
-        require(type(journal) is bootstrap.Journal and journal.path == plan.root / "journal")
-        journal.check_directory()
-        machine = journal.replayed(end)
-        entries = tuple(base.encode(entry) for entry in journal.entries)
-        require(0 < len(journal.entries) <= journal.max_events)
-        require(
-            sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
-        )
-        for index, expected in enumerate(entries):
-            name = journal.name(index)
-            info = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
-            require(info.st_uid == os.geteuid() and info.st_mode & 0o7777 == 0o600)
-            raw = binding.protected.evidence.read_bytes(
-                journal.fd, name, limit=base.MAX_BYTES, deadline=end
-            )
-            require(raw == expected)
-            require(
-                binding.identity(os.stat(name, dir_fd=journal.fd, follow_symlinks=False))
-                == binding.identity(info)
-            )
-        journal.check_directory()
-        require(sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(entries))])
-        require(tuple(base.encode(entry) for entry in journal.entries) == entries)
-        require(journal.replayed(end) is machine)
-        require(time.monotonic() < end)
-        require(type(machine) is bootstrap.Machine)
-        require(
-            base.encode(journal.entries[0]["event"])
-            == base.encode(plan.preparation(machine.baseline, self.projected))
-        )
-        require((machine.case_id, machine.boot_id) == (plan.case, plan.boot))
-        require(machine.created_at == plan.deadlines.issued_at)
-        require(machine.hard_deadline == plan.deadlines.recover_by)
-        require(machine.bootstrap == plan.bootstrap and machine.contract == plan.candidate.contract)
-        return machine
+        return _verified_history(self.plan, self.projected, self.journal, end)
 
     def _guard(self, phase):
         require(not self.closed and not self.failed and self.owner == (os.getpid(), get_ident()))

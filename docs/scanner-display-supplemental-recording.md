@@ -2832,6 +2832,33 @@ independent recovery session still have to be assembled. The 53-module source
 graph is unchanged in membership; helper source bytes/pins change with the new
 collector, so earlier image results do not qualify the new bundle.
 
+`TransferHost` supplies the successive, freshly collected observations between
+the original prepared journal and `candidate_idle`. It retains the same plan,
+projection, Docker object and journal descriptor. Each observation brackets the
+full host/pristine-file read with the actual original journal bytes and pure
+replay; it never substitutes a reconstructed journal or newer preparation
+baseline. The original two-second freshness and ready bounds remain unchanged.
+
+The normal App may receive only a fresh fixed cache read for its original
+generation. Candidate native health and recording state remain unknown: this
+reader never executes a candidate probe or claims that a running container is
+a ready daemon. The original recovery session must join init and CLI receipts;
+subsequent Idle/Launch qualification is still required. Existing candidates
+before the start intent, changed generations, missing exits, altered journals,
+concurrent reads and uncertain transport cannot create new dispatch authority.
+Changed protected fingerprints and busy-job facts remain visible to policy.
+
+This reader does not append journal events, submit operator notices or send App
+commands. Only the existing executor consumes fresh policy intents, including
+its second pre-dispatch observation. A failed read permanently consumes the
+reader; successful reads may continue only within the initial transfer phases.
+Operator authorization ends this reader's scope. Post-launch observation,
+never-launched restoration, service entrypoint assembly and installed-host
+qualification remain separate work. Local integration tests join one original
+RecoverySession through normal stop and candidate idle with explicit synthetic
+Engine/process receipts, including lost stop replies and missing exit proof;
+they are not installed App or actual pidfd qualification.
+
 The private schema3 plan can construct an initial bootstrap-journal event only
 from its original qualified observation and retained host/native projection. It
 checks the normal App's full seal and original generation, the distinct candidate
