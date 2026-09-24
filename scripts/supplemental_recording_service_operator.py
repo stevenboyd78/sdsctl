@@ -546,6 +546,179 @@ class IdleCoordinator:
                 self.lock.release()
 
 
+class IdleCandidate:
+    """Read-only candidate resources borrowed from the STILL RUNNING idle owner.
+
+    This is not a phase transition, native launch, successful qualification or
+    recording approval. The service's one explicit preparation attempt retains
+    its ORIGINAL candidate witness/session/journal and creates only Idle,
+    BootstrapHost and CandidateQualification readers. No new init process is
+    acquired or rebound, no Engine action is sent, and no journal event is appended.
+
+    Construction reads actual idle/proc/clock evidence. Complete host and runtime
+    qualification still belongs to the separate readers; this object cannot
+    substitute for it. Any supplied ZeroDomain remains caller-owned. close()
+    discards only this owner's reader and closes its duplicate idle descriptors,
+    not the service's original witness, journal, plan or clock-domain handles.
+    """
+
+    def __init__(
+        self,
+        service,
+        *,
+        image_environment_sha256,
+        timezone,
+        hostname,
+        architecture,
+        runtime_workers=1,
+        zero_domain=None,
+    ):
+        self.owner = (os.getpid(), get_ident())
+        self.failed = self.closed = False
+        self._cleanup = []
+        try:
+            require(type(service) is IdleService)
+            require(service.candidate_attempted and service.candidate is None)
+            self.service = service
+            service._context()
+            self.coordinator = service.coordinator
+            machine = self._phase()
+            self.witness = self.coordinator.cancel.candidate_witness
+            require(type(self.witness) is launch.engine.dispatch.process.ProcessWitness)
+            self.record = self.coordinator.cancel.candidate_record
+            self.fd = self.witness.fd
+            self.fd_identity = intake.files.identity(os.fstat(self.fd))
+            self.zero_domain = zero_domain
+            entries = tuple(base.encode(e) for e in service.journal.entries)
+            self._custody(machine)
+            self.idle = launch.idle_module.Idle(
+                service.plan, self.witness, self.record.generation, zero_domain=zero_domain
+            )
+            self._cleanup.append(self.idle.close)
+            self.reader = launch.BootstrapHost(
+                service.plan, service.projected, self.idle, self.witness, service.docker
+            )
+            self._cleanup.append(self.reader.discard)
+            self.qualifier = launch.CandidateQualification(
+                service.plan,
+                self.idle,
+                self.witness,
+                service.docker,
+                image_environment_sha256=image_environment_sha256,
+                timezone=timezone,
+                hostname=hostname,
+                architecture=architecture,
+                runtime_workers=runtime_workers,
+            )
+            self.objects = (
+                service,
+                self.coordinator,
+                self.witness,
+                self.record,
+                self.idle,
+                self.reader,
+                self.qualifier,
+                zero_domain,
+            )
+            self.profile = self.qualifier._pins()
+            self.recheck()
+            require(tuple(base.encode(e) for e in service.journal.entries) == entries)
+        except BaseException as error:
+            self.close()
+            self._fail(error)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedOperator(MESSAGE) from None
+
+    def _phase(self):
+        require(not self.closed and not self.failed and self.owner == (os.getpid(), get_ident()))
+        service = self.service
+        service._context()
+        require(service.used and service.lock.locked() and service.candidate_attempted)
+        require(service.coordinator is self.coordinator and not self.coordinator.input_failed)
+        machine = self.coordinator._history()
+        require(machine.state.phase == "candidate_idle" and not machine.state.finish_requested)
+        require(self.coordinator.cancel is not None and not self.coordinator.cancel.failed)
+        require(not self.coordinator.cancel.recovery_attempted)
+        observed = plans.clock.read()
+        service.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(
+            machine.last_at <= now < min(machine.state.deadline, service.plan.deadlines.ready_by)
+        )
+        require(time.monotonic() < service.plan.lease["ready_by"])
+        return machine
+
+    def _custody(self, machine):
+        cancel = self.coordinator.cancel
+        require(cancel.candidate_witness is self.witness and cancel.candidate_record is self.record)
+        require(self.service.processes.witnesses.get(base.CANDIDATE) is self.witness)
+        require(machine.process_bound(base.CANDIDATE, exited=False))
+        require(machine.execution_closed("starting_candidate"))
+        require(machine.state.candidate_generation == self.record.generation)
+        require(
+            self.witness.identity
+            == launch.runtime.processes.ProcessIdentity(
+                self.record.pid, self.record.start_ticks, self.record.container_id
+            )
+        )
+        require(self.witness.fd == self.fd)
+        require(intake.files.identity(os.fstat(self.fd)) == self.fd_identity)
+        require(not self.witness.exited())
+
+    def recheck(self):
+        """Original live custody only; None is NOT source/runtime readiness."""
+        try:
+            require(
+                all(
+                    a is b
+                    for a, b in zip(
+                        (
+                            self.service,
+                            self.coordinator,
+                            self.witness,
+                            self.record,
+                            self.idle,
+                            self.reader,
+                            self.qualifier,
+                            self.zero_domain,
+                        ),
+                        self.objects,
+                        strict=True,
+                    )
+                )
+            )
+            machine = self._phase()
+            self._custody(machine)
+            require(not self.idle.failed and not self.idle.closed)
+            require(self.idle.plan is self.service.plan and self.idle.init == self.witness.identity)
+            require(self.idle.generation == self.record.generation)
+            require(self.idle.zero_domain is self.zero_domain)
+            for reader in (self.reader, self.qualifier):
+                require(not reader.failed and reader.plan is self.service.plan)
+                require(reader.idle is self.idle and reader.witness is self.witness)
+                require(reader.docker is self.service.docker and reader.fd == self.fd)
+            require(self.reader.projected is self.service.projected)
+            require(self.reader.pending is None and self.qualifier._pins() == self.profile)
+        except BaseException as error:
+            self._fail(error)
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        if self.closed:
+            return
+        self.closed = True
+        try:
+            with ExitStack() as stack:
+                for callback in self._cleanup:
+                    stack.callback(callback)
+        except BaseException as error:
+            self._fail(error)
+
+
 class IdleService:
     """Finite idle-only assembly over a caller-owned ORIGINAL preparation.
 
@@ -568,6 +741,8 @@ class IdleService:
     def __init__(self, original, projected, journal, docker):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.used = self.closed = False
+        self.candidate_attempted = False
+        self.candidate = self._original_candidate = None
         self._cleanup = []
         try:
             require(type(original) is intake.CasePlan)
@@ -635,6 +810,45 @@ class IdleService:
         require(self.coordinator.session is self.session and self.coordinator.inbox is self.inbox)
         require(self.coordinator.transfer is self.transfer)
         require(self.original.recheck() is self.plan)
+        require(self.candidate is self._original_candidate)
+
+    def prepare_candidate(
+        self,
+        *,
+        image_environment_sha256,
+        timezone,
+        hostname,
+        architecture,
+        runtime_workers=1,
+        zero_domain=None,
+    ):
+        """One explicit read-only preparation inside this ORIGINAL running loop.
+
+        Never called automatically. The eventual qualified host caller may use
+        this while run() retains custody, not after run() closes it. It creates
+        no native/recording authority and never changes the original session's
+        reader, deadline or request/cancel-only behavior. All new descriptors are
+        owned by this service even if component attributes are later replaced.
+        Failure consumes the attempt; do not construct a replacement owner.
+        """
+        try:
+            self._context()
+            require(self.used and self.lock.locked() and not self.candidate_attempted)
+            self.candidate_attempted = True
+            candidate = IdleCandidate(
+                self,
+                image_environment_sha256=image_environment_sha256,
+                timezone=timezone,
+                hostname=hostname,
+                architecture=architecture,
+                runtime_workers=runtime_workers,
+                zero_domain=zero_domain,
+            )
+            self._cleanup.append(candidate.close)
+            self.candidate = self._original_candidate = candidate
+            return candidate
+        except BaseException as error:
+            self._fail(error)
 
     def _fail(self, error):
         self.failed = True

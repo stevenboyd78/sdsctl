@@ -3003,6 +3003,28 @@ owner; partial-construction and closure failures are sanitized, preserve evidenc
 and cannot grant a successful result or retry. Creating another instance is not
 permission to reopen or resume a consumed case.
 
+While that original `run()` still retains custody, an explicit
+`prepare_candidate()` call may prepare read-only `IdleCandidate` resources once.
+It must be at pristine candidate idle, before cancellation or any native intent,
+with valid input and the original candidate process witness still held by the
+same coordinator/session. It creates an idle-evidence reader, full bootstrap
+host reader and candidate source/runtime qualifier; it does not call the latter
+two, change the session's reader, consume another notice, append an event,
+launch native code or authorize recording. The caller supplies the independently
+reviewed environment/host profile and fixed worker selection. None of these
+values is inferred from a previous successful sample.
+
+The new readers remain service-owned; cancellation and original expiry continue
+unchanged. Partial construction, replaced objects, changed process descriptors,
+profile changes, foreign threads and stale phases refuse reuse. Closure releases
+the new idle duplicate and invalidates the owned host reader before the original
+session's process handles are released. The caller's plan, journal and optional
+clock-domain witness remain borrowed. A custody `recheck()` is not full host or
+source/runtime qualification, native readiness, or permission to keep using the
+resources after the idle owner exits. Tests cover this read-only preparation
+inside the original request/cancellation loop with explicitly synthetic process
+and idle observations; installed timing and the native phase join remain pending.
+
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, check installed confinement or
 source/runtime, establish independent external supervision, or support native
