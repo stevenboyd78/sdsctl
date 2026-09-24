@@ -665,8 +665,74 @@ def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, mon
     monkeypatch.setattr(m, "ThreadPoolExecutor", Pool)
     assert layout.observe().file_count >= 50
     assert widths == [workers, workers]
-    delegated = m.PARALLEL_FILES if workers == 2 else ()
-    assert submitted == [*m.TREES[:2], *delegated, *m.TREES[2:], *m.FILES, *m.ALIASES] * 2
+    tasks = (
+        [*m.PARALLEL_TREES, *m.TREES[1:2], *m.TREES[:1], *m.PARALLEL_FILES, *m.TREES[2:]]
+        if workers == 2
+        else list(m.TREES)
+    )
+    assert submitted == [*tasks, *m.FILES, *m.ALIASES] * 2
+
+
+def test_delegated_package_tree_reads_every_asset_once_per_snapshot(layout, monkeypatch):
+    root = layout.root / m.PARALLEL_TREES[0]
+    targets = {}
+    for name in ("pkg/__init__.py", "pkg/data.bin", "pkg/__pycache__/x.cpython-314.pyc"):
+        target = root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(name.encode())
+        targets[target.stat().st_ino] = target.read_bytes()
+    expected = layout.observe()
+    original, reads = m.os.read, {ino: [] for ino in targets}
+
+    def read(fd, size):
+        value = original(fd, size)
+        inode = os.fstat(fd).st_ino
+        if value and inode in reads:
+            reads[inode].append(value)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    assert replace(layout, workers=2).verify(expected.sha256) == expected
+    assert reads == {ino: [raw, raw] for ino, raw in targets.items()}
+
+
+@pytest.mark.parametrize("fault", ["bytes", "root_mode", "parent_mode", "entry", "depth"])
+def test_delegated_package_tree_preserves_mutation_and_depth_guards(layout, monkeypatch, fault):
+    root = layout.root / m.PARALLEL_TREES[0]
+    target = root / "payload.bin"
+    target.write_bytes(b"original")
+    inode, original, changed = target.stat().st_ino, m.os.read, []
+    descriptors = len(os.listdir("/proc/self/fd"))
+    if fault == "depth":
+        monkeypatch.setattr(m, "MAX_DEPTH", 3)  # Child remains depth4, not depth1.
+    else:
+
+        def read(fd, size):
+            value = original(fd, size)
+            if value and not changed and os.fstat(fd).st_ino == inode:
+                changed.append(True)
+                if fault == "bytes":
+                    target.write_bytes(b"modified")
+                elif fault == "entry":
+                    (root / "new-entry").mkdir()
+                else:
+                    (root if fault == "root_mode" else root.parent).chmod(0o700)
+            return value
+
+        monkeypatch.setattr(m.os, "read", read)
+    denied(replace(layout, workers=2).observe)
+    assert fault == "depth" or changed == [True]
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+
+
+def test_delegated_package_link_keeps_inventoried_resolution_semantics(layout):
+    root = layout.root / m.PARALLEL_TREES[0]
+    (root / "data.bin").write_bytes(b"original")
+    moved = root.with_name("versioned-packages")
+    root.rename(moved)
+    root.symlink_to(moved.name)
+    expected = layout.observe()
+    assert replace(layout, workers=2).verify(expected.sha256) == expected
 
 
 def test_delegated_file_is_hashed_once_per_snapshot_with_same_evidence(layout, monkeypatch):
@@ -726,8 +792,12 @@ def test_delegated_file_retains_selected_parent_and_depth_checks(layout, monkeyp
     assert fault in ("directory", "depth") or changed
 
 
-def test_delegated_parent_is_retained_after_ordinary_subtree_finishes(layout, monkeypatch):
+@pytest.mark.parametrize("kind", ["library", "package"])
+def test_delegated_parent_is_retained_after_ordinary_subtree_finishes(layout, monkeypatch, kind):
     target = layout.root / m.PARALLEL_FILES[0]
+    if kind == "package":
+        target = layout.root / m.PARALLEL_TREES[0] / "payload.bin"
+        target.write_bytes(b"original package asset")
     inode = target.stat().st_ino
     original_pool, original_read = m.ThreadPoolExecutor, m.os.read
     subtree_finished, changed = Event(), False

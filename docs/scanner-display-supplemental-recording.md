@@ -2200,6 +2200,17 @@ earlier handles without starting a worker. The inventory, source scope, shared
 budgets and deadlines are unchanged; the helper/native source pins must be
 reconstructed for the changed verifier.
 
+On the actual host, a later isolated check again refused the delayed bracket
+at its original two-second limit. A read-only profile found no CPU-quota
+throttling; the remaining `usr/local` package tree dominated the two-worker
+path. That path now gives the fixed, required `site-packages` subtree its own
+task, alongside the library and other fixed roots. Packages, assets and bytecode
+are still read exactly once per snapshot, with the same global budgets and
+original depth below `usr/local`. All parent chains remain bound before any
+worker starts. The default one-worker traversal is unchanged. This is work
+distribution, not an inventory exclusion, cached observation or renewed budget;
+actual timing must be qualified independently for this updated source.
+
 The host's repeated plan checks now retain a separately decoded canonical plan
 and compare every field, nested type and original byte string against it. They
 also require the same original plan object. This removes repeated JSON decoding
