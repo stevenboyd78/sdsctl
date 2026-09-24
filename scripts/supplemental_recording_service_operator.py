@@ -744,7 +744,10 @@ class IdleService:
         self.failed = self.used = self.closed = False
         self.candidate_attempted = False
         self.observation_attempted = False
+        self.launch_preparation_attempted = False
         self.candidate = self._original_candidate = None
+        self.prepared_launch = self._original_launch = None
+        self._launch_binding = None
         self._cleanup = []
         try:
             require(type(original) is intake.CasePlan)
@@ -813,6 +816,84 @@ class IdleService:
         require(self.coordinator.transfer is self.transfer)
         require(self.original.recheck() is self.plan)
         require(self.candidate is self._original_candidate)
+        self._launch_context()
+
+    def _launch_context(self):
+        """A prepared, UNUSED launch is not a route into a native phase."""
+        require(self.prepared_launch is self._original_launch)
+        run = self.prepared_launch
+        if run is None:
+            require(self._launch_binding is None)
+            return
+        require(self.launch_preparation_attempted and type(run) is launch.Launch)
+        require(run.owner == self.owner and not run.used and not run.failed and not run.closed)
+        require(not run.confirm_attempted)
+        require(run.action is run.claim is run.client is run.ready is run.probe is None)
+        candidate = self._original_candidate
+        require(type(candidate) is IdleCandidate and candidate.service is self)
+        require(run.plan is self.plan and run.projected is self.projected)
+        require(run.journal is self.journal and run.idle is candidate.idle)
+        require(run.witness is candidate.witness and run.read is candidate.reader)
+        require(run.qualify is candidate.qualifier)
+        endpoint, pins, command, digests = self._launch_binding
+        require(run.endpoint is endpoint and run.pins is pins and run.command is command)
+        require((run.launch_sha256, run.profile_sha256) == digests)
+        require(type(endpoint) is launch.engine.Endpoint and not endpoint.closed)
+
+    def prepare_launch(self, endpoint, *, launch_sha256, profile_sha256):
+        """Bind one passive Launch to this STILL RUNNING original idle owner.
+
+        Digests and the authenticated Engine endpoint come from the separately
+        qualified caller, never a saved observation. Construction only verifies
+        custody/journal/socket metadata; no connection, exec, intent, Ready or
+        recording approval is created. The endpoint stays caller-owned because
+        no Engine Client is constructed. Original Launch closure is service-owned.
+
+        This idle-only loop cannot dispatch the prepared object. A used/changed
+        launch refuses the loop instead of falling back to pristine cancellation.
+        Explicit native phase routing and its recovery remain separate gates.
+        """
+        try:
+            started = time.monotonic()
+            self._context()
+            require(self.used and self.lock.locked() and not self.launch_preparation_attempted)
+            self.launch_preparation_attempted = True
+            candidate = self.candidate
+            require(type(candidate) is IdleCandidate and candidate.service is self)
+            candidate.recheck()
+            before = plans.clock.read()
+            self.plan.check_clock(before)
+            entries = tuple(base.encode(e) for e in self.journal.entries)
+            run = launch.Launch(
+                self.plan,
+                self.projected,
+                self.journal,
+                candidate.idle,
+                candidate.witness,
+                endpoint,
+                launch_sha256=launch_sha256,
+                profile_sha256=profile_sha256,
+                read=candidate.reader,
+                qualify=candidate.qualifier,
+            )
+            self._cleanup.append(run.close)
+            self.prepared_launch = self._original_launch = run
+            self._launch_binding = (
+                endpoint,
+                run.pins,
+                run.command,
+                (launch_sha256, profile_sha256),
+            )
+            candidate.recheck()
+            require(tuple(base.encode(e) for e in self.journal.entries) == entries)
+            after = plans.clock.read()
+            self.plan.check_clock(after)
+            before.check_later(after)
+            require(0 <= (after.boottime_ns - before.boottime_ns) / plans.clock.NS < 2)
+            require(time.monotonic() < started + 2)
+            return run
+        except BaseException as error:
+            self._fail(error)
 
     def prepare_candidate(
         self,

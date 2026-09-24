@@ -3045,6 +3045,28 @@ and explicit pristine cancellation still uses the same original recovery session
 Tests use the real host-reader worker and private files with explicitly synthetic
 HA/process/source-runtime evidence; installed combined timing remains unqualified.
 
+`prepare_launch()` now binds one passive `Launch` to the same still-running idle
+owner. It takes independently supplied launch/profile digests and a caller-owned
+Engine endpoint, and uses the original candidate idle reader, witness, bootstrap
+host reader, source/runtime qualifier, plan and journal. Construction verifies
+current custody and socket metadata within one two-second budget; it neither
+connects to the Engine nor creates an exec, journal intent, Ready or recording
+authorization. A previous successful observation is not required or reused as
+authority. Preparation and the optional diagnostic observation remain distinct.
+
+The service owns closure of that original prepared launch. The endpoint remains
+caller-owned because no Engine Client has taken ownership. Explicit pristine
+cancellation can still restore through the same session. Service cleanup closes
+the prepared launch before its idle readers; completed recovery has already
+closed its process tracker after verified exits and restoration. Preparation is
+one-attempt, with sticky failure and preserved evidence on interruptions, changed
+bindings, journal changes or expired budgets. A used, replaced or modified launch
+refuses this idle-only loop; it cannot silently route native activity through
+never-launched recovery. Actual native dispatch, explicit phase routing and
+post-native recovery have **not** been added to this service. Tests exercise the
+real passive Launch and original private journal with synthetic Engine/init
+metadata, not installed endpoint or native-process qualification.
+
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed
 confinement/source/runtime, establish independent external supervision, or
