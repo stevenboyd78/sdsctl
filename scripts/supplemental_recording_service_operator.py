@@ -984,8 +984,9 @@ class RecordingPhase:
 
     Uncertain begin/completion is sticky and preserves original clock expiry;
     this owner never invents abandonment, retries, or falls back to pristine
-    recovery. Independent supervision and a separately qualified preserved route
-    remain required. Explicit active observations use fresh one-use samplers;
+    recovery. Explicit abandonment of a confirmed start is a distinct route,
+    never repair for a failed finish. Independent supervision remains required.
+    Explicit active observations use fresh one-use samplers;
     they are never automatic polling or cached policy/recording success.
     """
 
@@ -1007,6 +1008,8 @@ class RecordingPhase:
         self.objects = service, native, self.run, self.ledger, self.operator, service.session
         self.used = self.uncertain = self.started = False
         self.finish_attempted = self.recovery_attempted = False
+        self.abandon_attempted = self.abandoned = False
+        self.abandoned_state = None
         self.start_attempt = self._original_start = None
         self.relay = self._original_relay = None
         self.reader = self._original_reader = None
@@ -1044,10 +1047,17 @@ class RecordingPhase:
             require(self.start_attempt.relay is self.relay)
         require(self.reader is self._original_reader)
         if self.reader is not None:
-            require(type(self.reader) is begin.AuthorizedFinalized)
-            require(
-                self.reader.start is self.start_attempt and self.reader.operator is self.operator
-            )
+            if self.abandoned:
+                require(type(self.reader) is begin.worker_exit.reconcile.Preserved)
+                require(self.reader.operator is self.operator and self.reader.ledger is self.ledger)
+                require(self.reader.journal is service.journal)
+                require(not self.finish_attempted and self.completion is None)
+            else:
+                require(type(self.reader) is begin.AuthorizedFinalized)
+                require(
+                    self.reader.start is self.start_attempt
+                    and self.reader.operator is self.operator
+                )
         require(self.completion is self._original_completion)
         if recovering:
             require(self.recovery_attempted and self.reader is not None)
@@ -1123,7 +1133,9 @@ class RecordingPhase:
         """
         self.service._context()
         require(self.used and self.started and not self.uncertain)
-        require(not self.finish_attempted and not self.recovery_attempted)
+        require(
+            not self.finish_attempted and not self.recovery_attempted and not self.abandon_attempted
+        )
         require(self.relay.phase == "completed" and self.relay.expected is not None)
         try:
             entries = tuple(base.encode(e) for e in self.service.journal.entries)
@@ -1153,11 +1165,11 @@ class RecordingPhase:
         self.service._context()
         return None
 
-    def _finish_progress(self):
-        """Durably retain the latest intermediate read before consuming return.
+    def _retain_progress(self):
+        """Durably retain the latest intermediate read before closing the ledger.
 
         A full active sample is NOT a progress checkpoint. Relay remembers those
-        observations, so completion must acknowledge a fresh monotonic file read
+        observations, so either closing route retains a fresh monotonic file read
         in the original chain. Lost append/ledger acknowledgment is uncertainty,
         never permission to retry, drop the directory, or forget prior reads.
         """
@@ -1211,11 +1223,13 @@ class RecordingPhase:
         """
         self.service._context()
         require(self.used and self.started and not self.uncertain)
-        require(not self.finish_attempted and not self.recovery_attempted)
+        require(
+            not self.finish_attempted and not self.recovery_attempted and not self.abandon_attempted
+        )
         self.finish_attempted = True
         try:
             self.start_attempt.retained_history()
-            progress_directory = self._finish_progress()
+            progress_directory = self._retain_progress()
             completion = self.relay.completed(progress_directory=progress_directory)
             self.completion = self._original_completion = completion
             require(self.relay.phase == "closed" and self.relay.completion is completion)
@@ -1234,20 +1248,91 @@ class RecordingPhase:
         self.service._context()
         return not self.uncertain
 
+    def abandon(self):
+        """Explicit known-start cancellation, never an uncertainty fallback.
+
+        Durably abandon before closing only the original completion transport.
+        No native stop/completion or App command is sent. A lost ledger return
+        is sticky even if bytes exist. A lost transport-close return is not exit
+        proof, but the independent ORIGINAL Operator may still confirm closure.
+        """
+        self.service._context()
+        require(self.used and self.started and not self.uncertain)
+        require(
+            not self.finish_attempted and not self.recovery_attempted and not self.abandon_attempted
+        )
+        self.abandon_attempted = True
+        try:
+            require(self.reader is None and self.completion is None and not self.operator.done)
+            require(self.relay.phase == "completed" and self.relay.expected is not None)
+            require(not self.run.closed and self.run.client is self.run.ready.client)
+            self.start_attempt.retained_history()
+            self._retain_progress()
+            before = self.ledger.state
+            require(not self.ledger._poisoned and not before.closed)
+            require(before.expected == self.relay.expected)
+            require(before.generation == self.run.pins.generation)
+            require(before.acknowledgment is None and before.preservation is None)
+            closed = self.ledger.abandon(now=time.monotonic())
+            require(type(closed) is launch.binding.State and closed is self.ledger.state)
+            require(not self.ledger._poisoned and closed.closed)
+            require(closed.count == before.count + 1 and closed.now >= before.now)
+            require(
+                replace(
+                    closed, count=before.count, sha256=before.sha256, now=before.now, closed=False
+                )
+                == before
+            )
+            self.abandoned_state = closed
+            self.abandoned = True
+        except Exception:
+            self.uncertain = True
+            self.service._context()
+            return False
+        confirmed = True
+        try:
+            self.run.client.close()
+        except Exception:
+            confirmed = False
+        self.service._context()
+        return confirmed
+
+    def _preserved_reader(self):
+        require(self.abandon_attempted and not self.finish_attempted)
+        require(self.reader is None and self.completion is None)
+        require(self.ledger.state is self.abandoned_state and not self.ledger._poisoned)
+        if not self.operator.done:
+            if self.operator.poll() is None:
+                return False
+            self.operator.publish(self.service.journal)
+        if not self.operator._exited("init"):
+            return False
+        self.service.processes.reconcile()
+        reader = begin.worker_exit.reconcile.Preserved(
+            self.operator, self.ledger, self.service.journal
+        )
+        self.service._cleanup.append(reader.close)
+        self.reader = self._original_reader = reader
+        return True
+
     def poll(self, wait):
         self.service._context()
         require(self.used and not self.recovery_attempted and callable(wait))
         result = self.service.session.poll()
         if result.phase in ("complete", "review") or self.uncertain:
             return result
-        if self.reader is None:
+        if self.reader is None and not self.abandoned:
             return result
         try:
-            require(self.finish_attempted and self.reader.phase == "published")
-            if not self.operator._exited("init"):
-                return result
-            self.service.processes.reconcile()
-            self.reader._history(time.monotonic() + 2)
+            if self.abandoned:
+                if not self._preserved_reader():
+                    return result
+            else:
+                require(self.finish_attempted and self.reader.phase == "published")
+                if not self.operator._exited("init"):
+                    return result
+                self.service.processes.reconcile()
+                self.reader._history(time.monotonic() + 2)
         except Exception:
             self.uncertain = True
             return result
@@ -1260,6 +1345,10 @@ class RecordingPhase:
             wait(seconds)
             self.service._context(recovering=True)
 
+        if self.abandoned:
+            return begin.recover_preserved(
+                self.reader, self.run, self.service.session, bounded_wait
+            )
         return begin.recover_finalized(self.reader, self.service.session, bounded_wait)
 
 
@@ -1482,6 +1571,20 @@ class IdleService:
             self._context()
             require(type(self.recording) is RecordingPhase)
             return self.recording.observe()
+        except BaseException as error:
+            self._fail(error)
+
+    def abandon_recording(self):
+        """Explicit confirmed-start cancellation, not a successful recording.
+
+        False consumes the attempt; never resubmit it. Only independently
+        confirmed original exits and retained files can permit SAME-session
+        restoration. Failed begin/observation/finish cannot enter this route.
+        """
+        try:
+            self._context()
+            require(type(self.recording) is RecordingPhase)
+            return self.recording.abandon()
         except BaseException as error:
             self._fail(error)
 

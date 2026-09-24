@@ -147,7 +147,8 @@ def active(recording, monkeypatch):
                 fault("close")
 
     def read_files(start):
-        assert start is s.service.recording.start_attempt and s.service.recording.finish_attempted
+        assert start is s.service.recording.start_attempt
+        assert s.service.recording.finish_attempted or s.service.recording.abandon_attempted
         s.checkpoint_calls.append("read")
         fault("checkpoint_read")
         return m.begin.relayed.local.protected.Collected(

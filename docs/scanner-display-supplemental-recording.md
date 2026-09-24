@@ -3185,10 +3185,10 @@ may have durably authorized recording while marking its Launch failed. The
 retired native owner does not disable original clock-only expiry or allow
 pristine/never-authorized fallback in that situation. No failed operation is
 retried, no abandoned ledger is invented, and no former Ready data is presented
-as active health. This join currently leaves uncertain recordings for review;
-integration with the separately qualified preserved-recording route remains
-work to complete. Its routing tests use real policy and intent journals with
-explicit synthetic native/completion boundaries.
+as active health. This join leaves uncertain recordings for review; the explicit
+confirmed-start abandonment route below is not a fallback for them. Its routing
+tests use real policy and intent journals with explicit synthetic
+native/completion boundaries.
 
 An explicit `observe_recording()` now joins `PostBegin`, `RetainedQualification`,
 `RetainedHost` and a new one-use `ActiveSample` for each active read. It takes
@@ -3217,6 +3217,27 @@ earlier host sample as a checkpoint is not allowed. A lost checkpoint or ledger
 acknowledgment makes completion uncertain and is never retried or discarded.
 The no-active-read route still finalizes without introducing a progress chain.
 
+An explicit `abandon_recording()` is a separate one-use decision while the
+original start is confirmed, before any failed observation or finish attempt.
+It rechecks the original authorization and open ledger, retains any intermediate
+active progress through a separate acknowledged checkpoint, then durably closes
+the original ledger as abandoned. Only after that exact acknowledgment does it
+close the original completion transport. It sends no native stop/completion,
+App stop, signal or replacement launch. A lost abandonment acknowledgment is
+sticky even if the ledger bytes reached disk; it cannot be reloaded as authority.
+
+A returned transport close is not process-exit evidence, and a lost close return
+cannot be retried. The independently captured original Operator must observe and
+publish actual worker exits once, then the original init must exit separately.
+Only then can the distinct `Preserved` reader join the unchanged ledger, retained
+files and same recovery session. Restoration through this route leaves the
+recording **unconfirmed**, with no completion acknowledgment or successful
+artifact, even if the native process returned zero. Lost exit publication,
+poisoned or replaced ledger state and failed retained-file checks require review.
+Routing tests exercise the actual private host ledger and policy with explicitly
+synthetic native, exit and recovery boundaries. This whole-service abandonment
+join still needs an independent actual-process qualification.
+
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed
 confinement/source/runtime, or establish independent external supervision.
@@ -3226,8 +3247,10 @@ It verified the synthetic recording, unchanged older file, original worker/init
 exits and restoration through the same session. A separate earlier case safely
 refused stale evidence before begin; a later pass does not erase that timing
 failure. Supervisor/Core/CLI/cache/network/source routing in both cases remained
-explicitly synthetic. The active-observation join still needs its own process
-qualification, followed by installed host-launcher and platform checks.
+explicitly synthetic. The active-observation join has also completed a separate
+synthetic-audio process case through a fresh active read, acknowledged progress,
+finalization, original exits and same-session restoration. None of these cases
+qualifies an installed host launcher or a real scanner/audio trial.
 Assembly tests use real private files and explicit synthetic
 Engine/process/cache fixtures, not Home Assistant or scanner acceptance.
 
