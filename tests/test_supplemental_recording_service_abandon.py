@@ -128,6 +128,7 @@ def exits(s):
 
 @pytest.mark.parametrize("lost_close", [False, True])
 @pytest.mark.parametrize("init_exits", [False, True])
+@pytest.mark.parametrize("service", [False, "offered"], indirect=True)
 def test_explicit_abandon_waits_for_original_exits_not_close_ack(abandoned, lost_close, init_exits):
     s = abandoned
     original_session = s.session
@@ -155,6 +156,9 @@ def test_explicit_abandon_waits_for_original_exits_not_close_ack(abandoned, lost
     assert not s.finish_calls and not s.finalized_recoveries and not s.recoveries
     assert s.journal.machine.state.recording_outcome == "unconfirmed"
     assert s.journal.machine.state.artifact_sha256 is None and len(s.engine.sent) == 2
+    if s.borrowed_clock is not None:
+        assert s.startup_offer.accepted and s.service.clock_witness is s.borrowed_clock
+        assert not s.borrowed_clock.closed and s.borrowed_clock.fd >= 0
 
 
 @pytest.mark.parametrize("kind", ["worker_only", "init_only", "neither"])

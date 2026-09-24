@@ -1363,18 +1363,24 @@ class IdleService:
     process tracker, dispatcher, session and coordinator; run() consumes it once.
 
     Missing/refused input still expires through the original session. Exiting
-    the loop closes only its original clock/process handles and Inbox, never files,
+    the loop closes only its owned clock/process handles and Inbox, never files,
     containers, the borrowed plan or journal. Native execution requires a
     separate explicit one-way handoff. Recording has its own explicit one-use
     handoff and finish, never an automatic request. A new object is NOT restart
     permission.
+
+    An explicit clock_witness borrows the continuing startup owner's ORIGINAL
+    witness instead of opening a new namespace handle. Its original window must
+    match every value AND type in the sealed plan. The caller keeps it alive
+    through service cleanup and closes it afterward. This supplies no approval
+    or startup protocol; no serialized or newly sampled clock is substituted.
 
     This is not an installed entrypoint. Root/confinement, source/runtime pins,
     independent outer supervision and original custody after helper loss must
     be qualified by the eventual host launcher, not inferred from this loop.
     """
 
-    def __init__(self, original, projected, journal, docker):
+    def __init__(self, original, projected, journal, docker, *, clock_witness=None):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.used = self.closed = False
         self.candidate_attempted = False
@@ -1392,10 +1398,14 @@ class IdleService:
             require(type(original) is intake.CasePlan)
             self.original, self.plan = original, original.recheck()
             self.projected, self.journal, self.docker = projected, journal, docker
-            self.clock_witness = self._original_clock_witness = plans.clock.ClockWitness(
-                self.plan.original_clock
-            )
-            self._cleanup.append(self.clock_witness.close)
+            if clock_witness is None:
+                self.clock_witness = plans.clock.ClockWitness(self.plan.original_clock)
+                self._cleanup.append(self.clock_witness.close)
+            else:
+                require(type(clock_witness) is plans.clock.ClockWitness)
+                self.clock_witness = clock_witness
+            self._original_clock_witness = self.clock_witness
+            self._clock()
             self.transfer = launch.TransferHost(self.plan, projected, journal, docker)
             self.processes = launch.TrackedProcesses(
                 journal,
@@ -1448,7 +1458,7 @@ class IdleService:
         require(self.original.recheck() is self.plan)
         require(self.clock_witness is self._original_clock_witness)
         require(type(self.clock_witness) is plans.clock.ClockWitness)
-        require(self.clock_witness.original == self.plan.original_clock)
+        require(plans._same_plan_value(self.clock_witness.original, self.plan.original_clock))
         observed = self.clock_witness.read()
         self.plan.check_clock(observed)
         return observed.boot, observed.boottime_ns / plans.clock.NS

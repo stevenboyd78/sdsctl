@@ -1,5 +1,6 @@
 """Finite idle-service assembly, real files with explicit synthetic host/process I/O."""
 
+import json
 import os
 from dataclasses import replace
 from threading import Thread
@@ -7,6 +8,7 @@ from threading import Thread
 import pytest
 
 from . import test_supplemental_recording_idle_coordinator as coordinator_tests
+from . import test_supplemental_recording_service_offer as offer_tests
 
 m, cancellation, b = coordinator_tests.m, coordinator_tests.cancellation, coordinator_tests.b
 (
@@ -35,7 +37,7 @@ m, cancellation, b = coordinator_tests.m, coordinator_tests.cancellation, coordi
 
 
 @pytest.fixture
-def service(transfer, monkeypatch):
+def service(transfer, monkeypatch, request):
     s = transfer
     path = s.plan.root / "plan.json"
     path.write_bytes(s.plan.raw)
@@ -43,17 +45,53 @@ def service(transfer, monkeypatch):
     (s.plan.root / "inbox").mkdir(mode=0o700)
     with m.intake.CasePlan(s.plan.root, s.plan.sha256) as original:
         s.plan = original.plan
+        witness = (
+            m.plans.clock.ClockWitness(s.plan.original_clock)
+            if getattr(request, "param", False)
+            else None
+        )
+        s.borrowed_clock = witness
+        s.startup_offer = None
+        if getattr(request, "param", False) == "offered":
+            # The fixture's plan/journal are already persisted synthetic inputs.
+            # Prove the startup model matches those EXACT original bytes, then
+            # carries its retained clock into service; no publication is implied.
+            declaration = json.loads(s.plan.raw)
+            times = declaration.pop("deadlines")
+            declaration.pop("original_clock")
+            template = offer_tests.m.template_codec.decode(
+                {
+                    "schema": 1,
+                    "kind": offer_tests.m.template_codec.KIND,
+                    "plan": declaration,
+                    "budget": {
+                        "ready_seconds": int(times["ready_by"] - times["issued_at"]),
+                        "stop_seconds": int(times["stop_by"] - times["issued_at"]),
+                    },
+                }
+            )
+            s.startup_offer = offer_tests.m.Offer(template, template.sha256, witness)
+            assert s.startup_offer.inspect().raw == s.plan.raw
+            assert s.startup_offer.accept(s.plan.sha256).raw == s.plan.raw
 
         def assemble():
-            s.service = m.IdleService(original, s.projected, s.journal, s.docker)
+            s.service = m.IdleService(
+                original, s.projected, s.journal, s.docker, clock_witness=witness
+            )
             s.inbox, s.before = s.service.inbox, s.service.transfer
             return s.service.session
 
-        with cancellation.owned_session(s, monkeypatch, assemble):
-            try:
-                yield s
-            finally:
-                s.service.close()
+        try:
+            with cancellation.owned_session(s, monkeypatch, assemble):
+                try:
+                    yield s
+                finally:
+                    s.service.close()
+        finally:
+            if s.startup_offer is not None:
+                s.startup_offer.close()
+            if witness is not None:
+                witness.close()
 
 
 def publish(s, action):
@@ -405,6 +443,141 @@ def test_closure_error_releases_other_resources_and_withholds_success(service):
     assert s.service.clock_witness.closed
     s.service.close()
     assert closed == [True] and s.service.original.recheck() is s.plan
+
+
+@pytest.mark.parametrize("service", [True], indirect=True)
+def test_borrowed_startup_clock_survives_every_service_cleanup_callback(service):
+    s = service
+    witness = s.borrowed_clock
+    assert s.service.clock_witness is witness
+    fd, observed = witness.fd, []
+
+    def after():
+        assert not witness.closed and witness.fd == fd
+        os.fstat(fd)
+        observed.append(True)
+
+    s.service._cleanup.append(after)
+    s.service.close()
+    assert observed == [True] and s.service.closed
+    assert not witness.closed and witness.fd == fd
+    s.plan.check_clock(witness.read())
+    assert not s.engine.sent and s.journal.fd >= 0 and s.service.original.recheck() is s.plan
+
+
+@pytest.mark.parametrize("service", [True, "offered"], indirect=True)
+@pytest.mark.parametrize("route", ["complete", "expiry", "interrupted", "lost_notice", "lost_read"])
+def test_borrowed_startup_clock_survives_original_service_paths(service, monkeypatch, route):
+    witness = service.borrowed_clock
+    if route == "complete":
+        test_single_owner_polls_explicit_request_cancel_and_normal_restoration(service)
+    elif route == "expiry":
+        test_missing_or_refused_input_expires_without_inventing_cancel(
+            service, monkeypatch, True, True
+        )
+    elif route == "interrupted":
+        test_wait_interruption_closes_original_custody_without_retry(service, KeyboardInterrupt())
+    elif route == "lost_notice":
+        test_lost_durable_notice_ack_never_causes_resubmission(service, monkeypatch, "cancel_idle")
+    else:
+        test_failed_host_read_is_not_retried_but_original_clock_still_expires(service, monkeypatch)
+    assert service.service.closed and not witness.closed
+    assert service.service.clock_witness is witness
+    os.fstat(witness.fd)
+
+
+@pytest.mark.parametrize("service", [True], indirect=True)
+def test_failed_borrowed_service_cleanup_does_not_close_clock(service):
+    s = service
+
+    def fail():
+        raise OSError("private-secret")
+
+    s.service._cleanup.append(fail)
+    with pytest.raises(m.UnconfirmedOperator):
+        s.service.close()
+    assert s.service.failed and s.service.closed
+    assert not s.borrowed_clock.closed
+    assert s.session.processes.closed and s.inbox.closed
+    s.plan.check_clock(s.borrowed_clock.read())
+
+
+@pytest.mark.parametrize("service", [True], indirect=True)
+def test_clock_replacement_refuses_without_closing_either_borrowed_handle(service):
+    s = service
+    replacement = m.plans.clock.ClockWitness(s.plan.original_clock)
+    try:
+        s.service.clock_witness = replacement
+        refused(s.service)
+        assert not s.borrowed_clock.closed and not replacement.closed
+        os.fstat(s.borrowed_clock.fd)
+        os.fstat(replacement.fd)
+        assert not s.engine.sent
+    finally:
+        replacement.close()
+
+
+@pytest.mark.parametrize("service", [True], indirect=True)
+def test_failed_partial_assembly_does_not_close_supplied_original_clock(service):
+    s = service
+    publish(s, "request")
+    assert s.service.coordinator.poll(lambda _: None).phase == "stopping_normal"
+    descriptors = set(os.listdir("/proc/self/fd"))
+    with pytest.raises(m.UnconfirmedOperator):
+        m.IdleService(
+            s.service.original,
+            s.projected,
+            s.journal,
+            s.docker,
+            clock_witness=s.borrowed_clock,
+        )
+    assert set(os.listdir("/proc/self/fd")) == descriptors
+    assert not s.borrowed_clock.closed and not s.inbox.closed and not s.session.processes.closed
+    assert s.journal.fd >= 0 and len(s.engine.sent) == 1
+
+
+@pytest.mark.parametrize("bad", [True, {}, "private-secret", object()])
+def test_non_witness_borrowed_clock_refuses_without_dispatch(service, bad):
+    s = service
+    descriptors = set(os.listdir("/proc/self/fd"))
+    with pytest.raises(m.UnconfirmedOperator):
+        m.IdleService(s.service.original, s.projected, s.journal, s.docker, clock_witness=bad)
+    assert set(os.listdir("/proc/self/fd")) == descriptors
+    assert not s.engine.sent and not s.service.clock_witness.closed
+
+
+@pytest.mark.parametrize("service", [True], indirect=True)
+@pytest.mark.parametrize(
+    "fault", ["closed", "failed", "later_origin", "foreign_owner", "int_float"]
+)
+def test_borrowed_clock_must_be_live_same_owner_and_exact_original_window(service, fault):
+    s, witness = service, service.borrowed_clock
+    original, owner = witness.original, witness.owner
+    if fault == "closed":
+        witness.close()
+    elif fault == "failed":
+        witness.failed = True
+    elif fault == "later_origin":
+        witness.original = m.plans.clock.read()
+    elif fault == "foreign_owner":
+        witness.owner = owner[0] + 1, owner[1]
+    else:
+        # A bypassed frozen Window with numerically equal, differently typed ns
+        # must not pass ordinary dataclass equality.
+        witness.original = replace(original)
+        object.__setattr__(witness.original, "before_ns", float(original.before_ns))
+        assert witness.original == original
+    descriptors = set(os.listdir("/proc/self/fd"))
+    try:
+        with pytest.raises(m.UnconfirmedOperator):
+            m.IdleService(
+                s.service.original, s.projected, s.journal, s.docker, clock_witness=witness
+            )
+        assert set(os.listdir("/proc/self/fd")) == descriptors
+        assert not s.engine.sent and len(s.journal.entries) == 1
+        assert witness.closed == (fault == "closed")
+    finally:
+        witness.owner, witness.original = owner, original
 
 
 def test_run_cannot_return_success_when_final_closure_is_unconfirmed(service, monkeypatch):

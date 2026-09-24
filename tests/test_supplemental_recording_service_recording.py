@@ -207,6 +207,7 @@ def run(s, action, after=None):
     return native_tests.run(s, joined, after)
 
 
+@pytest.mark.parametrize("service", [False, "offered"], indirect=True)
 def test_recording_requires_separate_explicit_handoff_and_actual_started_return(recording):
     s = recording
     original = s.session
@@ -224,6 +225,9 @@ def test_recording_requires_separate_explicit_handoff_and_actual_started_return(
     assert len(s.start_calls) == len(s.begin_calls) == len(s.received_starts) == 1
     assert s.start_calls[0].closed and s.native_captures[0].closed
     assert not s.service.failed and not s.recoveries
+    if s.borrowed_clock is not None:
+        assert s.startup_offer.accepted and s.service.clock_witness is s.borrowed_clock
+        assert not s.borrowed_clock.closed and s.borrowed_clock.fd >= 0
 
 
 @pytest.mark.parametrize(
@@ -279,6 +283,7 @@ def test_completion_or_exit_failure_never_becomes_success_or_pristine_recovery(r
 
 
 @pytest.mark.parametrize("init_exits", [False, True])
+@pytest.mark.parametrize("service", [False, "offered"], indirect=True)
 def test_finalized_join_requires_worker_publication_and_original_init_exit(recording, init_exits):
     s = recording
 

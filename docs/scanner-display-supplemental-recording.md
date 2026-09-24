@@ -3311,8 +3311,8 @@ but Engine and process outcomes remain explicitly synthetic.
 
 `IdleService` assembles that idle-first graph from the original `CasePlan`,
 projection, preparation-only journal and Docker adapter. Construction is passive
-apart from retaining the Inbox descriptor: it neither observes the host nor
-publishes input or sends commands. Its single-use `run()` polls the same
+apart from retaining the Inbox and validating its original clock witness: it
+neither observes the host nor publishes input or sends commands. Its single-use `run()` polls the same
 coordinator/session, using the existing 0.25-second interval, original phase and
 recovery deadlines, and a finite defensive iteration ceiling. The ceiling is an
 unconfirmed outcome, not a successful restoration. Explicit request and
@@ -3325,6 +3325,18 @@ away from the original owned handles. A foreign thread cannot run or close the
 owner; partial-construction and closure failures are sanitized, preserve evidence
 and cannot grant a successful result or retry. Creating another instance is not
 permission to reopen or resume a consumed case.
+
+The optional explicit `clock_witness` argument lets the continuing startup owner
+lend its already retained original `ClockWitness` to this assembly. The service
+checks the original window's exact values and types, same-process/thread ownership
+and a fresh kernel clock read before assembling later resources. It never replaces
+that witness or renews its sample. The default still acquires and owns its own
+witness, while the explicit borrowed path leaves closure to the original caller
+after all service cleanup. Construction failure, normal completion, expiry,
+interruption and closure errors do not close a borrowed clock. A serialized,
+failed, closed, foreign-owner or differently sampled witness refuses. This is a
+library join only; acceptance, private startup publication and independently
+supervised installed entrypoint qualification remain separate requirements.
 
 While that original `run()` still retains custody, an explicit
 `prepare_candidate()` call may prepare read-only `IdleCandidate` resources once.
