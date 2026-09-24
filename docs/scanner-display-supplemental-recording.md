@@ -2570,8 +2570,20 @@ and fixed paths between source/runtime reads and before releasing them. A change
 root or mount namespace, substituted path, lost process, partial open or
 interrupted hash refuses qualification. Cleanup closes only collector-owned
 descriptors, never the caller's original pidfd. This binds the observed root to
-that process; it does not authenticate proc-mount provenance or enumerate every
-mount inside the namespace.
+that process; it does not by itself authenticate the outer launcher's proc view.
+
+Within that bracket, the collector also retains the helper's actual proc-directory
+descriptor. Its kernel `fdinfo` mount ID and filesystem device must match the
+helper's bounded `mountinfo` table, read through the trusted outer process view.
+Process, self-link and boot-ID paths cannot be overmounted; an optional read-only
+`/proc/sys` remount must retain the original proc filesystem and `/sys` root.
+Unrelated standard masks, binfmt mounts and namespace-handle mounts do not shadow
+those paths. PID/cgroup/user namespaces must match the outer view, and reading
+the original helper's identity through its proc mount must agree with the retained
+original process. The complete mount table stays unchanged across source/runtime
+hashing. This follows the kernel's [mountinfo and fdinfo formats](https://docs.kernel.org/filesystems/proc.html#proc-pid-mountinfo-information-about-mounts);
+it does not authenticate the trusted outer launcher's own proc/PID view, prove
+every non-proc mount safe or replace independent supervision.
 
 The prospective helper profile requires a read-only root, no network, host PID
 and cgroup views, private IPC, root user, no automatic restart/removal, one CPU,

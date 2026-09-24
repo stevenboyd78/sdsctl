@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import re
 import stat
 import time
 from contextlib import contextmanager
@@ -843,6 +844,79 @@ class _PreparedHostRead:
         return self.sample
 
 
+def helper_proc_mount_profile(raw, *, mount_id, device):
+    """Bounded target mountinfo policy, read through the trusted outer proc view.
+
+    The real open proc-directory mount ID and device come from fdinfo/fstat,
+    not this text. Refuse overmounted process/self/clock paths. Standard Docker
+    masks of unrelated proc files are immaterial to those reads. This does not
+    authenticate the caller's own proc mount or grant execution authority.
+    Format: docs.kernel.org/filesystems/proc.html sections 3.5 and 3.8.
+    """
+    try:
+        require(type(raw) is bytes and 0 < len(raw) <= 1024 * 1024 and raw.endswith(b"\n"))
+        require(type(mount_id) is int and mount_id > 0)
+        require(type(device) is tuple and len(device) == 2)
+        require(all(type(value) is int and value >= 0 for value in device))
+        text = raw.decode("ascii")
+        require("\x00" not in text and "\r" not in text and "\t" not in text)
+        lines = text.splitlines()
+        require(0 < len(lines) <= 4096)
+        ids, proc, sys_mount = set(), None, None
+
+        def path(value, *, target=True):
+            require(re.search(r"\\(?!040|011|012|134)", value) is None)
+            decoded = re.sub(r"\\(040|011|012|134)", lambda match: chr(int(match[1], 8)), value)
+            if target:
+                require(decoded.startswith("/") and not decoded.startswith("//"))
+                require(str(Path(decoded)) == decoded and ".." not in Path(decoded).parts)
+            return decoded
+
+        for line in lines:
+            fields = line.split(" ")
+            require(all(fields) and len(fields) >= 10 and fields.count("-") == 1)
+            separator = fields.index("-")
+            require(separator >= 6 and len(fields) == separator + 4)
+            require(all(re.fullmatch(r"[1-9][0-9]{0,19}", value) for value in fields[:2]))
+            current_id = int(fields[0])
+            require(current_id not in ids)
+            ids.add(current_id)
+            require(re.fullmatch(r"[0-9]{1,10}:[0-9]{1,10}", fields[2]) is not None)
+            current_device = tuple(int(value) for value in fields[2].split(":"))
+            # Filesystem-specific roots can be nsfs names such as mnt:[123].
+            # Only mount targets are paths; selected proc roots are exact below.
+            root, target = path(fields[3], target=False), path(fields[4])
+            options = fields[5].split(",")
+            require(len(set(options)) == len(options) and all(options))
+            if target == "/proc":
+                require(proc is None and root == "/")
+                require(fields[separator + 1] == "proc")
+                require({"nosuid", "nodev", "noexec"} <= set(options))
+                require(("ro" in options) != ("rw" in options))
+                require(current_id == mount_id and current_device == device)
+                proc = current_id
+            elif target == "/proc/sys":
+                require(sys_mount is None and root == "/sys")
+                require(fields[separator + 1] == "proc" and current_device == device)
+                require("ro" in options and "rw" not in options)
+                sys_mount = current_id
+            elif target.startswith("/proc/"):
+                first = target.split("/")[2]
+                require(first not in ("self", "thread-self") and not first.isdigit())
+                boot = "/proc/sys/kernel/random/boot_id"
+                require(
+                    target != boot
+                    and not boot.startswith(target + "/")
+                    and not target.startswith(boot + "/")
+                )
+            else:
+                require(current_id != mount_id)
+        require(proc is not None)
+        return base.checksum({"kind": "finite-helper-proc-mount-view-v1", "mountinfo": text})
+    except Exception:
+        raise UnconfirmedHostLaunch(MESSAGE) from None
+
+
 class HelperQualification:
     """Read-only startup qualification of one independently captured helper.
 
@@ -852,8 +926,9 @@ class HelperQualification:
     original live witness remains caller-owned. A replacement, late observation
     or failed read permanently consumes this instance; nothing is launched.
 
-    This checks Engine-declared confinement and actual proc privilege state,
-    not namespace provenance or the seccomp filter's contents, independent
+    This checks Engine-declared confinement, actual proc privilege state and
+    the observed helper's proc mount against the trusted outer process view,
+    not the outer view's provenance or the seccomp filter's contents, independent
     supervision, or the helper's own continuing clock domain. Those remain
     separate installation gates. A
     read-only Docker socket mount DOES NOT restrict Engine API authority.
@@ -1145,6 +1220,72 @@ class HelperQualification:
         return result
 
     @contextmanager
+    def _proc_binding(self, deadline):
+        """Retain the observed helper's proc mount through the source bracket.
+
+        Call only inside the original root/mount-namespace binding. The outer
+        launcher's proc/PID/cgroup/user view must already be trusted. No pidfd
+        reacquisition, namespace entry, mount operation or process discovery.
+        """
+        self._guard(deadline)
+        path = f"/proc/{self.init.pid}/root/proc"
+        fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        try:
+            # proc root link counts change when unrelated processes start/exit.
+            # Retain stable object/security metadata, not volatile tree size.
+            def identity(info):
+                return info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_gid
+
+            initial = identity(os.fstat(fd))
+            require(stat.S_ISDIR(os.fstat(fd).st_mode))
+
+            def read(selected, limit):
+                self._guard(deadline)
+                with open(selected, "rb", buffering=0) as stream:
+                    raw = stream.read(limit + 1)
+                require(len(raw) <= limit and time.monotonic() < deadline)
+                return raw
+
+            def sample():
+                self._guard(deadline)
+                require(identity(os.fstat(fd)) == initial)
+                require(identity(os.stat(path, follow_symlinks=False)) == initial)
+                info = read(f"/proc/{os.getpid()}/fdinfo/{fd}", 4096).decode("ascii")
+                ids = re.findall(r"^mnt_id:\s*([0-9]+)$", info, flags=re.MULTILINE)
+                inodes = re.findall(r"^ino:\s*([0-9]+)$", info, flags=re.MULTILINE)
+                require(len(ids) == len(inodes) == 1 and int(inodes[0]) == os.fstat(fd).st_ino)
+                metadata = os.fstat(fd)
+                stamp = helper_proc_mount_profile(
+                    read(f"/proc/{self.init.pid}/mountinfo", 1024 * 1024),
+                    mount_id=int(ids[0]),
+                    device=(os.major(metadata.st_dev), os.minor(metadata.st_dev)),
+                )
+                require(os.readlink(path + "/self") == str(os.getpid()))
+                for name in ("pid", "cgroup", "user"):
+                    own = os.stat(f"/proc/{os.getpid()}/ns/{name}")
+                    other = os.stat(f"/proc/{self.init.pid}/ns/{name}")
+                    require((own.st_dev, own.st_ino) == (other.st_dev, other.st_ino))
+                observed_identity = engine.dispatch.process.process_identity(
+                    self.init.pid,
+                    self.init.container_id,
+                    read(path + f"/{self.init.pid}/stat", 4096).decode("ascii"),
+                    read(path + f"/{self.init.pid}/cgroup", 4096).decode("ascii"),
+                )
+                require(observed_identity == self.init)
+                self._guard(deadline)
+                return stamp
+
+            original = sample()
+
+            def check():
+                require(sample() == original)
+
+            yield check
+            check()
+        finally:
+            os.close(fd)
+
+    @contextmanager
     def _root_binding(self, root, deadline):
         """Retain the original process root and mount namespace across hashing.
 
@@ -1209,7 +1350,10 @@ class HelperQualification:
             deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
             self._guard(deadline)
             root, driver, configured = self._metadata(deadline)
-            with self._root_binding(root, deadline) as check_root:
+            with (
+                self._root_binding(root, deadline) as check_root,
+                self._proc_binding(deadline) as check_proc,
+            ):
                 kernel_before = self._kernel(deadline)
                 self._command(deadline)
                 before = self._environment(configured, deadline)
@@ -1217,12 +1361,14 @@ class HelperQualification:
                 check_root()
                 source.verify(self.plan.helper.source)
                 check_root()
+                check_proc()
                 runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
                     self.plan.helper.interpreter, self.timezone
                 )
                 check_root()
                 source.verify(self.plan.helper.source)
                 check_root()
+                check_proc()
                 after = self._environment(configured, deadline)
                 kernel_after = self._kernel(deadline)
                 require(

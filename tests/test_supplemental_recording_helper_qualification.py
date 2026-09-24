@@ -84,7 +84,16 @@ def helper(supervised, image, configured, monkeypatch):
     )
     witness = None
     state = SimpleNamespace(
-        reads=0, images=0, fault=None, when=1, command_fault=None, command_reads=0
+        reads=0,
+        images=0,
+        fault=None,
+        when=1,
+        command_fault=None,
+        command_reads=0,
+        proc_mount_fault=None,
+        proc_cgroup_fault=None,
+        proc_reads=0,
+        proc_fds=[],
     )
 
     def identity(pid, cid):
@@ -104,6 +113,17 @@ def helper(supervised, image, configured, monkeypatch):
             state.command_reads += 1
             raw = b"\0".join(part.encode() for part in command) + b"\0"
             return io.BytesIO(state.command_fault if state.command_fault is not None else raw)
+        if path == f"/proc/{child.pid}/mountinfo":
+            state.proc_reads += 1
+            if state.proc_mount_fault is not None:
+                return io.BytesIO(state.proc_mount_fault)
+        if path == f"/proc/{child.pid}/root/proc/{child.pid}/cgroup":
+            # The test child is not a Docker process; only this cgroup route is
+            # synthetic. Its actual proc mount/fdinfo and namespace reads remain.
+            raw = f"0::/system.slice/docker-{CID}.scope\n".encode("ascii")
+            return io.BytesIO(
+                state.proc_cgroup_fault if state.proc_cgroup_fault is not None else raw
+            )
         return original_open(path, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "open", open_file)
@@ -232,6 +252,8 @@ def helper(supervised, image, configured, monkeypatch):
             fd = original_os_open(routed(path), flags, *args, **kwargs)
             if path in (supervised.root, state.root_path, state.namespace_path):
                 state.root_fds.append(fd)
+            if path == f"/proc/{child.pid}/root/proc":
+                state.proc_fds.append(fd)
             return fd
 
         def os_stat(path, *args, **kwargs):
