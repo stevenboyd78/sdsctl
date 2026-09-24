@@ -153,6 +153,60 @@ print(json.dumps({"private": len(private), "product": len(product)}))
     assert report["private"] == (62 if startup else 54) and report["product"] >= 1
 
 
+@pytest.mark.parametrize("startup", [False, True])
+def test_helper_imports_need_no_installer_web_or_terminal_dependencies(startup):
+    # The dedicated host image is not the scanner/web/native image. Its entire
+    # product package is still pinned, but this reviewed helper graph needs no
+    # third-party modules, including imports deferred until cached profile reads.
+    # Reject dependency imports, rather than masking them with empty stubs.
+    script = r"""
+import importlib
+import importlib.abc
+import json
+import os
+import socket
+import subprocess
+import sys
+from pathlib import Path
+repository = Path(sys.argv[1])
+sys.path[:0] = [str(repository / "scripts"), str(repository / "src")]
+class OnlyHelperAndStdlib(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        top = fullname.partition(".")[0]
+        allowed = top in sys.stdlib_module_names or top == "sds200"
+        if not allowed and not top.startswith("supplemental_"):
+            raise AssertionError("Unexpected helper dependency: " + fullname)
+sys.meta_path.insert(0, OnlyHelperAndStdlib())
+def forbidden(*args, **kwargs):
+    raise AssertionError("Source import attempted network/process activity")
+for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "sendto"):
+    setattr(socket.socket, name, forbidden)
+subprocess.Popen = forbidden
+os.fork = os.system = forbidden
+bundle = importlib.import_module("supplemental_recording_host_source")
+startup = sys.argv[2] == "True"
+for name in sorted(bundle.STARTUP_ROOTS if startup else bundle.ROOTS):
+    importlib.import_module(name)
+for name in (
+    "daemon_recording", "scanner_display_configuration",
+    "scanner_display_profile_storage", "scanner_display_upload",
+):
+    importlib.import_module("sds200." + name)
+private = {name for name in sys.modules if name.startswith("supplemental_")}
+assert private == (bundle.STARTUP_MODULES if startup else bundle.MODULES)
+assert "sds200.daemon_recording" in sys.modules
+print(json.dumps({"private": len(private)}))
+"""
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", script, str(native.SCRIPTS.parent), str(startup)],
+        capture_output=True,
+        timeout=5,
+        check=True,
+    )
+    assert not result.stderr
+    assert json.loads(result.stdout) == {"private": 62 if startup else 54}
+
+
 @pytest.mark.parametrize(
     "name", ["display.js", "nested/package.dat", "__pycache__/module.cpython-314.pyc"]
 )

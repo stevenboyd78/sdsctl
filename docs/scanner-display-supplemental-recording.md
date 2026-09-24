@@ -2868,6 +2868,22 @@ Neither native-source nor legacy-helper digests substitute for its distinct
 schema. This is not the future host service entrypoint, interpreter/stdlib or
 third-party dependency attestation, and it does not start or install anything.
 
+The host graph (including the explicit startup variant and the product imports
+deferred until cached profile reads) imports only the standard library and the
+full product package. An isolated import regression refuses every third-party
+dependency rather than substituting stubs. This permits investigating a
+separate, smaller host-only image without the CLI formatting, web server or
+package-installer dependencies. It does **not** reduce the supported scanner
+App/native/web dependencies or the product's package requirements. Such a
+host-only image cannot substitute for those images, and import closure alone
+does not qualify execution paths or a complete installed service.
+
+Any smaller image needs its own immutable image and interpreter fingerprints,
+independently reconstructed before execution. All remaining runtime files,
+bytecode, assets, directories, aliases and metadata must still be observed
+twice under the original limits. No collector exclusion, old runtime pin,
+cached inventory or increased deadline is allowed to stand in for that work.
+
 ### Separate interpreter and startup-environment evidence
 
 `scripts/supplemental_recording_runtime.py` is a separate read-only collector for
