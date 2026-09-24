@@ -2117,6 +2117,29 @@ authority to remove anything, accept a recording, or bypass restoration checks.
 This edge case is covered by a reproduced failing test and regression tests;
 fresh image/platform qualification is a separate requirement.
 
+Further local containerized runs exposed a narrow pre-begin timing margin:
+complete observations around two seconds correctly refused rather than sending
+recording begin. Reducing test-observer Engine traffic improved one run but did
+not establish a reliable margin. These refusals are retained as failed cases,
+not retried or counted as recovery passes.
+
+The read-only runtime collector now checks its fixed, disjoint filesystem roots
+with at most two workers. It still hashes every file in both complete snapshots,
+checks ownership, modes, aliases, absence rules and descriptor/name identity,
+and uses the same original absolute deadline. A shared reservation budget is
+enforced before file reads; limits are not multiplied by worker count. Work is
+queued only for the fixed roots, never for every discovered file. Failure cancels
+remaining reads, and workers are joined before parent descriptors close or any
+evidence can escape. Blocked kernel I/O still requires independent supervision.
+
+The affected regression passed 375 tests, including concurrency, global-budget
+and failed-worker cleanup checks. A read-only, network-isolated two-CPU local
+measurement reduced the complete runtime check from about 1.06 to 0.90 seconds,
+with the identical runtime fingerprint. That staged measurement is not an
+installed-platform performance guarantee or a completed recording/recovery trial.
+The two-second observation limit and all native/readiness/recovery deadlines
+remain unchanged.
+
 Integrated offline tests exercise the actual journal, policy, dispatch tracking
 and loop across candidate stop, normal start and health verification, with
 explicitly synthetic host, cached-state, Engine and init-exit evidence. They

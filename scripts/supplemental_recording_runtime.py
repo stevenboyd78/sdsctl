@@ -16,8 +16,10 @@ import posixpath
 import re
 import stat
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from threading import Event, Lock
 
 import supplemental_handoff_process as processes
 from supplemental_handoff_files import DIRECTORY, identity
@@ -339,9 +341,13 @@ class Layout:
         aliases = tuple(ALIASES) if timezone is None else (*ALIASES, "etc/localtime")
         absent = ABSENT if timezone is None else SUPERVISED_ABSENT
         opened, entries, total, count = [], {}, 0, 0
+        # Only the fixed, disjoint root inventories run concurrently. A shared
+        # reservation budget is checked BEFORE any file is opened/read, rather
+        # than accepting two independently oversized inventories after joining.
+        reserved, budget, cancelled = set(), Lock(), Event()
 
         def timely():
-            require(time.monotonic() < deadline)
+            require(not cancelled.is_set() and time.monotonic() < deadline)
 
         def safe(info, *, link=False):
             require(info.st_uid == ROOT_UID and info.st_gid == ROOT_GID)
@@ -358,7 +364,10 @@ class Layout:
         def record(parent, name, relative, depth=0):
             nonlocal total, count
             timely()
-            require(depth <= MAX_DEPTH and len(entries) < MAX_ENTRIES and relative not in entries)
+            require(depth <= MAX_DEPTH)
+            with budget:
+                require(len(reserved) < MAX_ENTRIES and relative not in reserved)
+                reserved.add(relative)
             require(0 < len(name.encode()) <= 255 and CONTROL_CHARACTER.search(name) is None)
             before = os.stat(name, dir_fd=parent, follow_symlinks=False)
             before_identity = identity(before)
@@ -389,9 +398,10 @@ class Layout:
             else:
                 require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1)
                 require(0 <= before.st_size <= MAX_FILE_BYTES)
-                total += before.st_size
-                count += 1
-                require(total <= MAX_TOTAL_BYTES)
+                with budget:
+                    require(total + before.st_size <= MAX_TOTAL_BYTES)
+                    total += before.st_size
+                    count += 1
                 fd = os.open(
                     name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent
                 )
@@ -435,9 +445,28 @@ class Layout:
                     safe(os.fstat(parent))
                 return parent
 
-            for path in (*trees, *FILES, *aliases):
-                parent = parent_for(path)
-                record(parent, PurePosixPath(path).name, path)
+            paths = (*trees, *FILES, *aliases)
+
+            # Fixed roots only, never one queued task per untrusted file. Both
+            # workers finish before parent FDs close or any evidence escapes.
+            # The original absolute deadline is shared by every read. Stalled
+            # kernel I/O still requires the independently supervised caller.
+            def collect(parent, name, path):
+                try:
+                    record(parent, name, path)
+                except BaseException:
+                    cancelled.set()
+                    raise
+
+            with ThreadPoolExecutor(max_workers=2, thread_name_prefix="runtime-inventory") as pool:
+                pending = [
+                    pool.submit(collect, parent_for(path), PurePosixPath(path).name, path)
+                    for path in paths
+                ]
+                for future in pending:
+                    future.result()
+            require(reserved == entries.keys())
+            for path in paths:
                 expected = "directory" if path in trees else "file" if path in FILES else "symlink"
                 require(entries[path]["kind"] == expected)
                 if path in ALIASES:

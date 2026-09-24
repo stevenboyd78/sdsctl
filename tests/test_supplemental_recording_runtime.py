@@ -5,6 +5,7 @@ import os
 import sys
 from dataclasses import replace
 from pathlib import Path
+from threading import Barrier, Event, Thread, current_thread
 
 import pytest
 
@@ -334,6 +335,127 @@ def test_fallible_descriptor_reads_do_not_leak_open_handles(layout, monkeypatch,
     denied(layout.observe)
     assert len(calls) >= failure_at
     assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_disjoint_roots_overlap_but_both_snapshots_keep_the_original_digest(layout, monkeypatch):
+    expected = layout.observe()
+    targets = {
+        (layout.root / path).stat().st_ino
+        for path in (
+            "usr/local/bin/python3.14",
+            "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+        )
+    }
+    original, barrier, reads = m.os.read, Barrier(2), []
+
+    def read(fd, size):
+        value = original(fd, size)
+        inode = os.fstat(fd).st_ino
+        if value and inode in targets:
+            reads.append((inode, current_thread().name))
+            barrier.wait(timeout=3)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    assert layout.verify(expected.sha256) == expected
+    assert len(reads) == 4  # Both files were actually read in BOTH snapshots.
+    assert {inode for inode, _ in reads} == targets
+    assert len({worker for _, worker in reads}) == 2
+    assert all(worker.startswith("runtime-inventory") for _, worker in reads)
+
+
+@pytest.mark.parametrize("budget", ["bytes", "entries"])
+def test_workers_share_budget_before_opening_files(layout, monkeypatch, budget):
+    for name in ("tree-a", "tree-b"):
+        (layout.root / name).mkdir()
+        (layout.root / name / "data").write_bytes(b"1234")
+    monkeypatch.setattr(m, "TREES", ("tree-a", "tree-b"))
+    for field, value in (("FILES", ()), ("ALIASES", {}), ("ABSENT", ()), ("REQUIRED", ())):
+        monkeypatch.setattr(m, field, value)
+    monkeypatch.setattr(
+        m, "MAX_TOTAL_BYTES" if budget == "bytes" else "MAX_ENTRIES", 6 if budget == "bytes" else 3
+    )
+    original, reads, barrier, synchronized = m.os.read, [], Barrier(2), set()
+    stat_original = m.os.stat
+
+    def stated(path, *args, **kwargs):
+        result = stat_original(path, *args, **kwargs)
+        if budget == "bytes" and path == "data" and result.st_ino not in synchronized:
+            # Both workers have seen a four-byte file before reserving bytes.
+            # The second reservation must fail before that file is opened.
+            synchronized.add(result.st_ino)
+            barrier.wait(timeout=3)
+        return result
+
+    def read(fd, size):
+        value = original(fd, size)
+        reads.append(len(value))
+        return value
+
+    monkeypatch.setattr(m.os, "stat", stated)
+    monkeypatch.setattr(m.os, "read", read)
+    denied(layout.observe)
+    assert sum(reads) <= 4
+    assert not barrier.broken
+    assert budget != "bytes" or len(synchronized) == 2
+
+
+def test_pool_size_and_queued_work_are_fixed_by_roots_not_file_count(layout, monkeypatch):
+    original, submitted, widths = m.ThreadPoolExecutor, [], []
+
+    class Pool(original):
+        def __init__(self, *, max_workers, thread_name_prefix):
+            widths.append(max_workers)
+            super().__init__(max_workers=max_workers, thread_name_prefix=thread_name_prefix)
+
+        def submit(self, function, *args, **kwargs):
+            submitted.append(args[-1])
+            return super().submit(function, *args, **kwargs)
+
+    for number in range(50):
+        (layout.root / "usr/local" / f"file-{number}").write_bytes(b"one")
+    monkeypatch.setattr(m, "ThreadPoolExecutor", Pool)
+    assert layout.observe().file_count >= 50
+    assert widths == [2, 2]
+    assert submitted == [*m.TREES, *m.FILES, *m.ALIASES] * 2
+
+
+def test_failed_worker_is_joined_before_parent_descriptors_close(layout, monkeypatch):
+    first = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+    second = (layout.root / "usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2").stat().st_ino
+    original = m.os.read
+    entered, failed, release, finished = (Event() for _ in range(4))
+    before = len(os.listdir("/proc/self/fd"))
+
+    def read(fd, size):
+        inode = os.fstat(fd).st_ino
+        if inode == first:
+            assert entered.wait(3)
+            failed.set()
+            raise OSError("PRIVATE_WORKER_FAILURE")
+        if inode == second and not finished.is_set():
+            entered.set()
+            assert release.wait(3)
+            value = original(fd, size)
+            finished.set()
+            return value
+        return original(fd, size)
+
+    def unblock():
+        assert failed.wait(3)
+        release.set()
+
+    monkeypatch.setattr(m.os, "read", read)
+    helper = Thread(target=unblock)
+    helper.start()
+    try:
+        denied(layout.observe)
+        assert finished.is_set()
+        assert len(os.listdir("/proc/self/fd")) == before
+    finally:
+        release.set()
+        helper.join(timeout=3)
+    assert not helper.is_alive()
 
 
 def test_environment_is_pinned_without_printing_values(env):
