@@ -9,7 +9,9 @@ All times here are the original host policy clock, never raw native MONOTONIC.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+import json
+import time
+from dataclasses import asdict, dataclass, is_dataclass, replace
 
 import supplemental_recording_handoff as recording
 import supplemental_recording_recovery as recovery
@@ -277,6 +279,57 @@ class Journal(base.Journal):
 
     schema = 3
     max_events = 64
+
+    def replayed(self, end):
+        """Compare cached policy with a pure replay, without replacing either.
+
+        Callers must separately check actual journal bytes/identity, and include
+        this check in their original bounded read. Replayed policy actions are
+        discarded, never dispatched or returned. No reopen, append, fsync,
+        repair, renewed deadline or permission is supplied by this operation.
+        """
+        try:
+            began = time.monotonic()
+            base.clock(end)
+            base.require(began < end <= began + 2)
+            base.require(type(self) is Journal and type(self.machine) is Machine)
+            base.require(0 < len(self.entries) <= self.max_events)
+            cached = self.machine
+            entries = tuple(base.encode(entry) for entry in self.entries)
+
+            def values(machine):
+                return base.encode(
+                    {
+                        name: asdict(value) if is_dataclass(value) else value
+                        for name, value in vars(machine).items()
+                    }
+                )
+
+            original = values(cached)
+            # An inert replay target: no file descriptor, directory open or
+            # caller-state mutation. apply() only advances the pure Machine.
+            replay = object.__new__(Journal)
+            replay.machine = None
+            previous = None
+            for raw in entries:
+                base.require(0 < len(raw) <= base.MAX_BYTES and time.monotonic() < end)
+                entry = json.loads(raw)
+                base.require(type(entry) is dict and set(entry) == {"schema", "previous", "event"})
+                base.require(type(entry["schema"]) is int and entry["schema"] == self.schema)
+                base.require(entry["previous"] == base.checksum(previous))
+                Journal.apply(replay, entry["event"])
+                previous = entry
+            base.require(type(replay.machine) is Machine)
+            base.require(vars(cached) == vars(replay.machine))
+            base.require(original == values(cached) == values(replay.machine))
+            base.require(self.machine is cached)
+            base.require(tuple(base.encode(entry) for entry in self.entries) == entries)
+            base.require(began <= time.monotonic() < end)
+            return cached
+        except Exception:
+            raise base.UnsafeHandoff(
+                "Recording journal replay is unconfirmed; preserve the original case."
+            ) from None
 
     def apply(self, event):
         base.require(type(event) is dict)

@@ -321,24 +321,28 @@ class Operator:
             type(journal) is plans.bootstrap.Journal and journal.path == self.plan.root / "journal"
         )
         journal.check_directory()
+        machine = journal.replayed(end)
+        entries = tuple(base.encode(entry) for entry in journal.entries)
         require(0 < len(journal.entries) <= journal.max_events)
         require(
             sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
         )
-        for index, entry in enumerate(journal.entries):
+        for index, expected in enumerate(entries):
             name = journal.name(index)
             before = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
             require(before.st_uid == os.geteuid() and before.st_mode & 0o7777 == 0o600)
             raw = dispatch.binding.protected.evidence.read_bytes(
                 journal.fd, name, limit=base.MAX_BYTES, deadline=end
             )
-            require(raw == base.encode(entry))
+            require(raw == expected)
             require(
                 dispatch.binding.identity(os.stat(name, dir_fd=journal.fd, follow_symlinks=False))
                 == dispatch.binding.identity(before)
             )
         journal.check_directory()
-        machine = journal.machine
+        require(sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(entries))])
+        require(tuple(base.encode(entry) for entry in journal.entries) == entries)
+        require(journal.replayed(end) is machine)
         require(type(machine) is plans.bootstrap.Machine)
         require(
             base.encode(journal.entries[0]["event"])

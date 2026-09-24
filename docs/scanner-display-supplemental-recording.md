@@ -1854,6 +1854,20 @@ fsync acknowledgment consumes publication while preserving its on-disk evidence.
 The independent recovery session must still qualify actual init/CLI exits,
 recording preservation and every other restoration gate.
 
+Original host-history reads now bracket their complete file checks with a pure
+schema-3 journal replay. Every entry's schema, hash chain and policy transition
+must be valid, and all cached policy values must match that replay, including
+the original deadlines, authorization, recording outcome and last event time.
+The same journal entries and machine must remain unchanged across the read.
+This prevents a changed in-memory cache from standing in for durable authority,
+even when individual file bytes still match the cached entries.
+
+Replay uses the existing policy rules and discards their returned actions. It
+does not reopen the journal, replace or repair the cache, publish an event,
+renew a deadline or dispatch anything. The existing two-second and original
+lifecycle bounds still apply. Replay alone is not on-disk evidence: Launch and
+Operator retain their separate complete-file and directory-identity checks.
+
 After this observer's actual terminal `poll()`, `recheck()` provides a separate
 read-only custody check. It requires the identical original result and digest,
 retained original pidfds, immutable dispatch history, original host clock and

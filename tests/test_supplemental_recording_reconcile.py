@@ -251,6 +251,74 @@ def test_lost_exit_journal_fsync_return_preserves_consumed_case_no_retry(
         assert len(case.requests) == 7
 
 
+@pytest.mark.parametrize("fault", ["outcome", "last_at", "chain", "schema"])
+def test_corrupt_cached_policy_refuses_before_exit_publication(
+    prepared, actors, calibration, plan, journal, family, monkeypatch, fault
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        finish(family)
+        evidence = case.holder.poll()
+        if fault == "outcome":
+            journal.machine.state = replace(journal.machine.state, recording_outcome="verified")
+        elif fault == "last_at":
+            journal.machine.last_at -= 1
+        else:
+            field, value = ("previous", "f" * 64) if fault == "chain" else ("schema", 2)
+            journal.entries[-1][field] = value
+            # Corruption matching both cache and disk must still fail replay.
+            path = journal.path / journal.name(len(journal.entries) - 1)
+            path.write_bytes(m.plans.base.encode(journal.entries[-1]))
+        originals = {path: path.read_bytes() for path in journal.path.iterdir()}
+        handles = dict(case.holder.handles)
+
+        def forbidden(*_, **__):
+            pytest.fail("Unconfirmed history must fail BEFORE publication")
+
+        monkeypatch.setattr(journal, "append", forbidden)
+        with pytest.raises(m.UnconfirmedReconciliation):
+            case.holder.publish(journal)
+        assert case.holder.failed and case.holder.publish_attempted
+        assert case.holder.result is evidence and case.holder.handles == handles
+        assert journal.fd >= 0
+        assert {path: path.read_bytes() for path in journal.path.iterdir()} == originals
+
+
+@pytest.mark.parametrize("fault", ["cache", "entry", "extra"])
+def test_changed_journal_during_exit_check_never_reaches_publication(
+    prepared, actors, calibration, plan, journal, family, monkeypatch, fault
+):
+    with captured(prepared, actors, calibration, plan, monkeypatch) as case:
+        case.ready.close()
+        finish(family)
+        evidence = case.holder.poll()
+        originals = {path: path.read_bytes() for path in journal.path.iterdir()}
+        read, calls = m.dispatch.binding.protected.evidence.read_bytes, []
+
+        def changed(fd, name, **kwargs):
+            raw = read(fd, name, **kwargs)
+            if fd == journal.fd and not calls:
+                calls.append(True)
+                if fault == "cache":
+                    journal.machine.last_at -= 1
+                elif fault == "entry":
+                    journal.entries[-1]["previous"] = "f" * 64
+                else:
+                    (journal.path / "extra").write_bytes(b"PRIVATE")
+            return raw
+
+        def forbidden(*_, **__):
+            pytest.fail("History changed during read; publication must not run")
+
+        monkeypatch.setattr(m.dispatch.binding.protected.evidence, "read_bytes", changed)
+        monkeypatch.setattr(journal, "append", forbidden)
+        with pytest.raises(m.UnconfirmedReconciliation):
+            case.holder.publish(journal)
+        assert len(calls) == 1 and case.holder.failed and not case.holder.closed
+        assert case.holder.result is evidence and journal.fd >= 0
+        assert {path: path.read_bytes() for path in originals} == originals
+
+
 @contextmanager
 def captured(
     prepared,

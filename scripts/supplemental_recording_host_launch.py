@@ -734,25 +734,29 @@ class Launch:
         journal, plan = self.journal, self.plan
         require(type(journal) is bootstrap.Journal and journal.path == plan.root / "journal")
         journal.check_directory()
+        machine = journal.replayed(end)
+        entries = tuple(base.encode(entry) for entry in journal.entries)
         require(0 < len(journal.entries) <= journal.max_events)
         require(
             sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(journal.entries))]
         )
-        for index, entry in enumerate(journal.entries):
+        for index, expected in enumerate(entries):
             name = journal.name(index)
             info = os.stat(name, dir_fd=journal.fd, follow_symlinks=False)
             require(info.st_uid == os.geteuid() and info.st_mode & 0o7777 == 0o600)
             raw = binding.protected.evidence.read_bytes(
                 journal.fd, name, limit=base.MAX_BYTES, deadline=end
             )
-            require(raw == base.encode(entry))
+            require(raw == expected)
             require(
                 binding.identity(os.stat(name, dir_fd=journal.fd, follow_symlinks=False))
                 == binding.identity(info)
             )
         journal.check_directory()
+        require(sorted(os.listdir(journal.fd)) == [journal.name(i) for i in range(len(entries))])
+        require(tuple(base.encode(entry) for entry in journal.entries) == entries)
+        require(journal.replayed(end) is machine)
         require(time.monotonic() < end)
-        machine = journal.machine
         require(type(machine) is bootstrap.Machine)
         require(
             base.encode(journal.entries[0]["event"])

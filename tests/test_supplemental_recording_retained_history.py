@@ -1,5 +1,6 @@
 """Original real journals/pidfd; explicitly synthetic Relay/Ready/platform."""
 
+import copy
 import json
 import time
 from dataclasses import replace
@@ -156,6 +157,54 @@ def test_original_recording_recovery_and_stop_windows_remain_final(begun, monkey
 def test_post_begin_read_is_not_available_before_actual_return(joined):
     begins.denied(joined.start.retained_history)
     assert not joined.relays and joined.ledger.state.count == 1
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"recording_outcome": "verified"},
+        {"files_stage": "finalized"},
+        {"reason": "not-in-the-original-journal"},
+    ],
+)
+def test_cached_policy_cannot_replace_durable_authorization(begun, change):
+    s = begun
+    originals = {path: path.read_bytes() for path in s.journal.path.iterdir()}
+    s.journal.machine.state = replace(s.journal.machine.state, **change)
+    begins.denied(s.start.retained_history)
+    assert {path: path.read_bytes() for path in originals} == originals
+    assert not s.prepared.witness.exited() and s.journal.fd >= 0
+    assert len(s.relays) == 1
+
+
+@pytest.mark.parametrize("fault", ["cache", "entry", "extra", "append", "machine"])
+def test_host_history_cannot_change_during_original_file_read(begun, monkeypatch, fault):
+    s = begun
+    read, calls = m.binding.protected.evidence.read_bytes, []
+    originals = {path: path.read_bytes() for path in s.journal.path.iterdir()}
+
+    def changed(fd, name, **kwargs):
+        raw = read(fd, name, **kwargs)
+        if fd == s.journal.fd and not calls:
+            calls.append(True)
+            if fault == "cache":
+                s.journal.machine.state = replace(s.journal.machine.state, files_stage="finalized")
+            elif fault == "entry":
+                s.journal.entries[-1]["previous"] = "f" * 64
+            elif fault == "extra":
+                (s.journal.path / "extra").write_bytes(b"PRIVATE")
+            elif fault == "machine":
+                s.journal.machine = copy.deepcopy(s.journal.machine)
+            else:
+                now = m.plans.clock.read().boottime_ns / m.plans.clock.NS
+                s.journal.append(dict(kind="finish", now=now, boot_id=s.plan.boot))
+        return raw
+
+    monkeypatch.setattr(m.binding.protected.evidence, "read_bytes", changed)
+    begins.denied(s.start.retained_history)
+    assert len(calls) == 1 and len(s.relays) == 1
+    assert {path: path.read_bytes() for path in originals} == originals
+    assert s.journal.fd >= 0 and not s.prepared.witness.exited()
 
 
 def test_retained_history_does_not_relax_bootstrap_history(begun, monkeypatch):
