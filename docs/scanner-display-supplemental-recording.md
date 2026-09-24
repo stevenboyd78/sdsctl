@@ -2606,6 +2606,24 @@ or operator approval. The full expanded source/runtime graph, finite installed
 command, supervision and actual host qualification still gate installation;
 none of the old helper commands implicitly selects this startup protocol.
 
+The same module also exposes a distinct, action-free `--startup-probe` command
+for later isolated qualification. Direct execution requires isolated Python,
+bytecode disabled, root uid/gid, working directory `/` and the fixed sealed
+helper pathname. The arguments identify the separate declaration directory and
+its independently reviewed template digest, **not** a precomputed final plan.
+It publishes one claim/plan, may consume one independent acceptance, and keeps
+the original handles alive only within the original offer's at-most15-second
+bound. Acceptance does not restart that bound. A defensive iteration ceiling
+and unchanged inner I/O bounds apply; blocked kernel I/O still needs independent
+outer supervision. Original clock closure is last; all case files are retained.
+
+This is not a read-only file probe: it explicitly creates private startup
+evidence in a fresh provisioned case. It never starts the service/native worker,
+contacts Engine, creates a journal or operator notice, or controls the scanner.
+Exit75 does not prove acceptance, readiness, recording, or restoration. Existing
+commands and `HelperQualification` do not allow/select this entrypoint. Running
+it in a synthetic local container is not installed App qualification.
+
 The read-only `host_source.Layout` now offers an explicit `startup=True` source
 inventory profile for the expanded **62-module** graph. The default still
 requires exactly the original54 modules; it does not detect or adopt a different

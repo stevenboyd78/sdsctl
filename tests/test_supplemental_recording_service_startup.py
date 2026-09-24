@@ -54,6 +54,116 @@ def submit(startup):
     sends.m.Submission(startup.original, startup.expected, startup.original.plan.sha256).submit()
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+def test_finite_probe_retains_original_until_same_offer_expiry(case, monkeypatch, accepted):
+    root, source, template, _ = case
+    before, owners, sleeps = inputs.fds(), [], []
+    actual = m.Startup
+
+    def capture(original):
+        result = actual(original)
+        owners.append(result)
+        return result
+
+    def wait(seconds):
+        owner = owners[0]
+        assert not owner.clock.closed and not owner.original._closed
+        assert not owner.declaration.closed and 0 < seconds <= 0.1
+        sleeps.append(seconds)
+        if accepted and len(sleeps) == 1:
+            submit(owner)
+        else:
+            assert owner.accepted is accepted
+            monkeypatch.setattr(m.time, "monotonic", lambda: owner.offer.deadline)
+
+    monkeypatch.setattr(m, "Startup", capture)
+    monkeypatch.setattr(m.time, "sleep", wait)
+    assert m.startup_probe(source, template.sha256) == 75
+    assert len(owners) == 1 and len(sleeps) == (2 if accepted else 1)
+    owner = owners[0]
+    assert owner.accepted is accepted and not owner.failed
+    assert owner.closed and owner.clock.closed and owner.original._closed
+    assert owner.declaration.closed and inputs.fds() == before
+    expected = {"startup-claim.json", "plan.json"}
+    if accepted:
+        expected.add("startup-acceptance.json")
+    assert {p.name for p in root.iterdir()} == expected
+
+
+@pytest.mark.parametrize("problem", [OSError, KeyboardInterrupt, SystemExit])
+def test_finite_probe_wait_failure_closes_every_original_without_replay(case, monkeypatch, problem):
+    root, source, template, _ = case
+    before = inputs.fds()
+
+    def interrupted(_):
+        raise problem("private-secret")
+
+    monkeypatch.setattr(m.time, "sleep", interrupted)
+    with pytest.raises(problem):
+        m.startup_probe(source, template.sha256)
+    assert inputs.fds() == before
+    preserved = {p.name: p.read_bytes() for p in root.iterdir()}
+    assert set(preserved) == {"startup-claim.json", "plan.json"}
+    denied(lambda: m.startup_probe(source, template.sha256))
+    assert preserved == {p.name: p.read_bytes() for p in root.iterdir()}
+    assert inputs.fds() == before
+
+
+def test_finite_probe_loop_cap_cannot_be_renewed_by_an_unchanging_wait(case, monkeypatch):
+    root, source, template, _ = case
+    before, sleeps, owners = inputs.fds(), [], []
+
+    class FrozenOwner:
+        # Exercise the defensive loop ceiling independently of real elapsed
+        # time. Actual original-clock custody is tested above, not simulated
+        # by this deliberately clock-free loop-control fixture.
+        def __init__(self, _):
+            self.offer = self
+            self.deadline = m.time.monotonic() + 60
+            self.accepted = self.closed = False
+            self.polls = 0
+            owners.append(self)
+
+        def prepare(self):
+            pass
+
+        def poll(self):
+            self.polls += 1
+
+        def close(self):
+            self.closed = True
+
+    monkeypatch.setattr(m, "Startup", FrozenOwner)
+    monkeypatch.setattr(m.time, "sleep", lambda value: sleeps.append(value))
+    denied(lambda: m.startup_probe(source, template.sha256))
+    assert len(sleeps) == 151 and all(0 < value <= 0.1 for value in sleeps)
+    assert len(owners) == 1 and owners[0].polls == 151 and owners[0].closed
+    assert inputs.fds() == before and list(root.iterdir()) == []
+
+
+def test_finite_probe_changed_declaration_refuses_without_other_actions(case, monkeypatch):
+    root, source, template, _ = case
+    before = inputs.fds()
+    monkeypatch.setattr(m.time, "sleep", lambda _: (source / m.declaration.NAME).chmod(0o644))
+    denied(lambda: m.startup_probe(source, template.sha256))
+    assert inputs.fds() == before and (root / "plan.json").is_file()
+
+
+@pytest.mark.parametrize("flags", [[], ["-I"], ["-B"], ["-I", "-B"]])
+@pytest.mark.parametrize(
+    "mode", [[], ["--startup-probe"], ["--start"], ["--startup-probe", "extra"]]
+)
+def test_direct_probe_cannot_run_from_an_unsealed_path(flags, mode):
+    result = subprocess.run(
+        [sys.executable, *flags, m.__file__, "/private-secret", "a" * 64, *mode],
+        cwd="/",
+        capture_output=True,
+        timeout=5,
+    )
+    assert result.returncode == 64 and not result.stdout
+    assert result.stderr.decode() == m.PROBE_MESSAGE + "\n"
+
+
 def test_constructor_claims_only_original_declaration_without_clock_or_write(case, monkeypatch):
     root, _, template, original = case
     before = inputs.fds()
