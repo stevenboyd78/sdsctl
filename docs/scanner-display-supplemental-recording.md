@@ -2594,6 +2594,24 @@ once when an earlier close is uncertain, rather than leaking the remaining
 handles or retrying a possibly reused descriptor. An original interruption is
 not hidden by an ordinary cleanup error.
 
+The direct startup-to-service integration tests now publish and accept a fresh
+plan before assembling a real private journal and `IdleService` from those same
+retained objects. The independently checked original normal-running/candidate-
+absent baseline must be sampled **before** `Startup.prepare()` captures the
+service origin, and no more than two seconds earlier. Journal preparation checks
+that original freshness against `issued_at`, not the later acceptance time.
+Acceptance cannot make an unhealthy, stale, future or differently pinned sample
+safe. A later observation must not replace the baseline or renew any deadline.
+
+After the accepted handles have been explicitly borrowed by the service, its
+own original-clock/plan checks continue; it does not poll acceptance again or
+extend the fifteen-second startup offer to accommodate the service lifetime.
+The caller closes service resources and journal before startup, then closes the
+borrowed declaration last. Tests cover passive assembly, explicit idle
+cancellation/restoration, expiry, lost notices, failed reads and interrupted
+cleanup. Their host metadata, Engine actions and process receipts are explicitly
+synthetic; no installed command or actual handoff is enabled by these tests.
+
 Real local subprocess tests cover independent acceptance and rejection while
 an observer holds the original process pidfd, clock and namespace evidence.
 The observer refuses to continue after that owner exits. These tests use
