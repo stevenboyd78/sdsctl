@@ -2015,8 +2015,10 @@ containers or retired original custody refuse the join. The metadata-only
 
 Neither collector appends a completion event or dispatches an App command.
 Tests using real original journals and explicitly synthetic host/IPC evidence
-exercise the existing policy through restoration, including withholding
-completion until the separately tracked normal-start CLI exit is recorded.
+exercise the existing policy and actual `RecoverySession` tracking bridge through
+restoration, including withholding completion until the separately tracked
+normal-start CLI exit is recorded. Lost Engine replies never replay that command;
+a failed file read cannot suppress the bridge's independent clock-only expiry.
 Installed runtime/source qualification and independently supervised recovery
 remain separate gates; this is not a claim of a live App restoration.
 

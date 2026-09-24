@@ -10,6 +10,8 @@ from threading import Thread
 
 import pytest
 
+from . import test_supplemental_handoff_host as dispatch_tests
+from . import test_supplemental_handoff_recovery as recovery_tests
 from . import test_supplemental_recording_finalized_host as finalized
 
 m, authority = finalized.m, finalized.authority
@@ -329,3 +331,109 @@ def test_original_static_collector_still_has_no_native_flags(restoring):
     assert sample.observation.normal.healthy is None
     assert sample.observation.normal.recording is None
     assert not c.native_calls
+
+
+@pytest.fixture
+def recovering(restoring, monkeypatch):
+    """Actual recovery bridge and tracking, explicitly synthetic Engine return."""
+    c = restoring
+    event(c, "bind_execution", container_id="a" * 64, execution_id="3" * 64)
+    command = dispatch_tests.h.CONTROL["starting_normal"]
+    c.execution = dispatch_tests.execution(command) | dict(
+        ID="3" * 64, ContainerID="a" * 64, Running=True, ExitCode=None, Pid=321
+    )
+    c.inspections, c.commands = [], []
+
+    def inspect(execution):
+        assert execution == "3" * 64
+        c.inspections.append(execution)
+        return c.execution.copy()
+
+    def no_dispatch(*args, **kwargs):
+        c.commands.append((args, kwargs))
+        pytest.fail("A previously recorded restoration command must never be replayed")
+
+    monkeypatch.setattr(c.host.docker, "inspect_execution", inspect)
+    monkeypatch.setattr(c.host.docker, "create_execution", no_dispatch)
+    monkeypatch.setattr(c.host.docker, "start_execution", no_dispatch)
+    processes = recovery_tests.r.TrackedProcesses(
+        c.s.journal,
+        c.host.docker,
+        images={m.base.NORMAL: c.s.plan.normal.image, m.base.CANDIDATE: c.s.plan.candidate.image},
+        read_clock=lambda: (c.s.plan.boot, c.operator._clock()),
+    )
+    dispatch = dispatch_tests.h.TrackedDispatch(
+        c.s.journal,
+        c.host.docker,
+        cli_image=c.s.plan.cli_image,
+        cli_generation=c.s.plan.cli_generation,
+        now=c.operator._clock,
+    )
+    c.session = m.launch.bootstrap.RecoverySession(c.s.journal, processes, dispatch, c.host.read)
+    try:
+        yield c
+    finally:
+        c.session.close()
+
+
+def test_actual_recovery_bridge_waits_for_exit_then_completes_without_dispatch(recovering):
+    c = recovering
+    deadline = c.s.journal.machine.hard_deadline
+    first = c.session.poll()
+    assert first.phase == "starting_normal" and first.outcome == "observed"
+    assert c.native_calls and c.s.journal.machine.state.restored_generation is None
+    c.execution.update(Running=False, ExitCode=0, Pid=0)
+    final = c.session.poll()
+    assert final.phase == "complete" and final.outcome == "observed"
+    assert ("3" * 64, 0) in c.s.journal.machine.state.completed_executions
+    assert c.s.journal.machine.state.restored_generation == c.normal.generation
+    assert c.s.journal.machine.state.recording_outcome == "verified"
+    assert c.s.journal.machine.hard_deadline == deadline
+    assert c.session.poll().outcome == "terminal"
+    assert not c.commands
+
+
+def test_actual_recovery_bridge_keeps_lost_exec_unknown_without_replay(recovering, monkeypatch):
+    c = recovering
+
+    def lost(_):
+        raise TimeoutError("PRIVATE lost Engine inspection")
+
+    monkeypatch.setattr(c.host.docker, "inspect_execution", lost)
+    for _ in range(2):
+        result = c.session.poll()
+        assert result.phase == "starting_normal"
+        assert c.s.journal.machine.state.restored_generation is None
+    assert not c.commands
+    assert not any(eid == "3" * 64 for eid, _ in c.s.journal.machine.state.completed_executions)
+
+
+def test_actual_recovery_bridge_clock_expires_even_after_file_failure(recovering):
+    c = recovering
+    c.reader.files.bad_files = True
+    result = c.session.poll()
+    assert result.outcome == "observation_unavailable"
+    assert result.phase == "starting_normal" and c.reader.failed and c.host.failed
+    assert not c.operator.closed and c.s.journal.fd >= 0
+    # This clock-only tick must not invoke the failed file reader or promote
+    # the recording. It proves no shutdown itself; native/outer timers remain
+    # independently responsible for stopping their exact original processes.
+    limit = c.s.journal.machine.state.deadline
+    c.session.processes.read_clock = lambda: (c.s.plan.boot, limit)
+    count = len(c.native_calls)
+    result = c.session.poll()
+    assert result.phase == "review" and result.outcome == "terminal"
+    assert c.s.journal.machine.state.reason == "phase_deadline"
+    assert len(c.native_calls) == count and not c.commands
+    assert not c.operator.closed
+
+
+@pytest.mark.parametrize("state", [(None, False), (False, False), (True, True)])
+def test_actual_recovery_bridge_does_not_infer_health_from_cli_exit(recovering, state):
+    c = recovering
+    c.execution.update(Running=False, ExitCode=0, Pid=0)
+    c.native_values = state
+    result = c.session.poll()
+    assert result.phase == ("review" if state[1] else "starting_normal")
+    assert ("3" * 64, 0) in c.s.journal.machine.state.completed_executions
+    assert not c.commands
