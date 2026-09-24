@@ -359,11 +359,16 @@ class Layout:
             if not link:
                 require(stat.S_IMODE(info.st_mode) & 0o7022 == 0)
 
-        def directory(parent, name):
+        def directory(parent, name, *, ancestor=False):
             before = os.stat(name, dir_fd=parent, follow_symlinks=False)
             child = os.open(name, DIRECTORY, dir_fd=parent)
-            opened.append((parent, name, child, identity(before)))
-            require(identity(os.fstat(child)) == identity(before))
+            # Outside the selected image, sibling creation changes directory
+            # size/link count/timestamps without changing this path's identity.
+            # Retain inode/device/type/mode/owner checks there. The image root
+            # itself and EVERY directory/file below it keep the full identity.
+            original = identity(before)[:5] if ancestor else identity(before)
+            opened.append((parent, name, child, original))
+            require(identity(os.fstat(child))[: len(original)] == original)
             return child
 
         def record(parent, name, relative, depth=0):
@@ -437,10 +442,11 @@ class Layout:
         try:
             anchor = os.open("/", DIRECTORY)
             opened.append((None, None, anchor, None))
-            opened[-1] = (None, None, anchor, identity(os.fstat(anchor)))
+            original = identity(os.fstat(anchor))
+            opened[-1] = (None, None, anchor, original[:5] if self.root != Path("/") else original)
             root = anchor
-            for part in self.root.parts[1:]:
-                root = directory(root, part)
+            for index, part in enumerate(self.root.parts[1:], start=1):
+                root = directory(root, part, ancestor=index < len(self.root.parts) - 1)
             safe(os.fstat(root))
 
             def parent_for(relative):
@@ -509,9 +515,12 @@ class Layout:
                     final = _resolve(path, entries)
                     require(final.startswith(ZONEINFO + "/") and entries[final]["kind"] == "file")
             for parent, name, fd, before in opened:
-                require(identity(os.fstat(fd)) == before)
+                require(identity(os.fstat(fd))[: len(before)] == before)
                 if parent is not None:
-                    require(identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == before)
+                    require(
+                        identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[: len(before)]
+                        == before
+                    )
             timely()
             return entries, count, total
         finally:
@@ -526,6 +535,8 @@ class Layout:
         exact image/configuration, dynamic-loader environment, kernel/process
         identity and original independent deadlines remain separate obligations.
         Kernel I/O stalls require an independently supervised outer deadline.
+        Ancestors outside root bind identity/mode/owner, not unrelated sibling
+        timestamps. The selected root and its descendants keep full checks.
         """
         try:
             require(type(self.root) is type(Path()) and self.root.is_absolute())

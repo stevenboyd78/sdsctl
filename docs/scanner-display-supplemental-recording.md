@@ -2400,6 +2400,13 @@ symlinks; missing, cyclic or out-of-inventory targets refuse qualification.
 Two complete observations must agree within one bounded collection deadline.
 Unsafe permissions, special files, hard-linked files, changed descriptors,
 unbounded trees and unknown expected pins fail with a fixed sanitized error.
+Every retained ancestor outside the selected image root is checked for the same
+device, inode, type, permissions and ownership. Unrelated sibling activity in
+those external ancestors (for example another image below a Docker directory)
+does not invalidate the inventory through directory timestamps or link counts.
+The selected root itself, including when it is `/`, and every directory and
+file below it retain the full before/after metadata checks. Replacements and
+symlink swaps still fail; no runtime content is excluded or deadline renewed.
 Loader-preload, virtual-environment and zip overrides, Python startup hooks and
 `._pth` path overrides are refused. A separate closed image/container `Config.Env`
 check rejects duplicate or extra keys, including dynamic-loader injection. It

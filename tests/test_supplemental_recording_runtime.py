@@ -6,6 +6,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 from threading import Barrier, Event, Thread, current_thread
+from types import SimpleNamespace
 
 import pytest
 
@@ -310,6 +311,166 @@ def test_changed_file_during_read_is_refused(layout, monkeypatch):
 
     monkeypatch.setattr(m.os, "read", read)
     denied(layout.observe)
+    assert changed == [True]
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_unrelated_sibling_creation_during_each_snapshot_keeps_identical_evidence(
+    layout, monkeypatch, workers
+):
+    layout = replace(layout, workers=workers)
+    expected = layout.observe()
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+    original, changed = m.os.read, []
+
+    def read(fd, size):
+        value = original(fd, size)
+        if value and os.fstat(fd).st_ino == target:
+            # A sibling of the selected image is outside the inventory. Real
+            # /tmp and Docker parent directories change during unrelated work.
+            sibling = layout.root.parent / f"unrelated-{len(changed)}"
+            sibling.mkdir()
+            changed.append(sibling)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    assert layout.verify(expected.sha256) == expected
+    assert len(changed) == 2
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("relative", [".", "etc", "usr", "usr/local", "usr/local/bin"])
+def test_in_image_directory_mutation_keeps_full_metadata_guard(
+    layout, monkeypatch, workers, relative
+):
+    layout = replace(layout, workers=workers)
+    original, changed = m.os.read, []
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+
+    def read(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == target:
+            (layout.root / relative / "unexpected").mkdir()
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    denied(layout.observe)
+    assert changed == [True]
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("fault", ["mode", "replaced", "symlink"])
+def test_external_ancestor_change_is_still_refused(layout, monkeypatch, workers, fault):
+    parent = layout.root.parent / "holder"
+    parent.mkdir()
+    layout.root.rename(parent / "image")
+    layout = replace(layout, root=parent / "image", workers=workers)
+    original, changed = m.os.read, []
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+
+    def read(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == target:
+            if fault == "mode":
+                parent.chmod(0o711)
+            else:
+                saved = parent.with_name("original-holder")
+                parent.rename(saved)
+                if fault == "replaced":
+                    parent.mkdir()
+                else:
+                    parent.symlink_to(saved, target_is_directory=True)
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    denied(layout.observe)
+    assert changed == [True]
+
+
+def test_external_ancestor_swapped_between_stat_and_open_is_refused(layout, monkeypatch):
+    parent = layout.root.parent / "holder"
+    parent.mkdir()
+    layout.root.rename(parent / "image")
+    layout = replace(layout, root=parent / "image")
+    original, changed = m.os.open, []
+    descriptors = len(os.listdir("/proc/self/fd"))
+
+    def opened(path, flags, *args, **kwargs):
+        if path == "holder" and not changed:
+            parent.rename(parent.with_name("original-holder"))
+            parent.mkdir()
+            changed.append(True)
+        return original(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(m.os, "open", opened)
+    denied(layout.observe)
+    assert changed == [True]
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+
+
+@pytest.mark.parametrize("field", ["st_dev", "st_ino", "st_mode", "st_uid", "st_gid"])
+def test_external_ancestor_descriptor_identity_fields_are_all_retained(layout, monkeypatch, field):
+    reading, stating, changed = m.os.read, m.os.fstat, []
+    ancestor = layout.root.parent.stat().st_ino
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+
+    def read(fd, size):
+        value = reading(fd, size)
+        if value and stating(fd).st_ino == target:
+            changed.append(True)
+        return value
+
+    def stated(fd):
+        value = stating(fd)
+        if changed and value.st_ino == ancestor:
+            # Model a changed original descriptor without privileged chown or
+            # mount operations. Ordinary pathname/descriptor reads stay real.
+            fields = (
+                "st_dev",
+                "st_ino",
+                "st_mode",
+                "st_uid",
+                "st_gid",
+                "st_nlink",
+                "st_size",
+                "st_mtime_ns",
+                "st_ctime_ns",
+            )
+            replacement = {name: getattr(value, name) for name in fields}
+            replacement[field] += 1
+            return SimpleNamespace(**replacement)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    monkeypatch.setattr(m.os, "fstat", stated)
+    denied(layout.observe)
+    assert changed
+
+
+def test_image_root_is_not_treated_as_external_when_it_is_the_anchor(layout, monkeypatch):
+    # Map only the slash anchor to an ordinary fixture FD; never inspect or
+    # modify the host's actual runtime. All later operations remain FD-relative.
+    opening, reading, changed = m.os.open, m.os.read, []
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+
+    def opened(path, flags, *args, **kwargs):
+        return opening(layout.root if path == "/" else path, flags, *args, **kwargs)
+
+    def read(fd, size):
+        value = reading(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == target:
+            (layout.root / "unexpected").mkdir()
+            changed.append(True)
+        return value
+
+    expected = layout.observe()
+    monkeypatch.setattr(m.os, "open", opened)
+    anchored = replace(layout, root=Path("/"))
+    assert anchored.observe() == expected
+    monkeypatch.setattr(m.os, "read", read)
+    denied(anchored.observe)
     assert changed == [True]
 
 

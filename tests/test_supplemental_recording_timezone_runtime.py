@@ -48,6 +48,38 @@ def test_same_file_alias_still_binds_selected_name(supervised):
     )
 
 
+@pytest.mark.parametrize("workers", [1, 2])
+def test_supervised_profile_keeps_pin_during_unrelated_parent_activity(
+    supervised, monkeypatch, workers
+):
+    supervised = replace(supervised, workers=workers)
+    expected = supervised.observe_supervised("America/Denver")
+    original, changed = m.os.read, []
+    target = (supervised.root / m.ZONEINFO / "America/Denver").stat().st_ino
+
+    def read(fd, size):
+        value = original(fd, size)
+        if value and os.fstat(fd).st_ino == target:
+            sibling = supervised.root.parent / f"unrelated-{len(changed)}"
+            sibling.mkdir()
+            changed.append(sibling)
+        return value
+
+    monkeypatch.setattr(m.os, "read", read)
+    assert supervised.verify_supervised(expected.sha256, "America/Denver") == expected
+    assert len(changed) == 2
+    assert (
+        supervised.verify_supervised_during(
+            expected.sha256,
+            "America/Denver",
+            lambda: "read-only-sample",
+            deadline=time.monotonic() + 2,
+        )
+        == "read-only-sample"
+    )
+    assert len(changed) == 4
+
+
 @pytest.mark.parametrize("path", ["America/Denver", "Etc/UTC", "tzdata.zi", "unused-zone"])
 def test_selected_unselected_and_metadata_bytes_all_pinned(supervised, path):
     before = supervised.observe_supervised("America/Denver")
