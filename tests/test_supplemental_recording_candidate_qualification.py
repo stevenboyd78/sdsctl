@@ -264,7 +264,20 @@ def test_actual_full_files_and_original_process_reads_surround_observation(candi
 
 @pytest.mark.parametrize(
     "fault",
-    ["source", "runtime", "environment", "metadata", "idle", "exit", "late", "raise", "reentrant"],
+    [
+        "source",
+        "runtime",
+        "environment",
+        "metadata",
+        "idle",
+        "exit",
+        "late",
+        "raise",
+        "reentrant",
+        "plan_nested",
+        "plan_raw",
+        "plan_replaced",
+    ],
 )
 def test_bracket_permanently_refuses_every_post_observation_failure(candidate, monkeypatch, fault):
     obj = candidate.make()
@@ -302,6 +315,13 @@ def test_bracket_permanently_refuses_every_post_observation_failure(candidate, m
             raise OSError("PRIVATE callback failed")
         elif fault == "reentrant":
             launch.denied(obj)
+        elif fault == "plan_nested":
+            object.__setattr__(candidate.plan.candidate_runtime, "source", "f" * 64)
+        elif fault == "plan_raw":
+            object.__setattr__(candidate.plan, "raw", candidate.plan.raw + b" ")
+        elif fault == "plan_replaced":
+            obj.plan = m.plans.load_bytes(candidate.plan.raw, candidate.plan.sha256)
+            candidate.idle.plan = obj.plan
         return object()
 
     launch.denied(lambda: obj.during(observe))

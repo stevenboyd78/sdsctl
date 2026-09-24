@@ -62,7 +62,7 @@ class BootstrapHost:
         self.failed = False
         self.pending = None
         try:
-            require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
+            self.plan_pin = plans.PinnedPlan(plan)
             plan.check_projection(projected)
             require(type(idle) is idle_module.Idle and idle.plan is plan)
             require(type(witness) is engine.dispatch.process.ProcessWitness)
@@ -86,8 +86,7 @@ class BootstrapHost:
         return observed.boot, now
 
     def _guard(self):
-        require(type(self.plan) is plans.Plan)
-        require(plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan)
+        self.plan_pin.check(self.plan)
         self.plan.check_projection(self.projected)
         require((self.plan.raw, self.projected.sha256, self.init, self.generation) == self.original)
         require(type(self.idle) is idle_module.Idle and self.idle.plan is self.plan)
@@ -347,7 +346,7 @@ class CandidateQualification:
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed, self.elapsed_seconds = False, None
         try:
-            require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
+            self.plan_pin = plans.PinnedPlan(plan)
             require(type(idle) is idle_module.Idle and idle.plan == plan)
             require(type(witness) is engine.dispatch.process.ProcessWitness)
             require(idle.init == witness.identity)
@@ -394,10 +393,7 @@ class CandidateQualification:
         require(not self.failed and self.owner == (os.getpid(), get_ident()))
         require(os.geteuid() == runtime.ROOT_UID and time.monotonic() < deadline)
         require(self._pins() == self.original)
-        require(
-            type(self.plan) is plans.Plan
-            and plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan
-        )
+        self.plan_pin.check(self.plan)
         require(
             type(self.docker) is plans.ordinary.Docker
             and self.docker.path == "/var/run/docker.sock"

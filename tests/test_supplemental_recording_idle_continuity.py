@@ -172,6 +172,8 @@ def test_changed_original_files_never_become_a_new_baseline(joined, fault):
         "idle_closed",
         "initial",
         "plan_object",
+        "plan_nested",
+        "plan_raw",
     ],
 )
 def test_changed_original_bindings_refuse_without_signalling_or_closing(joined, fault):
@@ -208,6 +210,10 @@ def test_changed_original_bindings_refuse_without_signalling_or_closing(joined, 
         setattr(s.idle, fault.removeprefix("idle_"), True)
     elif fault == "initial":
         s.idle.initial = replace(s.idle.initial, claim_sha256="f" * 64)
+    elif fault == "plan_nested":
+        object.__setattr__(s.plan.helper, "source", "f" * 64)
+    elif fault == "plan_raw":
+        object.__setattr__(s.plan, "raw", s.plan.raw + b" ")
     else:
         s.idle.plan = m.host_plan.load_bytes(s.plan.raw, s.plan.sha256)
     denied(s.post.read)

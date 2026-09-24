@@ -346,6 +346,7 @@ class PostBegin:
             require(not idle.closed and not idle.failed and idle.owner == self.owner)
             require(type(idle.initial) is Evidence and type(idle.plan) is host_plan.Plan)
             self.idle, self.guard, self.plan = idle, guard, idle.plan
+            self.plan_pin = host_plan.PinnedPlan(self.plan)
             self.objects = (idle, guard, idle.plan)
             self.original = idle.initial
             self.plan_raw, self.pins = self.plan.raw, guard.pins
@@ -374,7 +375,7 @@ class PostBegin:
         require(type(idle) is Idle and type(guard) is retained.Retained)
         require(not idle.closed and not idle.failed and idle.owner == guard.owner == self.owner)
         require(type(plan) is host_plan.Plan and idle.plan is plan and plan.raw == self.plan_raw)
-        require(host_plan.load_bytes(plan.raw, plan.sha256) == plan)
+        self.plan_pin.check(plan)
         require(idle.initial == self.original and idle.actor == self.actor)
         require(idle.zero_domain is self.domain and idle.domain_sha256 == self.domain_sha256)
         require(guard.zero_domain is self.domain and guard.domain_sha256 == self.domain_sha256)

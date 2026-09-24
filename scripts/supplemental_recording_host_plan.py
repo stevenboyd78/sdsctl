@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
 
 import supplemental_handoff_observer as ordinary
@@ -67,8 +67,8 @@ class Deadlines:
     recover_by: float
 
     def __post_init__(self):
-        for field in fields(self):
-            base.clock(getattr(self, field.name))
+        for item in fields(self):
+            base.clock(getattr(self, item.name))
         require(self.issued_at < self.ready_by <= self.issued_at + 600)
         require(self.ready_by < self.stop_by <= self.issued_at + 780)
         require(self.recover_by == self.issued_at + base.TOTAL_SECONDS)
@@ -268,6 +268,59 @@ class Plan:
                 "contract": asdict(self.candidate.contract),
                 "bootstrap": asdict(self.bootstrap),
             }
+        except Exception:
+            raise UnconfirmedPlan(MESSAGE) from None
+
+
+def _same_plan_value(current, decoded):
+    """Compare every value and type against independently decoded plan data.
+
+    The trusted side is produced only by load_bytes: frozen records, tuples,
+    paths and immutable scalars, never caller-defined equality implementations.
+    Exact types also prevent bool/int or int/float equality from hiding a change.
+    """
+    kind = type(decoded)
+    if type(current) is not kind:
+        return False
+    if kind is tuple:
+        return len(current) == len(decoded) and all(
+            _same_plan_value(a, b) for a, b in zip(current, decoded, strict=True)
+        )
+    if is_dataclass(kind):
+        return all(
+            _same_plan_value(getattr(current, item.name), getattr(decoded, item.name))
+            for item in fields(kind)
+        )
+    return current == decoded
+
+
+@dataclass(frozen=True)
+class PinnedPlan:
+    """Retain one strictly decoded plan for cheap, complete in-memory rechecks.
+
+    No observations, time samples or filesystem results are cached. Construction
+    independently decodes the canonical bytes and validates every field. Each
+    check still compares all fields, nested types and raw bytes, and requires
+    the original Plan object. This provides no readiness or action authority;
+    owners must retain all fresh clock/file/process/Engine checks separately.
+    """
+
+    original: Plan
+    _decoded: Plan = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self):
+        try:
+            require(type(self.original) is Plan)
+            decoded = load_bytes(self.original.raw, self.original.sha256)
+            object.__setattr__(self, "_decoded", decoded)
+            self.check(self.original)
+        except Exception:
+            raise UnconfirmedPlan(MESSAGE) from None
+
+    def check(self, current):
+        try:
+            require(type(current) is Plan and current is self.original)
+            require(_same_plan_value(current, self._decoded))
         except Exception:
             raise UnconfirmedPlan(MESSAGE) from None
 

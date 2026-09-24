@@ -452,7 +452,10 @@ def test_prepared_sample_completion_does_not_refresh_original_freshness(joined, 
     assert not s.prepared.witness.exited()
 
 
-@pytest.mark.parametrize("fault", ["idle", "identity", "source", "new_recording"])
+@pytest.mark.parametrize(
+    "fault",
+    ["idle", "identity", "source", "plan_nested", "plan_raw", "plan_replaced", "new_recording"],
+)
 def test_original_checks_still_bracket_prepared_read(joined, fault):
     s = joined
     s.obj.prepare()
@@ -465,6 +468,13 @@ def test_original_checks_still_bracket_prepared_read(joined, fault):
         s.prepared.witness.close()
     elif fault == "source":
         object.__setattr__(s.plan, "core_generation", "f" * 64)
+    elif fault == "plan_nested":
+        object.__setattr__(s.plan.helper, "source", "f" * 64)
+    elif fault == "plan_raw":
+        object.__setattr__(s.plan, "raw", s.plan.raw + b" ")
+    elif fault == "plan_replaced":
+        s.obj.plan = m.plans.load_bytes(s.plan.raw, s.plan.sha256)
+        s.idle.plan = s.obj.plan
     else:
         # A file introduced before a NEW prepared read must not adopt that root.
         assert s.obj()

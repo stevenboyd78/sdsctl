@@ -214,6 +214,8 @@ def test_complete_fresh_original_observation_is_required(joined, monkeypatch, fa
         "original_ready",
         "ready_deadline",
         "plan",
+        "plan_nested",
+        "plan_raw",
         "reader",
         "qualifier",
         "docker",
@@ -243,6 +245,10 @@ def test_changed_original_context_refuses_before_new_probe(joined, monkeypatch, 
         s.run.ready.ready_by += 10
     elif fault == "plan":
         monkeypatch.setattr(s.run, "plan", m.plans.load_bytes(s.plan.raw, s.plan.sha256))
+    elif fault == "plan_nested":
+        object.__setattr__(s.plan.normal.files, "recordings", "f" * 64)
+    elif fault == "plan_raw":
+        object.__setattr__(s.plan, "raw", s.plan.raw + b" ")
     elif fault == "reader":
         s.run.read = lambda: None
     elif fault == "qualifier":

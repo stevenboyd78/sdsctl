@@ -67,6 +67,7 @@ class Start:
             require(ledger.binding == run.pins.host)
             self.run, self.ledger = run, ledger
             self.plan, self.ready = run.plan, run.ready
+            self.plan_pin = plans.PinnedPlan(self.plan)
             self.objects = (
                 run.plan,
                 run.projected,
@@ -160,7 +161,7 @@ class Start:
             == binding.encode(launch.received._context(run.pins, run.profile_sha256))
         )
         require(not run.failed and not run.closed and run.used and run.confirm_attempted)
-        require(type(plan) is plans.Plan and plans.load_bytes(plan.raw, plan.sha256) == plan)
+        self.plan_pin.check(plan)
         plan.check_projection(run.projected)
         require(
             (

@@ -3,7 +3,7 @@
 import importlib.util
 import sys
 from copy import deepcopy
-from dataclasses import asdict, replace
+from dataclasses import asdict, fields, is_dataclass, replace
 from pathlib import Path
 
 import pytest
@@ -113,6 +113,88 @@ def test_input_mutation_cannot_change_plan_or_original_deadlines():
     supplied["other_scanner_apps"].clear()
     supplied["installed_versions"].clear()
     assert (plan.raw, plan.sha256, plan.lease, plan.bootstrap, plan.idle_argv) == original
+
+
+def _plan_members(current, path=()):
+    if is_dataclass(current):
+        for item in fields(current):
+            member = (*path, item.name)
+            yield member
+            yield from _plan_members(getattr(current, item.name), member)
+    elif type(current) is tuple:
+        for index, item in enumerate(current):
+            yield from _plan_members(item, (*path, index))
+
+
+def _member(plan, path):
+    for name in path:
+        plan = plan[name] if type(name) is int else getattr(plan, name)
+    return plan
+
+
+@pytest.mark.parametrize("path", list(_plan_members(m.decode(value()))))
+@pytest.mark.parametrize("before_pin", [False, True])
+def test_plan_pin_checks_every_nested_member_even_if_frozen_record_is_bypassed(path, before_pin):
+    plan = m.decode(value())
+    pin = None if before_pin else m.PinnedPlan(plan)
+    parent = _member(plan, path[:-1])
+    object.__setattr__(parent, path[-1], None)
+    denied(lambda: m.PinnedPlan(plan) if before_pin else pin.check(plan))
+
+
+def test_plan_pin_decodes_once_but_never_adopts_different_bytes_or_plan(monkeypatch):
+    plan = m.decode(value())
+    copy = m.load_bytes(plan.raw, plan.sha256)
+    pin = m.PinnedPlan(plan)
+
+    def no_repeat(*_):
+        pytest.fail("Unchanged canonical plan must not be decoded again")
+
+    monkeypatch.setattr(m, "load_bytes", no_repeat)
+    for _ in range(3):
+        assert pin.check(plan) is None
+    denied(lambda: pin.check(copy))
+    changed = value() | {"firmware": "changed"}
+    object.__setattr__(plan, "firmware", changed["firmware"])
+    object.__setattr__(plan, "raw", m.base.encode(changed))
+    denied(lambda: pin.check(plan))
+
+
+@pytest.mark.parametrize(
+    "path,replacement",
+    [
+        (("original_clock", "namespace"), (True, 402)),
+        (("deadlines", "issued_at"), 30.0),
+        (("deadlines", "ready_by"), 330.0),
+        (("original_clock", "before_ns"), float(10 * m.clock.NS)),
+    ],
+)
+def test_plan_pin_refuses_equal_but_differently_typed_values(path, replacement):
+    plan = m.decode(value())
+    pin = m.PinnedPlan(plan)
+    parent = _member(plan, path[:-1])
+    assert getattr(parent, path[-1]) == replacement  # Ordinary equality would hide this drift.
+    object.__setattr__(parent, path[-1], replacement)
+    denied(lambda: pin.check(plan))
+    denied(lambda: m.PinnedPlan(plan))
+
+
+def test_plan_pin_nested_reference_is_independently_decoded():
+    plan = m.decode(value())
+    pin = m.PinnedPlan(plan)
+    for path in _plan_members(plan):
+        member = _member(plan, path)
+        if is_dataclass(member):
+            assert _member(pin._decoded, path) == member
+            assert _member(pin._decoded, path) is not member
+    assert pin._decoded is not plan
+
+
+@pytest.mark.parametrize("changed", [None, {}, b"PRIVATE"])
+def test_plan_pin_refuses_non_plan_without_leaking_input(changed):
+    denied(lambda: m.PinnedPlan(changed))
+    pin = m.PinnedPlan(m.decode(value()))
+    denied(lambda: pin.check(changed))
 
 
 @pytest.mark.parametrize(

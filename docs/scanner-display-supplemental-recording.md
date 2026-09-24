@@ -2152,6 +2152,18 @@ both modes' mutation/timeout rejection, and the existing concurrent-budget and
 worker-cleanup checks. This read-only timing result does not itself qualify
 combined readiness, real Supervisor latency or the installed service.
 
+The host's repeated plan checks now retain a separately decoded canonical plan
+and compare every field, nested type and original byte string against it. They
+also require the same original plan object. This removes repeated JSON decoding
+and cross-field reconstruction from the hot guard path without caching any
+clock, filesystem, process, container or readiness observations. Changed raw
+bytes, nested records, equal-but-differently-typed values and substituted plan
+objects still refuse; no later plan becomes the baseline. The initial strict
+decoder, source pins, full live observations and original deadlines remain in
+place. A local pure-plan benchmark reduced 1,000 such checks from about
+1.92–1.98 seconds to 0.049–0.052 seconds. That is an isolated CPU measurement,
+not a passing combined-readiness or installed-service timing result.
+
 ### Recovery routes inside the pinned helper
 
 Two fresh local cases at `df78fd4` passed the recording/recovery assembly inside
