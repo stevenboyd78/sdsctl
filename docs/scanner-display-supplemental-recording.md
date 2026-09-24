@@ -1941,6 +1941,33 @@ host/source/runtime observation, an independently supervised recovery service,
 proof of original init/CLI exit, or permission to restore an App. Those gates
 remain required before an installed trial.
 
+`supplemental_recording_host_begin.FinalizedHost` joins that original published
+`AuthorizedFinalized` reader to fresh ordinary host metadata. It uses the
+original fixed Docker/Supervisor routes, App seals, installed-version pins,
+Core/CLI identities, protected-file layouts and other-owner inventory. The
+original candidate container ID is checked before and after the complete read,
+including when stopped; a same-name or same-image replacement is not accepted.
+Running containers use the existing complete mounted-package collector. A
+stopped candidate uses the existing sealed immutable-image check, which does
+not pretend to observe a current process environment.
+
+The whole composition must fit within two seconds and the original recovery
+deadline. Current metadata and verified finalized files must agree on boot,
+time ordering, original generation and recording contract, with no intervening
+authorization-journal change. Both Apps' native health and recording flags stay
+unknown. Changed App pins, busy jobs and other-owner state remain visible to
+the existing recovery policy rather than being replaced with favorable facts.
+No recovery event, signal, App action, deadline renewal or new baseline is
+created. Failure or closure retires only this observer; the original file
+reader, Start, journal and independent Operator remain caller-owned.
+
+This is a current metadata/file observation, **not** installed host/runtime
+qualification, independent recovery supervision or restoration authorization.
+Original init/CLI exit evidence and a separately qualified normal-start health
+observation remain necessary. Unit tests use real authorization/journal state
+with explicit synthetic metadata/files and separately check the original
+observer factory and collector bindings; they are not a scanner test.
+
 A fresh local Engine/native check also verified capture and reconciliation after
 closing the original Ready object and its own process handles, then separately
 observed the original fixture init expiry. A separate fresh case exercised the

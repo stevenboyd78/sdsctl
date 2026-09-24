@@ -788,6 +788,157 @@ class _StaticHostObserver(plans.ordinary.HostObserver):
         )
 
 
+class FinalizedHost:
+    """Original authorized finalized files plus current ordinary host metadata.
+
+    This read-only composition is NOT installed source/runtime qualification,
+    an independent recovery service or permission to restore either App. Both
+    Apps' native flags stay unknown. Normal-start health, original init/CLI
+    exit receipts and execution qualification remain separate recovery gates.
+    """
+
+    def __init__(self, reader):
+        self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.failed = self.closed = False
+        self.end = None
+        try:
+            require(type(reader) is AuthorizedFinalized)
+            self.reader = reader
+            self.start, self.run, self.plan = reader.start, reader.run, reader.plan
+            self.docker = self.run.read.docker
+            self.origins = (reader, self.start, self.run, self.plan, self.docker, self.run.read)
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+
+    def _guard(self):
+        require(not self.failed and not self.closed and self.owner == (os.getpid(), get_ident()))
+        reader, run = self.reader, self.run
+        require(type(reader) is AuthorizedFinalized and reader.phase == "published")
+        require(reader.start is self.start and reader.run is run and reader.plan is self.plan)
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (reader, reader.start, reader.run, reader.plan, run.read.docker, run.read),
+                    self.origins,
+                    strict=True,
+                )
+            )
+        )
+        require(type(self.docker) is plans.ordinary.Docker)
+        require(self.docker.path == "/var/run/docker.sock")
+        require(self.docker is run.qualify.docker)
+        reader._context()
+
+    def _clock(self):
+        self._guard()
+        require(type(self.end) is float and time.monotonic() < self.end)
+        observed = plans.clock.read()
+        self.plan.check_clock(observed)
+        now = observed.boottime_ns / plans.clock.NS
+        require(now < self.plan.deadlines.recover_by)
+        return observed.boot, now
+
+    def _candidate(self):
+        """Identity check only; ordinary observer still owns full state checks."""
+        self._clock()
+        current = self.docker.container("app_" + base.CANDIDATE)
+        require(type(current) is dict and current.get("Id") == self.run.pins.init.container_id)
+        self._clock()
+
+    def _observer(self):
+        plan = self.plan
+        layouts = {item.slug: item for item in plan.layouts}
+
+        def collect_files(slug, container):
+            require(slug in (base.NORMAL, base.CANDIDATE))
+            if slug == base.NORMAL:
+                return plans.host.static.collect(layouts[slug], container)
+            if container is not None:
+                require(container.get("Id") == self.run.pins.init.container_id)
+            return plans.host.candidate_static.collect(layouts[slug], container)
+
+        supervisor = plans.ordinary.SupervisorReads(
+            self.docker, image=plan.cli_image, incarnation=plan.cli_generation
+        )
+        return _StaticHostObserver(
+            self.docker,
+            supervisor,
+            seals=(plan.normal, plan.candidate),
+            installed_versions=dict(plan.installed_versions),
+            other_scanner_apps=frozenset(plan.other_scanner_apps),
+            core_image=plan.core_image,
+            core_generation=plan.core_generation,
+            core_version=plan.core_version,
+            read_clock=self._clock,
+            collect_files=collect_files,
+            read_native=launch.BootstrapHost._unknown_native,
+            network=plans.ordinary.AUDIO_NETWORK,
+        )
+
+    def read(self):
+        acquired = False
+        try:
+            began = time.monotonic()
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._guard()
+            now = self.reader.operator._clock()
+            self.end = min(began + 2, time.monotonic() + self.plan.deadlines.recover_by - now)
+            end = self.end
+            boot, started = self._clock()
+            machine = self.reader._history(end)
+            entries = tuple(base.encode(entry) for entry in self.reader.journal.entries)
+            self._candidate()
+            snapshot = self._observer().read()
+            require(type(snapshot) is _StaticHostSnapshot)
+            self._clock()
+            files = self.reader.read()
+            self._candidate()
+            require(self.reader._history(end) is machine)
+            require(tuple(base.encode(entry) for entry in self.reader.journal.entries) == entries)
+            self._guard()
+            end_boot, ended = self._clock()
+            require(self.end == end and began <= time.monotonic() < end)
+            require(boot == end_boot == snapshot.boot)
+            require(started <= snapshot.began <= snapshot.ended <= ended)
+            require(0 <= ended - started < 2)
+            require(files.files.stage == "finalized")
+            require(files.files.contract_sha256 == self.plan.candidate.contract.sha256)
+            require(files.files.generation == self.run.pins.generation)
+            for app in (snapshot.normal, snapshot.candidate):
+                require(app.healthy is None and app.recording is None)
+            if snapshot.candidate.state == "running":
+                require(snapshot.candidate.generation == self.run.pins.generation)
+            observation = launch.bootstrap.recording.Observation(
+                started,
+                snapshot.normal,
+                snapshot.candidate,
+                snapshot.other_stopped,
+                snapshot.jobs_idle,
+                True,
+                files.files,
+            )
+            return launch.bootstrap.recovery.Sample(boot, ended, observation)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.end = None
+                self.lock.release()
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedHostBegin(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident()))
+        self.closed = True
+
+
 class RetainedHost:
     """Full host/file sample after actual begin; native flags remain unknown.
 
