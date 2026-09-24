@@ -210,7 +210,7 @@ def test_passive_inputs_never_contend_with_active_receipt_owner(prepared):
         (prepared.spec.receipts / "start-intent.json").write_bytes(b"retained fixture receipt")
         # Prove the actual writer lock is held; a second shared lock fails.
         with (
-            pytest.raises(BlockingIOError),
+            pytest.raises(p.DirectoryBusy),
             p._private_directory(prepared.spec.receipts, exclusive=False),
         ):
             pytest.fail("A reader unexpectedly borrowed the owner's lock")
