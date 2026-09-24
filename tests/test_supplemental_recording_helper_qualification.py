@@ -166,7 +166,7 @@ def helper(supervised, image, configured, monkeypatch):
                 MemorySwap=1024 * 1024 * 1024,
                 PidsLimit=64,
                 CapDrop=["ALL"],
-                CapAdd=["DAC_READ_SEARCH", "SYS_PTRACE"],
+                CapAdd=["CAP_DAC_READ_SEARCH", "CAP_SYS_PTRACE"],
                 SecurityOpt=["no-new-privileges"],
                 Mounts=[
                     dict(
@@ -376,6 +376,7 @@ def test_after_read_changes_are_not_adopted(helper, monkeypatch, fault):
         ("PidsLimit", 0),
         ("CapDrop", []),
         ("CapAdd", ["SYS_ADMIN"]),
+        ("CapAdd", ["DAC_READ_SEARCH", "SYS_PTRACE"]),
         ("SecurityOpt", ["seccomp=unconfined"]),
         ("Binds", ["/:/host"]),
         ("VolumesFrom", ["other"]),

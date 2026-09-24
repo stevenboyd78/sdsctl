@@ -2567,7 +2567,8 @@ The prospective helper profile requires a read-only root, no network, host PID
 and cgroup views, private IPC, root user, no automatic restart/removal, one CPU,
 512 MiB memory, 1 GiB memory-plus-swap limit and 64 PIDs. All capabilities are
 dropped except the explicitly pinned `DAC_READ_SEARCH` and `SYS_PTRACE` needed
-for host reads; `no-new-privileges` is mandatory. HAOS's `label=disable` setting
+for host reads; Engine inspection must report their canonical `CAP_` names,
+not the shorter CLI spellings. `no-new-privileges` is mandatory. HAOS's `label=disable` setting
 is admitted only as an explicit part of the independent configuration pin.
 Only five bind mounts are accepted: the Engine socket read-only, `/mnt/data`
 read-only, the exact private case writable, and the two host UDP tables
@@ -2597,9 +2598,18 @@ host-path fixtures. Separate kernel-collector tests use actual descriptors and
 an original owned pidfd with synthetic accepted proc bytes/cgroup routing; an
 actual unprivileged child is correctly refused. These checks do not establish
 namespace provenance, seccomp policy contents, independent supervision, or a
-continuing helper clock-domain witness. Those remain separate gates; no installed entrypoint or
-existing live service selects this collector. Its accepted command shape does
+continuing helper clock-domain witness. Those remain separate gates; no installed
+entrypoint or existing live service selects this collector. Its accepted command shape does
 not make any library module a usable service or authorize its execution.
+
+Separate frozen-image checks on the local Docker host and HAOS read actual
+kernel privilege snapshots for the verifier and its own child. Both matched the
+closed profile, then refused the original child after its confirmed exit while
+retaining the caller's pidfd. Complete source, import-origin, environment and
+one-/two-worker runtime checks also passed in those isolated cases. They mounted
+only the verifier read-only: no Engine socket, App data, recordings or
+credentials. Those checks validate constituent collectors, **not** the complete
+two-second `HelperQualification` sequence or an installed service.
 
 The explicit `Layout.observe_supervised(timezone)` / `verify_supervised()` runtime
 profile also inventories the complete `/usr/share/zoneinfo` tree and the

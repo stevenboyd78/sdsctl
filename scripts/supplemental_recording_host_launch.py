@@ -1064,7 +1064,7 @@ class HelperQualification:
         require(
             type(added) is list
             and len(added) == 2
-            and set(added) == {"DAC_READ_SEARCH", "SYS_PTRACE"}
+            and set(added) == {"CAP_DAC_READ_SEARCH", "CAP_SYS_PTRACE"}
         )
         security = host.get("SecurityOpt")
         require(security in (["no-new-privileges"], ["no-new-privileges", "label=disable"]))
