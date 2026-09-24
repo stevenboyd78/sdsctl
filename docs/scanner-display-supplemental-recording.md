@@ -3186,14 +3186,47 @@ retired native owner does not disable original clock-only expiry or allow
 pristine/never-authorized fallback in that situation. No failed operation is
 retried, no abandoned ledger is invented, and no former Ready data is presented
 as active health. This join currently leaves uncertain recordings for review;
-integration with the separately qualified preserved-recording route and active
-full-host sampling remain work to complete. Its routing tests use real policy
-and intent journals with explicit synthetic native/completion boundaries.
+integration with the separately qualified preserved-recording route remains
+work to complete. Its routing tests use real policy and intent journals with
+explicit synthetic native/completion boundaries.
+
+An explicit `observe_recording()` now joins `PostBegin`, `RetainedQualification`,
+`RetainedHost` and a new one-use `ActiveSample` for each active read. It takes
+the original prepared environment/timezone/hostname/architecture/worker profile,
+not replacement caller settings, and retains the original init/worker resources.
+Every sample rechecks current source/runtime, host/files and authenticated native
+state. Closing its temporary probe and checking owner context must still fit
+the original evidence freshness window; completion time never refreshes the
+earliest contributing timestamp.
+
+These explicit reads are diagnostic observations, not automatic service polling,
+progress-checkpoint publication, policy events, finalized artifacts or audible
+acceptance. They do not cache a result for the session to reuse. A failed read
+returns no observation, consumes that active route and leaves the original
+clock-only expiry/review available. No replacement sampler can retry after
+uncertainty, and no active read can interleave the finalized exit-publication
+step. A fresh read after a successful read uses a new one-use sampler over the
+same original post-begin resources. Independent outer supervision remains
+required for blocked I/O.
+
+After an active observation, `finish_recording()` performs a separate fresh
+intermediate file read and durably appends and acknowledges its progress tip
+before consuming completion. The original Relay requires that checkpoint chain
+to reach its last observed progress; omitting the directory or treating the
+earlier host sample as a checkpoint is not allowed. A lost checkpoint or ledger
+acknowledgment makes completion uncertain and is never retried or discarded.
+The no-active-read route still finalizes without introducing a progress chain.
 
 This finite library owner is still **not** an installed schema3 entrypoint. It
 does not authenticate its own input digests, qualify its own helper's installed
 confinement/source/runtime, or establish independent external supervision.
-The recording-phase join still requires its own whole-service real-process
+The recording start/finalize join has completed a local whole-service process
+case with synthetic scanner/RTP peers and disposable normal/candidate containers.
+It verified the synthetic recording, unchanged older file, original worker/init
+exits and restoration through the same session. A separate earlier case safely
+refused stale evidence before begin; a later pass does not erase that timing
+failure. Supervisor/Core/CLI/cache/network/source routing in both cases remained
+explicitly synthetic. The active-observation join still needs its own process
 qualification, followed by installed host-launcher and platform checks.
 Assembly tests use real private files and explicit synthetic
 Engine/process/cache fixtures, not Home Assistant or scanner acceptance.

@@ -985,7 +985,8 @@ class RecordingPhase:
     Uncertain begin/completion is sticky and preserves original clock expiry;
     this owner never invents abandonment, retries, or falls back to pristine
     recovery. Independent supervision and a separately qualified preserved route
-    remain required. Active full-host sampling is not provided by this join.
+    remain required. Explicit active observations use fresh one-use samplers;
+    they are never automatic polling or cached policy/recording success.
     """
 
     def __init__(self, service):
@@ -1010,6 +1011,9 @@ class RecordingPhase:
         self.relay = self._original_relay = None
         self.reader = self._original_reader = None
         self.completion = self._original_completion = None
+        self.active_preparation_attempted = False
+        self.continuity = self.active_qualifier = self.active_host = None
+        self.active_objects = None
         self.read = self._unavailable
 
     def _context(self, *, recovering=False):
@@ -1054,6 +1058,126 @@ class RecordingPhase:
         # No former Ready/idle data masquerades as an active recording sample.
         raise UnconfirmedOperator(MESSAGE)
 
+    def _active_profile(self):
+        candidate, run = self.service.candidate, self.run
+        qualifier = candidate.qualifier
+        require(type(qualifier) is launch.CandidateQualification and run.qualify is qualifier)
+        require(qualifier.plan is self.service.plan and qualifier.idle is run.idle)
+        require(qualifier.witness is run.witness and qualifier.docker is self.service.docker)
+        require(
+            not qualifier.failed and qualifier._pins() == qualifier.original == candidate.profile
+        )
+        return {
+            name: getattr(qualifier, name)
+            for name in (
+                "image_environment_sha256",
+                "timezone",
+                "hostname",
+                "architecture",
+                "runtime_workers",
+            )
+        }
+
+    def _prepare_active(self):
+        profile = self._active_profile()
+        if self.active_preparation_attempted:
+            require(self.active_objects is not None)
+            require(
+                all(
+                    a is b
+                    for a, b in zip(
+                        (self.continuity, self.active_qualifier, self.active_host),
+                        self.active_objects,
+                        strict=True,
+                    )
+                )
+            )
+            require(type(self.continuity) is launch.idle_module.PostBegin)
+            require(type(self.active_qualifier) is launch.RetainedQualification)
+            require(type(self.active_host) is begin.RetainedHost)
+            require(
+                all(
+                    getattr(self.active_qualifier, name) == value for name, value in profile.items()
+                )
+            )
+            return
+        self.active_preparation_attempted = True
+        continuity = launch.idle_module.PostBegin(self.run.idle, self.relay.guard)
+        self.service._cleanup.append(continuity.close)
+        self.continuity = continuity
+        self.active_qualifier = launch.RetainedQualification(
+            continuity, self.run.witness, self.service.docker, **profile
+        )
+        host = begin.RetainedHost(self.start_attempt, continuity)
+        self.service._cleanup.append(host.discard)
+        self.active_host = host
+        self.active_objects = continuity, self.active_qualifier, host
+
+    def observe(self):
+        """One explicit read, not a progress publication or automatic retry.
+
+        Each successful call consumes a NEW ActiveSample over the ORIGINAL
+        post-begin resources. The input/runtime/host/native checks keep their
+        existing bounds. No result is stored for the session to reuse. A failed
+        read is sticky; original clock-only expiry remains available for review.
+        """
+        self.service._context()
+        require(self.used and self.started and not self.uncertain)
+        require(not self.finish_attempted and not self.recovery_attempted)
+        require(self.relay.phase == "completed" and self.relay.expected is not None)
+        try:
+            entries = tuple(base.encode(e) for e in self.service.journal.entries)
+            ledger_state = self.ledger.state
+            self._prepare_active()
+            sample = begin.ActiveSample(self.active_host, self.active_qualifier)
+            # Capture the original cleanup before read; replacement members
+            # cannot close somebody else's probe or lose this owned handle.
+            close = sample.close
+            self.service._cleanup.append(close)
+            try:
+                observed = sample.read()
+            finally:
+                close()
+            self.service._context()
+            require(tuple(base.encode(e) for e in self.service.journal.entries) == entries)
+            require(self.ledger.state is ledger_state)
+            require(type(observed) is launch.bootstrap.recovery.Sample)
+            boot, now = self.service._clock()
+            require(observed.boot_id == boot and observed.now <= now)
+            require(observed.observation.files.stage == "active")
+            # Include owner-side close/context checks without refreshing the
+            # earliest contributing evidence timestamp or any original lease.
+            return launch.bootstrap.recovery.Sample(boot, now, observed.observation)
+        except Exception:
+            self.uncertain = True
+        self.service._context()
+        return None
+
+    def _finish_progress(self):
+        """Durably retain the latest intermediate read before consuming return.
+
+        A full active sample is NOT a progress checkpoint. Relay remembers those
+        observations, so completion must acknowledge a fresh monotonic file read
+        in the original chain. Lost append/ledger acknowledgment is uncertainty,
+        never permission to retry, drop the directory, or forget prior reads.
+        """
+        if not self.active_preparation_attempted:
+            return None
+        require(self.active_objects is not None)
+        relay, ledger = self.relay, self.ledger
+        directory = self.service.plan.root / "recording-progress"
+        collector = begin.relayed.local.protected.Collector(self.run.projected.host)
+        collected = self.start_attempt.read_files()
+        require(type(collected) is begin.relayed.local.protected.Collected)
+        require(collected.files.stage in ("active", "finalizing") and collected.artifact is None)
+        tip = begin.relayed.local.checkpoints.append_progress(
+            directory, collector, relay.expected, collected, previous_tip=ledger.state.tip
+        )
+        ledger.progress(directory, collector, tip, now=time.monotonic())
+        require(ledger.state.tip == tip)
+        self.start_attempt.retained_history()
+        return directory
+
     def start(self):
         self.service._context()
         require(not self.used)
@@ -1091,7 +1215,8 @@ class RecordingPhase:
         self.finish_attempted = True
         try:
             self.start_attempt.retained_history()
-            completion = self.relay.completed(progress_directory=None)
+            progress_directory = self._finish_progress()
+            completion = self.relay.completed(progress_directory=progress_directory)
             self.completion = self._original_completion = completion
             require(self.relay.phase == "closed" and self.relay.completion is completion)
             reader = begin.AuthorizedFinalized(self.start_attempt, self.operator)
@@ -1343,6 +1468,20 @@ class IdleService:
             self._context()
             require(type(self.recording) is RecordingPhase)
             return self.recording.finish()
+        except BaseException as error:
+            self._fail(error)
+
+    def observe_recording(self):
+        """Explicit fresh active observation, or None on consumed uncertainty.
+
+        No automatic polling, checkpoint publication, policy event or completion
+        verdict. After uncertainty, do not call again; the original service
+        keeps only its clock-expiry/review route and independent supervision.
+        """
+        try:
+            self._context()
+            require(type(self.recording) is RecordingPhase)
+            return self.recording.observe()
         except BaseException as error:
             self._fail(error)
 

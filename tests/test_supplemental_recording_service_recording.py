@@ -77,7 +77,12 @@ def recording(phase, monkeypatch):
             return self.expected
 
         def completed(self, *, progress_directory):
-            assert progress_directory is None and self.phase == "completed"
+            assert self.phase == "completed"
+            assert progress_directory == (
+                s.plan.root / "recording-progress"
+                if s.service.recording.active_preparation_attempted
+                else None
+            )
             s.finish_calls.append(self)
             fault("receive", s.finish_fault)
             self.completion = SimpleNamespace(synthetic_completion=True)
