@@ -2190,6 +2190,16 @@ adaptive retries, cached bytes or renewed deadline is introduced. Full inventory
 fingerprints must remain identical. Actual host timing and the complete service
 remain separate qualification gates.
 
+Both worker modes now bind every fixed task's parent directories before the
+first worker is submitted. A full regression exposed an ordering gap: an early
+`usr/local` read could mutate a later task's `etc` ancestor before that ancestor
+was pinned, allowing both snapshots to agree despite the in-flight change.
+Deterministic tests reproduce that gap for both `etc` and `usr/share` before the
+fix, and require refusal afterward. Partial parent-binding failure closes all
+earlier handles without starting a worker. The inventory, source scope, shared
+budgets and deadlines are unchanged; the helper/native source pins must be
+reconstructed for the changed verifier.
+
 The host's repeated plan checks now retain a separately decoded canonical plan
 and compare every field, nested type and original byte string against it. They
 also require the same original plan object. This removes repeated JSON decoding

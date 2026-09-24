@@ -483,13 +483,15 @@ class Layout:
                     cancelled.set()
                     raise
 
+            # Bind EVERY fixed task's parent chain before submitting any work.
+            # Otherwise an early worker can finish reading usr/local while an
+            # unrelated selected ancestor (for example etc) is still unbound.
+            # That mutation could then be accepted by both full snapshots.
+            bound_tasks = [(parent_for(path), PurePosixPath(path).name, path) for path in tasks]
             with ThreadPoolExecutor(
                 max_workers=self.workers, thread_name_prefix="runtime-inventory"
             ) as pool:
-                pending = [
-                    pool.submit(collect, parent_for(path), PurePosixPath(path).name, path)
-                    for path in tasks
-                ]
+                pending = [pool.submit(collect, *task) for task in bound_tasks]
                 for future in pending:
                     future.result()
             require(reserved == entries.keys())

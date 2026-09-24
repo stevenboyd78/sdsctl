@@ -360,6 +360,64 @@ def test_in_image_directory_mutation_keeps_full_metadata_guard(
 
 
 @pytest.mark.parametrize("workers", [1, 2])
+@pytest.mark.parametrize("relative", ["etc", "usr/share"])
+def test_all_inventory_parent_chains_are_bound_before_first_worker_read(
+    layout, monkeypatch, workers, relative
+):
+    layout = replace(layout, workers=workers)
+    original, changed = m.os.read, []
+    target = (layout.root / "usr/local/bin/python3.14").stat().st_ino
+    descriptors = len(os.listdir("/proc/self/fd"))
+
+    class DrainedSubmission(m.ThreadPoolExecutor):
+        def submit(self, *args, **kwargs):
+            future = super().submit(*args, **kwargs)
+            # Deterministically let the first actual worker read finish before
+            # submitting later tasks. An early worker must not get ahead of
+            # the parent bindings for another selected runtime tree.
+            future.result()
+            return future
+
+    def read(fd, size):
+        value = original(fd, size)
+        if value and not changed and os.fstat(fd).st_ino == target:
+            (layout.root / relative / "unexpected").mkdir()
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(m, "ThreadPoolExecutor", DrainedSubmission)
+    monkeypatch.setattr(m.os, "read", read)
+    denied(layout.observe)
+    assert changed == [True]
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_failed_parent_binding_closes_earlier_handles_without_starting_workers(
+    layout, monkeypatch, workers
+):
+    layout = replace(layout, workers=workers)
+    original_open, original_pool = m.os.open, m.ThreadPoolExecutor
+    descriptors = len(os.listdir("/proc/self/fd"))
+    started = []
+
+    def opening(path, flags, *args, **kwargs):
+        if path == "etc" and kwargs.get("dir_fd") is not None:
+            raise OSError("PRIVATE_PARENT_FAILURE")
+        return original_open(path, flags, *args, **kwargs)
+
+    def pool(*args, **kwargs):
+        started.append(True)
+        return original_pool(*args, **kwargs)
+
+    monkeypatch.setattr(m.os, "open", opening)
+    monkeypatch.setattr(m, "ThreadPoolExecutor", pool)
+    denied(layout.observe)
+    assert started == []
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+
+
+@pytest.mark.parametrize("workers", [1, 2])
 @pytest.mark.parametrize("fault", ["mode", "replaced", "symlink"])
 def test_external_ancestor_change_is_still_refused(layout, monkeypatch, workers, fault):
     parent = layout.root.parent / "holder"
