@@ -745,6 +745,14 @@ defaults. DNS names and IPv4 addresses are supported without resolving them at
 construction time; ephemeral RTP ports are restricted to loopback fixtures. A
 future installed plan still must qualify its actual fixed RTP publication.
 
+Both construction and read-only launch-plan validation require positive time
+headroom beyond the full three-second preparation, configured read window and
+ten-second finalization budget. An exact fit is rejected before services are
+constructed: durable host intent and dispatch necessarily consume some of the
+original contract. Static headroom is not a timing guarantee or a new deadline;
+the native begin guard still requires the entire remaining schedule to fit the
+original deadline at the time the actual request is received.
+
 The constructed native services are the scanner/runtime, recording manager,
 restricted API, events, saved-recording file server and same-source PCMU server.
 There are no destination/reload, MQTT, remote-control, encoder or waterfall
@@ -1845,6 +1853,21 @@ action is returned. Review/expired cases cannot be revived, and an uncertain
 fsync acknowledgment consumes publication while preserving its on-disk evidence.
 The independent recovery session must still qualify actual init/CLI exits,
 recording preservation and every other restoration gate.
+
+After this observer's actual terminal `poll()`, `recheck()` provides a separate
+read-only custody check. It requires the identical original result and digest,
+retained original pidfds, immutable dispatch history, original host clock and
+recovery deadline, and a fresh terminal inspection from the same authenticated
+Engine endpoint. The complete read must fit within two seconds. Copied/equal
+receipts, changed process/command/Engine facts, lost handles, altered history or
+clock drift fail closed and retain evidence until explicit cleanup.
+
+Rechecking returns the original historical result; it does not change its
+timestamp, publish it again or renew the two-second publication window. Init
+may have exited since that result, but its original `init_exited` value is not
+rewritten or treated as new recovery evidence. This does not verify recording
+files or grant restoration. Post-exit file verification still needs the actual
+original native completion and independent source/runtime/host qualification.
 
 A fresh local Engine/native check also verified capture and reconciliation after
 closing the original Ready object and its own process handles, then separately

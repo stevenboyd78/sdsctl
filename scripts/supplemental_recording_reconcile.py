@@ -92,6 +92,7 @@ class Operator:
         self.closed = self.failed = self.done = False
         self.publish_attempted = False
         self.result = self.result_sha256 = None
+        self._terminal_receipt = None
         try:
             require(type(plan) is plans.Plan and type(ready) is received.Ready)
             require(plans.load_bytes(plan.raw, plan.sha256) == plan)
@@ -240,7 +241,76 @@ class Operator:
             )
             self.done = True
             self.result, self.result_sha256 = result, result.sha256
+            self._terminal_receipt = (result, result.sha256)
             return result
+        except BaseException as error:
+            self._fail(error)
+
+    def _receipt(self):
+        """Only the actual terminal return, not an equal/caller-replaced value."""
+        require(self.done and self._terminal_receipt is not None)
+        require(type(self.plan) is plans.Plan)
+        require(plans.load_bytes(self.plan.raw, self.plan.sha256) == self.plan)
+        require(self.plan.original_clock is self.clock)
+        result, digest = self._terminal_receipt
+        require(type(result) is Evidence and self.result is result)
+        require(result.sha256 == self.result_sha256 == digest)
+        require(
+            (
+                result.execution_id,
+                result.container_id,
+                result.generation,
+                result.plan_sha256,
+                result.ready_sha256,
+                result.actors_sha256,
+                result.dispatch_sha256,
+            )
+            == (
+                self.execution_id,
+                self.pins.init.container_id,
+                self.pins.generation,
+                self.plan.sha256,
+                self.ready_sha256,
+                dispatch.binding.checksum([asdict(actor) for actor in self.actors]),
+                self.state.sha256,
+            )
+        )
+        return result
+
+    def recheck(self):
+        """Fresh read-only custody checks AFTER this observer's terminal poll.
+
+        Reuses original pidfds/dispatch/Engine identities under the original
+        recovery deadline; never repolls, republishes or renews that receipt's
+        observed_at. Returns the SAME historical Evidence, not a fresh file,
+        completion, health or init-exit verdict. Init may exit since capture,
+        but that does not rewrite the original result or authorize restoration.
+        Installed supervision and full input qualification remain separate.
+        """
+        try:
+            require(not self.closed and not self.failed)
+            require(self.owner == (os.getpid(), get_ident()))
+            original = self._receipt()
+            began = self._clock()
+            require(began >= original.observed_at)
+            end = time.monotonic() + min(2, self.plan.deadlines.recover_by - began)
+            require(time.monotonic() < end)
+            require(_peer(self.endpoint) == self.peer)
+            self._history(end)
+            exited = self._actors()
+            require(set(ROLES[1:]) <= exited)
+            require(not original.init_exited or "init" in exited)
+            raw, terminal = self._inspect(end)
+            require(terminal.phase == "not_running" and terminal.returncode == original.returncode)
+            require(terminal.pid in (0, self.actors[1].host_pid))
+            require(dispatch.binding.checksum(raw) == original.engine_sha256)
+            require(_peer(self.endpoint) == self.peer)
+            self._history(end)
+            require(exited <= self._actors())
+            require(self._receipt() is original)
+            ended = self._clock()
+            require(time.monotonic() < end and 0 <= ended - began <= 2)
+            return original
         except BaseException as error:
             self._fail(error)
 
@@ -307,7 +377,7 @@ class Operator:
                 not self.closed and not self.failed and self.done and not self.publish_attempted
             )
             self.publish_attempted = True
-            require(type(self.result) is Evidence and self.result.sha256 == self.result_sha256)
+            self._receipt()
             now = self._clock()
             require(0 <= now - self.result.observed_at <= 2)
             end = time.monotonic() + min(2, self.plan.deadlines.recover_by - now)

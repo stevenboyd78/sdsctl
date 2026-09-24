@@ -118,6 +118,41 @@ def probe_inputs(prepared):
     )
 
 
+@pytest.mark.parametrize("window", [6.5, 7, 7.0, 7.25])
+@pytest.mark.parametrize("reader", [load, probe_inputs])
+def test_schedule_requires_dispatch_headroom_in_both_read_only_paths(
+    prepared, monkeypatch, window, reader
+):
+    baseline = prepared.path.parent / "bounded-baseline"
+    baseline.mkdir(mode=0o700)
+    stored = p.save_baseline(
+        baseline,
+        prepared.stored.baseline,
+        prepared.stored.writer,
+        prepared.stored.contract.audio_endpoint_sha256,
+        maximum_recording_seconds=20,
+    )
+    prepared.value["baseline"] = {
+        "directory": str(baseline),
+        "sha256": stored.manifest_sha256,
+        "contract": asdict(stored.contract),
+    }
+    prepared.value["specification"]["read_window_seconds"] = window
+    prepared.path.write_bytes(p.encode(prepared.value))
+
+    def forbidden(*_, **__):
+        pytest.fail("Budget validation must remain passive")
+
+    monkeypatch.setattr(m.construction, "_services", forbidden)
+    monkeypatch.setattr(socket, "socket", forbidden)
+    if window < 7:
+        assert reader(prepared) is not None
+    else:
+        refused(lambda: reader(prepared))
+    assert list(prepared.spec.sockets.iterdir()) == list(prepared.spec.receipts.iterdir()) == []
+    assert p.Collector(stored).pristine().files.stage == "pristine"
+
+
 @pytest.mark.parametrize("changed", ["sockets", "receipts", "new_recording", "old_recording"])
 def test_passive_inputs_keep_original_manifest_and_do_not_assert_current_files(
     prepared, monkeypatch, changed

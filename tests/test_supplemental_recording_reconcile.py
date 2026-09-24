@@ -253,13 +253,27 @@ def test_lost_exit_journal_fsync_return_preserves_consumed_case_no_retry(
 
 @contextmanager
 def captured(
-    prepared, actors, calibration, plan, monkeypatch, *, code=70, fault=None, sender=False
+    prepared,
+    actors,
+    calibration,
+    plan,
+    monkeypatch,
+    *,
+    code=70,
+    fault=None,
+    sender=False,
+    terminal_replies=1,
+    recheck_fault=None,
 ):
     live = joined.live(prepared, actors)
     final = dict(live, Running=False, ExitCode=code)
     if fault is not None:
         fault(final)
     handlers = [transport.reply(live)] * 3 + [transport.reply(final)]
+    repeated = dict(final)
+    if recheck_fault is not None:
+        recheck_fault(repeated)
+    handlers += [transport.reply(repeated)] * (terminal_replies - 1)
     with joined.ready(
         prepared,
         actors,

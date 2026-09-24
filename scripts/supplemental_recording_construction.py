@@ -186,8 +186,11 @@ def construct(
         protected.evidence.digest(generation)
         collector = protected.Collector(stored)
         require(stored.writer.uid == os.geteuid() and stored.writer.gid == os.getegid())
+        # Intent durability and dispatch consume time before native begin. An
+        # exact-fit schedule is infeasible; the later native guard still checks
+        # the ACTUAL remaining budget, even when static headroom exists.
         require(
-            3 + specification.read_window_seconds + 10 <= stored.contract.maximum_recording_seconds
+            3 + specification.read_window_seconds + 10 < stored.contract.maximum_recording_seconds
         )
         root = stored.baseline.root
         configuration.require_separate_recordings(root)

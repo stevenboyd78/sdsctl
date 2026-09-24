@@ -261,6 +261,34 @@ def test_bound_profile_baseline_endpoint_and_process_inputs_required(prepared, f
     assert list(prepared.spec.sockets.iterdir()) == list(prepared.spec.receipts.iterdir()) == []
 
 
+@pytest.mark.parametrize("window", [6.5, 7, 7.0, 7.25])
+def test_schedule_requires_dispatch_headroom_before_constructing_services(
+    prepared, monkeypatch, window
+):
+    # A 20-second contract cannot fit 3 seconds of preparation, 7 of reads,
+    # and 10 of finalization AFTER intent durability and dispatch consume time.
+    stored = protection.p._decode(
+        protection.p.manifest_bytes(
+            prepared.stored.baseline,
+            prepared.stored.writer,
+            prepared.stored.contract.audio_endpoint_sha256,
+            maximum_recording_seconds=20,
+        )
+    )
+    spec = replace(prepared.spec, read_window_seconds=window)
+    if window < 7:
+        enter(prepared, specification=spec, stored=stored)
+    else:
+
+        def forbidden():
+            pytest.fail("An infeasible schedule must be rejected before service construction")
+
+        monkeypatch.setattr(c, "_services", forbidden)
+        refused(lambda: enter(prepared, specification=spec, stored=stored))
+    assert list(spec.sockets.iterdir()) == list(spec.receipts.iterdir()) == []
+    assert protection.p.Collector(stored).pristine().files.stage == "pristine"
+
+
 @pytest.mark.parametrize(
     "fault", ["same", "nested", "recordings", "profile", "public", "used", "symlink"]
 )

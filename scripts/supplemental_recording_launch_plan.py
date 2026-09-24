@@ -168,7 +168,9 @@ def _read(path, *, expected_sha256, expected_source_sha256, pristine):
             directory, expected_contract=contract, expected_sha256=original["sha256"]
         )
         require(stored.writer.uid == os.geteuid() and stored.writer.gid == os.getegid())
-        require(3 + specification.read_window_seconds + 10 <= contract.maximum_recording_seconds)
+        # Static headroom is necessary, not permission to dispatch late. Native
+        # begin independently checks the original deadline after intent fsync.
+        require(3 + specification.read_window_seconds + 10 < contract.maximum_recording_seconds)
         profile = protected._mapping(value["profile"], {"deployment", "sha256"})
         protected.evidence.digest(profile["sha256"])
         deployment = _path(profile["deployment"])
