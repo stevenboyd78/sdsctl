@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import os
 import sys
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,39 @@ def test_empty_file_and_directory(tree):
     (tree / "zero").touch()
     (tree / "empty").mkdir()
     assert f.inventory(tree)["zero"]["sha256"] == hashlib.sha256(b"").hexdigest()
+
+
+@pytest.mark.parametrize("name", ["ordinary", "é漢字", "space name", "del-\x7f"])
+@pytest.mark.parametrize("mode", [0o600, 0o644, 0o755])
+@pytest.mark.parametrize("content", [b"", b"unchanged\0bytes\xff"])
+def test_inventory_scalar_format_matches_original_dataclass(tree, name, mode, content):
+    target = tree / name
+    target.write_bytes(content)
+    target.chmod(mode)
+    info = target.stat()
+    expected = asdict(
+        f.FileEvidence(
+            len(content), hashlib.sha256(content).hexdigest(), mode, info.st_uid, info.st_gid
+        )
+    )
+    assert f.inventory(tree)[name] == expected
+
+
+def test_inventory_does_not_construct_per_file_dataclass(tree, monkeypatch):
+    expected = f.inventory(tree)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Inventory needlessly constructed a scalar dataclass")
+
+    monkeypatch.setattr(f, "FileEvidence", forbidden)
+    assert f.inventory(tree) == expected
+
+
+@pytest.mark.parametrize("code", range(1, 32))
+def test_every_filesystem_control_character_still_refuses(tree, code):
+    (tree / ("private-" + chr(code) + "-name")).write_bytes(b"unused")
+    with pytest.raises(f.UnconfirmedFiles, match="^Protected filesystem evidence is unconfirmed.$"):
+        f.inventory(tree)
 
 
 @pytest.mark.parametrize("single", [False, True])

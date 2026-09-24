@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import stat
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 MAX_FILES = 4096
@@ -22,6 +23,7 @@ MAX_FILE_BYTES = 4 * 1024 * 1024
 MAX_TOTAL_BYTES = 64 * 1024 * 1024
 MAX_SECONDS = 2.0
 DIRECTORY = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+CONTROL_CHARACTER = re.compile(r"[\x00-\x1f]")
 
 
 class UnconfirmedFiles(ValueError):
@@ -106,18 +108,19 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
                     entries += 1
                     require(entries <= MAX_ENTRIES)
                     name = entry.name
-                    require(len(name.encode()) <= 255 and not any(ord(c) < 32 for c in name))
+                    require(len(name.encode()) <= 255 and CONTROL_CHARACTER.search(name) is None)
                     path = prefix + name
                     stated = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                    stated_identity = identity(stated)
                     if stat.S_ISDIR(stated.st_mode):
                         child = os.open(name, DIRECTORY, dir_fd=directory)
                         try:
-                            require(identity(os.fstat(child)) == identity(stated))
+                            require(identity(os.fstat(child)) == stated_identity)
                             visit(child, path + "/", depth + 1)
-                            require(identity(os.fstat(child)) == identity(stated))
+                            require(identity(os.fstat(child)) == stated_identity)
                             require(
                                 identity(os.stat(name, dir_fd=directory, follow_symlinks=False))
-                                == identity(stated)
+                                == stated_identity
                             )
                         finally:
                             os.close(child)
@@ -132,7 +135,7 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
                             dir_fd=directory,
                         )
                         try:
-                            require(identity(os.fstat(fd)) == identity(stated))
+                            require(identity(os.fstat(fd)) == stated_identity)
                             hashed = hashlib.sha256()
                             size = 0
                             while True:
@@ -144,20 +147,22 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
                                 require(size <= stated.st_size)
                                 hashed.update(chunk)
                             require(size == stated.st_size)
-                            require(identity(os.fstat(fd)) == identity(stated))
+                            require(identity(os.fstat(fd)) == stated_identity)
                             require(
                                 identity(os.stat(name, dir_fd=directory, follow_symlinks=False))
-                                == identity(stated)
+                                == stated_identity
                             )
-                            result[path] = asdict(
-                                FileEvidence(
-                                    size,
-                                    hashed.hexdigest(),
-                                    stat.S_IMODE(stated.st_mode),
-                                    stated.st_uid,
-                                    stated.st_gid,
-                                )
-                            )
+                            # The inventory format contains only five scalars.
+                            # Avoid constructing and recursively copying a
+                            # dataclass for every file in every full snapshot.
+                            # All bytes and fresh stat observations above remain.
+                            result[path] = {
+                                "size": size,
+                                "sha256": hashed.hexdigest(),
+                                "mode": stat.S_IMODE(stated.st_mode),
+                                "uid": stated.st_uid,
+                                "gid": stated.st_gid,
+                            }
                         finally:
                             os.close(fd)
             require(identity(os.fstat(directory)) == before)
