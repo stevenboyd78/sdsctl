@@ -643,6 +643,18 @@ expires. Cancellation, replaced objects, rewritten history and late reads refuse
 without discarding the original process handles. This supplies authorization
 continuity only, not a recording observation, completion or restoration action.
 
+`Start.read_files()` joins that retained host authorization to the same Relay's
+read-only file evidence. There is no caller-selected stage or path: the original
+Plan supplies the progress directory, and the actual received native schedule
+selects active/finalizing progress. After an acknowledged completion, only the
+Relay's original finalized-artifact recheck is used. Both complete host journals
+are reread around the collection; phase, objects, generation, contract and journal
+state must remain unchanged. The earliest two-second budget includes both host
+history checks, and an active read may not cross the original stop boundary.
+This remains an uninstalled file adapter, not a full host/source/runtime/native
+health observation, checkpoint publication, exit witness or restoration action.
+It cannot be used after the separate exit collector closes the Relay transport.
+
 One namespace constraint is explicit: a host path beneath
 `/mnt/data/supervisor/media` is not the same path string as its native `/media`
 alias. Their root-path hashes must not be compared as if equal, nor silently

@@ -46,6 +46,7 @@ class Start:
 
     def __init__(self, run, ledger):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
+        self.files_lock = Lock()
         self.used = self.failed = self.closed = False
         self.probe = self.authorization = self.intent = self.relay = None
         self._begin_result = None
@@ -337,6 +338,57 @@ class Start:
         finally:
             if acquired:
                 self.lock.release()
+
+    def read_files(self):
+        """Read the original recording files under both retained host journals.
+
+        Uses this Start's actual returned Relay and fixed host progress path.
+        Before completion, Relay selects active/finalizing from its authenticated
+        owner schedule; afterward only its actual acknowledged completion may
+        supply the finalized read. This is read-only file evidence, not a full
+        host/source/runtime/native-health sample or permission to restore.
+        """
+        acquired = False
+        try:
+            began = time.monotonic()
+            require(self.files_lock.acquire(blocking=False))
+            acquired = True
+            self.retained_history()
+            relay, ledger = self.relay, self.ledger
+            phase, expected, owner_plan = relay.phase, relay.expected, relay.plan
+            require(phase in ("completed", "closed") and expected is not None)
+            end = min(began + 2, self.plan.lease["stop_by"], relay.guard.finish_by)
+            if phase == "completed":
+                end = min(end, relay.native_binding.finish_by, owner_plan.finish_by)
+            history = tuple(base.encode(entry) for entry in self.run.journal.entries)
+            state = ledger.state
+            require(time.monotonic() < end)
+            if phase == "completed":
+                result = relay.read_progress(self.plan.root / "recording-progress")
+                require(type(result) is binding.protected.Collected)
+                require(result.files.stage in ("active", "finalizing"))
+                require(result.artifact is None)
+            else:
+                result = relay.recheck_completed()
+                require(type(result) is binding.protected.Collected)
+                require(result.files.stage == "finalized" and result.artifact is not None)
+            require(result.files.contract_sha256 == self.plan.candidate.contract.sha256)
+            require(result.files.generation == self.run.pins.generation == expected.generation)
+            self.retained_history()
+            require(self.relay is relay and self.ledger is ledger and ledger.state == state)
+            require(
+                relay.phase == phase and relay.expected is expected and relay.plan is owner_plan
+            )
+            require(tuple(base.encode(entry) for entry in self.run.journal.entries) == history)
+            ended = time.monotonic()
+            require(began <= ended < end)
+            require(result.files.stage != "active" or ended < owner_plan.stop_at)
+            return result
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.files_lock.release()
 
     def _observe(self):
         self._guard()
