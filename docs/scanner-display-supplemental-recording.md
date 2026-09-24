@@ -2057,6 +2057,16 @@ combined observations. These tests are not installed-service, native process,
 scanner or audible-playback qualification; independent service supervision and
 installed-platform checks are still required.
 
+At `f2b067b`, the expanded affected-suite regression passed 805 tests, including
+19 new continuation cases. A fresh helper image built offline from that immutable
+source then passed a separately supervised, read-only/network-none source,
+import-origin and full-interpreter check. Its 52 helper modules matched the
+independently reconstructed Git-archive fingerprint. The unchanged interpreter
+matched the previously independently reconstructed immutable-base fingerprint.
+That check had only a read-only verifier mount: no Engine socket, App data,
+profile, recordings, scanner connection or recovery-service entrypoint. It
+therefore verifies packaged code and runtime, not containerized App restoration.
+
 ### Local independent supervision and host-loss qualification
 
 Fresh scanner-free cases at `2d07cab` exercised the original native recording
