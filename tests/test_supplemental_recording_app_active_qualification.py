@@ -16,6 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from . import test_supplemental_recording_app_begin as app_begins
 from . import test_supplemental_recording_app_ready_qualification as r
 from . import test_supplemental_recording_idle_continuity as continuity_tests
 from . import test_supplemental_recording_receipt_inventory as receipt_tests
@@ -35,6 +36,7 @@ layout, image_umask, supervised, image, configured = (
     r.configured,
 )
 pytestmark = pytest.mark.parametrize("candidate", ["app_native"], indirect=True)
+execution, app_joined = app_begins.execution, app_begins.joined
 
 NAME = "qualify_supplemental_recording_app_active"
 SPEC = importlib.util.spec_from_file_location(NAME, Path(r.m.__file__).with_name(NAME + ".py"))
@@ -53,7 +55,7 @@ def active(ready_case, monkeypatch):
     original = idle_read()
     s.ready.client.begun = True
     s.begin_reads = 0
-    s.start = object.__new__(m.begin.Start)
+    s.start = object.__new__(m.app_begin.AppStart)
     s.start.plan, s.start.ready = s.plan, s.ready
     s.start.closed = s.start.failed = False
     s.start.run = object()
@@ -113,7 +115,7 @@ def active(ready_case, monkeypatch):
         m.require(s.continued.exits == frozenset())
         return None
 
-    monkeypatch.setattr(m.begin.Start, "retained_history", history)
+    monkeypatch.setattr(m.app_begin.AppStart, "retained_history", history)
 
     def expired(*args):
         pytest.fail("Post-begin must not renew or recheck pre-begin readiness")
@@ -380,3 +382,81 @@ def test_active_reader_cannot_enter_the_existing_launch_gate(active):
         run._candidate_qualifier()
     assert str(error.value) == m.launch.MESSAGE
     assert q() is None
+
+
+def test_actual_app_controller_history_joins_active_inputs_without_ready_renewal(
+    app_joined, monkeypatch
+):
+    """Real AppLaunch/AppStart/journals/inventories; synthetic Relay/actor I/O."""
+    s = app_joined
+    start = s.make_start()
+    relay = start.start_once()
+    ready_inputs = s.run.qualify
+    continuity = object.__new__(m.launch.idle_module.PostBegin)
+    continuity.plan, continuity.idle = s.plan, s.idle
+    continuity.ready, continuity.guard = s.run.ready, relay.guard
+    continuity.finish_by = s.plan.lease["stop_by"]
+    continuity.closed = continuity.failed = False
+
+    def guard(current, deadline):
+        assert current is continuity and not current.closed and not current.failed
+        assert current.guard is relay.guard and current.ready is s.run.ready
+        m.require(time.monotonic() < min(deadline, current.finish_by))
+
+    def read(current):
+        guard(current, current.finish_by)
+        exits = relay.guard.check()
+        observed = s.idle_adapter()  # Fixture's synthetic kernel/lease adapter.
+        return m.launch.idle_module.Continuity(
+            replace(observed, sampled_at=s.prebegin_idle.sampled_at),
+            observed.sampled_at,
+            exits,
+        )
+
+    def expired(*args):
+        pytest.fail("No post-begin Idle/Ready reacquisition")
+
+    monkeypatch.setattr(m.launch.idle_module.PostBegin, "_guard", guard)
+    monkeypatch.setattr(m.launch.idle_module.PostBegin, "read", read)
+    monkeypatch.setattr(m.launch.received.Ready, "check_before_begin", expired)
+    monkeypatch.setattr(m.launch.idle_module.Idle, "read", expired)
+    q = m.NativeActiveQualification(ready_inputs, start, continuity)
+    assert q() is None
+    plan = m.outputs.owner.Plan(
+        s.plan.case,
+        s.idle.generation,
+        s.projected.native.contract.audio_endpoint_sha256,
+        relay.intent_at,
+        relay.intent_at + 2,
+        relay.intent_at + 150,
+        relay.intent_at + 158,
+    )
+    prepared = dict(
+        schema=1,
+        plan=asdict(plan),
+        root_sha256=s.projected.native.contract.root_sha256,
+        baseline_sha256=s.projected.native.contract.baseline_sha256,
+    )
+
+    def append():
+        target = s.case_root / "receipts/prepared.json"
+        target.write_bytes(m.outputs.channel.encode(prepared))
+        target.chmod(0o600)
+
+    assert q.during(append) is None
+    assert len(q.receipts.inventory.records) == 1
+    assert s.ledger.state is start.intent and s.ledger.state.count == 2
+    with monkeypatch.context() as patch:
+        continuity_tests.advance(patch, 125)
+        assert time.monotonic() > s.run.ready.ready_by
+        assert q() is None
+    assert s.run.qualify is ready_inputs  # Retained history keeps its original inputs.
+    assert q.consumption is ready_inputs.consumption
+    assert not s.run.failed and not s.run.client.closed and not s.witness.exited()
+
+
+def test_direct_start_cannot_substitute_for_the_explicit_app_begin(active):
+    s = active
+    direct = object.__new__(m.begin.Start)
+    r.launches.denied(lambda: m.NativeActiveQualification(s.before, direct, s.continued))
+    assert s.before.failed and s.before.native_active_used

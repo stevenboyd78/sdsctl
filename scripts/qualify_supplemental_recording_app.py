@@ -222,6 +222,8 @@ class NativeIdleQualification(AppCandidateQualification):
         self.native_launch_publication = None
         self.native_ready_used = False
         self.native_ready_owner = None
+        self.native_execution_used = False
+        self.native_execution_owner = None
         super().__init__(*args, **kwargs)
 
     def _publication(self, plan, published, bridge_sha256):

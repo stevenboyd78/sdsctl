@@ -11,6 +11,7 @@ from __future__ import annotations
 import time
 
 import qualify_supplemental_recording_app_ready as readiness
+import supplemental_recording_app_begin as app_begin
 import supplemental_recording_host_begin as begin
 import supplemental_recording_receipt_inventory as outputs
 
@@ -45,7 +46,7 @@ class NativeActiveQualification(inputs.NativeLaunchQualification, launch.Retaine
             original.native_active_owner = self
             require(not original.failed and original.elapsed_seconds is not None)
             require(original.consumption is not None)
-            require(type(start) is begin.Start)
+            require(type(start) is app_begin.AppStart)
             require(type(continuity) is launch.idle_module.PostBegin)
             require(start.plan is original.plan and continuity.plan is original.plan)
             require(continuity.idle is original.idle)
@@ -151,7 +152,7 @@ class NativeActiveQualification(inputs.NativeLaunchQualification, launch.Retaine
         )
         require(original._pins() == original.original == self.prebegin_pins)
         require(self.consumption is original.consumption)
-        require(type(start) is begin.Start and not start.closed and not start.failed)
+        require(type(start) is app_begin.AppStart and not start.closed and not start.failed)
         relay = start.relay
         require(type(relay) is begin.relayed.Relay)
         require(
