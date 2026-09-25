@@ -106,6 +106,20 @@ def service(accepted, monkeypatch):
         journal.append(s.plan.preparation(s.baseline, s.projected))
         s.journal = journal
 
+        def append(kind, **fields):
+            # Later native/recording fixtures must append to THIS original
+            # service journal, never the inherited preflight fixture journal.
+            return journal.append(
+                dict(
+                    kind=kind,
+                    now=m.plans.clock.read().boottime_ns / m.plans.clock.NS,
+                    boot_id=s.plan.boot,
+                    **fields,
+                )
+            )
+
+        s.append = append
+
         def assemble():
             s.service = m.IdleService(
                 s.original, s.projected, journal, s.docker, clock_witness=s.startup.clock

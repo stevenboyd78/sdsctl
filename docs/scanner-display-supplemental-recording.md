@@ -2612,6 +2612,16 @@ cancellation/restoration, expiry, lost notices, failed reads and interrupted
 cleanup. Their host metadata, Engine actions and process receipts are explicitly
 synthetic; no installed command or actual handoff is enabled by these tests.
 
+The published-startup chain also reaches the existing native and recording
+phase-routing fixtures. Those tests keep the same accepted plan, original
+baseline, journal and borrowed clock across explicit native startup, recording
+start, completion, failed active reads and abandonment. Lost acknowledgments
+cannot recreate an owner, replace an original process-exit requirement, renew
+the startup offer, or rewrite the original three startup files. After service
+cleanup the startup clock/plan/declaration still belong to their original
+owners. These tests deliberately end in review: their synthetic native replies
+and completion data cannot establish a real artifact or successful restoration.
+
 Real local subprocess tests cover independent acceptance and rejection while
 an observer holds the original process pidfd, clock and namespace evidence.
 The observer refuses to continue after that owner exits. These tests use
