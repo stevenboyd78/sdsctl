@@ -20,19 +20,29 @@ sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 
 
-@pytest.fixture(params=[False, True], ids=["original", "startup"])
+@pytest.fixture(params=[False, True, "permission"], ids=["original", "startup", "permission"])
 def layout(tmp_path, request):
     runtime, helper = tmp_path / "sds200", tmp_path / "helper"
     for root, names in (
         (runtime, m.REQUIRED_RUNTIME),
-        (helper, m.STARTUP_FILES if request.param else m.HELPER_FILES),
+        (
+            helper,
+            m.PERMISSION_FILES
+            if request.param == "permission"
+            else (m.STARTUP_FILES if request.param else m.HELPER_FILES),
+        ),
     ):
         root.mkdir()
         for name in names:
             path = root / name
             path.write_bytes(b"raise RuntimeError('PRIVATE_UNTRUSTED_SOURCE')\n")
             path.chmod(0o644)
-    return m.Layout(runtime, helper, startup=request.param)
+    return m.Layout(
+        runtime,
+        helper,
+        startup=request.param is True,
+        permission_probe=request.param == "permission",
+    )
 
 
 def denied(callback):
@@ -53,7 +63,9 @@ def test_whole_package_and_closed_helper_inventory_without_candidate_import(layo
     assert result.sha256 == m.checksum(
         {
             "schema": 1,
-            "kind": m.STARTUP_KIND if layout.startup else m.KIND,
+            "kind": m.PERMISSION_KIND
+            if layout.permission_probe
+            else (m.STARTUP_KIND if layout.startup else m.KIND),
             "runtime": runtime,
             "helper": helper,
         }
@@ -65,10 +77,17 @@ def test_whole_package_and_closed_helper_inventory_without_candidate_import(layo
     assert before == {p: m.files.identity(p.stat()) for p in before}
 
 
-@pytest.mark.parametrize("startup", [False, True])
+@pytest.mark.parametrize("startup", [False, True, "permission"])
 def test_reviewed_roots_close_the_entire_private_static_import_graph(startup):
-    modules = m.STARTUP_MODULES if startup else m.MODULES
-    pending, seen, product = list(m.STARTUP_ROOTS if startup else m.ROOTS), set(), set()
+    modules = (
+        m.PERMISSION_MODULES
+        if startup == "permission"
+        else (m.STARTUP_MODULES if startup else m.MODULES)
+    )
+    roots = (
+        m.PERMISSION_ROOTS if startup == "permission" else (m.STARTUP_ROOTS if startup else m.ROOTS)
+    )
+    pending, seen, product = list(roots), set(), set()
     while pending:
         name = pending.pop()
         if name in seen:
@@ -96,7 +115,9 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph(startup):
                     pending.append(dependency)
                 elif dependency.startswith("sds200"):
                     product.add(dependency)
-    assert seen == modules and len(seen) == (62 if startup else 54)
+    assert seen == modules and len(seen) == (
+        64 if startup == "permission" else (62 if startup else 54)
+    )
     assert product == {
         "sds200.daemon_recording",
         "sds200.scanner_display_configuration",
@@ -108,7 +129,7 @@ def test_reviewed_roots_close_the_entire_private_static_import_graph(startup):
     assert m.MODULES != native.m.MODULES
 
 
-@pytest.mark.parametrize("startup", [False, True])
+@pytest.mark.parametrize("startup", [False, True, "permission"])
 def test_real_isolated_import_closes_local_graph_without_starting_services(startup):
     # Reviewed local source, not the untrusted inventory fixture. This is an
     # import smoke test in the test interpreter, NOT installed image attestation.
@@ -130,10 +151,15 @@ subprocess.Popen = forbidden
 os.fork = os.system = forbidden
 bundle = importlib.import_module("supplemental_recording_host_source")
 startup = sys.argv[2] == "True"
-for name in sorted(bundle.STARTUP_ROOTS if startup else bundle.ROOTS):
+permission = sys.argv[2] == "permission"
+roots = (bundle.PERMISSION_ROOTS if permission else
+         (bundle.STARTUP_ROOTS if startup else bundle.ROOTS))
+modules = (bundle.PERMISSION_MODULES if permission else
+           (bundle.STARTUP_MODULES if startup else bundle.MODULES))
+for name in sorted(roots):
     importlib.import_module(name)
 private = {name for name in sys.modules if name.startswith("supplemental_")}
-assert private == (bundle.STARTUP_MODULES if startup else bundle.MODULES)
+assert private == modules
 for name in private:
     assert Path(sys.modules[name].__file__) == repository / "scripts" / (name + ".py")
 product = [name for name in sys.modules if name == "sds200" or name.startswith("sds200.")]
@@ -150,10 +176,11 @@ print(json.dumps({"private": len(private), "product": len(product)}))
     )
     assert not result.stderr
     report = json.loads(result.stdout)
-    assert report["private"] == (62 if startup else 54) and report["product"] >= 1
+    assert report["private"] == (64 if startup == "permission" else (62 if startup else 54))
+    assert report["product"] >= 1
 
 
-@pytest.mark.parametrize("startup", [False, True])
+@pytest.mark.parametrize("startup", [False, True, "permission"])
 def test_helper_imports_need_no_installer_web_or_terminal_dependencies(startup):
     # The dedicated host image is not the scanner/web/native image. Its entire
     # product package is still pinned, but this reviewed helper graph needs no
@@ -185,7 +212,12 @@ subprocess.Popen = forbidden
 os.fork = os.system = forbidden
 bundle = importlib.import_module("supplemental_recording_host_source")
 startup = sys.argv[2] == "True"
-for name in sorted(bundle.STARTUP_ROOTS if startup else bundle.ROOTS):
+permission = sys.argv[2] == "permission"
+roots = (bundle.PERMISSION_ROOTS if permission else
+         (bundle.STARTUP_ROOTS if startup else bundle.ROOTS))
+modules = (bundle.PERMISSION_MODULES if permission else
+           (bundle.STARTUP_MODULES if startup else bundle.MODULES))
+for name in sorted(roots):
     importlib.import_module(name)
 for name in (
     "daemon_recording", "scanner_display_configuration",
@@ -193,7 +225,7 @@ for name in (
 ):
     importlib.import_module("sds200." + name)
 private = {name for name in sys.modules if name.startswith("supplemental_")}
-assert private == (bundle.STARTUP_MODULES if startup else bundle.MODULES)
+assert private == modules
 assert "sds200.daemon_recording" in sys.modules
 print(json.dumps({"private": len(private)}))
 """
@@ -204,7 +236,9 @@ print(json.dumps({"private": len(private)}))
         check=True,
     )
     assert not result.stderr
-    assert json.loads(result.stdout) == {"private": 62 if startup else 54}
+    assert json.loads(result.stdout) == {
+        "private": 64 if startup == "permission" else (62 if startup else 54)
+    }
 
 
 @pytest.mark.parametrize(
@@ -339,18 +373,19 @@ def test_graph_selection_is_explicit_and_old_digests_cannot_certify_startup(layo
 
 
 @pytest.mark.parametrize("selection", [None, 0, 1, "startup", "False", [], {}])
-def test_nonboolean_graph_selection_refuses_before_io(layout, monkeypatch, selection):
+@pytest.mark.parametrize("field", ["startup", "permission_probe"])
+def test_nonboolean_graph_selection_refuses_before_io(layout, monkeypatch, selection, field):
     monkeypatch.setattr(
         m.files, "inventory", lambda *_a, **_k: pytest.fail("Invalid profile read files")
     )
-    denied(replace(layout, startup=selection).observe)
+    denied(replace(layout, **{field: selection}).observe)
 
 
 def test_extra_startup_file_is_not_allowed_in_old_graph_or_incomplete_startup(layout):
     extra = m.STARTUP_FILES - m.HELPER_FILES
     assert len(extra) == 8
     selected = layout.helper / sorted(extra)[0]
-    if layout.startup:
+    if layout.startup or layout.permission_probe:
         selected.unlink()
     else:
         selected.write_bytes(b"pass\n")

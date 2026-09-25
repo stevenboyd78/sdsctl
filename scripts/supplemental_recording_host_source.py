@@ -21,6 +21,7 @@ from supplemental_handoff_policy import checksum, digest
 
 KIND = "finite-recording-host-source-v1"
 STARTUP_KIND = "finite-recording-startup-host-source-v1"
+PERMISSION_KIND = "finite-recording-permission-probe-host-source-v1"
 MAX_SECONDS = 8.0
 ROOTS = frozenset(
     "supplemental_recording_" + name
@@ -132,6 +133,11 @@ STARTUP_FILES = frozenset(name + ".py" for name in STARTUP_MODULES)
 STARTUP_ROOTS = ROOTS | frozenset(
     "supplemental_recording_service_" + name for name in ("startup", "submit", "clock_link")
 )
+PERMISSION_MODULES = STARTUP_MODULES | frozenset(
+    {"supplemental_recording_service_permission", "supplemental_recording_permission_probe"}
+)
+PERMISSION_FILES = frozenset(name + ".py" for name in PERMISSION_MODULES)
+PERMISSION_ROOTS = STARTUP_ROOTS | frozenset({"supplemental_recording_permission_probe"})
 REQUIRED_RUNTIME = frozenset({"__init__.py", "daemon_recording.py"})
 MESSAGE = "Recording host source is unconfirmed; do not launch the private host helper."
 
@@ -159,11 +165,17 @@ class Layout:
     runtime: Path
     helper: Path
     startup: bool = False
+    permission_probe: bool = False
+
+    def _profile(self):
+        require(type(self.startup) is bool and type(self.permission_probe) is bool)
+        require(not (self.startup and self.permission_probe))
+        if self.permission_probe:
+            return PERMISSION_FILES, PERMISSION_KIND
+        return (STARTUP_FILES, STARTUP_KIND) if self.startup else (HELPER_FILES, KIND)
 
     def _snapshot(self):
-        require(type(self.startup) is bool)
-        expected = STARTUP_FILES if self.startup else HELPER_FILES
-        kind = STARTUP_KIND if self.startup else KIND
+        expected, kind = self._profile()
         runtime, helper = files.inventory(self.runtime), files.inventory(self.helper)
         require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == expected)
         # inventory() includes every file, but an extra empty namespace must
@@ -191,7 +203,7 @@ class Layout:
 
     def observe(self):
         try:
-            require(type(self.startup) is bool)
+            self._profile()
             for path in (self.runtime, self.helper):
                 require(type(path) is type(Path()) and path.is_absolute() and path != Path("/"))
                 require(".." not in path.parts)

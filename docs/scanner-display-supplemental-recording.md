@@ -2821,10 +2821,10 @@ observer must not delegate its endpoint. Both peers' source/runtime/confinement,
 channel setup and independent observer decision remain external prerequisites;
 the canonical response codec alone is not proof of review. Local tests use real
 owned sockets/processes/clocks and synthetic Docker/host metadata, not installed
-qualification. This receiver is not in either existing helper source profile,
-and neither `--startup-probe` nor any installed command imports or selects it.
-A separately reviewed command/profile and sender are still required before
-actual service activation or a new physical/audible acceptance test.
+qualification. This receiver is not in the original 54-module or startup
+62-module profiles; neither `--startup-probe` nor any installed App selects it.
+Actual service activation or a new physical/audible acceptance test still needs
+separate installed qualification.
 
 The companion outer-only `supplemental_recording_permission_review.Review`
 checks a received challenge against independently supplied original template,
@@ -2863,9 +2863,49 @@ poison the sender without another qualification/write attempt. Local write
 attempt/completion facts are preserved separately from receiver acknowledgment:
 even if all bytes were written, loss of the final check does not authorize a
 retry or establish remote acceptance. Borrowed handles remain caller-owned.
-There is still no installed sender policy, separately qualified finite command,
-or new observed helper profile. Neither existing probe nor App selects this
-protocol; a fresh isolated qualification must precede any real service use.
+Neither existing probe nor App selects this protocol; a fresh isolated
+qualification must precede any real service use.
+
+#### Distinct action-free permission command (uninstalled)
+
+`supplemental_recording_permission_probe.py --permission-probe` is a separate
+finite command, not an extension of `--startup-probe`. Its exact arguments pin
+the declaration directory, template digest, baseline digest, and the original
+observer PID/start ticks/container identity. Direct execution requires the fixed
+helper location, isolated/no-bytecode interpreter, root identity and root working
+directory before private imports. The baseline argument is **only a digest**:
+the command never opens a baseline, reads the host cache, contacts Engine,
+publishes a plan, accepts a plan, assembles a service, or touches the scanner.
+
+The trusted observer provisions a private sibling directory with one socket.
+The target retains the original directory chain and leaf identities, requires
+private ownership/modes and no extra entries, and connects once through the
+original directory handle. It neither creates nor removes the socket path.
+Path replacement, descriptor changes, connection refusal, backlog uncertainty,
+interruptions and original deadline expiry cannot trigger reconnect. Permission
+still checks the exact original live peer credentials, process and clock/domain.
+
+After one challenge/reply, this command consumes an **empty guarded scope**.
+It reports that local protocol milestone only after the final scope check and
+retains its original handles until the original observation cutoff. A completed
+sender write is still not a receiver acknowledgment; exit 75 proves neither
+permission, service readiness, recording success nor restoration. Cleanup retires
+the protocol borrower, channel, domain and peer witness before the original
+clock, followed by the declaration. Independent outer supervision remains
+mandatory for blocked kernel I/O. No failed case is reopened or repaired.
+
+The explicit `permission_probe=True` source profile contains exactly 64 private
+modules and the complete product package. Its separate digest kind cannot be
+substituted for either older profile; selecting multiple profiles fails closed.
+Outer review/sender/qualification code is deliberately outside this observed
+helper inventory. The uninstalled outer `PermissionProbeQualification` admits
+only the exact nine-argument action-free command and retains the complete
+unchanged two-second source/runtime/confinement qualification. Its one-attempt
+`review_and_qualify()` callback binds the original review, observer clock,
+peer witness, domain and independent input pins before any permission write.
+It cannot authorize a future service command or baseline read. Local integration
+uses actual sockets/processes/clocks with synthetic Docker/Engine metadata;
+that is not installed platform or physical/audible acceptance.
 
 #### Observer-side clock comparison for a service-owned plan
 

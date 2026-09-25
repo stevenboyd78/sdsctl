@@ -42,8 +42,11 @@ def configuration_pin(container, environment):
 
 @pytest.fixture
 def helper(supervised, image, configured, monkeypatch, request):
-    startup_profile = getattr(request, "param", False)
-    assert type(startup_profile) is bool
+    selection = getattr(request, "param", False)
+    assert type(selection) is bool or selection == "permission"
+    permission_profile = selection == "permission"
+    startup_profile = selection is True
+    template_profile = startup_profile or permission_profile
     monkeypatch.setattr(m.time_domain, "ROOT_UID", os.geteuid())
     product = supervised.root / m.plans.fixed.PACKAGE
     helpers = supervised.root / m.HelperQualification.HELPER
@@ -51,7 +54,11 @@ def helper(supervised, image, configured, monkeypatch, request):
         (product, m.helper_source.REQUIRED_RUNTIME),
         (
             helpers,
-            m.helper_source.STARTUP_FILES if startup_profile else m.helper_source.HELPER_FILES,
+            m.helper_source.PERMISSION_FILES
+            if permission_profile
+            else (
+                m.helper_source.STARTUP_FILES if startup_profile else m.helper_source.HELPER_FILES
+            ),
         ),
     ):
         root.mkdir(parents=True, exist_ok=True)
@@ -69,7 +76,11 @@ def helper(supervised, image, configured, monkeypatch, request):
         ),
     )
     value["helper"].update(
-        source=m.helper_source.Layout(product, helpers, startup=startup_profile).observe().sha256,
+        source=m.helper_source.Layout(
+            product, helpers, startup=startup_profile, permission_probe=permission_profile
+        )
+        .observe()
+        .sha256,
         interpreter=supervised.observe_supervised(env.env.TIMEZONE).sha256,
         environment=env.pin(configured, image),
     )
@@ -83,7 +94,8 @@ def helper(supervised, image, configured, monkeypatch, request):
         plan.sha256,
     )
     template = None
-    if startup_profile:
+    observer_identity = None
+    if template_profile:
         from .test_supplemental_recording_service_template import m as template_codec
 
         raw = json.loads(plan.raw)
@@ -109,6 +121,23 @@ def helper(supervised, image, configured, monkeypatch, request):
             template.sha256,
             "--startup-probe",
         )
+        if permission_profile:
+            from supplemental_recording_permission_probe import identity_argument
+
+            observer_identity = m.engine.dispatch.process.process_identity(
+                os.getpid(),
+                "8" * 64,
+                Path("/proc/self/stat").read_text(),
+                "0::/system.slice/docker-" + "8" * 64 + ".scope\n",
+            )
+            command = command[:3] + (
+                "/opt/sdsctl-recording-host/supplemental_recording_permission_probe.py",
+                command[4],
+                template.sha256,
+                "d" * 64,
+                identity_argument(observer_identity),
+                "--permission-probe",
+            )
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.env.HOSTNAME)
     child = subprocess.Popen(
@@ -131,6 +160,8 @@ def helper(supervised, image, configured, monkeypatch, request):
     )
 
     def identity(pid, cid):
+        if permission_profile and (pid, cid) == (os.getpid(), observer_identity.container_id):
+            return observer_identity
         assert (pid, cid) == (child.pid, CID)
         return m.engine.dispatch.process.process_identity(
             pid,
@@ -336,7 +367,8 @@ def helper(supervised, image, configured, monkeypatch, request):
             plan, witness, docker, **(args | overrides)
         )
         state.template = template
-        state.obj = None if startup_profile else state.make()
+        state.observer_identity = observer_identity
+        state.obj = None if template_profile else state.make()
         yield state
     finally:
         child.stdin.close()
