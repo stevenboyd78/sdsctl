@@ -2,10 +2,11 @@
 """Finite original-owner startup custody, uninstalled and without App actions.
 
 Connects retained declaration, original clock, exclusive plan publication and
-independent acceptance. No Engine, journal, service, native worker, scanner or
-recording operation is selected. Accepted bytes are NOT installed qualification
-or operator approval. The caller must keep this owner alive until any later
-borrowers have released its original plan and clock handles.
+independent acceptance. The explicit prepare_service() library path first reads
+the complete pre-handoff host baseline; the finite command never selects it.
+No journal, service, native worker, scanner or recording operation is selected.
+Accepted bytes are NOT installed qualification or operator approval. The caller
+must keep this owner alive until later borrowers release its plan and clock.
 """
 
 from __future__ import annotations
@@ -81,6 +82,7 @@ class Startup:
         self.lock, self._cleanup = Lock(), []
         self.failed = self.closed = self.used = self.accepted = False
         self.clock = self.offer = self.publisher = self.original = self.reader = None
+        self.baseline = self.projected = self._service_inputs = None
         try:
             require(type(original) is declaration.Declaration)
             require(original.owner == self.owner and original.startup_owner is None)
@@ -125,6 +127,15 @@ class Startup:
         require(not self.clock.closed and not self.clock.failed)
         require(not self.reader.closed and not self.reader.failed)
         require(self.reader.accepted is self.accepted)
+        if self._service_inputs is None:
+            require(self.baseline is None and self.projected is None)
+        else:
+            baseline, projected, prepared_sha256 = self._service_inputs
+            require(self.baseline is baseline and self.projected is projected)
+            require(
+                plans.base.checksum(self.offer.plan.preparation(baseline, projected))
+                == prepared_sha256
+            )
 
     def _guard(self):
         self._input()
@@ -137,6 +148,73 @@ class Startup:
         self._binding()
 
     def prepare(self):
+        """Publish without an App/Engine read; the action-free probe uses this."""
+        return self._prepare(None)
+
+    def prepare_service(self, projected, docker):
+        """Explicit one-use baseline read BEFORE the one service clock origin.
+
+        All non-clock inputs come from the retained independent declaration.
+        A separate temporary preflight clock/plan bounds the existing complete
+        host observer and fixed normal-App cache read. It is never published,
+        accepted, journaled or substituted for the service's original clock.
+        The final plan requires that observation to predate issued_at by at
+        most two seconds. A late or failed read ends this owner, without retry.
+
+        After independent acceptance, accepted_input() rechecks this same
+        baseline and projection as well as the original published plan. They
+        remain in baseline/projected for separately qualified journal/service
+        assembly. No journal, App mutation, scanner request or service starts.
+        Source/runtime/confinement and input provenance remain external gates.
+        """
+        return self._prepare((projected, docker))
+
+    def _capture_service_origin(self, projected, docker):
+        # This explicit library path is not invoked by --startup-probe.
+        # The module is already in the separately qualified startup graph.
+        import supplemental_recording_host_launch as launch
+
+        preflight = plans.clock.ClockWitness(plans.clock.read())
+        problem = None
+        try:
+            plan = self.template.preview(preflight.original)
+            reader = launch.PreHandoffHost(plan, projected, docker)
+            self._input()
+            sample = reader.read()
+            require(type(sample) is plans.bootstrap.recovery.Sample)
+            sample.__post_init__()
+            require(sample.boot_id == plan.boot and reader.used and not reader.failed)
+            observed = preflight.read()
+            require(
+                plan.deadlines.issued_at
+                <= sample.observation.sampled_at
+                <= sample.now
+                <= observed.boottime_ns / plans.clock.NS
+            )
+            self._input()
+            self.clock = plans.clock.ClockWitness(plans.clock.read())
+            self._cleanup.append(self.clock.close)
+            observed.check_later(self.clock.original)
+            final = self.template.preview(self.clock.original)
+            prepared = final.preparation(sample.observation, projected)
+            self.baseline, self.projected = sample.observation, projected
+            self._service_inputs = self.baseline, projected, plans.base.checksum(prepared)
+        except BaseException as error:
+            problem = error
+            raise
+        finally:
+            try:
+                preflight.close()
+            except BaseException as cleanup:
+                # Ordinary cleanup uncertainty must not hide an interruption.
+                if (
+                    problem is None
+                    or isinstance(problem, Exception)
+                    or not isinstance(cleanup, Exception)
+                ):
+                    raise
+
+    def _prepare(self, service_inputs):
         acquired = False
         try:
             require(self.lock.acquire(blocking=False))
@@ -144,8 +222,11 @@ class Startup:
             self._input()
             require(not self.used)
             self.used = True
-            self.clock = plans.clock.ClockWitness(plans.clock.read())
-            self._cleanup.append(self.clock.close)
+            if service_inputs is None:
+                self.clock = plans.clock.ClockWitness(plans.clock.read())
+                self._cleanup.append(self.clock.close)
+            else:
+                self._capture_service_origin(*service_inputs)
             self._input()
             self.offer = offers.Offer(self.template, self.expected, self.clock)
             self._cleanup.append(self.offer.close)

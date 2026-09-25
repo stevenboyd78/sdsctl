@@ -2603,6 +2603,26 @@ that original freshness against `issued_at`, not the later acceptance time.
 Acceptance cannot make an unhealthy, stale, future or differently pinned sample
 safe. A later observation must not replace the baseline or renew any deadline.
 
+The explicit `Startup.prepare_service(projected, docker)` library method now
+connects that initial read to the retained clock-free declaration. It derives a
+temporary preflight plan from those same non-clock fields, retains a separate
+temporary clock witness, and runs the complete one-use `PreHandoffHost` reader,
+including the fixed cached read of the original normal App. Only after a valid
+read does it capture the continuing service clock. It verifies the chronology
+in the same time domain, checks the baseline against the final `issued_at`, and
+closes the temporary witness before publishing anything. The temporary plan is
+never published, accepted or substituted for the service plan. An uncertain
+read or close ends the attempt without resetting its clock or retrying.
+
+The exact baseline and projection remain bound to the original startup owner
+through independent acceptance; equal-looking replacements, field mutations
+or post-acceptance recapture are refused. This path does not prepare a journal,
+start a service, or change an App. It is a library integration, not an installed
+command. Its expected source/settings/manifests still require independent
+provenance, and all later host reads remain mandatory. The tests exercise both
+externally supplied preflight and template-derived preflight through idle,
+native and recording cleanup, with explicitly synthetic host/cache transports.
+
 After the accepted handles have been explicitly borrowed by the service, its
 own original-clock/plan checks continue; it does not poll acceptance again or
 extend the fifteen-second startup offer to accommodate the service lifetime.
@@ -2628,11 +2648,12 @@ The observer refuses to continue after that owner exits. These tests use
 temporary path aliases and explicitly synthetic Docker cgroup/App metadata;
 they do not certify an installed container, command or mount configuration.
 
-This assembly performs no Engine request, journal preparation, service/native
-launch, scanner access or recording operation. Accepted input is not readiness
-or operator approval. The full expanded source/runtime graph, finite installed
-command, supervision and actual host qualification still gate installation;
-none of the old helper commands implicitly selects this startup protocol.
+The ordinary `Startup.prepare()` path performs no Engine request. Neither
+preparation path prepares a journal, launches a service/native worker, accesses
+the scanner or records audio. Accepted input is not readiness or operator
+approval. The full expanded source/runtime graph, finite installed command,
+supervision and actual host qualification still gate installation; none of the
+old helper commands implicitly selects this startup protocol.
 
 The same module also exposes a distinct, action-free `--startup-probe` command
 for later isolated qualification. Direct execution requires isolated Python,

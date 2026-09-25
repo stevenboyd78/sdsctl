@@ -39,8 +39,8 @@ m, startup = services.m, startups.m
 )
 
 
-@pytest.fixture
-def accepted(before_handoff, tmp_path, monkeypatch):
+@pytest.fixture(params=["external_baseline", "template_baseline"])
+def accepted(before_handoff, tmp_path, monkeypatch, request):
     s = before_handoff
     root, source = tmp_path / "startup-case", tmp_path / "startup-declaration"
     root.mkdir(mode=0o700)
@@ -67,12 +67,29 @@ def accepted(before_handoff, tmp_path, monkeypatch):
     with startup.declaration.Declaration(source, template.sha256) as original:
         owner = startup.Startup(original)
         try:
-            # The synthetic fixture's independent preflight plan is NOT the
-            # service plan. Its full host read precedes the one service origin;
-            # never replace this baseline with a post-acceptance observation.
-            s.baseline = s.before.read().observation
             assert not owner.used and owner.clock is None and list(root.iterdir()) == []
-            owner.prepare()
+            if request.param == "external_baseline":
+                # The older independent preflight plan is NOT the service
+                # plan. Its full host read precedes the one service origin.
+                s.baseline = s.before.read().observation
+                owner.prepare()
+            else:
+                command = m.launch.normal_read.Sample(s.plan, s.docker).command
+
+                def cached(docker, seal, selected, generation):
+                    # Only the synthetic transport boundary is replaced. The
+                    # new complete reader derives its own preflight plan from
+                    # the retained template and a separate temporary clock.
+                    assert docker is s.docker and seal.pin == s.plan.normal.pin
+                    assert selected == command and generation == s.plan.normal_generation
+                    assert owner.clock is None and not list(root.iterdir())
+                    s.cached_calls.append((seal.slug, generation))
+                    s.after_cached()
+                    return m.plans.ordinary.NativeState(generation, *s.host.native_state)
+
+                monkeypatch.setattr(m.launch.normal_read.cached, "_read_probe", cached)
+                owner.prepare_service(s.projected, s.docker)
+                s.baseline = owner.baseline
             assert owner.poll() is None
             startups.submit(owner)
             assert owner.poll() is owner.original
