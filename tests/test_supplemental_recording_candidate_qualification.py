@@ -26,7 +26,7 @@ CID = "a" * 64
 
 
 @pytest.fixture
-def candidate(supervised, image, configured, monkeypatch):
+def candidate(supervised, image, configured, monkeypatch, request):
     native = m.plans.host.candidate_static
     product, helpers = supervised.root / m.plans.fixed.PACKAGE, supervised.root / native.NATIVE
     for root, names in (
@@ -38,6 +38,16 @@ def candidate(supervised, image, configured, monkeypatch):
             (root / name).write_bytes(b"raise RuntimeError('PRIVATE-NEVER-IMPORT-CANDIDATE')\n")
             (root / name).chmod(0o644)
     source_pin = native.source.Layout(product, helpers).observe().sha256
+    app_profile = getattr(request, "param", None) == "app_bridge"
+    bridge_raw = None
+    if app_profile:
+        bridge = supervised.root / "usr/local/libexec/sdsctl-recording-app-idle.py"
+        bridge.parent.mkdir(mode=0o755)
+        bridge_raw = (
+            Path(__file__).parents[1] / "scripts/accept_supplemental_recording_app_idle.py"
+        ).read_bytes()
+        bridge.write_bytes(bridge_raw)
+        bridge.chmod(0o444)
     clock = m.plans.clock.read()
     issued = clock.boottime_ns / m.plans.clock.NS
     value = launch.plans.value()
@@ -155,6 +165,17 @@ def candidate(supervised, image, configured, monkeypatch):
             state.images += 1
             state.events.append("image")
             result = dict(Id=name, Os="linux", Architecture="amd64", Config=dict(Env=image))
+            if app_profile:
+                result["Config"].update(
+                    Entrypoint=["/usr/local/bin/python"],
+                    Cmd=[
+                        "-I",
+                        "-B",
+                        "/usr/local/libexec/sdsctl-recording-app-idle.py",
+                        "--case",
+                        plan.case,
+                    ],
+                )
             if state.fault == "image" and state.images == state.when:
                 result["Architecture"] = "arm64"
             return result
@@ -191,6 +212,7 @@ def candidate(supervised, image, configured, monkeypatch):
         )
         state.plan, state.idle, state.witness, state.child = plan, idle, witness, child
         state.root, state.container, state.docker = supervised.root, container, docker
+        state.bridge_raw, state.image_env = bridge_raw, image
         yield state
     finally:
         if witness is not None:

@@ -1539,6 +1539,16 @@ class CandidateQualification:
     def _bounds(self):
         return self.plan.deadlines.ready_by, self.plan.lease["ready_by"]
 
+    def _startup_argv(self):
+        # The original direct-idle policy stays exact. Separately reviewed
+        # read-only subclasses may attest an explicit fixed startup bridge.
+        return self.plan.idle_argv
+
+    def _image_startup(self, config):
+        # Existing direct-idle images are independently image-hash pinned;
+        # their per-container command is checked below as before.
+        pass
+
     def _evidence(self):
         return self.idle.read()
 
@@ -1577,6 +1587,7 @@ class CandidateQualification:
     def _metadata(self, deadline):
         self._guard(deadline)
         plan = self.plan
+        startup_argv = self._startup_argv()
         container = self.docker.container("app_" + base.CANDIDATE)
         require(container.get("Id") == self.init.container_id)
         require(
@@ -1588,8 +1599,8 @@ class CandidateQualification:
         require(container["State"]["Pid"] == self.init.pid)
         plans.ordinary.manual_container(container)
         require(
-            container.get("Path") == plan.idle_argv[0]
-            and container.get("Args") == list(plan.idle_argv[1:])
+            container.get("Path") == startup_argv[0]
+            and container.get("Args") == list(startup_argv[1:])
         )
         config = container.get("Config")
         require(type(config) is dict and config.get("User") in ("0", "0:0"))
@@ -1599,7 +1610,7 @@ class CandidateQualification:
             parts = config.get(key)
             require(parts is None or type(parts) is list)
             command.extend(parts or [])
-        require(command == list(plan.idle_argv))
+        require(command == list(startup_argv))
         require(
             runtime.supervised_environment(
                 config.get("Env"),
@@ -1617,6 +1628,7 @@ class CandidateQualification:
             image.get("Architecture") == self.architecture and type(image.get("Config")) is dict
         )
         require(runtime.environment(image["Config"].get("Env")) == self.image_environment_sha256)
+        self._image_startup(image["Config"])
         # Compare all configuration/mount inputs, not changing counters or health.
         # Tokens are represented only by the separately tagged one-way digest.
         stamp = base.checksum(

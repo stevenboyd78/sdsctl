@@ -947,3 +947,26 @@ idle command, original receipt/claim/lease, full runtime (including this file),
 source, process and namespace custody. Host receipt publication, App staging,
 active-phase authorization and independent recovery are remaining work. Existing
 direct-idle checks must not simply be relaxed to admit the wrapper.
+
+The separate, uninstalled `supplemental_recording_app_publish.publish()` path
+now constructs both inputs from the accepted startup owner's **original** plan
+and clock, and only after that owner has completed service baseline preparation.
+It must be explicitly called before passive service assembly; existing commands
+do not call it. One exclusive case-directory creation records its intent. The
+lease is written and synced first, then the matching launch receipt last, with
+original input guards and retained host-directory checks around the operation.
+An existing case, partial write, changed file or uncertain close preserves the
+residue and prevents another attempt by that owner. Publication neither starts
+an App nor establishes installed qualification, process readiness or recovery.
+
+`qualify_supplemental_recording_app.AppCandidateQualification` is a separate
+read-only policy for that bridge. It requires the case-fixed bridge command in
+both the installed image defaults and container configuration, while retaining
+the existing independent `Idle` checks of the actual post-exec PID1 command.
+It also rechecks the original publication files and directory, the one-use
+consumption receipt, and independently pinned bridge bytes inside the complete
+runtime verification. Source, runtime, environment, mounts, original process and
+clock checks still surround a contributing read within the same two-second
+bound. Changed files cannot be adopted as a new successful baseline. Existing
+direct-idle qualification still rejects bridge-configured containers, and
+existing exact-type launch/service gates do not select this new policy.

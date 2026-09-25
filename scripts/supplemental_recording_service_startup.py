@@ -87,6 +87,8 @@ class Startup:
         self.lock, self._cleanup = Lock(), []
         self.failed = self.closed = self.used = self.accepted = False
         self.service_used = self._service_active = False
+        # Separate optional App-start publication; no existing command selects it.
+        self.app_idle_publication_used = False
         self._service_invalidate = None
         self.clock = self.offer = self.publisher = self.original = self.reader = None
         self.baseline = self.projected = self._service_inputs = None
