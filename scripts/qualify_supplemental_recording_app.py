@@ -40,40 +40,27 @@ def _file(directory, name, end, *, mode=0o600, limit=4096):
     return raw, files.identity(before)
 
 
-class AppCandidateQualification(launch.CandidateQualification):
-    """Borrow original publication pins; do not learn them from App inputs.
+class _AppInputs:
+    """Shared read-only App input policy; no standalone phase authority."""
 
-    Docker Config and image defaults must both name this exact case's bridge.
-    Existing Idle.read independently checks the actual post-exec PID1 against
-    plan.idle_argv. Neither configured argv is substituted for that process read.
-    First observed consumption/directory identities remain fixed thereafter.
-    """
-
-    def __init__(self, plan, idle, witness, docker, *, published, bridge_sha256, **profile):
-        self.failed, self.elapsed_seconds = False, None
-        try:
-            require(type(published) is publication.Published)
-            require(published.plan_sha256 == plan.sha256)
-            require(published.lease_sha256 == plan.lease_sha256)
-            for pin in (published.receipt_sha256, bridge_sha256):
-                base.digest(pin)
-            require(type(published.root_identity) is tuple and len(published.root_identity) == 9)
-            require(all(type(value) is int for value in published.root_identity))
-            require(
-                type(published.file_identities) is tuple and len(published.file_identities) == 2
-            )
-            require(
-                tuple(name for name, _ in published.file_identities)
-                == ("idle/lease.json", "app-start/launch.json")
-            )
-            for _, identity in published.file_identities:
-                require(type(identity) is tuple and len(identity) == 9)
-                require(all(type(value) is int for value in identity))
-            self.published, self.bridge_sha256 = published, bridge_sha256
-            self.consumption = self._original_consumption = None
-            super().__init__(plan, idle, witness, docker, **profile)
-        except BaseException as error:
-            self._fail(error)
+    def _publication(self, plan, published, bridge_sha256):
+        require(type(published) is publication.Published)
+        require(published.plan_sha256 == plan.sha256)
+        require(published.lease_sha256 == plan.lease_sha256)
+        for pin in (published.receipt_sha256, bridge_sha256):
+            base.digest(pin)
+        require(type(published.root_identity) is tuple and len(published.root_identity) == 9)
+        require(all(type(value) is int for value in published.root_identity))
+        require(type(published.file_identities) is tuple and len(published.file_identities) == 2)
+        require(
+            tuple(name for name, _ in published.file_identities)
+            == ("idle/lease.json", "app-start/launch.json")
+        )
+        for _, identity in published.file_identities:
+            require(type(identity) is tuple and len(identity) == 9)
+            require(all(type(value) is int for value in identity))
+        self.published, self.bridge_sha256 = published, bridge_sha256
+        self.consumption = self._original_consumption = None
 
     def _pins(self):
         p = self.published
@@ -179,3 +166,103 @@ class AppCandidateQualification(launch.CandidateQualification):
             unchanged()
         self._guard(deadline)
         return merged, base.checksum(dict(metadata=stamp, app_inputs=consumed)), configured
+
+
+class AppCandidateQualification(_AppInputs, launch.CandidateQualification):
+    """Borrow original publication pins; do not learn them from App inputs.
+
+    Docker Config and image defaults must both name this exact case's bridge.
+    Existing Idle.read independently checks the actual post-exec PID1 against
+    plan.idle_argv. Neither configured argv is substituted for that process read.
+    First observed consumption/directory identities remain fixed thereafter.
+    """
+
+    def __init__(self, plan, idle, witness, docker, *, published, bridge_sha256, **profile):
+        self.failed, self.elapsed_seconds = False, None
+        try:
+            self._publication(plan, published, bridge_sha256)
+            super().__init__(plan, idle, witness, docker, **profile)
+        except BaseException as error:
+            self._fail(error)
+
+
+class AppRetainedQualification(_AppInputs, launch.RetainedQualification):
+    """Fresh post-begin reads with the ORIGINAL App input/consumption pins.
+
+    Borrow the actual original App candidate reader and PostBegin capability;
+    no caller-supplied replacement profile or receipt is accepted. Its previous
+    success is only a continuity prerequisite, never cached qualification. Every
+    call rechecks complete source/runtime/environment/process/App input evidence
+    under the original stop deadline, not the expired ready deadline. Existing
+    exact-type Launch/Start/IdleService gates do not admit this class.
+    """
+
+    PROFILE = (
+        "image_environment_sha256",
+        "timezone",
+        "hostname",
+        "architecture",
+        "runtime_workers",
+    )
+
+    def __init__(self, original, continuity):
+        self.failed, self.elapsed_seconds = False, None
+        try:
+            require(type(original) is AppCandidateQualification)
+            require(type(continuity) is launch.idle_module.PostBegin)
+            require(continuity.plan is original.plan and continuity.idle is original.idle)
+            require(original.consumption is not None and original.elapsed_seconds is not None)
+            self.candidate = original
+            self.candidate_objects = (
+                original,
+                original.plan,
+                original.idle,
+                original.witness,
+                original.docker,
+                original.published,
+                original.consumption,
+            )
+            self.candidate_profile = original.original
+            self._publication(original.plan, original.published, original.bridge_sha256)
+            self.consumption = self._original_consumption = original.consumption
+            self._prebegin()
+            super().__init__(
+                continuity,
+                original.witness,
+                original.docker,
+                **{name: getattr(original, name) for name in self.PROFILE},
+            )
+        except BaseException as error:
+            self._fail(error)
+
+    def _prebegin(self):
+        original = self.candidate
+        require(type(original) is AppCandidateQualification and not original.failed)
+        require(original.owner == (os.getpid(), launch.get_ident()))
+        require(not original.lock.locked())
+        require(
+            all(
+                a is b
+                for a, b in zip(
+                    (
+                        original,
+                        original.plan,
+                        original.idle,
+                        original.witness,
+                        original.docker,
+                        original.published,
+                        original.consumption,
+                    ),
+                    self.candidate_objects,
+                    strict=True,
+                )
+            )
+        )
+        require(original._pins() == original.original == self.candidate_profile)
+        require(self.published is original.published)
+        require(self.consumption is original.consumption)
+        require(self.bridge_sha256 == original.bridge_sha256)
+
+    def _pins(self):
+        self._prebegin()
+        return super()._pins()

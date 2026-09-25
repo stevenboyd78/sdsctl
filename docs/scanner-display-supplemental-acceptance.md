@@ -940,8 +940,8 @@ arbitrary executable, scanner connection, daemon startup, recording operation,
 or automatic retry exists here. Blocked kernel I/O still requires independent
 outer supervision.
 
-This file is not selected by any existing image, source profile, staging
-adapter or qualification policy. Before installation, a separately reviewed
+This file is not selected by any installed image, source profile, staging
+adapter or service command. Before installation, a separately reviewed
 policy must authenticate its exact image-config command, actual post-exec
 idle command, original receipt/claim/lease, full runtime (including this file),
 source, process and namespace custody. Host receipt publication, App staging,
@@ -970,3 +970,22 @@ clock checks still surround a contributing read within the same two-second
 bound. Changed files cannot be adopted as a new successful baseline. Existing
 direct-idle qualification still rejects bridge-configured containers, and
 existing exact-type launch/service gates do not select this new policy.
+
+The separate `AppRetainedQualification` borrows that **same original** App
+candidate reader and an actual `PostBegin` capability. It carries the original
+publication and consumption identities forward instead of learning new ones
+after begin. Every read still performs full fresh qualification; prior success
+is only a continuity prerequisite. Its bound is the already fixed stop deadline,
+never renewed readiness, and it never calls the expired pre-begin `Idle.read()`.
+Replacement inputs, an altered original reader, a failed continuity check or a
+late contributing observation permanently refuse that collector. No launch,
+recording, health, completion or restoration authority is returned, and existing
+exact-type action gates do not admit it.
+
+These App publication/qualification libraries currently describe a closed
+**idle-only** case tree (`idle` and `app-start`). Native execution additionally
+needs an independently pinned `launch/launch.json`, baseline/profile inputs and
+precreated private output directories. Adding them after pinning this idle-only
+root is deliberately refused. A separate complete native-tree publication and
+qualification policy is required before active-App assembly; synthetic
+`PostBegin` tests do not satisfy that gate or prove an actual recording began.
