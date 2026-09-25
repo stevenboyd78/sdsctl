@@ -128,7 +128,7 @@ def execution(launch_case, tmp_path, monkeypatch):
         tick("ready")
         assert profile_sha256 == "a" * 64 and original_clock is p.original_clock
         assert zero_domain is s.idle.zero_domain
-        ready.client, ready.processes = client, object()
+        ready.client, ready.processes = client, SimpleNamespace(closed=False)
         ready.clock, ready.zero_domain = original_clock, zero_domain
         ready.failed = ready.closed = False
         ready.ready_by, ready.received_at = p.lease["ready_by"], time.monotonic()

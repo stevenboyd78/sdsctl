@@ -16,6 +16,9 @@ independent supervision and recovery integration.
 | Active inputs | `NativeActiveQualification` | Exact AppStart/Relay/PostBegin, original sockets and immutable input identities, and append-only validated receipt prefixes |
 | Host and file observation | `AppRetainedHost` | Original authorization history, fixed metadata worker, owner-thread file read, and continuing original actor/lease evidence |
 | Native status observation | `AppActiveSample` | One fresh cached native probe bracketed by complete App source/runtime/input inventories and host/file checks |
+| Finalized recording and exit evidence | `AppAuthorizedFinalized` | Original successful AppStart, closed Relay and independently captured Operator; separate actual exit collection and returned journal publication |
+| Finalized host observation | `AppFinalizedHost` | Original finalized files plus current complete ordinary metadata/static-file reads; native health and recording flags remain unknown |
+| Successful-recording recovery | App-specific `recover_finalized` and `AppRestoredHost` | Original RecoverySession, journal, process/CLI owners and deadline; fresh normal-App status only after durable restoration intent and separate exit receipts |
 
 The direct-policy `Launch`, `Start`, `RetainedHost`, `ActiveSample`, and
 `IdleService` admission gates remain unchanged. They do not accept the App
@@ -62,7 +65,7 @@ sampler cannot repair it or reuse its result.
 
 ### Failure and ownership
 
-An App-specific failure closes its original recording transport, not a
+A launch, begin, or active-observation failure closes its original recording transport, not a
 substituted public handle, while retaining the original process descriptors for
 separate recovery. Nested launch error wrappers do not retry a lost transport
 close acknowledgment. Explicit final descriptor cleanup remains the owner's
@@ -72,6 +75,41 @@ Startup, original clock, original journal, idle process witness, and input
 readers remain borrowed. Nothing here signals the scanner, changes its mode,
 stops Core, deletes recordings, reacquires a process identity, or silently
 restarts a consumed case.
+
+### Finalized files and independent exits
+
+`AppAuthorizedFinalized` admits only the original successful AppStart and the
+exact independent Operator captured before begin. Its constructor checks the
+original recording authorization and closed ledger/Relay history. It delegates
+the actual fourth-return, EOF, original-pidfd and Engine-exit checks to the
+existing collector. The returned exit evidence must then be separately
+published to the original host journal. A file or return code alone is not a
+successful recording or permission to restore an App.
+
+After those exits, live Ready and input qualification are not refreshed. The
+reader instead checks original object identities, sealed authorization and
+journal prefixes, immutable finalized files, and independent exit custody.
+Lost returns cannot be adopted from a later disk entry or retried. A finalized
+reader failure leaves the independent Operator and caller-owned journal intact.
+
+`AppFinalizedHost` retains the full bounded ordinary host/static-file bracket.
+It does not infer native health from a completed WAV, and does not dispatch
+recovery. The existing direct finalized-host and recovery gates still refuse
+these App-specific objects. Original-session restoration and failure branches
+use a separate explicit App policy.
+
+The App-specific `recover_finalized` routes the original session from candidate
+shutdown observations to `AppRestoredHost` after normal-start intent. It retains
+the original process and CLI trackers, executor, journal, and recovery deadline.
+The normal status reader must observe a new generation with fresh healthy,
+nonrecording state; old Ready health or a successful command reply is not enough.
+An unavailable observation stays unavailable while the same session can still
+expire by its independent clock ticks. There is no reader replacement, renewed
+budget, repeated stop/start command, or fallback to pristine recording state.
+
+This success-only path is not an installed service or independent supervisor.
+The preserved/unconfirmed and never-authorized App recovery branches still need
+explicit integration before live use.
 
 ## Validation scope
 
@@ -88,8 +126,9 @@ full source/runtime checks to make a run pass.
 
 ## Remaining gates before a human scanner/audio test
 
-1. App-specific finalized, preserved, and never-authorized recovery composition
-   using the original session and independently retained worker/init handles.
+1. App-specific preserved/unconfirmed and never-authorized recovery branches,
+   with independently retained worker/init handles. They cannot enter the
+   success-only path above or treat a lost return as an absent recording.
 2. Explicit App-aware service phase assembly, with no idle fallback after
    dispatch and no loss of original clock-only expiry on uncertainty.
 3. A separately named source profile and independently supervised entrypoint;
