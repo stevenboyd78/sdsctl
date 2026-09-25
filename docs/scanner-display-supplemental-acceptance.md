@@ -1013,7 +1013,13 @@ native launch input to the original native-idle reader's actual generation. It
 borrows the same accepted `Startup`, original clock and projected baseline;
 requires explicit native settings and an independently supplied profile pin;
 and writes only `launch/launch.json` in the original precreated directory. The
-source, host plan, projection, baseline, firmware, audio endpoint and output
+startup owner must still be lending its original handles to the already
+assembled service. A merely accepted owner or a retired service does not qualify.
+Continuing custody uses original object/file/clock checks, not a renewed poll of
+the expired 15-second acceptance offer. A late **new** assembly is still refused;
+the candidate's original ready/stop/recovery limits are never extended. Tests
+exercise this distinction through the real accepted Startup and service context.
+The source, host plan, projection, baseline, firmware, audio endpoint and output
 locations are joined without recapturing files or constructing a transport.
 The profile/port settings still require independently qualified installed
 provenance; this library does not derive that authority from supplied values.
@@ -1038,6 +1044,30 @@ unchanged; no installed profile selects the new publication or successor.
 Tests cover real local files/pidfds with explicitly synthetic App/Startup
 provenance, failure residue and native-parser format compatibility with private
 local baseline/profile fixtures. They do not qualify an installed handoff.
-Ready/active-output continuity, explicit active service/source-profile selection,
+
+The distinct `qualify_supplemental_recording_app_ready.NativeReadyQualification`
+handles the **pre-begin** boundary. It borrows that same acknowledged launch
+reader and the actual authenticated `Ready` object, joins its context and
+process/launch pins, and freshly checks readiness before and after each complete
+source/runtime collection. Immutable bindings are checked at intervening guards;
+expensive actor-tree reads are not repeated for each file. The original ready
+deadline and two-second collection bound remain in force.
+
+Only `api.sock`, `events.sock`, `pcmu.sock` and `recordings.sock` may now appear,
+as private root-owned socket entries inside the original socket directory. The
+reader neither opens nor connects to them. Their first fully qualified identities
+are retained, while all non-socket inputs retain their prelaunch identities.
+This one acquisition slot belongs to the original native-idle publication owner,
+not to a replaceable read-only wrapper. Constructing another launch reader cannot
+obtain a second slot or adopt replaced sockets; failed initial readiness also
+consumes that original slot without retry.
+Receipt directories must still be empty; an actual begin invalidates this
+pre-begin policy. Unexpected files, replaced sockets, lost original readiness,
+actor exit or changes during a contributing observation never return a verified
+result. Tests use real local socket inodes with explicitly synthetic readiness;
+actual installed timing and native actor provenance remain separate gates.
+
+Active-output continuity, explicit active service/source-profile selection,
 installed provenance and independent recovery remain required. Neither the
-larger tree nor a valid receipt supplies native/recording authority.
+larger tree, a valid receipt nor this read-only readiness join supplies native
+execution or recording authority. Existing action gates do not select it.

@@ -220,6 +220,8 @@ class NativeIdleQualification(AppCandidateQualification):
         # and existing read-only callers neither publish nor advance the phase.
         self.native_launch_used = False
         self.native_launch_publication = None
+        self.native_ready_used = False
+        self.native_ready_owner = None
         super().__init__(*args, **kwargs)
 
     def _publication(self, plan, published, bridge_sha256):
