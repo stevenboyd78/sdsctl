@@ -1008,7 +1008,36 @@ full App/source/runtime/process checks. It refuses a new `launch.json` or any
 runtime output rather than treating that change as authorization to advance.
 It is not accepted by the existing native-launch or post-begin gates.
 
-Complete native launch-input publication after actual generation binding,
-explicit active service/source-profile selection, installed provenance and
-independent recovery remain required. Neither the larger tree nor a valid
-receipt supplies native/recording authority.
+The distinct `supplemental_recording_app_launch.publish_launch()` now binds the
+native launch input to the original native-idle reader's actual generation. It
+borrows the same accepted `Startup`, original clock and projected baseline;
+requires explicit native settings and an independently supplied profile pin;
+and writes only `launch/launch.json` in the original precreated directory. The
+source, host plan, projection, baseline, firmware, audio endpoint and output
+locations are joined without recapturing files or constructing a transport.
+The profile/port settings still require independently qualified installed
+provenance; this library does not derive that authority from supplied values.
+
+One attempt consumes the original reader's publication slot, even on failure.
+Exclusive creation, private ownership/mode, full readback, identity checks and
+file/directory synchronization precede acknowledgment. Ambiguous output remains
+in place, and close errors use a fixed diagnostic without retrying descriptors.
+Full candidate qualification precedes and follows the write within the same
+two-second operation/original ready deadline. A failed handoff poisons the
+original reader, retains borrowed process/clock handles and grants no action.
+
+The returned `NativeLaunchQualification` is a **read-only** successor. It keeps
+all original identities and permits only the acknowledged launch leaf and its
+parent's expected metadata change. It does not rediscover the remaining tree.
+The original empty-tree reader still rejects the new file, and native output
+directories must still be empty. Replaced bytes, same-byte inode replacements,
+lost original custody or changes during a contributing read are refused.
+Existing native-launch/PostBegin exact-type gates and passive commands remain
+unchanged; no installed profile selects the new publication or successor.
+
+Tests cover real local files/pidfds with explicitly synthetic App/Startup
+provenance, failure residue and native-parser format compatibility with private
+local baseline/profile fixtures. They do not qualify an installed handoff.
+Ready/active-output continuity, explicit active service/source-profile selection,
+installed provenance and independent recovery remain required. Neither the
+larger tree nor a valid receipt supplies native/recording authority.

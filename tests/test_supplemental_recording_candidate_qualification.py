@@ -7,6 +7,7 @@ not qualify an installed App, independently supervised helper or scanner test.
 import copy
 import hashlib
 import os
+import stat
 import subprocess
 import sys
 import time
@@ -41,6 +42,7 @@ def candidate(supervised, image, configured, monkeypatch, request):
     source_pin = native.source.Layout(product, helpers).observe().sha256
     app_profile = getattr(request, "param", None) in ("app_bridge", "app_native")
     native_baseline = b'{"synthetic_original_baseline":true}'
+    projected = None
     bridge_raw = None
     if app_profile:
         bridge = supervised.root / "usr/local/libexec/sdsctl-recording-app-idle.py"
@@ -71,6 +73,39 @@ def candidate(supervised, image, configured, monkeypatch, request):
     for item in value["layouts"]:
         if item["slug"] == m.base.CANDIDATE:
             item["image_package_sha256"] = source_pin
+    if getattr(request, "param", None) == "app_native":
+        # A valid *synthetic* original manifest/projection: no real recording
+        # files or accepted Startup provenance is claimed by this fixture.
+        protected = next(item for item in value["layouts"] if item["slug"] == m.base.CANDIDATE)
+        path_fields = {
+            "context",
+            "data",
+            "media",
+            "recordings",
+            "deployment",
+            "configuration",
+            "accepted",
+            "source",
+        }
+        protected = m.plans.fixed.ProtectedLayout(
+            **{key: Path(item) if key in path_fields else item for key, item in protected.items()}
+        )
+        recording = m.plans.projection.recording
+        manifest = recording.manifest_bytes(
+            recording.evidence.RecordingBaseline(
+                value["case"],
+                protected.recordings,
+                (1, 2, stat.S_IFDIR | 0o700, os.geteuid(), os.getegid(), 2),
+                (),
+            ),
+            recording.monitor.Writer(os.geteuid(), os.getegid(), 0o600),
+            hashlib.sha256(b"rtsp://192.0.2.25/au:scanner.au").hexdigest(),
+        )
+        projected = m.plans.projection.project(protected, recording._decode(manifest))
+        native_baseline = projected.native_manifest
+        value["native_baseline_sha256"] = hashlib.sha256(native_baseline).hexdigest()
+        value["projection_sha256"] = projected.sha256
+        value["candidate"]["contract"] = asdict(projected.host.contract)
     plan = m.plans.decode(value)
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.HOSTNAME)
@@ -218,6 +253,7 @@ def candidate(supervised, image, configured, monkeypatch, request):
         state.root, state.container, state.docker = supervised.root, container, docker
         state.bridge_raw, state.image_env = bridge_raw, image
         state.native_baseline = native_baseline
+        state.projected = projected
         yield state
     finally:
         if witness is not None:

@@ -215,6 +215,13 @@ class NativeIdleQualification(AppCandidateQualification):
     INPUT_FILES = ("idle/lease.json", "baseline/baseline.json", "app-start/launch.json")
     DIRECTORIES = ("app-start", "baseline", "idle", "launch", "receipts", "sockets")
 
+    def __init__(self, *args, **kwargs):
+        # A separately selected publisher may consume this once. Construction
+        # and existing read-only callers neither publish nor advance the phase.
+        self.native_launch_used = False
+        self.native_launch_publication = None
+        super().__init__(*args, **kwargs)
+
     def _publication(self, plan, published, bridge_sha256):
         super()._publication(plan, published, bridge_sha256)
         require(published.baseline_sha256 == plan.native_baseline_sha256)
@@ -234,6 +241,22 @@ class NativeIdleQualification(AppCandidateQualification):
     def _root_entries(self):
         return self.DIRECTORIES
 
+    def _directory_input(self, fd, name, deadline):
+        if name == "baseline":
+            require(os.listdir(fd) == ["baseline.json"])
+            raw, identity = _file(
+                fd,
+                "baseline.json",
+                deadline,
+                limit=publication.plans.projection.recording.MAX_MANIFEST_BYTES,
+            )
+            require(identity == dict(self.published.file_identities)["baseline/baseline.json"])
+            require(hashlib.sha256(raw).hexdigest() == self.plan.native_baseline_sha256)
+            return identity
+        if name in ("launch", "sockets", "receipts"):
+            require(not os.listdir(fd))
+        return None
+
     def _additional_inputs(self, directory, deadline):
         p = self.published
         expected = dict(p.directory_identities)
@@ -248,24 +271,12 @@ class NativeIdleQualification(AppCandidateQualification):
                 require(stat.S_IMODE(info.st_mode) == 0o700)
                 before = files.identity(info)
                 require(before[:6] == expected[name])
-                if name == "baseline":
-                    require(os.listdir(fd) == ["baseline.json"])
-                    raw, identity = _file(
-                        fd,
-                        "baseline.json",
-                        deadline,
-                        limit=publication.plans.projection.recording.MAX_MANIFEST_BYTES,
-                    )
-                    require(identity == dict(p.file_identities)["baseline/baseline.json"])
-                    require(hashlib.sha256(raw).hexdigest() == self.plan.native_baseline_sha256)
-                    observed.append(identity)
-                elif name in ("launch", "sockets", "receipts"):
-                    require(not os.listdir(fd))
+                identity = self._directory_input(fd, name, deadline)
                 require(files.identity(os.fstat(fd)) == before)
                 require(
                     files.identity(os.stat(name, dir_fd=directory, follow_symlinks=False)) == before
                 )
-                observed.append(before)
+                observed.append((name, before, identity))
                 self._guard(deadline)
             return tuple(observed)
         finally:
