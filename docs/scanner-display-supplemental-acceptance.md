@@ -982,10 +982,26 @@ late contributing observation permanently refuse that collector. No launch,
 recording, health, completion or restoration authority is returned, and existing
 exact-type action gates do not admit it.
 
-These App publication/qualification libraries currently describe a closed
-**idle-only** case tree (`idle` and `app-start`). Native execution additionally
+The idle-only App publication/qualification libraries describe a closed
+case tree (`idle` and `app-start`). Native execution additionally
 needs an independently pinned `launch/launch.json`, baseline/profile inputs and
 precreated private output directories. Adding them after pinning this idle-only
 root is deliberately refused. A separate complete native-tree publication and
 qualification policy is required before active-App assembly; synthetic
 `PostBegin` tests do not satisfy that gate or prove an actual recording began.
+
+`supplemental_recording_app_publish.publish_native()` is an explicit, uninstalled
+preparation step for that larger tree. It reserves `launch`, `sockets` and
+`receipts` as empty private directories, copies the accepted owner's **original**
+projected manifest into `baseline/baseline.json`, and publishes the idle lease
+and bridge receipt. It creates all six directories before returning their
+original identities, and publishes the bridge receipt last. It never recaptures
+recording files, writes a native launch plan, binds a candidate generation or
+starts a process. The same one-attempt owner flag excludes either publication
+path after the other, including after failure. Existing residue is preserved.
+
+Its `NativePublished` result is deliberately **not** admitted by the idle-only
+App qualifiers. Complete native launch-input publication after actual generation
+binding, native-tree qualification, explicit active service/source-profile
+selection, installed provenance and independent recovery remain required.
+Neither the larger tree nor a valid receipt supplies native/recording authority.

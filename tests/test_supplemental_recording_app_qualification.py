@@ -136,6 +136,20 @@ def test_old_direct_policy_still_refuses_the_bridge(app):
     candidates.denied(old)
 
 
+def test_native_preparation_is_not_accepted_by_idle_only_qualification(app):
+    p = app.published
+    app.published = m.publication.NativePublished(
+        p.plan_sha256,
+        p.lease_sha256,
+        p.receipt_sha256,
+        p.root_identity,
+        p.file_identities,
+        app.plan.native_baseline_sha256,
+        (),
+    )
+    candidates.launch.denied(app.make_app)
+
+
 @pytest.mark.parametrize(
     "fault",
     [
