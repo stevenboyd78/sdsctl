@@ -2911,6 +2911,49 @@ It cannot authorize a future service command or baseline read. Local integration
 uses actual sockets/processes/clocks with synthetic Docker/Engine metadata;
 that is not installed platform or physical/audible acceptance.
 
+#### Distinct finite idle-preparation command (uninstalled)
+
+`supplemental_recording_service_command.py --prepare-idle-service` explicitly
+joins preflight permission to **passive preparation**, without upgrading either
+probe. Its exact nine-argument interpreter command pins the declaration,
+template digest, original baseline digest and original observer identity. The
+same fixed-location/isolated/root/cwd gate runs before private imports. The
+baseline is read only from `/mnt/data/sdsctl-recording-baseline-<case>/baseline.json`,
+outside the writable case; its digest must be supplied independently.
+
+No baseline, host cache or Engine request occurs before original-peer permission.
+The single guarded preparation loads the pinned original manifest, validates its
+projection and performs the complete existing host read. Only afterward does it
+capture the continuing **service** clock; neither the observer's clock nor the
+target's preflight clock is substituted. The resulting plan is published once.
+Permission does not accept that plan. Separate independent final-plan acceptance
+must arrive within the original offer, reserving a full poll and assembly budget.
+Late, absent, malformed or uncertain acceptance preserves the case and refuses.
+
+Accepted input assembles the original startup-owned `idle_service()` once and
+immediately retires that passive borrower. The command never calls `run()`, reads
+operator notices, dispatches App changes, starts a native worker, or selects any
+recording phase. A completion milestone is emitted only after service, journal,
+startup and peer-resource cleanup succeeds. Exit75 and that milestone are not
+recording, restoration or installed-readiness receipts. Ambiguous writes, cleanup
+failures and lost output never authorize repetition or removal of evidence.
+Preflight handles remain passively retained after consumption; no expired
+preflight authorization is reused during final acceptance. Original service
+clock custody lasts through service/journal cleanup. Independent outer
+termination must also cover blocked kernel I/O across both finite phases.
+
+The separate `service_preparation=True` profile covers exactly 65 private modules
+and the full product package. The 54-, 62-, and 64-module policies still reject
+this command and inventory. Outer-only `ServicePreflightQualification` checks
+the exact command/profile before the one-attempt permission callback.
+`ServicePreparationQualification` then borrows that same successful preflight's
+original observer, target witness, domain, configuration and input pins while
+independently qualifying the **later service-origin plan**. It does not rerun
+permission, recapture a clock, reuse the temporary plan, or submit acceptance.
+Both retain the unchanged complete two-second source/runtime/confinement checks.
+Actual installed input provenance and an independently owned outer supervisor
+are still required before deployment; synthetic-host tests are not that proof.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

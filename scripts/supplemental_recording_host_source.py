@@ -22,6 +22,7 @@ from supplemental_handoff_policy import checksum, digest
 KIND = "finite-recording-host-source-v1"
 STARTUP_KIND = "finite-recording-startup-host-source-v1"
 PERMISSION_KIND = "finite-recording-permission-probe-host-source-v1"
+SERVICE_KIND = "finite-recording-service-preparation-host-source-v1"
 MAX_SECONDS = 8.0
 ROOTS = frozenset(
     "supplemental_recording_" + name
@@ -138,6 +139,9 @@ PERMISSION_MODULES = STARTUP_MODULES | frozenset(
 )
 PERMISSION_FILES = frozenset(name + ".py" for name in PERMISSION_MODULES)
 PERMISSION_ROOTS = STARTUP_ROOTS | frozenset({"supplemental_recording_permission_probe"})
+SERVICE_MODULES = PERMISSION_MODULES | frozenset({"supplemental_recording_service_command"})
+SERVICE_FILES = frozenset(name + ".py" for name in SERVICE_MODULES)
+SERVICE_ROOTS = PERMISSION_ROOTS | frozenset({"supplemental_recording_service_command"})
 REQUIRED_RUNTIME = frozenset({"__init__.py", "daemon_recording.py"})
 MESSAGE = "Recording host source is unconfirmed; do not launch the private host helper."
 
@@ -166,10 +170,13 @@ class Layout:
     helper: Path
     startup: bool = False
     permission_probe: bool = False
+    service_preparation: bool = False
 
     def _profile(self):
-        require(type(self.startup) is bool and type(self.permission_probe) is bool)
-        require(not (self.startup and self.permission_probe))
+        flags = self.startup, self.permission_probe, self.service_preparation
+        require(all(type(flag) is bool for flag in flags) and sum(flags) <= 1)
+        if self.service_preparation:
+            return SERVICE_FILES, SERVICE_KIND
         if self.permission_probe:
             return PERMISSION_FILES, PERMISSION_KIND
         return (STARTUP_FILES, STARTUP_KIND) if self.startup else (HELPER_FILES, KIND)

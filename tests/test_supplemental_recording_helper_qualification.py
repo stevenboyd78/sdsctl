@@ -43,10 +43,11 @@ def configuration_pin(container, environment):
 @pytest.fixture
 def helper(supervised, image, configured, monkeypatch, request):
     selection = getattr(request, "param", False)
-    assert type(selection) is bool or selection == "permission"
+    assert type(selection) is bool or selection in ("permission", "service")
+    service_profile = selection == "service"
     permission_profile = selection == "permission"
     startup_profile = selection is True
-    template_profile = startup_profile or permission_profile
+    template_profile = startup_profile or permission_profile or service_profile
     monkeypatch.setattr(m.time_domain, "ROOT_UID", os.geteuid())
     product = supervised.root / m.plans.fixed.PACKAGE
     helpers = supervised.root / m.HelperQualification.HELPER
@@ -54,7 +55,9 @@ def helper(supervised, image, configured, monkeypatch, request):
         (product, m.helper_source.REQUIRED_RUNTIME),
         (
             helpers,
-            m.helper_source.PERMISSION_FILES
+            m.helper_source.SERVICE_FILES
+            if service_profile
+            else m.helper_source.PERMISSION_FILES
             if permission_profile
             else (
                 m.helper_source.STARTUP_FILES if startup_profile else m.helper_source.HELPER_FILES
@@ -77,7 +80,11 @@ def helper(supervised, image, configured, monkeypatch, request):
     )
     value["helper"].update(
         source=m.helper_source.Layout(
-            product, helpers, startup=startup_profile, permission_probe=permission_profile
+            product,
+            helpers,
+            startup=startup_profile,
+            permission_probe=permission_profile,
+            service_preparation=service_profile,
         )
         .observe()
         .sha256,
@@ -121,7 +128,7 @@ def helper(supervised, image, configured, monkeypatch, request):
             template.sha256,
             "--startup-probe",
         )
-        if permission_profile:
+        if permission_profile or service_profile:
             from supplemental_recording_permission_probe import identity_argument
 
             observer_identity = m.engine.dispatch.process.process_identity(
@@ -138,6 +145,12 @@ def helper(supervised, image, configured, monkeypatch, request):
                 identity_argument(observer_identity),
                 "--permission-probe",
             )
+            if service_profile:
+                command = command[:3] + (
+                    "/opt/sdsctl-recording-host/supplemental_recording_service_command.py",
+                    *command[4:-1],
+                    "--prepare-idle-service",
+                )
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.env.HOSTNAME)
     child = subprocess.Popen(
@@ -160,7 +173,10 @@ def helper(supervised, image, configured, monkeypatch, request):
     )
 
     def identity(pid, cid):
-        if permission_profile and (pid, cid) == (os.getpid(), observer_identity.container_id):
+        if (permission_profile or service_profile) and (pid, cid) == (
+            os.getpid(),
+            observer_identity.container_id,
+        ):
             return observer_identity
         assert (pid, cid) == (child.pid, CID)
         return m.engine.dispatch.process.process_identity(
