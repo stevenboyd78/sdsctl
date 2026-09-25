@@ -14,7 +14,7 @@ import sys
 import time
 from dataclasses import replace
 from pathlib import Path
-from threading import Thread
+from threading import Lock, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -46,11 +46,15 @@ def launch_case(native, monkeypatch):
     s.original = s.make_native()
     s.startup = object.__new__(m.publication.startup.Startup)
     s.startup.original = SimpleNamespace(recheck=lambda: s.plan)
-    s.startup.clock = object()  # Original clock/provenance is synthetic here.
+    s.startup.clock = m.plans.clock.ClockWitness(s.plan.original_clock)
     s.startup.projected = s.projected
     s.startup.accepted = s.startup.app_idle_publication_used = True
     s.startup._service_inputs = object()
     s.startup.closed = False
+    s.startup.service_used = s.startup._service_active = True
+    s.startup.lock = Lock()
+    s.startup.lock.acquire()
+    s.startup._service_invalidate = lambda: None
     s.owner_reads = 0
 
     def original_guard(owner):
@@ -58,7 +62,8 @@ def launch_case(native, monkeypatch):
         s.owner_reads += 1
         m.require(not owner.closed)
 
-    monkeypatch.setattr(m.publication.startup.Startup, "_guard", original_guard)
+    monkeypatch.setattr(m.publication.startup.Startup, "_input", original_guard)
+    monkeypatch.setattr(m.publication.startup.Startup, "_binding", original_guard)
     s.spec = m.native.construction.Specification(
         "192.0.2.25",
         50536,
@@ -78,7 +83,12 @@ def launch_case(native, monkeypatch):
         specification=s.spec,
         profile_sha256="a" * 64,
     )
-    return s
+    original_clock = s.startup.clock
+    try:
+        yield s
+    finally:
+        original_clock.close()
+        s.startup.lock.release()
 
 
 def denied(callback):
@@ -293,3 +303,21 @@ def test_callback_cannot_change_new_launch_input_and_return_a_verified_value(lau
     denied(lambda: q.during(changed))
     assert q.failed and q.elapsed_seconds is None
     denied(q)
+
+
+@pytest.mark.parametrize(
+    "fault", ["not_assembled", "retired", "invalidate_missing", "clock_replaced"]
+)
+def test_publisher_requires_continuing_original_service_custody(launch_case, fault):
+    s = launch_case
+    if fault == "not_assembled":
+        s.startup.service_used = False
+    elif fault == "retired":
+        s.startup._service_active = False
+    elif fault == "invalidate_missing":
+        s.startup._service_invalidate = None
+    else:
+        s.startup.clock = object()
+    denied(s.publish)
+    assert not tuple((s.case_root / "launch").iterdir())
+    assert s.original.failed

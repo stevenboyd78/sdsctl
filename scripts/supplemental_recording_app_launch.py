@@ -25,6 +25,29 @@ require = qualification.require
 MAX_SECONDS = 2.0
 
 
+def _service_custody(owner, plan):
+    """Retained accepted service, not a new read of the expired startup offer.
+
+    The service must have been assembled within its original acceptance window
+    and still hold the Startup's borrowed clock/plan. This follows the same
+    continuing-custody rule as Startup.idle_service(), without renewing consent
+    or admitting a merely accepted but never assembled/retired owner.
+    """
+    require(type(owner) is publication.startup.Startup)
+    require(owner.accepted and owner.service_used and owner._service_active)
+    require(owner.lock.locked() and callable(owner._service_invalidate))
+    require(owner.app_idle_publication_used and owner._service_inputs is not None)
+    owner._input()
+    owner._binding()
+    require(owner.original.recheck() is plan)
+    require(type(owner.clock) is plans.clock.ClockWitness)
+    require(plans._same_plan_value(owner.clock.original, plan.original_clock))
+    observed = owner.clock.read()
+    plan.check_clock(observed)
+    owner._input()
+    owner._binding()
+
+
 def _description(owner, original, specification, profile_sha256):
     """Canonical original data only; never capture a new recording baseline."""
     plan = original.plan
@@ -174,11 +197,7 @@ class NativeLaunchQualification(qualification.NativeIdleQualification):
                 )
             )
         )
-        owner._guard()
-        require(
-            owner.accepted and owner.app_idle_publication_used and owner._service_inputs is not None
-        )
-        require(owner.original.recheck() is original.plan)
+        _service_custody(owner, original.plan)
         original.plan.check_projection(owner.projected)
 
     def _pins(self):
@@ -229,13 +248,7 @@ def publish_launch(owner, original, *, specification, profile_sha256):
                     )
                 )
             )
-            owner._guard()
-            require(
-                owner.accepted
-                and owner.app_idle_publication_used
-                and owner._service_inputs is not None
-            )
-            require(owner.original.recheck() is original.plan)
+            _service_custody(owner, original.plan)
             original._guard(end)
 
         guard()
