@@ -11,6 +11,7 @@ from threading import Thread
 
 import pytest
 
+from . import test_supplemental_recording_app_failure as failure_evidence
 from . import test_supplemental_recording_app_finalized as evidence
 from . import test_supplemental_recording_finalized_recovery as direct
 
@@ -41,6 +42,7 @@ m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 begin, h = m.begin, direct.h
+assert m.failure is failure_evidence.m
 
 
 @pytest.fixture
