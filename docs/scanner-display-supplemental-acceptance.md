@@ -903,3 +903,47 @@ replayed:
 
 The prior `shared-reader-audio-retest-20260921.IH9sCC` hardware case remains
 `CLOSED_NO_RETRY`. Its operational helpers must not be executed or rearmed.
+
+## Uninstalled fixed App startup bridge
+
+The installed Supervisor starts an App using its image command, while a finite
+recording lease is derived from the continuing service's later original clock.
+Putting that future lease hash into the image would make its image/plan inputs
+self-referential. An App wrapper also leaves Docker's configured command
+different from its post-`exec` process command; the existing direct-idle
+qualification intentionally does not accept that mismatch.
+
+`scripts/accept_supplemental_recording_app_idle.py` is an **uninstalled** boundary
+for a future explicit App profile. Its only argument is one exact UUIDv4 case.
+It requires isolated, no-bytecode Python, root PID1, `/` as working directory,
+and its fixed `/usr/local/libexec/sdsctl-recording-app-idle.py` installed path.
+It reads only a bounded private launch receipt at
+`/data/sdsctl-recording-<case>/app-start/launch.json`, with this closed shape:
+
+```json
+{"schema":1,"kind":"finite-recording-app-idle-launch-v1","case":"<case>","plan_sha256":"<original accepted plan digest>","lease_sha256":"<original lease digest>"}
+```
+
+Bytes must be canonically encoded (sorted keys, compact separators). A trusted
+host must publish those independently authenticated values after final-plan
+acceptance. The bridge does not infer a hash by reading whatever lease happens
+to exist. The receipt's presence is **not** native or recording authorization.
+
+The bridge durably claims that receipt once using an exclusive `consumed.json`
+in the separate `app-start` directory, then performs one fixed `exec` into the
+existing finite idle program with the original lease hash. The idle program
+still checks its own lease, boot/time domain, ready/stop deadlines and separate
+one-use claim. Its strict `idle` directory inventory is unchanged. Missing,
+replaced, unsafe, duplicate or partially written inputs refuse; exec failure or
+lost acknowledgement retains the claim and does not permit a restart. No shell,
+arbitrary executable, scanner connection, daemon startup, recording operation,
+or automatic retry exists here. Blocked kernel I/O still requires independent
+outer supervision.
+
+This file is not selected by any existing image, source profile, staging
+adapter or qualification policy. Before installation, a separately reviewed
+policy must authenticate its exact image-config command, actual post-exec
+idle command, original receipt/claim/lease, full runtime (including this file),
+source, process and namespace custody. Host receipt publication, App staging,
+active-phase authorization and independent recovery are remaining work. Existing
+direct-idle checks must not simply be relaxed to admit the wrapper.
