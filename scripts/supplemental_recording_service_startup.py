@@ -174,9 +174,26 @@ class Startup:
         assembly. No journal, App mutation, scanner request or service starts.
         Source/runtime/confinement and input provenance remain external gates.
         """
-        return self._prepare((projected, docker))
+        return self._prepare((projected, docker, None))
 
-    def _capture_service_origin(self, projected, docker):
+    def prepare_service_from_baseline(self, directory, expected_sha256, docker):
+        """Load an independently pinned ORIGINAL manifest before the host read.
+
+        Uses the existing private bounded reader and the template's candidate
+        contract. The caller authenticates the manifest digest separately; it
+        must not derive approval from whatever bytes happen to be present.
+        Projection changes only the declared native path alias, never captures
+        or reseals current files. All projection pins are checked before any
+        host/cache read. Subsequent complete host checks remain mandatory.
+
+        The loaded original values stay in projected through acceptance and
+        service assembly; acceptance does not reopen/adopt a replacement file.
+        This consumes the same one prepare attempt as the other entry paths,
+        never selects a service run, and is not invoked by --startup-probe.
+        """
+        return self._prepare((None, docker, (directory, expected_sha256)))
+
+    def _capture_service_origin(self, projected, docker, persisted):
         # This explicit library path is not invoked by --startup-probe.
         # The module is already in the separately qualified startup graph.
         import supplemental_recording_host_launch as launch
@@ -185,6 +202,16 @@ class Startup:
         problem = None
         try:
             plan = self.template.preview(preflight.original)
+            if persisted is not None:
+                directory, expected_sha256 = persisted
+                original = plans.projection.recording.load_baseline(
+                    directory,
+                    expected_contract=plan.candidate.contract,
+                    expected_sha256=expected_sha256,
+                )
+                layout = next(item for item in plan.layouts if item.slug == plans.base.CANDIDATE)
+                projected = plans.projection.project(layout, original)
+                plan.check_projection(projected)
             reader = launch.PreHandoffHost(plan, projected, docker)
             self._input()
             sample = reader.read()

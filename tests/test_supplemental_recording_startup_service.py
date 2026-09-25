@@ -40,10 +40,12 @@ m, startup = services.m, startups.m
 )
 
 
-@pytest.fixture(params=["external_baseline", "template_baseline", "owned_service"])
+@pytest.fixture(
+    params=["external_baseline", "template_baseline", "owned_service", "persisted_service"]
+)
 def accepted(before_handoff, tmp_path, monkeypatch, request):
     s = before_handoff
-    s.owned_service = request.param == "owned_service"
+    s.owned_service = request.param in ("owned_service", "persisted_service")
     root, source = tmp_path / "startup-case", tmp_path / "startup-declaration"
     root.mkdir(mode=0o700)
     source.mkdir(mode=0o700)
@@ -90,7 +92,27 @@ def accepted(before_handoff, tmp_path, monkeypatch, request):
                     return m.plans.ordinary.NativeState(generation, *s.host.native_state)
 
                 monkeypatch.setattr(m.launch.normal_read.cached, "_read_probe", cached)
-                owner.prepare_service(s.projected, s.docker)
+                if request.param == "persisted_service":
+                    # Already sealed ORIGINAL inventory, not a fresh snapshot.
+                    # The fixture aliases real temporary files to host paths;
+                    # no actual /mnt/data source is opened or provisioned.
+                    manifest = tmp_path / "original-manifest"
+                    manifest.mkdir(mode=0o700)
+                    stored = s.projected.host
+                    protected = startup.plans.projection.recording
+                    raw = protected.manifest_bytes(
+                        stored.baseline,
+                        stored.writer,
+                        stored.contract.audio_endpoint_sha256,
+                        maximum_recording_seconds=stored.contract.maximum_recording_seconds,
+                    )
+                    path = manifest / "baseline.json"
+                    path.write_bytes(raw)
+                    path.chmod(0o600)
+                    owner.prepare_service_from_baseline(manifest, stored.manifest_sha256, s.docker)
+                    s.projected = owner.projected
+                else:
+                    owner.prepare_service(s.projected, s.docker)
                 s.baseline = owner.baseline
             assert owner.poll() is None
             startups.submit(owner)

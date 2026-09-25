@@ -2623,6 +2623,25 @@ provenance, and all later host reads remain mandatory. The tests exercise both
 externally supplied preflight and template-derived preflight through idle,
 native and recording cleanup, with explicitly synthetic host/cache transports.
 
+`Startup.prepare_service_from_baseline(directory, expected_sha256, docker)` is
+an explicit alternative for a previously sealed original recording manifest.
+It uses the existing bounded private `baseline.json` reader, requires the
+template-derived candidate contract and the independently authenticated expected
+manifest digest, then derives the declared native media alias from that exact
+original inventory. Complete projection, native-manifest, contract and layout
+pins must match before the host/cache reader is even constructed. It does not
+capture a new original inventory, save a new baseline, or infer approval from
+observed bytes. The later complete host reader must still independently verify
+current pristine/source/health/job facts before the continuing service origin.
+
+The loaded original projection stays in memory through acceptance and service
+assembly. Replacing the manifest afterward cannot replace that inventory:
+acceptance never reopens it. The existing declaration directory still contains
+only its original template, and the writable publication case must remain empty
+until the original claim. This path consumes the same one preparation attempt,
+including on failure. No installed command selects it, and its input provenance,
+actual helper qualification and independent supervision remain separate gates.
+
 The separate `Startup.idle_service(docker)` context provides passive assembly
 from that accepted, template-derived baseline. It requires a case containing
 only the three original startup files, creates new mode0700 journal and inbox
