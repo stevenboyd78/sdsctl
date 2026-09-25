@@ -2845,6 +2845,28 @@ review or response digest alone does not authorize that write. Local tests use
 actual child/observer clock samples and process handles with synthetic Docker
 cgroup labels; these do not constitute installed qualification.
 
+The uninstalled outer `supplemental_recording_permission_sender.Sender` now
+provides the explicit one-attempt transport join. It authenticates the original
+target's connected UNIX peer endpoint, receives exactly one bounded challenge,
+and retains its original `Review`. Receiving is read-only and does not send a
+response. Its separate `send()` invokes the original trusted read-only
+qualification function exactly once, rechecks the original review/peer/clocks,
+and writes only the challenge-bound response within the original cutoff.
+That callback is trusted observer **code**, not a network-supplied callback or
+an approval token. Its independently reviewed command/source/runtime/confinement
+policy remains the caller's prerequisite; an arbitrary no-op callback cannot
+establish qualification. The legacy action-free probe policy is insufficient.
+
+Partial nonblocking I/O completes only the same frame. Qualification failure,
+binding loss, timeout, malformed input, interruption, and uncertain delivery
+poison the sender without another qualification/write attempt. Local write
+attempt/completion facts are preserved separately from receiver acknowledgment:
+even if all bytes were written, loss of the final check does not authorize a
+retry or establish remote acceptance. Borrowed handles remain caller-owned.
+There is still no installed sender policy, separately qualified finite command,
+or new observed helper profile. Neither existing probe nor App selects this
+protocol; a fresh isolated qualification must precede any real service use.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

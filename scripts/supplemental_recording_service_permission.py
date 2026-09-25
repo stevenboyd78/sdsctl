@@ -62,27 +62,26 @@ def permission_bytes(challenge_sha256):
         raise UnconfirmedPermission(MESSAGE) from None
 
 
-class Permission:
-    """Borrow one original channel/clock/process/domain; grant one short scope.
+class _Peer:
+    """Private symmetric live-peer binding, without protocol or authority.
 
-    The caller must already trust the independently qualified original observer.
-    This is not discovery, source qualification, or a replacement for final-plan
-    acceptance. Challenge/response checks the original connected AF_UNIX
-    stream's creation-time kernel PID/UID/GID. As with any
-    SO_PEERCRED protocol, the independently trusted peer must not delegate its
-    endpoint to another process; these credentials do not prove current fd
-    possession. The receiver never treats them as source qualification.
-
-    wait() sends one fresh nonce-bound challenge and receives one exact response.
-    It reserves the original window's final two seconds for consume(). That
-    context grants at most two seconds, never beyond the original clock cutoff.
-    guard() is valid only inside that single scope. No subsequent service lease
-    is created, and even refusal/interruption leaves all borrowed handles owned
-    by the caller. A future entrypoint must preserve failure evidence itself.
+    target is this local process; observer is its remote peer. The observer-side
+    sender reverses those argument roles explicitly. Each endpoint owns its OWN
+    preflight clock/domain proof and borrows an already authenticated socket.
     """
 
     def __init__(
-        self, template, template_sha256, baseline_sha256, target, observer, domain, timer, channel
+        self,
+        template,
+        template_sha256,
+        baseline_sha256,
+        target,
+        observer,
+        domain,
+        timer,
+        channel,
+        *,
+        incoming=False,
     ):
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.lock = Lock()
@@ -119,7 +118,8 @@ class Permission:
             self.wait_by = self.deadline - IO_SECONDS
             self.values = self._values()
             self._check(self.wait_by)
-            self._quiet()
+            if not incoming:
+                self._quiet()
         except BaseException as error:
             self._fail(error)
 
@@ -214,6 +214,43 @@ class Permission:
         poller.register(self.fd, event | select.POLLERR | select.POLLHUP)
         poller.poll(max(1, min(50, int((end - time.monotonic()) * 1000))))
         self._check(end)
+
+    def _fail(self, error):
+        self.failed = True
+        if not isinstance(error, Exception):
+            raise error
+        raise UnconfirmedPermission(MESSAGE) from None
+
+    def close(self):
+        require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
+        self.closed = True
+        if self.active:
+            self.failed = True
+
+
+class Permission(_Peer):
+    """Borrow one original channel/clock/process/domain; grant one short scope.
+
+    The caller must already trust the independently qualified original observer.
+    This is not discovery, source qualification, or final-plan acceptance.
+    SO_PEERCRED checks endpoint creation-time credentials, not current fd
+    possession after delegation. The trusted peer must not delegate its endpoint.
+
+    wait() sends one fresh nonce-bound challenge and receives one exact response.
+    It reserves the original window's final two seconds for consume(). That
+    context grants at most two seconds, never beyond the original clock cutoff.
+    guard() is valid only inside that single scope. No subsequent service lease
+    is created, and refusal/interruption leaves borrowed handles caller-owned.
+    """
+
+    def __init__(
+        self, template, template_sha256, baseline_sha256, target, observer, domain, timer, channel
+    ):
+        # Unlike the opposite endpoint, a receiver must reject any unsolicited
+        # bytes before generating its challenge. Callers cannot relax this.
+        super().__init__(
+            template, template_sha256, baseline_sha256, target, observer, domain, timer, channel
+        )
 
     def wait(self):
         acquired = False
@@ -335,18 +372,6 @@ class Permission:
             self.active = False
             if acquired:
                 self.lock.release()
-
-    def _fail(self, error):
-        self.failed = True
-        if not isinstance(error, Exception):
-            raise error
-        raise UnconfirmedPermission(MESSAGE) from None
-
-    def close(self):
-        require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
-        self.closed = True
-        if self.active:
-            self.failed = True
 
 
 if __name__ == "__main__":

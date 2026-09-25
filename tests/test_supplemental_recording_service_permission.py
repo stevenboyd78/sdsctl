@@ -33,7 +33,8 @@ SPEC.loader.exec_module(m)
 
 PEER = r"""
 import hashlib, json, os, socket, sys, time, uuid
-path, mode = sys.argv[1:]
+from pathlib import Path
+path, mode, helper = sys.argv[1:]
 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
     server.bind(path)
     server.listen(1)
@@ -44,7 +45,49 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         if mode == "preemptive":
             channel.sendall(b"PRIVATE preemptive response\n")
         print("connected", flush=True)
-        if mode == "clock":
+        if mode == "pair":
+            # Both real protocol classes, in distinct owned local processes.
+            # Only Docker cgroups and root UID eligibility are fixture aliases.
+            sys.path[:0] = [helper, str(Path(helper).parent / "src")]
+            import supplemental_recording_service_permission as gate
+            value = json.loads(sys.stdin.buffer.readline())
+            gate.ROOT_UID = gate.domains.ROOT_UID = os.geteuid()
+            def identity(pid, cid):
+                return gate.domains.process.process_identity(pid, cid,
+                    Path(f"/proc/{pid}/stat").read_text(),
+                    f"0::/system.slice/docker-{cid}.scope\n")
+            gate.domains.process.read_identity = identity
+            clock = domain = witness = permission = None
+            try:
+                template = gate.templates.decode(value["template"])
+                target = identity(os.getpid(), "a" * 64)
+                observer = identity(os.getppid(), "b" * 64)
+                witness = gate.domains.process.ProcessWitness(observer)
+                clock = gate.clock.ClockWitness(gate.clock.read())
+                domain = gate.domains.ZeroDomain(clock.original, witness)
+                channel.setblocking(False)
+                permission = gate.Permission(template, value["template_sha256"],
+                    value["baseline_sha256"], target, witness, domain, clock, channel)
+                print("receiver-ready", flush=True)
+                permission.wait()
+                with permission.consume() as guard:
+                    guard()
+                print(json.dumps(dict(approved=permission.approved,
+                    consumed=permission.used, failed=permission.failed,
+                    challenge_sha256=permission.challenge_sha256,
+                    original_clock_unchanged=clock.original is permission.origin)), flush=True)
+                sys.stdin.buffer.read()
+            finally:
+                if permission:
+                    permission.close()
+                if domain:
+                    domain.close()
+                if clock:
+                    clock.close()
+                if witness:
+                    witness.close()
+            sys.exit(0)
+        if mode in ("clock", "challenge"):
             # Actual child-domain sample for the read-only observer review.
             with open("/proc/sys/kernel/random/boot_id") as source:
                 boot = uuid.UUID(source.read().strip()).hex
@@ -54,6 +97,19 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
             after = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
             print(json.dumps(dict(boot=boot, namespace=[info.st_dev, info.st_ino],
                 before_ns=before, boottime_ns=boottime, after_ns=after)), flush=True)
+            if mode == "challenge":
+                channel.sendall(sys.stdin.buffer.readline())
+                print("challenge", flush=True)
+                response = bytearray()
+                while b"\n" not in response:
+                    try:
+                        chunk = channel.recv(2048)
+                    except ConnectionResetError:
+                        sys.exit(0)
+                    if not chunk:
+                        sys.exit(0)
+                    response.extend(chunk)
+                print(bytes(response).decode().strip(), flush=True)
             sys.stdin.buffer.read()
             sys.exit(0)
         raw = bytearray()
@@ -131,7 +187,7 @@ def peer(request, monkeypatch):
     with tempfile.TemporaryDirectory(prefix="sds-permission-") as directory:
         address = str(Path(directory) / "peer.sock")
         child = subprocess.Popen(
-            [sys.executable, "-I", "-B", "-c", PEER, address, mode],
+            [sys.executable, "-I", "-B", "-c", PEER, address, mode, str(Path(m.__file__).parent)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
