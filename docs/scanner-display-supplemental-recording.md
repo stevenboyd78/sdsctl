@@ -2826,6 +2826,25 @@ and neither `--startup-probe` nor any installed command imports or selects it.
 A separately reviewed command/profile and sender are still required before
 actual service activation or a new physical/audible acceptance test.
 
+The companion outer-only `supplemental_recording_permission_review.Review`
+checks a received challenge against independently supplied original template,
+baseline digest, observer identity, target pidfd, and local clock/domain proof.
+It rejects unknown/duplicate fields, noncanonical bytes, peer reversal, mismatched
+pins and altered deadlines. The receiver's reported reverse-domain digest is
+recomputed from the independently retained domains; this proves consistency of
+the statement, not possession of the remote live handles. The existing
+`ObserverClock` compares the reported remote preflight sample without adopting
+it as the observer's clock or the eventual continuing service clock. Either
+original wait cutoff can expire the review; repeated reads cannot renew it.
+
+Review is deliberately read-only: it neither reads/writes a socket nor sends
+permission, publishes a plan, or starts a service. The future sender must still
+bind the received bytes to the exact authenticated original channel, independently
+qualify both peers, and preserve one-attempt write/uncertainty semantics. A valid
+review or response digest alone does not authorize that write. Local tests use
+actual child/observer clock samples and process handles with synthetic Docker
+cgroup labels; these do not constitute installed qualification.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

@@ -32,7 +32,7 @@ sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 
 PEER = r"""
-import hashlib, json, socket, sys
+import hashlib, json, os, socket, sys, time, uuid
 path, mode = sys.argv[1:]
 with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
     server.bind(path)
@@ -44,6 +44,18 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         if mode == "preemptive":
             channel.sendall(b"PRIVATE preemptive response\n")
         print("connected", flush=True)
+        if mode == "clock":
+            # Actual child-domain sample for the read-only observer review.
+            with open("/proc/sys/kernel/random/boot_id") as source:
+                boot = uuid.UUID(source.read().strip()).hex
+            info = os.stat("/proc/self/ns/time")
+            before = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            boottime = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
+            after = time.clock_gettime_ns(time.CLOCK_MONOTONIC)
+            print(json.dumps(dict(boot=boot, namespace=[info.st_dev, info.st_ino],
+                before_ns=before, boottime_ns=boottime, after_ns=after)), flush=True)
+            sys.stdin.buffer.read()
+            sys.exit(0)
         raw = bytearray()
         while b"\n" not in raw:
             try:
