@@ -2787,6 +2787,45 @@ this temporary observer plan nor successful probe qualification satisfies those
 later gates. No existing command automatically selects this outer adapter, and
 it is not part of the observed helper's source graph.
 
+#### One-use preflight permission and guarded preparation (uninstalled)
+
+`supplemental_recording_service_permission.Permission` adds a separate library
+receiver for a future finite service command. It borrows an already-connected,
+nonblocking, close-on-exec UNIX stream, an original observer process/pidfd,
+an original local preflight clock, and a live zero-offset domain proof. The
+caller independently pins the original target identity, template, and baseline
+digest; constructing or waiting on this receiver performs no host/cache read,
+plan publication, App operation, or recording action.
+
+The stream must have the exact original observer's kernel PID/UID/GID peer
+credentials. A fresh nonce-bound challenge includes both process identities,
+the input pins, original clock/domain evidence, and fixed deadlines. Only one
+exact canonical response is accepted. Unsolicited, malformed, extra, replayed,
+late, or incomplete bytes fail closed, as do peer exit, descriptor replacement,
+clock/domain retirement, and owner/thread changes. The original fifteen-second
+window reserves its final two seconds for one bounded consumption scope; it
+cannot be renewed by waiting again. Failure never closes borrowed resources.
+
+An explicit `prepare_service()` adapter consumes that scope to join the existing
+pinned baseline loader and complete pre-handoff host read. Guards bracket the
+manifest read, host read, continuing service-clock capture, and publication.
+The continuing service clock is captured **after** the host observation, never
+copied from the permission clock. A late or lost result closes startup-owned
+handles, poisons both attempts, and preserves any partial claim/plan files;
+it cannot be retried as another preparation path. Independent final-plan
+acceptance remains separate and does not itself start a service or recording.
+
+Peer credentials identify the process at socket creation/connection, not the
+current holder of a descriptor that was subsequently transferred. The trusted
+observer must not delegate its endpoint. Both peers' source/runtime/confinement,
+channel setup and independent observer decision remain external prerequisites;
+the canonical response codec alone is not proof of review. Local tests use real
+owned sockets/processes/clocks and synthetic Docker/host metadata, not installed
+qualification. This receiver is not in either existing helper source profile,
+and neither `--startup-probe` nor any installed command imports or selects it.
+A separately reviewed command/profile and sender are still required before
+actual service activation or a new physical/audible acceptance test.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`

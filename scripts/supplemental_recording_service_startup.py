@@ -193,28 +193,35 @@ class Startup:
         """
         return self._prepare((None, docker, (directory, expected_sha256)))
 
-    def _capture_service_origin(self, projected, docker, persisted):
+    def _capture_service_origin(self, projected, docker, persisted, preflight_guard=None):
         # This explicit library path is not invoked by --startup-probe.
         # The module is already in the separately qualified startup graph.
         import supplemental_recording_host_launch as launch
 
+        check = preflight_guard if preflight_guard is not None else lambda: None
+        check()
         preflight = plans.clock.ClockWitness(plans.clock.read())
         problem = None
         try:
+            check()
             plan = self.template.preview(preflight.original)
             if persisted is not None:
                 directory, expected_sha256 = persisted
+                check()
                 original = plans.projection.recording.load_baseline(
                     directory,
                     expected_contract=plan.candidate.contract,
                     expected_sha256=expected_sha256,
                 )
+                check()
                 layout = next(item for item in plan.layouts if item.slug == plans.base.CANDIDATE)
                 projected = plans.projection.project(layout, original)
                 plan.check_projection(projected)
             reader = launch.PreHandoffHost(plan, projected, docker)
             self._input()
+            check()
             sample = reader.read()
+            check()
             require(type(sample) is plans.bootstrap.recovery.Sample)
             sample.__post_init__()
             require(sample.boot_id == plan.boot and reader.used and not reader.failed)
@@ -226,8 +233,10 @@ class Startup:
                 <= observed.boottime_ns / plans.clock.NS
             )
             self._input()
+            check()
             self.clock = plans.clock.ClockWitness(plans.clock.read())
             self._cleanup.append(self.clock.close)
+            check()
             observed.check_later(self.clock.original)
             final = self.template.preview(self.clock.original)
             prepared = final.preparation(sample.observation, projected)
@@ -248,7 +257,11 @@ class Startup:
                 ):
                     raise
 
-    def _prepare(self, service_inputs):
+    def _prepare(self, service_inputs, *, preflight_guard=None):
+        # Only the separate Permission adapter supplies this additional guard.
+        # A callback alone is not source qualification or permission; existing
+        # explicit library callers retain their separate external prerequisites.
+        # No command or legacy helper profile imports/selects that adapter.
         acquired = False
         try:
             require(self.lock.acquire(blocking=False))
@@ -256,21 +269,28 @@ class Startup:
             self._input()
             require(not self.used)
             self.used = True
+            check = preflight_guard if preflight_guard is not None else lambda: None
+            check()
             if service_inputs is None:
+                require(preflight_guard is None)
                 self.clock = plans.clock.ClockWitness(plans.clock.read())
                 self._cleanup.append(self.clock.close)
             else:
-                self._capture_service_origin(*service_inputs)
+                self._capture_service_origin(*service_inputs, preflight_guard=preflight_guard)
+            check()
             self._input()
             self.offer = offers.Offer(self.template, self.expected, self.clock)
             self._cleanup.append(self.offer.close)
             self.publisher = publication.Publisher(self.offer)
+            check()
             self.original = self.publisher.publish()
             self._cleanup.append(self.original.close)
+            check()
             self.reader = acceptance.Acceptance(self.publisher)
             self._cleanup.append(self.reader.close)
             self.objects = self.clock, self.offer, self.publisher, self.original, self.reader
             self._guard()
+            check()
             return self.original
         except BaseException as error:
             self._fail(error)
