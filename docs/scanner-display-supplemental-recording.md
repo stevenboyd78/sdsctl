@@ -2623,6 +2623,28 @@ provenance, and all later host reads remain mandatory. The tests exercise both
 externally supplied preflight and template-derived preflight through idle,
 native and recording cleanup, with explicitly synthetic host/cache transports.
 
+The separate `Startup.idle_service(docker)` context provides passive assembly
+from that accepted, template-derived baseline. It requires a case containing
+only the three original startup files, creates new mode0700 journal and inbox
+directories exclusively, synchronizes the case, and seals exactly the original
+preparation record. It checks the opened directory identities and borrows the
+same plan and continuing clock into `IdleService`. Assembly has its own
+two-second bound inside the original acceptance window; no later timestamp
+replaces `issued_at`. Existing residue or an uncertain write/close refuses and
+is preserved, not deleted or reinitialized.
+
+Yielding the service does **not** run it, submit a request, dispatch an App,
+launch native code or start recording. Those remain separate explicit steps.
+The context closes the service and journal before releasing its borrow of the
+startup resources. Startup closure is refused while that context is active,
+including after a reentrant call poisons the startup object. All original
+cleanup callbacks are attempted once, and ordinary cleanup errors cannot hide
+an interruption. Losing startup custody immediately marks the original service
+failed so its action guards refuse, without closing its borrowed clock ahead of
+its cleanup. The service's own deadline checks continue during its run;
+context exit does not repoll or extend the short startup offer. No installed
+command selects this context.
+
 After the accepted handles have been explicitly borrowed by the service, its
 own original-clock/plan checks continue; it does not poll acceptance again or
 extend the fifteen-second startup offer to accommodate the service lifetime.

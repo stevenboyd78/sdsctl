@@ -3,17 +3,21 @@
 
 Connects retained declaration, original clock, exclusive plan publication and
 independent acceptance. The explicit prepare_service() library path first reads
-the complete pre-handoff host baseline; the finite command never selects it.
-No journal, service, native worker, scanner or recording operation is selected.
-Accepted bytes are NOT installed qualification or operator approval. The caller
-must keep this owner alive until later borrowers release its plan and clock.
+the complete pre-handoff host baseline; idle_service() can then assemble the
+passive journal/service. The finite command selects neither method. No native
+worker, scanner or recording operation is selected. Accepted bytes are NOT
+installed qualification or operator approval. The caller must keep this owner
+alive until later borrowers release its plan and clock.
 """
 
 from __future__ import annotations
 
+import fcntl
 import os
+import stat
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from threading import Lock, get_ident
 
@@ -73,14 +77,17 @@ class Startup:
 
     For later separately qualified service assembly, accepted_input() rechecks
     the original accepted input and clock. IdleService may BORROW these exact
-    handles. Close this startup owner only AFTER that borrower is closed. There
-    is no service assembly, readiness, recording or restoration claim here.
+    handles. Close this startup owner only AFTER that borrower is closed. The
+    optional idle_service() context closes its borrower before releasing the
+    owner; it does not run it or establish readiness, recording or restoration.
     """
 
     def __init__(self, original):
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.lock, self._cleanup = Lock(), []
         self.failed = self.closed = self.used = self.accepted = False
+        self.service_used = self._service_active = False
+        self._service_invalidate = None
         self.clock = self.offer = self.publisher = self.original = self.reader = None
         self.baseline = self.projected = self._service_inputs = None
         try:
@@ -278,8 +285,162 @@ class Startup:
             if acquired:
                 self.lock.release()
 
+    def _service_directories(self, original, guard):
+        """Create exactly two children through the retained case descriptor.
+
+        The generic private-directory reader deliberately pins link count.
+        This creation step instead accounts for each intended mkdir explicitly,
+        without weakening that reader or adopting a reopened case pathname.
+        An independent open description keeps the short exclusive flock from
+        remaining on the caller's retained descriptor after this step.
+        """
+        directory, problem = -1, None
+        try:
+            guard()
+            retained = original._directories[-1][2]
+            directory = os.open(".", declaration.files.DIRECTORY, dir_fd=retained)
+            fcntl.flock(directory, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            before = declaration.files.identity(os.fstat(retained))[:6]
+            require(before[5] >= 2)
+            names = {publication.CLAIM, "plan.json", acceptance.NAME}
+            identities = {}
+
+            def check():
+                guard()
+                expected = (*before[:5], before[5] + len(identities))
+                require(declaration.files.identity(os.fstat(directory))[:6] == expected)
+                require(declaration.files.identity(os.fstat(retained))[:6] == expected)
+                publication._names(directory, names | set(identities))
+                for name, pinned in identities.items():
+                    require(
+                        declaration.files.identity(
+                            os.stat(name, dir_fd=directory, follow_symlinks=False)
+                        )[:6]
+                        == pinned
+                    )
+                guard()
+
+            check()
+            for name in ("journal", "inbox"):
+                os.mkdir(name, mode=0o700, dir_fd=directory)
+                info = os.stat(name, dir_fd=directory, follow_symlinks=False)
+                require(stat.S_ISDIR(info.st_mode) and stat.S_IMODE(info.st_mode) == 0o700)
+                require((info.st_uid, info.st_gid) == self.owner[2:] and info.st_nlink == 2)
+                identities[name] = declaration.files.identity(info)[:6]
+                check()
+            os.fsync(directory)
+            check()
+            return identities
+        except BaseException as error:
+            problem = error
+            raise
+        finally:
+            if directory >= 0:
+                closing, directory = directory, -1
+                try:
+                    os.close(closing)
+                except BaseException as error:
+                    if (
+                        problem is None
+                        or isinstance(problem, Exception)
+                        or not isinstance(error, Exception)
+                    ):
+                        raise
+
+    @contextmanager
+    def idle_service(self, docker):
+        """One passive service assembly, keeping startup custody until cleanup.
+
+        Requires this owner's accepted template-derived baseline. Creates only
+        new private journal/inbox directories and the original preparation
+        record; any existing residue refuses and stays untouched. There is no
+        implicit run(), notice, App dispatch, native startup or recording.
+
+        Assembly fits one two-second window within the original offer. The
+        yielded service keeps its own original deadline checks; this context
+        does not repoll/extend acceptance across the service lifetime. It closes
+        service then journal before releasing the startup owner's clock/plan.
+        Successful exit leaves startup and declaration with the caller. Every
+        failed path preserves files and attempts original cleanup once.
+        No installed command currently selects this method.
+        """
+        import supplemental_recording_service_operator as operator
+
+        acquired, cleanup, problem = False, [], None
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            self._guard()
+            require(self.accepted and not self.service_used and self._service_inputs is not None)
+            self.service_used = True
+            # Protect custody during construction as well as the yielded
+            # lifetime; reentrant failure cannot close a clock being lent to
+            # a partly constructed service before its own cleanup runs.
+            self._service_active = True
+            require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
+            end = time.monotonic() + publication.MAX_SECONDS
+            original, plan, clock = self.original, self.original.plan, self.clock
+            baseline, projected = self.baseline, self.projected
+
+            def guard():
+                require(time.monotonic() < end)
+                self._guard()
+                require(self.original is original and self.clock is clock)
+                require(self.baseline is baseline and self.projected is projected)
+                require(time.monotonic() < end)
+
+            guard()
+            identities = self._service_directories(original, guard)
+            journal = operator.launch.bootstrap.Journal(plan.root / "journal")
+            cleanup.append(journal.close)
+            require(declaration.files.identity(os.fstat(journal.fd))[:6] == identities["journal"])
+            require(not journal.entries and journal.machine is None)
+            journal.append(plan.preparation(baseline, projected))
+            guard()
+            service = operator.IdleService(
+                original, projected, journal, docker, clock_witness=clock
+            )
+            cleanup.append(service.close)
+
+            def invalidate():
+                # Deny more service actions immediately on custody failure,
+                # but leave original descriptors alive for ordered cleanup.
+                service.failed = True
+
+            self._service_invalidate = invalidate
+            require(
+                declaration.files.identity(os.fstat(service.inbox.fd))[:6] == identities["inbox"]
+            )
+            guard()
+            yield service
+            # Pure original-object checks only, not a renewed offer read after
+            # a service that may legitimately outlive the acceptance window.
+            self._binding()
+        except BaseException as error:
+            problem = error
+        finally:
+            while cleanup:
+                callback = cleanup.pop()
+                try:
+                    callback()
+                except BaseException as error:
+                    if (
+                        problem is None
+                        or isinstance(problem, Exception)
+                        and not isinstance(error, Exception)
+                    ):
+                        problem = error
+            if acquired:
+                self._service_active = False
+                self._service_invalidate = None
+                self.lock.release()
+        if problem is not None:
+            self._fail(problem)
+
     def _fail(self, error):
         self.failed = True
+        if self._service_active and self._service_invalidate is not None:
+            self._service_invalidate()
         if self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()):
             try:
                 self.close()
@@ -292,6 +453,7 @@ class Startup:
 
     def close(self):
         require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
+        require(not self._service_active)
         if self.closed:
             return
         self.closed = True

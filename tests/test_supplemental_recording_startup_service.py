@@ -8,6 +8,7 @@ not installed qualification, a new service command or scanner/audio acceptance.
 
 import json
 import os
+from contextlib import ExitStack
 from dataclasses import replace
 
 import pytest
@@ -39,9 +40,10 @@ m, startup = services.m, startups.m
 )
 
 
-@pytest.fixture(params=["external_baseline", "template_baseline"])
+@pytest.fixture(params=["external_baseline", "template_baseline", "owned_service"])
 def accepted(before_handoff, tmp_path, monkeypatch, request):
     s = before_handoff
+    s.owned_service = request.param == "owned_service"
     root, source = tmp_path / "startup-case", tmp_path / "startup-declaration"
     root.mkdir(mode=0o700)
     source.mkdir(mode=0o700)
@@ -109,8 +111,6 @@ def accepted(before_handoff, tmp_path, monkeypatch, request):
 def service(accepted, monkeypatch):
     s = accepted
     root = s.plan.root
-    (root / "journal").mkdir(mode=0o700)
-    (root / "inbox").mkdir(mode=0o700)
 
     def candidate_files(selected, container):
         assert selected == s.projected.layout
@@ -119,28 +119,35 @@ def service(accepted, monkeypatch):
         return s.static
 
     monkeypatch.setattr(m.plans.host.candidate_static, "collect", candidate_files)
-    with m.launch.bootstrap.Journal(root / "journal") as journal:
-        journal.append(s.plan.preparation(s.baseline, s.projected))
-        s.journal = journal
-
-        def append(kind, **fields):
-            # Later native/recording fixtures must append to THIS original
-            # service journal, never the inherited preflight fixture journal.
-            return journal.append(
-                dict(
-                    kind=kind,
-                    now=m.plans.clock.read().boottime_ns / m.plans.clock.NS,
-                    boot_id=s.plan.boot,
-                    **fields,
-                )
-            )
-
-        s.append = append
+    with ExitStack() as resources:
+        if not s.owned_service:
+            (root / "journal").mkdir(mode=0o700)
+            (root / "inbox").mkdir(mode=0o700)
+            s.journal = resources.enter_context(m.launch.bootstrap.Journal(root / "journal"))
+            s.journal.append(s.plan.preparation(s.baseline, s.projected))
 
         def assemble():
-            s.service = m.IdleService(
-                s.original, s.projected, journal, s.docker, clock_witness=s.startup.clock
-            )
+            if s.owned_service:
+                s.service = resources.enter_context(s.startup.idle_service(s.docker))
+                s.journal = s.service.journal
+            else:
+                s.service = m.IdleService(
+                    s.original, s.projected, s.journal, s.docker, clock_witness=s.startup.clock
+                )
+            journal = s.journal
+
+            def append(kind, **fields):
+                # Never append to the inherited preflight fixture's journal.
+                return journal.append(
+                    dict(
+                        kind=kind,
+                        now=m.plans.clock.read().boottime_ns / m.plans.clock.NS,
+                        boot_id=s.plan.boot,
+                        **fields,
+                    )
+                )
+
+            s.append = append
             s.inbox, s.before = s.service.inbox, s.service.transfer
             return s.service.session
 
@@ -148,11 +155,13 @@ def service(accepted, monkeypatch):
             try:
                 yield s
             finally:
-                s.service.close()
-                # All service cleanup precedes startup/clock and declaration
-                # cleanup, including exceptions and uncertain transitions.
-                assert not s.startup.closed and not s.borrowed_clock.closed
-                assert s.original.recheck() is s.plan and not s.declaration.closed
+                if not s.owned_service:
+                    s.service.close()
+    # The production assembly context also owns journal/Inbox cleanup. The
+    # borrowed startup clock and declaration outlive every service resource.
+    assert s.service.closed and s.journal.fd == -1
+    assert not s.startup.closed and not s.borrowed_clock.closed
+    assert s.original.recheck() is s.plan and not s.declaration.closed
 
 
 def test_independent_acceptance_is_not_operator_request_or_service_authority(accepted):
