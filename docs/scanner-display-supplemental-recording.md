@@ -2887,7 +2887,11 @@ still checks the exact original live peer credentials, process and clock/domain.
 
 After one challenge/reply, this command consumes an **empty guarded scope**.
 It reports that local protocol milestone only after the final scope check and
-retains its original handles until the original observation cutoff. A completed
+retains its original handles until the original observation cutoff. The final
+two-second I/O budget is a passive retention tail: it starts no new bounded read
+and claims no fresh observation or authority. A read started before that tail
+must still pass its final guards; its failure is never swallowed as expiry.
+A completed
 sender write is still not a receiver acknowledgment; exit 75 proves neither
 permission, service readiness, recording success nor restoration. Cleanup retires
 the protocol borrower, channel, domain and peer witness before the original

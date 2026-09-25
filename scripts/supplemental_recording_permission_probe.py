@@ -240,6 +240,28 @@ def _cleanup(callbacks, problem=None):
         raise permission.UnconfirmedPermission(permission.MESSAGE) from None
 
 
+def _retain_to_cutoff(original, connection, receiver, end):
+    # Stop starting bounded observations in the final I/O budget. Keep every
+    # original handle owned during that passive tail, but claim no fresh read,
+    # permission or service authority from sleeping to the original cutoff.
+    # A read that was actually started still must complete its original guard;
+    # expiry/refusal inside it is never swallowed as a normal finish.
+    for _ in range(151):
+        remaining = end - time.monotonic()
+        if remaining <= 0:
+            return
+        if remaining > permission.IO_SECONDS:
+            original.recheck()
+            connection.recheck()
+            receiver._check(end)
+            receiver._quiet()
+            receiver._binding(end)
+        remaining = end - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(0.1, remaining))
+    require(False)  # A stalled local clock cannot create an unbounded loop.
+
+
 def permission_probe(root, template_sha256, baseline_sha256, observer_identity):
     """Wait once and consume an EMPTY scope, then retain originals until cutoff.
 
@@ -288,18 +310,7 @@ def permission_probe(root, template_sha256, baseline_sha256, observer_identity):
         # Written only AFTER the single scope's final guard. A lost stdout
         # write remains ambiguous. Never derive a sender acknowledgment from it.
         print("Permission probe consumed its empty scope; no service action selected.", flush=True)
-        for _ in range(151):
-            if time.monotonic() >= end:
-                break
-            original.recheck()
-            connection.recheck()
-            receiver._check(end)
-            receiver._quiet()
-            receiver._binding(end)
-            remaining = end - time.monotonic()
-            if remaining <= 0:
-                break
-            time.sleep(min(0.1, remaining))
+        _retain_to_cutoff(original, connection, receiver, end)
     except BaseException as error:
         problem = error
     finally:

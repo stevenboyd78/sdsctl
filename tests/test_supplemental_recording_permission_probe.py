@@ -253,6 +253,47 @@ def test_interrupt_cleanup_keeps_original_interrupt_and_attempts_each_close_once
     assert calls == ["socket", "clock"]
 
 
+def test_final_io_budget_keeps_handles_without_starting_a_late_observation(monkeypatch):
+    now, calls = [8.0], []
+    monkeypatch.setattr(m.time, "monotonic", lambda: now[0])
+    monkeypatch.setattr(m.time, "sleep", lambda seconds: now.__setitem__(0, now[0] + seconds))
+
+    def forbidden(*args):
+        pytest.fail("Final passive tail must not start or claim a new bounded read")
+
+    resource = SimpleNamespace(
+        recheck=forbidden,
+        _check=forbidden,
+        _quiet=forbidden,
+        _binding=forbidden,
+        close=lambda: calls.append("close"),
+    )
+    m._retain_to_cutoff(resource, resource, resource, 10.0)
+    assert now[0] == 10 and calls == []
+
+
+def test_read_started_before_final_budget_cannot_hide_its_failure_as_expiry(monkeypatch):
+    now = [7.9]
+    monkeypatch.setattr(m.time, "monotonic", lambda: now[0])
+
+    def late():
+        now[0] = 10.1
+        raise m.permission.UnconfirmedPermission(m.permission.MESSAGE)
+
+    resource = SimpleNamespace(recheck=late)
+    with pytest.raises(m.permission.UnconfirmedPermission):
+        m._retain_to_cutoff(resource, resource, resource, 10.0)
+
+
+def test_frozen_clock_cannot_extend_the_finite_hold_forever(monkeypatch):
+    monkeypatch.setattr(m.time, "monotonic", lambda: 9.0)
+    sleeps = []
+    monkeypatch.setattr(m.time, "sleep", sleeps.append)
+    with pytest.raises(m.permission.UnconfirmedPermission):
+        m._retain_to_cutoff(None, None, None, 10.0)
+    assert len(sleeps) == 151 and max(sleeps) <= 0.1
+
+
 @pytest.mark.parametrize(
     "args",
     [
