@@ -5,6 +5,7 @@ not qualify an installed App, independently supervised helper or scanner test.
 """
 
 import copy
+import hashlib
 import os
 import subprocess
 import sys
@@ -38,7 +39,8 @@ def candidate(supervised, image, configured, monkeypatch, request):
             (root / name).write_bytes(b"raise RuntimeError('PRIVATE-NEVER-IMPORT-CANDIDATE')\n")
             (root / name).chmod(0o644)
     source_pin = native.source.Layout(product, helpers).observe().sha256
-    app_profile = getattr(request, "param", None) == "app_bridge"
+    app_profile = getattr(request, "param", None) in ("app_bridge", "app_native")
+    native_baseline = b'{"synthetic_original_baseline":true}'
     bridge_raw = None
     if app_profile:
         bridge = supervised.root / "usr/local/libexec/sdsctl-recording-app-idle.py"
@@ -51,6 +53,8 @@ def candidate(supervised, image, configured, monkeypatch, request):
     clock = m.plans.clock.read()
     issued = clock.boottime_ns / m.plans.clock.NS
     value = launch.plans.value()
+    if getattr(request, "param", None) == "app_native":
+        value["native_baseline_sha256"] = hashlib.sha256(native_baseline).hexdigest()
     value.update(
         boot=clock.boot,
         original_clock=asdict(clock) | {"namespace": list(clock.namespace)},
@@ -213,6 +217,7 @@ def candidate(supervised, image, configured, monkeypatch, request):
         state.plan, state.idle, state.witness, state.child = plan, idle, witness, child
         state.root, state.container, state.docker = supervised.root, container, docker
         state.bridge_raw, state.image_env = bridge_raw, image
+        state.native_baseline = native_baseline
         yield state
     finally:
         if witness is not None:

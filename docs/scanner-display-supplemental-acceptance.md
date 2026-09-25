@@ -1001,7 +1001,14 @@ starts a process. The same one-attempt owner flag excludes either publication
 path after the other, including after failure. Existing residue is preserved.
 
 Its `NativePublished` result is deliberately **not** admitted by the idle-only
-App qualifiers. Complete native launch-input publication after actual generation
-binding, native-tree qualification, explicit active service/source-profile
-selection, installed provenance and independent recovery remain required.
-Neither the larger tree nor a valid receipt supplies native/recording authority.
+App qualifiers. The distinct read-only `NativeIdleQualification` checks the
+original manifest file identity and digest, all six original private directory
+identities, and the still-empty launch/output directories, in addition to the
+full App/source/runtime/process checks. It refuses a new `launch.json` or any
+runtime output rather than treating that change as authorization to advance.
+It is not accepted by the existing native-launch or post-begin gates.
+
+Complete native launch-input publication after actual generation binding,
+explicit active service/source-profile selection, installed provenance and
+independent recovery remain required. Neither the larger tree nor a valid
+receipt supplies native/recording authority.

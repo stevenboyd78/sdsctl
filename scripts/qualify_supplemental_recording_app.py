@@ -43,30 +43,33 @@ def _file(directory, name, end, *, mode=0o600, limit=4096):
 class _AppInputs:
     """Shared read-only App input policy; no standalone phase authority."""
 
+    PUBLICATION = publication.Published
+    INPUT_FILES = ("idle/lease.json", "app-start/launch.json")
+
     def _publication(self, plan, published, bridge_sha256):
-        require(type(published) is publication.Published)
+        require(type(published) is self.PUBLICATION)
         require(published.plan_sha256 == plan.sha256)
         require(published.lease_sha256 == plan.lease_sha256)
         for pin in (published.receipt_sha256, bridge_sha256):
             base.digest(pin)
         require(type(published.root_identity) is tuple and len(published.root_identity) == 9)
         require(all(type(value) is int for value in published.root_identity))
-        require(type(published.file_identities) is tuple and len(published.file_identities) == 2)
         require(
-            tuple(name for name, _ in published.file_identities)
-            == ("idle/lease.json", "app-start/launch.json")
+            type(published.file_identities) is tuple
+            and len(published.file_identities) == len(self.INPUT_FILES)
         )
+        require(tuple(name for name, _ in published.file_identities) == self.INPUT_FILES)
         for _, identity in published.file_identities:
             require(type(identity) is tuple and len(identity) == 9)
             require(all(type(value) is int for value in identity))
         self.published, self.bridge_sha256 = published, bridge_sha256
         self.consumption = self._original_consumption = None
 
-    def _pins(self):
+    def _app_pins(self):
         p = self.published
-        require(type(p) is publication.Published)
+        require(type(p) is self.PUBLICATION)
         require(self.consumption is self._original_consumption)
-        return super()._pins() + (
+        return (
             p.plan_sha256,
             p.lease_sha256,
             p.receipt_sha256,
@@ -74,6 +77,15 @@ class _AppInputs:
             p.file_identities,
             self.bridge_sha256,
         )
+
+    def _pins(self):
+        return super()._pins() + self._app_pins()
+
+    def _root_entries(self):
+        return ("app-start", "idle")
+
+    def _additional_inputs(self, directory, deadline):
+        return None
 
     def _startup_argv(self):
         return argv(self.plan)
@@ -94,7 +106,7 @@ class _AppInputs:
         try:
             with publication._chain(root, guard) as (directory, unchanged):
                 require(files.identity(os.fstat(directory)) == p.root_identity)
-                require(sorted(os.listdir(directory)) == ["app-start", "idle"])
+                require(tuple(sorted(os.listdir(directory))) == self._root_entries())
                 observed = []
                 for name, filename, expected in (
                     ("idle", "lease.json", base.encode(plan.lease)),
@@ -144,13 +156,16 @@ class _AppInputs:
                         == info
                     )
                     observed.append(info)
+                additional = self._additional_inputs(directory, deadline)
+                if additional is not None:
+                    observed.append(additional)
                 require(files.identity(os.fstat(directory)) == p.root_identity)
                 result = tuple(observed)
             if self.consumption is None:
                 require(self._original_consumption is None)
                 self.consumption = self._original_consumption = result
             require(self.consumption == result)
-            return base.checksum(dict(publication=self._pins()[-6:], consumption=result))
+            return base.checksum(dict(publication=self._app_pins(), consumption=result))
         finally:
             publication._close(list(reversed(owned)))
 
@@ -184,6 +199,77 @@ class AppCandidateQualification(_AppInputs, launch.CandidateQualification):
             super().__init__(plan, idle, witness, docker, **profile)
         except BaseException as error:
             self._fail(error)
+
+
+class NativeIdleQualification(AppCandidateQualification):
+    """Original larger tree, but ONLY while native launch/outputs remain empty.
+
+    Independently compare the copied baseline and every precreated directory
+    against the original publisher's pins. This is not a launch-input qualifier
+    or a PostBegin reader. A later launch.json is refused, not silently adopted;
+    binding and verifying that new input is a separate explicit phase.
+    Existing exact-type action/retained gates do not accept this class.
+    """
+
+    PUBLICATION = publication.NativePublished
+    INPUT_FILES = ("idle/lease.json", "baseline/baseline.json", "app-start/launch.json")
+    DIRECTORIES = ("app-start", "baseline", "idle", "launch", "receipts", "sockets")
+
+    def _publication(self, plan, published, bridge_sha256):
+        super()._publication(plan, published, bridge_sha256)
+        require(published.baseline_sha256 == plan.native_baseline_sha256)
+        identities = published.directory_identities
+        require(type(identities) is tuple and len(identities) == len(self.DIRECTORIES))
+        require(tuple(name for name, _ in identities) == self.DIRECTORIES)
+        for _, identity in identities:
+            require(type(identity) is tuple and len(identity) == 6)
+            require(all(type(value) is int for value in identity))
+
+    def _app_pins(self):
+        return super()._app_pins() + (
+            self.published.baseline_sha256,
+            self.published.directory_identities,
+        )
+
+    def _root_entries(self):
+        return self.DIRECTORIES
+
+    def _additional_inputs(self, directory, deadline):
+        p = self.published
+        expected = dict(p.directory_identities)
+        descriptors, observed = [], []
+        try:
+            for name in self.DIRECTORIES:
+                self._guard(deadline)
+                fd = os.open(name, files.DIRECTORY, dir_fd=directory)
+                descriptors.append(fd)
+                info = os.fstat(fd)
+                publication._secure(info)
+                require(stat.S_IMODE(info.st_mode) == 0o700)
+                before = files.identity(info)
+                require(before[:6] == expected[name])
+                if name == "baseline":
+                    require(os.listdir(fd) == ["baseline.json"])
+                    raw, identity = _file(
+                        fd,
+                        "baseline.json",
+                        deadline,
+                        limit=publication.plans.projection.recording.MAX_MANIFEST_BYTES,
+                    )
+                    require(identity == dict(p.file_identities)["baseline/baseline.json"])
+                    require(hashlib.sha256(raw).hexdigest() == self.plan.native_baseline_sha256)
+                    observed.append(identity)
+                elif name in ("launch", "sockets", "receipts"):
+                    require(not os.listdir(fd))
+                require(files.identity(os.fstat(fd)) == before)
+                require(
+                    files.identity(os.stat(name, dir_fd=directory, follow_symlinks=False)) == before
+                )
+                observed.append(before)
+                self._guard(deadline)
+            return tuple(observed)
+        finally:
+            publication._close(list(reversed(descriptors)))
 
 
 class AppRetainedQualification(_AppInputs, launch.RetainedQualification):
