@@ -2758,6 +2758,35 @@ runtime and proc provenance, plus an actual-host qualification of the expanded
 helper, remain separate gates. Synthetic Engine/path/kernel fixtures and local
 clock-handle tests are not a real App handoff or an installed qualification.
 
+#### Template-only probe qualification before service publication
+
+The separate uninstalled outer
+`qualify_supplemental_recording_preflight.PreflightProbeQualification` provides
+a read-only check that needs no service-owned plan. Its caller independently
+pins the clock-free template and retains its own original `ClockWitness`,
+the original target `ProcessWitness`, and a live `ZeroDomain` between them.
+It derives a temporary plan in the **observer's** domain solely to reuse the
+complete helper checks. It never reads a published service plan, assigns the
+observer's clock to the target, publishes a plan, submits acceptance, writes a
+journal, or starts a service.
+
+Only the existing exact seven-argument `--startup-probe` command is eligible.
+The full startup62 source/runtime/confinement/process checks retain their
+two-second bound. The original observer window supplies an additional fixed
+cutoff, reserving the final two seconds of the original short offer; constructing
+another verifier with that same observer cannot renew it. Original template
+bytes and borrowed owner identities remain bound before and after clock reads.
+Any refusal is sticky, and the verifier never closes caller-owned handles.
+
+This is groundwork for the startup ordering problem, **not authorization for
+preflight host/cache reads**. A future service command must first have its own
+explicit policy and an independently reviewed authorization gate, before its
+first host read. It will still capture its own continuing clock only after the
+complete baseline read, then require independent final-plan acceptance. Neither
+this temporary observer plan nor successful probe qualification satisfies those
+later gates. No existing command automatically selects this outer adapter, and
+it is not part of the observed helper's source graph.
+
 #### Observer-side clock comparison for a service-owned plan
 
 The uninstalled `supplemental_recording_service_clock_link.ObserverClock`
