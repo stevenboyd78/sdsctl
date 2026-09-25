@@ -21,6 +21,23 @@ require = q.require
 SOCKETS = ("api.sock", "events.sock", "pcmu.sock", "recordings.sock")
 
 
+def _socket_inputs(fd, deadline, guard):
+    guard(deadline)
+    require(tuple(sorted(os.listdir(fd))) == SOCKETS)
+    result = []
+    for leaf in SOCKETS:
+        info = os.stat(leaf, dir_fd=fd, follow_symlinks=False)
+        require(stat.S_ISSOCK(info.st_mode) and info.st_nlink == 1)
+        require(stat.S_IMODE(info.st_mode) == 0o600 and info.st_size == 0)
+        require((info.st_uid, info.st_gid) == (publication.ROOT_UID, publication.ROOT_GID))
+        result.append((leaf, files.identity(info)))
+    require(tuple(sorted(os.listdir(fd))) == SOCKETS)
+    for leaf, identity in result:
+        require(files.identity(os.stat(leaf, dir_fd=fd, follow_symlinks=False)) == identity)
+    guard(deadline)
+    return tuple(result)
+
+
 class NativeReadyQualification(inputs.NativeLaunchQualification):
     """Fresh inventories plus original readiness, never a serialized substitute.
 
@@ -34,6 +51,7 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
 
     def __init__(self, original, ready):
         self.failed, self.elapsed_seconds = False, None
+        self.native_active_used, self.native_active_owner = False, None
         claimed = None
         try:
             began = time.monotonic()
@@ -155,20 +173,7 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
     def _directory_input(self, fd, name, deadline):
         if name != "sockets":
             return super()._directory_input(fd, name, deadline)
-        self._guard(deadline)
-        require(tuple(sorted(os.listdir(fd))) == SOCKETS)
-        result = []
-        for leaf in SOCKETS:
-            info = os.stat(leaf, dir_fd=fd, follow_symlinks=False)
-            require(stat.S_ISSOCK(info.st_mode) and info.st_nlink == 1)
-            require(stat.S_IMODE(info.st_mode) == 0o600 and info.st_size == 0)
-            require((info.st_uid, info.st_gid) == (publication.ROOT_UID, publication.ROOT_GID))
-            result.append((leaf, files.identity(info)))
-        require(tuple(sorted(os.listdir(fd))) == SOCKETS)
-        for leaf, identity in result:
-            require(files.identity(os.stat(leaf, dir_fd=fd, follow_symlinks=False)) == identity)
-        self._guard(deadline)
-        return tuple(result)
+        return _socket_inputs(fd, deadline, self._guard)
 
     def _additional_inputs(self, directory, deadline):
         observed = super()._additional_inputs(directory, deadline)

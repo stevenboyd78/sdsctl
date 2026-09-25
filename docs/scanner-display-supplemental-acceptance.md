@@ -1067,7 +1067,44 @@ actor exit or changes during a contributing observation never return a verified
 result. Tests use real local socket inodes with explicitly synthetic readiness;
 actual installed timing and native actor provenance remain separate gates.
 
-Active-output continuity, explicit active service/source-profile selection,
-installed provenance and independent recovery remain required. Neither the
-larger tree, a valid receipt nor this read-only readiness join supplies native
-execution or recording authority. Existing action gates do not select it.
+The separate `supplemental_recording_receipt_inventory.ReceiptInventory` is
+read-only active-phase groundwork. Given the original directory identity and an
+independently authenticated begin binding, it accepts only ordered prefixes of
+`prepared`, `start-intent`, `started`, `stop-intent` and `stopped` JSON receipts.
+Files must be canonical, private, bounded, and tied to that generation, baseline
+and schedule. Previously observed bytes/inodes cannot be replaced or removed;
+partial/raced observations consume the reader without cleanup or retry. It
+borrows, and never closes, the directory descriptor. This is for separately
+authenticated checkpoints, not polling files to infer that a start succeeded.
+Tests include receipts actually emitted by the native recording implementation
+against a loopback scanner/RTP fixture, separately from authenticated returns.
+Even a complete five-file inventory supplies no acknowledgment, file-quality
+verdict, process-exit proof or recovery authority. It is not selected by an
+installed service, and construction alone cannot establish original custody.
+
+`qualify_supplemental_recording_app_active.NativeActiveQualification` adds a
+distinct read-only post-begin input policy. It consumes one handoff slot on the
+original qualified readiness owner and borrows the actual original `Start`,
+returned `Relay` and `PostBegin` objects. No replacement readiness wrapper or
+second receipt reader can reacquire that slot. Fresh durable start history and
+original live actor checks bracket complete source/runtime collections, using
+the original stop limits rather than expired startup/readiness offers.
+
+All original input and socket identities stay fixed. Only a valid append-only
+receipt prefix may advance across the source/runtime bracket: its changing
+parent timestamps are explicitly excluded from the **immutable input** hash
+after the original receipt reader checks the bounded files and their unchanged
+prefix. That inventory is never an acknowledgment or recording-health sample.
+Unknown/partial output, replaced files/sockets, lost ownership or worker exit
+refuses the active observation; separate exit/recovery readers are still needed.
+Unit tests exercise the App input join with actual local files/socket inodes and
+explicitly synthetic Start/PostBegin/Engine evidence. They are not an installed
+end-to-end App/recording qualification or proof of installed timing.
+
+Explicit active service/source-profile selection, actual App lifetime
+qualification, installed provenance and independent recovery remain required.
+Neither the larger tree, a valid receipt nor these read-only phase joins supply
+native execution or recording authority. Existing action gates remain exact and
+do not select any of the new App readers; the passive preparation command is
+unchanged. Selecting a new App action path requires separate implementation and
+review, not simply widening those gates or substituting synthetic unit evidence.
