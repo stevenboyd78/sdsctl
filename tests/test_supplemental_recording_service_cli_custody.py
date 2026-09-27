@@ -20,9 +20,11 @@ from threading import Thread
 import pytest
 
 from . import test_supplemental_handoff_host as host_tests
+from . import test_supplemental_recording_app_begin as admission_tests  # noqa: F401
 from . import test_supplemental_recording_host_plan as plan_tests
 from . import test_supplemental_recording_projection as projection_tests
 from . import test_supplemental_recording_service_app_custody as app_tests
+from . import test_supplemental_recording_service_native_custody as native_tests  # noqa: F401
 
 NAME = "supplemental_recording_service_cli_custody"
 SPEC = importlib.util.spec_from_file_location(

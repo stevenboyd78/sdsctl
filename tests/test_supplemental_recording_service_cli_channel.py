@@ -172,6 +172,37 @@ def notice(plan, history=(b"fixture",), stage="before_create", eid=None):
     )
 
 
+def native_notice(case, projection):
+    """Protocol-only synthetic facts; custody tests independently capture actors."""
+    admission = m.custody_module.admission
+    dispatch, namespace = admission.dispatch, admission.namespace
+    init = case.peer.identity
+    pins = dispatch.Pins(
+        dispatch.binding.Binding(projection, "a" * 64, case.plan.sha256, case.plan.boot),
+        dispatch.execution.Command(
+            str(case.plan.native_root / "launch/launch.json"),
+            "b" * 64,
+            "a" * 64,
+            case.plan.lease["ready_by"],
+        ),
+        "c" * 64,
+        init,
+    )
+    domains = tuple((1, i + 1) for i in range(len(namespace.NAMESPACES)))
+    actors = tuple(
+        namespace.Actor(
+            init.pid if i == 0 else 1_000_000 + i,
+            i + 1,
+            0 if i == 0 else init.pid,
+            init.start_ticks + i,
+            init.container_id,
+            domains,
+        )
+        for i in range(4)
+    )
+    return admission.NativeNotice(pins, *(str(i) * 64 for i in range(1, 7)), actors, (b"fixture",))
+
+
 def writer(child, current):
     value = asdict(current)
     history = value.pop("history")
@@ -280,14 +311,20 @@ def test_actual_writer_peer_receipt_is_not_an_action_or_restoration(monkeypatch)
         "kind",
     ],
 )
-@pytest.mark.parametrize("candidate", [False, True])
-def test_wrong_lost_replayed_or_forwarded_reply_latches_failure(monkeypatch, fault, candidate):
+@pytest.mark.parametrize("kind", ["cli", "candidate", "native"])
+def test_wrong_lost_replayed_or_forwarded_reply_latches_failure(
+    projection, monkeypatch, fault, kind
+):
     with protocol(monkeypatch) as case:
         descriptors = set(os.listdir("/proc/self/fd"))
-        if candidate:
+        if kind != "cli":
             # Protocol-only counter setup; the separate-process custody suite
             # reaches this boundary via all four actual CLI evidence exchanges.
             case.link.sequence = case.link._sequence = 4
+        if kind == "native":
+            case.link.candidate_attempted = case.link._candidate_attempted = True
+            current, observe = native_notice(case, projection), case.link.observe_native
+        elif kind == "candidate":
             current = m.custody_module.platform.CandidateNotice(
                 case.plan.sha256, "b" * 64, case.peer.identity, (b"fixture",)
             )
@@ -298,20 +335,30 @@ def test_wrong_lost_replayed_or_forwarded_reply_latches_failure(monkeypatch, fau
         denied(lambda: observe(current))
         assert line(case.child) == b"sent"
         denied(lambda: observe(current))
-        assert case.link.failed and case.link.sequence == (4 if candidate else 1)
+        assert case.link.failed and case.link.sequence == (1 if kind == "cli" else 4)
         assert set(os.listdir("/proc/self/fd")) == descriptors
 
 
 @pytest.mark.parametrize("count", [0, 1, 2, 3, 5, 6, 7, 8])
-def test_candidate_protocol_refuses_any_other_cli_boundary(monkeypatch, count):
+@pytest.mark.parametrize("native", [False, True])
+def test_auxiliary_protocol_refuses_any_other_cli_boundary(monkeypatch, count, native):
     with protocol(monkeypatch) as case:
         case.link.sequence = case.link._sequence = count
         current = m.custody_module.platform.CandidateNotice(
             case.plan.sha256, "b" * 64, case.peer.identity, (b"fixture",)
         )
-        denied(lambda: case.link.observe_candidate(current))
+        observe = case.link.observe_native if native else case.link.observe_candidate
+        denied(lambda: observe(current))
         assert case.link.sequence == count and not case.link.candidate_attempted
+        assert not case.link.native_attempted
         assert case.link.failed
+
+
+def test_native_protocol_requires_original_candidate_exchange(monkeypatch):
+    with protocol(monkeypatch) as case:
+        case.link.sequence = case.link._sequence = 4
+        denied(lambda: case.link.observe_native(object()))
+        assert not case.link.native_attempted and case.link.failed
 
 
 @pytest.mark.parametrize(

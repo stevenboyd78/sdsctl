@@ -17,7 +17,9 @@ import time
 from dataclasses import asdict, dataclass
 from threading import Lock, get_ident
 
+import supplemental_recording_app_begin as admission
 import supplemental_recording_service_app_custody as apps
+import supplemental_recording_service_native_custody as natives
 
 platform, engine, deadlines = apps.platform, apps.engine, apps.deadlines
 plans = deadlines.links.plans
@@ -204,6 +206,8 @@ class CliCustody:
         self._original_executions, self._execution_bytes = self._executions, ()
         self._snapshot = ()
         self._candidate_attempted = False
+        self._native_attempted = False
+        self.native = self._original_native = None
         acquired = False
         try:
             end = time.monotonic() + 2
@@ -245,6 +249,7 @@ class CliCustody:
             )
         )
         require(self._history is self._original_history)
+        require(self.native is self._original_native)
         require((self._pending is None) == (self._pending_receipt is None))
         if self._pending is not None:
             require(self._pending.receipt == self._pending_receipt)
@@ -501,6 +506,150 @@ class CliCustody:
             if acquired:
                 self.lock.release()
 
+    def observe_native(self, fields, *, deadline):
+        """Independently capture original workers before the writer may begin.
+
+        Only compact comparison fields cross the authenticated channel. Original
+        plan, candidate custody, held journal and dispatch supply the bindings;
+        reported local PIDs never constitute Ready authentication. Lost replies
+        retain captured handles without transferring the writer or retrying.
+        """
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            require(not self._native_attempted and self._candidate_attempted)
+            self._native_attempted = True
+            base.clock(deadline)
+            end = min(time.monotonic() + 2, deadline)
+            status = self._endpoint(end)
+            require(not self.capture_failed and not self.inspection_failed)
+            require(not status.deadline.helper_exited and not status.capture_failed)
+            require(status.normal_exited and status.candidate_exited is False)
+            require(self.native is None and self._pending is None)
+            plans.mapping(fields, NATIVE_FIELDS)
+            for key in NATIVE_FIELDS - {"workers"}:
+                base.digest(fields[key])
+            workers = fields["workers"]
+            require(type(workers) is list and len(workers) == 3)
+            reported = {}
+            for role, worker in zip(natives.ROLES[1:], workers, strict=True):
+                plans.mapping(worker, {"pid", "start_ticks"})
+                require(type(worker["pid"]) is int and 0 < worker["pid"] < 2**31)
+                require(type(worker["start_ticks"]) is int and worker["start_ticks"] > 0)
+                reported[role] = dict(worker, uid=0, gid=0)
+            require(tuple(e.binding.phase for e in self._executions) == tuple(platform.CONTROL)[:2])
+            require(all(e.state == "not_running" and e.exit_code == 0 for e in self._executions))
+            require(
+                fields["execution_id"] not in {e.binding.execution_id for e in self._executions}
+            )
+            snapshot = self._history.read(end)
+            require(snapshot[: len(self._snapshot)] == self._snapshot)
+            machine, action = _replay(snapshot, self.plan, self.projected, end)
+            state = machine.state
+            require(action is None and state.phase == "candidate_running")
+            require(not state.finish_requested and state.operator_exit_sha256 is None)
+            require(state.authorization_generation is None and state.recording_deadline == 0)
+            require(state.recording_outcome == "not_attempted")
+            require(state.ready_evidence_sha256 == fields["ready_proof"])
+            require(state.launch_plan_sha256 == fields["launch_sha256"])
+            ready_events = [
+                json.loads(raw)["event"]
+                for _, raw in snapshot
+                if json.loads(raw)["event"]["kind"] == "operator_ready"
+            ]
+            require(len(ready_events) == 1)
+            observation = bootstrap.recording.decode_observation(ready_events[0]["observation"])
+            current = observation.candidate
+            ready_proof = base.checksum(
+                dict(
+                    ready_sha256=fields["ready_sha256"],
+                    probe_execution_id=fields["probe_execution_id"],
+                    probe_request_sha256=fields["probe_request_sha256"],
+                    native=asdict(
+                        plans.ordinary.NativeState(
+                            current.generation, current.healthy, current.recording
+                        )
+                    ),
+                    observation=asdict(observation),
+                )
+            )
+            require(ready_proof == fields["ready_proof"])
+            require(machine.process_bound(base.NORMAL, exited=True))
+            require(machine.process_bound(base.CANDIDATE, exited=False))
+            require(
+                state.executions
+                == tuple(
+                    (e.binding.phase, e.binding.container_id, e.binding.execution_id)
+                    for e in self._executions
+                )
+            )
+            require(
+                state.completed_executions
+                == tuple((e.binding.execution_id, e.exit_code) for e in self._executions)
+            )
+            cutoff = min(state.deadline, self.plan.deadlines.ready_by)
+            require(machine.last_at <= time.clock_gettime_ns(time.CLOCK_BOOTTIME) / 1e9 < cutoff)
+            candidate = status.candidate
+            require(state.candidate_generation == candidate.generation)
+            dispatch = natives.dispatch
+            pins = dispatch.Pins(
+                dispatch.binding.Binding(
+                    self.projected,
+                    self.plan.candidate_runtime.source,
+                    self.plan.sha256,
+                    self.plan.boot,
+                ),
+                dispatch.execution.Command(
+                    str(self.plan.native_root / "launch/launch.json"),
+                    fields["launch_sha256"],
+                    self.plan.candidate_runtime.source,
+                    self.plan.lease["ready_by"],
+                ),
+                candidate.generation,
+                candidate.process,
+            )
+            native = natives.NativeCustody(self.custody, pins, reported, deadline=end)
+            self.native = self._original_native = native
+            binding = native.binding
+            notice = admission.NativeNotice(
+                pins,
+                binding.execution_id,
+                binding.dispatch_sha256,
+                fields["ready_sha256"],
+                fields["ready_proof"],
+                fields["probe_execution_id"],
+                fields["probe_request_sha256"],
+                binding.actors,
+                tuple(raw for _, raw in snapshot),
+            )
+            require(native_fields(notice) == fields)
+            require(snapshot == self._history.read(end))
+            status = self._endpoint(end)
+            require(not self.capture_failed and not self.inspection_failed)
+            require(not status.deadline.helper_exited and not status.capture_failed)
+            observed = native.poll()
+            require(observed.exited == frozenset() and not observed.apps.deadline.helper_exited)
+            require(
+                not observed.apps.capture_failed
+                and not observed.apps.deadline.recovery_deadline_expired
+            )
+            require(time.monotonic() < end)
+            require(time.clock_gettime_ns(time.CLOCK_BOOTTIME) / 1e9 < cutoff)
+            self._snapshot = snapshot
+            return notice.receipt
+        except BaseException as error:
+            self.capture_failed = True
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def poll_native(self):
+        self._guard()
+        require(type(self.native) is natives.NativeCustody)
+        return self.native.poll()
+
     def _retain(self, values):
         self._executions = self._original_executions = values
         self._execution_bytes = tuple(base.encode(asdict(e)) for e in values)
@@ -516,5 +665,42 @@ class CliCustody:
             return
         self.closed = True
         history = getattr(self, "_original_history", None)
-        if history is not None:
-            history.close()
+        try:
+            if self._original_native is not None:
+                self._original_native.close()
+        finally:
+            if history is not None:
+                history.close()
+
+
+NATIVE_FIELDS = {
+    "launch_sha256",
+    "execution_id",
+    "dispatch_sha256",
+    "ready_sha256",
+    "ready_proof",
+    "probe_execution_id",
+    "probe_request_sha256",
+    "actors_sha256",
+    "workers",
+    "receipt",
+}
+
+
+def native_fields(notice):
+    require(type(notice) is admission.NativeNotice)
+    notice.__post_init__()
+    return dict(
+        launch_sha256=notice.pins.command.plan_sha256,
+        execution_id=notice.execution_id,
+        dispatch_sha256=notice.dispatch_sha256,
+        ready_sha256=notice.ready_sha256,
+        ready_proof=notice.ready_proof,
+        probe_execution_id=notice.probe_execution_id,
+        probe_request_sha256=notice.probe_request_sha256,
+        actors_sha256=base.checksum([asdict(actor) for actor in notice.actors]),
+        workers=[
+            dict(pid=actor.local_pid, start_ticks=actor.start_ticks) for actor in notice.actors[1:]
+        ],
+        receipt=notice.receipt,
+    )

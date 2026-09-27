@@ -273,6 +273,8 @@ def test_original_observer_survives_app_native_recording_and_recovery_handoffs(
     assert observer is not None and not s.dispatch_notices
     candidate_observer = s.driver.candidate_observer
     assert candidate_observer is not None and not s.candidate_notices
+    native_observer = s.driver.native_observer
+    assert native_observer is not None and not s.native_notices
     test_original_notice_dispatch_and_process_receipts_join_recovery(s, monkeypatch, route)
     commands = s.transfer_io.created + s.cycle.created
     phases = [
@@ -290,6 +292,8 @@ def test_original_observer_survives_app_native_recording_and_recovery_handoffs(
     assert s.driver.candidate_observer is candidate_observer and len(s.candidate_notices) == 1
     assert s.driver.candidate_observation_attempted
     assert s.candidate_notices[0].plan_sha256 == s.plan.sha256
+    assert s.driver.native_observer is native_observer
+    assert len(s.native_notices) == (0 if route == "pristine" else 1)
     assert s.service.closed and not s.startup.clock.closed
 
 

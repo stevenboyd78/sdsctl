@@ -370,10 +370,11 @@ def test_interrupted_candidate_exchange_consumes_attempt_and_cleans_original_own
 
 
 @pytest.mark.parametrize("value", [False, True, 0, "callback", object()])
-def test_invalid_candidate_callback_does_not_reserve_service(app_candidate, value):
+@pytest.mark.parametrize("field", ["candidate_observer", "native_observer"])
+def test_invalid_candidate_callback_does_not_reserve_service(app_candidate, value, field):
     s = app_candidate
     with pytest.raises(m.operator.UnconfirmedOperator):
-        m.AppService(s.startup, s.service, candidate_observer=value)
+        m.AppService(s.startup, s.service, **{field: value})
     assert s.service._app_driver is None and not s.service.used
     assert not s.engine.sent and not s.service.failed
 

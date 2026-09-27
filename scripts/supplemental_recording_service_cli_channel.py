@@ -32,6 +32,7 @@ Channels = control.Channels
 MAX_BYTES, MAX_EXCHANGES, EXCHANGE_SECONDS, ROOT_UID = 2048, 8, 2, 0
 KIND = "finite-recording-cli-evidence-v1"
 CANDIDATE_KIND = "finite-recording-candidate-custody-v1"
+NATIVE_KIND = "finite-recording-native-custody-v1"
 MESSAGE = "App command evidence exchange is unconfirmed; preserve the case and do not retry."
 
 
@@ -130,6 +131,7 @@ class Link:
         self.sequence = 0
         self._sequence = 0
         self.candidate_attempted = self._candidate_attempted = False
+        self.native_attempted = self._native_attempted = False
         try:
             require(type(self) is Link and self.owner[2] == ROOT_UID)
             require(role in ("writer", "observer") and type(role) is str)
@@ -198,6 +200,9 @@ class Link:
         require(
             type(self.candidate_attempted) is bool
             and self.candidate_attempted is self._candidate_attempted
+        )
+        require(
+            type(self.native_attempted) is bool and self.native_attempted is self._native_attempted
         )
         if hasattr(self, "_pins"):
             require(self._values() == self._pins)
@@ -287,13 +292,19 @@ class Link:
         self._quiet()
         return value, raw
 
-    def _enter(self, role, *, candidate=False):
+    def _enter(self, role, *, candidate=False, native=False):
         require(self.lock.acquire(blocking=False))
         try:
             end = time.monotonic() + EXCHANGE_SECONDS
             self._guard(end)
             require(self.role == role and self.sequence < MAX_EXCHANGES)
-            if candidate:
+            require(not (candidate and native))
+            if native:
+                require(
+                    self.sequence == 4 and self.candidate_attempted and not self.native_attempted
+                )
+                self.native_attempted = self._native_attempted = True
+            elif candidate:
                 require(self.sequence == 4 and not self.candidate_attempted)
                 self.candidate_attempted = self._candidate_attempted = True
             else:
@@ -312,22 +323,34 @@ class Link:
         """One separate pre-native exchange after the two initial CLI commands."""
         return self._observe(notice, candidate=True)
 
-    def _observe(self, notice, *, candidate):
+    def observe_native(self, notice):
+        """One original-Ready comparison exchange, never a begin instruction."""
+        return self._observe(notice, candidate=False, native=True)
+
+    def _observe(self, notice, *, candidate, native=False):
         entered = False
         try:
-            end = self._enter("writer", candidate=candidate)
+            end = self._enter("writer", candidate=candidate, native=native)
             entered = True
             self._quiet()
-            kind = CANDIDATE_KIND if candidate else KIND
-            codec = _candidate_notice if candidate else _notice
+            kind = NATIVE_KIND if native else CANDIDATE_KIND if candidate else KIND
+            codec = (
+                custody_module.native_fields
+                if native
+                else _candidate_notice
+                if candidate
+                else _notice
+            )
             fields = codec(notice)
-            if candidate:
+            if native:
+                require(notice.pins.host.plan_sha256 == self.plan_sha256)
+            elif candidate:
                 require(notice.plan_sha256 == self.plan_sha256)
             else:
                 require((notice.case_id, notice.boot_id) == (self.plan.case, self.plan.boot))
             issued = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
             until = min(issued + EXCHANGE_SECONDS * clock.NS, _hard_ns(self.plan))
-            if candidate:
+            if candidate or native:
                 until = min(until, int(Decimal(self.plan.deadlines.ready_by) * clock.NS))
             require(issued < until)
             request = dict(
@@ -378,15 +401,19 @@ class Link:
         """
         return self._acknowledge(custody, candidate=True)
 
-    def _acknowledge(self, custody, *, candidate):
+    def acknowledge_native(self, custody):
+        """Capture original workers; the writer separately authenticates Ready."""
+        return self._acknowledge(custody, candidate=False, native=True)
+
+    def _acknowledge(self, custody, *, candidate, native=False):
         entered = False
         try:
-            end = self._enter("observer", candidate=candidate)
+            end = self._enter("observer", candidate=candidate, native=native)
             entered = True
             require(type(custody) is custody_module.CliCustody and custody.plan is self.plan)
             require(custody.custody.watch.target == self._peer.identity)
             request, _ = self._receive(end)
-            kind = CANDIDATE_KIND if candidate else KIND
+            kind = NATIVE_KIND if native else CANDIDATE_KIND if candidate else KIND
             plans.mapping(
                 request,
                 {"schema", "kind", "plan", "sequence", "nonce", "notice", "issued_ns", "until_ns"},
@@ -407,11 +434,13 @@ class Link:
             )
             now = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
             require(issued <= now < until <= _hard_ns(self.plan))
-            if candidate:
+            if candidate or native:
                 require(until <= int(Decimal(self.plan.deadlines.ready_by) * clock.NS))
             end = min(end, time.monotonic() + (until - now) / clock.NS)
             keys = (
-                {"plan_sha256", "generation", "process", "receipt"}
+                custody_module.NATIVE_FIELDS
+                if native
+                else {"plan_sha256", "generation", "process", "receipt"}
                 if candidate
                 else {
                     "stage",
@@ -435,9 +464,11 @@ class Link:
                 not status.deadline.helper_exited and not status.deadline.recovery_deadline_expired
             )
             require(not custody.capture_failed and not custody.inspection_failed)
-            snapshot = custody._history.read(end)
-            history = tuple(raw for _, raw in snapshot)
-            if candidate:
+            if native:
+                require(custody.observe_native(fields, deadline=end) == fields["receipt"])
+            elif candidate:
+                snapshot = custody._history.read(end)
+                history = tuple(raw for _, raw in snapshot)
                 process = plans.mapping(fields["process"], {"pid", "start_ticks", "container_id"})
                 notice = custody_module.platform.CandidateNotice(
                     fields["plan_sha256"],
@@ -448,6 +479,8 @@ class Link:
                 require(_candidate_notice(notice) == fields)
                 require(custody.observe_candidate(notice, deadline=end) == fields["receipt"])
             else:
+                snapshot = custody._history.read(end)
+                history = tuple(raw for _, raw in snapshot)
                 notice = custody_module.platform.DispatchNotice(
                     **{key: value for key, value in fields.items() if key != "receipt"},
                     history=history,

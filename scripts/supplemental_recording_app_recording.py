@@ -191,12 +191,27 @@ class AppRecordingPhase(operator.RecordingPhase):
         self.service._context()
         return None
 
+    def _observe_native(self, notice):
+        self.service._context()
+        observer = self.service.native_observer
+        require(callable(observer))
+        receipt = observer(notice)
+        self.service._context()
+        require(self.service.native_observer is observer)
+        return receipt
+
     def start(self):
         self.service._context()
         require(not self.used)
         self.used = True
         try:
-            start = app_begin.AppStart(self.run, self.ledger)
+            start = app_begin.AppStart(
+                self.run,
+                self.ledger,
+                native_observer=(
+                    self._observe_native if self.service.native_observer is not None else None
+                ),
+            )
             self.service._cleanup.append(start.close)
             self.start_attempt = self._original_start = start
             relay = start.start_once()

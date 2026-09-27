@@ -97,7 +97,8 @@ def recording(app_phase, monkeypatch):
             return self.completion
 
     class Start:
-        def __init__(self, run, ledger):
+        def __init__(self, run, ledger, *, native_observer=None):
+            assert native_observer is None  # This fixture does not authenticate native custody.
             s.start_calls.append(self)
             assert run is s.run and ledger is s.ledger
             assert s.driver.native.retired and s.driver.recording is not None

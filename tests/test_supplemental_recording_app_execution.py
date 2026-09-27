@@ -151,7 +151,23 @@ def _execution_boundaries(launch_case, tmp_path, monkeypatch, *, prepared, publi
         tick("ready")
         assert profile_sha256 == "a" * 64 and original_clock is p.original_clock
         assert zero_domain is s.idle.zero_domain
-        ready.client, ready.processes = client, SimpleNamespace(closed=False)
+        # Actual type only; actor/transport methods remain explicit fixture
+        # substitutions, not an authenticated native Ready or kernel capture.
+        ready.client, ready.processes = client, object.__new__(launch.engine.namespace.Witness)
+        ready.processes.closed = False
+        init = client.claim.pins.init
+        domains = tuple((1, index + 1) for index in range(len(launch.engine.namespace.NAMESPACES)))
+        ready.processes.actors = tuple(
+            launch.engine.namespace.Actor(
+                init.pid if index == 0 else 1_000_000 + index,
+                index + 1,
+                0 if index == 0 else init.pid,
+                init.start_ticks + index,
+                init.container_id,
+                domains,
+            )
+            for index in range(4)
+        )
         ready.clock, ready.zero_domain = original_clock, zero_domain
         ready.failed = ready.closed = False
         ready.ready_by, ready.received_at = p.lease["ready_by"], time.monotonic()
@@ -207,6 +223,7 @@ def _execution_boundaries(launch_case, tmp_path, monkeypatch, *, prepared, publi
     monkeypatch.setattr(launch.received.Ready, "__init__", ready_init)
     monkeypatch.setattr(launch.received.Ready, "check_before_begin", ready_check)
     monkeypatch.setattr(launch.received.Ready, "close", ready_close)
+    monkeypatch.setattr(launch.engine.namespace.Witness, "refresh", lambda witness: witness.actors)
     monkeypatch.setattr(launch.probe_exec, "Sample", Probe)
     s.endpoint = Endpoint()
     host = s.host = s.bootstrap_host = launch.BootstrapHost(

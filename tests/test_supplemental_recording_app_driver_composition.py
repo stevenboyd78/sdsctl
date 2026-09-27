@@ -65,6 +65,7 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
     s.startup.original = s.case_plan
     s.dispatch_notices = []
     s.candidate_notices = []
+    s.native_notices = []
 
     def observe(notice):
         # Test-only receipt, not independent CLI/App custody. The real peer
@@ -85,6 +86,19 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
         assert notice.process == s.candidate_owner.witness.identity
         assert notice.history == tuple(base.encode(item) for item in s.journal.entries)
         s.candidate_notices.append(notice)
+        return notice.receipt
+
+    def observe_native(notice):
+        # Synthetic acknowledgment in the actual original service->begin path.
+        # Separate-process custody and actual native Ready have other fixtures.
+        assert s.driver.native.retired and s.driver.recording is not None
+        assert s.driver.recording.start_attempt.native_observation_attempted
+        assert s.ledger.state.count == 1
+        assert s.journal.machine.state.authorization_generation is None
+        assert notice.history == tuple(base.encode(item) for item in s.journal.entries)
+        s.native_notices.append(notice)
+        if getattr(s, "native_observer_fault", None) is not None:
+            return s.native_observer_fault(notice)
         return notice.receipt
 
     with ExitStack() as cleanup:
@@ -120,6 +134,7 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
                 s.startup,
                 s.service,
                 candidate_observer=observe_candidate if observer is not None else None,
+                native_observer=observe_native if observer is not None else None,
             )
             s.session = s.service.session
             s.original_owners = (
@@ -351,6 +366,44 @@ def test_original_driver_lost_begin_stays_uncertain_and_expires_without_recovery
     assert s.ledger.state.count == (3 if fault == "lost_started_ack" else 2)
     assert not s.service.failed and s.service.closed and not s.driver.lock.locked()
     assert s.run.closed and s.driver.native.operator.closed
+    assert_owners(s)
+
+
+@pytest.mark.parametrize("driver_case", ["observed"], indirect=True)
+@pytest.mark.parametrize("fault", ["lost", "wrong", "callback"])
+def test_original_driver_native_ack_failure_expires_without_authorization(
+    driver_case, monkeypatch, fault
+):
+    s = driver_case
+
+    def failed(notice):
+        if fault == "lost":
+            raise OSError("PRIVATE lost native evidence acknowledgment")
+        if fault == "wrong":
+            return "0" * 64
+        # A coordinated replacement would satisfy the static object tuple.
+        # The original recording wrapper must still refuse it before begin.
+        s.driver.native_observer = lambda notice: notice.receipt
+        s.driver.objects = (*s.driver.objects[:-1], s.driver.native_observer)
+        return notice.receipt
+
+    s.native_observer_fault = failed
+
+    def action():
+        assert not s.start_result and s.driver.recording.uncertain
+        assert s.driver.native.retired and not s.relays
+        assert len(s.native_notices) == 1 and s.ledger.state.count == 1
+        assert s.journal.machine.state.authorization_generation is None
+        assert s.driver.recording.start_attempt.failed and s.run.client.closed
+        expire(s, monkeypatch)
+
+    assert run(s, monkeypatch, action).phase == "review"
+    assert s.creates == 1 and not hasattr(s, "cycle")
+    assert not s.driver.recording.recovery_attempted
+    assert not s.driver.recording.abandon_attempted
+    assert s.ledger.state.count == 1 and len(s.native_notices) == 1
+    assert not any(e["event"]["kind"] == "authorize_recording" for e in s.journal.entries)
+    assert s.service.closed and s.run.closed and not s.service.failed
     assert_owners(s)
 
 

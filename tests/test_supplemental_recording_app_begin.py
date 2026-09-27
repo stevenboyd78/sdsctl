@@ -10,6 +10,7 @@ import importlib.util
 import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -48,8 +49,8 @@ def joined(execution, monkeypatch):
     assert s.run.start_confirmed().healthy is True
     setup_relay(s, monkeypatch)
 
-    def make():
-        start = m.AppStart(s.run, s.ledger)
+    def make(**kwargs):
+        start = m.AppStart(s.run, s.ledger, **kwargs)
         s.starts.append(start)
         return start
 
@@ -129,6 +130,157 @@ def test_fresh_app_ready_then_durable_permission_and_original_begin(joined):
     )
     assert start.retained_history(require_live=True).state.phase == "candidate_running"
     assert not tuple((s.case_root / "receipts").iterdir())  # A sent begin isn't a native result.
+
+
+def synthetic_actors(s, monkeypatch):
+    """Explicitly synthetic Ready actors; no independent kernel capture here."""
+    init = s.run.pins.init
+    domains = tuple((1, index + 1) for index in range(len(m.namespace.NAMESPACES)))
+    actors = tuple(
+        m.namespace.Actor(
+            init.pid if index == 0 else 1_000_000 + index,
+            index + 1,
+            0 if index == 0 else init.pid,
+            init.start_ticks + index,
+            init.container_id,
+            domains,
+        )
+        for index in range(4)
+    )
+    witness = s.run.ready.processes
+    assert type(witness) is m.namespace.Witness
+    witness.actors = actors
+
+    def refresh(current):
+        assert current is witness
+        return current.actors
+
+    monkeypatch.setattr(m.namespace.Witness, "refresh", refresh)
+    return witness
+
+
+def test_native_observation_precedes_durable_authorization_and_begin(joined, monkeypatch):
+    s = joined
+    actors = synthetic_actors(s, monkeypatch)
+    notices = []
+
+    def observe(notice):
+        assert not s.relays and s.ledger.state.count == 1
+        assert s.journal.machine.state.authorization_generation is None
+        assert not s.run.client.begun
+        assert notice.actors == actors.actors
+        assert notice.pins is s.run.pins
+        assert notice.history == tuple(begin.base.encode(entry) for entry in s.journal.entries)
+        notices.append(notice)
+        s.trace.append("native_observation")
+        return notice.receipt
+
+    start = s.make_start(native_observer=observe)
+    assert not notices and not start.native_observation_attempted
+    start.start_once()
+    assert len(notices) == 1 and start.native_observation_attempted
+    assert s.trace.index("probe") < s.trace.index("native_observation") < s.trace.index("relay")
+    denied(start.start_once)
+    assert len(notices) == 1 and len(s.relays) == 1
+
+
+def test_original_ready_notice_binds_dispatch_and_original_history(joined, monkeypatch):
+    s = joined
+    synthetic_actors(s, monkeypatch)
+    start = s.make_start()
+    notice = start._native_notice()
+    assert notice.dispatch_sha256 == s.run.client.claim.state.sha256
+    assert notice.execution_id == s.run.client.claim.state.execution_id
+    assert notice.ready_proof == start.proof
+    assert notice.history == start.history
+    assert not s.relays and not start.native_observation_attempted
+
+
+@pytest.mark.parametrize(
+    "fault", ["lost", "interrupt", "wrong", "actors", "ready", "source", "callback", "late"]
+)
+def test_native_observation_failure_never_authorizes_or_sends_begin(joined, monkeypatch, fault):
+    s = joined
+    witness = synthetic_actors(s, monkeypatch)
+    notices, offset = [], [0]
+    real = time.monotonic
+    monkeypatch.setattr(time, "monotonic", lambda: real() + offset[0])
+
+    def observe(notice):
+        notices.append(notice)
+        if fault == "lost":
+            raise OSError("PRIVATE lost acknowledgment")
+        if fault == "interrupt":
+            raise KeyboardInterrupt
+        if fault == "wrong":
+            return "0" * 64
+        if fault == "actors":
+            witness.actors = witness.actors[:-1] + (
+                replace(witness.actors[-1], start_ticks=witness.actors[-1].start_ticks + 1),
+            )
+        elif fault == "ready":
+            s.run.ready.ready_raw += b" changed"
+        elif fault == "source":
+            s.container["Config"]["Cmd"][-1] = "0" * 32
+        elif fault == "callback":
+            # Even coordinated replacement cannot defeat the local original pin.
+            start.native_observer = lambda notice: notice.receipt
+            start.observer_objects = (start.native_observer,)
+        elif fault == "late":
+            offset[0] = 2.1
+        return notice.receipt
+
+    start = s.make_start(native_observer=observe)
+    if fault == "interrupt":
+        with pytest.raises(KeyboardInterrupt):
+            start.start_once()
+    else:
+        denied(start.start_once)
+    offset[0] = 0
+    assert start.native_observation_attempted and len(notices) == 1
+    assert not s.relays and s.ledger.state.count == 1
+    assert s.journal.machine.state.authorization_generation is None
+    assert start.failed and s.run.failed and s.run.client.closed
+    denied(start.start_once)
+    denied(s.make_start)
+    assert len(notices) == 1
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("pins", object()),
+        ("execution_id", ""),
+        ("dispatch_sha256", "not-a-digest"),
+        ("ready_sha256", True),
+        ("ready_proof", "a" * 63),
+        ("probe_execution_id", "A" * 64),
+        ("probe_request_sha256", None),
+        ("actors", []),
+        ("actors", ()),
+        ("history", []),
+        ("history", ()),
+        ("history", (b"",)),
+        ("history", ("not-bytes",)),
+        ("history", (b"x",) * 65),
+        ("history", (b"x" * (begin.base.MAX_BYTES + 1),)),
+    ],
+)
+def test_native_notice_rejects_unbounded_or_untyped_comparison_fields(joined, field, value):
+    start = joined.make_start()
+    notice = start._native_notice()
+    with pytest.raises(ValueError):
+        replace(notice, **{field: value})
+    assert not joined.relays and not start.native_observation_attempted
+    assert joined.ledger.state.count == 1
+
+
+@pytest.mark.parametrize("value", [False, True, 0, "observer", object()])
+def test_invalid_native_observer_never_reserves_original_begin(joined, value):
+    s = joined
+    denied(lambda: s.make_start(native_observer=value))
+    assert not s.run.begin_attempted and not s.run.failed and not s.run.client.closed
+    assert s.run.begin_owner is None and not s.relays
 
 
 def test_retained_app_history_does_not_poll_expired_ready(joined, monkeypatch):

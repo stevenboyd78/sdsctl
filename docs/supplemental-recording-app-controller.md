@@ -20,6 +20,7 @@ independent supervision and recovery integration.
 | Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
 | Native launch | `AppLaunch` | Original accepted Startup, candidate generation, published launch input, host journal, clock, init witness and full BootstrapHost |
 | Native ready | `NativeReadyQualification` | Actual returned Ready and the one-time inventory of the four declared private sockets |
+| Explicit pre-begin native custody | Original AppStart and original peer Link/CliCustody | One comparison of original authenticated Ready/dispatch/history to independently captured workers, before recording authorization or begin; no action grant |
 | Recording begin | `AppStart` | Original AppLaunch, fresh source/runtime/host/probe checks, returned durable host authorization and ledger intent, and the existing one-use Relay |
 | Active inputs | `NativeActiveQualification` | Exact AppStart/Relay/PostBegin, original sockets and immutable input identities, and append-only validated receipt prefixes |
 | Host and file observation | `AppRetainedHost` | Original authorization history, fixed metadata worker, owner-thread file read, and continuing original actor/lease evidence |
@@ -243,6 +244,65 @@ Fresh checks precede the durable recording authorization and ledger intent.
 Only the returned intent permits the existing Relay to send begin. A sent
 begin is not a received recording-start acknowledgment, completed recording,
 verified file, process exit, or recovered App.
+
+### Explicit original-Ready/native-custody join
+
+An optional `native_observer` is selected and pinned at original `AppService`
+construction. The original recording phase passes its guarded callback to the
+one original `AppStart`. Assembly invokes nothing. The selected callback runs
+once inside the existing fresh source/runtime/host/probe qualification bracket,
+**before** durable `authorize_recording`, ledger start intent, or Relay begin.
+The callback is pinned across its return, including in the service wrapper;
+replacing both public callback and comparison fields during a reply cannot
+permit begin. The default uninstalled compositions remain unchanged; an active
+launcher must explicitly select the independent exchange and its separate
+action scope.
+
+`NativeNotice` binds the original launch pins, private dispatch execution and
+chain digest, Ready bytes digest and original Ready proof, original probe
+execution/request, four exact actors, and the original journal prefix. The
+writer refreshes its **authenticated Ready's original namespace Witness** both
+before and after the callback. It does not construct that Witness from an
+observer report. It also rechecks original callback, journal, prepared ledger,
+and the unchanged readiness deadline before the surrounding qualification can
+permit authorization. Wrong, missing, late or interrupted acknowledgment closes
+the original launch transport, consumes the attempt, and retains actor evidence;
+it never retries, renews readiness or infers recording success.
+
+The private `Link` has a distinct one-time native-custody message kind after the
+candidate exchange and before any recording authorization. It does not consume
+or replace one of the eight CLI evidence slots. Only comparison digests and
+three bounded local worker PID/start-time hints cross the channel, not journal
+content, paths, action instructions, or full process/namespace descriptions.
+The original peer credentials, challenge, request digest and remaining original
+two-second/readiness interval remain required.
+
+`CliCustody` reconstructs this notice from its independently held journal,
+original plan/projection and retained candidate. Both initial CLI commands must
+already have independently observed terminal zero results. The held history
+must still describe `candidate_running` with exactly one matching Ready event,
+no recording authorization, no finish or operator exit. The observer recomputes
+the Ready proof from that event and the comparison hashes; this is a consistency
+check, **not** independent Ready authentication. The existing `NativeCustody`
+then captures all four actual kernel handles through the original private
+dispatch chain, two Engine inspections and process mapping. Its remaining
+deadline can only shorten; the command deadline is the original conservative
+MONOTONIC lease, not the raw BOOTTIME policy cutoff.
+
+Independently captured execution, dispatch and actors must reproduce the
+writer's exact receipt. Once captured, handles remain retained even if a later
+comparison fails or the acknowledgment is lost. Factual `poll_native()` remains
+available after helper loss; it neither takes the journal lock nor creates a
+replacement writer/recovery session. Unknown capture, helper exit or a matching
+receipt cannot stand in for worker exits, native returns or restoration.
+
+Tests join the original service-to-begin path with synthetic acknowledgments,
+and separately exercise real distinct writer/observer processes, private
+journal/dispatch files, Unix transport, kernel handles and owned process trees.
+App/Engine/cgroup/Ready facts remain explicitly synthetic. Faults cover changed
+Ready/probe/dispatch/actor/history facts, worker loss, bad replies, interrupted
+callbacks and lost acknowledgment. These are complementary tests, not a complete
+installed or actual-native recording lifetime qualification.
 
 ### Continuing observations
 
@@ -581,6 +641,9 @@ blocked observer; outer execution supervision remains necessary.
 
 The capture joins the original plan/projection, candidate generation and init,
 fixed command path/source/deadline, and all three private dispatch intents.
+The command's MONOTONIC deadline must equal the conservative lease converted
+from the original host clock window; the BOOTTIME policy cutoff is not
+interchangeable with it, and neither deadline is renewed during capture.
 The dispatch directory stays read-locked across both fixed exec inspections and
 kernel capture. No intent is recreated or appended. The observer's separately
 authenticated Engine endpoint supplies the exact running exec's guardian PID;
@@ -716,8 +779,8 @@ commands or filesystem data. The observer rereads its original held journal,
 reconstructs the notice and checks its digest, then performs `CliCustody`'s
 independent capture before acknowledging. Replies bind the complete request,
 challenge and exact captured receipt. Each case permits at most eight CLI exchanges
-(two per fixed App action), plus the distinct one-time candidate-custody exchange
-described above. Policy and original dispatcher one-use rules still decide which
+(two per fixed App action), plus the distinct one-time candidate- and
+native-custody exchanges described above. Policy and original dispatcher one-use rules still decide which
 actions, if any, are allowed.
 
 Both sides retain their original two-second exchange budget and the original

@@ -31,9 +31,10 @@ class AppService:
     Custody substitution still refuses; it is not an observation failure.
     """
 
-    def __init__(self, startup, original, *, candidate_observer=None):
+    def __init__(self, startup, original, *, candidate_observer=None, native_observer=None):
         require(type(self) is AppService and type(original) is operator.IdleService)
         require(candidate_observer is None or callable(candidate_observer))
+        require(native_observer is None or callable(native_observer))
         original._context()
         require(not original.used and not original.lock.locked())
         require(original._app_driver is None and not original.candidate_attempted)
@@ -59,6 +60,7 @@ class AppService:
         )
         self._cleanup = original._cleanup
         self.candidate_observer = candidate_observer
+        self.native_observer = native_observer
         self.objects = (
             startup,
             original,
@@ -73,6 +75,7 @@ class AppService:
             self.lock,
             self._cleanup,
             candidate_observer,
+            native_observer,
         )
         self.used = self.native_attempted = False
         self.candidate_observation_attempted = False
@@ -105,6 +108,7 @@ class AppService:
                         original.lock,
                         original._cleanup,
                         self.candidate_observer,
+                        self.native_observer,
                     ),
                     self.objects,
                     strict=True,
@@ -129,6 +133,7 @@ class AppService:
                         self.lock,
                         self._cleanup,
                         self.candidate_observer,
+                        self.native_observer,
                     ),
                     self.objects,
                     strict=True,

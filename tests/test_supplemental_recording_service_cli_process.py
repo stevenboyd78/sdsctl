@@ -22,6 +22,7 @@ from . import test_supplemental_recording_service_cli_channel as channel
 m, old = channel.m, channel.old
 apps, hosts = old.app_tests, old.host_tests
 layout, tree, routing, projection = old.layout, old.tree, old.routing, old.projection
+family = old.native_tests.family
 pytestmark = apps.pytestmark
 
 CHILD = r"""
@@ -41,6 +42,10 @@ def identity(pid, cid):
         f"0::/system.slice/docker-{cid}.scope\n")
 m.processes.read_identity = identity
 plan = m.plans.load_bytes(config["plan"].encode(), config["sha256"])
+m.plans.Plan.root = property(lambda _: Path(config["root"]))
+layout = next(item for item in plan.layouts if item.slug == m.base.CANDIDATE)
+stored = m.plans.projection.recording._decode(config["manifest"].encode())
+projected = m.plans.projection.project(layout, stored)
 original = service = None
 if config["assembly"] == "service":
     import supplemental_recording_service_operator as operator
@@ -93,6 +98,7 @@ try:
                 cli_generation=plan.cli_generation, now=now, observe=observe)
         def event(kind, **fields):
             return journal.append(dict(kind=kind, boot_id=plan.boot, now=now(), **fields))
+        native_notice = None
         emit(kind="prepared")
         for line in sys.stdin.buffer:
             command = json.loads(line)
@@ -105,6 +111,72 @@ try:
                 mode = command["mode"]
                 if mode == "reconcile":
                     writer.reconcile_executions()
+                elif mode == "native":
+                    # Synthetic Ready/Engine facts only. The real writer still
+                    # owns the only journal and actual private dispatch files.
+                    from dataclasses import asdict
+                    d = m.custody_module.natives.dispatch
+                    bound = journal.machine.state.processes[-1]
+                    process = m.processes.ProcessIdentity(
+                        bound.pid, bound.start_ticks, bound.container_id)
+                    pins = d.Pins(d.binding.Binding(projected, plan.candidate_runtime.source,
+                        plan.sha256, plan.boot),
+                        d.execution.Command(str(plan.native_root / "launch/launch.json"),
+                            command["launch_sha256"], plan.candidate_runtime.source,
+                            plan.lease["ready_by"]), bound.generation, process)
+                    sample = command["observation"]
+                    sample["sampled_at"] = now()
+                    action = event("authorize_operator", generation=bound.generation,
+                        bootstrap_sha256=plan.bootstrap.sha256,
+                        launch_plan_sha256=pins.command.plan_sha256,
+                        idle_evidence_sha256="d" * 64, observation=sample)
+                    directory = plan.root / "operator-exec"
+                    directory.mkdir(mode=0o700)
+                    with m.processes.ProcessWitness(process) as witness:
+                        claim = d.Claim(directory, pins, witness)
+                        claim.created(command["metadata"]["ID"])
+                        claim.attach_intent(command["metadata"])
+                    sample["candidate"].update(healthy=True, recording=False)
+                    stamp = now()
+                    sample["sampled_at"] = stamp
+                    native = m.plans.ordinary.NativeState(bound.generation, True, False)
+                    proof = m.base.checksum(dict(ready_sha256="b" * 64,
+                        probe_execution_id="8" * 64, probe_request_sha256="9" * 64,
+                        native=asdict(native), observation=sample))
+                    event("operator_ready", generation=bound.generation,
+                        intent_sha256=action.intent_sha256, ready_evidence_sha256=proof,
+                        received_at=stamp, observation=sample)
+                    actors = tuple(m.custody_module.admission.namespace.Actor(
+                        **(actor | {"namespaces": tuple(tuple(pair)
+                            for pair in actor["namespaces"])})) for actor in command["actors"])
+                    native_notice = m.custody_module.admission.NativeNotice(
+                        pins, claim.state.execution_id, claim.state.sha256, "b" * 64, proof,
+                        "8" * 64, "9" * 64, actors,
+                        tuple(m.base.encode(e) for e in journal.entries))
+                    from dataclasses import replace
+                    fault = command.get("fault")
+                    if fault in ("ready_sha256", "ready_proof", "probe_execution_id",
+                            "probe_request_sha256", "execution_id", "dispatch_sha256"):
+                        native_notice = replace(native_notice, **{fault: "0" * 64})
+                    elif fault in ("worker", "actor_domain"):
+                        last = native_notice.actors[-1]
+                        if fault == "worker":
+                            last = replace(last, local_pid=last.local_pid + 10)
+                        else:
+                            domains = ((last.namespaces[0][0] + 1, last.namespaces[0][1]),
+                                *last.namespaces[1:])
+                            last = replace(last, namespaces=domains)
+                        native_notice = replace(native_notice,
+                            actors=(*native_notice.actors[:-1], last))
+                    elif fault == "history":
+                        native_notice = replace(native_notice, history=native_notice.history[:-1])
+                    emit(kind="native-boundary", receipt=native_notice.receipt,
+                        events=len(journal.entries))
+                    link.observe_native(native_notice)
+                elif mode == "native-retry":
+                    emit(kind="native-boundary", receipt=native_notice.receipt,
+                        events=len(journal.entries))
+                    link.observe_native(native_notice)
                 elif mode == "candidate":
                     bound = journal.machine.state.processes[-1]
                     notice = m.custody_module.platform.CandidateNotice(
@@ -415,6 +487,178 @@ def test_separate_candidate_capture_acknowledges_original_process_before_native(
         retained = case.custody.poll()
         assert retained.candidate == status.candidate and not retained.candidate_exited
         assert retained.deadline.helper_exited
+
+
+def native_prepare(case, family, monkeypatch, *, fault=None):
+    """Owned real worker tree; explicitly synthetic container/Ready facts."""
+    candidate_idle(case)
+    channel.send(case.prepared.child, dict(mode="candidate"))
+    assert receive(case)["kind"] == "candidate-boundary"
+    case.exchange.acknowledge_candidate(case.observer)
+    assert not receive(case)["failed"]
+    n = m.custody_module.natives
+    candidate = case.custody.poll().candidate
+    domains = tuple(
+        (info.st_dev, info.st_ino)
+        for info in (os.stat(f"/proc/self/ns/{name}") for name in n.engine.namespace.NAMESPACES)
+    )
+    points = (
+        candidate.process,
+        family.expected.guardian,
+        family.expected.native,
+        family.expected.watchdog,
+    )
+    actors = tuple(
+        n.engine.namespace.Actor(
+            item.pid,
+            index + 1,
+            os.getpid() if index < 2 else family.process.pid,
+            item.start_ticks,
+            candidate.process.container_id,
+            domains,
+        )
+        for index, item in enumerate(points)
+    )
+    lookup = {actor.host_pid: actor for actor in actors}
+
+    def read(pid, cid):
+        actor = lookup[pid]
+        assert cid == actor.container_id
+        fields = Path(f"/proc/{pid}/stat").read_text().rpartition(") ")[2].split()
+        n.engine.namespace.require(
+            fields[0] in ("R", "S", "I") and int(fields[19]) == actor.start_ticks
+        )
+        assert int(fields[1]) == actor.parent
+        return actor
+
+    monkeypatch.setattr(n.engine.namespace, "read", read)
+    plan = case.custody.plan
+    command = n.dispatch.execution.Command(
+        str(plan.native_root / "launch/launch.json"),
+        "e" * 64,
+        plan.candidate_runtime.source,
+        plan.lease["ready_by"],
+    )
+    metadata = old.native_tests.execution_tests.metadata()
+    metadata.update(ContainerID=candidate.process.container_id)
+    argv = command.argv()
+    metadata["ProcessConfig"].update(entrypoint=argv[0], arguments=list(argv[1:]))
+    case.executions[metadata["ID"]] = metadata | dict(Running=True, Pid=family.process.pid)
+    sample = asdict(case.baseline)
+    sample["normal"] = asdict(m.base.App(plan.normal.pin, "stopped"))
+    sample["candidate"] = asdict(
+        m.base.App(plan.candidate.pin, "running", candidate.generation, None, None)
+    )
+    channel.send(
+        case.prepared.child,
+        dict(
+            mode="native",
+            fault=fault,
+            launch_sha256="e" * 64,
+            metadata=metadata,
+            observation=sample,
+            actors=[asdict(actor) for actor in actors],
+        ),
+    )
+    boundary = receive(case)
+    assert boundary["kind"] == "native-boundary"
+    return actors, boundary
+
+
+def test_separate_native_capture_keeps_original_ready_comparison_and_no_begin(
+    prepared, projection, family, tmp_path, monkeypatch
+):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        actors, boundary = native_prepare(case, family, monkeypatch)
+        assert case.exchange.acknowledge_native(case.observer) == boundary["receipt"]
+        result = receive(case)
+        assert not result["failed"] and result["phase"] == "candidate_running"
+        assert result["recording"] == "not_attempted" and result["events"] == boundary["events"]
+        assert len(case.created) == len(case.started) == 2
+        assert case.exchange.sequence == 4 and case.exchange.native_attempted
+        status = case.observer.poll_native()
+        assert status.binding.actors == actors and status.exited == frozenset()
+        channel.send(case.prepared.child, dict(mode="native-retry"))
+        assert receive(case)["kind"] == "native-boundary"
+        assert receive(case) == result | dict(failed=True, link_failed=True)
+        channel.denied(lambda: case.exchange.acknowledge_native(case.observer))
+        case.prepared.child.stdin.close()
+        assert case.prepared.child.wait(timeout=3) == 0
+        retained = case.observer.poll_native()
+        assert retained.apps.deadline.helper_exited and retained.exited == frozenset()
+        assert retained.binding == status.binding
+        native = case.observer.native
+        owned = [fd for _, fd, _ in native._retained]
+        case.observer.native = object()  # Cleanup must retain its original owned handles.
+        with pytest.raises(old.m.UnconfirmedCliCustody):
+            case.observer.poll_native()
+        case.observer.close()
+        assert native.closed
+        for fd in owned:
+            with pytest.raises(OSError):
+                os.fstat(fd)
+        # Closing native/CLI custody is not closing the borrowed App/deadline
+        # evidence and never manufactures a candidate or worker exit.
+        assert case.custody.poll().candidate_exited is False
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "ready_sha256",
+        "ready_proof",
+        "probe_execution_id",
+        "probe_request_sha256",
+        "execution_id",
+        "dispatch_sha256",
+        "worker",
+        "actor_domain",
+        "history",
+        "engine",
+        "candidate_exit",
+        "lost",
+    ],
+)
+def test_native_capture_mismatch_or_loss_never_retries_or_authorizes_recording(
+    prepared, projection, family, tmp_path, monkeypatch, fault
+):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        _, boundary = native_prepare(case, family, monkeypatch, fault=fault)
+        if fault == "engine":
+            metadata = case.executions[old.native_tests.execution_tests.EXEC]
+            metadata["ProcessConfig"]["arguments"].append("PRIVATE")
+        elif fault == "candidate_exit":
+            case.candidate.stdin.close()
+            assert case.candidate.wait(timeout=3) == 0
+        elif fault == "lost":
+
+            def lost(*args):
+                raise OSError("PRIVATE lost native custody receipt")
+
+            monkeypatch.setattr(case.exchange, "_send", lost)
+        channel.denied(lambda: case.exchange.acknowledge_native(case.observer))
+        result = receive(case)
+        assert result["failed"] and result["link_failed"] and result["phase"] == "candidate_running"
+        assert result["recording"] == "not_attempted" and result["events"] == boundary["events"]
+        captured = case.observer.native
+        assert (captured is not None) is (
+            fault
+            in (
+                "execution_id",
+                "dispatch_sha256",
+                "actor_domain",
+                "history",
+                "lost",
+            )
+        )
+        channel.send(case.prepared.child, dict(mode="native-retry"))
+        assert receive(case)["kind"] == "native-boundary"
+        assert receive(case) == result
+        channel.denied(lambda: case.exchange.acknowledge_native(case.observer))
+        assert case.observer.native is captured
+        assert len(case.created) == len(case.started) == 2
+        if captured is not None:
+            assert case.observer.poll_native().exited == frozenset()
 
 
 @pytest.mark.parametrize(

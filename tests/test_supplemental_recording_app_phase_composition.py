@@ -49,6 +49,7 @@ def composed(joined, monkeypatch, phase_session):
     driver.owner = os.getpid(), get_ident()
     driver.used, driver.recording_attempted = True, False
     driver.recording = driver._original_recording = None
+    driver.native_observer = None  # Synthetic shell mirrors the constructor's optional hook.
     driver.plan, driver.projected, driver.journal = s.plan, s.projected, s.journal
     driver.lock, driver._cleanup = Lock(), []
     driver.lock.acquire()
