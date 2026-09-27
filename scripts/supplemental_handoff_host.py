@@ -22,6 +22,7 @@ from typing import Any, cast
 
 from supplemental_handoff_policy import (
     CANDIDATE,
+    MAX_BYTES,
     NORMAL,
     Journal,
     UnsafeHandoff,
@@ -419,6 +420,51 @@ class Docker:
         return raw
 
 
+@dataclass(frozen=True)
+class DispatchNotice:
+    """Immutable evidence request, NOT an action permit or peer authentication.
+
+    A separately qualified observer must read the original journal/Engine for
+    itself. Returning this receipt only acknowledges custody of these exact
+    bytes; it cannot replace the existing policy, consent or execution bounds.
+    """
+
+    stage: str
+    phase: str
+    case_id: str
+    boot_id: str
+    container_id: str
+    execution_id: str | None
+    history: tuple[bytes, ...]
+
+    def __post_init__(self):
+        require(type(self.stage) is str and self.stage in ("before_create", "before_start"))
+        require(type(self.phase) is str and self.phase in CONTROL)
+        identifier(self.case_id, case=True)
+        identifier(self.boot_id)
+        digest(self.container_id)
+        if self.stage == "before_create":
+            require(self.execution_id is None)
+        else:
+            digest(self.execution_id)
+        require(type(self.history) is tuple and 0 < len(self.history) <= 64)
+        require(all(type(raw) is bytes and 0 < len(raw) <= MAX_BYTES for raw in self.history))
+
+    @property
+    def receipt(self) -> str:
+        return checksum(
+            [
+                self.stage,
+                self.phase,
+                self.case_id,
+                self.boot_id,
+                self.container_id,
+                self.execution_id,
+                [raw.hex() for raw in self.history],
+            ]
+        )
+
+
 class TrackedDispatch:
     """Fixed control-command adapter for Executor.send, with durable exec IDs.
 
@@ -436,12 +482,18 @@ class TrackedDispatch:
         cli_image: str,
         cli_generation: str,
         now: Callable[[], float],
+        observe: Callable[[DispatchNotice], str] | None = None,
     ):
         require(cli_image.startswith("sha256:"))
         digest(cli_image[7:])
         digest(cli_generation)
         self.journal, self.docker = journal, docker
         self.image, self.generation, self.now = cli_image, cli_generation, now
+        require(observe is None or callable(observe))
+        # Optional only for the existing uninstalled adapters. An active command
+        # must explicitly select/authenticate an independent observer. This hook
+        # does not make arbitrary callbacks trustworthy or select such a command.
+        self.observe = self._original_observe = observe
         require(journal.machine is not None)
         assert journal.machine is not None
         # Construct before polling. Reopening a pending phase cannot authorize
@@ -451,6 +503,7 @@ class TrackedDispatch:
             self.used.add(journal.machine.state.phase)
 
     def __call__(self, command: tuple[str, ...], case_id: str) -> None:
+        require(self.observe is self._original_observe)
         machine = self.journal.machine
         require(machine is not None and machine.case_id == case_id)
         assert machine is not None
@@ -460,6 +513,7 @@ class TrackedDispatch:
         self.used.add(phase)
         cli = self.docker.container(CLI)
         require(generation(cli, name=CLI, image=self.image) == self.generation)
+        self._observed("before_create", phase, cli["Id"], None, observed_at)
         eid = self.docker.create_execution(cli["Id"], command)
         self.journal.append(
             {
@@ -484,7 +538,58 @@ class TrackedDispatch:
         require(generation(fresh, name=CLI, image=self.image) == self.generation)
         require(0 <= self.now() - observed_at <= 2)
         self.journal.check_directory()
+        self._observed("before_start", phase, cli["Id"], eid, observed_at)
         self.docker.start_execution(eid)  # exactly one attempt; never infer success
+
+    def _observed(self, stage, phase, cid, eid, observed_at):
+        require(self.observe is self._original_observe)
+        if self.observe is None:
+            return  # Preserve the old non-supervised, uninstalled API.
+        journal, docker, image, generation_pin, clock = (
+            self.journal,
+            self.docker,
+            self.image,
+            self.generation,
+            self.now,
+        )
+        journal.check_directory()
+        machine = journal.machine
+        require(machine is not None and machine.state.phase == phase)
+        notice = DispatchNotice(
+            stage,
+            phase,
+            machine.case_id,
+            machine.boot_id,
+            cid,
+            eid,
+            tuple(encode(entry) for entry in journal.entries),
+        )
+        expected = notice.receipt
+        require(0 <= clock() - observed_at <= 2)
+        acknowledged = self.observe(notice)
+        require(type(acknowledged) is str and acknowledged == expected)
+        require(notice.receipt == expected and self.observe is self._original_observe)
+        require(self.journal is journal and self.docker is docker and self.now is clock)
+        require(self.image == image and self.generation == generation_pin)
+        require(journal.machine is machine and machine.state.phase == phase)
+        require(tuple(encode(entry) for entry in journal.entries) == notice.history)
+        journal.check_directory()
+        # The synchronous observer can consume time. Recheck the original CLI
+        # generation and interval after its receipt, before either mutation.
+        fresh = docker.container(CLI)
+        require(fresh["Id"] == cid)
+        require(generation(fresh, name=CLI, image=image) == generation_pin)
+        if eid is not None:
+            require(
+                execution_state(
+                    docker.inspect_execution(eid),
+                    execution_id=eid,
+                    container_id=cid,
+                    command=CONTROL[phase],
+                )
+                == "created"
+            )
+        require(0 <= clock() - observed_at <= 2)
 
     def executions_idle(self) -> bool:
         machine = self.journal.machine

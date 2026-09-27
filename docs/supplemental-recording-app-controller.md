@@ -526,6 +526,66 @@ recovery session from its exit set. A different worker time namespace is not
 silently accepted; this capture currently requires the ordinary host user/time
 namespace mapping, without inferring any alternate-domain proof.
 
+## Independent fixed App-command custody (uninstalled)
+
+`supplemental_recording_service_cli_custody.CliCustody` retains the original
+fixed Home Assistant CLI command evidence in the observer. It is constructed
+from the original `AppCustody` and manifest projection while the normal App and
+helper remain live, before the first handoff request. Construction consumes one
+capture slot. It does not install a command or upgrade the passive preflight
+permission into action consent.
+
+The original `TrackedDispatch` now has an explicitly optional observation
+boundary at two points:
+
+1. After the original journaled policy intent, **before exec/create**.
+2. After the exact execution ID has been journaled and independently inspected
+   as created, **before exec/start**.
+
+The observer opens the original private journal directory read-only, without
+acquiring or sharing its writer lock. It retains the directory identity and
+checks bounded canonical hash-chain bytes, immutable prefix file identities,
+original preparation/plan/projection and pure policy replay. Partial writes,
+replacement, extra files, wrong permissions or a history mismatch refuse; no
+repair, second `Journal`, recovery session or replayed dispatch is constructed.
+The original writer must pause publication during each boundary exchange.
+
+Using its separately authenticated Engine endpoint, the observer verifies the
+pinned CLI container generation and reads the exact exec metadata before start.
+The original dispatcher rechecks its unchanged owner/context, CLI generation,
+created state and original two-second interval after each acknowledgment.
+Missing, late, changed or lost acknowledgment consumes the attempt, never
+permits start or retry. A lost create return remains a pending intent with an
+unknown execution, not an idle state. Earlier commands cannot be adopted later;
+their terminal facts must also have been independently observed before the next
+App command boundary.
+
+Subsequent `poll()` reads only already captured execution IDs through the same
+Engine endpoint. It may do so after helper exit, within the original recovery
+deadline. Actual terminal metadata is retained even when Docker later expires
+it; no numeric CLI PID is reopened. A missing or malformed read retains the
+last factual state, marks inspection failed and disables further Engine reads.
+Created/queued is never exit, and neither exit code zero nor all CLI exits prove
+App success, worker exit, recording completion or restored service. The original
+writer remains solely responsible for qualified journal publication.
+
+Local composition tests exercise both boundaries and all four fixed App actions
+through the same real journal and dispatcher. They use actual Unix HTTP,
+kernel peer credentials, App/helper pidfds and private files, with synthetic
+CLI/container metadata and App operations. Faults cover lost acknowledgments,
+changed generations, stale intervals, missing independent history, malformed
+terminal state, helper loss, journal damage, foreign-thread admission and
+cleanup that preserves the original writer. These are **not** an installed
+cross-process supervisor or scanner acceptance test.
+
+The callback receipt is an evidence acknowledgment, not peer authentication or
+permission. A separately selected active command must authenticate the complete
+cross-process exchange, qualify both runtimes and sources, bind explicit action
+consent, bound observer execution and implement exclusive failure handoff. No
+existing command/source inventory selects this observer, and no existing
+`IdleService` gains an observer or new authority by default. The optional legacy
+dispatch path remains unchanged when no observer is explicitly supplied.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and native-I/O lifetime qualification.

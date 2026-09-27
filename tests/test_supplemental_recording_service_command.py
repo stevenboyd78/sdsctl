@@ -72,8 +72,18 @@ def command_case(manifest_case, monkeypatch):
     monkeypatch.setattr(m.peer.process, "read_identity", identity)
     monkeypatch.setattr(m.peer, "current_identity", lambda: identity(os.getpid(), "b" * 64))
     monkeypatch.setattr(m, "baseline_root", lambda _: s.manifest_directory)
-    # Keep the fixture's real Docker class and explicitly synthetic transport.
-    monkeypatch.setattr(m.startup.plans.ordinary.Docker, "__new__", lambda cls: s.docker)
+    # Substitute only this command's constructor lookup, not the shared class's
+    # __new__ slot. Patching/restoring that inherited special method can leave
+    # CPython's allocator rejecting Docker(path) in later unrelated tests.
+    # All real Startup/Permission exact-class checks still see the real Docker
+    # class and the fixture's same actual instance with synthetic transport.
+    ordinary = SimpleNamespace(**vars(m.startup.plans.ordinary))
+    ordinary.Docker = lambda: s.docker
+    plans = SimpleNamespace(**vars(m.startup.plans))
+    plans.ordinary = ordinary
+    startup = SimpleNamespace(**vars(m.startup))
+    startup.plans = plans
+    monkeypatch.setattr(m, "startup", startup)
     owner_init, service_init = m.startup.Startup.__init__, operator.IdleService.__init__
 
     def owning(owner, original):
@@ -328,6 +338,16 @@ def test_baseline_is_case_bound_and_not_the_writable_case_or_declaration():
     assert m.baseline_root(case) == Path("/mnt/data/sdsctl-recording-baseline-" + case)
     assert m.baseline_root(case) != m.peer.declaration.declaration_root(case)
     assert m.baseline_root(case) != m.peer.peer_root(case)
+
+
+def test_constructor_fixture_does_not_patch_shared_docker_allocator(command_case, tmp_path):
+    real = operator.plans.ordinary.Docker
+    assert "__new__" not in vars(real)
+    path = str(tmp_path / "never-opened.sock")
+    independent = real(path)
+    assert type(independent) is real and independent.path == path
+    assert independent is not command_case.docker
+    assert m.startup.plans.ordinary.Docker() is command_case.docker
 
 
 @pytest.mark.parametrize("flag", [m.MODE, "--permission-probe", "--startup-probe", "--run"])

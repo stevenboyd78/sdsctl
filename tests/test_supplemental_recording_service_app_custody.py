@@ -85,7 +85,16 @@ def metadata(process, slug, image, cid):
 
 
 @contextmanager
-def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True, executions=None):
+def server(
+    tmp_path,
+    monkeypatch,
+    values,
+    *,
+    sender=False,
+    authenticated=True,
+    executions=None,
+    containers=None,
+):
     path = tmp_path / "engine.sock"
     tmp_path.chmod(0o700)
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -122,6 +131,12 @@ def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True, e
                     f"GET /v1.47/containers/app_{slug}/json HTTP/1.1": value
                     for slug, value in values.items()
                 }
+                paths.update(
+                    {
+                        f"GET /v1.47/containers/{key}/json HTTP/1.1": value
+                        for key, value in (containers or {}).items()
+                    }
+                )
                 paths.update(
                     {
                         f"GET /v1.47/exec/{key}/json HTTP/1.1": value
@@ -168,6 +183,7 @@ def setup(
     authenticated=True,
     short=False,
     executions=None,
+    containers=None,
 ):
     with child() as normal, child() as candidate:
         values = {
@@ -207,6 +223,7 @@ def setup(
                     sender=sender,
                     authenticated=authenticated,
                     executions=executions,
+                    containers=containers,
                 ) as (endpoint, state):
                     case = SimpleNamespace(
                         link=link,
