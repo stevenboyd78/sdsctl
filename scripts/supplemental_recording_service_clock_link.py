@@ -48,6 +48,10 @@ class ObserverClock:
     def __init__(self, plan, observer_clock, zero_domain, target):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.closed = False
+        # A separately selected supervisor may capture original kernel handles
+        # once, while this live startup comparison still succeeds. This flag is
+        # not action consent and does not enable that separate library.
+        self.deadline_capture_attempted = False
         try:
             self.pin = plans.PinnedPlan(plan)
             require(type(observer_clock) is plans.clock.ClockWitness)

@@ -351,6 +351,62 @@ Neither kind of test alone proves an installed end-to-end App lifetime or
 real-hardware performance. No test permits extending deadlines or reducing
 full source/runtime checks to make a run pass.
 
+## Independent observer deadline prerequisite (uninstalled)
+
+`supplemental_recording_service_deadline.DeadlineWatch` is a separately selected,
+read-only observer library. It captures one original live `ObserverClock` before
+mutation and retains its own duplicates of the helper pidfd and proven time
+namespace descriptors. It arms a one-shot absolute `CLOCK_BOOTTIME` timer at the
+**original** plan's recovery deadline. Closing or losing the startup comparison
+does not close these duplicates or reset the timer. The old startup comparator
+still refuses after its readiness deadline or helper exit; its policy has not
+been widened to accept a late helper.
+
+The continuing watch polls only retained kernel handles and its own namespace
+metadata. It does not reopen a dead helper's numeric PID, call the helper or
+Docker, or depend on service clock callbacks. The actual timer includes suspend
+time, retains readable expiry until close, and cannot be extended through this
+API. Clock-id metadata is checked because timerfds share an anonymous inode:
+an otherwise similar monotonic timer must not silently replace a BOOTTIME timer.
+The live pidfd's kernel PID is also checked during capture rather than relying
+only on the separate `/proc/PID` identity read. Failed captures consume the one
+attempt; changed timer settings, lost handles, and inconsistent metadata refuse.
+
+Tests use actual owned child processes, pidfds, namespace descriptors and
+timerfds. They freeze a harmless child, observe independent kernel expiry, and
+close/reap a child plus all startup owners before reading the retained exit.
+The short expiry fixture changes only its local test plan's timing constants;
+the runtime's fixed recovery budget is unchanged. No system suspend, distinct
+container namespace, installed source/runtime, App or scanner test is claimed.
+
+**This is not an independently supervised controller yet.** It sends no signal,
+publishes no recovery receipt, owns no normal/candidate/native exit witnesses,
+and cannot authorize a restart or establish recording success. In particular,
+kernel timer readiness does not by itself terminate a blocked observer or
+recover a service. The source-qualified outer owner still needs original
+App/native custody from before each relevant mutation, separate action consent,
+bounded execution, and journal-safe failure recovery. No existing source
+profile or command imports this watch; passive preparation stays passive.
+
+The active integration must preserve this ordering:
+
+1. Independently qualify the exact active command, full source/runtime and
+   original helper process. Do not reuse the passive command's permission.
+2. Capture the observer deadline while the original plan/clock link is live,
+   before granting any action permission. Capture failure must leave App
+   mutation unauthorized; opening another clock link is not a retry mechanism.
+3. Retain the original normal-App exit witness independently **before stop**,
+   and the actual candidate init witness **before native launch**. Before
+   recording begin, independently retain the original guardian/native/watchdog
+   witnesses and separate Engine endpoint as well. A helper's report or a
+   persisted PID alone is not this custody.
+4. Keep a single journal/dispatch owner. An independent observer cannot start a
+   competing RecoverySession or infer successful finalization from helper exit.
+   Any failure handoff needs separately verified original receipts, bounded
+   ownership transfer and fresh platform evidence; otherwise it stays review-only.
+5. Bound the observer's own execution independently. This read-only kernel watch
+   neither signals the helper nor makes a shell timeout a recovery protocol.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and native-I/O lifetime qualification.
