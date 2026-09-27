@@ -586,6 +586,52 @@ existing command/source inventory selects this observer, and no existing
 `IdleService` gains an observer or new authority by default. The optional legacy
 dispatch path remains unchanged when no observer is explicitly supplied.
 
+## Private CLI evidence exchange (uninstalled)
+
+`supplemental_recording_service_cli_channel.Link` connects the original writer's
+two dispatch observation boundaries to `CliCustody` in another process. It
+does not install, launch or authorize an active command. The separately reviewed
+launcher supplies each peer's original live process witness, original plan and
+clock, and two private directional Unix SEQPACKET endpoints. There is no public
+socket, pathname listener, reconnect or permission-file fallback.
+
+Every received datagram carries kernel sender credentials, checked against the
+retained live peer pidfd and original incarnation. A descriptor forwarded to a
+different process cannot stand in for the peer. Each side retains namespace
+handles and currently requires identical user and time namespaces; a different
+domain is refused, not inferred from similar clock readings. Borrowed channels,
+clock and process witness remain caller-owned. Closing the link releases only
+its duplicate pidfd and namespace descriptors.
+
+Requests contain a bounded canonical notice description and receipt, the exact
+plan digest, an incrementing sequence, a fresh challenge and a short absolute
+BOOTTIME interval. They do **not** carry journal paths, journal content, arbitrary
+commands or filesystem data. The observer rereads its original held journal,
+reconstructs the notice and checks its digest, then performs `CliCustody`'s
+independent capture before acknowledging. Replies bind the complete request,
+challenge and exact captured receipt. Each case permits at most eight exchanges
+(two per fixed App action); policy and original dispatcher one-use rules still
+decide which actions, if any, are allowed.
+
+Both sides retain their original two-second exchange budget and the original
+plan cutoff. The observer passes the remaining interval into `CliCustody`'s
+file/Engine checks; those checks cannot start a new two-second budget. Late,
+missing, malformed, duplicated, out-of-sequence or forwarded messages permanently
+fail that link. Unexpected descriptor messages are rejected
+and any descriptors installed by the kernel are closed. A lost reply cannot be
+retried or become success; already captured observer facts remain available
+independently. A receipt is custody evidence, **not** action permission, an exec
+exit, a finalized recording or restoration. No earlier passive preflight consent
+is used by this protocol.
+
+Tests exercise actual distinct local peer processes, anonymous datagrams, kernel
+credentials, pidfds and clocks. Observer composition additionally uses the real
+private journal and `CliCustody` with synthetic Engine/App metadata. Its journal
+publications are fixture operations, not proof of a complete deployed writer
+lifetime. Source/runtime qualification, explicit action scope, independent
+execution bounds, authenticated native Ready, and exclusive failure handoff
+remain separate requirements before selecting any active command.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and native-I/O lifetime qualification.

@@ -626,6 +626,54 @@ def test_retained_receipts_cannot_be_substituted(
         assert case.journal.machine.state.completed_executions == ()
 
 
+@pytest.mark.parametrize("deadline", [0, True, "PRIVATE", float("nan"), float("inf")])
+def test_containing_exchange_invalid_or_expired_deadline_refuses_without_engine_reads(
+    projection, prepared, tmp_path, monkeypatch, deadline
+):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        intent(case)
+        plan = case.custody.plan
+        notice = m.platform.DispatchNotice(
+            "before_create",
+            "stopping_normal",
+            plan.case,
+            plan.boot,
+            host_tests.CID,
+            None,
+            tuple(m.base.encode(e) for e in case.journal.entries),
+        )
+        requests = len(case.state.requests)
+        denied(lambda: case.cli_observer.observe(notice, deadline=deadline))
+        assert case.cli_observer.capture_failed and len(case.state.requests) == requests
+        assert not case.docker.created and not case.docker.started
+
+
+def test_containing_exchange_budget_is_never_extended(projection, prepared, tmp_path, monkeypatch):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        intent(case)
+        plan = case.custody.plan
+        notice = m.platform.DispatchNotice(
+            "before_create",
+            "stopping_normal",
+            plan.case,
+            plan.boot,
+            host_tests.CID,
+            None,
+            tuple(m.base.encode(e) for e in case.journal.entries),
+        )
+        end = time.monotonic() + 0.5
+        seen = []
+        original = case.cli_observer._get
+
+        def get(path, cutoff):
+            seen.append(cutoff)
+            return original(path, cutoff)
+
+        monkeypatch.setattr(case.cli_observer, "_get", get)
+        assert case.cli_observer.observe(notice, deadline=end) == notice.receipt
+        assert seen and all(cutoff == end for cutoff in seen)
+
+
 def test_readonly_directory_in_separate_process_never_shares_writer_lock(tmp_path):
     from . import test_supplemental_recording_bootstrap as bootstrap_tests
 

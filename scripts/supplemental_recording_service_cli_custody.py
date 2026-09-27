@@ -288,12 +288,17 @@ class CliCustody:
             require(value["ExitCode"] in (None, 0))
         return Execution(binding, state, code, base.checksum(value))
 
-    def observe(self, notice):
+    def observe(self, notice, *, deadline=None):
         acquired = False
         try:
             require(self.lock.acquire(blocking=False))
             acquired = True
             end = time.monotonic() + 2
+            if deadline is not None:
+                # A containing evidence exchange can only shorten this budget.
+                # Never grant a fresh interval after its transport consumed time.
+                base.clock(deadline)
+                end = min(end, deadline)
             status = self._endpoint(end)
             require(not self.capture_failed and not self.inspection_failed)
             require(not status.deadline.helper_exited)
