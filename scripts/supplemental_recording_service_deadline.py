@@ -35,6 +35,34 @@ def require(value):
         raise UnconfirmedDeadline(MESSAGE)
 
 
+def timerfd_available():
+    """API presence only, not runtime qualification or a usable kernel timer.
+
+    Python exposes these Linux APIs starting in 3.13. Other product runtimes
+    remain supported; this uninstalled observer must refuse without a timer,
+    not replace BOOTTIME with sleeps or a suspend-insensitive clock.
+    """
+    return (
+        all(
+            callable(getattr(os, name, None))
+            for name in (
+                "timerfd_create",
+                "timerfd_settime_ns",
+                "timerfd_gettime_ns",
+            )
+        )
+        and all(
+            type(getattr(os, name, None)) is int
+            for name in (
+                "TFD_CLOEXEC",
+                "TFD_NONBLOCK",
+                "TFD_TIMER_ABSTIME",
+            )
+        )
+        and type(getattr(time, "CLOCK_BOOTTIME", None)) is int
+    )
+
+
 def _identity(fd):
     value = os.fstat(fd)
     return value.st_dev, value.st_ino, value.st_mode
@@ -117,6 +145,9 @@ class DeadlineWatch:
     def __init__(self, link):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.closed = False
+        # The separately selected observer may retain the original App init
+        # processes once. This is not action permission or recovery authority.
+        self.app_custody_attempted = False
         self._owned = []
         self._original_owned = self._owned
         self._resources = None
@@ -127,6 +158,7 @@ class DeadlineWatch:
             link.read()
             require(link.deadline_capture_attempted is False)
             link.deadline_capture_attempted = True
+            require(timerfd_available())
             require(time.monotonic() < end)
             self.plan, self.target = link.plan, link.target
             self._target_identity = (

@@ -388,6 +388,14 @@ App/native custody from before each relevant mutation, separate action consent,
 bounded execution, and journal-safe failure recovery. No existing source
 profile or command imports this watch; passive preparation stays passive.
 
+This optional observer requires Linux's Python 3.13+ `os.timerfd_*` APIs;
+their presence alone is not installed-runtime qualification. Missing support
+consumes the capture attempt and refuses before descriptor acquisition. It
+never substitutes a sleep, MONOTONIC clock, or weaker timeout. Actual timerfd
+tests are capability-gated; missing-API refusal tests still run on supported
+Linux Python 3.11/3.12. The product's `>=3.11` requirement and CI matrix are
+unchanged. See the [Python timer file descriptor documentation](https://docs.python.org/3/library/os.html#timer-file-descriptors).
+
 The active integration must preserve this ordering:
 
 1. Independently qualify the exact active command, full source/runtime and
@@ -406,6 +414,56 @@ The active integration must preserve this ordering:
    ownership transfer and fresh platform evidence; otherwise it stays review-only.
 5. Bound the observer's own execution independently. This read-only kernel watch
    neither signals the helper nor makes a shell timeout a recovery protocol.
+
+## Independent original App process custody prerequisite (uninstalled)
+
+`supplemental_recording_service_app_custody.AppCustody` adds a separate,
+observer-owned normal/candidate init-process watch alongside the original
+`DeadlineWatch`. It is not selected by any command or source inventory.
+The observer must have its own separately authenticated Engine endpoint and
+independently qualified host PID/cgroup view; transport credentials are not
+source, configuration, or action authorization.
+Original PID, child-PID, cgroup, and mount namespace descriptors are retained
+and rechecked; namespace changes cannot silently adopt a different process view.
+
+Construction consumes one capture slot on the original deadline watch and
+captures the normal App's plan-pinned generation **before stop**. Two fixed,
+bounded, read-only Engine inspections bracket the actual live process identity
+and pidfd acquisition. Kernel pidfd metadata verifies that the handle really
+names that process. Changed generation/image/name, a wrong-process handle,
+helper exit during capture, and partial acquisition refuse without adoption.
+
+The subsequent candidate capture is one-use and requires the original normal
+pidfd to be readable, the helper still alive, and the original readiness cutoff
+still in the future. The supplied candidate-generation expectation is checked
+against both independent Engine reads; a numeric PID or caller claim alone is
+not evidence. Original normal, helper, and candidate containers must remain
+distinct. A failed candidate capture cannot be retried and does not discard
+the retained normal evidence. An uncaptured candidate remains **unknown**, not
+exited. Readiness and recovery deadlines are never renewed.
+
+Once captured, polling uses only retained kernel handles and the original
+deadline watch. It does not contact Engine, repoll startup, reopen an App PID,
+or replace an expired owner. Helper/Engine loss and even hard-deadline expiry
+do not prevent read-only observation of previously retained exits. Explicit
+cleanup releases only the custody object's own pidfds, not the borrowed
+deadline watch or Engine endpoint, and sends no signal.
+
+Local tests use real owned subprocesses, pidfds, namespace handles, timerfds,
+and a real credential-checked Unix socket. Docker responses and cgroup
+membership are synthetic. They cover changed first/final inspections, capture
+races, wrong pidfds, missing processes, interrupts/partial acquisition,
+descriptor substitution, foreign ownership, and continued observation after
+original startup/Engine cleanup. These are not installed App/native tests.
+
+This prerequisite does **not** gate the existing dispatcher, authenticate an
+action grant, retain native worker or CLI execution custody, transfer a journal
+lock, or start recovery. Init exit is not worker exit, absence of a replacement
+App, recording completion, or restoration. A future active integration must
+join these captures to its mutation gates and preserve a single journal/dispatch
+owner. It must not reconstruct a new recovery session merely because these
+read-only handles report an exit. Independent bounds on the observer itself
+also remain required.
 
 ## Remaining gates before a human scanner/audio test
 

@@ -30,6 +30,9 @@ m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 prepared = clock_tests.prepared
+pytestmark = pytest.mark.skipif(
+    not m.timerfd_available(), reason="Actual Linux timerfd custody requires Python 3.13+ APIs"
+)
 
 
 def denied(action):
