@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1] / "scripts"
 for name in (
     "supplemental_handoff_policy",
     "supplemental_handoff_executor",
+    "supplemental_handoff_process",
     "supplemental_handoff_host",
 ):
     if name not in sys.modules:

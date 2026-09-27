@@ -286,6 +286,41 @@ def capture_both(case):
     return observer
 
 
+def test_expired_containing_exchange_cannot_start_a_fresh_capture_budget(case):
+    observer = case.create()
+    exit_normal(case)
+    requests = len(case.state.requests)
+    denied(
+        lambda: observer.capture_candidate(
+            case.generations[m.CANDIDATE], deadline=time.monotonic() - 1
+        )
+    )
+    assert len(case.state.requests) == requests
+    status = observer.poll()
+    assert status.normal_exited and status.capture_failed and status.candidate is None
+    denied(lambda: observer.capture_candidate(case.generations[m.CANDIDATE]))
+    assert len(case.state.requests) == requests
+
+
+@pytest.mark.parametrize("seconds", [1, 100])
+def test_containing_exchange_can_only_shorten_capture_budget(case, monkeypatch, seconds):
+    observer = case.create()
+    exit_normal(case)
+    capture, limits = observer._capture, []
+    started = time.monotonic()
+    deadline = started + seconds
+
+    def bounded(slug, expected, end):
+        assert end <= deadline and end <= time.monotonic() + m.MAX_SECONDS
+        assert end < started + m.MAX_SECONDS + 0.1
+        limits.append(end)
+        return capture(slug, expected, end)
+
+    monkeypatch.setattr(observer, "_capture", bounded)
+    captured = observer.capture_candidate(case.generations[m.CANDIDATE], deadline=deadline)
+    assert len(limits) == 1 and captured is observer.poll().candidate
+
+
 @pytest.mark.parametrize("sender", [False, True])
 def test_actual_original_generations_and_pidfds_survive_full_borrowed_cleanup(
     prepared, tmp_path, monkeypatch, sender

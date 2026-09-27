@@ -14,6 +14,7 @@ independent supervision and recovery integration.
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
+| Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
 | Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
 | Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
@@ -129,6 +130,43 @@ substitution cannot redirect cleanup to a replacement reader. Startup and the
 service's borrowed original objects remain caller-owned.
 
 ### Explicit service-to-native handoff
+
+An optional `candidate_observer` is selected and pinned when the original
+`AppService` is constructed. Assembly does not invoke it. The explicit native
+handoff consumes its one observation slot under the existing inbox lock,
+**before** retiring idle ownership and before publishing native launch inputs.
+The exact plan, candidate generation/process and journal prefix are bound to
+the receipt. Original candidate, callback, clock, history and prepared ledger
+are rechecked before publication. A missing/wrong/late reply retires the idle
+path into an uncertain native phase without publishing or launching; the same
+session can still expire. It cannot retry or silently return to idle.
+
+The original authenticated `Link` can supply this callback via
+`observe_candidate`; the observer explicitly calls `acknowledge_candidate` on
+its original `CliCustody`. This has a distinct message kind and one slot, only
+after the first four CLI exchanges. It does not enlarge the eight CLI-exchange
+limit or allow a CLI receipt to acknowledge candidate capture. Both sides retain
+the original peer, plan, clock, credentials, nonce and digest checks. The
+unchanged two-second exchange budget is additionally capped by the original
+readiness deadline; nested candidate capture inherits the remaining budget.
+
+The observer reconstructs the journal from its independently held directory,
+requires a candidate-idle history with no native launch/recording intent, and
+requires its own terminal metadata for both initial commands. The journal's
+candidate identity must agree with two independent Engine reads and the newly
+retained live candidate pidfd. No journal write, command, Ready or recording
+authorization follows from that observation. Lost reply leaves any acquired
+handles available for factual observation, including after writer loss, but
+does not permit a second capture or replacement RecoverySession.
+
+Separate-process tests exercise this exchange between the actual original
+writer/observer, interleaved with all eight CLI boundaries. App/native metadata
+and operations remain synthetic. Complementary original App-driver tests cover
+the pre-publication hook through all three recovery routes, using explicitly
+synthetic callback receipts. This is not yet a single installed end-to-end
+native lifetime. The active launcher must require this selection together with
+separate action scope, qualified runtimes, native-worker custody and authenticated
+Ready; optional development callbacks cannot substitute for those gates.
 
 `AppService` reserves one unused original `IdleService` inside the accepted
 Startup lifetime. Construction is passive. Its one top-level loop initially
@@ -474,7 +512,7 @@ The active integration must preserve this ordering:
 
 `supplemental_recording_service_app_custody.AppCustody` adds a separate,
 observer-owned normal/candidate init-process watch alongside the original
-`DeadlineWatch`. It is not selected by any command or source inventory.
+`DeadlineWatch`. The joint source inventory includes it; no command selects it.
 The observer must have its own separately authenticated Engine endpoint and
 independently qualified host PID/cgroup view; transport credentials are not
 source, configuration, or action authorization.
@@ -511,12 +549,12 @@ races, wrong pidfds, missing processes, interrupts/partial acquisition,
 descriptor substitution, foreign ownership, and continued observation after
 original startup/Engine cleanup. These are not installed App/native tests.
 
-This prerequisite does **not** gate the existing dispatcher, authenticate an
+The explicit candidate exchange above joins capture to the App driver's native
+publication boundary. This prerequisite does **not** authenticate an
 action grant, retain native worker or CLI execution custody, transfer a journal
 lock, or start recovery. Init exit is not worker exit, absence of a replacement
-App, recording completion, or restoration. A future active integration must
-join these captures to its mutation gates and preserve a single journal/dispatch
-owner. It must not reconstruct a new recovery session merely because these
+App, recording completion, or restoration. The remaining active integration must
+preserve a single journal/dispatch owner. It must not reconstruct a new recovery session merely because these
 read-only handles report an exit. Independent bounds on the observer itself
 also remain required.
 
@@ -664,9 +702,10 @@ BOOTTIME interval. They do **not** carry journal paths, journal content, arbitra
 commands or filesystem data. The observer rereads its original held journal,
 reconstructs the notice and checks its digest, then performs `CliCustody`'s
 independent capture before acknowledging. Replies bind the complete request,
-challenge and exact captured receipt. Each case permits at most eight exchanges
-(two per fixed App action); policy and original dispatcher one-use rules still
-decide which actions, if any, are allowed.
+challenge and exact captured receipt. Each case permits at most eight CLI exchanges
+(two per fixed App action), plus the distinct one-time candidate-custody exchange
+described above. Policy and original dispatcher one-use rules still decide which
+actions, if any, are allowed.
 
 Both sides retain their original two-second exchange budget and the original
 plan cutoff. The observer passes the remaining interval into `CliCustody`'s

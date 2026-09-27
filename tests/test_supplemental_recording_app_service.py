@@ -57,9 +57,47 @@ services = candidates.direct.services
 
 
 @pytest.fixture
-def app_phase(app_candidate, monkeypatch):
+def app_phase(app_candidate, monkeypatch, request):
     s = app_candidate
-    s.driver = m.AppService(s.startup, s.service)
+    s.candidate_notices = []
+    s.candidate_fault = None
+
+    def observe_candidate(notice):
+        assert s.inbox.lock.locked() and not s.service.coordinator.finished
+        assert s.driver.candidate_observation_attempted and s.driver.native is None
+        assert not s.candidate.qualifier.native_launch_used
+        assert not s.trace and notice.plan_sha256 == s.plan.sha256
+        assert notice.process == s.witness.identity
+        assert notice.history == tuple(m.base.encode(e) for e in s.journal.entries)
+        s.candidate_notices.append(notice)
+        if s.candidate_fault == "lost":
+            raise OSError("PRIVATE lost candidate receipt")
+        if s.candidate_fault == "interrupt":
+            raise KeyboardInterrupt()
+        if s.candidate_fault == "wrong":
+            return "0" * 64
+        if s.candidate_fault == "callback":
+            s.driver.candidate_observer = None
+        if s.candidate_fault == "identity":
+            s.witness.identity = replace(
+                s.witness.identity, start_ticks=s.witness.identity.start_ticks + 1
+            )
+        if s.candidate_fault == "history":
+            s.append("finish")
+        if s.candidate_fault == "ledger":
+            s.ledger._poisoned = True
+        if s.candidate_fault == "late":
+            monotonic = m.time.monotonic
+            monkeypatch.setattr(m.time, "monotonic", lambda: monotonic() + 3)
+        return notice.receipt
+
+    s.driver = m.AppService(
+        s.startup,
+        s.service,
+        candidate_observer=observe_candidate
+        if getattr(request, "param", None) == "observed"
+        else None,
+    )
     s.fault = None
     s.trace, s.native_captures, s.recoveries = [], [], []
     s.worker_exit = s.init_exit = s.close_fault = False
@@ -269,6 +307,75 @@ def test_selected_driver_is_passive_and_reserved_once(app_phase):
     with pytest.raises(m.operator.UnconfirmedOperator):
         m.AppService(s.startup, s.service)
     assert s.service._app_driver is s.driver and not s.service.failed
+
+
+@pytest.mark.parametrize("app_phase", ["observed"], indirect=True)
+def test_independent_candidate_hook_precedes_publication_once(app_phase):
+    s = app_phase
+    assert not s.candidate_notices
+    assert run(s, lambda: start(s)).phase == "review"
+    assert len(s.candidate_notices) == 1 and s.trace.count("publication") == 1
+    assert s.trace.count("launch") == 1 and s.driver.native.confirmed
+    assert s.service.closed and not s.service.failed
+
+
+@pytest.mark.parametrize("app_phase", ["observed"], indirect=True)
+@pytest.mark.parametrize("fault", ["lost", "wrong", "history", "ledger", "late", "identity"])
+def test_missing_candidate_receipt_or_changed_inputs_prevent_publication(app_phase, fault):
+    s = app_phase
+
+    def action():
+        s.candidate_fault = fault
+        assert not start(s)
+        assert s.driver.native.uncertain and s.driver.native.used
+        assert s.driver.native.run is None and s.driver.native.operator is None
+        with pytest.raises(m.operator.UnconfirmedOperator):
+            start(s)
+
+    assert run(s, action).phase == "review"
+    assert len(s.candidate_notices) == 1 and not s.trace
+    assert not s.candidate.qualifier.native_launch_used and not s.recoveries
+    assert s.journal.machine.state.recording_outcome == "not_attempted"
+
+
+@pytest.mark.parametrize("app_phase", ["observed"], indirect=True)
+def test_changed_candidate_callback_fails_closed(app_phase):
+    s = app_phase
+
+    def action():
+        s.candidate_fault = "callback"
+        start(s)
+
+    candidates.direct.denied(lambda: run(s, action))
+    assert len(s.candidate_notices) == 1 and not s.trace
+    assert s.service.closed and s.service.failed
+    assert not s.candidate.qualifier.native_launch_used
+
+
+@pytest.mark.parametrize("app_phase", ["observed"], indirect=True)
+def test_interrupted_candidate_exchange_consumes_attempt_and_cleans_original_owner(app_phase):
+    s = app_phase
+
+    def action():
+        s.candidate_fault = "interrupt"
+        start(s)
+
+    with pytest.raises(KeyboardInterrupt):
+        run(s, action)
+    assert s.driver.candidate_observation_attempted and len(s.candidate_notices) == 1
+    assert s.service.closed and not s.service.lock.locked() and not s.trace
+    assert len(s.engine.sent) == 2 and not s.candidate.qualifier.native_launch_used
+    with pytest.raises(m.operator.UnconfirmedOperator):
+        start(s)
+
+
+@pytest.mark.parametrize("value", [False, True, 0, "callback", object()])
+def test_invalid_candidate_callback_does_not_reserve_service(app_candidate, value):
+    s = app_candidate
+    with pytest.raises(m.operator.UnconfirmedOperator):
+        m.AppService(s.startup, s.service, candidate_observer=value)
+    assert s.service._app_driver is None and not s.service.used
+    assert not s.engine.sent and not s.service.failed
 
 
 def test_direct_loop_cannot_run_a_reserved_service(app_phase):

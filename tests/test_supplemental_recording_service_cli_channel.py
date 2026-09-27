@@ -83,7 +83,8 @@ try:
             elif mode == "echo":
                 end = time.monotonic() + 2
                 request, _ = link._receive(end)
-                reply = dict(schema=1, kind=m.KIND, plan=plan.sha256, sequence=request["sequence"],
+                reply = dict(schema=1, kind=request["kind"], plan=plan.sha256,
+                    sequence=request["sequence"],
                     nonce=request["nonce"], request_sha256=m.base.checksum(request),
                     receipt=request["notice"]["receipt"])
                 fault = command.get("fault")
@@ -91,6 +92,9 @@ try:
                     reply[fault] = "f" * 64
                 elif fault == "sequence":
                     reply["sequence"] += 1
+                elif fault == "kind":
+                    reply["kind"] = (m.KIND if request["kind"] == m.CANDIDATE_KIND
+                        else m.CANDIDATE_KIND)
                 elif fault == "schema":
                     reply["schema"] = True
                 elif fault == "extra":
@@ -273,17 +277,41 @@ def test_actual_writer_peer_receipt_is_not_an_action_or_restoration(monkeypatch)
         "duplicate",
         "forwarder",
         "rights",
+        "kind",
     ],
 )
-def test_wrong_lost_replayed_or_forwarded_reply_latches_failure(monkeypatch, fault):
+@pytest.mark.parametrize("candidate", [False, True])
+def test_wrong_lost_replayed_or_forwarded_reply_latches_failure(monkeypatch, fault, candidate):
     with protocol(monkeypatch) as case:
         descriptors = set(os.listdir("/proc/self/fd"))
+        if candidate:
+            # Protocol-only counter setup; the separate-process custody suite
+            # reaches this boundary via all four actual CLI evidence exchanges.
+            case.link.sequence = case.link._sequence = 4
+            current = m.custody_module.platform.CandidateNotice(
+                case.plan.sha256, "b" * 64, case.peer.identity, (b"fixture",)
+            )
+            observe = case.link.observe_candidate
+        else:
+            current, observe = notice(case.plan), case.link.observe
         send(case.child, dict(mode="echo", fault=fault))
-        denied(lambda: case.link.observe(notice(case.plan)))
+        denied(lambda: observe(current))
         assert line(case.child) == b"sent"
-        denied(lambda: case.link.observe(notice(case.plan)))
-        assert case.link.failed and case.link.sequence == 1
+        denied(lambda: observe(current))
+        assert case.link.failed and case.link.sequence == (4 if candidate else 1)
         assert set(os.listdir("/proc/self/fd")) == descriptors
+
+
+@pytest.mark.parametrize("count", [0, 1, 2, 3, 5, 6, 7, 8])
+def test_candidate_protocol_refuses_any_other_cli_boundary(monkeypatch, count):
+    with protocol(monkeypatch) as case:
+        case.link.sequence = case.link._sequence = count
+        current = m.custody_module.platform.CandidateNotice(
+            case.plan.sha256, "b" * 64, case.peer.identity, (b"fixture",)
+        )
+        denied(lambda: case.link.observe_candidate(current))
+        assert case.link.sequence == count and not case.link.candidate_attempted
+        assert case.link.failed
 
 
 @pytest.mark.parametrize(

@@ -1,11 +1,49 @@
 """Optional dispatch observation never replaces fresh policy or one-use intent."""
 
+from dataclasses import replace
+
 import pytest
 
 from . import test_supplemental_handoff_host as old
 
 h, p = old.h, old.p
 journal = old.journal
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("plan_sha256", "bad"),
+        ("generation", True),
+        ("process", object()),
+        ("history", ()),
+        ("history", [b"x"]),
+        ("history", ("x",)),
+        ("history", (b"",)),
+        ("history", (b"x",) * 65),
+        ("history", (b"x" * (h.MAX_BYTES + 1),)),
+    ],
+)
+def test_candidate_notice_rejects_unbounded_or_wrong_evidence(field, value):
+    notice = h.CandidateNotice(
+        "a" * 64, "b" * 64, h.ProcessIdentity(123, 456, "c" * 64), (b"fixture",)
+    )
+    with pytest.raises(p.UnsafeHandoff):
+        replace(notice, **{field: value})
+
+
+def test_candidate_receipt_binds_every_field_without_becoming_an_action():
+    notice = h.CandidateNotice(
+        "a" * 64, "b" * 64, h.ProcessIdentity(123, 456, "c" * 64), (b"fixture",)
+    )
+    alternatives = (
+        replace(notice, plan_sha256="d" * 64),
+        replace(notice, generation="d" * 64),
+        replace(notice, process=replace(notice.process, start_ticks=457)),
+        replace(notice, history=(b"other",)),
+    )
+    assert all(other.receipt != notice.receipt for other in alternatives)
+    assert not isinstance(notice, p.Action)
 
 
 @pytest.mark.parametrize("stage", ["before_create", "before_start"])

@@ -15,7 +15,7 @@ import re
 import socket
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -34,6 +34,7 @@ from supplemental_handoff_policy import (
     require,
     unique,
 )
+from supplemental_handoff_process import ProcessIdentity
 
 MAX_RESPONSE = 1024 * 1024
 API = "/v1.47"
@@ -460,6 +461,35 @@ class DispatchNotice:
                 self.boot_id,
                 self.container_id,
                 self.execution_id,
+                [raw.hex() for raw in self.history],
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class CandidateNotice:
+    """Exact pre-native custody request, never consent or authenticated Ready."""
+
+    plan_sha256: str
+    generation: str
+    process: ProcessIdentity
+    history: tuple[bytes, ...]
+
+    def __post_init__(self):
+        digest(self.plan_sha256)
+        digest(self.generation)
+        require(type(self.process) is ProcessIdentity)
+        self.process.__post_init__()
+        require(type(self.history) is tuple and 0 < len(self.history) <= 64)
+        require(all(type(raw) is bytes and 0 < len(raw) <= MAX_BYTES for raw in self.history))
+
+    @property
+    def receipt(self):
+        return checksum(
+            [
+                self.plan_sha256,
+                self.generation,
+                asdict(self.process),
                 [raw.hex() for raw in self.history],
             ]
         )

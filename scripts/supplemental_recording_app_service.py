@@ -15,6 +15,7 @@ import time
 import supplemental_recording_app_candidate as candidates
 import supplemental_recording_app_execution as execution
 import supplemental_recording_app_recovery as recovery
+from supplemental_handoff_host import CandidateNotice
 
 operator = candidates.operator
 inputs, launch, require = candidates.inputs, operator.launch, operator.require
@@ -30,8 +31,9 @@ class AppService:
     Custody substitution still refuses; it is not an observation failure.
     """
 
-    def __init__(self, startup, original):
+    def __init__(self, startup, original, *, candidate_observer=None):
         require(type(self) is AppService and type(original) is operator.IdleService)
+        require(candidate_observer is None or callable(candidate_observer))
         original._context()
         require(not original.used and not original.lock.locked())
         require(original._app_driver is None and not original.candidate_attempted)
@@ -56,6 +58,7 @@ class AppService:
             original.lock,
         )
         self._cleanup = original._cleanup
+        self.candidate_observer = candidate_observer
         self.objects = (
             startup,
             original,
@@ -69,8 +72,10 @@ class AppService:
             self.inbox,
             self.lock,
             self._cleanup,
+            candidate_observer,
         )
         self.used = self.native_attempted = False
+        self.candidate_observation_attempted = False
         self.native = self._original_native = None
         self.recording_attempted = False
         self.recording = self._original_recording = None
@@ -99,6 +104,7 @@ class AppService:
                         original.inbox,
                         original.lock,
                         original._cleanup,
+                        self.candidate_observer,
                     ),
                     self.objects,
                     strict=True,
@@ -122,6 +128,7 @@ class AppService:
                         self.inbox,
                         self.lock,
                         self._cleanup,
+                        self.candidate_observer,
                     ),
                     self.objects,
                     strict=True,
@@ -155,6 +162,48 @@ class AppService:
     def _clock(self):
         self._context()
         return self.objects[1]._clock()
+
+    def _observe_candidate(self):
+        """One original callback before launch publication, under the inbox lock.
+
+        Optional for existing development compositions only. An active launcher
+        must explicitly select the authenticated independent custody exchange;
+        an arbitrary receipt is not action authority or complete supervision.
+        The service consumes the observation slot before entering here. Idle
+        ownership remains live until this check returns, then is retired even
+        when the acknowledgment was lost. Never repoll a retired idle reader.
+        """
+        self._context()
+        require(self.candidate_observation_attempted and self.native is None)
+        observer = self.candidate_observer
+        if observer is None:
+            return
+        end = time.monotonic() + 2
+        candidate = self.original.candidate
+        candidate.recheck()
+        notice = CandidateNotice(
+            self.plan.sha256,
+            candidate.record.generation,
+            candidate.witness.identity,
+            tuple(base.encode(entry) for entry in self.journal.entries),
+        )
+        receipt = notice.receipt
+        require(observer(notice) == receipt)
+        self._context()
+        require(self.candidate_observer is observer and self.original.candidate is candidate)
+        candidate.recheck()
+        require(
+            CandidateNotice(
+                self.plan.sha256,
+                candidate.record.generation,
+                candidate.witness.identity,
+                tuple(base.encode(entry) for entry in self.journal.entries),
+            )
+            == notice
+        )
+        require(notice.receipt == receipt and time.monotonic() < end)
+        require(self._clock()[1] < self.plan.deadlines.ready_by)
+        require(time.monotonic() < end)
 
     def start_recording(self):
         """Retire native cancellation BEFORE constructing the one-use AppStart.
@@ -216,18 +265,32 @@ class AppService:
         this boundary, even if publication or native acquisition fails.
         """
         self._context()
-        require(self.used and not self.native_attempted)
+        require(
+            self.used and not self.native_attempted and not self.candidate_observation_attempted
+        )
         candidate = self.original.candidate
         require(type(candidate) is candidates.AppIdleCandidate)
         candidate.recheck()
         with self.inbox.native_handoff():
             phase = AppNativePhase(self, ledger, endpoint, operator_endpoint)
             candidate.recheck()
+            self.candidate_observation_attempted = True
+            observed = False
+            try:
+                self._observe_candidate()
+                observed = True
+            except Exception:
+                pass  # Retire idle below; lost evidence never permits retry.
+            self._context()
             self.native_attempted = True
             self.coordinator.finished = True
             self.native = self._original_native = phase
             self.session.read = phase.read
-            return phase.start(specification=specification, profile_sha256=profile_sha256)
+            return phase.start(
+                specification=specification,
+                profile_sha256=profile_sha256,
+                candidate_observed=observed,
+            )
 
     def cancel_native(self):
         self._context()
@@ -427,11 +490,13 @@ class AppNativePhase(operator.NativePhase):
         else:
             require(service.session.read is self.read and self.read == self._unavailable)
 
-    def start(self, *, specification, profile_sha256):
+    def start(self, *, specification, profile_sha256, candidate_observed):
         self.service._context()
         require(not self.used)
         self.used = True
         try:
+            require(candidate_observed is True)
+            self._ledger()
             prelaunch = inputs.publish_launch(
                 self.service.startup,
                 self.candidate.qualifier,

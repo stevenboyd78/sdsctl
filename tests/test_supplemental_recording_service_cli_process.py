@@ -12,7 +12,7 @@ import os
 import subprocess
 import sys
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pytest
@@ -105,6 +105,27 @@ try:
                 mode = command["mode"]
                 if mode == "reconcile":
                     writer.reconcile_executions()
+                elif mode == "candidate":
+                    bound = journal.machine.state.processes[-1]
+                    notice = m.custody_module.platform.CandidateNotice(
+                        plan.sha256, bound.generation,
+                        m.processes.ProcessIdentity(
+                            bound.pid, bound.start_ticks, bound.container_id),
+                        tuple(m.base.encode(e) for e in journal.entries))
+                    if command.get("fault"):
+                        from dataclasses import replace
+                        fault = command["fault"]
+                        if fault == "plan":
+                            notice = replace(notice, plan_sha256="0" * 64)
+                        elif fault == "generation":
+                            notice = replace(notice, generation="0" * 64)
+                        elif fault == "identity":
+                            notice = replace(notice, process=replace(notice.process,
+                                start_ticks=notice.process.start_ticks + 1))
+                        elif fault == "history":
+                            notice = replace(notice, history=notice.history[:-1])
+                    emit(kind="candidate-boundary", receipt=notice.receipt)
+                    link.observe_candidate(notice)
                 elif mode == "retry":
                     writer(p.CONTROL[journal.machine.state.phase], plan.case)
                 elif mode == "observe":
@@ -158,6 +179,9 @@ def prepared(projection, tmp_path, monkeypatch, request):
                 str(right.outgoing.fileno()),
             ]
             kw["pass_fds"] = (right.incoming.fileno(), right.outgoing.fileno())
+            # line() waits on the pipe fd. Buffered readline can prefetch the
+            # next immediate failure result and hide it from select().
+            kw["bufsize"] = 0
         return popen(command, **kw)
 
     monkeypatch.setattr(subprocess, "Popen", start)
@@ -338,8 +362,119 @@ def complete_dispatch(case, phase):
     assert len(reconciled["completed"]) == len(case.created) == len(case.started)
 
 
-def test_separate_original_writer_and_observer_cover_all_four_fixed_commands(
+def candidate_idle(case):
+    first(case)
+    complete_dispatch(case, "stopping_normal")
+    apps.exit_normal(case)
+    plan = case.custody.plan
+    stopped = m.base.App(plan.normal.pin, "stopped")
+    request(
+        case,
+        normal=stopped,
+        events=[dict(kind="process_exited", generation=plan.normal_generation)],
+    )
+    complete_dispatch(case, "starting_candidate")
+    # Fixture writer's candidate hint, not observer acquisition. Only the new
+    # authenticated exchange may acquire the observer's candidate pidfd.
+    candidate = apps.m.Binding(
+        m.base.CANDIDATE,
+        case.generations[m.base.CANDIDATE],
+        apps.m.processes.read_identity(case.candidate.pid, case.values[m.base.CANDIDATE]["Id"]),
+    )
+    idle = m.base.App(plan.candidate.pin, "running", candidate.generation, None, None)
+    request(
+        case,
+        normal=stopped,
+        candidate=idle,
+        events=[dict(kind="bind_process", process=record(candidate))],
+    )
+    result = receive(case)
+    assert result["phase"] == "candidate_idle" and not result["failed"]
+    assert case.custody.poll().candidate is None and not case.custody.candidate_attempted
+    return result
+
+
+def test_separate_candidate_capture_acknowledges_original_process_before_native(
     prepared, projection, tmp_path, monkeypatch
+):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        before = candidate_idle(case)
+        channel.send(case.prepared.child, dict(mode="candidate"))
+        notice = receive(case)
+        assert notice["kind"] == "candidate-boundary"
+        assert case.exchange.acknowledge_candidate(case.observer) == notice["receipt"]
+        after = receive(case)
+        assert after == before  # Evidence alone never writes/launches/authorizes.
+        status = case.custody.poll()
+        assert status.candidate.process.pid == case.candidate.pid and not status.candidate_exited
+        assert status.normal_exited and not status.deadline.helper_exited
+        assert case.exchange.sequence == 4 and case.exchange.candidate_attempted
+        assert len(case.created) == len(case.started) == 2
+        case.prepared.child.stdin.close()
+        assert case.prepared.child.wait(timeout=3) == 0
+        retained = case.custody.poll()
+        assert retained.candidate == status.candidate and not retained.candidate_exited
+        assert retained.deadline.helper_exited
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "plan",
+        "generation",
+        "identity",
+        "history",
+        "exited",
+        "not_terminal",
+        "inspection_failure",
+        "lost",
+    ],
+)
+def test_candidate_capture_failure_never_allows_retry_or_new_action(
+    prepared, projection, tmp_path, monkeypatch, fault
+):
+    with setup(prepared, projection, tmp_path, monkeypatch) as case:
+        before = candidate_idle(case)
+        if fault == "exited":
+            case.candidate.stdin.close()
+            assert case.candidate.wait(timeout=3) == 0
+        elif fault == "not_terminal":
+            values = case.observer._executions
+            case.observer._retain(
+                (*values[:-1], replace(values[-1], state="running", exit_code=None))
+            )
+        elif fault == "inspection_failure":
+
+            def changed(value, count):
+                case.observer.inspection_failed = True
+                return value
+
+            case.state.hook = changed
+        elif fault == "lost":
+
+            def lost(*args):
+                raise OSError("PRIVATE lost candidate custody receipt")
+
+            monkeypatch.setattr(case.exchange, "_send", lost)
+        channel.send(case.prepared.child, dict(mode="candidate", fault=fault))
+        boundary = receive(case)
+        assert boundary["kind"] == "candidate-boundary"
+        channel.denied(lambda: case.exchange.acknowledge_candidate(case.observer))
+        result = receive(case)
+        assert result == before | dict(failed=True, link_failed=True)
+        captured = case.custody.poll().candidate
+        assert (captured is not None) is (fault in ("lost", "inspection_failure"))
+        channel.send(case.prepared.child, dict(mode="candidate"))
+        assert receive(case)["kind"] == "candidate-boundary"
+        assert receive(case) == result
+        channel.denied(lambda: case.exchange.acknowledge_candidate(case.observer))
+        assert len(case.created) == len(case.started) == 2
+        assert case.custody.poll().candidate == captured
+
+
+@pytest.mark.parametrize("observed_candidate", [False, True])
+def test_separate_original_writer_and_observer_cover_all_four_fixed_commands(
+    prepared, projection, tmp_path, monkeypatch, observed_candidate
 ):
     with setup(prepared, projection, tmp_path, monkeypatch) as case:
         # Real cross-process flock exclusion: observer has never acquired it.
@@ -356,7 +491,16 @@ def test_separate_original_writer_and_observer_cover_all_four_fixed_commands(
             events=[dict(kind="process_exited", generation=plan.normal_generation)],
         )
         complete_dispatch(case, "starting_candidate")
-        candidate = case.custody.capture_candidate(case.generations[m.base.CANDIDATE])
+        if observed_candidate:
+            candidate = apps.m.Binding(
+                m.base.CANDIDATE,
+                case.generations[m.base.CANDIDATE],
+                apps.m.processes.read_identity(
+                    case.candidate.pid, case.values[m.base.CANDIDATE]["Id"]
+                ),
+            )
+        else:
+            candidate = case.custody.capture_candidate(case.generations[m.base.CANDIDATE])
         idle = m.base.App(plan.candidate.pin, "running", candidate.generation, None, None)
         request(
             case,
@@ -366,6 +510,13 @@ def test_separate_original_writer_and_observer_cover_all_four_fixed_commands(
         )
         result = receive(case)
         assert result["phase"] == "candidate_idle" and not result["failed"]
+        if observed_candidate:
+            channel.send(case.prepared.child, dict(mode="candidate"))
+            boundary = receive(case)
+            assert boundary["kind"] == "candidate-boundary"
+            assert case.exchange.acknowledge_candidate(case.observer) == boundary["receipt"]
+            assert receive(case) == result
+            assert case.custody.poll().candidate == candidate
         request(case, normal=stopped, candidate=idle, events=[dict(kind="finish")])
         complete_dispatch(case, "stopping_candidate")
         case.candidate.stdin.close()
@@ -378,6 +529,7 @@ def test_separate_original_writer_and_observer_cover_all_four_fixed_commands(
         complete_dispatch(case, "starting_normal")
         assert [phase for phase, _ in case.created] == list(old.m.platform.CONTROL)
         assert case.exchange.sequence == 8 and not case.exchange.failed
+        assert case.exchange.candidate_attempted is observed_candidate
         assert len({e.binding.execution_id for e in case.observer.poll().executions}) == 4
         # The fixture has not restored an App; no fabricated success is asserted.
         assert len(case.started) == 4

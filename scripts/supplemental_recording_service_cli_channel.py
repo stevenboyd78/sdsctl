@@ -31,6 +31,7 @@ processes, clock = custody_module.apps.processes, plans.clock
 Channels = control.Channels
 MAX_BYTES, MAX_EXCHANGES, EXCHANGE_SECONDS, ROOT_UID = 2048, 8, 2, 0
 KIND = "finite-recording-cli-evidence-v1"
+CANDIDATE_KIND = "finite-recording-candidate-custody-v1"
 MESSAGE = "App command evidence exchange is unconfirmed; preserve the case and do not retry."
 
 
@@ -89,6 +90,17 @@ def _decode(raw):
     return value
 
 
+def _candidate_notice(notice):
+    require(type(notice) is custody_module.platform.CandidateNotice)
+    notice.__post_init__()
+    return dict(
+        plan_sha256=notice.plan_sha256,
+        generation=notice.generation,
+        process=asdict(notice.process),
+        receipt=notice.receipt,
+    )
+
+
 def _hard_ns(plan):
     return int(
         (Decimal(plan.deadlines.recover_by) * clock.NS).to_integral_value(rounding=ROUND_FLOOR)
@@ -117,6 +129,7 @@ class Link:
         self._peer_handle = None
         self.sequence = 0
         self._sequence = 0
+        self.candidate_attempted = self._candidate_attempted = False
         try:
             require(type(self) is Link and self.owner[2] == ROOT_UID)
             require(role in ("writer", "observer") and type(role) is str)
@@ -182,6 +195,10 @@ class Link:
             )
         )
         require(type(self.sequence) is int and self.sequence == self._sequence <= MAX_EXCHANGES)
+        require(
+            type(self.candidate_attempted) is bool
+            and self.candidate_attempted is self._candidate_attempted
+        )
         if hasattr(self, "_pins"):
             require(self._values() == self._pins)
         self.pin.check(self.plan)
@@ -270,14 +287,18 @@ class Link:
         self._quiet()
         return value, raw
 
-    def _enter(self, role):
+    def _enter(self, role, *, candidate=False):
         require(self.lock.acquire(blocking=False))
         try:
             end = time.monotonic() + EXCHANGE_SECONDS
             self._guard(end)
             require(self.role == role and self.sequence < MAX_EXCHANGES)
-            self.sequence += 1
-            self._sequence = self.sequence
+            if candidate:
+                require(self.sequence == 4 and not self.candidate_attempted)
+                self.candidate_attempted = self._candidate_attempted = True
+            else:
+                self.sequence += 1
+                self._sequence = self.sequence
             return end
         except BaseException:
             self.lock.release()
@@ -285,18 +306,33 @@ class Link:
 
     def observe(self, notice):
         """Original writer callback: request evidence, never issue any action."""
+        return self._observe(notice, candidate=False)
+
+    def observe_candidate(self, notice):
+        """One separate pre-native exchange after the two initial CLI commands."""
+        return self._observe(notice, candidate=True)
+
+    def _observe(self, notice, *, candidate):
         entered = False
         try:
-            end = self._enter("writer")
+            end = self._enter("writer", candidate=candidate)
             entered = True
             self._quiet()
-            fields = _notice(notice)
-            require((notice.case_id, notice.boot_id) == (self.plan.case, self.plan.boot))
+            kind = CANDIDATE_KIND if candidate else KIND
+            codec = _candidate_notice if candidate else _notice
+            fields = codec(notice)
+            if candidate:
+                require(notice.plan_sha256 == self.plan_sha256)
+            else:
+                require((notice.case_id, notice.boot_id) == (self.plan.case, self.plan.boot))
             issued = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
             until = min(issued + EXCHANGE_SECONDS * clock.NS, _hard_ns(self.plan))
+            if candidate:
+                until = min(until, int(Decimal(self.plan.deadlines.ready_by) * clock.NS))
+            require(issued < until)
             request = dict(
                 schema=1,
-                kind=KIND,
+                kind=kind,
                 plan=self.plan_sha256,
                 sequence=self.sequence,
                 nonce=secrets.token_hex(32),
@@ -308,7 +344,7 @@ class Link:
             reply, _ = self._receive(end)
             expected = dict(
                 schema=1,
-                kind=KIND,
+                kind=kind,
                 plan=self.plan_sha256,
                 sequence=self.sequence,
                 nonce=request["nonce"],
@@ -316,7 +352,7 @@ class Link:
                 receipt=fields["receipt"],
             )
             require(base.encode(reply) == base.encode(expected))
-            require(base.encode(request) == raw and _notice(notice) == fields)
+            require(base.encode(request) == raw and codec(notice) == fields)
             self._guard(end)
             require(time.clock_gettime_ns(time.CLOCK_BOOTTIME) < until)
             return fields["receipt"]
@@ -332,13 +368,25 @@ class Link:
         Lost reply leaves the retained custody factual but the link unusable.
         This never appends a journal, transfers ownership or dispatches an exec.
         """
+        return self._acknowledge(custody, candidate=False)
+
+    def acknowledge_candidate(self, custody):
+        """Capture candidate through independent original CLI/App custody.
+
+        Uses a distinct message kind and one slot, not another CLI receipt or
+        native Ready. Lost replies preserve captured handles but never retry.
+        """
+        return self._acknowledge(custody, candidate=True)
+
+    def _acknowledge(self, custody, *, candidate):
         entered = False
         try:
-            end = self._enter("observer")
+            end = self._enter("observer", candidate=candidate)
             entered = True
             require(type(custody) is custody_module.CliCustody and custody.plan is self.plan)
             require(custody.custody.watch.target == self._peer.identity)
             request, _ = self._receive(end)
+            kind = CANDIDATE_KIND if candidate else KIND
             plans.mapping(
                 request,
                 {"schema", "kind", "plan", "sequence", "nonce", "notice", "issued_ns", "until_ns"},
@@ -346,7 +394,7 @@ class Link:
             require(
                 type(request["schema"]) is int
                 and request["schema"] == 1
-                and request["kind"] == KIND
+                and request["kind"] == kind
             )
             require(type(request["sequence"]) is int and request["sequence"] == self.sequence)
             require(request["plan"] == self.plan_sha256)
@@ -359,10 +407,25 @@ class Link:
             )
             now = time.clock_gettime_ns(time.CLOCK_BOOTTIME)
             require(issued <= now < until <= _hard_ns(self.plan))
+            if candidate:
+                require(until <= int(Decimal(self.plan.deadlines.ready_by) * clock.NS))
             end = min(end, time.monotonic() + (until - now) / clock.NS)
+            keys = (
+                {"plan_sha256", "generation", "process", "receipt"}
+                if candidate
+                else {
+                    "stage",
+                    "phase",
+                    "case_id",
+                    "boot_id",
+                    "container_id",
+                    "execution_id",
+                    "receipt",
+                }
+            )
             fields = plans.mapping(
                 request["notice"],
-                {"stage", "phase", "case_id", "boot_id", "container_id", "execution_id", "receipt"},
+                keys,
             )
             base.digest(fields["receipt"])
             # Never accept serialized journal bytes, paths, or actions from the
@@ -373,18 +436,30 @@ class Link:
             )
             require(not custody.capture_failed and not custody.inspection_failed)
             snapshot = custody._history.read(end)
-            notice = custody_module.platform.DispatchNotice(
-                **{key: value for key, value in fields.items() if key != "receipt"},
-                history=tuple(raw for _, raw in snapshot),
-            )
-            require(_notice(notice) == fields)
-            require(custody.observe(notice, deadline=end) == fields["receipt"])
+            history = tuple(raw for _, raw in snapshot)
+            if candidate:
+                process = plans.mapping(fields["process"], {"pid", "start_ticks", "container_id"})
+                notice = custody_module.platform.CandidateNotice(
+                    fields["plan_sha256"],
+                    fields["generation"],
+                    processes.ProcessIdentity(**process),
+                    history,
+                )
+                require(_candidate_notice(notice) == fields)
+                require(custody.observe_candidate(notice, deadline=end) == fields["receipt"])
+            else:
+                notice = custody_module.platform.DispatchNotice(
+                    **{key: value for key, value in fields.items() if key != "receipt"},
+                    history=history,
+                )
+                require(_notice(notice) == fields)
+                require(custody.observe(notice, deadline=end) == fields["receipt"])
             self._guard(end)
             require(time.clock_gettime_ns(time.CLOCK_BOOTTIME) < until)
             self._quiet()
             reply = dict(
                 schema=1,
-                kind=KIND,
+                kind=kind,
                 plan=self.plan_sha256,
                 sequence=self.sequence,
                 nonce=request["nonce"],

@@ -240,11 +240,14 @@ class AppCustody:
                     require(deadlines._identity(fd) == fd_identity)
                     os.close(fd)
 
-    def capture_candidate(self, expected_generation):
+    def capture_candidate(self, expected_generation, *, deadline=None):
         """One pre-native capture, never a candidate start or action permit."""
         acquired = False
         try:
             end = time.monotonic() + MAX_SECONDS
+            if deadline is not None:
+                deadlines.links.plans.base.clock(deadline)
+                end = min(end, deadline)
             require(self.lock.acquire(blocking=False))
             acquired = True
             self._capture_guard(end)

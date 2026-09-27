@@ -64,6 +64,7 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
     s = launch_case
     s.startup.original = s.case_plan
     s.dispatch_notices = []
+    s.candidate_notices = []
 
     def observe(notice):
         # Test-only receipt, not independent CLI/App custody. The real peer
@@ -75,6 +76,17 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
         return notice.receipt
 
     observer = observe if getattr(request, "param", None) == "observed" else None
+
+    def observe_candidate(notice):
+        # Synthetic receipt at the real pre-publication phase, not an actual
+        # separate observer or installed-native qualification in this fixture.
+        assert not s.driver.native_attempted and s.driver.native is None
+        assert s.service.inbox.lock.locked() and s.candidate_owner is s.service.candidate
+        assert notice.process == s.candidate_owner.witness.identity
+        assert notice.history == tuple(base.encode(item) for item in s.journal.entries)
+        s.candidate_notices.append(notice)
+        return notice.receipt
+
     with ExitStack() as cleanup:
 
         @contextmanager
@@ -104,7 +116,11 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
                     dispatch_observer=observer,
                 )
                 cleanup.callback(s.service.close)
-            s.driver = m.AppService(s.startup, s.service)
+            s.driver = m.AppService(
+                s.startup,
+                s.service,
+                candidate_observer=observe_candidate if observer is not None else None,
+            )
             s.session = s.service.session
             s.original_owners = (
                 s.session,

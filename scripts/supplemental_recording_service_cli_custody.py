@@ -203,6 +203,7 @@ class CliCustody:
         self._pending_receipt = None
         self._original_executions, self._execution_bytes = self._executions, ()
         self._snapshot = ()
+        self._candidate_attempted = False
         acquired = False
         try:
             end = time.monotonic() + 2
@@ -421,6 +422,80 @@ class CliCustody:
             )
         except BaseException as error:
             self.inspection_failed = True
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def observe_candidate(self, notice, *, deadline):
+        """Retain original candidate before native publication, exactly once.
+
+        The caller authenticates the original peer and remaining exchange budget.
+        Both initial commands must already have independently observed terminal
+        metadata. The original journal must still be candidate-idle, with no
+        launch or recording intent. These facts are not Ready or action consent.
+        """
+        acquired = False
+        try:
+            require(self.lock.acquire(blocking=False))
+            acquired = True
+            base.clock(deadline)
+            end = min(time.monotonic() + 2, deadline)
+            require(not self._candidate_attempted)
+            self._candidate_attempted = True
+            status = self._endpoint(end)
+            require(not status.deadline.helper_exited)
+            require(not self.capture_failed and not self.inspection_failed)
+            require(type(notice) is platform.CandidateNotice)
+            notice.__post_init__()
+            require(notice.plan_sha256 == self.plan.sha256 and self._pending is None)
+            require(tuple(e.binding.phase for e in self._executions) == tuple(platform.CONTROL)[:2])
+            require(all(e.state == "not_running" and e.exit_code == 0 for e in self._executions))
+            receipt = notice.receipt
+            snapshot = self._history.read(end)
+            require(snapshot[: len(self._snapshot)] == self._snapshot)
+            require(tuple(raw for _, raw in snapshot) == notice.history)
+            machine, action = _replay(snapshot, self.plan, self.projected, end)
+            require(action is None and machine.state.phase == "candidate_idle")
+            require(
+                not machine.state.finish_requested and machine.state.launch_intent_sha256 is None
+            )
+            require(
+                machine.state.executions
+                == tuple(
+                    (e.binding.phase, e.binding.container_id, e.binding.execution_id)
+                    for e in self._executions
+                )
+            )
+            require(
+                machine.state.completed_executions
+                == tuple((e.binding.execution_id, e.exit_code) for e in self._executions)
+            )
+            require(machine.process_bound(base.NORMAL, exited=True))
+            require(machine.process_bound(base.CANDIDATE, exited=False))
+            cutoff = min(machine.state.deadline, self.plan.deadlines.ready_by)
+            now = time.clock_gettime_ns(time.CLOCK_BOOTTIME) / 1_000_000_000
+            require(machine.last_at <= now < cutoff)
+            expected = base.ProcessRecord(
+                base.CANDIDATE,
+                notice.generation,
+                notice.process.container_id,
+                notice.process.pid,
+                notice.process.start_ticks,
+            )
+            require(expected in machine.state.processes)
+            captured = self.custody.capture_candidate(notice.generation, deadline=end)
+            require(captured.process == notice.process)
+            require(snapshot == self._history.read(end) and notice.receipt == receipt)
+            status = self._endpoint(end)
+            require(not self.capture_failed and not self.inspection_failed)
+            require(not status.deadline.helper_exited and status.candidate_exited is False)
+            require(not status.capture_failed)
+            require(time.clock_gettime_ns(time.CLOCK_BOOTTIME) / 1_000_000_000 < cutoff)
+            self._snapshot = snapshot
+            return receipt
+        except BaseException as error:
+            self.capture_failed = True
             self._fail(error)
         finally:
             if acquired:
