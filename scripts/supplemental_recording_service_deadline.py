@@ -5,7 +5,7 @@ Capture once from the original LIVE ObserverClock before any App mutation.
 Retained namespace/pidfd handles and an absolute CLOCK_BOOTTIME timer survive
 helper exit, a frozen helper, or closure of the startup comparison. No signal,
 App action, journal publication, process discovery, launch or restoration is
-provided. No installed command or helper-source profile selects this library.
+provided. A separate joint inventory names this library; no command selects it.
 The separate observer must itself have independently qualified provenance.
 """
 

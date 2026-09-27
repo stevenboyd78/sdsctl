@@ -5,6 +5,7 @@ metadata and cgroup membership are synthetic. No source/runtime admission,
 App dispatch, native lifetime, journal failover or installed recovery is claimed.
 """
 
+import ast
 import importlib.util
 import json
 import os
@@ -94,6 +95,7 @@ def server(
     authenticated=True,
     executions=None,
     containers=None,
+    request_handler=None,
 ):
     path = tmp_path / "engine.sock"
     tmp_path.chmod(0o700)
@@ -126,6 +128,8 @@ def server(
                 if request is None:
                     continue
                 state.requests.append(request)
+                if request_handler is not None and request_handler(peer, request):
+                    continue
                 assert request[2] is None
                 paths = {
                     f"GET /v1.47/containers/app_{slug}/json HTTP/1.1": value
@@ -184,6 +188,7 @@ def setup(
     short=False,
     executions=None,
     containers=None,
+    request_handler=None,
 ):
     with child() as normal, child() as candidate:
         values = {
@@ -224,6 +229,7 @@ def setup(
                     authenticated=authenticated,
                     executions=executions,
                     containers=containers,
+                    request_handler=request_handler,
                 ) as (endpoint, state):
                     case = SimpleNamespace(
                         link=link,
@@ -710,7 +716,18 @@ def test_close_does_not_stop_children_or_close_borrowed_watch_or_endpoint(case):
     denied(case.create)
 
 
-def test_existing_commands_and_source_profiles_do_not_select_custody_library():
+def test_only_explicit_readonly_joint_inventory_names_custody_library():
     root = Path(m.__file__).parent
     for path in (*root.glob("*source*.py"), *root.glob("supplemental_recording*command.py")):
-        assert NAME not in path.read_text(), path.name
+        text = path.read_text()
+        if path.name == "supplemental_recording_service_host_source.py":
+            assert f'"{NAME}"' in text
+            imports = set()
+            for node in ast.walk(ast.parse(text)):
+                if isinstance(node, ast.Import):
+                    imports.update(alias.name for alias in node.names)
+                elif isinstance(node, ast.ImportFrom):
+                    imports.add(node.module)
+            assert imports == {"__future__", "supplemental_recording_app_host_source"}
+        else:
+            assert NAME not in text, path.name

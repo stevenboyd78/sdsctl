@@ -50,7 +50,7 @@ def read_request(peer):
         assert len(header) <= m.MAX_HEADER
     lines = header.decode().split("\r\n")
     headers = dict(line.split(": ", 1) for line in lines[1:] if line)
-    body = attached.exact(peer, int(headers["Content-Length"]))
+    body = attached.exact(peer, int(headers.get("Content-Length", "0")))
     return lines[0], headers, json.loads(body) if body else None
 
 

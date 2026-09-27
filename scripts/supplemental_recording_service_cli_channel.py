@@ -4,8 +4,8 @@
 Two anonymous directional SEQPACKET pairs bind every message to the original
 live peer's kernel credentials. Only a compact notice digest crosses the link;
 the observer independently reads the retained journal and inspects Engine.
-No source inventory or command selects this uninstalled library. The qualified
-launcher must establish both peers, one writer, explicit action consent and
+The joint read-only source inventory includes this library; no command selects
+it. The qualified launcher must establish both peers, one writer, action consent and
 independently bounded lifetimes. No preflight permission is consumed or reused.
 """
 

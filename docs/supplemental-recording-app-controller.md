@@ -12,6 +12,7 @@ independent supervision and recovery integration.
 | Phase | Explicit owner | Evidence retained |
 | --- | --- | --- |
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
+| Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
 | Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
 | Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
@@ -50,6 +51,25 @@ only. Controller imports additionally require PySerial through scanner transport
 code; the test explicitly distinguishes this requirement from the deferred native
 imports. This is a local dependency observation, not a pinned installed image,
 a dependency integrity check, or independent supervision. Those gates remain.
+
+`supplemental_recording_service_host_source.Layout` now names the joint
+controller/observer graph under a different digest kind. The closed 90-module
+bundle adds the deadline watch, original App/native/CLI custody, private evidence
+channel and its control dependency. Its inventory is also standard-library-only
+and hashes the complete product tree without executing observed source. The
+older 83-module controller profile and all four legacy profiles remain unchanged
+and refuse this larger bundle. It does not include the passive permission or
+preparation commands and cannot turn their consent into active action scope.
+
+Isolated local import tests cover all joint roots and the complete graph, both
+with PySerial available and with that dependency deliberately refused. The
+inventory needs no PySerial; the controller requires it. Missing Linux timerfd
+APIs are tested separately: imports remain passive, while deadline-watch
+availability refuses. This API-absence simulation is not a test run on an older
+Python interpreter. The planned installed runtime still requires an independently
+authenticated complete interpreter/loader/package inventory, a supported kernel,
+original process binding and separately measured bounds; source hashes and local
+imports do not establish any of those facts.
 
 ### Read-only service preparation
 
@@ -626,9 +646,24 @@ is used by this protocol.
 
 Tests exercise actual distinct local peer processes, anonymous datagrams, kernel
 credentials, pidfds and clocks. Observer composition additionally uses the real
-private journal and `CliCustody` with synthetic Engine/App metadata. Its journal
-publications are fixture operations, not proof of a complete deployed writer
-lifetime. Source/runtime qualification, explicit action scope, independent
+private journal and `CliCustody` with synthetic Engine/App metadata. The original
+channel tests publish journal events in the parent fixture. A separate process
+composition test now has the **child exclusively own the real Journal and
+TrackedDispatch**, using the actual fixed Docker Unix-HTTP adapter against a
+private synthetic server. The parent neither publishes journal entries nor
+shares the writer lock. It independently retains custody and acknowledges over
+the original private link. All four fixed App-command transitions complete
+through the same writer/observer pair and eight evidence exchanges. Command
+bodies and ordering are asserted at the test server; no App commands execute.
+
+Cross-process faults cover lost replies at both dispatch boundaries and changed
+CLI generation/created-exec state after custody capture but before acknowledgment.
+The original writer refuses start and retry despite a valid evidence receipt.
+After an uncertain exchange and writer exit, the observer retains the original
+pending/created facts without opening a replacement journal or acquiring its
+vacated lock. This is not active-command admission, native recording, App
+restoration, independent termination, or installed lifetime qualification.
+Source/runtime qualification, explicit action scope, independent
 execution bounds, authenticated native Ready, and exclusive failure handoff
 remain separate requirements before selecting any active command.
 

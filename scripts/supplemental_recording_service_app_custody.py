@@ -4,7 +4,7 @@
 Capture the normal App before stopping it, then the actual candidate before
 native launch. Both reads use the observer's separately authenticated Engine
 endpoint. Polling survives helper/Engine loss without reconstructing processes
-from numeric PIDs. No installed command or source profile selects this library.
+from numeric PIDs. A joint inventory names this library; no command selects it.
 """
 
 from __future__ import annotations
