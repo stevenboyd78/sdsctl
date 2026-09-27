@@ -82,6 +82,18 @@ def composed(joined, monkeypatch, phase_session):
     native.ledger_state = s.ledger.state
     native.ledger_identity, native.ledger_lock = s.ledger._directory_identity, s.ledger._lock
     s.driver = driver
+    setup_returns(s, monkeypatch)
+    try:
+        yield s
+    finally:
+        for close in reversed(driver._cleanup):
+            close()
+        driver.lock.release()
+
+
+def setup_returns(s, monkeypatch):
+    """Synthetic native return/continuity only, usable with the actual driver."""
+    driver, native = s.driver, s.driver.native
     s.started_returns = []
 
     def started(relay):
@@ -125,12 +137,6 @@ def composed(joined, monkeypatch, phase_session):
     monkeypatch.setattr(r.launch.idle_module.PostBegin, "__init__", continuity_init)
     monkeypatch.setattr(r.launch.idle_module.PostBegin, "_guard", continued_guard)
     monkeypatch.setattr(r.launch.idle_module.PostBegin, "read", continued_read)
-    try:
-        yield s
-    finally:
-        for close in reversed(driver._cleanup):
-            close()
-        driver.lock.release()
 
 
 def test_phase_consumes_actual_app_start_and_original_durable_ledger(composed):
@@ -230,6 +236,18 @@ def finalizing(composed, monkeypatch):
     operator.result_sha256 = None
     s.driver.native.operator = operator
     assert s.driver.start_recording()
+    setup_completion(s, monkeypatch)
+    try:
+        yield s
+    finally:
+        # The fault targets the marked phase operation, not fixture teardown.
+        s.finish_fault = None
+
+
+def setup_completion(s, monkeypatch):
+    """Patch native file/exit I/O, never the real App phase/finalized policy."""
+    exits = r.begin.worker_exit
+    operator = s.driver.native.operator
     phase, relay = s.driver.recording, s.driver.recording.relay
     expected = relay.expected
     s.finish_fault = None
@@ -331,11 +349,6 @@ def finalizing(composed, monkeypatch):
     monkeypatch.setattr(operator, "recheck", recheck)
     monkeypatch.setattr(operator, "publish", publish)
     monkeypatch.setattr(s.run.ready, "close", close)
-    try:
-        yield s
-    finally:
-        # The fault targets the marked phase operation, not fixture teardown.
-        s.finish_fault = None
 
 
 def test_phase_joins_real_finalized_reader_and_separate_exit_publication(finalizing):

@@ -29,6 +29,11 @@ CID = "a" * 64
 
 @pytest.fixture
 def candidate(supervised, image, configured, monkeypatch, request):
+    yield from setup_candidate(supervised, image, configured, monkeypatch, request)
+
+
+def setup_candidate(supervised, image, configured, monkeypatch, request, *, decode=None):
+    """Share the synthetic platform; optionally retain the plan before any owner."""
     native = m.plans.host.candidate_static
     product, helpers = supervised.root / m.plans.fixed.PACKAGE, supervised.root / native.NATIVE
     for root, names in (
@@ -106,7 +111,7 @@ def candidate(supervised, image, configured, monkeypatch, request):
         value["native_baseline_sha256"] = hashlib.sha256(native_baseline).hexdigest()
         value["projection_sha256"] = projected.sha256
         value["candidate"]["contract"] = asdict(projected.host.contract)
-    plan = m.plans.decode(value)
+    plan = m.plans.decode(value) if decode is None else decode(value, projected)
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.HOSTNAME)
     child = subprocess.Popen(

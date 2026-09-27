@@ -74,6 +74,55 @@ def test_original_private_handles_bytes_and_template_retained_without_writes(cas
     denied(original.recheck)
 
 
+def test_recheck_reads_original_file_without_redecoding_unchanged_bytes(case, monkeypatch):
+    root, template = case
+    reads = []
+    actual = m.os.pread
+    with m.Declaration(root, template.sha256) as original:
+
+        def reading(fd, size, offset):
+            reads.append(fd)
+            return actual(fd, size, offset)
+
+        monkeypatch.setattr(m.os, "pread", reading)
+        monkeypatch.setattr(
+            m.codec, "_read", lambda *_: pytest.fail("Unchanged template decoded again")
+        )
+        for _ in range(3):
+            before = len(reads)
+            assert original.recheck() is original.original_template
+            assert len(reads) > before and set(reads) == {original.file}
+        # A fresh file read remains mandatory; a cached digest is not evidence
+        # of the current file, even after multiple successful observations.
+        (root / m.NAME).write_bytes(template.raw.replace(b'"schema":1', b'"schema":2', 1))
+        denied(original.recheck)
+        assert original.failed and original.closed
+
+
+@pytest.mark.parametrize("fault", ["valid", "invalid", "mutable", "retained-bytes", "pin", "root"])
+def test_retained_template_mutation_cannot_bypass_initial_validation(case, fault):
+    root, template = case
+    original = m.Declaration(root, template.sha256)
+    if fault == "valid":
+        supplied = templates.value()
+        supplied["plan"]["firmware"] = "Different"
+        object.__setattr__(original.template, "raw", m.codec.decode(supplied).raw)
+    elif fault == "invalid":
+        object.__setattr__(original.template, "raw", b"PRIVATE")
+    elif fault == "mutable":
+        object.__setattr__(original.template, "raw", bytearray(template.raw))
+    elif fault == "retained-bytes":
+        original.raw = b"PRIVATE"
+        object.__setattr__(original.template, "raw", original.raw)
+    elif fault == "pin":
+        original.expected = "0" * 64
+    else:
+        original.root = root.with_name("different-root")
+    denied(original.recheck)
+    assert original.failed and original.closed
+    denied(original.recheck)
+
+
 @pytest.mark.parametrize(
     "fault", ["hash", "noncanonical", "empty", "large", "clock", "missing", "other-case"]
 )

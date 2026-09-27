@@ -9,6 +9,7 @@ Its new input path/command/source still require separate installed qualification
 
 from __future__ import annotations
 
+import hashlib
 import os
 import stat
 import time
@@ -86,6 +87,7 @@ class Declaration:
             raw = self._read(end)
             self.template = codec.load_bytes(raw, expected_sha256)
             self.original_template, self.raw = self.template, raw
+            require(declaration_root(codec._read(raw)["plan"]["case"]) == self.root)
             self._binding(end)
             self._file(end)
             self._directories(end)
@@ -147,8 +149,15 @@ class Declaration:
     def _binding(self, end):
         self._context(end)
         require(self.template is self.original_template and type(self.template) is codec.Template)
-        require(self.template.raw == self.raw and self.template.sha256 == self.expected)
-        require(declaration_root(codec._read(self.raw)["plan"]["case"]) == self.root)
+        # Construction validates the complete canonical template and case/root
+        # relationship. Template contains only immutable bytes: rechecking those
+        # exact independently pinned bytes needs no repeated plan decoding. File
+        # contents, all retained descriptors and directory entries are still
+        # freshly read/checked on EVERY call. Neither changed bytes nor a new
+        # Template can become an accepted replacement.
+        require(type(self.raw) is bytes and type(self.template.raw) is bytes)
+        require(self.template.raw == self.raw)
+        require(hashlib.sha256(self.raw).hexdigest() == self.expected)
         self._context(end)
 
     def recheck(self):

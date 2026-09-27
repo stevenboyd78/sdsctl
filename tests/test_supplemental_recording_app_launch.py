@@ -42,28 +42,36 @@ SPEC.loader.exec_module(m)
 
 @pytest.fixture
 def launch_case(native, monkeypatch):
+    yield from setup_launch_case(native, monkeypatch)
+
+
+def setup_launch_case(native, monkeypatch, *, owner=None):
+    """Use synthetic acceptance by default; an actual retained owner is optional."""
     s = native
     s.original = s.make_native()
-    s.startup = object.__new__(m.publication.startup.Startup)
-    s.startup.original = SimpleNamespace(recheck=lambda: s.plan)
-    s.startup.clock = m.plans.clock.ClockWitness(s.plan.original_clock)
-    s.startup.projected = s.projected
-    s.startup.accepted = s.startup.app_idle_publication_used = True
-    s.startup._service_inputs = object()
-    s.startup.closed = False
-    s.startup.service_used = s.startup._service_active = True
-    s.startup.lock = Lock()
-    s.startup.lock.acquire()
-    s.startup._service_invalidate = lambda: None
     s.owner_reads = 0
+    if owner is None:
+        s.startup = object.__new__(m.publication.startup.Startup)
+        s.startup.original = SimpleNamespace(recheck=lambda: s.plan)
+        s.startup.clock = m.plans.clock.ClockWitness(s.plan.original_clock)
+        s.startup.projected = s.projected
+        s.startup.accepted = s.startup.app_idle_publication_used = True
+        s.startup._service_inputs = object()
+        s.startup.closed = False
+        s.startup.service_used = s.startup._service_active = True
+        s.startup.lock = Lock()
+        s.startup.lock.acquire()
+        s.startup._service_invalidate = lambda: None
 
-    def original_guard(owner):
-        assert owner is s.startup
-        s.owner_reads += 1
-        m.require(not owner.closed)
+        def original_guard(owner):
+            assert owner is s.startup
+            s.owner_reads += 1
+            m.require(not owner.closed)
 
-    monkeypatch.setattr(m.publication.startup.Startup, "_input", original_guard)
-    monkeypatch.setattr(m.publication.startup.Startup, "_binding", original_guard)
+        monkeypatch.setattr(m.publication.startup.Startup, "_input", original_guard)
+        monkeypatch.setattr(m.publication.startup.Startup, "_binding", original_guard)
+    else:
+        s.startup = owner
     s.spec = m.native.construction.Specification(
         "192.0.2.25",
         50536,
@@ -87,8 +95,9 @@ def launch_case(native, monkeypatch):
     try:
         yield s
     finally:
-        original_clock.close()
-        s.startup.lock.release()
+        if owner is None:
+            original_clock.close()
+            s.startup.lock.release()
 
 
 def denied(callback):

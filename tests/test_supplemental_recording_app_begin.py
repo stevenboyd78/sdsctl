@@ -46,6 +46,24 @@ def joined(execution, monkeypatch):
     path.mkdir(mode=0o700)
     s.ledger = begin.binding.Ledger(path, s.run.pins.host, now=time.monotonic())
     assert s.run.start_confirmed().healthy is True
+    setup_relay(s, monkeypatch)
+
+    def make():
+        start = m.AppStart(s.run, s.ledger)
+        s.starts.append(start)
+        return start
+
+    s.make_start = make
+    s.trace.clear()
+    try:
+        yield s
+    finally:
+        for start in s.starts:
+            start.close()
+
+
+def setup_relay(s, monkeypatch):
+    """Only native begin/retained actor I/O is synthetic; authorization is not."""
     s.starts, s.relays, s.exits = [], [], frozenset()
     s.prebegin_idle = s.idle.read()
     s.idle_adapter = s.idle.read
@@ -89,19 +107,6 @@ def joined(execution, monkeypatch):
 
     monkeypatch.setattr(begin.relayed.Relay, "__init__", relay_init)
     monkeypatch.setattr(begin.relayed.retained.Retained, "check", guard_check)
-
-    def make():
-        start = m.AppStart(s.run, s.ledger)
-        s.starts.append(start)
-        return start
-
-    s.make_start = make
-    s.trace.clear()
-    try:
-        yield s
-    finally:
-        for start in s.starts:
-            start.close()
 
 
 def test_fresh_app_ready_then_durable_permission_and_original_begin(joined):

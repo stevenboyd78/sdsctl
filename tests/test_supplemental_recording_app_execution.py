@@ -10,6 +10,7 @@ import os
 import socket
 import sys
 import time
+from contextlib import ExitStack, nullcontext
 from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
@@ -42,13 +43,35 @@ denied = begins.launches.denied
 
 @pytest.fixture
 def execution(launch_case, tmp_path, monkeypatch):
+    yield from setup_execution(launch_case, tmp_path, monkeypatch)
+
+
+def setup_execution(
+    launch_case, tmp_path, monkeypatch, *, prepared=None, publish=True, service_factory=None
+):
+    """Reuse only boundary adapters, with an optional original prepared owner."""
+    with ExitStack() as cleanup:
+        service = (
+            cleanup.enter_context(service_factory(launch_case))
+            if service_factory is not None
+            else None
+        )
+        yield from _execution_boundaries(
+            launch_case, tmp_path, monkeypatch, prepared=prepared, publish=publish, service=service
+        )
+
+
+def _execution_boundaries(launch_case, tmp_path, monkeypatch, *, prepared, publish, service):
     s, p = launch_case, launch_case.plan
-    s.prelaunch = s.publish()
-    s.other = m.inputs.NativeLaunchQualification(s.startup, s.original, s.prelaunch.launch_inputs)
-    assert s.other() is None
+    if publish:
+        s.prelaunch = s.publish()
+        s.other = m.inputs.NativeLaunchQualification(
+            s.startup, s.original, s.prelaunch.launch_inputs
+        )
+        assert s.other() is None
     host_root = tmp_path / "host-execution"
-    host_root.mkdir(mode=0o700)
-    for name in ("journal", "operator-exec", "web-exec"):
+    host_root.mkdir(mode=0o700, exist_ok=True)
+    for name in (("journal",) if service is None else ()) + ("operator-exec", "web-exec"):
         (host_root / name).mkdir(mode=0o700)
     monkeypatch.setattr(launch.plans.Plan, "root", property(lambda self: host_root))
     s.idle.zero_domain = None
@@ -186,22 +209,24 @@ def execution(launch_case, tmp_path, monkeypatch):
     monkeypatch.setattr(launch.received.Ready, "close", ready_close)
     monkeypatch.setattr(launch.probe_exec, "Sample", Probe)
     s.endpoint = Endpoint()
-    host = s.host = launch.BootstrapHost(p, s.projected, s.idle, s.witness, s.docker)
+    host = s.host = s.bootstrap_host = launch.BootstrapHost(
+        p, s.projected, s.idle, s.witness, s.docker
+    )
 
     def host_read(reader):
-        assert reader is host and not reader.failed
+        assert reader is s.bootstrap_host and not reader.failed
         tick("host")
         reader.pending = None
         observed = observation()
         return launch.bootstrap.recovery.Sample(p.boot, now(), observed)
 
     def prepare(reader):
-        assert reader is host and reader.pending is None
+        assert reader is s.bootstrap_host and reader.pending is None
         tick("host_prepare")
         reader.pending = True
 
     def discard(reader):
-        assert reader is host
+        assert reader is s.bootstrap_host
         s.trace.append("host_discard")
         reader.failed = True
 
@@ -209,41 +234,20 @@ def execution(launch_case, tmp_path, monkeypatch):
     monkeypatch.setattr(launch.BootstrapHost, "prepare", prepare)
     monkeypatch.setattr(launch.BootstrapHost, "discard", discard)
     try:
-        with launch.bootstrap.Journal(host_root / "journal") as journal:
+        with (
+            launch.bootstrap.Journal(host_root / "journal")
+            if service is None
+            else nullcontext(service.journal)
+        ) as journal:
             s.journal = journal
-            baseline = observation(normal, absent, p.deadlines.issued_at)
-            journal.append(p.preparation(baseline, s.projected))
+            if service is None:
+                baseline = observation(normal, absent, p.deadlines.issued_at)
+                journal.append(p.preparation(baseline, s.projected))
+            if prepared is not None:
+                prepared(s)
 
-            def append(kind, **fields):
-                return journal.append(dict(kind=kind, now=now(), boot_id=p.boot, **fields))
-
-            append(
-                "bind_process",
-                process=asdict(b.ProcessRecord(b.NORMAL, normal.generation, "8" * 64, 1234, 100)),
-            )
-            append("request")
-            append("observe", observation=asdict(observation(normal, absent)))
-            append("bind_execution", container_id="a" * 64, execution_id="1" * 64)
-            append("execution_completed", execution_id="1" * 64, exit_code=0)
-            append("process_exited", generation=normal.generation)
-            append("observe", observation=asdict(observation(c=absent)))
-            append("bind_execution", container_id="a" * 64, execution_id="2" * 64)
-            append("execution_completed", execution_id="2" * 64, exit_code=0)
-            init = s.witness.identity
-            append(
-                "bind_process",
-                process=asdict(
-                    b.ProcessRecord(
-                        b.CANDIDATE,
-                        s.idle.generation,
-                        init.container_id,
-                        init.pid,
-                        init.start_ticks,
-                    )
-                ),
-            )
-            append("observe", observation=asdict(observation()))
-            assert journal.machine.state.phase == "candidate_idle"
+            if not getattr(s, "initial_dispatch", False):
+                synthetic_transfer(s, now, observation, normal, absent)
 
             def make(original=None, **changes):
                 run = m.AppLaunch(
@@ -263,6 +267,41 @@ def execution(launch_case, tmp_path, monkeypatch):
         for sock in sockets:
             sock.close()
         os.close(directory)
+
+
+def synthetic_transfer(s, now, observation, normal, absent):
+    """Default fixture history only; the original-dispatch fixture does not use it."""
+
+    def append(kind, **fields):
+        return s.journal.append(dict(kind=kind, now=now(), boot_id=s.plan.boot, **fields))
+
+    append(
+        "bind_process",
+        process=asdict(b.ProcessRecord(b.NORMAL, normal.generation, "8" * 64, 1234, 100)),
+    )
+    append("request")
+    append("observe", observation=asdict(observation(normal, absent)))
+    append("bind_execution", container_id="a" * 64, execution_id="1" * 64)
+    append("execution_completed", execution_id="1" * 64, exit_code=0)
+    append("process_exited", generation=normal.generation)
+    append("observe", observation=asdict(observation(c=absent)))
+    append("bind_execution", container_id="a" * 64, execution_id="2" * 64)
+    append("execution_completed", execution_id="2" * 64, exit_code=0)
+    init = s.witness.identity
+    append(
+        "bind_process",
+        process=asdict(
+            b.ProcessRecord(
+                b.CANDIDATE,
+                s.idle.generation,
+                init.container_id,
+                init.pid,
+                init.start_ticks,
+            )
+        ),
+    )
+    append("observe", observation=asdict(observation()))
+    assert s.journal.machine.state.phase == "candidate_idle"
 
 
 def test_combined_explicit_app_transition_qualifies_actual_socket_inventory(execution):

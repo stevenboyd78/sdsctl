@@ -287,6 +287,59 @@ deadline. The outer AppService shell and native/file/platform facts are still
 explicitly synthetic; complete startup-to-service composition and installed
 supervision are not proved by this narrower seam.
 
+The original-driver composition adds an actual retained CasePlan before any
+other owner, and constructs IdleService/AppService while the journal is still
+preparation-only. One real top-level App loop then joins actual candidate
+preparation, input publication/qualification, AppLaunch, AppStart and the
+finalized or preserved recovery readers. A separate run covers native
+cancellation and NeverAuthorized recovery without any recording authorization.
+All routes keep the same tracker, dispatcher, executor, journal, original clock
+callbacks and deadlines; cleanup closes the original owned handles while leaving
+the borrowed journal, plan and Startup clock available to their caller.
+
+These driver tests inject lost start/completion acknowledgments, transport-close
+and recovery replies, absent worker/init exits, changed file results, unhealthy
+normal status and owner replacement. Explicit abandonment preserves unconfirmed
+output; pre-recording cancellation stays not-attempted. An unacknowledged progress
+file is preserved for review, never adopted. Phase deadlines expire through the
+original policy; an already expired hard recovery deadline refuses further
+authority and closes the original service rather than renewing its budget.
+
+Startup acceptance and the initial App transfer into candidate-idle are still
+synthetic in this driver fixture, as are Engine/HA observations, idle facts and
+native actor/return/exit/file I/O. The owned init pidfd, private file trees,
+socket inodes, actual journal/ledger checks and App classes are real. This closes
+the outer driver-to-recording/recovery composition gap, not accepted-startup,
+full initial-dispatch, installed supervision or actual-native lifetime proof.
+
+A complementary original-driver fixture now uses the actual private declaration,
+clock-free template, original startup clock, plan publication, one-time acceptance
+and `Startup.idle_service` assembly. It drives all three recovery outcomes through
+that same accepted owner's AppService. It forbids repolling or renewing the startup
+offer after service assembly. Preflight host facts, initial App transfer, idle
+publication provenance and native/platform I/O are still explicitly synthetic;
+this does not prove a complete installed or actual-native lifetime.
+
+This composition exposed redundant declaration decoding at every intervening
+file guard. Declaration construction still performs full canonical schema and
+case/root validation. Rechecks compare the exact retained Template and immutable
+bytes against the independently supplied digest while freshly reading the
+original file and all descriptor, directory and metadata identities. No file
+observation is cached, no changed template can be adopted, and all original
+two-second collection limits and full source/runtime inventories remain intact.
+
+The initial-dispatch fixture extends that accepted-startup composition with the
+actual request Publisher, Inbox, IdleCoordinator, process tracker and dispatcher.
+The original session produces the normal-stop and candidate-start journal entries
+instead of accepting prewritten transfer history. The normal process exit is
+observed through an actual owned subprocess pidfd; candidate binding also uses a
+real pidfd. The candidate child is precreated, however, not started by Docker.
+Container/cgroup/generation metadata, full host observations, App publication
+provenance and native recording/exit facts remain synthetic. Tests cover all
+three recovery outcomes, lost initial stop replies without reissuing them, and
+missing exit evidence or lost create/inspection acknowledgments expiring to
+review without launching native code.
+
 Failure tests use two complementary fixtures: actual AppLaunch/input bindings
 with explicitly synthetic exit evidence, and actual original worker/init
 pidfds, exit receipts, ledgers, journals and private recording files with
@@ -300,10 +353,12 @@ full source/runtime checks to make a run pass.
 
 ## Remaining gates before a human scanner/audio test
 
-1. Extend full-driver composition through startup, native and recording phases
-   into actual finalized/preserved recovery. The finalized phase-to-session seam
-   is covered, but its outer service is synthetic. Keep all substituted
-   platform/transport facts explicit.
+1. Complete real platform/publication and native-I/O lifetime qualification.
+   Accepted startup, request/initial dispatch, outer service, native/recording
+   handoffs and all three recovery routes are joined in local tests. App
+   publication provenance, platform responses and native transport/file results
+   remain explicit synthetic boundaries. Active checkpoint/file/native-I/O tests
+   also remain complementary rather than proof of one complete installed lifetime.
 2. Bind the separate App source inventory to a reviewed, independently supervised
    entrypoint with explicit interpreter/dependency provenance; passive preparation
    must remain passive. The read-only inventory alone does not enable this.

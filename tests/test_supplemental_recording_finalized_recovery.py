@@ -36,7 +36,7 @@ def cycling(host, monkeypatch):
     yield from setup_cycling(host, monkeypatch)
 
 
-def setup_cycling(c, monkeypatch, *, read_clock=None):
+def setup_cycling(c, monkeypatch, *, read_clock=None, session=None):
     """Explicit synthetic platform adapter; caller may retain a pre-begin clock."""
     clock = c.operator._clock if read_clock is None else read_clock
     c.normal = m.base.App(c.s.plan.normal.pin, "stopped")
@@ -112,11 +112,18 @@ def setup_cycling(c, monkeypatch, *, read_clock=None):
     monkeypatch.setattr(docker, "create_execution", create)
     monkeypatch.setattr(docker, "start_execution", start)
     monkeypatch.setattr(docker, "inspect_execution", inspect)
-    processes = m.TrackedProcesses(
-        c.s.journal,
-        docker,
-        images={m.base.NORMAL: c.s.plan.normal.image, m.base.CANDIDATE: c.s.plan.candidate.image},
-        read_clock=lambda: (c.s.plan.boot, clock()),
+    processes = (
+        m.TrackedProcesses(
+            c.s.journal,
+            docker,
+            images={
+                m.base.NORMAL: c.s.plan.normal.image,
+                m.base.CANDIDATE: c.s.plan.candidate.image,
+            },
+            read_clock=lambda: (c.s.plan.boot, clock()),
+        )
+        if session is None
+        else session.processes
     )
 
     def reconcile():
@@ -131,14 +138,19 @@ def setup_cycling(c, monkeypatch, *, read_clock=None):
 
     monkeypatch.setattr(processes, "reconcile", reconcile)
     monkeypatch.setattr(processes, "bind_running", bind)
-    dispatch = m.TrackedDispatch(
-        c.s.journal,
-        docker,
-        cli_image=c.s.plan.cli_image,
-        cli_generation=c.s.plan.cli_generation,
-        now=clock,
-    )
-    c.session = m.launch.bootstrap.RecoverySession(c.s.journal, processes, dispatch, c.host.read)
+    if session is None:
+        dispatch = m.TrackedDispatch(
+            c.s.journal,
+            docker,
+            cli_image=c.s.plan.cli_image,
+            cli_generation=c.s.plan.cli_generation,
+            now=clock,
+        )
+        c.session = m.launch.bootstrap.RecoverySession(
+            c.s.journal, processes, dispatch, c.host.read
+        )
+    else:
+        c.session = session
     original_init = m.FinalizedHost.__init__
 
     def init(observer, reader):
@@ -182,7 +194,8 @@ def setup_cycling(c, monkeypatch, *, read_clock=None):
 
     c.wait = wait
     yield c
-    c.session.close()
+    if session is None:
+        c.session.close()
 
 
 def test_original_session_drives_stop_restore_and_health_without_new_authority(cycling):
