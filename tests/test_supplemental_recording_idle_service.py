@@ -9,6 +9,7 @@ import pytest
 
 from . import test_supplemental_recording_idle_coordinator as coordinator_tests
 from . import test_supplemental_recording_service_offer as offer_tests
+from ._supplemental_fixture_budget import integer_budget
 
 m, cancellation, b = coordinator_tests.m, coordinator_tests.cancellation, coordinator_tests.b
 (
@@ -64,10 +65,7 @@ def service(transfer, monkeypatch, request):
                     "schema": 1,
                     "kind": offer_tests.m.template_codec.KIND,
                     "plan": declaration,
-                    "budget": {
-                        "ready_seconds": int(times["ready_by"] - times["issued_at"]),
-                        "stop_seconds": int(times["stop_by"] - times["issued_at"]),
-                    },
+                    "budget": integer_budget(times),
                 }
             )
             s.startup_offer = offer_tests.m.Offer(template, template.sha256, witness)

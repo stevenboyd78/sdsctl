@@ -15,6 +15,7 @@ import pytest
 
 from . import test_supplemental_recording_idle_service as services
 from . import test_supplemental_recording_service_startup as startups
+from ._supplemental_fixture_budget import integer_budget
 
 m, startup = services.m, startups.m
 (
@@ -57,10 +58,7 @@ def accepted(before_handoff, tmp_path, monkeypatch, request):
             "schema": 1,
             "kind": startup.declaration.codec.KIND,
             "plan": value,
-            "budget": {
-                "ready_seconds": int(times["ready_by"] - times["issued_at"]),
-                "stop_seconds": int(times["stop_by"] - times["issued_at"]),
-            },
+            "budget": integer_budget(times),
         }
     )
     path = source / startup.declaration.NAME

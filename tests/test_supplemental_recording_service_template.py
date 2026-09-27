@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from . import test_supplemental_recording_host_plan as original
+from ._supplemental_fixture_budget import integer_budget
 
 NAME = "supplemental_recording_service_template"
 SPEC = importlib.util.spec_from_file_location(
@@ -57,6 +58,35 @@ def test_canonical_clock_free_template_and_exact_schema3_preview():
     assert template.check_plan(plan, clock()) is None
     assert plan.deadlines.recover_by - plan.deadlines.issued_at == m.plans.base.TOTAL_SECONDS
     assert {key: json.loads(plan.raw)[key] for key in m.PLAN_FIELDS} == supplied["plan"]
+
+
+def test_fixture_budget_reconstructs_exact_integer_across_float_exponent_boundary():
+    issued = 65500.000000001
+    limits = dict(issued_at=issued, ready_by=issued + 120, stop_by=issued + 400)
+    assert int(limits["ready_by"] - issued) == 119  # Deterministic former fixture error.
+    assert integer_budget(limits) == dict(ready_seconds=120, stop_seconds=400)
+    supplied = value()
+    supplied["budget"] = integer_budget(limits)
+    current = clock()
+    delta = 65_470_000_000_001
+    original = replace(
+        current,
+        before_ns=current.before_ns + delta,
+        after_ns=current.after_ns + delta,
+        boottime_ns=current.boottime_ns + delta,
+    )
+    plan = m.decode(supplied).preview(original)
+    assert plan.deadlines.issued_at == issued
+    assert (plan.deadlines.ready_by, plan.deadlines.stop_by) == (
+        limits["ready_by"],
+        limits["stop_by"],
+    )
+
+
+@pytest.mark.parametrize("duration", [0, -1, 120.25, 120.75])
+def test_fixture_budget_never_normalizes_a_genuine_fraction_or_invalid_duration(duration):
+    with pytest.raises(AssertionError):
+        integer_budget(dict(issued_at=65500.0, ready_by=65500.0 + duration, stop_by=66000.0))
 
 
 def test_input_mutation_cannot_change_template_or_budgets():

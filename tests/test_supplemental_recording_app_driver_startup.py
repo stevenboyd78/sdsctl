@@ -13,6 +13,7 @@ import pytest
 from . import test_supplemental_recording_app_driver_pristine as pristine
 from . import test_supplemental_recording_app_launch as launch_cases
 from . import test_supplemental_recording_service_startup as startups
+from ._supplemental_fixture_budget import integer_budget
 
 failure, driver = pristine.failure, pristine.driver
 m, base, launch = driver.m, driver.base, driver.launch
@@ -46,10 +47,7 @@ def candidate(supervised, image, configured, monkeypatch, request, tmp_path):
                     schema=1,
                     kind=startup.declaration.codec.KIND,
                     plan=value,
-                    budget=dict(
-                        ready_seconds=int(limits["ready_by"] - limits["issued_at"]),
-                        stop_seconds=int(limits["stop_by"] - limits["issued_at"]),
-                    ),
+                    budget=integer_budget(limits),
                 )
             )
             path = source / startup.declaration.NAME

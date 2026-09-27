@@ -13,6 +13,7 @@ from threading import Thread
 import pytest
 
 from . import test_supplemental_recording_startup_service as integration
+from ._supplemental_fixture_budget import integer_budget
 
 m, launch = integration.startup, integration.m.launch
 (
@@ -52,10 +53,7 @@ def service_case(before_handoff, tmp_path, monkeypatch):
             schema=1,
             kind=m.declaration.codec.KIND,
             plan=value,
-            budget=dict(
-                ready_seconds=int(times["ready_by"] - times["issued_at"]),
-                stop_seconds=int(times["stop_by"] - times["issued_at"]),
-            ),
+            budget=integer_budget(times),
         )
     )
     path = source / m.declaration.NAME
