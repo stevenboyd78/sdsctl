@@ -58,6 +58,8 @@ class NativeCustody:
     Kernel ancestry/namespace/UID/start-time evidence independently checks every
     reported worker identity. The retained candidate pidfd is duplicated, never
     reopened by numeric PID. Capture is once-only, including partial failure.
+    An optional caller deadline only shortens the same two-second capture;
+    nested Engine/dispatch/kernel checks cannot renew an exchange budget.
 
     This does NOT receive/authenticate Ready, prove installed source/runtime,
     authorize begin, or acquire journal/dispatcher ownership. Its already
@@ -72,7 +74,7 @@ class NativeCustody:
     single-writer handoff and independently bounded observer execution.
     """
 
-    def __init__(self, custody, pins, reported):
+    def __init__(self, custody, pins, reported, *, deadline=None):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.closed = self.failed = False
         self._retained = self._original_retained = ()
@@ -86,6 +88,9 @@ class NativeCustody:
             custody.native_custody_attempted = True
             self.custody, self.plan = custody, custody.plan
             self._originals = custody, self.plan
+            if deadline is not None:
+                dispatch.binding.clock(deadline)
+                end = min(end, deadline)
             self._capture_guard(end)
             require(type(pins) is dispatch.Pins)
             pins_raw = dispatch.binding.encode(pins.payload())

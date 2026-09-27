@@ -132,8 +132,8 @@ def setup(prepared, projection, family, tmp_path, monkeypatch, *, sender=False, 
         case.actors, case.value, case.directory, case.family = actors, value, directory, family
         objects = []
 
-        def capture():
-            result = m.NativeCustody(custody, case.pins, case.reported)
+        def capture(**kwargs):
+            result = m.NativeCustody(custody, case.pins, case.reported, **kwargs)
             objects.append(result)
             return result
 
@@ -189,6 +189,71 @@ def test_actual_capture_matches_fixed_exec_and_retains_four_distinct_original_ha
     for fd in handles:
         with pytest.raises(OSError):
             os.fstat(fd)
+
+
+@pytest.mark.parametrize("deadline", [False, True, "later", float("nan"), float("inf"), -1])
+def test_invalid_native_deadline_consumes_attempt_without_engine_reads(case, deadline):
+    before = app_tests.count_fds(case)
+    denied(lambda: case.capture(deadline=deadline))
+    assert len(case.state.requests) == 4 and app_tests.count_fds(case) == before
+    assert case.custody.native_custody_attempted
+    denied(case.capture)
+    assert case.custody.poll().candidate_exited is False
+
+
+def test_expired_native_exchange_cannot_start_a_fresh_capture(case):
+    before = app_tests.count_fds(case)
+    denied(lambda: case.capture(deadline=time.monotonic() - 1))
+    assert len(case.state.requests) == 4 and app_tests.count_fds(case) == before
+    assert case.custody.native_custody_attempted
+    denied(case.capture)
+    assert not case.custody.failed and not case.custody.capture_failed
+    assert case.custody.poll().candidate_exited is False
+
+
+@pytest.mark.parametrize("seconds", [1, 100])
+def test_native_capture_preserves_shorter_outer_budget_through_both_engine_reads(
+    case, monkeypatch, seconds
+):
+    original, limits = m.engine._json_request, []
+    began = time.monotonic()
+    deadline = began + seconds
+
+    def bounded(*args, **kwargs):
+        end = kwargs["deadline"]
+        assert end <= deadline and end < began + m.MAX_SECONDS + 0.1
+        limits.append(end)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(m.engine, "_json_request", bounded)
+    observer = case.capture(deadline=deadline)
+    assert len(limits) == 2 and limits[0] == limits[1]
+    assert observer.poll().binding.actors == case.actors
+    assert observer.poll().exited == frozenset()
+
+
+@pytest.mark.parametrize("when", [5, 6])
+def test_outer_native_expiry_during_inspection_drops_partial_handles_without_retry(
+    case, monkeypatch, when
+):
+    original, offset = m.time.monotonic, [0]
+    deadline = original() + 1
+    monkeypatch.setattr(m.time, "monotonic", lambda: original() + offset[0])
+
+    def expire(value, count):
+        if count == when:
+            offset[0] = 1.1
+        return value
+
+    case.state.hook = expire
+    before = app_tests.count_fds(case)
+    denied(lambda: case.capture(deadline=deadline))
+    offset[0] = 0
+    assert len(case.state.requests) == when and app_tests.count_fds(case) == before
+    assert case.custody.native_custody_attempted
+    denied(case.capture)
+    assert case.custody.poll().candidate_exited is False
+    assert all(os.fstat(fd) for fd in case.family.handles)
 
 
 def test_poll_survives_helper_init_engine_and_history_loss_without_worker_exit(case, monkeypatch):

@@ -562,11 +562,22 @@ also remain required.
 
 `supplemental_recording_service_native_custody.NativeCustody` adds a one-use,
 read-only native-process capture to the **same original** `AppCustody`. It is
-not selected by an installed command or source inventory. The helper, candidate
+included by the explicit joint source inventory, but no installed command
+selects it. The helper, candidate
 init, guardian, native recording worker and watchdog must still be live, the
 retained normal init must have exited, and the original readiness cutoff must
 not have passed. A failed or interrupted capture consumes the slot but leaves
 the borrowed App/deadline evidence intact; it cannot be retried.
+
+An optional containing-exchange deadline can only shorten the capture's
+two-second limit. The same resulting deadline is passed to dispatch reads and
+both Engine inspections and is checked around kernel capture and at final
+validation; the custody operation cannot start a fresh allowance. Invalid or
+expired supplied limits consume the native slot
+without Engine reads. Expiry during inspection closes only newly acquired native
+duplicates, preserving the original App handles for factual exit observation.
+This is an elapsed-time check, not independent protection against an indefinitely
+blocked observer; outer execution supervision remains necessary.
 
 The capture joins the original plan/projection, candidate generation and init,
 fixed command path/source/deadline, and all three private dispatch intents.
@@ -607,6 +618,8 @@ container credentials/membership and namespace mapping are explicit fixtures;
 the fixed native command is not executed. Both ordinary peer and actual sender
 credential paths are covered, along with wrong identities/descriptors, changed
 commands/dispatch history, partial interrupts, and independent worker exits.
+Shorter/longer outer deadlines, invalid/expired limits, and expiry at either
+Engine inspection are covered without widening the production time limits.
 These tests do not qualify distinct installed containers or actual scanner I/O.
 
 This captures process facts only. Authenticated Ready, reviewed active-command
