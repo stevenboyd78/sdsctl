@@ -12,6 +12,7 @@ independent supervision and recovery integration.
 | --- | --- | --- |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
 | Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
+| Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
 | Native launch | `AppLaunch` | Original accepted Startup, candidate generation, published launch input, host journal, clock, init witness and full BootstrapHost |
 | Native ready | `NativeReadyQualification` | Actual returned Ready and the one-time inventory of the four declared private sockets |
 | Recording begin | `AppStart` | Original AppLaunch, fresh source/runtime/host/probe checks, returned durable host authorization and ledger intent, and the existing one-use Relay |
@@ -79,9 +80,36 @@ never-authorized route can continue the same RecoverySession. No recording
 authorization, automatic cancellation, renewed budget or App stop is inferred.
 All original cleanup callbacks remain owned by the borrowed idle service.
 
-This driver currently stops at the native/cancellation boundary. Service-level
-recording begin, active sampling, finish and abandonment still need a separate
-one-way phase join. Neither a source profile nor an entrypoint selects it.
+### Explicit recording-phase handoff
+
+The App driver's separate `start_recording` retires native cancellation before
+constructing AppStart. Direct IdleService recording fields remain empty. Only
+the original Relay's returned start acknowledgment permits the started state;
+lost authorization, intent or start acknowledgments remain uncertain.
+
+The retired native phase retains static object custody, not obsolete idle or
+pristine-ledger reads. Failed App begin/observation/completion does not disable
+the original session's independent clock-only expiry. No fallback to idle,
+never-authorized recovery, automatic abandonment or fresh begin is inferred.
+
+Explicit active reads construct PostBegin from the original idle/Relay guard,
+then NativeActiveQualification from the ORIGINAL ready qualification and
+AppStart, plus AppRetainedHost and a fresh AppActiveSample per observation.
+Original cleanup is registered before later operations can fail. Results are
+not cached as session evidence and do not themselves publish progress.
+
+Either closing route first durably retains intermediate progress if active
+observation was prepared. Successful completion captures AppAuthorizedFinalized,
+collects actual exit evidence, closes the original Ready and publishes the
+independent Operator receipt without an intervening session tick. Explicit
+confirmed-start abandonment closes the original ledger before the transport.
+Lost ledger acknowledgment cannot be adopted or retried; a lost transport-close
+return still requires independent worker/init exit evidence.
+
+Only the distinct App finalized or preserved route may then continue the same
+session. The service phase does not provide a lost-start preservation route:
+uncertain begin remains review-only. Neither a source profile nor an entrypoint
+selects this driver.
 
 ### One-way launch and begin
 
@@ -197,7 +225,7 @@ uncertain command returns are inspected without reissuing commands. Closing a
 host reader does not close the caller's original ledger, Operator or journal.
 
 None of these paths is an installed service or independent supervisor. The
-App-aware recording-phase assembly remains necessary before live use.
+App-aware recording-phase assembly is now explicit but remains unselected.
 
 ## Validation scope
 
@@ -220,6 +248,15 @@ synthetic boundaries in that suite. They prove ownership/order and fault handlin
 not an actual installed App/native lifetime. The actual lower-level App policy
 tests remain separate and cannot be replaced by these synthetic boundary results.
 
+App recording-phase routing tests cover real service/journal/ledger ownership
+and the explicit start/observe/finish/abandon branches with synthetic native
+return, active reader and exit boundaries. Complementary phase composition
+tests use the actual AppStart, NativeActiveQualification and AppAuthorizedFinalized
+against real private files, sockets, journals and ledgers; their outer service
+shell, file results and native return/continuity/exit facts are explicitly
+synthetic. Neither fixture is a complete installed App lifetime, and these
+scopes must not be conflated.
+
 Failure tests use two complementary fixtures: actual AppLaunch/input bindings
 with explicitly synthetic exit evidence, and actual original worker/init
 pidfds, exit receipts, ledgers, journals and private recording files with
@@ -233,10 +270,8 @@ full source/runtime checks to make a run pass.
 
 ## Remaining gates before a human scanner/audio test
 
-1. Complete the App-aware recording-phase handoff from the new native driver:
-   retire native cancellation before AppStart, retain exact Relay/PostBegin for
-   active samples, preserve progress before finish/abandonment, and join the
-   distinct original-session success/preservation routes without idle fallback.
+1. Extend full-driver composition through actual finalized/preserved readers
+   and the original session, keeping synthetic platform/transport facts explicit.
 2. A separately named source profile and independently supervised entrypoint;
    passive preparation must remain passive.
 3. A fresh isolated fixed-command end-to-end lifetime with actual native

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Explicit, uninstalled App-aware service driver through native cancellation.
+"""Explicit, uninstalled App-aware service driver through recording recovery.
 
 No command selects this owner. It borrows the original idle service, runs ONE
 top-level loop, and retires idle reads before native input publication. Recording
-handoff is deliberately not supplied yet. Independent outer supervision remains
+handoff is separately explicit and one-use. Independent outer supervision remains
 mandatory; synthetic tests are not installed provenance or scanner acceptance.
 """
 
@@ -72,6 +72,8 @@ class AppService:
         )
         self.used = self.native_attempted = False
         self.native = self._original_native = None
+        self.recording_attempted = False
+        self.recording = self._original_recording = None
         original._app_driver = self
         self._context()
 
@@ -135,13 +137,72 @@ class AppService:
         require(not original.launch_preparation_attempted and not original.native_attempted)
         require(not original.recording_attempted)
         require(self.native is self._original_native)
+        require(self.recording is self._original_recording)
         if self.used:
             require(original.used and self.lock.locked())
         if self.native is not None:
             require(type(self.native) is AppNativePhase)
-            self.native._context(recovering=recovering)
+            self.native._context(recovering=recovering, retired=self.recording is not None)
+            if self.recording is not None:
+                from supplemental_recording_app_recording import AppRecordingPhase
+
+                require(type(self.recording) is AppRecordingPhase)
+                require(self.recording.service is self)
+                self.recording._context(recovering=recovering)
         else:
-            require(not self.native_attempted and not recovering)
+            require(not self.native_attempted and not recovering and self.recording is None)
+
+    def _clock(self):
+        self._context()
+        return self.objects[1]._clock()
+
+    def start_recording(self):
+        """Retire native cancellation BEFORE constructing the one-use AppStart.
+
+        This is explicit authority, never an idle notice or automatic step.
+        Failed/unknown begin preserves clock expiry, not pristine recovery.
+        """
+        from supplemental_recording_app_recording import AppRecordingPhase
+
+        original = self.objects[1]
+        try:
+            self._context()
+            require(self.used and not self.recording_attempted)
+            recording = AppRecordingPhase(self)
+            self.recording_attempted = True
+            self.native.retired = True
+            self.recording = self._original_recording = recording
+            self.session.read = recording.read
+            return recording.start()
+        except BaseException as error:
+            original._fail(error)
+
+    def observe_recording(self):
+        original = self.objects[1]
+        try:
+            self._context()
+            require(self.recording is not None)
+            return self.recording.observe()
+        except BaseException as error:
+            original._fail(error)
+
+    def finish_recording(self):
+        original = self.objects[1]
+        try:
+            self._context()
+            require(self.recording is not None)
+            return self.recording.finish()
+        except BaseException as error:
+            original._fail(error)
+
+    def abandon_recording(self):
+        original = self.objects[1]
+        try:
+            self._context()
+            require(self.recording is not None)
+            return self.recording.abandon()
+        except BaseException as error:
+            original._fail(error)
 
     def prepare_candidate(self, **profile):
         self._context()
@@ -170,7 +231,7 @@ class AppService:
 
     def cancel_native(self):
         self._context()
-        require(type(self.native) is AppNativePhase)
+        require(type(self.native) is AppNativePhase and self.recording is None)
         return self.native.cancel()
 
     def run(self, wait):
@@ -187,6 +248,8 @@ class AppService:
             for _ in range(operator.IDLE_POLL_LIMIT):
                 self._context()
                 phase = self.native if self.native is not None else self.coordinator
+                if self.recording is not None:
+                    phase = self.recording
                 result = phase.poll(wait)
                 if result.phase in ("complete", "review"):
                     return result
@@ -300,9 +363,10 @@ class AppNativePhase(operator.NativePhase):
             run.profile_sha256,
         )
 
-    def _context(self, *, recovering=False):
+    def _context(self, *, recovering=False, retired=False):
         service = self.service
-        require(type(self) is AppNativePhase and not self.retired)
+        require(type(self) is AppNativePhase and type(retired) is bool)
+        require(self.retired is retired)
         require(self.owner == service.owner == (os.getpid(), operator.get_ident()))
         require(service.used and service.lock.locked() and service.native_attempted)
         require(service.native is service._original_native is self and service.coordinator.finished)
@@ -351,7 +415,14 @@ class AppNativePhase(operator.NativePhase):
             require(self.operator.plan is service.plan and self.operator.endpoint is self.endpoint)
         if self.confirmed:
             require(self.run.used and self.run.confirm_attempted and self.operator is not None)
-        if recovering:
+        if retired:
+            # Static custody only: authorization has changed the ledger and
+            # Ready may be expired or failed. Do not disable original expiry.
+            require(self.confirmed and not self.uncertain)
+            require(not self.cancel_attempted and not self.recovery_attempted)
+            require(self.reader is None and self.operator is not None)
+            require(service.recording is not None and service.recording.native is self)
+        elif recovering:
             require(self.recovery_attempted and self.reader is not None)
         else:
             require(service.session.read is self.read and self.read == self._unavailable)
@@ -399,7 +470,7 @@ class AppNativePhase(operator.NativePhase):
 
     def poll(self, wait):
         self.service._context()
-        require(self.used and not self.recovery_attempted and callable(wait))
+        require(self.used and not self.retired and not self.recovery_attempted and callable(wait))
         result = self.service.session.poll()
         if result.phase in ("complete", "review") or self.uncertain:
             return result
@@ -437,4 +508,4 @@ class AppNativePhase(operator.NativePhase):
 
 
 if __name__ == "__main__":
-    raise SystemExit("Uninstalled App native-phase driver only; no service enabled.")
+    raise SystemExit("Uninstalled App service driver only; no service enabled.")
