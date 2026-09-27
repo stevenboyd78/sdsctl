@@ -304,6 +304,26 @@ Ready/probe/dispatch/actor/history facts, worker loss, bad replies, interrupted
 callbacks and lost acknowledgment. These are complementary tests, not a complete
 installed or actual-native recording lifetime qualification.
 
+An additional isolated recorder composition now retains original App and native
+custody through **actual** Ready reception, PCM recording, returned completion,
+file validation and worker exit. Both same-process and separate-observer-process
+variants use their own Engine endpoint and kernel handles. Their independently
+mapped actors must equal the original Ready actors before the test owner begins.
+Polling continues after Ready and the observer's endpoint close and after the
+original helper exits, without further Engine requests or numeric-PID reopening.
+Lost completion/exit messages and a contradictory final Engine exit remain
+unconfirmed even when a valid WAV and actual exited workers exist. Pre-begin
+withdrawal produces no recording; a frozen recorder and a dead helper are not
+reported as native-worker exits.
+
+These tests use only owned local processes and loopback scanner/audio fixtures.
+Their App/container/root metadata is synthetic. The separate observer is driven
+by a private **test-only** stdin/stdout harness, not the authenticated service
+`Link`, and the host authorization is a fixture. They do not yet join the full
+AppService/journal/peer protocol and recovery lifetime or qualify installed
+source/runtime provenance. Those remaining joins must not be inferred from the
+successful isolated recorder and independent-handle evidence.
+
 ### Continuing observations
 
 After begin, the original retained actor and journal checks apply. Expired
@@ -538,8 +558,9 @@ and cannot authorize a restart or establish recording success. In particular,
 kernel timer readiness does not by itself terminate a blocked observer or
 recover a service. The source-qualified outer owner still needs original
 App/native custody from before each relevant mutation, separate action consent,
-bounded execution, and journal-safe failure recovery. No existing source
-profile or command imports this watch; passive preparation stays passive.
+bounded execution, and journal-safe failure recovery. The joint read-only source
+profile names this watch, but no installed command selects it; passive
+preparation stays passive.
 
 This optional observer requires Linux's Python 3.13+ `os.timerfd_*` APIs;
 their presence alone is not installed-runtime qualification. Missing support
@@ -675,7 +696,7 @@ workers remain alive. A frozen worker is not exited. Neither helper nor init
 exit substitutes for any worker, and even all four exits supply no exec return
 code, recording-completion acknowledgment or restoration proof.
 
-Tests use actual disposable process trees, retained kernel handles, private
+The focused custody tests use actual disposable process trees, retained kernel handles, private
 dispatch records and credential-checked local Unix transport. Docker metadata,
 container credentials/membership and namespace mapping are explicit fixtures;
 the fixed native command is not executed. Both ordinary peer and actual sender
@@ -684,6 +705,9 @@ commands/dispatch history, partial interrupts, and independent worker exits.
 Shorter/longer outer deadlines, invalid/expired limits, and expiry at either
 Engine inspection are covered without widening the production time limits.
 These tests do not qualify distinct installed containers or actual scanner I/O.
+The additional actual-recorder composition described above supplies separate
+Ready/PCM/return/file evidence in both same-process and separate-process observer
+variants, without changing these synthetic container or qualification limits.
 
 This captures process facts only. Authenticated Ready, reviewed active-command
 and dependency provenance, explicit action permission, pre-begin admission,

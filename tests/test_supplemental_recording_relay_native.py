@@ -73,7 +73,7 @@ def close_init(process):
 
 
 @contextmanager
-def setup(staged, prepared, tmp_path, monkeypatch):
+def setup(staged, prepared, tmp_path, monkeypatch, *, configure=None):
     monkeypatch.setattr(operator.probing.m.cached, "CachedClient", operator.REAL_CACHED_CLIENT)
     with (
         peers(monkeypatch) as (scanner, rtsp),
@@ -82,7 +82,7 @@ def setup(staged, prepared, tmp_path, monkeypatch):
     ):
         base = Path(temporary)
         sockets, receipts, baseline = (base / name for name in ("sockets", "receipts", "baseline"))
-        dispatch, ledger_path = tmp_path / "dispatch", tmp_path / "host-ledger"
+        dispatch, ledger_path = tmp_path / "operator-exec", tmp_path / "host-ledger"
         for path in (
             sockets,
             receipts,
@@ -132,7 +132,7 @@ def setup(staged, prepared, tmp_path, monkeypatch):
                 data / name
                 for name in ("display.toml", "configuration.toml", "accepted.json", "profile.cfg")
             ),
-            "1" * 64,
+            staged.pin if configure is not None else "1" * 64,
         )
         host = p._decode(
             p.manifest_bytes(
@@ -164,11 +164,7 @@ def setup(staged, prepared, tmp_path, monkeypatch):
             deployment, native.baseline.root
         )[0]
         prepared.value["projection_sha256"] = projection.sha256
-        operator.guard.prepare_source_pin(staged, prepared)
         original_clock = ready_module.clock.read()
-        host_binding = returned.host.Binding(
-            projection, staged.pin, prepared.value["host_plan_sha256"], original_clock.boot
-        )
         init = subprocess.Popen(
             [sys.executable, "-I", "-B", "-c", "import sys;sys.stdin.read()"], stdin=subprocess.PIPE
         )
@@ -182,8 +178,21 @@ def setup(staged, prepared, tmp_path, monkeypatch):
         witness = process_module.ProcessWitness(identity)
         cleanup.callback(witness.close)
         ready_by = time.monotonic() + 8
+        command_plan = "/data/native-relay/launch.json"
+        if configure is not None:
+            # Optional test-only composition binds the original observer plan
+            # before native input bytes, command, host ledger or Ready exist.
+            host_plan, generation = configure(projection, original_clock, identity, init)
+            prepared.value["host_plan_sha256"] = host_plan.sha256
+            prepared.value["generation"] = generation
+            ready_by = host_plan.lease["ready_by"]
+            command_plan = str(host_plan.native_root / "launch/launch.json")
+        operator.guard.prepare_source_pin(staged, prepared)
+        host_binding = returned.host.Binding(
+            projection, staged.pin, prepared.value["host_plan_sha256"], original_clock.boot
+        )
         command = engine.intents.m.execution.Command(
-            "/data/native-relay/launch.json",
+            command_plan,
             hashlib.sha256(p.encode(prepared.value)).hexdigest(),
             staged.pin,
             ready_by,
@@ -319,6 +328,15 @@ def handlers(state, staged, prepared, monkeypatch, fault):
 
         def forward():
             try:
+                if fault == "no_begin":
+                    # Explicit pre-begin withdrawal: no synthetic begin or
+                    # native receipt is manufactured after the host closes.
+                    retained.settimeout(6)
+                    assert retained.recv(1) == b""
+                    state.operator.stdin.close()
+                    state.operator.stdin = None
+                    state.operator.wait(timeout=5)
+                    return
                 begin = engine.attached.begun(retained)
                 assert begin["body"]["intent_sha256"] == state.ledger.state.sha256
                 raw = operator.w.encode(begin)
