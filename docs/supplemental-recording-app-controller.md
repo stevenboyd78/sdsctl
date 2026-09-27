@@ -11,6 +11,7 @@ independent supervision and recovery integration.
 | Phase | Explicit owner | Evidence retained |
 | --- | --- | --- |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
+| Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
 | Native launch | `AppLaunch` | Original accepted Startup, candidate generation, published launch input, host journal, clock, init witness and full BootstrapHost |
 | Native ready | `NativeReadyQualification` | Actual returned Ready and the one-time inventory of the four declared private sockets |
 | Recording begin | `AppStart` | Original AppLaunch, fresh source/runtime/host/probe checks, returned durable host authorization and ledger intent, and the existing one-use Relay |
@@ -24,8 +25,9 @@ independent supervision and recovery integration.
 | Never-authorized recovery | `AppNeverAuthorizedHost`, `AppNeverAuthorizedRestoredHost` and App-specific `recover_never_authorized` | Exact original NeverAuthorized reader, prepared-only ledger, pristine files and independent exits; no recording authorization, abandonment or success is manufactured |
 
 The direct-policy `Launch`, `Start`, `RetainedHost`, `ActiveSample`, and
-`IdleService` admission gates remain unchanged. They do not accept the App
-classes just because they share implementation. The App-specific classes are
+`IdleService` action admission gates remain exact. They do not accept the App
+classes just because they share implementation. An explicitly reserved idle
+service also refuses a second driver through its direct `run()` path. App classes are
 closed leaf policies; unreviewed subclasses are not admitted.
 
 ### Read-only service preparation
@@ -43,12 +45,43 @@ retire the idle coordinator, change its session reader, append journal events,
 start native code or authorize recording. Existing direct launch gates refuse
 the App candidate. The original explicit idle-cancellation route still works
 while no native inputs have been published. Once they have, this idle reader
-refuses recheck; a future explicit native phase must own that transition.
+refuses recheck; the separate App native phase owns that transition.
 
 Partial construction releases only acquired duplicate/read resources. Successful
 construction registers original cleanup immediately with the existing service;
 substitution cannot redirect cleanup to a replacement reader. Startup and the
 service's borrowed original objects remain caller-owned.
+
+### Explicit service-to-native handoff
+
+`AppService` reserves one unused original `IdleService` inside the accepted
+Startup lifetime. Construction is passive. Its one top-level loop initially
+drives the existing idle coordinator; it never runs a nested App loop inside
+an idle wait callback. Direct native and recording slots remain empty.
+
+The explicit `start_native` verifies the original prepared ledger and distinct
+launch/exit-observation endpoints, then holds the existing inbox publication
+lock across input publication, launch and independent Operator capture. Pending
+idle cancellation or publication contention refuses before launch input writes.
+The idle coordinator and its reader are retired before the first publication
+attempt; uncertain publication or launch cannot restore idle ownership.
+
+Only a successfully returned original AppLaunch can supply Ready for independent
+Operator capture. The Operator's original cleanup is registered immediately,
+before subsequent checks can fail. Earlier launch/capture failures consume the
+attempt and leave the original session's clock-only expiry available; pristine
+files alone do not allow a never-authorized recovery claim.
+
+Explicit cancellation closes only the original transport, once. A lost close
+return is not exit evidence or permission to repeat. The independently retained
+Operator must establish worker/init exits and publish evidence before the App
+never-authorized route can continue the same RecoverySession. No recording
+authorization, automatic cancellation, renewed budget or App stop is inferred.
+All original cleanup callbacks remain owned by the borrowed idle service.
+
+This driver currently stops at the native/cancellation boundary. Service-level
+recording begin, active sampling, finish and abandonment still need a separate
+one-way phase join. Neither a source profile nor an entrypoint selects it.
 
 ### One-way launch and begin
 
@@ -164,7 +197,7 @@ uncertain command returns are inspected without reissuing commands. Closing a
 host reader does not close the caller's original ledger, Operator or journal.
 
 None of these paths is an installed service or independent supervisor. The
-App-aware service phase assembly remains necessary before live use.
+App-aware recording-phase assembly remains necessary before live use.
 
 ## Validation scope
 
@@ -180,6 +213,13 @@ session, journal and descriptors, with explicitly synthetic Startup publication,
 App input identities and idle process facts. They prove preparation/cleanup and
 unchanged action gates, not full App qualification or installed provenance.
 
+App service/native-phase tests exercise the real original service, journal,
+prepared ledger, policy deadlines and descriptor cleanup. Startup/App publication,
+native launch/Ready, independent Operator and recovery-entry facts are explicitly
+synthetic boundaries in that suite. They prove ownership/order and fault handling,
+not an actual installed App/native lifetime. The actual lower-level App policy
+tests remain separate and cannot be replaced by these synthetic boundary results.
+
 Failure tests use two complementary fixtures: actual AppLaunch/input bindings
 with explicitly synthetic exit evidence, and actual original worker/init
 pidfds, exit receipts, ledgers, journals and private recording files with
@@ -193,9 +233,10 @@ full source/runtime checks to make a run pass.
 
 ## Remaining gates before a human scanner/audio test
 
-1. Explicit App-aware service phase assembly, including capture of the original
-   independent Operator before begin/cancel, immediate cleanup custody, no idle
-   fallback after dispatch and no loss of clock-only expiry on uncertainty.
+1. Complete the App-aware recording-phase handoff from the new native driver:
+   retire native cancellation before AppStart, retain exact Relay/PostBegin for
+   active samples, preserve progress before finish/abandonment, and join the
+   distinct original-session success/preservation routes without idle fallback.
 2. A separately named source profile and independently supervised entrypoint;
    passive preparation must remain passive.
 3. A fresh isolated fixed-command end-to-end lifetime with actual native

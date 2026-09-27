@@ -1384,6 +1384,7 @@ class IdleService:
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.used = self.closed = False
         self.candidate_attempted = False
+        self._app_driver = None
         self.observation_attempted = False
         self.launch_preparation_attempted = False
         self.native_attempted = False
@@ -1783,6 +1784,7 @@ class IdleService:
         """
         acquired = entered = False
         try:
+            require(self._app_driver is None)
             require(self.lock.acquire(blocking=False))
             acquired = True
             require(self.owner == (os.getpid(), get_ident()) and not self.used)
