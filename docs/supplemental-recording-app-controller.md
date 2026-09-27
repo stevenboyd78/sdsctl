@@ -44,8 +44,8 @@ Observed source is hashed, never imported. Legacy selectors, subclasses and a
 digest made under another profile kind are refused. Existing source profiles
 and the passive preparation command remain unchanged.
 
-An isolated import smoke test runs only reviewed repository code, with socket
-and process creation prohibited. The inventory itself remains standard-library
+An isolated import smoke test runs only reviewed repository code, with network
+connection operations and subprocess launches blocked. The inventory remains standard-library
 only. Controller imports additionally require PySerial through scanner transport
 code; the test explicitly distinguishes this requirement from the deferred native
 imports. This is a local dependency observation, not a pinned installed image,
@@ -277,6 +277,16 @@ shell, file results and native return/continuity/exit facts are explicitly
 synthetic. Neither fixture is a complete installed App lifetime, and these
 scopes must not be conflated.
 
+A further recording-phase composition keeps a real RecoverySession, process
+tracker, dispatcher and executor from before AppStart through the actual App
+finalized/restored reader route. Deadline tests advance the underlying fixture
+clock without replacing the original owner callbacks. Delayed or absent init
+exit, lost stop replies, failed inspection, changed files, unhealthy normal
+status and attempted session replacement cannot repeat recovery or renew its
+deadline. The outer AppService shell and native/file/platform facts are still
+explicitly synthetic; complete startup-to-service composition and installed
+supervision are not proved by this narrower seam.
+
 Failure tests use two complementary fixtures: actual AppLaunch/input bindings
 with explicitly synthetic exit evidence, and actual original worker/init
 pidfds, exit receipts, ledgers, journals and private recording files with
@@ -290,8 +300,10 @@ full source/runtime checks to make a run pass.
 
 ## Remaining gates before a human scanner/audio test
 
-1. Extend full-driver composition through actual finalized/preserved readers
-   and the original session, keeping synthetic platform/transport facts explicit.
+1. Extend full-driver composition through startup, native and recording phases
+   into actual finalized/preserved recovery. The finalized phase-to-session seam
+   is covered, but its outer service is synthetic. Keep all substituted
+   platform/transport facts explicit.
 2. Bind the separate App source inventory to a reviewed, independently supervised
    entrypoint with explicit interpreter/dependency provenance; passive preparation
    must remain passive. The read-only inventory alone does not enable this.

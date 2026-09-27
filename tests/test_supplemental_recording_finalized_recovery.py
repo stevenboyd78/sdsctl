@@ -33,7 +33,12 @@ h = restored.dispatch_tests.h
 
 @pytest.fixture
 def cycling(host, monkeypatch):
-    c = host
+    yield from setup_cycling(host, monkeypatch)
+
+
+def setup_cycling(c, monkeypatch, *, read_clock=None):
+    """Explicit synthetic platform adapter; caller may retain a pre-begin clock."""
+    clock = c.operator._clock if read_clock is None else read_clock
     c.normal = m.base.App(c.s.plan.normal.pin, "stopped")
     c.candidate = m.base.App(c.s.plan.candidate.pin, "running", c.s.run.pins.generation)
     c.stop_return_lost = c.inspect_lost = False
@@ -111,7 +116,7 @@ def cycling(host, monkeypatch):
         c.s.journal,
         docker,
         images={m.base.NORMAL: c.s.plan.normal.image, m.base.CANDIDATE: c.s.plan.candidate.image},
-        read_clock=lambda: (c.s.plan.boot, c.operator._clock()),
+        read_clock=lambda: (c.s.plan.boot, clock()),
     )
 
     def reconcile():
@@ -131,7 +136,7 @@ def cycling(host, monkeypatch):
         docker,
         cli_image=c.s.plan.cli_image,
         cli_generation=c.s.plan.cli_generation,
-        now=c.operator._clock,
+        now=clock,
     )
     c.session = m.launch.bootstrap.RecoverySession(c.s.journal, processes, dispatch, c.host.read)
     original_init = m.FinalizedHost.__init__

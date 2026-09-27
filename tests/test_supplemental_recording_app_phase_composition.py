@@ -38,7 +38,12 @@ pytestmark = pytest.mark.parametrize("candidate", ["app_native"], indirect=True)
 
 
 @pytest.fixture
-def composed(joined, monkeypatch):
+def phase_session():
+    return SimpleNamespace(read=None)
+
+
+@pytest.fixture
+def composed(joined, monkeypatch, phase_session):
     s = joined
     driver = object.__new__(m.AppService)
     driver.owner = os.getpid(), get_ident()
@@ -47,7 +52,7 @@ def composed(joined, monkeypatch):
     driver.plan, driver.projected, driver.journal = s.plan, s.projected, s.journal
     driver.lock, driver._cleanup = Lock(), []
     driver.lock.acquire()
-    driver.session = SimpleNamespace(read=None)
+    driver.session = phase_session
     driver.failed = False
 
     def fail(error):
@@ -62,12 +67,11 @@ def composed(joined, monkeypatch):
 
     def context(*, recovering=False):
         assert not driver.failed and driver.used and driver.lock.locked()
-        assert not recovering
         assert driver.owner == (os.getpid(), get_ident())
         if driver.recording is not None:
-            driver.recording._context()
+            driver.recording._context(recovering=recovering)
         else:
-            assert not driver.recording_attempted
+            assert not recovering and not driver.recording_attempted
 
     driver._context = context
     native = driver.native = object.__new__(m.AppNativePhase)
