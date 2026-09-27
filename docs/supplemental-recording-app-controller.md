@@ -2,7 +2,8 @@
 
 These are **uninstalled development libraries**, not an available Home
 Assistant App option or a supported manual launch recipe. No existing command,
-source profile, service, or passive `--prepare-idle-service` path selects them.
+service, or passive `--prepare-idle-service` path selects them. A separate
+read-only source inventory names their bundle but cannot select or launch it.
 Do not run them against a scanner as a substitute for the still-pending
 independent supervision and recovery integration.
 
@@ -10,6 +11,7 @@ independent supervision and recovery integration.
 
 | Phase | Explicit owner | Evidence retained |
 | --- | --- | --- |
+| Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
 | Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
 | Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
@@ -30,6 +32,24 @@ The direct-policy `Launch`, `Start`, `RetainedHost`, `ActiveSample`, and
 classes just because they share implementation. An explicitly reserved idle
 service also refuses a second driver through its direct `run()` path. App classes are
 closed leaf policies; unreviewed subclasses are not admitted.
+
+### Separate read-only source inventory
+
+`supplemental_recording_app_host_source.Layout` names the closed App controller
+library bundle with its own digest kind. Its 83 private modules include imports
+deferred until native construction; the whole product tree is also inventoried.
+It retains the original complete double-read metadata/content checks, file and
+byte limits, time bound, private-file rules and exact inventory requirements.
+Observed source is hashed, never imported. Legacy selectors, subclasses and a
+digest made under another profile kind are refused. Existing source profiles
+and the passive preparation command remain unchanged.
+
+An isolated import smoke test runs only reviewed repository code, with socket
+and process creation prohibited. The inventory itself remains standard-library
+only. Controller imports additionally require PySerial through scanner transport
+code; the test explicitly distinguishes this requirement from the deferred native
+imports. This is a local dependency observation, not a pinned installed image,
+a dependency integrity check, or independent supervision. Those gates remain.
 
 ### Read-only service preparation
 
@@ -272,8 +292,9 @@ full source/runtime checks to make a run pass.
 
 1. Extend full-driver composition through actual finalized/preserved readers
    and the original session, keeping synthetic platform/transport facts explicit.
-2. A separately named source profile and independently supervised entrypoint;
-   passive preparation must remain passive.
+2. Bind the separate App source inventory to a reviewed, independently supervised
+   entrypoint with explicit interpreter/dependency provenance; passive preparation
+   must remain passive. The read-only inventory alone does not enable this.
 3. A fresh isolated fixed-command end-to-end lifetime with actual native
    returns, full source/runtime pins, and independently bounded termination.
 4. Installed provenance and measured collection timing, plus a reviewed
