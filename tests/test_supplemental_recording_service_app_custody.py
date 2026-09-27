@@ -85,7 +85,7 @@ def metadata(process, slug, image, cid):
 
 
 @contextmanager
-def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True):
+def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True, executions=None):
     path = tmp_path / "engine.sock"
     tmp_path.chmod(0o700)
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -118,9 +118,18 @@ def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True):
                     continue
                 state.requests.append(request)
                 assert request[2] is None
-                paths = {f"GET /v1.47/containers/app_{slug}/json HTTP/1.1": slug for slug in values}
+                paths = {
+                    f"GET /v1.47/containers/app_{slug}/json HTTP/1.1": value
+                    for slug, value in values.items()
+                }
+                paths.update(
+                    {
+                        f"GET /v1.47/exec/{key}/json HTTP/1.1": value
+                        for key, value in (executions or {}).items()
+                    }
+                )
                 assert request[0] in paths  # No mutations, signals, execs or arbitrary paths.
-                value = deepcopy(values[paths[request[0]]])
+                value = deepcopy(paths[request[0]])
                 if state.hook:
                     value = state.hook(value, len(state.requests))
                 peer.sendall(engine_tests.reply(value))
@@ -150,7 +159,16 @@ def server(tmp_path, monkeypatch, values, *, sender=False, authenticated=True):
 
 
 @contextmanager
-def setup(prepared, tmp_path, monkeypatch, *, sender=False, authenticated=True, short=False):
+def setup(
+    prepared,
+    tmp_path,
+    monkeypatch,
+    *,
+    sender=False,
+    authenticated=True,
+    short=False,
+    executions=None,
+):
     with child() as normal, child() as candidate:
         values = {
             m.NORMAL: metadata(normal, m.NORMAL, prepared.plan.normal.image, "b" * 64),
@@ -183,7 +201,12 @@ def setup(prepared, tmp_path, monkeypatch, *, sender=False, authenticated=True, 
             watch = m.deadlines.DeadlineWatch(link)
             try:
                 with server(
-                    tmp_path, monkeypatch, values, sender=sender, authenticated=authenticated
+                    tmp_path,
+                    monkeypatch,
+                    values,
+                    sender=sender,
+                    authenticated=authenticated,
+                    executions=executions,
                 ) as (endpoint, state):
                     case = SimpleNamespace(
                         link=link,

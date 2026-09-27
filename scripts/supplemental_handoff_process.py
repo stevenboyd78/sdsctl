@@ -73,20 +73,49 @@ class ProcessWitness:
     receipt. Independently persisted exits need the policy journal integration.
     """
 
-    def __init__(self, expected: ProcessIdentity):
+    def __init__(self, expected: ProcessIdentity, *, retained_fd: int | None = None):
+        """Optionally duplicate an already retained LIVE pidfd, without PID open.
+
+        This is not descriptor adoption or reconstruction of an exited process.
+        Kernel fdinfo and two live identity reads must bind the borrowed handle
+        to the expected incarnation. Only the duplicate is owned/closed here.
+        The caller still qualifies its original generation and namespace view.
+        """
         require(type(expected) is ProcessIdentity)
         self.identity, self.fd = expected, -1
         try:
             require(read_identity(expected.pid, expected.container_id) == expected)
-            self.fd = os.pidfd_open(expected.pid, 0)
+            if retained_fd is None:
+                self.fd = os.pidfd_open(expected.pid, 0)
+            else:
+                require(type(retained_fd) is int and retained_fd >= 0)
+                before = self._live_descriptor(retained_fd, expected.pid)
+                self.fd = os.dup(retained_fd)
+                require(not os.get_inheritable(self.fd))
+                require(self._live_descriptor(self.fd, expected.pid) == before)
+                require(self._live_descriptor(retained_fd, expected.pid) == before)
             require(read_identity(expected.pid, expected.container_id) == expected)
             require(not self.exited())
-        except Exception:
+        except BaseException as error:
             self.close()
+            if not isinstance(error, Exception):
+                raise
             # Never print proc text, local paths or exception messages.
             from supplemental_handoff_policy import UnsafeHandoff
 
             raise UnsafeHandoff("Process witness unavailable; exit remains unconfirmed.") from None
+
+    @staticmethod
+    def _live_descriptor(fd: int, pid: int):
+        info = os.fstat(fd)
+        with open(f"/proc/self/fdinfo/{fd}", "rb", buffering=0) as stream:
+            raw = stream.read(4097)
+        require(0 < len(raw) <= 4096 and raw.endswith(b"\n"))
+        numbers = [
+            line.partition(b":")[2].strip() for line in raw.splitlines() if line.startswith(b"Pid:")
+        ]
+        require(numbers == [str(pid).encode("ascii")])
+        return info.st_dev, info.st_ino, info.st_mode
 
     def exited(self) -> bool:
         require(self.fd >= 0)

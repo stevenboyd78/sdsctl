@@ -465,6 +465,67 @@ owner. It must not reconstruct a new recovery session merely because these
 read-only handles report an exit. Independent bounds on the observer itself
 also remain required.
 
+## Independent native-worker custody prerequisite (uninstalled)
+
+`supplemental_recording_service_native_custody.NativeCustody` adds a one-use,
+read-only native-process capture to the **same original** `AppCustody`. It is
+not selected by an installed command or source inventory. The helper, candidate
+init, guardian, native recording worker and watchdog must still be live, the
+retained normal init must have exited, and the original readiness cutoff must
+not have passed. A failed or interrupted capture consumes the slot but leaves
+the borrowed App/deadline evidence intact; it cannot be retried.
+
+The capture joins the original plan/projection, candidate generation and init,
+fixed command path/source/deadline, and all three private dispatch intents.
+The dispatch directory stays read-locked across both fixed exec inspections and
+kernel capture. No intent is recreated or appended. The observer's separately
+authenticated Engine endpoint supplies the exact running exec's guardian PID;
+the second inspection must match the first. Untrusted reported local identities
+must independently match kernel start times, root credentials, namespace
+membership, and the guardian's exact two-child process tree. A reported identity
+is **not** an authenticated Ready message or permission to begin recording.
+The separate `namespace.Observation` type shares kernel mapping checks but is
+not a `namespace.Witness`; the ordinary authenticated-Ready protocol and exact
+witness-type gates are unchanged. This avoids treating reported hints as if
+they had arrived through the recording transport's authenticated Ready path.
+
+The original candidate pidfd is duplicated through the explicit live-only
+`ProcessWitness(..., retained_fd=...)` path. This does not reopen a numeric PID:
+kernel pidfd metadata and two live incarnation reads must agree before a new
+witness is returned. An exited descriptor, another process's pidfd, a regular
+file, or a changed process identity cannot manufacture custody. The borrowed
+descriptor stays caller-owned, including on interruption or partial failure.
+The ordinary process-witness constructor remains available with its existing
+live-capture requirements.
+
+After acquisition, the observer owns four distinct duplicated handles for init,
+guardian, native and watchdog. Polling checks the retained immutable binding and
+descriptor identities, returning their individual exits alongside the original
+App/deadline observations. It does not replay dispatch files, contact Engine,
+receive a helper report, reopen worker PIDs or consult expired readiness.
+It can therefore continue after helper/Engine/startup cleanup and while other
+workers remain alive. A frozen worker is not exited. Neither helper nor init
+exit substitutes for any worker, and even all four exits supply no exec return
+code, recording-completion acknowledgment or restoration proof.
+
+Tests use actual disposable process trees, retained kernel handles, private
+dispatch records and credential-checked local Unix transport. Docker metadata,
+container credentials/membership and namespace mapping are explicit fixtures;
+the fixed native command is not executed. Both ordinary peer and actual sender
+credential paths are covered, along with wrong identities/descriptors, changed
+commands/dispatch history, partial interrupts, and independent worker exits.
+These tests do not qualify distinct installed containers or actual scanner I/O.
+
+This captures process facts only. Authenticated Ready, reviewed active-command
+and dependency provenance, explicit action permission, pre-begin admission,
+CLI execution custody, bounded observer execution, and single-writer recovery
+handoff remain separate requirements. The existing same-process `Operator`
+reconciliation and its journal rules are unchanged. Do not replace that owner
+with this object, treat its frozen `Status` as action authority, or create a new
+recovery session from its exit set. A different worker time namespace is not
+silently accepted; this capture currently requires the ordinary host user/time
+namespace mapping, without inferring any alternate-domain proof.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and native-I/O lifetime qualification.

@@ -128,10 +128,11 @@ def read(pid, container_id):
 
 
 def match(init, guardian, native, watchdog, *, expected_init, reported, host_user, host_time):
-    """Check already live-bound observations against an actual operator report.
+    """Check already live-bound observations against reported identity values.
 
     The init witness and independently inspected guardian host PID must be
     qualified by the host adapter; this pure mapping does not obtain them.
+    This pure comparison does not authenticate the report or grant authority.
     Exact init PID1, distinct child IDs, shared namespaces/cgroup and unchanged
     host user/time domains are required. No PID arithmetic or substring match.
     """
@@ -171,20 +172,8 @@ def match(init, guardian, native, watchdog, *, expected_init, reported, host_use
         raise UnconfirmedNamespace(MESSAGE) from None
 
 
-class Witness:
-    """Retain actual pidfds around host/container mapping, without signals.
-
-    init_witness must already be bound by the independent host before handoff;
-    guardian_pid comes from its separately qualified exact exec inspection.
-    reported is the identity part of the authenticated ready envelope. None of
-    those prerequisites is established by accepting caller arguments here.
-    A failed refresh prevents further live claims but keeps retained handles
-    available for exact exit observation until explicitly closed.
-    An optional live ZeroDomain is caller-owned and rechecked on every mapping;
-    it changes only the allowed helper/init time-domain relationship. All native
-    actors must still share the exact init namespaces. No serialized proof or
-    inferred numeric-clock equivalence is accepted.
-    """
+class _ProcessTree:
+    """Shared kernel mapping only; subclasses keep distinct protocol contracts."""
 
     def __init__(self, init_witness, guardian_pid, reported, *, zero_domain=None):
         self.owner = os.getpid(), get_ident()
@@ -321,6 +310,38 @@ class Witness:
                 failed = True
         self.handles.clear()
         require(not failed)
+
+
+class Witness(_ProcessTree):
+    """Retain actual pidfds around an authenticated Ready's namespace mapping.
+
+    init_witness must already be bound by the independent host before handoff;
+    guardian_pid comes from its separately qualified exact exec inspection.
+    reported is the identity part of the authenticated ready envelope. None of
+    those prerequisites is established by accepting caller arguments here.
+    A failed refresh prevents further live claims but keeps retained handles
+    available for exact exit observation until explicitly closed.
+    An optional live ZeroDomain is caller-owned and rechecked on every mapping;
+    it changes only the allowed helper/init time-domain relationship. All native
+    actors must still share the exact init namespaces. No serialized proof or
+    inferred numeric-clock equivalence is accepted.
+    """
+
+
+class Observation(_ProcessTree):
+    """Kernel actor facts from independently checked exec/PID identity hints.
+
+    Unlike Witness, this does NOT represent an authenticated Ready. It is a
+    distinct type, never accepted in place of the ordinary protocol witness.
+    The caller must supply an already live-bound init and an independently
+    inspected exact exec guardian. Every reported value still has to match
+    live kernel ancestry, namespace and incarnation evidence. No alternate
+    time-domain mapping is selected through this read-only observation API.
+    """
+
+    def __init__(self, init_witness, guardian_pid, reported):
+        require(type(self) is Observation)
+        super().__init__(init_witness, guardian_pid, reported)
 
 
 if __name__ == "__main__":

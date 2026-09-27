@@ -96,6 +96,7 @@ class AppCustody:
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.closed = self.failed = self.capture_failed = False
         self.candidate_attempted = False
+        self.native_custody_attempted = False
         self._retained = ()
         self._original_retained = self._retained
         self._receipts = ()
