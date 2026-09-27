@@ -397,7 +397,7 @@ class Startup:
                         raise
 
     @contextmanager
-    def idle_service(self, docker):
+    def idle_service(self, docker, *, dispatch_observer=None):
         """One passive service assembly, keeping startup custody until cleanup.
 
         Requires this owner's accepted template-derived baseline. Creates only
@@ -412,6 +412,12 @@ class Startup:
         Successful exit leaves startup and declaration with the caller. Every
         failed path preserves files and attempts original cleanup once.
         No installed command currently selects this method.
+
+        An explicit observer is passed unchanged into the original dispatcher
+        during assembly; it is never called by assembly. The independently
+        qualified caller must authenticate its peer and separately grant action
+        scope. Neither this optional callback nor passive preparation consent
+        authorizes running the service or a native recording.
         """
         import supplemental_recording_service_operator as operator
 
@@ -426,6 +432,7 @@ class Startup:
             # lifetime; reentrant failure cannot close a clock being lent to
             # a partly constructed service before its own cleanup runs.
             self._service_active = True
+            require(dispatch_observer is None or callable(dispatch_observer))
             require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
             end = time.monotonic() + publication.MAX_SECONDS
             original, plan, clock = self.original, self.original.plan, self.clock
@@ -447,7 +454,12 @@ class Startup:
             journal.append(plan.preparation(baseline, projected))
             guard()
             service = operator.IdleService(
-                original, projected, journal, docker, clock_witness=clock
+                original,
+                projected,
+                journal,
+                docker,
+                clock_witness=clock,
+                dispatch_observer=dispatch_observer,
             )
             cleanup.append(service.close)
 

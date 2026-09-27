@@ -80,6 +80,59 @@ def test_passive_assembly_seals_only_original_journal_and_retains_clock_last(ser
     assert preserved(s) == original_files
 
 
+def test_explicit_dispatch_observer_is_borrowed_without_calling_or_replacing_owners(service_case):
+    s = service_case
+    owner = accept(s)
+
+    def observer(_):
+        pytest.fail("Passive assembly must not request CLI evidence")
+
+    with owner.idle_service(s.docker, dispatch_observer=observer) as service:
+        assert service.dispatch.observe is service.dispatch._original_observe is observer
+        assert service._dispatch_observer is observer
+        assert service.session.dispatch is service.dispatch
+        assert service.session.processes is service.processes
+        assert service.session.journal is service.journal
+        assert service.clock_witness is owner.clock
+        service._context()
+        assert not service.used and not service.dispatch.used and len(service.journal.entries) == 1
+    assert service.closed and not owner.clock.closed
+
+
+@pytest.mark.parametrize("observer", [False, True, 0, "observe", object()])
+def test_invalid_observer_refuses_before_creating_service_directories(service_case, observer):
+    s = service_case
+    owner = accept(s)
+    before = preserved(s)
+    with (
+        pytest.raises(m.UnconfirmedStartup),
+        owner.idle_service(s.docker, dispatch_observer=observer),
+    ):
+        pytest.fail("Invalid observer reached assembly")
+    assert preserved(s) == before
+    assert not (s.root / "journal").exists() and not (s.root / "inbox").exists()
+    assert owner.service_used and owner.closed and owner.clock.closed
+
+
+@pytest.mark.parametrize("member", ["observe", "_original_observe", "both", "all"])
+def test_assembled_observer_cannot_be_removed_or_rebound(service_case, member):
+    s = service_case
+    owner = accept(s)
+
+    def observer(_):
+        pytest.fail("No action or evidence should be requested")
+
+    with owner.idle_service(s.docker, dispatch_observer=observer) as service:
+        for name in ("observe", "_original_observe") if member in ("both", "all") else (member,):
+            setattr(service.dispatch, name, None)
+        if member == "all":
+            service._dispatch_observer = None
+        with pytest.raises(operator.UnconfirmedOperator):
+            service._context()
+        assert not service.used and not service.dispatch.used and len(service.journal.entries) == 1
+    assert service.closed and not owner.clock.closed
+
+
 @pytest.mark.parametrize("extra", ["unexpected", "journal/unexpected"])
 def test_unplanned_directory_change_refuses_and_preserves_evidence(
     service_case, monkeypatch, extra

@@ -1375,12 +1375,20 @@ class IdleService:
     through service cleanup and closes it afterward. This supplies no approval
     or startup protocol; no serialized or newly sampled clock is substituted.
 
+    An explicit dispatch_observer is retained unchanged by the original
+    dispatcher before any intent. The service neither calls it during assembly
+    nor owns/closes its peer or evidence resources. Source-qualified peer
+    authentication, actual independent custody and action scope are separate;
+    an arbitrary callback must never be treated as that authority.
+
     This is not an installed entrypoint. Root/confinement, source/runtime pins,
     independent outer supervision and original custody after helper loss must
     be qualified by the eventual host launcher, not inferred from this loop.
     """
 
-    def __init__(self, original, projected, journal, docker, *, clock_witness=None):
+    def __init__(
+        self, original, projected, journal, docker, *, clock_witness=None, dispatch_observer=None
+    ):
         self.owner, self.lock = (os.getpid(), get_ident()), Lock()
         self.failed = self.used = self.closed = False
         self.candidate_attempted = False
@@ -1396,6 +1404,11 @@ class IdleService:
         self._launch_binding = None
         self._cleanup = []
         try:
+            # Install before constructing the ONE original dispatcher. Never
+            # replace that dispatcher/session or attach a callback after intent.
+            # This hook supplies evidence, not action consent or peer provenance.
+            require(dispatch_observer is None or callable(dispatch_observer))
+            self._dispatch_observer = dispatch_observer
             require(type(original) is intake.CasePlan)
             self.original, self.plan = original, original.recheck()
             self.projected, self.journal, self.docker = projected, journal, docker
@@ -1426,6 +1439,7 @@ class IdleService:
                 cli_image=self.plan.cli_image,
                 cli_generation=self.plan.cli_generation,
                 now=self._now,
+                observe=dispatch_observer,
             )
             self.session = launch.bootstrap.RecoverySession(
                 journal, self.processes, self.dispatch, self.transfer.read
@@ -1452,6 +1466,7 @@ class IdleService:
             self.inbox,
             self.coordinator,
             self.clock_witness,
+            self._dispatch_observer,
         )
 
     def _clock(self):
@@ -1472,6 +1487,10 @@ class IdleService:
         require(all(a is b for a, b in zip(self._objects(), self.objects, strict=True)))
         require(self.coordinator.session is self.session and self.coordinator.inbox is self.inbox)
         require(self.coordinator.transfer is self.transfer)
+        require(
+            self.dispatch.observe is self._dispatch_observer
+            and self.dispatch._original_observe is self._dispatch_observer
+        )
         require(self.original.recheck() is self.plan)
         require(self.candidate is self._original_candidate)
         require(self.native is self._original_native)

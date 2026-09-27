@@ -128,9 +128,23 @@ def accepted(before_handoff, tmp_path, monkeypatch, request):
 
 
 @pytest.fixture
-def service(accepted, monkeypatch):
+def service(accepted, monkeypatch, request):
     s = accepted
     root = s.plan.root
+    s.dispatch_notices, s.dispatch_fault = [], None
+
+    def observe(notice):
+        # Synthetic observer receipt only. Actual separate-peer custody and
+        # lost acknowledgments are exercised by service_cli_process tests.
+        assert s.service.dispatch is s.session.dispatch
+        assert s.service.clock_witness is s.startup.clock
+        assert notice.history == tuple(m.base.encode(item) for item in s.journal.entries)
+        s.dispatch_notices.append(notice)
+        if notice.stage == s.dispatch_fault:
+            raise OSError("PRIVATE missing evidence acknowledgment")
+        return notice.receipt
+
+    observer = observe if getattr(request, "param", None) == "observed" else None
 
     def candidate_files(selected, container):
         assert selected == s.projected.layout
@@ -148,11 +162,18 @@ def service(accepted, monkeypatch):
 
         def assemble():
             if s.owned_service:
-                s.service = resources.enter_context(s.startup.idle_service(s.docker))
+                s.service = resources.enter_context(
+                    s.startup.idle_service(s.docker, dispatch_observer=observer)
+                )
                 s.journal = s.service.journal
             else:
                 s.service = m.IdleService(
-                    s.original, s.projected, s.journal, s.docker, clock_witness=s.startup.clock
+                    s.original,
+                    s.projected,
+                    s.journal,
+                    s.docker,
+                    clock_witness=s.startup.clock,
+                    dispatch_observer=observer,
                 )
             journal = s.journal
 
@@ -207,6 +228,52 @@ def test_actual_published_plan_and_original_baseline_assemble_passively(service)
     assert not s.engine.sent and not list(s.inbox.path.iterdir())
     assert len(s.journal.entries) == 1
     assert not s.service.native_attempted and not s.service.recording_attempted
+
+
+@pytest.mark.parametrize("service", ["observed"], indirect=True)
+def test_same_accepted_owner_keeps_evidence_hook_through_all_four_app_commands(service):
+    s = service
+    originals = s.session, s.session.executor, s.service.dispatch, s.service.processes
+    assert not s.dispatch_notices
+    services.test_single_owner_polls_explicit_request_cancel_and_normal_restoration(s)
+    assert originals == (s.session, s.session.executor, s.service.dispatch, s.service.processes)
+    assert [(n.phase, n.stage) for n in s.dispatch_notices] == [
+        (phase, stage)
+        for phase in (
+            "stopping_normal",
+            "starting_candidate",
+            "stopping_candidate",
+            "starting_normal",
+        )
+        for stage in ("before_create", "before_start")
+    ]
+    assert not s.startup.closed and not s.borrowed_clock.closed
+    assert s.journal.machine.state.recording_outcome == "not_attempted"
+
+
+@pytest.mark.parametrize("service", ["observed"], indirect=True)
+@pytest.mark.parametrize("stage", ["before_create", "before_start"])
+def test_lost_ack_in_original_accepted_service_cannot_start_or_retry(service, stage):
+    s = service
+    s.dispatch_fault = stage
+    services.publish(s, "request")
+    # The executor retains an uncertain intent for reconciliation rather than
+    # throwing or silently retrying it. Exercise two bounded polls, not a full
+    # fifteen-minute recovery lifetime with a no-op test wait.
+    result = s.service.coordinator.poll(lambda _: pytest.fail("Unexpected nested wait"))
+    assert result.phase == "stopping_normal" and result.outcome == "dispatch_unconfirmed"
+    assert not s.engine.sent
+    assert s.service.dispatch.used == {"stopping_normal"}
+    assert len(s.dispatch_notices) == (1 if stage == "before_create" else 2)
+    notices = tuple(s.dispatch_notices)
+    again = s.service.coordinator.poll(lambda _: pytest.fail("Unexpected nested wait"))
+    assert again.phase == "stopping_normal" and tuple(s.dispatch_notices) == notices
+    entries = tuple(s.journal.entries)
+    with pytest.raises(m.base.UnsafeHandoff):
+        s.service.dispatch(("ha", "apps", "stop", m.base.NORMAL, "--raw-json"), s.plan.case)
+    assert tuple(s.journal.entries) == entries and not s.engine.sent
+    assert s.journal.machine.state.recording_outcome == "not_attempted"
+    assert not s.startup.closed and not s.borrowed_clock.closed
 
 
 @pytest.mark.parametrize("route", ["complete", "expiry", "interrupted", "lost_notice", "lost_read"])

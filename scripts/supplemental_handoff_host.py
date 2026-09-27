@@ -503,7 +503,8 @@ class TrackedDispatch:
             self.used.add(journal.machine.state.phase)
 
     def __call__(self, command: tuple[str, ...], case_id: str) -> None:
-        require(self.observe is self._original_observe)
+        observer = self.observe
+        require(observer is self._original_observe)
         machine = self.journal.machine
         require(machine is not None and machine.case_id == case_id)
         assert machine is not None
@@ -513,7 +514,7 @@ class TrackedDispatch:
         self.used.add(phase)
         cli = self.docker.container(CLI)
         require(generation(cli, name=CLI, image=self.image) == self.generation)
-        self._observed("before_create", phase, cli["Id"], None, observed_at)
+        self._observed("before_create", phase, cli["Id"], None, observed_at, observer=observer)
         eid = self.docker.create_execution(cli["Id"], command)
         self.journal.append(
             {
@@ -538,12 +539,14 @@ class TrackedDispatch:
         require(generation(fresh, name=CLI, image=self.image) == self.generation)
         require(0 <= self.now() - observed_at <= 2)
         self.journal.check_directory()
-        self._observed("before_start", phase, cli["Id"], eid, observed_at)
+        self._observed("before_start", phase, cli["Id"], eid, observed_at, observer=observer)
         self.docker.start_execution(eid)  # exactly one attempt; never infer success
 
-    def _observed(self, stage, phase, cid, eid, observed_at):
-        require(self.observe is self._original_observe)
-        if self.observe is None:
+    def _observed(self, stage, phase, cid, eid, observed_at, *, observer):
+        # Keep the callback from the start of THIS attempt across every I/O
+        # boundary; changing both object attributes cannot reseal its identity.
+        require(self.observe is self._original_observe is observer)
+        if observer is None:
             return  # Preserve the old non-supervised, uninstalled API.
         journal, docker, image, generation_pin, clock = (
             self.journal,
@@ -566,9 +569,9 @@ class TrackedDispatch:
         )
         expected = notice.receipt
         require(0 <= clock() - observed_at <= 2)
-        acknowledged = self.observe(notice)
+        acknowledged = observer(notice)
         require(type(acknowledged) is str and acknowledged == expected)
-        require(notice.receipt == expected and self.observe is self._original_observe)
+        require(notice.receipt == expected and self.observe is self._original_observe is observer)
         require(self.journal is journal and self.docker is docker and self.now is clock)
         require(self.image == image and self.generation == generation_pin)
         require(journal.machine is machine and machine.state.phase == phase)
@@ -590,6 +593,7 @@ class TrackedDispatch:
                 == "created"
             )
         require(0 <= clock() - observed_at <= 2)
+        require(self.observe is self._original_observe is observer)
 
     def executions_idle(self) -> bool:
         machine = self.journal.machine

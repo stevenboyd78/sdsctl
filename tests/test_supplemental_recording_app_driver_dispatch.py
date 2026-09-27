@@ -263,6 +263,31 @@ def test_original_notice_dispatch_and_process_receipts_join_recovery(
     driver.assert_owners(s)
 
 
+@pytest.mark.parametrize("driver_case", ["observed"], indirect=True)
+@pytest.mark.parametrize("route", ["finalized", "preserved", "pristine"])
+def test_original_observer_survives_app_native_recording_and_recovery_handoffs(
+    dispatched, monkeypatch, route
+):
+    s = dispatched
+    observer = s.service.dispatch.observe
+    assert observer is not None and not s.dispatch_notices
+    test_original_notice_dispatch_and_process_receipts_join_recovery(s, monkeypatch, route)
+    commands = s.transfer_io.created + s.cycle.created
+    phases = [
+        phase
+        for command in commands
+        for phase, argv in driver.platform.h.CONTROL.items()
+        if command == argv
+    ]
+    assert len(phases) == len(commands)
+    assert [(notice.phase, notice.stage) for notice in s.dispatch_notices] == [
+        (phase, stage) for phase in phases for stage in ("before_create", "before_start")
+    ]
+    assert s.service._dispatch_observer is s.driver.dispatch.observe is observer
+    assert s.driver.dispatch._original_observe is observer
+    assert s.service.closed and not s.startup.clock.closed
+
+
 def test_lost_initial_stop_return_is_reconciled_without_reissuing(dispatched, monkeypatch):
     s = dispatched
     s.transfer_io.stop_lost = True

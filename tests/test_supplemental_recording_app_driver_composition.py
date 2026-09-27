@@ -60,9 +60,21 @@ def candidate(supervised, image, configured, monkeypatch, request, tmp_path):
 
 
 @pytest.fixture
-def driver_case(launch_case, tmp_path, monkeypatch):
+def driver_case(launch_case, tmp_path, monkeypatch, request):
     s = launch_case
     s.startup.original = s.case_plan
+    s.dispatch_notices = []
+
+    def observe(notice):
+        # Test-only receipt, not independent CLI/App custody. The real peer
+        # transport and service assembly have separate process compositions.
+        assert s.driver.dispatch is s.service.dispatch is s.session.dispatch
+        assert s.service.clock_witness is s.startup.clock
+        assert notice.history == tuple(base.encode(item) for item in s.journal.entries)
+        s.dispatch_notices.append(notice)
+        return notice.receipt
+
+    observer = observe if getattr(request, "param", None) == "observed" else None
     with ExitStack() as cleanup:
 
         @contextmanager
@@ -74,7 +86,7 @@ def driver_case(launch_case, tmp_path, monkeypatch):
                 if getattr(s, "initial_dispatch", False)
                 else (lambda reader: s.host()),
             )
-            with s.startup.idle_service(s.docker) as original:
+            with s.startup.idle_service(s.docker, dispatch_observer=observer) as original:
                 s.service = original
                 yield original
 
@@ -84,7 +96,12 @@ def driver_case(launch_case, tmp_path, monkeypatch):
                 (s.plan.root / "inbox").mkdir(mode=0o700)
                 monkeypatch.setattr(launch.TransferHost, "read", lambda self: s.host())
                 s.service = m.operator.IdleService(
-                    s.case_plan, s.projected, s.journal, s.docker, clock_witness=s.startup.clock
+                    s.case_plan,
+                    s.projected,
+                    s.journal,
+                    s.docker,
+                    clock_witness=s.startup.clock,
+                    dispatch_observer=observer,
                 )
                 cleanup.callback(s.service.close)
             s.driver = m.AppService(s.startup, s.service)

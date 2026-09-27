@@ -4,6 +4,7 @@ Child owns the only Journal and real TrackedDispatch/Docker HTTP adapter; parent
 owns read-only App/CliCustody and the other Link. No parent journal publication,
 shared writer flock, live Engine, App command execution or recovery authority.
 Only test-only source/root/cgroup eligibility and App/exec facts are synthetic.
+Both direct-dispatch and original IdleService assembly paths are exercised.
 """
 
 import json
@@ -25,6 +26,7 @@ pytestmark = apps.pytestmark
 
 CHILD = r"""
 import json, os, socket, sys, time
+from contextlib import ExitStack
 from pathlib import Path
 print("ready", flush=True)
 line = sys.stdin.buffer.readline()
@@ -39,6 +41,16 @@ def identity(pid, cid):
         f"0::/system.slice/docker-{cid}.scope\n")
 m.processes.read_identity = identity
 plan = m.plans.load_bytes(config["plan"].encode(), config["sha256"])
+original = service = None
+if config["assembly"] == "service":
+    import supplemental_recording_service_operator as operator
+    m.plans.Plan.root = property(lambda _: Path(config["root"]))
+    original = operator.intake.CasePlan(Path(config["root"]), config["sha256"])
+    plan = original.plan
+    layout = next(item for item in plan.layouts if item.slug == m.base.CANDIDATE)
+    stored = m.plans.projection.recording._decode(config["manifest"].encode())
+    projected = m.plans.projection.project(layout, stored)
+    plan.check_projection(projected)
 timer = m.clock.ClockWitness(plan.original_clock)
 peer = m.processes.ProcessWitness(identity(os.getppid(), "9" * 64))
 channels = m.Channels(
@@ -57,18 +69,39 @@ def observe(notice):
     emit(kind="boundary", stage=notice.stage, phase=notice.phase, receipt=notice.receipt)
     return link.observe(notice)
 try:
-    with m.plans.bootstrap.Journal(Path(config["root"]) / "journal") as journal:
+    with ExitStack() as resources:
+        journal = resources.enter_context(
+            m.plans.bootstrap.Journal(Path(config["root"]) / "journal"))
         journal.append(config["preparation"])
         original_fd = journal.fd
-        docker = p.Docker(config["engine"])
-        writer = p.TrackedDispatch(journal, docker, cli_image=plan.cli_image,
-            cli_generation=plan.cli_generation, now=now, observe=observe)
+        if config["assembly"] == "service":
+            connection = p._UnixConnection
+            def fixture_connection(path):
+                assert path == "/var/run/docker.sock"
+                return connection(config["engine"])
+            p._UnixConnection = fixture_connection
+            docker = p.Docker()
+            service = operator.IdleService(original, projected, journal, docker,
+                clock_witness=timer, dispatch_observer=observe)
+            resources.callback(service.close)
+            writer = service.dispatch
+            owners = (service.session, service.session.executor, service.processes, writer)
+            assert not service.used and not writer.used and len(journal.entries) == 1
+        else:
+            docker = p.Docker(config["engine"])
+            writer = p.TrackedDispatch(journal, docker, cli_image=plan.cli_image,
+                cli_generation=plan.cli_generation, now=now, observe=observe)
         def event(kind, **fields):
             return journal.append(dict(kind=kind, boot_id=plan.boot, now=now(), **fields))
         emit(kind="prepared")
         for line in sys.stdin.buffer:
             command = json.loads(line)
             try:
+                if service is not None:
+                    service._context()
+                    assert owners == (service.session, service.session.executor,
+                        service.processes, service.dispatch)
+                    assert service.clock_witness is timer and writer is service.dispatch
                 mode = command["mode"]
                 if mode == "reconcile":
                     writer.reconcile_executions()
@@ -96,6 +129,8 @@ try:
                 recording=state.recording_outcome, completed=state.completed_executions,
                 events=len(journal.entries), link_failed=link.failed)
 finally:
+    if original is not None:
+        original.close()
     link.close()
     timer.close()
     peer.close()
@@ -103,8 +138,8 @@ finally:
 """
 
 
-@pytest.fixture
-def prepared(projection, tmp_path, monkeypatch):
+@pytest.fixture(params=["dispatch", "service"])
+def prepared(projection, tmp_path, monkeypatch, request):
     left, right = m.pair()
     popen, used = subprocess.Popen, []
 
@@ -133,6 +168,7 @@ def prepared(projection, tmp_path, monkeypatch):
         case = next(iterator)
         right.close()
         case.channel = left
+        case.assembly = request.param
         yield case
     finally:
         left.close()
@@ -171,6 +207,7 @@ def setup(prepared, projection, tmp_path, monkeypatch):
     root = tmp_path / "separate-writer"
     root.mkdir(mode=0o700)
     (root / "journal").mkdir(mode=0o700)
+    (root / "inbox").mkdir(mode=0o700)
     monkeypatch.setattr(m.plans.Plan, "root", property(lambda _: root))
     monkeypatch.setattr(m, "ROOT_UID", os.geteuid())
     executions, created, started = {}, [], []
@@ -221,6 +258,8 @@ def setup(prepared, projection, tmp_path, monkeypatch):
     ) as case:
         custody = case.create()
         plan = custody.plan
+        (root / "plan.json").write_bytes(plan.raw)
+        (root / "plan.json").chmod(0o600)
         baseline = old.m.bootstrap.recording.Observation(
             plan.deadlines.issued_at,
             m.base.App(plan.normal.pin, "running", plan.normal_generation, True, False),
@@ -240,6 +279,8 @@ def setup(prepared, projection, tmp_path, monkeypatch):
                 root=str(root),
                 engine=str(apps.m.engine.SOCKET),
                 preparation=plan.preparation(baseline, projection),
+                assembly=prepared.assembly,
+                manifest=m.plans.projection._validated(projection.host).decode(),
             ),
         )
         assert receive(case) == dict(kind="prepared")

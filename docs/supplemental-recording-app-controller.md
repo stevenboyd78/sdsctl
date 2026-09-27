@@ -13,6 +13,7 @@ independent supervision and recovery integration.
 | --- | --- | --- |
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
+| Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
 | Explicit service/native handoff | `AppService` and `AppNativePhase` | One reserved original IdleService, one top-level loop and original inbox lock; original prepared ledger checked before publication; independent Operator retained before cancellation |
 | Explicit recording-phase handoff | `AppRecordingPhase` | Native cancellation retired before AppStart; exact returned start, original active inputs, progress checkpoints, separate finalized/preserved recovery routes and unchanged session clock |
@@ -72,6 +73,40 @@ original process binding and separately measured bounds; source hashes and local
 imports do not establish any of those facts.
 
 ### Read-only service preparation
+
+The original `Startup.idle_service` assembly now accepts an explicitly supplied
+`dispatch_observer`, which is passed unchanged to its one original
+`TrackedDispatch` at construction. The service retains that callback throughout
+its lifetime and rejects removing or replacing either dispatcher reference.
+The dispatcher also pins the callback for each complete create/start attempt,
+including across the acknowledgment and subsequent Engine inspection. Changing
+both callback attributes together cannot bypass the remaining evidence gate.
+Assembly never calls the observer or sends an App command. Invalid callbacks
+refuse before the new journal/inbox directories are created. The existing
+passive command supplies no callback and remains action-free.
+
+This is an integration hook, not an authentication or action-permission gate.
+The eventual qualified active caller must bind the real peer, original plan,
+clock and source/runtime, establish independent custody, and separately admit
+the explicit action scope. An arbitrary callable or matching receipt cannot
+provide that authority. No dispatcher/session replacement or late attachment
+after intent is supported.
+
+Separate-process tests now exercise both the standalone dispatcher and one
+original `IdleService` assembly: the child retains the actual plan file, clock,
+projection, journal, session and dispatcher; the parent has independent App/CLI
+custody and the authenticated evidence link. All four fixed CLI phases, lost
+replies and last-moment generation/exec changes are covered. These tests still
+use synthetic local Engine/App facts, not real App commands or an installed
+service. The child test drives journal events explicitly, not an installed
+startup or native recording loop.
+
+Complementary accepted-startup tests cover all four service preparation routes,
+normal completion, withheld commands, callback substitution and cleanup. App
+driver compositions retain the same callback across native/recording handoffs
+and finalized, preserved and never-authorized recovery. Their observer receipts
+and native/host boundary facts are explicitly synthetic; they are not a second
+claim of independent installed custody or successful hardware recording.
 
 The explicit App `prepare_candidate` consumes the original running idle
 service's one candidate-preparation slot. It retains that service's original
@@ -602,8 +637,8 @@ The callback receipt is an evidence acknowledgment, not peer authentication or
 permission. A separately selected active command must authenticate the complete
 cross-process exchange, qualify both runtimes and sources, bind explicit action
 consent, bound observer execution and implement exclusive failure handoff. No
-existing command/source inventory selects this observer, and no existing
-`IdleService` gains an observer or new authority by default. The optional legacy
+existing command selects this observer; the joint read-only inventory only names
+its source. No `IdleService` gains an observer or new authority by default. The optional legacy
 dispatch path remains unchanged when no observer is explicitly supplied.
 
 ## Private CLI evidence exchange (uninstalled)
@@ -675,9 +710,11 @@ remain separate requirements before selecting any active command.
    publication provenance, platform responses and native transport/file results
    remain explicit synthetic boundaries. Active checkpoint/file/native-I/O tests
    also remain complementary rather than proof of one complete installed lifetime.
-2. Bind the separate App source inventory to a reviewed, independently supervised
-   entrypoint with explicit interpreter/dependency provenance; passive preparation
-   must remain passive. The read-only inventory alone does not enable this.
+2. Bind the joint controller/observer source inventory to a reviewed, independently
+   supervised entrypoint with interpreter/dependency provenance for **both** peers
+   and a distinct explicit action-scope grant. Passive preparation must remain
+   passive; neither its old permission nor a CLI evidence receipt is that grant.
+   The read-only inventory and service callback hook alone do not enable this.
 3. A fresh isolated fixed-command end-to-end lifetime with actual native
    returns, full source/runtime pins, and independently bounded termination.
 4. Installed provenance and measured collection timing, plus a reviewed

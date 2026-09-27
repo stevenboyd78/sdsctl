@@ -9,7 +9,9 @@ journal = old.journal
 
 
 @pytest.mark.parametrize("stage", ["before_create", "before_start"])
-@pytest.mark.parametrize("fault", ["bool", "none", "wrong", "late", "generation", "callback"])
+@pytest.mark.parametrize(
+    "fault", ["bool", "none", "wrong", "late", "generation", "callback", "callback_pair"]
+)
 def test_receipt_or_post_ack_fault_never_repeats_or_starts(journal, stage, fault):
     docker = old.FakeDocker()
     stamp = [12.2]
@@ -26,6 +28,8 @@ def test_receipt_or_post_ack_fault_never_repeats_or_starts(journal, stage, fault
                 docker.cli["State"]["Pid"] += 1
             if fault == "callback":
                 send.observe = None
+            if fault == "callback_pair":
+                send.observe = send._original_observe = None
         return notice.receipt
 
     send = h.TrackedDispatch(
@@ -78,3 +82,59 @@ def test_same_phase_post_ack_substitution_is_not_accepted(journal, fault):
     with pytest.raises(p.UnsafeHandoff):
         send(old.COMMAND, old.CASE)
     assert len(docker.created) == 1 and not docker.started
+
+
+@pytest.mark.parametrize("boundary", ["initial_inspect", "create_return", "final_inspect"])
+def test_callback_pair_is_pinned_across_engine_boundaries(journal, monkeypatch, boundary):
+    docker, notices = old.FakeDocker(), []
+    original_container = docker.container
+    original_create = docker.create_execution
+    original_inspect = docker.inspect_execution
+    inspections = []
+
+    def changed():
+        send.observe = send._original_observe = None
+
+    def container(name):
+        result = original_container(name)
+        if boundary == "initial_inspect":
+            changed()
+        return result
+
+    def create(cid, command):
+        result = original_create(cid, command)
+        if boundary == "create_return":
+            changed()
+        return result
+
+    def inspect(eid):
+        result = original_inspect(eid)
+        inspections.append(eid)
+        if boundary == "final_inspect" and len(inspections) == 2:
+            changed()
+        return result
+
+    def observe(notice):
+        notices.append(notice)
+        return notice.receipt
+
+    send = h.TrackedDispatch(
+        journal,
+        docker,
+        cli_image=old.IMAGE,
+        cli_generation=h.generation(old.container(), name=h.CLI, image=old.IMAGE),
+        now=lambda: 12.2,
+        observe=observe,
+    )
+    monkeypatch.setattr(docker, "container", container)
+    monkeypatch.setattr(docker, "create_execution", create)
+    monkeypatch.setattr(docker, "inspect_execution", inspect)
+    old.intent(journal)
+    with pytest.raises(p.UnsafeHandoff):
+        send(old.COMMAND, old.CASE)
+    assert len(docker.created) == (boundary != "initial_inspect") and not docker.started
+    assert len(notices) == {"initial_inspect": 0, "create_return": 1, "final_inspect": 2}[boundary]
+    before = tuple(journal.entries)
+    with pytest.raises(p.UnsafeHandoff):
+        send(old.COMMAND, old.CASE)
+    assert tuple(journal.entries) == before and not docker.started
