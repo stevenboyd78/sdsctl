@@ -76,7 +76,7 @@ def setup(prepared, projection, family, tmp_path, monkeypatch, *, sender=False, 
             str(plan.native_root / "launch/launch.json"),
             "e" * 64,
             host.source_sha256,
-            plan.deadlines.ready_by,
+            plan.lease["ready_by"],
         )
         pins = m.dispatch.Pins(host, command, candidate.generation, candidate.process)
         value = execution_tests.metadata()
@@ -189,6 +189,17 @@ def test_actual_capture_matches_fixed_exec_and_retains_four_distinct_original_ha
     for fd in handles:
         with pytest.raises(OSError):
             os.fstat(fd)
+
+
+def test_raw_host_cutoff_cannot_replace_original_converted_native_deadline(case):
+    plan = case.custody.plan
+    assert plan.lease["ready_by"] < plan.deadlines.ready_by
+    case.pins = replace(
+        case.pins,
+        command=replace(case.pins.command, ready_by=plan.deadlines.ready_by),
+    )
+    denied(case.capture)
+    assert len(case.state.requests) == 4
 
 
 @pytest.mark.parametrize("deadline", [False, True, "later", float("nan"), float("inf"), -1])

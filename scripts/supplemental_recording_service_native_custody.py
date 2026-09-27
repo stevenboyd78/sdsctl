@@ -102,7 +102,9 @@ class NativeCustody:
             self.plan.check_projection(pins.host.projection)
             require(pins.command.source_sha256 == self.plan.candidate_runtime.source)
             require(pins.command.plan == str(self.plan.native_root / "launch/launch.json"))
-            require(pins.command.ready_by == self.plan.deadlines.ready_by)
+            # Commands use the conservative MONOTONIC lease derived from the
+            # original host clock window, not the raw BOOTTIME policy cutoff.
+            require(pins.command.ready_by == self.plan.lease["ready_by"])
             directory = self.plan.root / "operator-exec"
             dispatch._location(directory, pins)
             # The read lock and retained directory bracket both inspections and
