@@ -2187,6 +2187,21 @@ fixtures cover original full comparisons, peer/outer loss, stopped peers,
 cancellation, descriptor closure and malformed handoffs. Native target stops
 are checked before caller fallback cleanup where that distinction matters.
 
+A separate offline native ingress mode now joins one authenticated UNIX
+SEQPACKET/SCM_RIGHTS transfer to that same watcher. Three independently inherited
+standard-I/O anchors (private original-outer socket, original outer pidfd and
+time namespace) bind six transferred handles; sender credentials, exact anchor
+identity, one-packet-then-EOF and the original absolute readiness cutoff are
+required. Wrong senders, substituted anchors, missing/excess rights, truncation,
+trailing messages and silent/incomplete handoffs are refused without readiness
+or authority over unconfirmed received targets. The original outer remains
+responsible for its own retained peers on any startup failure. Actual passive
+command tests join this transport to full comparisons, staged input, fixed
+writer release and observed exits. These tests use local posix_spawn, **not**
+systemd, and do not qualify the audited host's standard-I/O descriptor API or
+independent service lifetime. See the native README for its precise failure
+model and source references; no older entrypoint/source selection is enlarged.
+
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
 a host without Python, not authenticated compiler/libc/kernel or installed

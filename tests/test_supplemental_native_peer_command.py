@@ -12,6 +12,7 @@ import time
 
 import pytest
 
+from . import test_supplemental_native_peer_ingress as ingress_tests
 from . import test_supplemental_native_peer_watch as native_tests
 from . import test_supplemental_recording_qualified_peer_command as command
 
@@ -31,13 +32,15 @@ pytestmark = native_tests.pytestmark
     [dict(mode="release-command-pair", exit_after_result=True, staged_input=True)],
     indirect=True,
 )
+@pytest.mark.parametrize("transport", ["inherited", "socket-ingress"])
 def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exit(
-    joined, monkeypatch, binary
+    joined, monkeypatch, binary, transport
 ):
     s = joined
 
     def arm():
-        command.arm_original_watch(s, lambda custody: native_tests.native(custody, binary))
+        launch = native_tests.native if transport == "inherited" else ingress_tests.ingress
+        command.arm_original_watch(s, lambda custody: launch(custody, binary))
         s.h.expected_returncode = 75
 
     assert s.sender.send() is None

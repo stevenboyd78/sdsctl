@@ -147,7 +147,7 @@ def spawn(binary, handles, args, *, extra=()):
 
 
 @contextmanager
-def native(custody, binary, *, fault=None, outer=None, extra=()):
+def native(custody, binary, *, fault=None, outer=None, extra=(), spawner=None):
     """One real original capture/full re-collection -> exec -> existing Watch.
 
     No public command/library selects this test launcher. Original two-second
@@ -185,7 +185,7 @@ def native(custody, binary, *, fault=None, outer=None, extra=()):
         if fault is not None:
             fault(handles, args)
         committed = True
-        child = spawn(binary, handles, args, extra=extra)
+        child = (spawn if spawner is None else spawner)(binary, handles, args, extra=extra)
         child_fd = own(os.pidfd_open(child))
         os.close(send)
         owned.remove(send)
@@ -193,15 +193,18 @@ def native(custody, binary, *, fault=None, outer=None, extra=()):
         for fd in (child_fd, write, *targets):
             owned.remove(fd)
         custody.armed_watch = watch
-        assert select.select([ready, child_fd], [], [], max(0, end - time.monotonic()))[0]
-        data = os.read(ready, 2)
+        events = select.select([ready, child_fd], [], [], max(0, end - time.monotonic()))[0]
         if fault is None:
-            assert data == b"1"
+            assert events and os.read(ready, 2) == b"1"
             custody._live(end)
             custody._guard()
             assert not m.deadlines._readable(child_fd) and time.monotonic() < end
         else:
-            assert data == b""
+            # Failure-only observation AFTER the original admission cutoff is
+            # bounded by retirement, never permission for late readiness.
+            observe_by = end + m.RETIRE_SECONDS
+            assert select.select([child_fd], [], [], max(0, observe_by - time.monotonic()))[0]
+            assert os.read(ready, 2) == b""
         yield watch
     finally:
         if watch is not None:

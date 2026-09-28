@@ -41,7 +41,7 @@ native executable in this variant.
 
 ## Narrow, experimental ABI
 
-The sole recognized mode is `--offline-original-peer-watch-v1`, followed by the
+The inherited-handle mode is `--offline-original-peer-watch-v1`, followed by the
 **original absolute BOOTTIME** recovery cutoff and readiness cutoff in integer
 nanoseconds, and the original clock witness's canonical 32-hex boot ID. There
 are no PID arguments, relative durations, retries, operation commands, paths to
@@ -92,6 +92,70 @@ An original peer or outer exiting during exec also stops survivors without a
 new PID lookup. Handled termination signals produce uncertainty and attempt
 both stops. Atomic `ppoll` signal-mask exchange avoids a lost-signal wait race.
 
+## One-shot original-handle ingress
+
+The separate `--offline-original-peer-ingress-v1` mode takes the **same original
+absolute cutoffs and boot ID**, but starts with only three independently supplied
+anchors. No peer stop targets are inherited:
+
+| FD | Launcher-supplied original anchor |
+| --- | --- |
+| 0 | Original outer's unnamed, connected, nonblocking UNIX SEQPACKET receiver |
+| 1 | Independently retained original outer pidfd |
+| 2 | Original time-namespace descriptor |
+
+These anchors must come from a qualified launcher. They are not discovered from
+incoming traffic. Before waiting, the executable validates the original time
+domain and remaining finite budget, the live outer handle, socket kind and
+unnamed endpoints, and already-enabled `SO_PASSCRED`. It compares `SO_PEERCRED`
+with the retained outer's PID and receiver's UID/GID, then requires matching
+per-message `SCM_CREDENTIALS`. An inherited socket alone does not authenticate
+the child that actually sends a packet. The outer must still be live through
+authentication so a recycled numeric PID cannot establish the match. This is
+not a defense against a privileged trusted principal capable of forging
+credentials or replacing the launcher inputs.
+
+One packet contains the exact ASCII bytes `original-peer-handles-v1`, without
+a terminator, one six-descriptor `SCM_RIGHTS` array in the inherited ABI's order,
+and one credentials record. Both truncation flags, unexpected ancillary data,
+missing/excess descriptors and trailing packets are refused. The sender must
+close its write half after that packet. The receiver waits for that EOF within
+the **unchanged readiness cutoff**, using a private absolute BOOTTIME timer and
+the original outer pidfd. It never accepts a second attempt. Received outer and
+namespace handles must duplicate the independent anchors. Collision-safe
+descriptor remapping then joins the same target validation, private recovery
+timer, readiness byte, and original-peer termination code as inherited mode.
+[Linux UNIX socket semantics](https://man7.org/linux/man-pages/man7/unix.7.html),
+[Linux recvmsg flags](https://man7.org/linux/man-pages/man2/recvmsg.2.html)
+
+Ingress rejection is `64` and confers **no signal authority** over unconfirmed
+received targets. Exiting closes received descriptors and queued references
+owned by this receiver; the original outer must independently retire its own
+peers. Only after authentication and the common distinct-target commit can a
+failure trigger their native stop attempts (`70`). Callers must close their
+extra receiver copies: otherwise unread queued rights can keep a readiness pipe
+alive after rejection. Native process exit and absence of readiness are checked
+independently; a pipe timeout is never inferred success. A post-cutoff bounded
+failure observation is not an extension of the readiness/admission window.
+
+The [ingress fixtures](../../tests/test_supplemental_native_peer_ingress.py)
+exec real native processes and transfer original Custody handles both before
+and after exec. The full passive-command fixture also selects this transport
+explicitly, retaining original comparisons, baseline, release and actual exits.
+No existing installed entrypoint or source inventory selects this mode.
+
+This three-anchor form is informed by upstream systemd v256's
+`StandardInputFileDescriptor`, `StandardOutputFileDescriptor`, and
+`StandardErrorFileDescriptor` setters and direct stdio duplication paths. It is
+**not** `StandardInput=fd:`, named socket activation, path-based `OpenFile`, or
+the newer `ExtraFileDescriptors` API. The local test uses `posix_spawn`, not
+systemd. Exact installed v256.17 behavior, descriptor flags, authenticated
+transient service admission and outside-freeze-domain placement remain
+unqualified; no systemd/HAOS calls, service installation or native deployment
+are performed by these tests.
+[Upstream v256 service setter](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/dbus-service.c),
+[Upstream v256 exec stdio setup](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/exec-invoke.c)
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
@@ -120,14 +184,10 @@ remain gates. Existing closed cases, Apps, scanner, Pis, and recordings are not
 inputs to these tests and must not be touched. Installation or an isolated HAOS
 trial requires separate specific approval.
 
-The next offline join must also resolve **actual descriptor ingress** from the
-qualified outer into the independently placed host process. Do not assume that
-the development machine's transient-service options exist on the audited host:
-upstream systemd v256's service setter supports standard-I/O descriptors and
-path-based `OpenFile`, but has no `ExtraFileDescriptors` branch. The audited
-installed v256.17's backports were not established by that source inspection.
-Opening paths is not a substitute for transferring original pidfds. A bounded,
-authenticated control-socket transfer is a candidate for offline design; it is
-not implemented by this inherited-fd ABI and must not be silently selected as
-an installed launch path.
-[Upstream v256 service setter](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/dbus-service.c)
+The next offline join must bind this ingress to a **fixed qualified outer and
+independently supervised launch/lifetime**, including launch failure and watcher
+death handling. Source/binary/interpreter/runtime publication pins and active
+App admission/exclusive recovery cannot be inferred from socket authentication.
+Opening process paths or reopening PIDs is never a substitute for transferring
+original handles. No current offline process result qualifies an installed
+launch path or permits a fresh hardware trial.
