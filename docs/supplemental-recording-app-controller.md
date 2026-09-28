@@ -1600,7 +1600,12 @@ connection, clock/plan bindings and peer liveness are rechecked around assembly.
 The join neither yields an active service nor calls `run`, consumes an inbox,
 sends a CLI evidence request or performs an App/scanner/recording action.
 
-The original transport receipt is returned only after passive retirement. It is
+The original transport receipt is returned only after passive retirement and a
+final recheck of the same startup, accepted plan/clock, private input files,
+bootstrap connection and original peer handles, within the unchanged cutoff.
+Closing the last received socket cannot hide changed input, lost peers or an
+invalidated startup. The check neither reopens retired resources nor acquires a
+replacement owner or acceptance lock while the original service holds it. It is
 not Ready, action permission, a recording result, restoration, or proof of an
 installed launcher. Failure preserves complete and partial preparation files;
 the original intake slot stays consumed. There is no retry, replacement clock,
@@ -1612,10 +1617,42 @@ the received descriptor numbers.
 The integrated test starts with the exclusively published input pair, uses
 three actual local processes and kernel descriptor delivery, and checks the
 same dispatcher callback and ordered retirement. Host/Engine/runtime facts are
-still synthetic. Fault tests cover input changes, peer exit, expiration before
+still synthetic. Both the legacy and separately tagged handoff expectations
+reach this same real original-writer path through exclusive publication; this
+does not upgrade the raw outer fixture to full installed runtime qualification.
+Fault tests cover input changes, peer exit, expiration before
 or during assembly, changed callbacks, partial assembly, interruptions, cleanup
-failure and descriptor reuse. No older source inventory or permission format is
-enlarged, and no installed command selects this preparation function.
+failure, original-custody loss during final retirement and descriptor reuse.
+No older source inventory or permission format is enlarged, and no installed
+command selects this preparation function.
+
+### Next launcher ordering (not implemented)
+
+The fixed peer commands must be determined before sealing their runtime
+expectations. Putting the expectations digest in the very argv that declaration
+fingerprints creates a circular dependency. Likewise, per-case private inputs
+must remain outside the immutable image whose digest they declare. Pre-start
+arguments can pin the case, role, template, baseline and original outer identity;
+they cannot depend on future peer PIDs or the writer's final clock/plan.
+
+An independently qualified original outer owner must supply the expectations
+pin and exact peer identities through a distinct authenticated preparation
+exchange **before** the baseline read. Private permissions or a hash computed
+from the observed file are not authentication. This exchange cannot reuse or
+enlarge the older passive permission kinds or grant App action/recovery scope.
+Any preliminary runtime comparison needs its own explicitly preliminary context;
+it cannot be substituted for final accepted writer-plan qualification.
+
+The existing retained Connection and Listener have a two-second construction
+cutoff. Do not stretch that connection across baseline collection and final
+acceptance, reset its cutoff, or reconnect it for another phase. Preparation
+needs a separately identified, one-use channel and finite original preflight
+budget. Only after the original Startup creates its post-baseline clock and
+receives separate final acceptance may the existing final descriptor handoff
+begin, under that plan's ready limit and its own original two-second cutoff.
+Keep the same original process witnesses across these phases; no reconstructed
+Startup, replacement clock, new peer incarnation or cached success is admissible.
+This is the next integration order, not implemented command or launch authority.
 
 ## Remaining gates before a human scanner/audio test
 

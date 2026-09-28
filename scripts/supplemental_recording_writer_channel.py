@@ -5,7 +5,8 @@ No serialized plan, replacement clock or reconstructed Startup is accepted.
 The external launcher must authenticate the declaration pin, original peers,
 private connection, runtime/source and termination before calling this join.
 This is not input provisioning, installed qualification, Ready or App consent.
-No existing command or runtime qualification selects this module's source graph.
+The explicit peer source comparison can inventory this graph, but no existing
+command selects this join or admits its execution against a live App.
 """
 
 from __future__ import annotations
@@ -99,7 +100,9 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
     replacement. An uncertain/partial result preserves files and consumes the
     same one intake attempt. It never retries or reopens a journal.
 
-    Return is only the original transport receipt AFTER passive cleanup. It is
+    Borrowed startup, inputs, connection and original peer handles are rechecked
+    AFTER final channel retirement, under the SAME cutoff. Retired channels and
+    Link are not reopened. Return is only the original transport receipt. It is
     not Ready, App-action admission, recording/restore success, input provenance,
     fixed-entrypoint selection or outer/platform qualification. No existing
     command invokes this path; those separate launcher gates remain mandatory.
@@ -114,21 +117,41 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
             for s in (channels.incoming, channels.outgoing)
         )
         original, clock = owner.original, owner.clock
+        origin = clock.original
         plan, template = original.plan, owner.template
         expected, cutoff = inputs.expectations, connection.deadline
         end = min(cutoff, plan.lease["ready_by"])
+        observer_pin = observer.identity, observer.fd, bootstrap.links._identity(observer.fd)
 
-        def guard():
+        def guard(*, retired=False):
             require(time.monotonic() < end)
             require(owner.original is original and owner.clock is clock)
+            require(clock.original is origin and owner.accepted)
+            # idle_service already holds the ORIGINAL startup lock while
+            # yielded. Recheck its custody directly, never attempt another
+            # accepted_input acquisition or substitute an equal owner.
+            owner._guard()
             require(owner.template is template and original.plan is plan)
             require(inputs.declaration is owner.declaration and inputs.template is template)
             require(inputs.expectations is expected and inputs.recheck(deadline=end) is expected)
             require(connection.peer is outer and connection.deadline == cutoff)
             connection.recheck()
-            require(all(s.fileno() == fd for s, fd, _ in pins))
-            require(all(bootstrap.links._identity(fd) == pin for _, fd, pin in pins))
-            if link is not None:
+            identity, fd, pin = observer_pin
+            require(observer.identity is identity and observer.fd == fd)
+            require(bootstrap.links._identity(fd) == pin and not os.get_inheritable(fd))
+            bootstrap.links.processes.ProcessWitness._live_descriptor(fd, identity.pid)
+            require(not observer.exited())
+            require(
+                bootstrap.links.processes.read_identity(identity.pid, identity.container_id)
+                == identity
+            )
+            require(bootstrap.links.processes.read_identity(local.pid, local.container_id) == local)
+            if retired:
+                require(link.closed and all(s.fileno() == -1 for s, _, _ in pins))
+            else:
+                require(all(s.fileno() == fd for s, fd, _ in pins))
+                require(all(bootstrap.links._identity(fd) == pin for _, fd, pin in pins))
+            if link is not None and not retired:
                 require(link.channel is channels and link.plan is plan and link.timer is clock)
                 link._guard(end)
             require(time.monotonic() < end)
@@ -177,7 +200,11 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
                         problem = error
     if problem is None:
         try:
-            require(time.monotonic() < end)
+            # Closing the final received socket is still part of the original
+            # attempt. Do not return a stale receipt after input/peer/startup
+            # loss during retirement. Recheck borrowed originals, without
+            # reopening any retired Link, channel, journal or service.
+            guard(retired=True)
         except BaseException as error:
             problem = error
     if problem is not None:

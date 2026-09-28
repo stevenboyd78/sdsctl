@@ -55,7 +55,7 @@ def service_case(before_handoff, tmp_path, monkeypatch, request):
         )
     )
     s.input_publication = None
-    if getattr(request, "param", None) == "published-inputs":
+    if getattr(request, "param", None) in {"published-inputs", "published-peer-inputs"}:
         from . import test_supplemental_recording_peer_provision as provision
 
         p = provision.m
@@ -77,7 +77,12 @@ def service_case(before_handoff, tmp_path, monkeypatch, request):
         expected_value["template_sha256"] = s.template.sha256
         expected_value["writer"]["runtime"] = value["helper"]
         expected_value["observer"]["runtime"]["source"] = value["helper"]["source"]
-        s.expected_inputs = p.codec.decode(expected_value)
+        if request.param == "published-peer-inputs":
+            expected_value["kind"] = p.codec.PEER_KIND
+            expected_value["source_kind"] = p.codec.peer_source.KIND
+            s.expected_inputs = p.codec.decode_peer_handoff(expected_value)
+        else:
+            s.expected_inputs = p.codec.decode(expected_value)
         # Expected pins precede publication; never trust a receipt/file/process
         # to invent a replacement pin. Host/runtime provenance remains synthetic.
         s.expected_input_digest = s.expected_inputs.sha256

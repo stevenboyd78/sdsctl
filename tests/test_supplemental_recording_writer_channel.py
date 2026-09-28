@@ -184,7 +184,15 @@ def connection(service_case, monkeypatch, request):
         values["template_sha256"] = s.startup.template.sha256
         values["writer"]["runtime"] = json.loads(s.startup.template.raw)["plan"]["helper"]
         values["observer"]["runtime"]["source"] = values["writer"]["runtime"]["source"]
-        declaration = m.expectations.decode(values)
+        if (
+            s.input_publication is not None
+            and m.expectations._read(s.expected_inputs.raw)["kind"] == m.expectations.PEER_KIND
+        ):
+            values["kind"] = m.expectations.PEER_KIND
+            values["source_kind"] = m.expectations.peer_source.KIND
+            declaration = m.expectations.decode_peer_handoff(values)
+        else:
+            declaration = m.expectations.decode(values)
         expected_sha256 = declaration.sha256
         if retained_path == "inputs":
             # File intake precedes the baseline read and original clock capture.
@@ -380,7 +388,9 @@ def test_retained_inputs_precede_actual_baseline_and_reach_original_link_and_ser
     assert not c.input_owner.closed and not c.input_owner.declaration.closed
 
 
-@pytest.mark.parametrize("service_case", ["published-inputs"], indirect=True)
+@pytest.mark.parametrize(
+    "service_case", ["published-inputs", "published-peer-inputs"], indirect=True
+)
 @pytest.mark.parametrize("connection", ["inputs"], indirect=True)
 def test_exclusive_publication_reaches_original_startup_handoff_and_idle_assembly(
     connection, monkeypatch
@@ -416,13 +426,18 @@ def prepare_idle(c):
     )
 
 
-@pytest.mark.parametrize("service_case", ["published-inputs"], indirect=True)
+@pytest.mark.parametrize(
+    "service_case", ["published-inputs", "published-peer-inputs"], indirect=True
+)
 @pytest.mark.parametrize("connection", ["inputs"], indirect=True)
 def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_passively(
     connection, monkeypatch
 ):
     c = connection
     original, clock = c.owner.original, c.owner.clock
+    assert c.input_owner.expectations is c.declaration
+    assert c.declaration.raw == c.s.expected_inputs.raw
+    assert c.input_owner.expected == c.s.expected_input_digest
     links, services, cleanup, deadlines = [], [], [], []
     link_init, link_close = m.bootstrap.links.Link.__init__, m.bootstrap.links.Link.close
     service_init, service_close = (
@@ -619,6 +634,58 @@ def test_idle_join_cleanup_failure_still_retires_other_owned_channels(
     finally:
         for fd, _ in foreign:
             os.close(fd)
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    ["input", "socket-path", "observer-exit", "outer-exit", "clock", "startup", "plan", "cutoff"],
+)
+def test_idle_join_final_channel_retirement_rechecks_original_custody(
+    connection, monkeypatch, fault
+):
+    c = connection
+    construct, close = m.bootstrap.links.Link.__init__, socket.socket.close
+    links, changed = [], []
+
+    def link(value, *args, **kwargs):
+        construct(value, *args, **kwargs)
+        links.append(value)
+
+    def retire(channel):
+        result = close(channel)
+        if not links or channel is not links[0].channel.outgoing or changed:
+            return result
+        changed.append(fault)
+        assert links[0].closed and links[0].channel.incoming.fileno() == -1
+        if fault == "input":
+            (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE changed input")
+        elif fault == "socket-path":
+            (c.retained.root / "foreign").touch()
+        elif fault in {"observer-exit", "outer-exit"}:
+            child = c.observer if fault == "observer-exit" else c.outer
+            child.kill()
+            child.wait(timeout=3)
+        elif fault == "clock":
+            c.owner.clock.close()
+        elif fault == "startup":
+            c.owner.failed = True
+        elif fault == "plan":
+            object.__setattr__(c.plan, "raw", c.plan.raw + b" ")
+        else:
+            monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: c.retained.deadline))
+        return result
+
+    monkeypatch.setattr(m.bootstrap.links.Link, "__init__", link)
+    monkeypatch.setattr(socket.socket, "close", retire)
+    c.start()
+    denied(lambda: prepare_idle(c))
+    assert changed == [fault] and len(links) == 1
+    assert links[0].channel.incoming.fileno() == links[0].channel.outgoing.fileno() == -1
+    assert c.owner.peer_channel_attempted and c.owner.service_used
+    assert (c.s.root / "journal/0000.json").is_file()
+    assert len(c.s.clocks) == 2 and len(c.s.cached_calls) == 1
+    denied(lambda: prepare_idle(c))
 
 
 @pytest.mark.parametrize("connection", ["inputs"], indirect=True)
