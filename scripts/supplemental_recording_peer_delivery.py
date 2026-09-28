@@ -17,6 +17,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 
 import supplemental_recording_peer_bootstrap as bootstrap
+import supplemental_recording_peer_listener as listeners
 import supplemental_recording_peer_termination as termination
 
 MESSAGE = "Recording peer delivery is unconfirmed; preserve the case and do not retry."
@@ -74,6 +75,26 @@ def deliver(custody, watch, local, writer_connection, observer_connection):
     On success the same watcher remains armed and caller-owned. The caller must
     still require independent Ready, input/outer provenance and App action scope.
     """
+    return _deliver(custody, watch, local, writer_connection, observer_connection)
+
+
+def deliver_retained(custody, watch, local, writer_listener, observer_listener):
+    """Explicit listener-bound variant, still uninstalled and without App actions.
+
+    Borrow two original accepted Listener owners, each bound to the exact witness
+    in the original runtime pair. Their construction/accept cutoffs narrow the
+    complete delivery window, including all runtime collections. Paths, sockets,
+    witnesses and listener owners are rechecked between steps and at completion.
+    Listener uncertainty after original custody binding cancels that same Watch;
+    no replacement listener, deadline renewal or preflight permission is allowed.
+    Successful handoff leaves both listeners and the Watch caller-owned.
+    """
+    return _deliver(
+        custody, watch, local, None, None, retained=(writer_listener, observer_listener)
+    )
+
+
+def _deliver(custody, watch, local, writer_connection, observer_connection, *, retained=None):
     began = time.monotonic()
     accepted = False
     bundles, endpoints = [], []
@@ -112,8 +133,23 @@ def deliver(custody, watch, local, writer_connection, observer_connection):
             observer.witness,
         )
         end = min(began + SECONDS, plan.lease["ready_by"])
+        retained_pins = []
+        if retained is not None:
+            require(retained[0] is not retained[1])
+            for listener, member in zip(retained, (writer, observer), strict=True):
+                require(type(listener) is listeners.Listener)
+                require(listener.peer is member.witness and listener.accepted is True)
+                listener.recheck()
+                retained_pins.append((listener, listener.channel, listener.peer, listener.deadline))
+                end = min(end, listener.deadline)
+            writer_connection, observer_connection = (item[1] for item in retained_pins)
 
         def guard():
+            require(time.monotonic() < end)
+            for listener, channel, peer, deadline in retained_pins:
+                require(listener.channel is channel and listener.peer is peer)
+                require(listener.deadline == deadline and listener.accepted is True)
+                listener.recheck()
             require(
                 all(
                     current is original

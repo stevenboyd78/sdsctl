@@ -20,6 +20,7 @@ independent supervision and recovery integration.
 | One-use private descriptor delivery | Explicit bootstrap `Endpoint` and outer `deliver` | Kernel-authenticated original three-process context, separate descriptor handoff before Link evidence exchanges, both full runtime reads before/after under one shared bound and original watcher cancellation on failure; transport receipts, not Ready or App permission |
 | Original writer channel intake | Uninstalled `supplemental_recording_writer_channel.receive` | Accepted baseline-derived original Startup, same continuing writer clock and original inputs, one-use bounded descriptor intake before journal assembly; no reconstructed writer, action grant or installed launcher |
 | Retained private connection | Uninstalled `supplemental_recording_peer_connection.Connection` | One SEQPACKET connect through retained no-symlink directories to the exact original live peer; unchanged private pathname, socket flags and shared finite cutoff; no listener creation, reconnect, input provenance or active admission |
+| Retained private listener | Uninstalled `supplemental_recording_peer_listener.Listener` and explicit `deliver_retained` | One exclusive socket in an already provisioned empty private leaf, one expected-peer accept, preserved pathname, and original listener cutoffs carried through both supervised descriptor handoffs; no installation authentication, replacement listener, App action or recovery grant |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -209,6 +210,47 @@ This module is outside all existing observed source profiles and commands.
 It creates no listener, input grant, journal, service action or recovery owner.
 The fixed launcher, authenticated installation/input provisioning and independent
 outer/platform bound remain required before any live trial.
+
+### Retained private listener and supervised handoff
+
+The separate `supplemental_recording_peer_listener.Listener` supplies the other
+side of that transport boundary. An independently qualified owner supplies an
+already provisioned, empty `0700` directory and the original authenticated peer
+witness. Every directory component is retained without symlinks. The listener
+exclusively binds the fixed name `bootstrap.sock`, pins that inode through an
+`O_PATH` handle, sets only that retained inode to `0600`, then begins listening.
+It does not change the process-wide umask. Existing entries are never adopted,
+overwritten, repaired or unlinked, and the socket pathname remains after close
+or failure for evidence review. These observations do not protect against
+another trusted root process or authenticate installation provenance.
+
+The single accept attempt verifies actual kernel peer credentials against the
+same original live witness, then closes the listening socket so no later peer
+can be admitted. The accepted socket remains owned by this Listener and is only
+borrowed by the handoff. Descriptor flags, private paths and original peer remain
+checked without consuming messages or their rights. Construction, accept and
+all rechecks share one immutable two-second-or-earlier cutoff. Timeout, uncertain
+accept, replaced paths, peer loss or cleanup uncertainty never permit a retry.
+Kernel stalls still require independently enforced outer/platform termination.
+
+The explicit `peer_delivery.deliver_retained` variant requires two accepted
+Listener owners bound to the **exact witnesses** in the original runtime pair.
+Both listener cutoffs narrow the entire delivery window, including both fresh
+paired runtime collections. Listener owners, paths, sockets and witnesses are
+rechecked between handoffs and at completion. Any uncertainty after original
+custody binding cancels the same original armed Watch, stopping both original
+peers; it never discovers replacements. Successful delivery leaves the Watch
+armed and both listeners caller-owned. Replaying a completed delivery is refused
+without treating the earlier receipt as fresh authority.
+
+Disposable-process tests exercise actual Listener/Connection/Endpoint descriptor
+receipt, plus the supervised two-listener handoff and unchanged Links. Original
+pidfds, socket credentials, file descriptors, kernel timers and termination are
+real; Engine/image/cgroup/command/input provenance is still fixture-supplied.
+Neither this library nor its join is in an installed source profile or command.
+No App mutation, journal, Ready grant, recovery owner or live-test admission is
+added. Authenticated directory/input provisioning and the fixed installed
+launcher remain separate requirements.
 
 ### Explicit outer peer termination
 

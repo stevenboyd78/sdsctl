@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from . import test_supplemental_recording_peer_bootstrap_lifetime as lifetime
+from . import test_supplemental_recording_peer_listener as listener_tests
 
 NAME = "supplemental_recording_peer_delivery"
 SPEC = importlib.util.spec_from_file_location(
@@ -24,6 +25,7 @@ m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 assert m.bootstrap is lifetime.m and m.termination is lifetime.stop
+assert m.listeners is listener_tests.m
 layout, image_umask, supervised = lifetime.layout, lifetime.image_umask, lifetime.supervised
 image, configured, pair = lifetime.image, lifetime.configured, lifetime.pair
 inputs, custody, short_budget = lifetime.inputs, lifetime.custody, lifetime.short_budget
