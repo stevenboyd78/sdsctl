@@ -113,6 +113,18 @@ roots and complete imports with and without PySerial and timerfd APIs. The
 new inventory and adjacent source/expectations tests also pass on actual Python
 3.11 and 3.14; interpreter/API compatibility is still not installed provenance.
 
+The peer bundle also has a disposable staged-import fixture containing exactly
+these helper files, the complete product source and an explicit PySerial copy.
+An isolated child verifies loaded module origins before using them; deliberately
+available checkout/installed copies cannot satisfy a missing staged import.
+Tests withhold each newly required helper, the product package and PySerial,
+refuse helper/package symlinks back outside the stage, and reject the older
+permission/command modules that this library bundle does not contain. Source and
+dependency inventories must remain unchanged, with no bytecode generated.
+These are reviewed fixture imports with active operations blocked, not a fixed
+production entrypoint, independent installation authentication or an installed
+peer lifetime. Existing runtime collectors still reject this new inventory kind.
+
 No library name is an admitted active entrypoint. A future fixed launcher must
 explicitly select its final reviewed graph and input contract, authenticate the
 installation and pins independently, retain the original startup and peer owners,
