@@ -84,6 +84,16 @@ do not disable AppArmor, relax kernel settings, run the tests as root, or bypass
 browser sandboxing to make the gate pass. This execution requirement is separate
 from the project's coverage-percentage target.
 
+The same namespace-capable job also executes the fixed App native preflight,
+operator, original service, recording/recovery and dispatch fixtures on all four
+Python versions. A separate JUnit report is checked with
+`scripts/check_browser_namespace_results.py --profile native-recording`; skipped,
+failed or missing required modules cannot pass. These are disposable local peers
+and processes, not scanner or installed Home Assistant acceptance. The fixture
+stages the package at the pinned App image's Python 3.14 path even when the test
+interpreter is Python 3.11–3.13, without rewriting the fixed command or relaxing
+source-origin checks. The overall 25-minute job limit remains unchanged.
+
 The full-suite/coverage jobs remain on `ubuntu-latest`. Its current hosted image
 refuses unprivileged `bwrap` UID mapping even after the package is installed, so
 the dedicated namespace gate uses `ubuntu-22.04` without policy overrides. This is

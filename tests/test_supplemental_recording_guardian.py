@@ -166,8 +166,17 @@ def staged(tmp_path):
     dependencies = dict.fromkeys(
         (sysconfig.get_path("purelib"), str(Path(serial.__file__).parents[1]))
     )
-    (purelib / "fixture-dependencies.pth").write_text("\n".join(dependencies) + "\n")
-    runtime = purelib / "sds200"
+    # The App command pins its package at Python 3.14's image path even when
+    # this fixture's interpreter is 3.11-3.13. Stage the package at that same
+    # relative path and use a relative .pth entry so both the local guardian
+    # and its /usr/local namespace alias find the ORIGINAL package there.
+    # Never rewrite the command, relax origin checks or load the host checkout.
+    app_purelib = environment / "lib/python3.14/site-packages"
+    app_purelib.mkdir(parents=True, exist_ok=True)
+    (purelib / "fixture-dependencies.pth").write_text(
+        "\n".join((os.path.relpath(app_purelib, purelib), *dependencies)) + "\n"
+    )
+    runtime = app_purelib / "sds200"
     shutil.copytree(sources.SCRIPTS.parent / "src" / "sds200", runtime)
     native = tmp_path / "native"
     native.mkdir()
@@ -184,6 +193,28 @@ def staged(tmp_path):
     return SimpleNamespace(
         python=environment / "bin" / "python", layout=layout, pin=layout.observe().sha256
     )
+
+
+def test_staged_package_uses_fixed_app_path_on_each_host_python(staged):
+    environment = staged.python.parent.parent
+    assert staged.layout.runtime.relative_to(environment) == Path(
+        "lib/python3.14/site-packages/sds200"
+    )
+    result = subprocess.run(
+        [
+            str(staged.python),
+            "-I",
+            "-B",
+            "-c",
+            "import importlib.util; print(importlib.util.find_spec('sds200').origin)",
+        ],
+        capture_output=True,
+        timeout=5,
+        check=False,
+        env={"PATH": "/usr/bin:/bin"},
+    )
+    assert result.returncode == 0 and result.stderr == b""
+    assert result.stdout == (str(staged.layout.runtime / "__init__.py") + "\n").encode()
 
 
 def run_driver(staged, prepared, case, fault, *, flags=("-I", "-B")):

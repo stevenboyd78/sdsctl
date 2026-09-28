@@ -88,6 +88,22 @@ jobs:
       - name: Require browser namespace tests to execute
         run: python scripts/check_browser_namespace_results.py "${RUNNER_TEMP}/namespace-test-results.xml"
 
+      - name: Pytest fixed App native namespace
+        run: >-
+          python -m pytest -q
+          tests/test_supplemental_recording_app_native_preflight.py
+          tests/test_supplemental_recording_app_fixed_operator.py
+          tests/test_supplemental_recording_app_actual_service.py
+          tests/test_supplemental_recording_app_actual_recovery.py
+          tests/test_supplemental_recording_app_actual_dispatch.py
+          --junitxml="${RUNNER_TEMP}/native-recording-namespace-results.xml"
+
+      - name: Require fixed App native namespace tests to execute
+        run: >-
+          python scripts/check_browser_namespace_results.py
+          --profile native-recording
+          "${RUNNER_TEMP}/native-recording-namespace-results.xml"
+
   package:
     name: Documentation and package
     runs-on: ubuntu-latest

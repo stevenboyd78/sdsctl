@@ -165,7 +165,7 @@ def launch_case(native, monkeypatch, mapped):
 
 
 DRIVER = r"""
-import json, os, socket, subprocess, sys
+import importlib.util, json, os, socket, subprocess, sys
 from pathlib import Path
 sys.path.insert(0, '/opt/sdsctl-supplemental-recording')
 import supplemental_recording_source as source
@@ -176,6 +176,7 @@ def forbidden(*args, **kwargs):
 socket.socket = socket.getaddrinfo = subprocess.Popen = forbidden
 path, plan_pin, source_pin, runtime, ready_by, claim = sys.argv[1:]
 assert sys.prefix == '/usr/local'
+assert importlib.util.find_spec('sds200').origin == str(Path(runtime) / '__init__.py')
 try:
     layout = source.Layout(Path(runtime), Path('/opt/sdsctl-supplemental-recording'))
     evidence = layout.verify(source_pin)
