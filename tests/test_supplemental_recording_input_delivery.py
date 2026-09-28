@@ -4,6 +4,7 @@ No installed provenance: template/digests/Engine/image facts remain synthetic.
 No scanner/App work. Inherited fixtures own every child, directory and handle.
 """
 
+import signal
 from types import SimpleNamespace
 
 import pytest
@@ -176,3 +177,51 @@ def test_late_input_change_cancels_original_watch_not_a_cached_success(
     original.refused(lambda: call(joined, input_source))
     assert joined.watch.closed and owner.closed and not input_source.declaration.closed
     lifetime.termination.exited(joined.pair)
+
+
+@pytest.mark.parametrize("fault", ["deadline", "input", "listener", "peer-exit", "watch-exit"])
+def test_final_retirement_cannot_return_a_stale_delivery_receipt(
+    joined, input_source, monkeypatch, fault
+):
+    """Both transfers/readbacks succeeded, but the complete operation has not.
+
+    The original inputs, two retained listeners, full paired runtime reads,
+    pidfds and armed kernel watcher are real parts of this fixture. No new
+    collector or replacement clock is constructed after uncertainty.
+    """
+    retire = m._retire
+    retired = []
+
+    def change(channels, pins):
+        retire(channels, pins)
+        retired.append(channels)
+        if len(retired) != 4:  # Last outer cleanup, AFTER the final full read.
+            return
+        if fault == "deadline":
+            monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: joined.listener_end))
+        elif fault == "input":
+            (input_source.owner.root / m.peer_inputs.NAME).write_bytes(b"changed at retirement")
+        elif fault == "listener":
+            (joined.listeners["observer"].root / "foreign").touch()
+        elif fault == "peer-exit":
+            joined.pair.children["observer"].kill()
+            joined.pair.children["observer"].wait(timeout=2)
+        else:
+            signal.pidfd_send_signal(joined.watch.fd, signal.SIGKILL)
+            assert lifetime.select.select([joined.watch.fd], [], [], 2)[0]
+
+    monkeypatch.setattr(m, "_retire", change)
+    original.start(joined)
+    original.refused(lambda: call(joined, input_source))
+    assert len(retired) == 4 and joined.watch.closed
+    assert joined.pair.obj.channel_delivery_attempted
+    assert all(joined.pair.counts[role]["container"] == 8 for role in ("writer", "observer"))
+    assert all(
+        sock.fileno() == -1
+        for channels in retired
+        for sock in (channels.incoming, channels.outgoing)
+    )
+    lifetime.termination.exited(joined.pair)
+    # Final cleanup must not turn delivery uncertainty into replay permission.
+    original.refused(lambda: call(joined, input_source))
+    assert len(retired) == 4

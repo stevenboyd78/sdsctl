@@ -520,6 +520,15 @@ window, which is also passed into each endpoint. The original owners, live
 namespace proofs, watcher and immutable recovery deadline remain bound between
 steps. Original sender copies are retired before success; a foreign descriptor
 reusing an owned numeric fd is detached from its stale socket wrapper, not closed.
+The receipt remains provisional through all retirement. Afterward the original
+input/listener bindings, live original peers and watcher, and the same complete
+cutoff are checked again. Cleanup does not start a new budget or make the last
+paired runtime result a continuing success cache. Input/path drift, peer/watcher
+loss, or expiry at this final boundary cancels the original Watch and returns
+no receipt. A process interruption during retirement does not skip the other
+owned channel direction or disappear behind an earlier ordinary error, including
+when interruption happens during cancellation. These cooperative checks still
+require independently qualified platform supervision for blocked kernel I/O.
 
 Once that exact original pair/watcher binding has been accepted, any failure
 cancels the already armed watcher and stops both original peers. This includes
@@ -540,6 +549,11 @@ lifetime. File/environment reads are real; Engine, image, cgroup, root, command
 and kernel-privilege eligibility remain explicitly synthetic. Fixture source is
 not the running installed image. These modules are now named only by the separate
 read-only peer library inventory, **not a command-selected source graph**.
+Final-retirement regressions join retained input files and listeners with those
+same paired runtime reads and armed original watcher. They inject expiry, input
+or path drift, actual peer/watcher loss, and cleanup/cancellation interruptions
+after otherwise successful handoffs. No requirement is relaxed to permit these
+fixtures; failures retain their original consumed attempt and do not admit retry.
 The qualified private connection, fixed active command,
 outer/runtime/input provenance, independent platform bound, separate action scope
 and exclusive original recovery owner still require integration before live use.

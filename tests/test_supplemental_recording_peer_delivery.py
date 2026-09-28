@@ -9,6 +9,7 @@ import importlib.util
 import json
 import os
 import signal
+import socket
 import sys
 from pathlib import Path
 
@@ -331,3 +332,97 @@ def test_initial_input_checks_do_not_receive_an_extra_budget(joined, monkeypatch
     assert joined.watch.closed
     lifetime.termination.exited(joined.pair)
     assert all(joined.pair.counts[role]["container"] == 4 for role in ("writer", "observer"))
+
+
+@pytest.mark.parametrize("stage", ["endpoint", "channels", "cancel"])
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_cleanup_interruption_is_preserved_after_an_unconfirmed_handoff(
+    joined, monkeypatch, stage, interruption
+):
+    """Retire/cancel everything possible, but do not hide process interruption."""
+    if stage == "endpoint":
+        close = m.bootstrap.Endpoint.close
+        interrupted = False
+
+        def closing(endpoint):
+            nonlocal interrupted
+            was_closed = endpoint.closed
+            close(endpoint)
+            # The malformed observer acknowledgment has already invalidated
+            # its Endpoint. Interrupt the outer cleanup, not that first error.
+            if endpoint.role == "observer" and was_closed and not interrupted:
+                interrupted = True
+                raise interruption("PRIVATE cleanup interruption")
+
+        monkeypatch.setattr(m.bootstrap.Endpoint, "close", closing)
+    elif stage == "channels":
+        retire = m._retire
+        calls = []
+
+        def retiring(channels, pins):
+            retire(channels, pins)
+            calls.append(channels)
+            if len(calls) == 2:
+                raise interruption("PRIVATE channel interruption")
+
+        monkeypatch.setattr(m, "_retire", retiring)
+    else:
+        close_watch = joined.watch.close
+
+        def cancelling():
+            close_watch()
+            raise interruption("PRIVATE cancellation interruption")
+
+        monkeypatch.setattr(joined.watch, "close", cancelling)
+
+    start(joined, observer="wrong-ack")
+    try:
+        with pytest.raises(interruption):
+            call(joined)
+        assert joined.watch.closed and joined.pair.obj.channel_delivery_attempted
+        lifetime.termination.exited(joined.pair)
+    finally:
+        if stage == "cancel":
+            monkeypatch.setattr(joined.watch, "close", close_watch)
+
+
+@pytest.mark.parametrize("interruption", [KeyboardInterrupt, SystemExit])
+def test_interrupted_first_socket_retirement_still_closes_the_other_original_direction(
+    joined, monkeypatch, interruption
+):
+    created = []
+    pair_sockets, close_socket = m.bootstrap.links.pair, socket.socket.close
+    interrupted = False
+
+    def sockets():
+        result = pair_sockets()
+        created.extend(result)
+        return result
+
+    def close(sock):
+        nonlocal interrupted
+        selected = len(created) == 2 and sock is created[1].incoming and not interrupted
+        close_socket(sock)
+        if selected:
+            interrupted = True
+            raise interruption("PRIVATE first socket close acknowledgment")
+
+    monkeypatch.setattr(m.bootstrap.links, "pair", sockets)
+    monkeypatch.setattr(socket.socket, "close", close)
+    start(joined, observer="wrong-ack")
+    try:
+        with pytest.raises(interruption):
+            call(joined)
+        assert interrupted and joined.watch.closed
+        assert all(
+            sock.fileno() == -1
+            for channels in created
+            for sock in (channels.incoming, channels.outgoing)
+        )
+        lifetime.termination.exited(joined.pair)
+    finally:
+        # Keep this failure regression from leaking a fixture-owned descriptor
+        # when exercised against the unfixed implementation.
+        for channels in created:
+            for sock in (channels.incoming, channels.outgoing):
+                close_socket(sock)

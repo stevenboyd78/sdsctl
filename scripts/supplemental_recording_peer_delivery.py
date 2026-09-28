@@ -13,7 +13,6 @@ from __future__ import annotations
 import os
 import select
 import time
-from contextlib import suppress
 from dataclasses import dataclass
 
 import supplemental_recording_peer_bootstrap as bootstrap
@@ -48,17 +47,21 @@ def _retire(channels, pins):
     if pins is None:  # Initial acquisition failed before exposing these new sockets.
         channels.close()
         return
-    problem = False
+    problem = None
     for endpoint, fd, identity in pins:
         if endpoint.fileno() == -1:
             continue
         try:
             require(endpoint.fileno() == fd and bootstrap.links._identity(fd) == identity)
             endpoint.close()
-        except Exception:
+        except BaseException as error:
             endpoint.detach()  # Never close a foreign reused descriptor through this wrapper.
-            problem = True
-    require(not problem)
+            if problem is None or not isinstance(error, Exception):
+                problem = error
+    if problem is not None:
+        if not isinstance(problem, Exception):
+            raise problem
+        require(False)
 
 
 def deliver(custody, watch, local, writer_connection, observer_connection):
@@ -265,18 +268,33 @@ def _deliver(
             try:
                 resource.close()
             except BaseException as cause:
-                if error is None:
+                if error is None or not isinstance(cause, Exception):
                     error = cause
         for channels in reversed(bundles):
             try:
                 _retire(channels, socket_pins.get(id(channels)))
             except BaseException as cause:
-                if error is None:
+                if error is None or not isinstance(cause, Exception):
                     error = cause
+        if error is None:
+            try:
+                # The receipt is provisional until every owned sender copy is
+                # retired. Recheck the SAME borrowed inputs/listeners, live
+                # original pair/watch and unchanged complete cutoff afterward.
+                # Cleanup does not earn another window or a cached success.
+                guard()
+            except BaseException as cause:
+                error = cause
         if error is not None and accepted:
             # Remains uncertainty; never substitute/reopen any owner.
-            with suppress(BaseException):
+            try:
                 original_watch.close()
+            except BaseException as cause:
+                # An ordinary cancellation failure remains an unconfirmed
+                # delivery. A process interruption must not be swallowed by
+                # an earlier ordinary error (or skip other owned cleanup).
+                if not isinstance(cause, Exception):
+                    error = cause
     if error is not None:
         if not isinstance(error, Exception):
             raise error
