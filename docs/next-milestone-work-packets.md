@@ -92,7 +92,9 @@ These are merged development changes, not a claim that a new release is publishe
    optional bounded `application_version` metadata on the existing authenticated
    snapshot. The Connection panel shares its Endpoint row with the daemon build;
    direct scanner sessions stay unchanged. Compatibility, loss/reconnect and
-   Pi geometry tests pass; installed physical acceptance is still pending.
+   Pi geometry tests pass. Both bench Pis passed installed, fictional offline
+   visual/keyboard checks on September 28, 2026; live endpoint-version acceptance
+   remains separate from that presentation evidence.
    See the [TUI candidate details](tui.md#unreleased-connected-daemon-version-follow-up).
 2. **Connection duration, if implemented:** first add an explicit owner for the
    selected link's successful connection/reconnection events. Use monotonic

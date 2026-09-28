@@ -21,7 +21,9 @@ Parser-to-snapshot/daemon-to-renderer, missing/malformed fields, bounded literal
 text, mode transitions, loss/reconnect, scroll/resize and compact/wide light/dark
 tests are implemented. This does not add a new command, observation subscription,
 telemetry interpretation, TUI waterfall or physical/model qualification. Both Pi
-visual checks and any field-specific hardware evidence remain pending. See the
+visual/keyboard checks passed on September 28, 2026, using installed candidate
+`824c417` and fictional offline snapshots. Original displays were restored;
+field-specific hardware evidence remains separate and pending. See the
 [TUI candidate guide](tui.md#unreleased-read-only-scanner-details).
 
 The following findings record the earlier baseline and motivation, not outstanding

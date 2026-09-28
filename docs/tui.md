@@ -75,7 +75,11 @@ Long versions/endpoints are ellipsized to the Connection panel width, not wrappe
 into a hidden row. The Mimic-SDS runtime drawer retains the full bounded daemon
 version and endpoint alongside the separate client and scanner identities.
 Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
-changes and resizing; this candidate still needs installed physical acceptance.
+changes and resizing. On September 28, 2026, the installed development wheel at
+`824c417` passed user-observed readability and keyboard checks on the 100×30 and
+160×45 bench Pis using a fictional, offline endpoint. Both original displays were
+restored with their configuration and fonts unchanged. This verifies physical
+presentation, not a real daemon's reported version or live transport behavior.
 
 ## Unreleased read-only scanner details
 
@@ -101,8 +105,11 @@ Scanner and audio action keys are inactive in this read-only view; existing audi
 and recording sessions continue unchanged. Return to the dashboard for controls.
 Quit remains available. The command palette contains only Back and Quit here.
 Automated checks cover direct/shared-daemon fields, both Pi sizes, the narrower
-fallback, light/dark, resizing and clearing; physical display acceptance remains
-pending.
+fallback, light/dark, resizing and clearing. The same September 28 offline Pi
+checks passed for drawer readability, changing values and unavailable fields,
+theme inheritance, return navigation and inactive action keys. Those fictional
+values do not qualify new physical scanner fields, models or live audio behavior;
+the candidate remains unreleased.
 
 ## Unreleased Mimic-SDS candidate
 
