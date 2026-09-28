@@ -19,6 +19,7 @@ independent supervision and recovery integration.
 | Original peer termination | Explicit outer `Custody` and `arm` | Both runtime comparisons and zero-offset domains, duplicate original peer handles, immutable BOOTTIME deadline and a separate kernel-only watcher; narrowly scoped peer stops, not App actions, native exits or restoration |
 | One-use private descriptor delivery | Explicit bootstrap `Endpoint` and outer `deliver` | Kernel-authenticated original three-process context, separate descriptor handoff before Link evidence exchanges, both full runtime reads before/after under one shared bound and original watcher cancellation on failure; transport receipts, not Ready or App permission |
 | Original writer channel intake | Uninstalled `supplemental_recording_writer_channel.receive` | Accepted baseline-derived original Startup, same continuing writer clock and original inputs, one-use bounded descriptor intake before journal assembly; no reconstructed writer, action grant or installed launcher |
+| Retained private connection | Uninstalled `supplemental_recording_peer_connection.Connection` | One SEQPACKET connect through retained no-symlink directories to the exact original live peer; unchanged private pathname, socket flags and shared finite cutoff; no listener creation, reconnect, input provenance or active admission |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -176,6 +177,38 @@ privilege facts in that fixture are still synthetic. This is **not** installed
 image provenance, independent termination or an end-to-end active launch. Both
 original peers still need a reviewed, independently supervised lifetime before
 any action.
+
+### Retained private bootstrap connection
+
+The separate `supplemental_recording_peer_connection.Connection` owns the
+receiving side of a private bootstrap connection. Its caller must already have
+an independently authenticated original peer witness and a separately provisioned
+listener. Every ancestor directory is retained without following symlinks; the
+leaf must remain mode `0700` and contain only the original mode `0600`
+`bootstrap.sock`. Directory/name replacement, altered leaf metadata or entries,
+changed descriptor flags, peer loss and mismatched kernel credentials refuse.
+Ancestor installation trust is not inferred from these observations.
+
+Construction, its single nonblocking connect, and all rechecks share an original
+two-second maximum, narrowed by the caller's absolute deadline. A full socket
+backlog, uncertain connect, timeout or interruption is not retried. The caller
+must pass this **same deadline** into the descriptor handoff and retain the
+connection owner until its borrowers finish. No new clock is created. Checks
+neither consume queued bootstrap messages nor install received descriptors;
+the separate Endpoint still checks actual message credentials and descriptor
+contents. Connection failure retires only its owned original handles, not a
+foreign descriptor reused at the same number. Socket paths and caller-owned
+process witnesses are never removed or closed.
+
+Local tests use real private directories, independent processes, pidfds and
+socket credentials. A three-process test also joins this connection to the
+original accepted writer Startup, bounded descriptor intake, Link exchange and
+passive service assembly. Docker identities, listener provisioning and runtime
+declaration provenance remain fixture-supplied, not installed qualification.
+This module is outside all existing observed source profiles and commands.
+It creates no listener, input grant, journal, service action or recovery owner.
+The fixed launcher, authenticated installation/input provisioning and independent
+outer/platform bound remain required before any live trial.
 
 ### Explicit outer peer termination
 

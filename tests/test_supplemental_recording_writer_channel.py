@@ -22,6 +22,7 @@ from types import SimpleNamespace
 import pytest
 
 from . import test_supplemental_recording_peer_bootstrap as transport
+from . import test_supplemental_recording_peer_connection as connections
 from . import test_supplemental_recording_service_runtime_expectations as declared
 from . import test_supplemental_recording_startup_assembly as assembly
 
@@ -66,6 +67,7 @@ import supplemental_recording_peer_bootstrap as m
 m.ROOT_UID = os.geteuid()
 listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 listener.bind(sys.argv[2])
+Path(sys.argv[2]).chmod(0o600)
 listener.listen(2)
 print("listening", flush=True)
 connections = {}
@@ -116,14 +118,17 @@ finally:
 
 
 @pytest.fixture
-def connection(service_case, monkeypatch):
+def connection(service_case, monkeypatch, request):
     s = service_case
     monkeypatch.setattr(m.bootstrap, "ROOT_UID", os.geteuid())
     monkeypatch.setattr(m.bootstrap.links, "ROOT_UID", os.geteuid())
+    monkeypatch.setattr(connections.m, "ROOT_UID", os.geteuid())
     temporary = tempfile.TemporaryDirectory(prefix="sds-writer-")
-    path = str(Path(temporary.name) / "peer")
+    path = str(Path(temporary.name) / connections.m.NAME)
     processes, witnesses, channels = [], [], []
     accepted = None
+    retained = None
+    retained_path = getattr(request, "param", False)
 
     def spawn(code):
         process = subprocess.Popen(
@@ -149,11 +154,12 @@ def connection(service_case, monkeypatch):
             )
         )
         assert transport.line(observer) == "ready"
-        accepted = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-        accepted.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-        accepted.connect(path)
-        accepted.setblocking(False)
-        assert transport.line(outer) == "connected"
+        if not retained_path:
+            accepted = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+            accepted.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            accepted.connect(path)
+            accepted.setblocking(False)
+            assert transport.line(outer) == "connected"
         table = {os.getpid(): "a" * 64, outer.pid: "b" * 64, observer.pid: "c" * 64}
 
         def identity(pid, cid):
@@ -185,6 +191,14 @@ def connection(service_case, monkeypatch):
             identities=[asdict(item) for item in identities.values()],
             declaration=declaration.sha256,
         )
+        if retained_path:
+            retained = connections.m.Connection(
+                Path(temporary.name),
+                outer_witness,
+                deadline=min(time.monotonic() + 2, plan.lease["ready_by"]),
+            )
+            accepted = retained.channel
+            assert transport.line(outer) == "connected"
 
         def start():
             transport.command(outer, config | dict(writer=os.getpid(), observer=observer.pid))
@@ -229,6 +243,7 @@ def connection(service_case, monkeypatch):
             outer_witness=outer_witness,
             observer_witness=observer_witness,
             channels=channels,
+            retained=retained,
         )
     finally:
         for bundle in channels:
@@ -241,7 +256,9 @@ def connection(service_case, monkeypatch):
                 stream.close()
         for witness in witnesses:
             witness.close()
-        if accepted is not None:
+        if retained is not None:
+            retained.close()
+        elif accepted is not None:
             accepted.close()
         temporary.cleanup()
 
@@ -290,6 +307,37 @@ def test_original_post_baseline_clock_reaches_delivered_link_then_passive_assemb
     channels.close()
     assert not owner.closed and not c.outer_witness.exited() and not c.observer_witness.exited()
     assert c.channel.fileno() >= 0
+
+
+@pytest.mark.parametrize("connection", [True], indirect=True)
+def test_original_writer_private_path_and_bootstrap_share_one_cutoff(connection):
+    c = connection
+    retained = c.retained
+    original = c.owner.original
+    clock = c.owner.clock
+    c.start()
+    retained.recheck()
+    channels, receipt = c.receive(deadline=retained.deadline)
+    retained.recheck()
+    assert transport.line(c.outer) == "delivered"
+    assert json.loads(transport.line(c.observer))["received"]
+    assert c.owner.original is original and c.owner.clock is clock
+    assert retained.peer is c.outer_witness and retained.channel is c.channel
+    assert receipt.context_sha256 and receipt.offer_sha256
+    assert not (c.s.root / "journal").exists()
+    link = m.bootstrap.links.Link(channels, c.plan, clock, c.observer_witness, role="writer")
+    try:
+        transport.command(c.observer, dict(mode="link"))
+        assert transport.line(c.observer) == "linked"
+        value = dict(schema=1, fixture="retained-original-path", plan=c.plan.sha256)
+        link._send(value, time.monotonic() + 2)
+        transport.command(c.observer, dict(mode="link-read"))
+        assert json.loads(transport.line(c.observer)) == value
+        with c.owner.idle_service(c.s.docker) as service:
+            assert service.original is original and service.clock_witness is clock
+            assert not service.used and not service.dispatch.used
+    finally:
+        link.close()
 
 
 def test_second_intake_cannot_reconstruct_or_replay_on_same_startup(connection):
