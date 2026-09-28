@@ -463,11 +463,15 @@ Blank strings, explicit `Empty`, missing configuration and configured tokens are
 different states; a configured token alone does not prove live-data support.
 
 Stored color values and documented F/HOLD/soft-key reversal flags are retained
-separately. No COLOR/BLACK/WHITE transformation is invented. All Detail/special
-small-field colors remain explicitly unqualified because the printed eight-color
-table conflicts with the six-option grid and observed record size. Supplying
-eight color pairs does not resolve that ambiguity. Other qualified groups can
-be mapped without silently guessing these colors.
+separately. No COLOR/BLACK/WHITE transformation is invented. Detail/special
+small-field color **ordering** remains explicitly unqualified because the printed
+eight-color table conflicts with the six-option grid and observed record size.
+Supplying eight color pairs does not resolve that ambiguity. A complete six- or
+eight-pair group whose foreground/background pairs are all identical can supply
+that common pair: every possible ordering produces the same color. The ordering
+issue remains recorded, with no invented positional mapping or profile change.
+Missing, unexpected-sized or mixed-color groups still use neutral fallback
+colors. This exception never borrows colors from Simple or another layout.
 
 `src/sds200/scanner_display_values.py` projects only allowlisted shared snapshot
 fields into raw-source values. It requires explicit freshness and an independently

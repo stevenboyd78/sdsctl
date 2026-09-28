@@ -57,6 +57,21 @@ def region_elements(source):
 
 
 @pytest.mark.parametrize("style", ["simple", "detail"])
+def test_uniform_profile_small_field_colors_reach_the_renderer(scenarios, style):
+    frame = scenarios["held_trunk"][style]
+    regions = region_elements(render_scanner_display_frame(frame))
+    small = [
+        slot
+        for slot in frame.screen.regions
+        if slot.region.option and slot.region.option.group == 3
+    ]
+    assert len(small) == (8 if style == "simple" else 6)
+    for slot in small:
+        assert slot.stored_color == ScannerDisplayColor("ffffff", "000000")
+        assert "color:#ffffff;background:#000000" in regions[slot.region.id]["style"]
+
+
+@pytest.mark.parametrize("style", ["simple", "detail"])
 def test_clean_names_alignment_and_current_hold_inversion(scenarios, style):
     held = region_elements(render_scanner_display_frame(scenarios["held_trunk"][style]))
     released = region_elements(render_scanner_display_frame(scenarios["released_trunk"][style]))

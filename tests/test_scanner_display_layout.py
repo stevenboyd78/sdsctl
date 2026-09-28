@@ -181,6 +181,83 @@ def test_small_options_seven_eight_are_fifth_sixth_tokens_without_guessed_colors
     )
 
 
+@pytest.mark.parametrize("mode", list(ScannerDisplayMode)[2:])
+@pytest.mark.parametrize("count", [6, 8])
+@pytest.mark.parametrize(
+    "pair", [ScannerDisplayColor("ffffff", "000000"), ScannerDisplayColor("123abc", "456def")]
+)
+def test_uniform_small_field_colors_do_not_require_a_positional_mapping(mode, count, pair):
+    profile = synthetic_profile()
+    profile = replace(
+        profile,
+        color_groups=tuple(
+            replace(group, colors=(pair,) * count)
+            if group.color_layout_id == mode.layout_ids[1] and group.group_id == 3
+            else group
+            for group in profile.color_groups
+        ),
+    )
+    original = profile.as_dict()
+    screen = resolve_scanner_display_screen(profile, mode)
+    small = [
+        item for item in screen.regions if item.region.option and item.region.option.group == 3
+    ]
+    assert len(small) == 6
+    assert all(item.stored_color == pair for item in small)
+    # Color order is still unknown; no slot position is invented or persisted.
+    assert all(item.region.color is None for item in small)
+    assert any(
+        issue.kind is DisplayMappingIssueKind.UNQUALIFIED_COLOR_ORDER for issue in screen.issues
+    )
+    assert profile.as_dict() == original
+    assert screen.profile_revision == profile.revision
+
+
+@pytest.mark.parametrize("count", [0, 1, 5, 7, 9])
+def test_uniform_small_colors_with_unknown_size_are_not_used(count):
+    profile = synthetic_profile()
+    profile = replace(
+        profile,
+        color_groups=tuple(
+            replace(group, colors=(ScannerDisplayColor("ffffff", "000000"),) * count)
+            if group.color_layout_id == 7 and group.group_id == 3
+            else group
+            for group in profile.color_groups
+        ),
+    )
+    screen = resolve_scanner_display_screen(profile, ScannerDisplayMode.DETAIL_TRUNK)
+    assert all(
+        item.stored_color is None
+        for item in screen.regions
+        if item.region.option and item.region.option.group == 3
+    )
+
+
+@pytest.mark.parametrize("position", [0, 3, 5, 7])
+@pytest.mark.parametrize(
+    "different", [ScannerDisplayColor("eeeeee", "000000"), ScannerDisplayColor("ffffff", "111111")]
+)
+def test_one_different_small_field_pair_keeps_the_whole_group_unqualified(position, different):
+    profile = synthetic_profile()
+    pairs = [ScannerDisplayColor("ffffff", "000000")] * 8
+    pairs[position] = different
+    profile = replace(
+        profile,
+        color_groups=tuple(
+            replace(group, colors=tuple(pairs))
+            if group.color_layout_id == 7 and group.group_id == 3
+            else group
+            for group in profile.color_groups
+        ),
+    )
+    screen = resolve_scanner_display_screen(profile, ScannerDisplayMode.DETAIL_TRUNK)
+    assert all(
+        item.stored_color is None
+        for item in screen.regions
+        if item.region.option and item.region.option.group == 3
+    )
+
+
 @pytest.mark.parametrize("mode", list(ScannerDisplayMode))
 def test_inversion_is_explicit_metadata_not_mutated_stored_colors(mode):
     screen = resolve_scanner_display_screen(synthetic_profile(), mode)

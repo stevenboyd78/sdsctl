@@ -77,6 +77,7 @@ class ScannerDisplayLayout:
     color_group_sizes: tuple[tuple[int, int], ...]
     # The detail/special small-color tables conflict with their six-slot grids.
     # Preserve raw records in the profile, but do not guess their color pairing.
+    # A wholly uniform group can supply its shared pair without resolving order.
     unqualified_color_groups: tuple[int, ...]
     rows: int = 20
     columns: int = 30
@@ -330,6 +331,7 @@ def resolve_scanner_display_screen(
     issues: list[DisplayMappingIssue] = []
     valid_options: set[int] = set()
     valid_colors: set[int] = set()
+    uniform_colors: dict[int, ScannerDisplayColor] = {}
     for namespace, actual_sizes, expected, valid in (
         (
             "option",
@@ -368,6 +370,18 @@ def resolve_scanner_display_screen(
         issues.append(
             DisplayMappingIssue("color", group, DisplayMappingIssueKind.UNQUALIFIED_COLOR_ORDER)
         )
+        pairs = colors.get(group, ())
+        # Detail/special small fields have six observed pairs versus eight in
+        # the printed table. Only a uniform complete group is order-independent:
+        # every possible assignment gives the same stored foreground/background.
+        # Keep the order issue and region.color=None; this does not qualify a
+        # positional map, infer missing colors or reuse another layout's colors.
+        if (
+            group == 3
+            and len(pairs) in (6, 8)
+            and len({(pair.text.lower(), pair.background.lower()) for pair in pairs}) == 1
+        ):
+            uniform_colors[group] = pairs[0]
 
     resolved: list[ResolvedScannerDisplayRegion] = []
     for region in layout.regions:
@@ -391,6 +405,8 @@ def resolve_scanner_display_screen(
         stored_color = None
         if region.color is not None and region.color.group in valid_colors:
             stored_color = colors[region.color.group][region.color.position - 1]
+        elif region.color is None and region.option is not None:
+            stored_color = uniform_colors.get(region.option.group)
         resolved.append(ResolvedScannerDisplayRegion(region, selection, token, stored_color))
     return ScannerDisplayScreen(
         layout,
