@@ -14,6 +14,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -209,16 +210,23 @@ def namespace_command(state, mapped, staged, *, writable=(), loopback_peers=Fals
     ]
     if not loopback_peers:
         command += ["--unshare-net"]
-    for path in ("/usr", "/lib", "/lib64", "/etc", "/home", "/tmp"):
+    roots = ("/usr", "/lib", "/lib64", "/etc", "/home", "/tmp")
+    for path in roots:
         if Path(path).exists():
             command += ["--ro-bind", path, path]
+    command += ["--dir", "/opt"]
+    # setup-python lives under /opt/hostedtoolcache, unlike local /usr or
+    # /home interpreters. The venv binary is a symlink into that ORIGINAL
+    # installation. Expose only its exact base prefix, read-only; never bind
+    # all /opt or change the fixed App command/package-origin checks.
+    base = Path(sys.base_prefix).resolve()
+    if not any(base.is_relative_to(Path(root)) for root in roots):
+        command += ["--ro-bind", str(base), str(base)]
     command += [
         "--proc",
         "/proc",
         "--dev",
         "/dev",
-        "--dir",
-        "/opt",
         "--ro-bind",
         str(staged.python.parent.parent),
         "/usr/local",
