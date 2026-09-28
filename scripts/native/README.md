@@ -156,6 +156,93 @@ are performed by these tests.
 [Upstream v256 service setter](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/dbus-service.c),
 [Upstream v256 exec stdio setup](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/exec-invoke.c)
 
+## Original parent and native lifetime
+
+The [lifetime fixture](../../tests/test_supplemental_native_peer_lifetime.py)
+now forks an actual original outer, which execs the native ingress and constructs
+the **unmodified direct-child Watch** itself. Original handles and absolute
+cutoffs are passed once. Only a disposable fixture driver is a subreaper; pytest
+and the host are not changed. The driver receives the original native pidfd,
+never reopens a reported PID, and retains an extra cancellation writer so EOF
+cannot hide the outer-pidfd loss path.
+
+Five real process faults are distinguished:
+
+- Outer death before target ingress: native refusal `64`, no target authority;
+  the independent original fixture owner retires its own peers.
+- Outer death after readiness: native peer stops and exact exit `12`.
+- Frozen outer: native stops both peers at the original BOOTTIME cutoff and
+  exits `10`. The still-live outer remains its parent; the driver cannot reap it.
+  Resuming the outer allows that original owner to reap through `Watch.finish`.
+- Native SIGKILL: the original outer reaps its child and independently stops
+  both peers, retaining uncertainty rather than treating the signal as success.
+- Frozen native: the outer's own private original-deadline timer triggers peer
+  and native stops. The original outer reaps, again reporting uncertainty.
+
+Only after outer death may the disposable driver adopt/reap the orphan. Numeric
+PIDs are used to reap known original children, never for signaling or discovery.
+Exit status is checked separately from pidfd readability. Failure observation
+after the cutoff never extends readiness, work, or recovery permission. These
+tests use synthetic container identities, not runtime/cgroup qualification.
+They do not prove survival of simultaneous parent/native failure or host freeze.
+
+The full-command fixture separately kills the actual native watcher after each
+real descriptor handoff. Existing delivery guards refuse the remaining phase,
+the original outer retires both peers, and no passive writer-release message is
+sent. The consumed attempt and original case files survive a rejected retry.
+This joins failure handling to original Custody/full comparisons and the real
+passive command; it still does not supply an active App grant or installed proof.
+
+### Investigated scope route, not an admitted launcher
+
+`Watch.finish` uses `waitpid` for its original direct child. A systemd **service**
+would own its process instead; a nonchild pidfd is not reaping authority. Do not
+weaken that owner/type boundary or manufacture exit status from readability.
+An alternative is a separately qualified **scope**: upstream v256 manages
+externally created processes and leaves exit collection to their original parent.
+Scope success is not a native exit receipt.
+[Upstream v256 scope semantics](https://raw.githubusercontent.com/systemd/systemd/v256/man/systemd.scope.xml)
+
+Upstream v256's transient scope setter accepts `PIDFDs` as an array of Unix
+descriptors. That suggests a way to place the **original live child** separately
+without changing its parent. It is not proof of installed v256.17 behavior,
+permission, cgroup independence, immutable placement or source provenance.
+[Upstream v256 PIDFD scope property](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/dbus-scope.c)
+
+Further source inspection finds an additional blocker: `unit_attach_pids_to_cgroup`
+verifies the pidref, then passes its **numeric PID** to `cg_attach`; upstream
+explicitly identifies that migration as racy. A PIDFD property alone therefore
+does not establish atomic exact-process placement. Keeping an unreaped direct
+child while its parent lives does not settle parent death, adoption/reaping and
+an in-flight manager action. Post-move validation cannot undo moving an unrelated
+replacement. The current route is **not admitted** by this original-handle
+contract; no fixture or installed trial may silently waive this gap.
+[Upstream v256 cgroup attachment](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/cgroup.c),
+[Upstream v256 numeric migration](https://raw.githubusercontent.com/systemd/systemd/v256/src/shared/cgroup-setup.c)
+
+Stock v256 `systemd-run` retries with numeric PIDs when its pidfd property is
+unsupported. That fallback conflicts with this one-attempt original-handle
+contract; do not use it as-is or silently retry. A future qualified route must
+refuse unsupported descriptors, ambiguous replies, late completion, existing
+units and replacement jobs. No scope/service or D-Bus action is performed here.
+[Upstream v256 scope launch fallback](https://raw.githubusercontent.com/systemd/systemd/v256/src/run/run.c)
+
+Any eventual parent-preserving route must retain original Custody and clocks,
+exec the original child with only its three anchors, withhold target ingress,
+then independently
+establish that child's exact fresh scope/source/runtime/namespace and placement
+outside all peer/outer freeze and kill domains; then send the one original
+target packet and require native readiness before the **same original** cutoff.
+Scope job completion alone is not this evidence. The fixture's `G` barrier is
+only test sequencing, never a placement receipt. Failed or incomplete placement
+must leave targets with their independent original owner, not make a replacement
+launch acceptable. The outer's own qualified placement/termination and the
+pre-readiness loss interval still require an independent platform contract.
+
+`RuntimeMaxSec` cannot replace the native BOOTTIME timer: upstream scope expiry
+is calculated from a monotonic activation timestamp, not our original clock.
+[Upstream v256 scope timer](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/scope.c)
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
@@ -169,7 +256,7 @@ it from a container does not accomplish that. A frozen cgroup includes its
 descendants; a watcher inside that subtree stops executing too.
 [Linux cgroup v2 documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html)
 
-The local SIGSTOP tests show progress independence from stopped peers, not
+The local SIGSTOP tests show separate progress when peers or one owner stop, not
 cgroup-freeze, installed systemd, or Docker qualification. Host-wide freeze,
 loss of scheduling, watcher SIGKILL/OOM/kernel failure and uninterruptible I/O
 remain outside this executable's guarantee. Even correct SIGKILL dispatch does

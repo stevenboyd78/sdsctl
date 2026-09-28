@@ -9,6 +9,7 @@ qualified installed fixed observer/outer command or an active App launcher.
 import select
 import signal
 import time
+from pathlib import Path
 
 import pytest
 
@@ -67,6 +68,70 @@ def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exi
     assert outcome.writer is s.custody.identities[0]
     assert outcome.observer is s.custody.identities[1]
     assert outcome.deadline_ns == s.custody.deadline_ns
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.parametrize(
+    "joined", [dict(mode="release-command-pair", staged_input=True)], indirect=True
+)
+@pytest.mark.parametrize("transport", ["inherited", "socket-ingress"])
+@pytest.mark.parametrize("after", ["writer", "observer"])
+def test_native_death_during_real_handoff_stops_originals_without_releasing_or_retrying(
+    joined, monkeypatch, binary, transport, after
+):
+    s = joined
+    sent, releases = [], []
+    endpoint_send = command.p.bootstrap.Endpoint.deliver
+
+    def arm():
+        launch = native_tests.native if transport == "inherited" else ingress_tests.ingress
+        command.arm_original_watch(s, lambda custody: launch(custody, binary))
+
+    def endpoint(endpoint, channels):
+        result = endpoint_send(endpoint, channels)
+        sent.append(endpoint.role)
+        if endpoint.role == after:
+            signal.pidfd_send_signal(s.watch.fd, signal.SIGKILL)
+            # Original handoff cutoff, not a new action/readiness allowance.
+            end = min(s.writer_listener.deadline, s.observer_listener.deadline)
+            assert time.monotonic() < end
+            assert select.select([s.watch.fd], [], [], end - time.monotonic())[0]
+        return result
+
+    def release(*args):
+        releases.append(True)
+        raise AssertionError("Dead native watcher admitted passive release")
+
+    monkeypatch.setattr(command.p.bootstrap.Endpoint, "deliver", endpoint)
+    monkeypatch.setattr(command.p.bootstrap.Endpoint, "send_retirement", release)
+    assert s.sender.send() is None
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery) as failure:
+        command.finish(s, monkeypatch, arm)
+    assert str(failure.value) == command.delivery_tests.m.MESSAGE
+    assert sent == (["writer"] if after == "writer" else ["writer", "observer"])
+    assert not releases and s.plan_receipt and s.pair.channel_delivery_attempted
+    assert s.custody.armed_watch is s.watch and s.watch.closed and s.watch.finished
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    assert Path("startup-claim.json") in files and Path("plan.json") in files
+    with pytest.raises(command.delivery_tests.m.UnconfirmedDelivery):
+        command.delivery_tests.m.deliver_and_release_passive_writer(
+            s.custody,
+            s.watch,
+            s.h.observer_identity,
+            s.inputs,
+            s.writer_listener,
+            s.observer_listener,
+        )
+    assert not releases
     assert files == {
         path.relative_to(s.case_root): path.read_bytes()
         for path in s.case_root.rglob("*")

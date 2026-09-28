@@ -2202,6 +2202,34 @@ systemd, and do not qualify the audited host's standard-I/O descriptor API or
 independent service lifetime. See the native README for its precise failure
 model and source references; no older entrypoint/source selection is enlarged.
 
+An additional real-process fixture now separates original-outer death/freeze
+from native-watcher death/freeze, including outer loss before target ingress.
+The original outer constructs and reaps its own unmodified Watch; a disposable
+fixture subreaper adopts only after that outer dies. Original private BOOTTIME
+timers, signal-vs-exit distinctions, retained handles and one-attempt boundaries
+remain intact. Full-command faults also kill the native watcher after each real
+handoff: original peer retirement occurs without passive writer release, and
+case files survive refusal/retry. This is not cgroup placement or installed
+supervision proof, nor a simultaneous-failure guarantee.
+
+The native README records an investigated scope-placement route that could keep
+the original parent/reaping owner while moving its child outside the outer's
+freeze domain. Upstream v256 supports a transient-scope PIDFD property, but stock
+`systemd-run` has a numeric-PID retry fallback that is **not** acceptable here.
+Deeper source inspection also finds that its cgroup attachment checks the pidref
+then migrates by numeric PID, an explicitly acknowledged race. The PIDFD property
+does not solve parent-death/adoption/reuse during an in-flight move; this route
+is **not admitted** under the current exact-process contract. A post-move check
+cannot undo affecting an unrelated replacement. See the native README's source
+references; do not silently relax this requirement or claim installed proof.
+No systemd action is implemented or selected. Independently qualified exact
+placement must precede target ingress/native readiness under the unchanged
+original cutoff; a scope job, fixture barrier, source observation, or monotonic
+scope runtime timer cannot stand in for that proof or the original BOOTTIME
+bound. Installed support and a qualified pre-readiness failure owner are still
+separate gates. A service-owned alternative would instead need its genuine
+separate child owner and exit evidence; never loosen the direct-child Watch.
+
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
 a host without Python, not authenticated compiler/libc/kernel or installed
