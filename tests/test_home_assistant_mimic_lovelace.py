@@ -22,6 +22,21 @@ from sds200.home_assistant_themes import (
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_real_browser_audit_geometry_contract_and_help():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node needed for browser audit contract tests")
+    for args in (
+        ["--test", "scripts/test_ha_mimic_audit.mjs"],
+        ["scripts/audit_home_assistant_mimic.mjs", "--help"],
+    ):
+        result = subprocess.run([node, *args], cwd=ROOT, capture_output=True, text=True, timeout=15)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.stderr == ""
+    assert "never contacts Home Assistant" in result.stdout
+    assert "temporary browser profile" in result.stdout
+
+
 def module(identifier="mimic-sds"):
     return read_built_in_home_assistant_theme_module(
         built_in_home_assistant_theme_registry().require(identifier)

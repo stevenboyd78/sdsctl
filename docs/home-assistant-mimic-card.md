@@ -121,6 +121,18 @@ Ingress manager into Waterfall and updates both manifests and the ordered
 aggregate digests. `--check` verifies reproducibility without writing files.
 The source-code-only contract contains no user profile or captured scanner data.
 
+Run `node scripts/audit_home_assistant_mimic.mjs` for the reproducible real-Chrome
+card audit (Node 24+, Chrome/Chromium and the Python development dependencies).
+Optional `--python` and `--chrome` paths select the local tools. It opens a new
+temporary browser profile and a loopback-only fixture page, using packaged card
+bytes, fictional scanner frames and a synthetic HA context. It never connects
+to an installed Home Assistant instance or scanner. CI runs this independently
+of the general dashboard/Waterfall audit. All 33 frame scenarios in three local
+layouts, four viewport/DPR configurations, three densities, both LED treatments,
+host-only resizing, short fixed rows, trusted keyboard disclosure/focus and
+two-card session cleanup are covered. Repeated updates must not grow auto rows.
+The audit writes no screenshots and removes only its temporary browser profile.
+
 Deterministic tests cover configuration, all seven layouts, malformed/oversized
 responses, source/sequence aging, late authentication and context callbacks,
 visibility, multiple leases, renewal shutdown, installer safety and existing

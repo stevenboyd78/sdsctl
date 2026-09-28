@@ -234,7 +234,7 @@ async function isExecutable(candidate) {
   }
 }
 
-async function findExecutable(explicit, candidates, description) {
+export async function findExecutable(explicit, candidates, description) {
   const requested = explicit === null ? candidates : [explicit];
   const searchDirectories = (process.env.PATH ?? "").split(path.delimiter);
 
