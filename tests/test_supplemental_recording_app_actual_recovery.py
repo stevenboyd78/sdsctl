@@ -97,7 +97,7 @@ def run_recovery(
             # bracket immutable files with inspections of the same terminal exec.
             io.handlers.extend(
                 [io.exited_metadata]
-                * (1 if fault == "new_file" else 2 if fault == "running_metadata" else 6)
+                * {None: 6, "new_file": 1, "running_metadata": 2, "observer_exit": 4}[fault]
             )
             phase = s.driver.recording
             c = s.cycle = SimpleNamespace(s=s, host=phase.reader, operator=phase.operator)
@@ -177,7 +177,15 @@ def run_recovery(
                     3 if fault is None else 2
                 )
             driver.assert_owners(s)
-            assert len(io.requests) == (10 if fault == "new_file" else 11 if fault else 15)
+            assert (
+                len(io.requests)
+                == {
+                    None: 15,
+                    "new_file": 10,
+                    "running_metadata": 11,
+                    "observer_exit": 13,
+                }[fault]
+            )
             assert (mapped.recordings / "previous.wav").read_bytes() == b"old evidence unchanged"
         finally:
             resources.close()

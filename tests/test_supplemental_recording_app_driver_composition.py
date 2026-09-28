@@ -93,10 +93,15 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
         return notice.receipt
 
     def observe_native(notice):
-        # Synthetic acknowledgment in the actual original service->begin path.
+        # Synthetic acknowledgment in the original service->begin/cancel path.
         # Separate-process custody and actual native Ready have other fixtures.
-        assert s.driver.native.retired and s.driver.recording is not None
-        assert s.driver.recording.start_attempt.native_observation_attempted
+        if s.driver.recording is None:
+            assert s.driver.native.cancel_attempted and not s.driver.native.retired
+            assert not s.driver.recording_attempted and not s.run.begin_attempted
+            assert s.run.begin_owner is None
+        else:
+            assert s.driver.native.retired
+            assert s.driver.recording.start_attempt.native_observation_attempted
         assert s.ledger.state.count == 1
         assert s.journal.machine.state.authorization_generation is None
         assert notice.history == tuple(base.encode(item) for item in s.journal.entries)

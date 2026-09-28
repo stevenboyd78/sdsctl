@@ -26,8 +26,8 @@ dispatch, namespace = launch.engine.dispatch, launch.engine.namespace
 class NativeNotice:
     """Pre-begin comparison facts, not independent custody or action permission.
 
-    Only AppStart derives this from its original authenticated Ready. A receiver
-    must independently reconstruct history/dispatch and capture actual actors;
+    AppStart or AppNativePhase derives this from its original authenticated
+    Ready. A receiver must reconstruct history/dispatch and capture actual actors;
     serialized hints or a matching receipt alone cannot supply that evidence.
     """
 
@@ -82,6 +82,27 @@ class NativeNotice:
                 history=[raw.hex() for raw in self.history],
             )
         )
+
+
+def native_notice(run, proof):
+    """Comparison only; callers must guard their distinct original phase first."""
+    require(type(run) is execution.AppLaunch)
+    require(type(run.ready.processes) is namespace.Witness)
+    actors = run.ready.processes.refresh()
+    state = run.client.claim.state
+    require(type(state) is dispatch.State and state.count == 3)
+    require(state.phase == "attach_intent")
+    return NativeNotice(
+        run.pins,
+        state.execution_id,
+        state.sha256,
+        hashlib.sha256(run.ready.ready_raw).hexdigest(),
+        proof,
+        run.probe.execution_id,
+        run.probe.request_sha256,
+        actors,
+        tuple(begin.base.encode(entry) for entry in run.journal.entries),
+    )
 
 
 class AppStart(begin.Start):
@@ -177,22 +198,7 @@ class AppStart(begin.Start):
         self._ledger()
         require(self.authorization is self.intent is self.relay is None)
         require(self._ready_proof() == self.proof)
-        require(type(self.ready.processes) is namespace.Witness)
-        actors = self.ready.processes.refresh()
-        state = self.run.client.claim.state
-        require(type(state) is dispatch.State and state.count == 3)
-        require(state.phase == "attach_intent")
-        return NativeNotice(
-            self.run.pins,
-            state.execution_id,
-            state.sha256,
-            hashlib.sha256(self.ready.ready_raw).hexdigest(),
-            self.proof,
-            self.run.probe.execution_id,
-            self.run.probe.request_sha256,
-            actors,
-            tuple(begin.base.encode(entry) for entry in self.run.journal.entries),
-        )
+        return native_notice(self.run, self.proof)
 
     def _observe(self):
         """Selected pre-begin hook stays inside the fresh qualification bracket.

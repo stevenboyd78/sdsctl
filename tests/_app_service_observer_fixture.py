@@ -104,13 +104,16 @@ def main():
             sock.set_inheritable(False)
         link = channel.Link(channels, plan, clock, witness, role="observer")
         cleanup.callback(link.close)
-        if config.get("fault") == "lost_native_ack":
+        if config.get("fault") in ("lost_native_ack", "exit_native_ack"):
             send = link._send
 
             def lost_native_ack(value, end):
                 if value["kind"] == channel.NATIVE_KIND:
                     # Drop only the outbound acknowledgement AFTER the real
                     # custody checks and independent native handles succeeded.
+                    if config["fault"] == "exit_native_ack":
+                        reply(dict(observer_exit_after_native_capture=True))
+                        os._exit(73)  # Deliberate loss of this owned fixture process.
                     return channel.base.encode(value)
                 return send(value, end)
 

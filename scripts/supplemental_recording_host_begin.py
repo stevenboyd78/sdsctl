@@ -37,6 +37,37 @@ def require(value):
         raise UnconfirmedHostBegin(MESSAGE)
 
 
+def ready_proof(run):
+    """Compare original Ready with its journal event; grants no phase authority.
+
+    Callers must retain and validate their own original owner, ledger, processes
+    and deadline. This read-only comparison neither constructs Start nor consumes
+    its one-use authorization slot.
+    """
+    entries = [e["event"] for e in run.journal.entries if e["event"]["kind"] == "operator_ready"]
+    require(len(entries) == 1)
+    event = entries[0]
+    observation = launch.bootstrap.recording.decode_observation(event["observation"])
+    candidate = observation.candidate
+    native = plans.ordinary.NativeState(
+        candidate.generation, candidate.healthy, candidate.recording
+    )
+    run._check_native(native)
+    proof = base.checksum(
+        dict(
+            ready_sha256=hashlib.sha256(run.ready.ready_raw).hexdigest(),
+            probe_execution_id=run.probe.execution_id,
+            probe_request_sha256=run.probe.request_sha256,
+            native=asdict(native),
+            observation=asdict(observation),
+        )
+    )
+    require(event["ready_evidence_sha256"] == proof)
+    require(event["generation"] == run.pins.generation)
+    require(event["intent_sha256"] == run.action.intent_sha256)
+    return proof
+
+
 class Start:
     """One pre-begin join; construction performs only original evidence checks.
 
@@ -105,31 +136,8 @@ class Start:
             self._fail(error)
 
     def _ready_proof(self):
-        run = self.run
-        entries = [
-            e["event"] for e in run.journal.entries if e["event"]["kind"] == "operator_ready"
-        ]
-        require(len(entries) == 1)
-        event = entries[0]
-        observation = launch.bootstrap.recording.decode_observation(event["observation"])
-        candidate = observation.candidate
-        native = plans.ordinary.NativeState(
-            candidate.generation, candidate.healthy, candidate.recording
-        )
-        run._check_native(native)
-        proof = base.checksum(
-            dict(
-                ready_sha256=hashlib.sha256(self.ready.ready_raw).hexdigest(),
-                probe_execution_id=run.probe.execution_id,
-                probe_request_sha256=run.probe.request_sha256,
-                native=asdict(native),
-                observation=asdict(observation),
-            )
-        )
-        require(event["ready_evidence_sha256"] == proof)
-        require(event["generation"] == run.pins.generation)
-        require(event["intent_sha256"] == run.action.intent_sha256)
-        return proof
+        require(self.ready is self.run.ready)
+        return ready_proof(self.run)
 
     def _identity(self):
         """Original object/plan bindings only; deliberately no phase authority."""

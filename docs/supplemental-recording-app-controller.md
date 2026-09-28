@@ -21,6 +21,7 @@ independent supervision and recovery integration.
 | Native launch | `AppLaunch` | Original accepted Startup, candidate generation, published launch input, host journal, clock, init witness and full BootstrapHost |
 | Native ready | `NativeReadyQualification` | Actual returned Ready and the one-time inventory of the four declared private sockets |
 | Explicit pre-begin native custody | Original AppStart and original peer Link/CliCustody | One comparison of original authenticated Ready/dispatch/history to independently captured workers, before recording authorization or begin; no action grant |
+| Explicit pre-cancel native custody | Original AppNativePhase and original peer Link/CliCustody | Same one-use comparison before withdrawing original transport; no AppStart, authorization, ledger intent or begin is created |
 | Recording begin | `AppStart` | Original AppLaunch, fresh source/runtime/host/probe checks, returned durable host authorization and ledger intent, and the existing one-use Relay |
 | Active inputs | `NativeActiveQualification` | Exact AppStart/Relay/PostBegin, original sockets and immutable input identities, and append-only validated receipt prefixes |
 | Host and file observation | `AppRetainedHost` | Original authorization history, fixed metadata worker, owner-thread file read, and continuing original actor/lease evidence |
@@ -203,6 +204,21 @@ Operator must establish worker/init exits and publish evidence before the App
 never-authorized route can continue the same RecoverySession. No recording
 authorization, automatic cancellation, renewed budget or App stop is inferred.
 All original cleanup callbacks remain owned by the borrowed idle service.
+
+When the service has selected `native_observer`, cancellation first consumes
+its own cancellation slot and obtains the same original native-custody receipt
+used by the pre-begin route. It does **not** construct `AppStart` merely to obtain
+that receipt: the begin slot stays unused, the ledger stays prepared, and no
+recording authorization is written. Original Ready, actors, journal, ledger,
+source/runtime qualification and callback identity are rechecked around the
+exchange. The original readiness limit and two-second exchange limit cannot be
+extended. Consuming cancellation before the callback also prevents reentrant
+cancellation or a recording handoff. Unknown or lost custody acknowledgment
+marks the original phase uncertain and closes its acquired transport; the same
+session may expire to review but cannot infer pristine recovery. A successful
+custody exchange followed by a lost transport-close return still requires
+actual original exits and unchanged files, just like the unobserved development
+composition. An active launcher must explicitly select this observer.
 
 ### Explicit recording-phase handoff
 
@@ -651,12 +667,38 @@ stays **unconfirmed**, never a successful recording. A still-live original init
 or an unexpected additional file withholds restoration on both routes. The
 caller prepares the private progress directory even if no active sample runs.
 
-The separate authenticated observer also joins the abandoned-recording route,
-including retained worker handles and the above refusal cases. Pristine
-cancellation has no `AppStart` pre-begin exchange, so its independent native
-observer join is **not** claimed: the same-writer `Operator` test is not a
-substitute. This distinction must be resolved before an active launcher can
-select pristine recovery under independent native supervision.
+The separate authenticated observer also joins the abandoned-recording and
+pristine-cancellation routes, including retained worker handles and the above
+refusal cases. Pristine cancellation selects its own pre-cancel exchange without
+constructing `AppStart`. A lost acknowledgment after the observer captured the
+actual workers preserves its factual handles but leaves the writer uncertain;
+there is no authorization, recording, retry or inferred restoration. These
+fixtures join the real original service/peer/native lifetime, not installed
+platform provenance, qualified active execution or action permission.
+An additional deliberate observer-process exit after native capture also
+withholds acknowledgment on both recording and cancellation routes. Kernel
+peer-exit evidence is real, but the lost observer's handles are not replaced or
+described as continuing custody; only the original writer's retained handles
+remain, and the original case expires without restoration.
+
+A separate loss test lets native work and its acknowledgment finish, then exits
+the owned observer before restoration. Finalized, abandoned and pristine routes
+all retain their original writer/session and refuse the first restoration
+dispatch through the original peer `Link`. No restoration CLI execution is
+created or started. Actual native output and exited workers do not replace the
+dead observer or turn the resulting review state into restored service.
+
+The same three successful fixture lifetimes also run the observer from a
+disposable copy of the closed joint source bundle and an explicit PySerial copy.
+The isolated test bootstrap removes installed package search paths, refuses
+undeclared third-party imports, and checks all imported private, product and
+dependency module origins. Complete source, dependency and bootstrap inventories
+are unchanged before and after execution. Private, product and dependency
+modules resolve only through their staged roots, before execution. Withholding
+the staged channel module, product package or PySerial dependency refuses before
+peer readiness rather than falling back to installed packages or another local
+checkout. This packaging check does **not** qualify the interpreter, installed image, bootstrap or
+active command. Both independently qualified peer runtimes remain required.
 
 ## Independent observer deadline prerequisite (uninstalled)
 
@@ -989,9 +1031,9 @@ remain separate requirements before selecting any active command.
    actual isolated native recording/WAV/worker exits and finalized recovery now
    join in one offline fixture. App publication provenance, platform/CLI replies
    and restored health remain synthetic. A separate authenticated observer now
-   joins finalized and abandoned-recording paths with real Link, journal, clock
-   and worker handles. Pristine cancellation is tested with the original writer's
-   retained Operator but does not yet have its separate native-observer exchange.
+   joins finalized, abandoned-recording and pristine-cancellation paths with real
+   Link, journal, clock and worker handles. Pristine cancellation captures native
+   custody without constructing a recording owner or consuming its begin slot.
    Installed evidence remains separate; do not infer the missing joins.
 2. Bind the joint controller/observer source inventory to a reviewed, independently
    supervised entrypoint with interpreter/dependency provenance for **both** peers

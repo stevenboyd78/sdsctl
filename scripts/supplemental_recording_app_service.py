@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import os
 import time
+from contextlib import suppress
 
 import supplemental_recording_app_candidate as candidates
 import supplemental_recording_app_execution as execution
@@ -536,7 +537,79 @@ class AppNativePhase(operator.NativePhase):
     def cancel(self):
         self.service._context()
         require(self.run is not None and not self.run.failed)
-        return super().cancel()
+        observer = self.service.native_observer
+        if observer is None:
+            return super().cancel()
+        # Consume cancellation BEFORE the callback, so neither a reentrant
+        # cancel nor a recording handoff can use this observation as authority.
+        require(self.used and self.confirmed and not self.uncertain and not self.retired)
+        require(not self.cancel_attempted and not self.recovery_attempted)
+        self.cancel_attempted = True
+        run = self.run
+        try:
+            notice = self._cancel_notice()
+            require(run.qualify() is None)
+            require(self._cancel_notice().receipt == notice.receipt)
+            end = min(time.monotonic() + 2, run.ready.ready_by)
+            receipt = notice.receipt
+            require(observer(notice) == receipt)
+            self.service._context()
+            require(self.service.native_observer is observer)
+            require(self._cancel_notice().receipt == receipt and notice.receipt == receipt)
+            require(time.monotonic() < end)
+            require(run.qualify() is None)
+            require(self._cancel_notice().receipt == receipt)
+            require(time.monotonic() < end)
+        except BaseException as error:
+            # Keep the same clock/session alive for review. Close only the
+            # originally acquired transport; no retry or pristine inference.
+            self.uncertain = True
+            with suppress(Exception):
+                run._fail(error)
+            if not isinstance(error, Exception):
+                raise
+            return False
+        confirmed = True
+        try:
+            run.client.close()
+        except Exception:
+            confirmed = False  # Original handles may still prove actual exit.
+        self.service._context()
+        return confirmed
+
+    def _cancel_notice(self):
+        """Original pre-cancel custody without constructing any AppStart."""
+        from supplemental_recording_app_begin import native_notice
+
+        self.service._context()
+        run = self.run
+        require(self.cancel_attempted and not self.uncertain and not self.retired)
+        require(not run.begin_attempted and run.begin_owner is None)
+        require(self.service.recording is None and not self.service.recording_attempted)
+        require(not self.operator.done and not self.recovery_attempted)
+        run._app_context()
+        require(type(run.ready) is launch.received.Ready and run.confirm_attempted)
+        require(type(run.probe) is launch.probe_exec.Sample and run.probe.ready is run.ready)
+        require(type(run.qualify) is execution.readiness.NativeReadyQualification)
+        run.ready.check_before_begin()
+        self._ledger()
+        require(self.ledger_state.now <= run.ready.received_at)
+        machine = self._history()
+        state = machine.state
+        proof = begin.ready_proof(run)
+        require(state.phase == "candidate_running" and not state.finish_requested)
+        require(state.operator_exit_sha256 is None and state.ready_evidence_sha256 == proof)
+        require(state.launch_intent_sha256 == run.action.intent_sha256)
+        require(state.launch_plan_sha256 == run.command.plan_sha256)
+        require(state.candidate_generation == run.pins.generation)
+        require(machine.process_bound(base.CANDIDATE, exited=False))
+        require(machine.execution_closed("starting_candidate"))
+        observed = operator.plans.clock.read()
+        self.service.plan.check_clock(observed)
+        now = observed.boottime_ns / operator.plans.clock.NS
+        require(machine.last_at <= now < min(state.deadline, self.service.plan.deadlines.ready_by))
+        require(time.monotonic() < run.ready.ready_by)
+        return native_notice(run, proof)
 
     def poll(self, wait):
         self.service._context()

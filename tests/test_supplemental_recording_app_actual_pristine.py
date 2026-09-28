@@ -2,9 +2,10 @@
 
 Owned normal/candidate and native worker exits and file reads are real. Initial
 CLI/App metadata and restored health are synthetic. Independent peer native
-custody and installed supervision are NOT supplied by this test. No live devices.
+custody is supplied only by the explicit observer factory; installed supervision
+is NOT supplied by this test. No live devices.
 The shared helper also serves the explicitly abandoned-recording tests; that
-route can select their separately owned observer factory before the first action.
+route can also select its separately owned observer factory before the first action.
 """
 
 import wave
@@ -108,6 +109,8 @@ def run_closed(
                 monkeypatch.setattr(s.driver.recording, "_preserved_reader", observed_preserved)
             else:
                 assert s.driver.cancel_native()
+                if observer_factory is not None:
+                    assert s.observer.exchanges == ["dispatch"] * 4 + ["candidate", "native"]
             # Real owned transport EOF, not substituted worker-exit methods.
             io.worker.join(timeout=8)
             assert not io.worker.is_alive() and not io.errors
@@ -157,7 +160,6 @@ def run_closed(
         try:
             observer = None
             if observer_factory is not None:
-                assert preserved  # Pristine cancellation has no pre-begin native exchange.
                 observer = resources.enter_context(observer_factory(s, io, monkeypatch))
             initial.request(s)
             try:

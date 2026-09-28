@@ -293,7 +293,10 @@ def test_original_observer_survives_app_native_recording_and_recovery_handoffs(
     assert s.driver.candidate_observation_attempted
     assert s.candidate_notices[0].plan_sha256 == s.plan.sha256
     assert s.driver.native_observer is native_observer
-    assert len(s.native_notices) == (0 if route == "pristine" else 1)
+    assert len(s.native_notices) == 1
+    if route == "pristine":
+        assert s.driver.recording is s.run.begin_owner is None
+        assert not s.run.begin_attempted and not s.driver.recording_attempted
     assert s.service.closed and not s.startup.clock.closed
 
 

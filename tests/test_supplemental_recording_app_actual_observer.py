@@ -141,6 +141,7 @@ def separate_observer(s, io, monkeypatch, *, fault=None):
         right.close()
         witness = link = None
         exchanges = []
+        retired = []
         try:
             current = m.processes.read_identity
 
@@ -182,18 +183,27 @@ def separate_observer(s, io, monkeypatch, *, fault=None):
             link = m.Link(left, s.plan, s.startup.clock, witness, role="writer")
 
             def exchange(kind, notice):
-                channel.send(child, dict(operation=kind))
                 fn = dict(
                     dispatch=link.observe,
                     candidate=link.observe_candidate,
                     native=link.observe_native,
                 )[kind]
+                if retired:
+                    assert kind == "dispatch" and child.returncode == 0 and witness.exited()
+                    # The original production Link, not the fixture control
+                    # pipe, must refuse its dead original peer before mutation.
+                    return fn(notice)
+                channel.send(child, dict(operation=kind))
                 try:
                     receipt = fn(notice)
                 except m.UnconfirmedExchange:
-                    assert fault == "lost_native_ack" and kind == "native"
+                    assert fault in ("lost_native_ack", "exit_native_ack") and kind == "native"
                     answer = json.loads(channel.line(child))
-                    assert answer == dict(receipt=notice.receipt, sequence=link.sequence)
+                    if fault == "exit_native_ack":
+                        assert answer == dict(observer_exit_after_native_capture=True)
+                        assert child.wait(timeout=3) == 73 and witness.exited()
+                    else:
+                        assert answer == dict(receipt=notice.receipt, sequence=link.sequence)
                     exchanges.append(kind)
                     raise
                 answer = json.loads(channel.line(child))
@@ -202,10 +212,24 @@ def separate_observer(s, io, monkeypatch, *, fault=None):
                 return receipt
 
             def snapshot():
+                assert not retired
                 channel.send(child, dict(operation="verify"))
                 return json.loads(channel.line(child))
 
+            def retire():
+                assert not retired and link.sequence == 4
+                assert exchanges == ["dispatch"] * 4 + ["candidate", "native"]
+                channel.send(child, dict(operation="close"))
+                assert json.loads(channel.line(child)) == dict(closed=True)
+                assert child.wait(timeout=3) == 0 and witness.exited()
+                retired.append(True)
+
             def verify(*, fault=None):
+                if fault == "observer_exit":
+                    assert retired == [True] and child.returncode == 0
+                    assert witness.exited() and link.failed and link.sequence == 4
+                    assert exchanges == ["dispatch"] * 4 + ["candidate", "native"]
+                    return  # No fresh custody facts can be read from a dead observer.
                 result = snapshot()
                 assert result["owner"] == child.pid and not result["failed"]
                 assert result["sequence"] == link.sequence == (6 if fault is None else 4)
@@ -231,7 +255,12 @@ def separate_observer(s, io, monkeypatch, *, fault=None):
                 assert requests and all(item[0].startswith("GET ") for item in requests)
 
             s.observer = SimpleNamespace(
-                exchange=exchange, verify=verify, snapshot=snapshot, link=link, exchanges=exchanges
+                exchange=exchange,
+                verify=verify,
+                snapshot=snapshot,
+                link=link,
+                exchanges=exchanges,
+                retire=retire,
             )
             yield s.observer
         finally:
@@ -255,8 +284,11 @@ def separate_observer(s, io, monkeypatch, *, fault=None):
             left.close()
             if witness is not None:
                 witness.close()
-            assert child.returncode == 0, error.decode()
-            assert output == b'{"closed":true}\n' and not error
+            assert child.returncode == (73 if fault == "exit_native_ack" else 0), error.decode()
+            assert output == (
+                b"" if fault == "exit_native_ack" or retired else b'{"closed":true}\n'
+            )
+            assert not error
 
 
 @pytest.mark.parametrize("fault", [None, "running_metadata", "new_file"])
@@ -274,8 +306,10 @@ def test_original_service_actual_native_and_separate_observer_share_one_lifetime
     )
 
 
+@pytest.mark.parametrize("route", ["record", "cancel"])
+@pytest.mark.parametrize("fault", ["lost_native_ack", "exit_native_ack"])
 def test_lost_separate_native_ack_preserves_facts_but_never_authorizes_recording(
-    dispatched, mapped, staged, monkeypatch
+    dispatched, mapped, staged, monkeypatch, route, fault
 ):
     s = dispatched
     from . import test_supplemental_recording_app_driver_dispatch as initial
@@ -297,19 +331,30 @@ def test_lost_separate_native_ack_preserves_facts_but_never_authorizes_recording
             assert len(attempts) == 1
             s.witness = s.session.processes.witnesses[service.m.base.CANDIDATE]
             service.start_native(s, mapped, io, audit)
-            assert not s.driver.start_recording()
+            if route == "record":
+                assert not s.driver.start_recording()
+                assert not s.driver.recording.recovery_attempted
+            else:
+                assert not s.driver.cancel_native()
+                assert s.driver.native.cancel_attempted and s.driver.native.uncertain
+                assert s.driver.recording is s.run.begin_owner is None
+                assert not s.run.begin_attempted
             assert s.observer.link.failed
-            facts = s.observer.snapshot()
-            assert facts["sequence"] == 4 and facts["candidate"] and facts["native"]
-            assert not facts["failed"] and facts["normal_exited"]
-            assert not facts["candidate_exited"] and not facts["helper_exited"]
-            assert len(facts["executions"]) == 2
+            if fault == "lost_native_ack":
+                facts = s.observer.snapshot()
+                assert facts["sequence"] == 4 and facts["candidate"] and facts["native"]
+                assert not facts["failed"] and facts["normal_exited"]
+                assert not facts["candidate_exited"] and not facts["helper_exited"]
+                assert len(facts["executions"]) == 2
+            else:
+                # Dead observer handles cannot be replaced or called factual
+                # recovery evidence. Only the original writer's handles remain.
+                assert s.observer.link._peer.exited()
             assert s.observer.exchanges == ["dispatch"] * 4 + ["candidate", "native"]
             assert s.ledger.state.count == 1 and s.ledger.state.expected is None
             assert s.journal.machine.state.authorization_generation is None
             assert s.journal.machine.state.recording_outcome == "not_attempted"
             assert not io.run.client.attachment.begun and len(io.requests) == 6
-            assert not s.driver.recording.recovery_attempted
             assert not tuple((s.case_root / "receipts").iterdir())
             assert not mapped.scanner.reads
             service.driver.expire(s, monkeypatch, hard=True)
@@ -322,7 +367,7 @@ def test_lost_separate_native_ack_preserves_facts_but_never_authorizes_recording
                 raise
 
         try:
-            with separate_observer(s, io, monkeypatch, fault="lost_native_ack"):
+            with separate_observer(s, io, monkeypatch, fault=fault):
                 initial.request(s)
                 with pytest.raises(service.m.operator.UnconfirmedOperator):
                     s.driver.run(wait)
@@ -354,3 +399,72 @@ def test_separate_observer_retains_original_abandoned_recording_lifetime(
         preserved=True,
         observer_factory=separate_observer,
     )
+
+
+@pytest.mark.parametrize("fault", [None, "live_init", "new_file"])
+def test_separate_observer_retains_original_pristine_cancellation_lifetime(
+    dispatched, mapped, staged, monkeypatch, fault
+):
+    from . import test_supplemental_recording_app_actual_pristine as closed
+
+    closed.run_closed(
+        dispatched,
+        mapped,
+        staged,
+        monkeypatch,
+        fault=fault,
+        observer_factory=separate_observer,
+    )
+
+
+@pytest.mark.parametrize("route", ["finalized", "abandoned", "pristine"])
+def test_observer_exit_after_native_work_prevents_every_restoration_route(
+    dispatched, mapped, staged, monkeypatch, route
+):
+    from . import test_supplemental_recording_app_actual_pristine as closed
+
+    @contextmanager
+    def retiring_observer(s, io, patch):
+        with separate_observer(s, io, patch) as observer:
+            if route == "finalized":
+                original = service.record_and_finalize
+
+                def finished(*args, **kwargs):
+                    result = original(*args, **kwargs)
+                    observer.retire()
+                    return result
+
+                patch.setattr(service, "record_and_finalize", finished)
+            else:
+                name = "abandon_recording" if route == "abandoned" else "cancel_native"
+                original = getattr(s.driver, name)
+
+                def finished():
+                    result = original()
+                    assert result is True
+                    observer.retire()
+                    return result
+
+                patch.setattr(s.driver, name, finished)
+            yield observer
+
+    if route == "finalized":
+        recovery.run_recovery(
+            dispatched,
+            mapped,
+            staged,
+            monkeypatch,
+            initial=True,
+            fault="observer_exit",
+            observer_factory=retiring_observer,
+        )
+    else:
+        closed.run_closed(
+            dispatched,
+            mapped,
+            staged,
+            monkeypatch,
+            fault="observer_exit",
+            preserved=route == "abandoned",
+            observer_factory=retiring_observer,
+        )
