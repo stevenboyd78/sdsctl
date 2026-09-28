@@ -70,6 +70,7 @@ class Inputs:
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.closed = self.failed = False
         self.handles, self.directories = [], []
+        self._owned_handles = ()
         try:
             end = _end(deadline)
             require(type(self) is Inputs and self.owner[2:] == (ROOT_UID, ROOT_UID))
@@ -125,7 +126,9 @@ class Inputs:
         except BaseException:
             os.close(fd)
             raise
-        self.handles.append((fd, pin, flags))
+        record = fd, pin, flags
+        self._owned_handles += (record,)
+        self.handles.append(record)
         return fd
 
     def _state(self, end):
@@ -139,7 +142,7 @@ class Inputs:
 
     def _paths(self, end):
         self._state(end)
-        require(tuple(self.handles) == self.handle_pins)
+        require(tuple(self.handles) == self.handle_pins == self._owned_handles)
         require(tuple(self.directories) == self.path_pins)
         require(self.file == self.handle_pins[-1][0] and self.directory == self.path_pins[-1][2])
         for fd, pin, original_flags in self.handle_pins:
@@ -218,9 +221,13 @@ class Inputs:
         if self.closed:
             return
         self.closed = True
-        problem = None
-        while self.handles:
-            fd, pin, _ = self.handles.pop()
+        problem = None if tuple(self.handles) == self._owned_handles else UnconfirmedInputs(MESSAGE)
+        # Retain ownership separately from the checked working list, including
+        # during partial construction. A changed list cannot nominate new fds
+        # for cleanup or hide an original. Retire before attempting any close.
+        originals, self._owned_handles = self._owned_handles, ()
+        self.handles = []
+        for fd, pin, _ in reversed(originals):
             try:
                 current = files.identity(os.fstat(fd))
                 require(current[:2] == pin[:2] and stat.S_IFMT(current[2]) == stat.S_IFMT(pin[2]))
@@ -229,6 +236,7 @@ class Inputs:
                 if problem is None or not isinstance(error, Exception):
                     problem = error
         if problem is not None:
+            self.failed = True
             if not isinstance(problem, Exception):
                 raise problem
             raise UnconfirmedInputs(MESSAGE) from None

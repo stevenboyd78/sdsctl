@@ -12,6 +12,7 @@ it does not run or enable the prospective recording service.
 
 from __future__ import annotations
 
+import fcntl
 import os
 import stat
 import sys
@@ -83,6 +84,7 @@ class CasePlan:
         self._owner = (os.getpid(), get_ident(), os.geteuid(), os.getegid())
         self._anchor = self._file = -1
         self._directories = []
+        self._owned_handles = {}
         self._failed = self._closed = False
         self._plan = self._pin = None
         try:
@@ -92,17 +94,13 @@ class CasePlan:
             plans.base.digest(expected_sha256)
             self._root, self._expected = root, expected_sha256
             end = time.monotonic() + MAX_SECONDS
-            self._anchor = os.open("/", files.DIRECTORY)
+            self._anchor = self._open("/", files.DIRECTORY)
             self._anchor_identity = files.identity(os.fstat(self._anchor))[:5]
             parent = self._anchor
             for name in root.parts[1:]:
                 require(time.monotonic() < end)
-                child = os.open(name, files.DIRECTORY, dir_fd=parent)
-                try:
-                    original = files.identity(os.fstat(child))[:5]
-                except BaseException:
-                    os.close(child)
-                    raise
+                child = self._open(name, files.DIRECTORY, dir_fd=parent)
+                original = self._owned_handles[child][0]
                 self._directories.append((parent, name, child, original))
                 parent = child
             self._check_directories(end)
@@ -115,7 +113,7 @@ class CasePlan:
                 and 0 < before.st_size <= plans.MAX_BYTES
             )
             self._file_identity = files.identity(before)
-            self._file = os.open(
+            self._file = self._open(
                 "plan.json",
                 os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
                 dir_fd=parent,
@@ -130,16 +128,43 @@ class CasePlan:
         except BaseException as error:
             self._fail(error)
 
+    def _open(self, *args, **kwargs):
+        fd = os.open(*args, **kwargs)
+        try:
+            pin = files.identity(os.fstat(fd))[:5]
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        except BaseException:
+            os.close(fd)
+            raise
+        self._owned_handles[fd] = pin, flags
+        return fd
+
+    def _slots(self):
+        return tuple(
+            fd
+            for fd in (self._anchor, *(child for _, _, child, _ in self._directories), self._file)
+            if fd >= 0
+        )
+
+    def _handle(self, fd):
+        pin, flags = self._owned_handles[fd]
+        require(files.identity(os.fstat(fd))[:5] == pin and not os.get_inheritable(fd))
+        require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags)
+        require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_APPEND)
+
     def _context(self, end):
         require(not self._closed and not self._failed)
         require(self._owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
         require(time.monotonic() < end)
+        require(self._slots() == tuple(self._owned_handles))
 
     def _check_directories(self, end):
         self._context(end)
+        self._handle(self._anchor)
         require(files.identity(os.fstat(self._anchor))[:5] == self._anchor_identity)
         for parent, name, child, original in self._directories:
             self._context(end)
+            self._handle(child)
             require(files.identity(os.fstat(child))[:5] == original)
             require(
                 files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:5] == original
@@ -154,6 +179,8 @@ class CasePlan:
 
     def _check_file(self, end):
         self._context(end)
+        self._handle(self._file)
+        require(fcntl.fcntl(self._file, fcntl.F_GETFL) & os.O_NONBLOCK)
         require(files.identity(os.fstat(self._file)) == self._file_identity)
         require(
             files.identity(
@@ -211,23 +238,22 @@ class CasePlan:
 
     def close(self):
         """Release descriptors only; never remove evidence or certify anything."""
+        require(self._owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
         if self._closed:
             return
         self._closed = True
-        handles = [
-            self._file,
-            *(child for _, _, child, _ in reversed(self._directories)),
-            self._anchor,
-        ]
+        error = None if self._slots() == tuple(self._owned_handles) else UnconfirmedInput(MESSAGE)
         # Retire all owned descriptors first. An uncertain close may already
         # have released its fd; it cannot be retried against a reused number.
         self._file = self._anchor = -1
-        self._directories.clear()
-        error = None
-        for fd in handles:
-            if fd < 0:
-                continue
+        self._directories = []
+        while self._owned_handles:
+            fd, (pin, _) = self._owned_handles.popitem()
             try:
+                # A reused number belongs to its new owner. Mode/flag drift
+                # still permits retiring the original inode, never a replacement.
+                current = files.identity(os.fstat(fd))
+                require(current[:2] == pin[:2] and stat.S_IFMT(current[2]) == stat.S_IFMT(pin[2]))
                 os.close(fd)
             except BaseException as problem:
                 if (

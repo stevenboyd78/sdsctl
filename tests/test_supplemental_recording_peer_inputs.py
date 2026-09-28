@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from threading import Thread
 from types import SimpleNamespace
@@ -330,6 +331,39 @@ def test_even_equal_duplicate_descriptor_cannot_replace_original_owned_slot(prov
         os.close(duplicate)
 
 
+@pytest.mark.parametrize("action", ["close", "recheck"])
+@pytest.mark.parametrize("fault", ["append", "replace", "omit", "clear"])
+def test_mutated_handle_list_never_adopts_foreign_or_leaks_originals(provisioned, action, fault):
+    before = fds()
+    owner = construct(provisioned)
+    originals = tuple(owner.handles)
+    foreign = os.open("/dev/null", os.O_RDONLY | os.O_CLOEXEC)
+    record = (foreign, m.files.identity(os.fstat(foreign))[:5], fcntl.fcntl(foreign, fcntl.F_GETFL))
+    try:
+        if fault == "append":
+            owner.handles.append(record)
+        elif fault == "replace":
+            owner.handles[-1] = record
+        elif fault == "omit":
+            owner.handles.pop()
+        else:
+            owner.handles.clear()
+        denied(getattr(owner, action))
+        assert owner.failed and owner.closed and not provisioned.original.closed
+        owner.close()
+        assert os.read(foreign, 1) == b""
+        for fd, _, _ in originals:
+            with pytest.raises(OSError):
+                os.fstat(fd)
+    finally:
+        owner.close()
+        # Only the fixture knows which descriptors are deliberately substituted.
+        for fd in (foreign, *(record[0] for record in originals)):
+            with suppress(OSError):
+                os.close(fd)
+    assert fds() == before
+
+
 def test_other_thread_cannot_close_original_descriptors(provisioned):
     owner = construct(provisioned)
     errors = []
@@ -346,6 +380,41 @@ def test_other_thread_cannot_close_original_descriptors(provisioned):
     assert len(errors) == 1 and not owner.closed
     assert owner.recheck() is owner.expectations
     owner.close()
+
+
+@pytest.mark.parametrize("after", [False, True])
+@pytest.mark.parametrize("error_type", [OSError, KeyboardInterrupt])
+def test_uncertain_close_retires_all_originals_once(provisioned, monkeypatch, after, error_type):
+    before = fds()
+    owner = construct(provisioned)
+    originals = [record[0] for record in reversed(owner.handles)]
+    target = owner.file
+    actual, calls = os.close, []
+
+    def uncertain(fd):
+        calls.append(fd)
+        if fd == target:
+            if after:
+                actual(fd)
+            raise error_type("PRIVATE cleanup detail")
+        actual(fd)
+
+    try:
+        with monkeypatch.context() as changed:
+            changed.setattr(m.os, "close", uncertain)
+            if error_type is OSError:
+                denied(owner.close)
+            else:
+                with pytest.raises(KeyboardInterrupt):
+                    owner.close()
+            owner.close()
+        assert calls == originals and owner.failed and owner.closed
+        assert not owner.handles and not owner._owned_handles
+        assert not provisioned.original.closed
+    finally:
+        if not after:
+            actual(target)  # Only the fixture knows the artificial close did not happen.
+    assert fds() == before
 
 
 def test_interrupt_retires_owned_handles_without_closing_original_declaration(

@@ -177,6 +177,14 @@ and startup declaration. Replacement files, equal recreated objects, foreign
 descriptor reuse, changed metadata or uncertain reads refuse permanently.
 Cleanup retires only owned original descriptors; the borrowed declaration is
 not closed by this reader (it can independently fail its own read checks).
+The ownership inventory is kept separately from checked working slots: adding,
+removing or substituting a slot cannot nominate a foreign descriptor for cleanup
+or hide an owned original. The retained `CasePlan` reader follows the same rule,
+including fresh original status flags and non-inheritability checks. Cleanup
+rejects foreign process/thread/credential custody, never closes an unrelated inode
+reusing an original number, and never retries an uncertain close. These guards
+do not authenticate installation provenance or defend against arbitrary trusted
+code rewriting the private ownership inventory in the same process.
 
 Each complete input read has a two-second maximum. An explicit enclosing
 deadline narrows that budget, including nested startup declaration reads;

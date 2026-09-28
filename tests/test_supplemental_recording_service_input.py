@@ -4,6 +4,7 @@ import fcntl
 import importlib.util
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 from threading import Thread
 from types import SimpleNamespace
@@ -83,6 +84,143 @@ def test_recheck_reads_file_every_time_and_allows_unrelated_journal_growth(case,
         (root / "journal").mkdir(mode=0o700)
         (root / "journal" / "0000.json").write_bytes(b"not interpreted by intake")
         assert original.recheck() is same and len(calls) > count
+
+
+@pytest.mark.parametrize("action", ["close", "recheck"])
+@pytest.mark.parametrize("target", ["file", "directory", "anchor"])
+def test_reused_descriptor_is_never_closed_as_an_original(case, action, target):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    fd = {
+        "file": original._file,
+        "directory": original._directories[-1][2],
+        "anchor": original._anchor,
+    }[target]
+    foreign = os.open("/dev/null", os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        os.dup2(foreign, fd, inheritable=False)
+    finally:
+        os.close(foreign)
+    try:
+        denied(getattr(original, action))
+        assert original._closed and original._failed
+        original.close()
+        assert os.read(fd, 1) == b""
+    finally:
+        original.close()
+        with suppress(OSError):
+            os.close(fd)
+    assert descriptors() == before
+
+
+@pytest.mark.parametrize("action", ["close", "recheck"])
+@pytest.mark.parametrize("target", ["file", "directory", "anchor"])
+def test_substituted_slot_does_not_adopt_duplicate_or_lose_original(case, action, target):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    held = [original._anchor, *(d[2] for d in original._directories), original._file]
+    fd = {
+        "file": original._file,
+        "directory": original._directories[-1][2],
+        "anchor": original._anchor,
+    }[target]
+    duplicate = os.dup(fd)
+    if target == "directory":
+        parent, name, _, pin = original._directories[-1]
+        original._directories[-1] = (parent, name, duplicate, pin)
+    else:
+        setattr(original, "_" + target, duplicate)
+    try:
+        denied(getattr(original, action))
+        assert original._closed and original._failed
+        original.close()
+        os.fstat(duplicate)
+        for owned in held:
+            with pytest.raises(OSError):
+                os.fstat(owned)
+    finally:
+        original.close()
+        for owned in (duplicate, *held):
+            with suppress(OSError):
+                os.close(owned)
+    assert descriptors() == before
+
+
+def test_foreign_thread_cannot_retire_the_owner_descriptors(case):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    held = [original._anchor, *(d[2] for d in original._directories), original._file]
+    errors = []
+
+    def foreign():
+        for action in (original.recheck, original.close):
+            try:
+                action()
+            except m.UnconfirmedInput as error:
+                errors.append(error)
+
+    try:
+        thread = Thread(target=foreign)
+        thread.start()
+        thread.join(timeout=2)
+        assert not thread.is_alive() and len(errors) == 2
+        assert original._failed and not original._closed
+        for fd in held:
+            os.fstat(fd)
+        denied(original.recheck)
+        assert original._closed and descriptors() == before
+    finally:
+        original.close()
+
+
+@pytest.mark.parametrize("target", ["file", "directory", "anchor"])
+@pytest.mark.parametrize("fault", ["inheritable", "append", "blocking"])
+def test_changed_descriptor_flags_refuse_and_retire_only_originals(case, target, fault):
+    root, plan = case
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    fd = {
+        "file": original._file,
+        "directory": original._directories[-1][2],
+        "anchor": original._anchor,
+    }[target]
+    if fault == "inheritable":
+        os.set_inheritable(fd, True)
+    else:
+        flag = os.O_APPEND if fault == "append" else os.O_NONBLOCK
+        fcntl.fcntl(fd, fcntl.F_SETFL, fcntl.fcntl(fd, fcntl.F_GETFL) ^ flag)
+    denied(original.recheck)
+    assert original._closed and original._failed and descriptors() == before
+    original.close()
+
+
+@pytest.mark.parametrize("action", ["close", "recheck"])
+def test_reused_regular_file_is_not_closed_even_with_matching_permissions(case, action):
+    root, plan = case
+    path = root / "unrelated"
+    path.write_bytes(b"retained")
+    path.chmod(0o600)
+    before = descriptors()
+    original = m.CasePlan(root, plan.sha256)
+    fd = original._file
+    foreign = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        os.dup2(foreign, fd, inheritable=False)
+    finally:
+        os.close(foreign)
+    try:
+        denied(getattr(original, action))
+        assert original._closed and original._failed
+        original.close()
+        assert os.pread(fd, 8, 0) == b"retained"
+    finally:
+        original.close()
+        with suppress(OSError):
+            os.close(fd)
+    assert descriptors() == before
 
 
 @pytest.mark.parametrize(
@@ -203,7 +341,13 @@ def test_retained_input_refuses_changes_and_never_rebases(case, fault, monkeypat
     elif fault in ("effective_uid", "effective_gid"):
         function = "geteuid" if fault == "effective_uid" else "getegid"
         previous = getattr(os, function)()
-        monkeypatch.setattr(m.os, function, lambda: previous + 1)
+        held = tuple(original._owned_handles)
+        with monkeypatch.context() as changed:
+            changed.setattr(m.os, function, lambda: previous + 1)
+            denied(original.recheck)
+            assert original._failed and not original._closed
+            for fd in held:
+                os.fstat(fd)
     else:
         result = []
 
