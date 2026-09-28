@@ -126,11 +126,19 @@ card audit (Node 24+, Chrome/Chromium and the Python development dependencies).
 Optional `--python` and `--chrome` paths select the local tools. It opens a new
 temporary browser profile and a loopback-only fixture page, using packaged card
 bytes, fictional scanner frames and a synthetic HA context. It never connects
-to an installed Home Assistant instance or scanner. CI runs this independently
+to an installed Home Assistant instance or scanner. The browser loads the exact
+digest-qualified aggregate and all four registered modules, not a rewritten
+test loader. Byte/digest and import-order checks reject mismatched resources;
+duplicate individual module loads must retain the original custom-element
+classes, picker entries and shared Ingress owner. CI runs this independently
 of the general dashboard/Waterfall audit. All 33 frame scenarios in three local
 layouts, four viewport/DPR configurations, three densities, both LED treatments,
 host-only resizing, short fixed rows, trusted keyboard disclosure/focus and
-two-card session cleanup are covered. Repeated updates must not grow auto rows.
+two-card presentation choices are covered. A third, real Waterfall element uses
+an idle fictional SSE stream: removing either Mimic card must preserve its
+session/stream, and removing the final consumer must release every lease and
+context subscription. This tests mixed-card lifecycle, not scanner acquisition.
+Repeated updates must not grow auto rows.
 The audit writes no screenshots and removes only its temporary browser profile.
 
 ### Offline visual acceptance — September 28, 2026

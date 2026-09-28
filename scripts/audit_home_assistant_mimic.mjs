@@ -2,8 +2,9 @@
 /** Real custom element and Chrome layout; fictional scanner data and HA context only. */
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
+import {createHash} from "node:crypto";
 import {createServer} from "node:http";
-import {mkdtemp, readFile, rm} from "node:fs/promises";
+import {mkdtemp, rm} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import {fileURLToPath, pathToFileURL} from "node:url";
@@ -19,6 +20,7 @@ Uses fictional frames and a synthetic HA context on a new loopback-only server;
 never contacts Home Assistant, a scanner, or an existing browser profile.
 Checks all screen fixtures/layouts, panel-relative LED frames, stable automatic
 height, fixed-row containment, resizing, keyboard details, and multi-card cleanup.
+Loads the exact digest-qualified aggregate and all four packaged card modules.
 Requires Node 24+, Chrome/Chromium and the repository's Python development dependencies.
 No screenshots are written. Only this run's temporary browser profile is removed.
 `;
@@ -42,6 +44,12 @@ export function parseArguments(args) {
 const PYTHON_FIXTURES = `
 import json, runpy
 from sds200.scanner_display_frame import project_scanner_display_frame
+from sds200.home_assistant_themes import (
+    built_in_home_assistant_theme_registry,
+    read_built_in_home_assistant_theme_module,
+    read_built_in_home_assistant_card_aggregate_module,
+)
+from sds200.home_assistant_lovelace import HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL
 scenarios = runpy.run_path("scripts/render_scanner_display_frames.py")["build_scenarios"]()
 result = {}
 for name, variants in scenarios.items():
@@ -53,17 +61,49 @@ for name, variants in scenarios.items():
         failure=None, source_status="matching", frames={
             "preferred" if style == "profile" else style: project_scanner_display_frame(frame)
             for style, frame in variants.items()}))
-print(json.dumps(result))
+registry = built_in_home_assistant_theme_registry()
+print(json.dumps(dict(scenarios=result, resources=[dict(
+    url=theme.resource_url, element=theme.custom_element,
+    body=read_built_in_home_assistant_theme_module(theme).decode("utf-8"),
+) for theme in registry.themes], aggregate=dict(
+    url=HOME_ASSISTANT_LOVELACE_AGGREGATE_RESOURCE_URL,
+    body=read_built_in_home_assistant_card_aggregate_module().decode("utf-8"),
+))))
 `;
 
-export function fixturePage(scenarios) {
+// These routes are immutable candidate resources, not arbitrary URLs or proxy paths.
+export function validateResourceBundle(bundle) {
+  const filenames = ['sds200-card', 'sds200-display-card', 'sds200-waterfall-card', 'sds200-mimic-card'];
+  assert.ok(Array.isArray(bundle.resources) && bundle.resources.length === filenames.length,
+    'Expected exactly four packaged card resources.');
+  const check = (resource, filename) => {
+    assert.equal(typeof resource?.body, 'string', 'Missing packaged JavaScript bytes.');
+    const digest = createHash('sha256').update(resource.body, 'utf8').digest('hex');
+    assert.equal(resource.url, `/local/sds200/${filename}.js?v=${digest}`, 'Packaged resource digest or path mismatch.');
+  };
+  for (const [index, resource] of bundle.resources.entries()) {
+    check(resource, filenames[index]);
+    assert.equal(resource.element, filenames[index], 'Unexpected packaged card registration.');
+  }
+  check(bundle.aggregate, 'sds200-cards');
+  assert.equal(bundle.aggregate.body, bundle.resources.map(resource=>`import "${resource.url}";\n`).join(''),
+    'Aggregate must import the four exact versioned modules in registry order.');
+  return bundle;
+}
+
+export function fixturePage(scenarios, aggregateUrl = null) {
   const payload = JSON.stringify(scenarios).replaceAll("<", "\\u003c");
+  if (aggregateUrl !== null) assert.match(aggregateUrl, /^\/local\/sds200\/sds200-cards\.js\?v=[0-9a-f]{64}$/);
+  const scripts = aggregateUrl === null
+    ? '<script type="module" src="/waterfall.js"></script><script type="module" src="/mimic.js"></script>'
+    : `<script type="module" src="${aggregateUrl}"></script>`;
   return `<!doctype html><meta charset="utf-8"><title>Fictional Mimic card browser audit</title>
 <style>body{margin:0;padding:12px;background:#e6ebf0}main{min-width:0}ha-card{display:block;border-radius:12px;
 border:1px solid #657287;--primary-text-color:#edf4fc;--ha-card-background:#101923}</style>
 <main></main><script>
 const scenarios = ${payload};
-window.fixture = {name:'held_trunk', requests:0, sequence:0, sessions:0, unsubscribed:0, errors:[]};
+window.fixture = {name:'held_trunk', requests:0, sequence:0, sessions:0, unsubscribed:0,
+  waterfallRequests:0, waterfallClosed:0, errors:[]};
 const api = {callWS: async request => {
   if(request.endpoint==='/ingress/session'){fixture.sessions++;return {session:'synthetic_session_example_1234'};}
   if(request.endpoint==='/ingress/validate_session')return {};
@@ -77,6 +117,19 @@ document.addEventListener('context-request',event=>{
   event.callback(event.context==='hassApi'?api:ui,()=>fixture.unsubscribed++);
 });
 window.fetch=async(url,options={})=>{
+  if(String(url)===location.origin+'/api/hassio_ingress/example_key/api/v1/waterfall' &&
+      (!options.method || options.method==='GET')){
+    fixture.waterfallRequests++;
+    let closed=false, control;
+    const finish=()=>{if(closed)return;closed=true;fixture.waterfallClosed++;
+      options.signal?.removeEventListener('abort',abort);};
+    const abort=()=>{if(closed)return;finish();control.error(new DOMException('Fixture stopped','AbortError'));};
+    const body=new ReadableStream({start(controller){control=controller;
+      controller.enqueue(new TextEncoder().encode(': fictional idle waterfall\\n\\n'));
+      options.signal?.addEventListener('abort',abort,{once:true});
+      if(options.signal?.aborted)abort();},cancel(){finish();}});
+    return new Response(body,{headers:{'content-type':'text/event-stream'}});
+  }
   if(String(url)!==location.origin+'/api/hassio_ingress/example_key/api/v1/display-frame'||
       options.method && options.method!=='GET'){
     fixture.errors.push('Unexpected card request.');throw Error('Unexpected card request.');
@@ -94,7 +147,7 @@ window.addCard=(id,config)=>{
   document.querySelector('main').append(card);return card;
 };
 window.scenarioNames=Object.keys(scenarios);
-</script><script type="module" src="/waterfall.js"></script><script type="module" src="/mimic.js"></script>`;
+</script>${scripts}`;
 }
 
 export function checkGeometry(value, treatment) {
@@ -145,25 +198,29 @@ async function until(cdp, expression, timeoutMs) {
 }
 
 export async function fixtureAssets(python, timeoutMs = 30000) {
-  const scenarios = JSON.parse(execFileSync(python, ['-B', '-c', PYTHON_FIXTURES], {
+  const bundle = validateResourceBundle(JSON.parse(execFileSync(python, ['-B', '-c', PYTHON_FIXTURES], {
     cwd: ROOT, env: {...process.env, PYTHONPATH: path.join(ROOT, 'src'), PYTHONNOUSERSITE: '1'},
     encoding: 'utf8', timeout: timeoutMs, maxBuffer: 8 * 1024 * 1024,
-  }));
+  })));
+  const {scenarios, resources, aggregate} = bundle;
   assert.equal(Object.keys(scenarios).length, 33);
   const assets = new Map([
-    ['/', ['text/html; charset=utf-8', fixturePage(scenarios)]],
-    ['/mimic.js', ['text/javascript', await readFile(path.join(ROOT, 'src/sds200/themes/home-assistant/mimic-sds/sds200-mimic-card.js'))]],
-    ['/waterfall.js', ['text/javascript', await readFile(path.join(ROOT, 'src/sds200/themes/home-assistant/waterfall/sds200-waterfall-card.js'))]],
+    ['/', ['text/html; charset=utf-8', fixturePage(scenarios, aggregate.url)]],
+    // Keep the direct-module aliases for the independent finite human preview
+    // and same-byte duplicate-registration checks; never accept arbitrary queries.
+    ['/mimic.js', ['text/javascript', resources[3].body]],
+    ['/waterfall.js', ['text/javascript', resources[2].body]],
+    ...[...resources, aggregate].map(resource=>[resource.url, ['text/javascript', resource.body]]),
   ]);
-  return {scenarios, assets};
+  return {scenarios, assets, resources, aggregate};
 }
 
 async function run(options) {
   assert.ok(Number(process.versions.node.split('.')[0]) >= 24 && typeof WebSocket === "function", "Node 24+ is required.");
   const python = await findExecutable(options.python, [path.join(ROOT, '.venv/bin/python'), 'python3'], 'Python');
   const chrome = await findExecutable(options.chrome, ['google-chrome', 'chromium', 'chromium-browser'], 'Chrome');
-  const {scenarios, assets} = await fixtureAssets(python, options.timeoutMs);
-  const requests = [], errors = [];
+  const {scenarios, assets, resources, aggregate} = await fixtureAssets(python, options.timeoutMs);
+  const requests = [], errors = [], failures = [];
   const server = createServer((request, response) => {
     const asset = assets.get(request.url);
     if (request.method === 'GET' && asset) {
@@ -180,10 +237,27 @@ async function run(options) {
     cdp = await CdpClient.connect(await pageWebSocketUrl(remotePort, options.timeoutMs, browser.child), options.timeoutMs);
     cdp.on('Runtime.exceptionThrown', event => errors.push(event.exceptionDetails.text));
     cdp.on('Network.requestWillBeSent', event => requests.push(event.request.url));
+    cdp.on('Network.loadingFailed', event => failures.push(event.errorText));
     await cdp.send('Runtime.enable');await cdp.send('Page.enable');await cdp.send('Network.enable');
     const loaded = cdp.waitForEvent('Page.loadEventFired');
     await cdp.send('Page.navigate', {url: origin + '/'});await loaded;
-    await until(cdp, "!!customElements.get('sds200-mimic-card') && !!customElements.get('sds200-waterfall-card')", options.timeoutMs);
+    const elements = resources.map(resource=>resource.element);
+    await until(cdp, `${JSON.stringify(elements)}.every(name=>!!customElements.get(name))`, options.timeoutMs);
+    assert.deepEqual(await evaluate(cdp, 'window.customCards.map(card=>card.type)'), elements,
+      'Aggregate must register every card exactly once in the picker.');
+    for (const resource of [...resources, aggregate]) {
+      assert.ok(requests.includes(origin + resource.url), 'Browser did not load a versioned packaged resource.');
+    }
+    // Coexisting individual resource registrations must not replace live classes
+    // or create a second Ingress owner when the aggregate is already loaded.
+    assert.equal(await evaluate(cdp, `(async()=>{
+      const names=${JSON.stringify(elements)}, classes=names.map(name=>customElements.get(name));
+      const owner=globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')];
+      await import('/mimic.js'); await import('/waterfall.js');
+      return names.every((name,index)=>customElements.get(name)===classes[index]) &&
+        globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]===owner &&
+        JSON.stringify(window.customCards.map(card=>card.type))===JSON.stringify(names);
+    })()`), true, 'Duplicate modules replaced a class, session owner or card-picker entry.');
     await cdp.send('Emulation.setDeviceMetricsOverride', {width: 1400, height: 1100, deviceScaleFactor: 1, mobile: false});
     await evaluate(cdp, "addCard('card',{layout:'detail',led_treatment:'border',grid_options:{rows:'auto',columns:'full'}}); true");
     await until(cdp, "document.getElementById('card')._card.dataset.state==='current'", options.timeoutMs);
@@ -276,15 +350,35 @@ async function run(options) {
     assert.equal(await evaluate(cdp, 'fixture.sessions'), 1);
     assert.equal(await evaluate(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases"), 2);
     assert.deepEqual(await evaluate(cdp, "['card','second'].map(id=>document.getElementById(id)._config.layout)"), ['detail','simple']);
-    await evaluate(cdp, "document.getElementById('card').remove();document.getElementById('second').remove();true");
-    await until(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases===0", options.timeoutMs);
+    // A real Waterfall custom element holds an idle fictional SSE stream. All
+    // three cards share authentication; removing Mimic must not close Waterfall.
+    await cdp.send('Emulation.setDeviceMetricsOverride', {width:1400,height:2200,deviceScaleFactor:1,mobile:false});
+    await evaluate(cdp, `(()=>{
+      const card=document.createElement('sds200-waterfall-card');card.id='waterfall';
+      card.setConfig({type:'custom:sds200-waterfall-card',density:'compact'});
+      document.querySelector('main').append(card);return true;
+    })()`);
+    await until(cdp, "document.getElementById('waterfall')._streaming && globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases===3", options.timeoutMs);
+    assert.deepEqual(await evaluate(cdp, '[fixture.sessions,fixture.waterfallRequests,fixture.waterfallClosed]'), [1,1,0]);
+    await evaluate(cdp, "document.getElementById('card').remove();true");
+    assert.equal(await evaluate(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases"), 2);
+    const surviving = await evaluate(cdp, 'fixture.requests');
+    await until(cdp, `fixture.requests>${surviving}`, options.timeoutMs);
+    assert.equal(await evaluate(cdp, "document.getElementById('waterfall')._streaming && fixture.waterfallClosed===0"), true);
+    await evaluate(cdp, "document.getElementById('second').remove();true");
+    assert.equal(await evaluate(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases"), 1);
     const stopped = await evaluate(cdp, 'fixture.requests');
     await new Promise(resolve=>setTimeout(resolve, 750));
     assert.equal(await evaluate(cdp, 'fixture.requests'), stopped, 'Removed cards keep polling.');
-    assert.equal(await evaluate(cdp, 'fixture.unsubscribed'), 2);
+    assert.equal(await evaluate(cdp, "document.getElementById('waterfall')._streaming && fixture.waterfallClosed===0"), true);
+    await evaluate(cdp, "document.getElementById('waterfall').remove();true");
+    await until(cdp, "globalThis[Symbol.for('sdsctl.home-assistant.ingress.v1')]._leases===0 && fixture.waterfallClosed===1", options.timeoutMs);
+    assert.deepEqual(await evaluate(cdp, '[fixture.sessions,fixture.waterfallRequests]'), [1,1]);
+    assert.equal(await evaluate(cdp, 'fixture.unsubscribed'), 3);
     assert.deepEqual(await evaluate(cdp, 'fixture.errors'), []);assert.deepEqual(errors, []);
+    assert.deepEqual(failures, [], 'A packaged browser resource failed to load.');
     assert.ok(requests.every(url=>new URL(url).origin===origin), 'Audit reached a non-fixture origin.');
-    console.log(`PASS: ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% LED geometry, stable rows, trusted keyboard details, shared session and complete removal cleanup.`);
+    console.log(`PASS: exact versioned four-card aggregate and duplicate registration, ${frames} Mimic frame/layout cases, ${sizes} sizing cases, held profile colors, 3% LED geometry, stable rows, trusted keyboard details, shared session and complete removal cleanup.`);
   } finally {
     cdp?.close();await stopChild(browser?.child ?? null);
     server.closeAllConnections();await new Promise(resolve=>server.close(resolve));
