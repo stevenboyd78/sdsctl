@@ -1084,15 +1084,36 @@
     }
 
     .recording-library-header {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto !important;
       align-items: center !important;
-      flex-direction: row !important;
+      row-gap: 0 !important;
     }
 
-    .recording-capture-panel .panel-header,
-    .recording-library-header > div {
+    .recording-capture-panel .panel-header {
       display: flex !important;
       align-items: baseline !important;
       gap: 0.4rem !important;
+    }
+
+    .recording-library-header > div {
+      /* Preserve title width and recording-row height across system fonts. */
+      display: contents !important;
+    }
+
+    .recording-library-header .panel-kicker {
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+    }
+
+    .recording-library-header h2 {
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+    }
+
+    #recordings-refresh {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
     }
 
     .recording-capture-panel .panel-kicker,
@@ -1115,6 +1136,11 @@
     .recording-telemetry dd {
       font-size: 0.6rem !important;
       line-height: 1 !important;
+    }
+
+    .recording-telemetry > .recording-file-status {
+      grid-column: 1 / -1 !important;
+      grid-template-columns: max-content minmax(0, 1fr) !important;
     }
 
     .recording-status,

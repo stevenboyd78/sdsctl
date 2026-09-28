@@ -581,6 +581,14 @@ subtitle and visible `Theme` label are omitted from that narrow presentation
 while the selector retains its accessible name, so long theme names remain
 complete and more height stays available to the working pane.
 
+The unreleased phone Recordings layout places the small library label and
+Refresh button above a full-width title. The current recording's filename also
+uses a full-width telemetry row. This keeps wider system fonts from wrapping
+the title into the space needed by saved-recording Play/Download controls. The
+browser audit exercises two alternative font stacks for this pane in every
+theme, in addition to the ordinary host-font and enlarged-text checks; it does
+not install fonts, change production font preferences, or replace the gallery.
+
 ### System
 
 ![System theme at 1920x1080](assets/web-dashboard/theme-system-1920x1080.png)

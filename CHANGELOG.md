@@ -15,6 +15,9 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Fixed
 
+- Preserve phone recording-library title width across system fonts, keeping the
+  Play and Download buttons inside their rows. Give the current recording's
+  filename a full-width telemetry row so its label does not stack vertically.
 - Let phone-width recording capture panels size to their content so LCARS saved
   recording Play and Download actions remain visible alongside the player controls.
 - Make the browser palette-focus audit select and verify a visible, enabled

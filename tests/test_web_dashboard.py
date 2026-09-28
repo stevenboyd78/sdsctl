@@ -779,6 +779,14 @@ def test_web_dashboard_serves_packaged_static_assets() -> None:
     for text in (stylesheet_source.text, viewport_stylesheet.text):
         assert "minmax(0, 0.7fr) minmax(0, 1.3fr)" not in text
     assert "grid-template-rows: auto minmax(0, 1fr) !important" in viewport_stylesheet.text
+    # Give the phone title its own full-width row below the kicker/Refresh row.
+    # This must not depend on the developer host's system-ui font metrics.
+    for text in (stylesheet_source.text, viewport_stylesheet.text):
+        assert ".recording-library-header > div {" in text
+        assert ".recording-library-header h2 {" in text
+        assert ".recording-library-header .panel-kicker {" in text
+        assert ".recording-telemetry > .recording-file-status {" in text
+        assert "grid-template-columns: minmax(0, 1fr) auto" in text
     assert "minmax(19rem, 0.42fr)" in viewport_stylesheet.text
     assert "grid-template-columns: max-content minmax(0, 1fr)" in (
         viewport_stylesheet.text

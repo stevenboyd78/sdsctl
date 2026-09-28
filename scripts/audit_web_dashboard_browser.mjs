@@ -91,6 +91,7 @@ theme × reference CSS viewport × workspace pane cases, all 189 explicit System
 palette responsive cases, plus media-preference, enlarged-text,
 pagination-focus, trusted Tab/Shift+Tab traversal, WCAG AA contrast, complete
 adaptive-presentation, DPR-transition, and prefixed-URL probes. It also covers
+phone recording controls with alternative system-font metrics, and
 the Home Assistant Ingress Diagnostics layout across all themes at desktop and
 phone widths, plus the authenticated waterfall card at desktop, 800x480, and
 phone widths; bounded frame-count and elapsed-time history; pointer, touch, and
@@ -2552,6 +2553,7 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
       );
     }
 
+    await auditPhoneRecordingFonts(cdp, collector, theme);
     await auditMediaPreferences(cdp, collector, theme);
     await auditEnlargedText(cdp, collector, theme);
   }
@@ -2636,6 +2638,34 @@ async function runMatrix(cdp, baseUrl, timeoutMs, pageFailures) {
     ingressHomeAssistantCases,
     systemPaletteCases,
   };
+}
+
+async function auditPhoneRecordingFonts(cdp, collector, theme) {
+  // Linux runners and desktop hosts resolve system-ui differently. Reuse the
+  // full geometry/focus check with common wider/narrower system fonts instead
+  // of assuming the developer's default font represents the CI host. Missing
+  // named fonts fall back normally; no fonts are downloaded or installed.
+  await setViewport(cdp, {width: 390, height: 844, dpr: 2});
+  await activatePane(cdp, "recordings");
+  const original = await evaluate(cdp, `({
+    value: document.documentElement.style.getPropertyValue("font-family"),
+    priority: document.documentElement.style.getPropertyPriority("font-family"),
+  })`);
+  try {
+    for (const family of ['"DejaVu Sans", sans-serif', '"Liberation Sans", sans-serif']) {
+      await evaluate(cdp,
+        `document.documentElement.style.setProperty("font-family", ${JSON.stringify(family)})`);
+      await frames(cdp);
+      await activatePane(cdp, "recordings");
+      collector.add(`${theme}/phone-recording-font/${family}`,
+        await evaluate(cdp,
+          `window.__sdsctlBrowserAudit.normal("recordings", ${JSON.stringify(theme)})`));
+    }
+  } finally {
+    await evaluate(cdp,
+      `document.documentElement.style.setProperty("font-family", ${JSON.stringify(original.value)}, ${JSON.stringify(original.priority)})`);
+    await frames(cdp);
+  }
 }
 
 async function homeAssistantWaterfallState(cdp) {
@@ -3785,7 +3815,8 @@ async function run(options) {
       `PASS: ${result.caseCount} matrix cases plus theme switching, all 35 radio ` +
         "fields, Simple/Detail and adaptive screens, trusted Tab/Shift+Tab and " +
         "pagination focus, WCAG AA normal/forced-color contrast, reduced motion, " +
-        "enlarged-text scrolling escape, DPR changes, prefixed URLs, all 18 " +
+        "enlarged-text scrolling escape, DPR changes, 12 phone recording font " +
+        "variants, prefixed URLs, all 18 " +
         `Ingress-only Home Assistant workspaces, ${result.systemPaletteCases} ` +
         "responsive System-palette cases, all 18 read-only Ingress " +
         "Diagnostics layouts, browser Waterfall duration/pointer controls, and " +
