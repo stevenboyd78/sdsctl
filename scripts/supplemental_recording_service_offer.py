@@ -10,6 +10,7 @@ part of the qualified helper image/command allowlist.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import time
 from threading import Lock, get_ident
@@ -87,10 +88,16 @@ class Offer:
         )
         require(type(self.clock_witness) is plans.clock.ClockWitness)
         require(self.clock_witness.original is self.original_clock)
+        # preview() validated the complete template/ORIGINAL-clock relationship
+        # when this owner was constructed. Retain its immutable bytes instead
+        # of decoding several equivalent plans at every fresh I/O boundary.
+        # No clock observation, file check or deadline is cached or renewed.
+        require(type(self.template) is template_codec.Template)
+        require(type(self.template.raw) is bytes and type(self.template_raw) is bytes)
         require(self.template.raw == self.template_raw)
-        require(self.template.sha256 == self.template_sha256)
+        require(hashlib.sha256(self.template_raw).hexdigest() == self.template_sha256)
         self.plan_pin.check(self.plan)
-        self.template.check_plan(self.plan, self.original_clock)
+        require(plans._same_plan_value(self.original_clock, self.plan.original_clock))
         require(self.deadline == self.original_deadline)
         require(time.monotonic() < self.deadline)
 

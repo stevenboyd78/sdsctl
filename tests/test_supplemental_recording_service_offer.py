@@ -352,3 +352,58 @@ def test_real_original_clock_is_retained_after_structural_acceptance_and_model_c
     finally:
         witness.close()
     assert witness.closed and witness.fd == -1
+
+
+def test_rechecks_do_not_redecode_immutable_inputs_but_keep_fresh_clock_reads(setup, monkeypatch):
+    offer = create(setup)
+    witness = setup[1]
+    reads = witness.reads
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("An unchanged immutable declaration was decoded again")
+
+    monkeypatch.setattr(m.template_codec, "_read", forbidden)
+    monkeypatch.setattr(m.plans, "decode", forbidden)
+    assert offer.inspect() is offer.plan
+    assert offer.accept(offer.plan.sha256) is offer.plan
+    assert witness.reads == reads + 3
+
+
+@pytest.mark.parametrize("when", ["before", "during_final_read"])
+@pytest.mark.parametrize("field", ["boot", "namespace", "before_ns", "boottime_ns", "after_ns"])
+def test_original_clock_in_place_changes_cannot_break_template_plan_binding(setup, when, field):
+    offer = create(setup)
+    witness = setup[1]
+    changed = {
+        "boot": "d" * 32,
+        "namespace": (9, 999),
+        "before_ns": offer.original_clock.before_ns + 1,
+        "boottime_ns": offer.original_clock.boottime_ns + 1,
+        "after_ns": offer.original_clock.after_ns + 1,
+    }
+
+    def mutate():
+        object.__setattr__(offer.original_clock, field, changed[field])
+
+    if when == "before":
+        mutate()
+    else:
+        target = witness.reads + 2
+        witness.hook = lambda: mutate() if witness.reads == target else None
+    denied(lambda: offer.accept(offer.plan.sha256))
+    assert offer.failed and offer.used and not offer.accepted and witness.closes == 0
+
+
+@pytest.mark.parametrize("fault", ["template_bytes", "origin_type", "nested_plan", "pin"])
+def test_equal_looking_or_nested_mutations_refuse_without_redecoding(setup, fault):
+    offer = create(setup)
+    if fault == "template_bytes":
+        object.__setattr__(offer.template, "raw", bytearray(offer.template.raw))
+    elif fault == "origin_type":
+        object.__setattr__(offer.original_clock, "before_ns", float(offer.original_clock.before_ns))
+    elif fault == "nested_plan":
+        object.__setattr__(offer.plan.deadlines, "ready_by", offer.plan.deadlines.ready_by + 1)
+    else:
+        offer.template_sha256 = "a" * 64
+    denied(offer.inspect)
+    assert offer.failed and not offer.accepted and setup[1].closes == 0

@@ -229,6 +229,38 @@ def test_prepare_wait_accept_keeps_actual_original_clock_and_files_until_owner_c
     denied(startup.accepted_input)
 
 
+def test_accepted_rechecks_keep_fresh_declaration_reads_without_redecoding(case, monkeypatch):
+    _, source, _, declaration = case
+    startup = m.Startup(declaration)
+    try:
+        original = startup.prepare()
+        submit(startup)
+        assert startup.poll() is original
+        read, reads = m.os.pread, []
+
+        def fresh_read(fd, *args):
+            if fd == declaration.file:
+                reads.append(fd)
+            return read(fd, *args)
+
+        def forbidden(*args, **kwargs):
+            raise AssertionError("An unchanged immutable declaration was decoded again")
+
+        monkeypatch.setattr(m.os, "pread", fresh_read)
+        monkeypatch.setattr(m.declaration.codec, "_read", forbidden)
+        monkeypatch.setattr(m.plans, "decode", forbidden)
+        assert startup.accepted_input() is original
+        assert reads
+        reads.clear()
+        assert startup.accepted_input() is original
+        assert reads
+        (source / m.declaration.NAME).write_bytes(b"changed")
+        denied(startup.accepted_input)
+        assert startup.failed and startup.closed
+    finally:
+        startup.close()
+
+
 @pytest.mark.parametrize("action", ["poll", "accepted_input"])
 def test_no_success_before_prepare_and_no_replay(case, action):
     root, _, _, declaration = case

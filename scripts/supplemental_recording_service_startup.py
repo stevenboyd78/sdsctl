@@ -117,7 +117,10 @@ class Startup:
     def _input(self):
         self._state()
         require(self.declaration.recheck() is self.template)
-        require(self.template.sha256 == self.expected)
+        # Declaration rechecks the original bytes, their independent digest
+        # and the live file/descriptor chain. Do not decode the same immutable
+        # template again just to recompute that already checked digest.
+        require(self.declaration.expected == self.expected)
         self._state()
 
     def _binding(self):

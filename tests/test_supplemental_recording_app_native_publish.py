@@ -174,3 +174,26 @@ def test_original_projection_failure_prevents_case_creation(publishing):
         assert not publishing.native.exists()
     finally:
         owner.projected = original
+
+
+def test_original_two_second_budget_still_expires_during_native_publication(
+    publishing, monkeypatch
+):
+    s, write, now = publishing, m.os.write, m.time.monotonic
+    offset = [0.0]
+    assert m.MAX_SECONDS == 2.0
+
+    def delayed_write(fd, raw):
+        result = write(fd, raw)
+        if b'"kind":"finite-recording-container-lease"' in raw:
+            offset[0] = m.MAX_SECONDS + 0.01
+        return result
+
+    monkeypatch.setattr(m.time, "monotonic", lambda: now() + offset[0])
+    monkeypatch.setattr(m.os, "write", delayed_write)
+    denied(s.publisher_owner)
+    assert offset[0] > m.MAX_SECONDS
+    assert (s.native / "idle/lease.json").is_file()
+    assert not (s.native / "app-start/launch.json").exists()
+    assert s.publisher_owner.app_idle_publication_used
+    denied(s.publisher_owner)

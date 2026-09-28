@@ -980,6 +980,17 @@ original file and all descriptor, directory and metadata identities. No file
 observation is cached, no changed template can be adopted, and all original
 two-second collection limits and full source/runtime inventories remain intact.
 
+The continuing Offer likewise validates the complete template-to-plan relationship
+at construction, then checks the same Template's exact immutable bytes and digest,
+every pinned Plan field and nested type, and the unchanged original clock values
+at each boundary. It does not repeatedly decode equivalent plans during native
+publication. Startup uses its retained Declaration's freshly checked digest; it
+does not substitute a new declaration or skip its file reads. Clock observations,
+ownership, poisoning and deadlines remain fresh checks before and after I/O.
+Tests cover in-place clock/plan changes, equal-looking wrong types, modified files
+and expiry during native publication. The original two-second publication budget
+is unchanged, including when coverage instrumentation is enabled.
+
 The initial-dispatch fixture extends that accepted-startup composition with the
 actual request Publisher, Inbox, IdleCoordinator, process tracker and dispatcher.
 The original session produces the normal-stop and candidate-start journal entries
