@@ -5,7 +5,7 @@ The independently qualified outer owner must already provision the listener and
 authenticate the original peer witness and input pins. This module connects;
 it never creates, repairs, removes or reconnects a pathname. Socket credentials
 are transport evidence, not runtime qualification, input provenance or consent.
-No existing command or observed source graph selects this module.
+No existing command or runtime qualification selects this module's source graph.
 """
 
 from __future__ import annotations

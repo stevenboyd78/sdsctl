@@ -8,7 +8,7 @@ loss, parent loss or cancellation. No Engine request, process discovery, journal
 write, scanner command, native-exit claim or App restoration is provided.
 
 The outer runtime/proc/image and fixed launch topology must be independently
-qualified before installation. This module is outside all observed source sets;
+qualified before installation. This module is outside command-selected source sets;
 no existing entrypoint, preflight permission or passive command selects it.
 """
 

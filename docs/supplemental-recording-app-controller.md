@@ -13,6 +13,7 @@ independent supervision and recovery integration.
 | --- | --- | --- |
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
+| Read-only peer library inventory | Explicit peer handoff `Layout` | Separate 101-module closure including retained inputs/listeners, supervised descriptor delivery and original writer intake; older declarations and runtime collectors do not select it |
 | Separate peer runtime expectations | Independently pinned `Expectations` declaration | Clock-free template digest and explicit writer/observer image, source, interpreter, environment, argv and confinement pins; pure comparison, not observed qualification or consent |
 | Retained peer input files | Separate read-only `Inputs` owner | Same original startup declaration and exact canonical expectations file, retained no-symlink paths and complete fresh reads; externally authenticated pins remain required |
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
@@ -93,6 +94,30 @@ Python interpreter. The planned installed runtime still requires an independentl
 authenticated complete interpreter/loader/package inventory, a supported kernel,
 original process binding and separately measured bounds; source hashes and local
 imports do not establish any of those facts.
+
+`supplemental_recording_peer_host_source.Layout` separately names the 101-module
+peer handoff library closure. It includes the original 90 modules plus the
+retained input, connection and listener owners, bootstrap, outer runtime and
+termination helpers, supervised delivery and original writer intake. Its roots
+and module set are explicit constants, checked against the complete static
+import graph; the observed files never determine which modules are accepted.
+Complete product assets, double-read drift checks, private-file rules and all
+combined read bounds remain included. Its inventory is standard-library-only.
+
+This new digest kind is deliberately **not** accepted by the existing runtime
+expectations codec or selected by its runtime collectors. All earlier source
+profiles reject the larger bundle. Local isolated import tests run the reviewed
+repository code, not observed image files, with process creation, signalling,
+network sends/binds and low-level file mutation blocked. They cover inventory,
+roots and complete imports with and without PySerial and timerfd APIs. The
+new inventory and adjacent source/expectations tests also pass on actual Python
+3.11 and 3.14; interpreter/API compatibility is still not installed provenance.
+
+No library name is an admitted active entrypoint. A future fixed launcher must
+explicitly select its final reviewed graph and input contract, authenticate the
+installation and pins independently, retain the original startup and peer owners,
+and satisfy the separate outer/platform, App-action and recovery-custody gates.
+Hashing this larger bundle does not complete those steps or enable a human trial.
 
 ### Separate writer and observer runtime comparison
 
@@ -439,8 +464,9 @@ leak/reused-fd checks. Joined tests run both complete runtime reads, then actual
 delivery, Link construction and independent original-peer termination in one
 lifetime. File/environment reads are real; Engine, image, cgroup, root, command
 and kernel-privilege eligibility remain explicitly synthetic. Fixture source is
-not the running installed image. These modules stay **outside every existing
-observed source graph**. The qualified private connection, fixed active command,
+not the running installed image. These modules are now named only by the separate
+read-only peer library inventory, **not a command-selected source graph**.
+The qualified private connection, fixed active command,
 outer/runtime/input provenance, independent platform bound, separate action scope
 and exclusive original recovery owner still require integration before live use.
 

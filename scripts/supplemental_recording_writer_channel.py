@@ -5,7 +5,7 @@ No serialized plan, replacement clock or reconstructed Startup is accepted.
 The external launcher must authenticate the declaration pin, original peers,
 private connection, runtime/source and termination before calling this join.
 This is not input provisioning, installed qualification, Ready or App consent.
-No existing command or observed source graph imports/selects this module.
+No existing command or runtime qualification selects this module's source graph.
 """
 
 from __future__ import annotations

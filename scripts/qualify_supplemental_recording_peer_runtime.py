@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Uninstalled, read-only runtime comparisons for original service peers.
 
-This outer verifier is not in any observed helper profile and starts nothing.
+This outer verifier is not in any command-selected helper profile and starts nothing.
 It checks either declared role without rewriting the original plan's helper pin
 to impersonate its partner. Both peers still need independent original handles,
 this full collection, installed provenance, continuing custody and supervision.

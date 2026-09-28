@@ -6,7 +6,7 @@ private SEQPACKET socket. The qualified outer launcher must provision that
 connection and authenticate both runtimes, inputs, original process witnesses,
 independent deadlines and action gates. This library creates no listener, path,
 process, clock, journal or App operation. It does not change Link, preflight
-permissions or any observed source profile. No installed command selects it.
+permissions or any command-selected source profile. No installed command selects it.
 """
 
 from __future__ import annotations

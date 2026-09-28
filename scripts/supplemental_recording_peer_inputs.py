@@ -4,7 +4,7 @@
 The external owner must authenticate BOTH the original startup declaration and
 this expectations digest before observing peers. No digest is learned from an
 observed file or running process. Fixed files are read, never provisioned here.
-This uninstalled library is outside existing source/command/permission profiles.
+This uninstalled library is outside command-selected source/permission profiles.
 """
 
 from __future__ import annotations

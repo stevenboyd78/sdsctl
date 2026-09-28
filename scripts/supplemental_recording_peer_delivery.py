@@ -5,7 +5,7 @@ The caller has already qualified/provisioned BOTH peers and private connections,
 captured original custody and explicitly armed peer termination. This outer-only
 uninstalled join keeps the same original owners, comparisons and hard deadline.
 No listener, installed command, App operation, journal or recovery is provided.
-No observed source graph or passive permission format selects this module.
+No command-selected source graph or passive permission format enables this module.
 """
 
 from __future__ import annotations
