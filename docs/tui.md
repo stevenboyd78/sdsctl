@@ -9,9 +9,9 @@ Milestone 19.10 adds explicit daemon-backed operation while preserving
 standalone scanner ownership as the default. Textual and PortAudio remain
 optional so the core installation stays lightweight.
 
-## Unreleased local date/time follow-up
+## Local date and time (v0.30.0)
 
-The development candidate replaces the header's time-only clock with the full
+Version 0.30.0 replaces the header's time-only clock with the full
 local date and 24-hour time, for example `Fri, 11 Sep 2026 06:26:10 -0600`.
 This is RFC 2822-style formatting: English weekday/month names, a four-digit
 year and an explicit numeric UTC offset. Each display uses its own operating
@@ -46,10 +46,11 @@ computer. No console font change is involved.
 An unavailable timestamp stays unavailable for that status observation, even
 if the clock later recovers; the TUI does not invent the missing start time.
 A new status uses the new clock reading. This does not add an elapsed-duration
-counter or remote-daemon version field, alter console fonts or change managed-
-display startup. The previews below record the earlier accepted layout; the
-date/time candidate still needs physical checks on both Pi displays before
-release acceptance.
+counter, alter console fonts or change managed-display startup. The date/time
+layout passed physical checks on both Pi displays, including published-client
+acceptance; see the [v0.30.0 release record](release-0.30.0.md). The previews below
+record an earlier layout. The separate, unreleased connected-daemon version
+follow-up is described below.
 
 The wide layout also reserves room for every Connection and Scanner State row,
 including the remote target and scanner-reported recording status beside the

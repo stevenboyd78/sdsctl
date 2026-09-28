@@ -975,6 +975,18 @@ as physically supported from that heading alone. Build a model/firmware and
 transport capability matrix; retain every requested code in the implementation
 inventory and expose unavailable controls with a reason where appropriate.
 
+The internal `front_panel_keys.py` inventory now implements all 27 codes in
+reference-table order, with immutable definitions and model-aware presentation
+notes. It records the SDS100 Backlight meaning of `V` and the explicit absence
+of `Q` and `T`; models without their own column retain unknown reference support.
+Soft keys remain generically numbered until current scanner context supplies
+their labels. All general-key presentations remain unavailable: being listed
+in the specification is not command qualification or authorization. This pure
+foundation performs no I/O, constructs no wire command, and adds no API route,
+UI button or key binding. Regression tests retain the existing four-key
+hold-only allowlist. Typed dispatch, permission checks and the actual control
+drawer remain subsequent work.
+
 Extend typed command validation, the single-owner daemon control transaction,
 authenticated API/remote permission checks and renderer affordances together.
 Do not simply widen the existing hold-only `PressKey` allowlist and inherit

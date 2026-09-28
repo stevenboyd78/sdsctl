@@ -104,9 +104,13 @@ infer undefined long-press behavior, retry uncertain keys or enable writes for
 observe-only displays. See the [Mimic-SDS work packet](docs/mimic-sds-work-packet.md)
 for source findings, profile/privacy boundaries, layout mappings, the complete
 control inventory and staged acceptance. An offline display-only parser is the
-first foundation; user-facing layouts, acquisition and controls are not yet
-implemented or released support. No milestone/release number is assigned. Waterfall-screen
-fidelity needs its own layout evidence and remains a separate slice.
+first foundation. The optional WebUI, daemon-backed TUI and additional HA card
+are now implemented as unreleased candidates; paired installed/live acceptance
+remains separate. Both Pi TUI geometries passed offline fictional-data visual
+checks. The complete front-panel key inventory is implemented read-only; new
+key dispatch and control UI remain pending. No milestone/release number is
+assigned. Waterfall-screen fidelity needs its own layout evidence and remains
+a separate slice.
 
 ### Low-priority TUI usability follow-up
 
@@ -117,8 +121,9 @@ fidelity needs its own layout evidence and remains a separate slice.
   handle unavailable version information explicitly. Direct USB connections
   should not gain this remote-only field. Implemented in the unreleased local
   candidate with additive snapshot metadata, reconnect clearing and both Pi
-  layout tests; installed physical acceptance is still pending. This is not part
-  of v0.30.0 or the active browser-device qualification.
+  layout tests. Both bench Pi geometries passed installed offline presentation
+  checks; a real endpoint's version and live transport remain separate. This is
+  not part of v0.30.0 or the active browser-device qualification.
 - **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
   PR #253 added the user-selected local RFC
   2822-style dates to the header and observed status transitions, for example
