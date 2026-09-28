@@ -160,8 +160,18 @@ A pending finite read may finish in the background, but its result is discarded
 and its dedicated API connection is closed by the worker. Resuming requires a
 new read. Stale, disconnected, malformed or failed responses never leave old
 values looking current. See the [frame API guide](scanner-display-frame-api.md#candidate-tui-presentation)
-for timeout, freshness and compatibility details. This is local candidate
-support, not a published release or physical-Pi acceptance claim.
+for timeout, freshness and compatibility details. This remains development
+candidate support, not a published release.
+
+On September 28, 2026, the installed development wheel at `824c417` passed
+user-observed Mimic-SDS visual and keyboard checks on both bench Pis: 100×30
+and 160×45 Linux consoles. The isolated, offline fixture used fictional profile
+colors and scanner data to exercise the grid, layout/LED choices, runtime drawer,
+hold/release and stale/recovery presentations. Both original display services
+were restored, with their published installations, saved profiles and console
+fonts unchanged. This qualifies physical presentation of those fixtures, not
+live scanner field accuracy, supplemental-reader admission, audio, or release
+readiness.
 
 ## Interface previews
 

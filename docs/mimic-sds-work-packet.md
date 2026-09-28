@@ -1034,8 +1034,14 @@ programming, power-off, mass-storage switching or speculative key sequences.
    responsiveness and clears hidden/stale values. Textual focus/geometry,
    Unicode/color fallback, replay/lifecycle and Unix-API tests are in place.
    Preferences are process-local, not persisted. Existing direct USB stays
-   unchanged; standalone profile wiring, actual daemon-version/recording runtime
-   additions and physical acceptance remain separate. The additional
+   unchanged; standalone profile wiring and daemon-owned recording runtime
+   additions remain separate. The endpoint version is now read from existing
+   daemon snapshot metadata. On September 28, 2026, the `824c417` development
+   wheel passed offline, fictional-data Mimic visual/keyboard checks on both
+   bench Pi Linux consoles (100×30 and 160×45), and both original display
+   services were restored unchanged. This is presentation acceptance, not live
+   scanner accuracy or supplemental-reader qualification; see the
+   [TUI guide](tui.md#unreleased-mimic-sds-candidate). The additional
    [Mimic-SDS HA card](home-assistant-mimic-card.md) is now implemented locally:
    shared WebUI decoder/drawing core, per-card YAML/editor options, stable auto
    height, fixed-row containment, and a common Ingress session owner with

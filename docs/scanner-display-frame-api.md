@@ -1013,8 +1013,10 @@ read can restore data. Quitting closes the worker without restarting it.
 Runtime/keyboard help is an opaque, scrollable modal drawer. Palette typing and
 drawer actions cannot activate scanner or audio controls. Profile metadata shown
 there is explicitly a snapshot from drawer-open time, while local TUI runtime
-and logs continue updating. Only reported fields are shown: it does not invent
-a daemon-version field or label client recordings as daemon-owned recordings.
+and logs continue updating. Only reported fields are shown: the daemon version
+comes from existing snapshot metadata, separately from the local client version,
+and missing metadata is unavailable. Client recordings are not labeled as
+daemon-owned recordings.
 Ordinary TUI event updates continue underneath, so returning does not require a
 new scanner connection. Managed-display terminal failure/retry remains the
 existing outer lifecycle.
@@ -1024,8 +1026,12 @@ quantization and `NO_COLOR` support. No ANSI/markup from the wire is interpreted
 The renderer preserves source frequency notation, useful option captions,
 Simple two-line names, Detail one-line names, alignment, and independent holds.
 The layout/LED selections are process-local and read-only. Synthetic renderer,
-real Textual, real Unix API and packaging tests do not replace physical Pi/Linux
-console or actual scanner LCD qualification.
+real Textual, real Unix API and packaging tests do not replace actual scanner LCD
+qualification. The `824c417` development wheel separately passed user-observed
+offline Mimic visual/keyboard checks on the 100×30 and 160×45 bench Pi Linux
+consoles on September 28, 2026; both original services were restored unchanged.
+That fictional-data acceptance covers presentation, not live scanner accuracy or
+supplemental reads. See the [TUI acceptance scope](tui.md#unreleased-mimic-sds-candidate).
 
 ## Shared renderer requirements
 
