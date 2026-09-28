@@ -230,6 +230,16 @@ writes, fsync failure, interruption, deadline expiry, altered content, extra fil
 hardlinks, path replacement and descriptor reuse. They use synthetic documents
 and temporary directories, not authenticated installed runtime evidence.
 
+An additional end-to-end fixture publishes the complete pair before constructing
+the original `Startup`, then uses those same retained files through the baseline
+read, original clock capture, independent acceptance, three-process descriptor
+handoff, ordinary Link exchange and idle-service assembly. It checks that neither
+input's contents or identity/permission/modification metadata changes. Access
+timestamps may legitimately advance during reads. The original startup/clock
+owners are retained through assembly; the fixture never runs the service or
+contacts a scanner. Host/Engine facts and runtime pins remain synthetic, so this
+is an integration regression, not installed launch or hardware qualification.
+
 This module is **not** added to any selected source profile or command. Direct
 execution refuses. It does not authenticate its caller, source installation,
 ancestor trust or expected digests; it does not qualify the newer handoff graph,

@@ -189,11 +189,18 @@ def connection(service_case, monkeypatch, request):
         if retained_path == "inputs":
             # File intake precedes the baseline read and original clock capture.
             # Pins are synthetic; this does not supply installed provenance.
-            input_temporary = tempfile.TemporaryDirectory(prefix="sds-writer-input-")
-            input_root = Path(input_temporary.name)
-            input_path = input_root / m.input_files.NAME
-            input_path.write_bytes(declaration.raw)
-            input_path.chmod(0o600)
+            if s.input_publication is None:
+                input_temporary = tempfile.TemporaryDirectory(prefix="sds-writer-input-")
+                input_root = Path(input_temporary.name)
+                input_path = input_root / m.input_files.NAME
+                input_path.write_bytes(declaration.raw)
+                input_path.chmod(0o600)
+            else:
+                # This pair was exclusively published BEFORE Startup existed.
+                # Use the original independent pin, not a hash learned by readback.
+                input_root = s.peer_input_root
+                assert declaration.raw == s.expected_inputs.raw
+                expected_sha256 = s.expected_input_digest
             case_id = json.loads(s.startup.template.raw)["plan"]["case"]
             root_for_case = m.input_files.inputs_root
             monkeypatch.setattr(
@@ -371,6 +378,30 @@ def test_retained_inputs_precede_actual_baseline_and_reach_original_link_and_ser
     test_original_post_baseline_clock_reaches_delivered_link_then_passive_assembly(c)
     assert len(ends) >= 6 and set(ends) == {c.retained.deadline}
     assert not c.input_owner.closed and not c.input_owner.declaration.closed
+
+
+@pytest.mark.parametrize("service_case", ["published-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+def test_exclusive_publication_reaches_original_startup_handoff_and_idle_assembly(
+    connection, monkeypatch
+):
+    c = connection
+    assert c.s.input_publication is not None
+    assert c.s.input_publication.template_sha256 == c.owner.expected
+    assert c.s.input_publication.expectations_sha256 == c.s.expected_input_digest
+    files = (
+        c.owner.declaration.root / m.startup.declaration.NAME,
+        c.input_owner.root / m.input_files.NAME,
+    )
+    # Reads may advance atime. Use the same identity/content metadata contract
+    # as the retained readers instead of treating access as a file mutation.
+    before = {
+        path: (m.input_files.files.identity(path.stat()), path.read_bytes()) for path in files
+    }
+    test_retained_inputs_precede_actual_baseline_and_reach_original_link_and_service(c, monkeypatch)
+    assert {
+        path: (m.input_files.files.identity(path.stat()), path.read_bytes()) for path in files
+    } == before
 
 
 @pytest.mark.parametrize("connection", ["inputs"], indirect=True)

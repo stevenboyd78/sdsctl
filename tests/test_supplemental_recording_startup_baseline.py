@@ -40,11 +40,9 @@ m, launch = integration.startup, integration.m.launch
 
 
 @pytest.fixture
-def service_case(before_handoff, tmp_path, monkeypatch):
+def service_case(before_handoff, tmp_path, monkeypatch, request):
     s = before_handoff
     s.root, source = tmp_path / "service-case", tmp_path / "service-declaration"
-    s.root.mkdir(mode=0o700)
-    source.mkdir(mode=0o700)
     value = json.loads(s.plan.raw)
     times = value.pop("deadlines")
     value.pop("original_clock")
@@ -56,9 +54,45 @@ def service_case(before_handoff, tmp_path, monkeypatch):
             budget=integer_budget(times),
         )
     )
-    path = source / m.declaration.NAME
-    path.write_bytes(s.template.raw)
-    path.chmod(0o600)
+    s.input_publication = None
+    if getattr(request, "param", None) == "published-inputs":
+        from . import test_supplemental_recording_peer_provision as provision
+
+        p = provision.m
+        assert p.declarations is m.declaration
+        monkeypatch.setattr(p, "ROOT_UID", os.geteuid())
+        monkeypatch.setattr(p.inputs, "ROOT_UID", os.geteuid())
+        monkeypatch.setattr(p, "PARENT", tmp_path)
+        monkeypatch.setattr(
+            p.declarations,
+            "declaration_root",
+            lambda case: tmp_path / ("sdsctl-recording-startup-" + case),
+        )
+        monkeypatch.setattr(
+            p.inputs,
+            "inputs_root",
+            lambda case: tmp_path / ("sdsctl-recording-peer-inputs-" + case),
+        )
+        expected_value = provision.readers.expectation_tests.value()
+        expected_value["template_sha256"] = s.template.sha256
+        expected_value["writer"]["runtime"] = value["helper"]
+        expected_value["observer"]["runtime"]["source"] = value["helper"]["source"]
+        s.expected_inputs = p.codec.decode(expected_value)
+        # Expected pins precede publication; never trust a receipt/file/process
+        # to invent a replacement pin. Host/runtime provenance remains synthetic.
+        s.expected_input_digest = s.expected_inputs.sha256
+        s.input_publication = p.publish(
+            s.template.raw, s.template.sha256, s.expected_inputs.raw, s.expected_input_digest
+        )
+        source = p.declarations.declaration_root(value["case"])
+        s.peer_input_root = p.inputs.inputs_root(value["case"])
+        s.root = tmp_path / ("sdsctl-recording-handoff-" + value["case"])
+    else:
+        source.mkdir(mode=0o700)
+        path = source / m.declaration.NAME
+        path.write_bytes(s.template.raw)
+        path.chmod(0o600)
+    s.root.mkdir(mode=0o700)
     monkeypatch.setattr(m.declaration, "declaration_root", lambda _: source)
     monkeypatch.setattr(m.plans.Plan, "root", property(lambda _: s.root))
     s.clocks, s.preflights, s.samples = [], [], []
