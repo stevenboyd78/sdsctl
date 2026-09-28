@@ -28,8 +28,10 @@ import pytest
 
 from . import test_supplemental_recording_helper_qualification as helper_tests
 from . import test_supplemental_recording_peer_command as command_tests
+from . import test_supplemental_recording_peer_delivery as delivery_tests
 from . import test_supplemental_recording_peer_preflight_qualification as qualification
 from . import test_supplemental_recording_peer_termination as termination_tests
+from ._supplemental_failure_diagnostics import failure_locations
 
 writer, p, m = command_tests.writer, command_tests.m, qualification.m
 transport, grants = writer.transport, qualification.grants
@@ -50,6 +52,33 @@ def receive():
     if not raw:
         raise EOFError
     return json.loads(raw)
+
+
+def preparation_diagnostics(patches):
+    """Keep bounded source locations behind sanitation; never private values."""
+    cleanup = p._cleanup
+
+    def retire(callbacks, problem):
+        try:
+            return cleanup(callbacks, problem)
+        except Exception as error:
+            if problem is not None:
+                locations = failure_locations(problem)
+                if locations:
+                    error.add_note(locations)
+            raise
+
+    patches.setattr(p, "_cleanup", retire)
+
+
+def test_preparation_diagnostics_never_copy_private_exception_values(monkeypatch):
+    preparation_diagnostics(monkeypatch)
+    with pytest.raises(p.UnconfirmedPreparation) as failure:
+        p._cleanup([], ValueError("PRIVATE_PREPARATION_PAYLOAD"))
+    assert str(failure.value) == p.MESSAGE
+    rendered = repr(getattr(failure.value, "__notes__", []))
+    if "PRIVATE_PREPARATION_PAYLOAD" in rendered:
+        raise AssertionError("Private values escaped preparation diagnostics")
 
 
 @contextmanager
@@ -90,6 +119,7 @@ def host_fixture(root, patches):
 def child(root):
     """Actual command function under explicitly synthetic host/path boundaries."""
     with pytest.MonkeyPatch.context() as patches, host_fixture(root, patches) as s:
+        preparation_diagnostics(patches)
         # The inherited host fixture's inert placeholder is not part of this
         # protocol. Retire it before command setup, so even an intentionally
         # killed writer below cannot orphan a fixture grandchild.
@@ -198,7 +228,7 @@ def child(root):
 
             patches.setattr(p.startups.Startup, "poll", polling)
             original_fds = writer.preflight_probe.fds()
-            result, error = None, None
+            result, error, locations = None, None, []
             try:
                 result = p.prepare_idle_writer(
                     s.plan.case,
@@ -206,12 +236,14 @@ def child(root):
                     stored.manifest_sha256,
                     identity(os.getppid(), config["outer_cid"]),
                 )
-            except p.UnconfirmedPreparation:
+            except p.UnconfirmedPreparation as refusal:
                 error = "refused"
+                locations = getattr(refusal, "__notes__", [])[:8]
             emit(
                 dict(
                     result=result,
                     error=error,
+                    refusal_locations=locations,
                     owners=len(owners),
                     services=len(services),
                     links=len(links),
@@ -289,6 +321,166 @@ def helper(supervised, image, configured, monkeypatch, tmp_path):
                 process.wait(timeout=3)
             for stream in (process.stdin, process.stdout, process.stderr):
                 stream.close()
+
+
+def observer_child(path):
+    """Retain actual authenticated inputs and final plan before descriptor intake.
+
+    Test-only sequencing, paths and cgroups; the outer's future plan/hash is NOT
+    supplied through these fixture pipes. No installed command or App grant.
+    """
+    before = len(os.listdir("/proc/self/fd"))
+    result = dict(received=False, error=None)
+    with pytest.MonkeyPatch.context() as patch, ExitStack() as stack:
+        for module in (p, p.connections, p.inputs_module, p.domains, p.bootstrap, p.links):
+            patch.setattr(module, "ROOT_UID", os.geteuid())
+        channel = stack.enter_context(closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)))
+        channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        channel.connect(path)
+        channel.setblocking(False)
+        timer = stack.enter_context(closing(p.domains.clock.ClockWitness(p.domains.clock.read())))
+        origin = timer.original
+        print("ready", flush=True)
+        config = receive()
+        ids = {item["pid"]: item for item in config["identities"]}
+
+        def identity(pid, cid):
+            assert ids[pid]["container_id"] == cid
+            return p.domains.process.process_identity(
+                pid,
+                cid,
+                Path(f"/proc/{pid}/stat").read_text(),
+                f"0::/system.slice/docker-{cid}.scope\n",
+            )
+
+        patch.setattr(p.domains.process, "read_identity", identity)
+        patch.setattr(
+            p.inputs_module.declarations, "declaration_root", lambda _: Path(config["source"])
+        )
+        patch.setattr(p.inputs_module, "inputs_root", lambda _: Path(config["inputs"]))
+        patch.setattr(p, "preparation_root", lambda *_: Path(config["preparation"]))
+        patch.setattr(p, "observer_plan_root", lambda _: Path(config["plan_socket"]))
+        patch.setattr(p, "writer_case_root", lambda _: Path(config["case_root"]))
+        patch.setattr(p.startups.plans.Plan, "root", property(lambda _: Path(config["case_root"])))
+        outer = stack.enter_context(
+            p.domains.process.ProcessWitness(
+                identity(os.getppid(), ids[os.getppid()]["container_id"])
+            )
+        )
+        local = identity(os.getpid(), ids[os.getpid()]["container_id"])
+        declaration = stack.enter_context(
+            p.inputs_module.declarations.Declaration(
+                Path(config["source"]), config["template_sha256"]
+            )
+        )
+        connection = stack.enter_context(
+            closing(
+                p.connections.Connection(
+                    Path(config["preparation"]), outer, deadline=time.monotonic() + 2
+                )
+            )
+        )
+        try:
+            inputs, writer_peer = stack.enter_context(
+                p.receive_inputs(
+                    declaration,
+                    connection,
+                    timer,
+                    local,
+                    role="observer",
+                    baseline_sha256=config["baseline"],
+                    preparation=True,
+                )
+            )
+            emit(dict(inputs_retained=True))
+            assert receive() == {"plan_ready": True}
+            connection.close()  # Never renew or reuse the old input exchange.
+            plan_connection = stack.enter_context(
+                closing(
+                    p.connections.Connection(
+                        Path(config["plan_socket"]), outer, deadline=time.monotonic() + 2
+                    )
+                )
+            )
+            selected_clock, selected_peer, selected_local = timer, writer_peer, local
+            fault = config.get("receive_fault")
+            if fault == "clock":
+                selected_clock = stack.enter_context(
+                    closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
+                )
+            elif fault == "peer":
+                selected_peer = stack.enter_context(
+                    p.domains.process.ProcessWitness(writer_peer.identity)
+                )
+            elif fault == "local":
+                selected_local = p.domains.process.ProcessIdentity(**asdict(local))
+            elif fault == "missing-context":
+                del inputs._preparation_context
+            original = stack.enter_context(
+                p.receive_observer_plan(
+                    inputs,
+                    plan_connection,
+                    selected_clock,
+                    selected_local,
+                    baseline_sha256=config["baseline"],
+                    counterpart=selected_peer,
+                )
+            )
+            plan = original.recheck()
+            if fault == "replay":
+                with (
+                    pytest.raises(p.UnconfirmedPreparation),
+                    p.receive_observer_plan(
+                        inputs,
+                        plan_connection,
+                        timer,
+                        local,
+                        baseline_sha256=config["baseline"],
+                        counterpart=writer_peer,
+                    ),
+                ):
+                    raise AssertionError("A second plan exchange was admitted")
+                assert original.recheck() is plan and not plan_connection.closed
+            emit(dict(plan_retained=plan.sha256, input_pin=inputs.expected))
+            assert receive() == {"handoff": True}
+            plan_connection.close()
+            end = min(time.monotonic() + 2, plan.lease["ready_by"])
+            assert inputs.recheck(deadline=end) is inputs.expectations
+            assert original.recheck() is plan and timer.original is origin
+            endpoint = stack.enter_context(
+                closing(
+                    p.bootstrap.Endpoint(
+                        channel,
+                        plan,
+                        timer,
+                        local,
+                        outer,
+                        writer_peer,
+                        role="observer",
+                        mode="receive",
+                        declaration_sha256=inputs.expected,
+                        deadline=end,
+                    )
+                )
+            )
+            channels, receipt = endpoint.receive()
+            stack.callback(channels.close)
+            assert (
+                original.recheck() is plan and inputs.recheck(deadline=end) is inputs.expectations
+            )
+            link = stack.enter_context(
+                closing(p.links.Link(channels, plan, timer, writer_peer, role="observer"))
+            )
+            assert link.timer is timer and link.plan is plan and link.sequence == 0
+            result = dict(received=True, offer=receipt.offer_sha256, original_clock=True)
+            emit(result)
+            assert receive() == {"retire": True}
+        except p.UnconfirmedPreparation:
+            result = dict(received=False, error="refused")
+            emit(result)
+            receive()  # Keep originals alive until the outer captures the failure.
+    emit(dict(fd_delta=len(os.listdir("/proc/self/fd")) - before, **result))
+    receive()  # Never turn local cleanup into an observer-exit receipt.
 
 
 def observer_runtime(h, counterpart, monkeypatch):
@@ -371,7 +563,12 @@ def observer_runtime(h, counterpart, monkeypatch):
 
 @pytest.fixture
 def joined(helper, monkeypatch, tmp_path, configured, request):
+    preparation_diagnostics(monkeypatch)
     h = helper
+    selection = getattr(request, "param", None)
+    options = selection if type(selection) is dict else dict(mode=selection)
+    mode = options["mode"]
+    plan_delivery = mode == "plan-pair"
     for module in (
         p,
         p.listeners,
@@ -395,17 +592,28 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         path.chmod(0o600)
         final_server.listen(2)
         final_server.settimeout(3)
+        observer_code = (
+            "import sys; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/src']; "
+            "from tests.test_supplemental_recording_qualified_peer_command import observer_child; "
+            "observer_child(sys.argv[2])"
+            if plan_delivery
+            else transport.CHILD.replace(
+                "m.links.clock.ClockWitness(plan.original_clock)",
+                "m.links.clock.ClockWitness(m.links.clock.read())",
+            )
+        )
         observer = subprocess.Popen(
             [
                 sys.executable,
                 "-I",
                 "-B",
                 "-c",
-                transport.CHILD.replace(
-                    "m.links.clock.ClockWitness(plan.original_clock)",
-                    "m.links.clock.ClockWitness(m.links.clock.read())",
+                observer_code,
+                str(
+                    Path(__file__).resolve().parents[1]
+                    if plan_delivery
+                    else Path(p.__file__).parent
                 ),
-                str(Path(p.__file__).parent),
                 str(path),
             ],
             stdin=subprocess.PIPE,
@@ -450,9 +658,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         monkeypatch.setattr(p.domains.process, "read_identity", identity)
         counterpart = stack.enter_context(p.domains.process.ProcessWitness(observer_id))
         comparison = (
-            observer_runtime(h, counterpart, monkeypatch)
-            if getattr(request, "param", None) == "pair"
-            else None
+            observer_runtime(h, counterpart, monkeypatch) if mode in ("pair", "plan-pair") else None
         )
         input_root = tmp_path / "inputs"
         input_root.mkdir(mode=0o700)
@@ -553,6 +759,45 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             )
         )
         sender.receive()
+        plan_socket = short / "observer-plan"
+        if plan_delivery:
+            preparation = short / "observer-inputs"
+            preparation.mkdir(mode=0o700)
+            plan_socket.mkdir(mode=0o700)
+            monkeypatch.setattr(p, "preparation_root", lambda *_: preparation)
+            observer_inputs = stack.enter_context(
+                closing(
+                    p.listeners.Listener(preparation, counterpart, deadline=time.monotonic() + 2)
+                )
+            )
+            transport.command(
+                observer,
+                dict(
+                    identities=[asdict(item) for item in identities],
+                    source=str(source),
+                    inputs=str(input_root),
+                    preparation=str(preparation),
+                    plan_socket=str(plan_socket),
+                    case_root=str(case_root),
+                    template_sha256=h.template.sha256,
+                    baseline=h.baseline,
+                    receive_fault=options.get("receive_fault"),
+                ),
+            )
+            observer_inputs.accept()
+            p.send_inputs(
+                inputs,
+                observer_inputs,
+                timer,
+                h.observer_identity,
+                role="observer",
+                baseline_sha256=h.baseline,
+                counterpart=h.witness,
+                preparation=True,
+            )
+            assert json.loads(transport.line(observer)) == dict(inputs_retained=True)
+            monkeypatch.setattr(p, "observer_plan_root", lambda _: plan_socket)
+            monkeypatch.setattr(p, "writer_case_root", lambda _: case_root)
         yield SimpleNamespace(
             h=h,
             q=q,
@@ -571,6 +816,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             path=input_path,
             comparison=comparison,
             pair=None,
+            plan_delivery=plan_delivery,
+            plan_socket=plan_socket,
         )
 
 
@@ -617,16 +864,45 @@ def finish(s, monkeypatch, after_qualification=None):
         qualify_final(s, plan)
     if after_qualification is not None:
         after_qualification()
-    monkeypatch.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
     submission = writer.assembly.baseline_tests.integration.startups.sends.m
-    original = s.stack.enter_context(submission.intake.CasePlan(s.case_root, plan.sha256))
-    submission.Submission(original, s.inputs.template.sha256, plan.sha256).submit()
+    # Only local case-file operations use this fixture path. Keeping the override
+    # during fresh runtime comparison would change its expected Engine mount and
+    # rightly refuse the originally pinned configuration.
+    with monkeypatch.context() as files:
+        files.setattr(p.startups.plans.Plan, "root", property(lambda _: s.case_root))
+        original = s.stack.enter_context(submission.intake.CasePlan(s.case_root, plan.sha256))
+        if s.plan_delivery:
+            listener = s.stack.enter_context(
+                closing(
+                    p.listeners.Listener(
+                        s.plan_socket, s.counterpart, deadline=time.monotonic() + 2
+                    )
+                )
+            )
+            s.plan_listener, s.sent_plan = listener, original
+            transport.command(s.observer, dict(plan_ready=True))
+            listener.accept()
+            s.plan_receipt = p.send_observer_plan(
+                s.inputs,
+                original,
+                listener,
+                s.timer,
+                s.h.observer_identity,
+                baseline_sha256=s.h.baseline,
+                counterpart=s.h.witness,
+            )
+            assert json.loads(transport.line(s.observer)) == dict(
+                plan_retained=plan.sha256, input_pin=s.inputs.expected
+            )
+        submission.Submission(original, s.inputs.template.sha256, plan.sha256).submit()
     writer_channel = s.stack.enter_context(closing(s.final_server.accept()[0]))
     writer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
     writer_channel.setblocking(False)
     transport.command(
         s.observer,
-        dict(
+        dict(handoff=True)
+        if s.plan_delivery
+        else dict(
             plan=plan.raw.decode(),
             sha256=plan.sha256,
             role="observer",
@@ -638,31 +914,38 @@ def finish(s, monkeypatch, after_qualification=None):
             peer=s.h.witness.identity.container_id,
         ),
     )
-    bundles = p.bootstrap.links.pair()
-    for bundle in bundles:
-        s.stack.callback(bundle.close)
-    for role, connection, target, other, bundle in (
-        ("writer", writer_channel, s.h.witness, s.counterpart, bundles[0]),
-        ("observer", s.observer_channel, s.counterpart, s.h.witness, bundles[1]),
-    ):
-        endpoint = s.stack.enter_context(
-            closing(
-                p.bootstrap.Endpoint(
-                    connection,
-                    plan,
-                    s.timer,
-                    s.h.observer_identity,
-                    target,
-                    other,
-                    role=role,
-                    mode="deliver",
-                    declaration_sha256=s.expected.sha256,
+    if hasattr(s, "watch"):
+        s.delivered = delivery_tests.m.deliver(
+            s.custody, s.watch, s.h.observer_identity, writer_channel, s.observer_channel
+        )
+        assert s.delivered.plan_sha256 == plan.sha256
+        assert s.delivered.declaration_sha256 == s.inputs.expected
+    else:
+        bundles = p.bootstrap.links.pair()
+        for bundle in bundles:
+            s.stack.callback(bundle.close)
+        for role, connection, target, other, bundle in (
+            ("writer", writer_channel, s.h.witness, s.counterpart, bundles[0]),
+            ("observer", s.observer_channel, s.counterpart, s.h.witness, bundles[1]),
+        ):
+            endpoint = s.stack.enter_context(
+                closing(
+                    p.bootstrap.Endpoint(
+                        connection,
+                        plan,
+                        s.timer,
+                        s.h.observer_identity,
+                        target,
+                        other,
+                        role=role,
+                        mode="deliver",
+                        declaration_sha256=s.expected.sha256,
+                    )
                 )
             )
-        )
-        endpoint.deliver(bundle)
-        bundle.close()
-        endpoint.close()
+            endpoint.deliver(bundle)
+            bundle.close()
+            endpoint.close()
     assert json.loads(transport.line(s.observer))["received"]
     assert transport.line(s.h.child) == p.MILESTONE
     return json.loads(transport.line(s.h.child))
@@ -678,6 +961,7 @@ def test_full_qualification_grants_real_original_writer_then_passive_retirement(
     assert result == dict(
         result=75,
         error=None,
+        refusal_locations=[],
         owners=1,
         services=1,
         links=1,
@@ -769,6 +1053,240 @@ def test_original_preflight_then_both_full_final_collectors_then_actual_command(
     assert s.pair.writer.plan is not s.q.plan
 
 
+@pytest.mark.parametrize(
+    "joined",
+    [
+        "plan-pair",
+        dict(mode="plan-pair", receive_fault="replay"),
+    ],
+    indirect=True,
+)
+def test_observer_retains_actual_authenticated_inputs_then_delivered_plan_and_original_link(
+    joined, monkeypatch
+):
+    s = joined
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch)
+    assert result["result"] == 75 and result["original_dispatch"] and result["fd_delta"] == 0
+    assert s.plan_receipt and s.pair.elapsed_seconds < 2
+    assert s.h.reads == 4 and s.comparison.counts["container"] == 2
+    transport.command(s.observer, dict(retire=True))
+    result = json.loads(transport.line(s.observer))
+    assert result["received"] and result["original_clock"] and result["fd_delta"] == 0
+    assert not s.counterpart.exited() and not s.h.witness.exited()
+
+
+@pytest.mark.parametrize(
+    "joined",
+    [
+        dict(mode="plan-pair", receive_fault=fault)
+        for fault in ("clock", "peer", "local", "missing-context")
+    ],
+    indirect=True,
+)
+def test_observer_plan_cannot_adopt_replacements_for_authenticated_original_owners(
+    joined, monkeypatch
+):
+    s = joined
+    assert s.sender.send() is None
+    with pytest.raises(p.UnconfirmedPreparation):
+        finish(s, monkeypatch)
+    assert json.loads(transport.line(s.observer))["error"] == "refused"
+    assert {path.name for path in s.case_root.iterdir()} == {"startup-claim.json", "plan.json"}
+    s.observer.kill()
+    s.observer.wait(timeout=3)
+    result = json.loads(transport.line(s.h.child))
+    assert result["services"] == 0 and result["error"] == "refused" and result["fd_delta"] == 0
+
+
+@pytest.mark.parametrize("joined", ["plan-pair"], indirect=True)
+@pytest.mark.parametrize("fault", ["clock", "peer", "local", "inputs"])
+def test_plan_sender_keeps_its_completed_observer_input_owners(joined, monkeypatch, fault):
+    s = joined
+    selected = dict(timer=s.timer, counterpart=s.h.witness, local=s.h.observer_identity)
+    inputs = s.inputs
+    if fault == "clock":
+        # Capture BEFORE the writer's later plan: timestamp ordering alone must
+        # not admit a replacement for the original preparation clock.
+        selected["timer"] = s.stack.enter_context(
+            closing(p.domains.clock.ClockWitness(p.domains.clock.read()))
+        )
+    elif fault == "peer":
+        selected["counterpart"] = s.stack.enter_context(
+            p.domains.process.ProcessWitness(s.h.witness.identity)
+        )
+    elif fault == "local":
+        selected["local"] = p.domains.process.ProcessIdentity(**asdict(s.h.observer_identity))
+    else:
+        inputs = s.stack.enter_context(
+            closing(p.inputs_module.Inputs(s.inputs.declaration, s.inputs.root, s.inputs.expected))
+        )
+    send = p.send_observer_plan
+
+    def replaced(original_inputs, plan, listener, timer, local, **kwargs):
+        assert original_inputs is s.inputs and timer is s.timer and local is s.h.observer_identity
+        return send(
+            inputs,
+            plan,
+            listener,
+            selected["timer"],
+            selected["local"],
+            **(kwargs | dict(counterpart=selected["counterpart"])),
+        )
+
+    monkeypatch.setattr(p, "send_observer_plan", replaced)
+    assert s.sender.send() is None
+    with pytest.raises(p.UnconfirmedPreparation):
+        finish(s, monkeypatch)
+    assert json.loads(transport.line(s.observer))["error"] == "refused"
+    assert {path.name for path in s.case_root.iterdir()} == {"startup-claim.json", "plan.json"}
+    s.observer.kill()
+    s.observer.wait(timeout=3)
+    result = json.loads(transport.line(s.h.child))
+    assert result["error"] == "refused" and result["services"] == 0 and result["fd_delta"] == 0
+
+
+@pytest.mark.parametrize("joined", ["plan-pair"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "schema",
+        "kind",
+        "scope",
+        "nonce",
+        "case",
+        "baseline",
+        "plan-pin",
+        "input-pin",
+        "writer",
+        "extra",
+        "rights",
+        "descendant",
+        "expired",
+        "input-drift",
+        "plan-drift",
+    ],
+)
+def test_observer_plan_refusal_preserves_claim_and_never_accepts_or_builds_service(
+    joined, monkeypatch, fault
+):
+    s = joined
+    original_send = p._Exchange.send
+
+    def send(exchange, frame):
+        if exchange.final_plan and frame["phase"] == "plan":
+            values = {
+                "schema": dict(schema=True),
+                "kind": dict(kind=p.KIND),
+                "scope": dict(scope=p.SCOPE),
+                "nonce": dict(nonce="0" * 64),
+                "case": dict(case="0" * 32),
+                "baseline": dict(baseline_sha256="0" * 64),
+                "plan-pin": dict(plan_sha256="0" * 64),
+                "input-pin": dict(expectations_sha256="0" * 64),
+                "writer": dict(writer=frame["requester"]),
+                "extra": dict(action="start"),
+            }
+            frame = frame | values.get(fault, {})
+            if fault == "expired":
+                time.sleep(max(0, exchange.end - time.monotonic()) + 0.01)
+            if fault in ("rights", "descendant"):
+                exchange.wait(sending=True)
+                raw = p.links.base.encode(frame)
+                if fault == "rights":
+                    exchange.channel.sendmsg(
+                        [raw],
+                        [
+                            (
+                                socket.SOL_SOCKET,
+                                socket.SCM_RIGHTS,
+                                p.struct.pack("i", exchange.remote.fd),
+                            )
+                        ],
+                    )
+                else:
+                    child_pid = os.fork()
+                    if child_pid == 0:
+                        exchange.channel.send(raw)
+                        os._exit(0)
+                    assert os.waitpid(child_pid, 0) == (child_pid, 0)
+                return p.links.base.checksum(frame)
+            result = original_send(exchange, frame)
+            if fault == "input-drift":
+                s.path.write_bytes(b"PRIVATE input drift after plan offer")
+            if fault == "plan-drift":
+                (s.case_root / "plan.json").write_bytes(b"PRIVATE plan drift after offer")
+            return result
+        return original_send(exchange, frame)
+
+    monkeypatch.setattr(p._Exchange, "send", send)
+    assert s.sender.send() is None
+    with pytest.raises(p.UnconfirmedPreparation):
+        finish(s, monkeypatch)
+    assert set(path.name for path in s.case_root.iterdir()) == {"startup-claim.json", "plan.json"}
+    files = {path.name: path.read_bytes() for path in s.case_root.iterdir()}
+    assert json.loads(transport.line(s.observer))["error"] == "refused"
+    s.observer.kill()  # Only this original fixture peer; not App recovery.
+    s.observer.wait(timeout=3)
+    result = json.loads(transport.line(s.h.child))
+    assert result["error"] == "refused" and result["host_reads"] == 1
+    assert result["services"] == result["links"] == 0 and not result["accepted"]
+    assert result["retired"] and result["clocks_closed"] and result["fd_delta"] == 0
+    assert files == {path.name: path.read_bytes() for path in s.case_root.iterdir()}
+
+
+@pytest.mark.parametrize("joined", ["plan-pair"], indirect=True)
+@pytest.mark.parametrize("fault", ["inputs", "plan", "clock", "deadline"])
+def test_observer_retention_ack_is_not_outer_completion_or_startup_acceptance(
+    joined, monkeypatch, fault
+):
+    s = joined
+    close = p._Exchange.close
+    changed = []
+
+    def retired(exchange):
+        opened = exchange.domain is not None and not exchange.domain.closed
+        if exchange.final_plan and opened:
+            # The wire ack precedes the receiver's final checks. Synchronize
+            # this fault AFTER that local completion so it tests the sender's
+            # retirement, not a race against receiver-side file validation.
+            s.retained_before_fault = json.loads(transport.line(s.observer))
+            assert s.retained_before_fault["plan_retained"]
+        close(exchange)
+        if exchange.final_plan and opened:
+            changed.append(True)
+            if fault == "inputs":
+                s.path.write_bytes(b"PRIVATE changed during sender retirement")
+            elif fault == "plan":
+                (s.case_root / "plan.json").write_bytes(b"PRIVATE changed during sender retirement")
+            elif fault == "clock":
+                s.timer.close()
+            else:
+                time.sleep(max(0, exchange.end - time.monotonic()) + 0.01)
+
+    monkeypatch.setattr(p._Exchange, "close", retired)
+    assert s.sender.send() is None
+    with pytest.raises(p.UnconfirmedPreparation):
+        finish(s, monkeypatch)
+    assert changed == [True] and s.retained_before_fault["plan_retained"]
+    assert {path.name for path in s.case_root.iterdir()} == {"startup-claim.json", "plan.json"}
+    with pytest.raises(p.UnconfirmedPreparation):
+        p.send_observer_plan(
+            s.inputs,
+            s.sent_plan,
+            s.plan_listener,
+            s.timer,
+            s.h.observer_identity,
+            baseline_sha256=s.h.baseline,
+            counterpart=s.h.witness,
+        )
+    s.observer.kill()
+    s.observer.wait(timeout=3)
+    result = json.loads(transport.line(s.h.child))
+    assert result["error"] == "refused" and result["services"] == 0 and not result["accepted"]
+    assert result["fd_delta"] == 0
+
+
 @pytest.mark.parametrize("joined", ["pair"], indirect=True)
 @pytest.mark.parametrize("fault", ["writer-source", "observer-configuration", "observer-exit"])
 def test_final_pair_refusal_never_submits_acceptance_or_constructs_service(
@@ -808,40 +1326,45 @@ def test_final_pair_refusal_never_submits_acceptance_or_constructs_service(
     assert original == {path.name: path.read_bytes() for path in s.case_root.iterdir()}
 
 
+def arm_original_watch(s):
+    stops = termination_tests.m
+    observer_domain = s.stack.enter_context(
+        closing(p.domains.ZeroDomain(s.timer.original, s.counterpart))
+    )
+    custody = s.stack.enter_context(
+        closing(stops.Custody(s.pair, s.timer, s.domain, observer_domain))
+    )
+    watch = stops.arm(custody, scope=stops.SCOPE)
+    s.stack.callback(watch.close)
+    s.custody, s.watch = custody, watch
+    assert custody.clock is s.timer and custody.origin is s.timer.original
+    assert custody.plan is s.pair.writer.plan and custody.plan is not s.q.plan
+    assert watch.identities == (s.h.witness.identity, s.counterpart.identity)
+    s.h.expected_returncode = -signal.SIGKILL
+
+
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["pair"], indirect=True)
+@pytest.mark.parametrize("joined", ["pair", "plan-pair"], indirect=True)
 def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_retirement(
     joined, monkeypatch
 ):
-    s, stops = joined, termination_tests.m
-    watches, custodies = [], []
-
-    def supervise():
-        observer_domain = s.stack.enter_context(
-            closing(p.domains.ZeroDomain(s.timer.original, s.counterpart))
-        )
-        custody = s.stack.enter_context(
-            closing(stops.Custody(s.pair, s.timer, s.domain, observer_domain))
-        )
-        custodies.append(custody)
-        watch = stops.arm(custody, scope=stops.SCOPE)
-        s.stack.callback(watch.close)
-        watches.append(watch)
-        assert custody.clock is s.timer and custody.origin is s.timer.original
-        assert custody.plan is s.pair.writer.plan and custody.plan is not s.q.plan
-        assert watch.identities == (s.h.witness.identity, s.counterpart.identity)
-        s.h.expected_returncode = -signal.SIGKILL
+    s = joined
 
     assert s.sender.send() is None
-    result = finish(s, monkeypatch, supervise)
+    result = finish(s, monkeypatch, lambda: arm_original_watch(s))
     assert result["result"] == 75 and result["original_dispatch"] and result["fd_delta"] == 0
-    watch, custody = watches[0], custodies[0]
+    if s.plan_delivery:
+        assert s.plan_receipt  # Original watcher already armed before plan delivery.
+    watch, custody = s.watch, s.custody
     assert not watch.closed and not s.h.witness.exited() and not s.counterpart.exited()
     # Initial final comparison, capture comparison and arming comparison ALL
-    # run afresh before acceptance; only the writer has the extra preflight.
-    assert s.h.reads == 8 and s.comparison.counts["container"] == 6
+    # run afresh before acceptance, then before/after descriptor delivery;
+    # only the writer has the extra preflight.
+    assert s.h.reads == 12 and s.comparison.counts["container"] == 10
+    assert s.pair.channel_delivery_attempted
+    assert s.delivered.writer.context_sha256 != s.delivered.observer.context_sha256
     assert watch.deadline_ns == custody.deadline_ns
     files = {
         path.relative_to(s.case_root): path.read_bytes()
@@ -850,6 +1373,62 @@ def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_reti
     }
     watch.close()  # Explicit cancellation, NOT successful App recovery or disarm.
     assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize("joined", ["plan-pair"], indirect=True)
+@pytest.mark.parametrize("when", ["before-first", "after-writer", "after-observer"])
+def test_authenticated_plan_then_source_drift_cancels_original_supervised_handoff(
+    joined, monkeypatch, when
+):
+    s = joined
+    source = s.h.root / s.q.HELPER / "supplemental_recording_peer_preparation.py"
+    sent, changed = [], []
+    deliver, endpoint_send = delivery_tests.m.deliver, p.bootstrap.Endpoint.deliver
+
+    def change():
+        changed.append(True)
+        source.write_bytes(b"PRIVATE fixture source drift during supervised delivery")
+
+    def delivered(*args):
+        if when == "before-first":
+            change()
+        return deliver(*args)
+
+    def endpoint(endpoint, channels):
+        result = endpoint_send(endpoint, channels)
+        sent.append(endpoint.role)
+        if when == "after-" + endpoint.role:
+            change()
+        return result
+
+    monkeypatch.setattr(delivery_tests.m, "deliver", delivered)
+    monkeypatch.setattr(p.bootstrap.Endpoint, "deliver", endpoint)
+    assert s.sender.send() is None
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
+        finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert changed == [True] and s.plan_receipt
+    assert s.pair.channel_delivery_attempted and s.pair.failed
+    assert s.watch.closed and s.watch.finished
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert sent == ([] if when == "before-first" else ["writer", "observer"])
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    assert Path("startup-claim.json") in files and Path("plan.json") in files
+    # No retry can replace the consumed pair, watcher or peers. Accepted startup
+    # and any partial passive journal stay evidence, never action/recovery success.
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
+        deliver(s.custody, s.watch, s.h.observer_identity, None, None)
     assert files == {
         path.relative_to(s.case_root): path.read_bytes()
         for path in s.case_root.rglob("*")

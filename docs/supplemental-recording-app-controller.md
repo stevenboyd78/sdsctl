@@ -1934,6 +1934,68 @@ independently qualified installed supervisor. Independent outer/platform lifetim
 fixed outer/observer source and interpreter provenance,
 explicit active-action admission and exclusive recovery remain separate gates.
 
+### Original observer inputs and separate final-plan delivery (uninstalled)
+
+The preparation library now has a separately selected, read-only final-plan
+exchange for an observer that already retained its original authenticated inputs.
+It uses `finite-recording-observer-plan-delivery-v1` and
+`retain-original-writer-plan-only-v1`, on the distinct private path
+`/mnt/data/sdsctl-recording-observer-plan-CASE`. The original completed input
+connection is never reused or given another deadline. Each new listener/connection
+has its own original two-second bound and one consumed exchange slot.
+
+The outer's `send_observer_plan` borrows an independently reviewed, retained
+`CasePlan`, the original private Inputs, clock and writer/observer witnesses.
+It requires the exact local owners retained only after the earlier observer-input
+send completed its retirement checks. A replacement clock captured before the
+writer plan is still refused; timestamp ordering alone cannot establish custody.
+It sends only the expected plan digest, bound to the case, template, original
+three-process identities, baseline and expectations pins, role and fresh nonce.
+It neither learns the expected plan from disk nor carries plan bytes or file
+descriptors. Full runtime/source/publication and outer/platform qualification
+remain caller obligations; a private sender's credentials are not those proofs.
+
+`receive_observer_plan` requires the exact declaration, input owner, clock and
+original sample, local identity object, outer witness and writer witness retained
+by the earlier observer input exchange. Equal replacement owners are refused.
+It reads and retains the fixed writer case using the digest received from that
+same outer, validates the complete template/plan/runtime-pin relation, and checks
+the writer's original clock against actual zero-offset domain custody and current
+readings of the observer's own original clock. It does not create a new writer
+clock from a reported Window. The final plan must postdate that observer's
+original preparation sample. No startup, baseline read or journal is created.
+
+The sender rechecks inputs, original peers, plan and time around the exchange
+and after retiring its owned namespace observations. The receiver's retention
+acknowledgment is **not sender completion, startup acceptance, Ready, an App
+action grant or recovery authority**. A sender-side failure after that ack still
+prevents acceptance and handoff. Both sides preserve files and their consumed
+attempts; the caller keeps borrowed originals alive until their later users close.
+
+The combined three-process fixture now authenticates the real observer's Inputs,
+delivers the actual writer's later plan using this protocol, then joins those
+same owners to real descriptor intake and passive Link construction/retirement.
+Fixture pipes carry sequencing only, not the future plan or its expected digest
+to the observer. Full paired runtime comparison precedes this delivery and
+fixture acceptance. Faults include malformed context, wrong pins, ancillary
+rights, a descendant sender, expiry, source-file drift, missing continuity,
+replacement owners, replay and sender-retirement failure after receiver ack.
+
+The watched variant arms the same original kernel-only peer watcher before this
+plan delivery. It then uses the existing supervised descriptor-delivery adapter,
+including both full fresh paired runtime/source collections before and after
+handoff in their original shared two-second bound. The watcher stays armed through
+the writer's passive dispatcher retirement. A source change before or during
+handoff cancels that original watcher; only its original peers are stopped and
+all case files survive. Final bootstrap sockets are still fixture-provisioned,
+not a qualification of an installed listener or outer launcher.
+
+This remains offline integration: paths/cgroups, Engine/kernel/argv and installed
+pin/publication provenance are synthetic. No fixed observer or outer entrypoint,
+installed platform supervision, active App grant or exclusive recovery has been
+enabled. Existing source-profile module sets and passive writer command selection
+are unchanged; adding these library operations does not select them for live use.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

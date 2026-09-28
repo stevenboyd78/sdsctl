@@ -65,6 +65,8 @@ except Exception:
 codec, links = inputs_module.codec, bootstrap.links
 KIND = "finite-recording-peer-input-preparation-v1"
 SCOPE = "authenticate-retained-peer-inputs-only-v1"
+PLAN_KIND = "finite-recording-observer-plan-delivery-v1"
+PLAN_SCOPE = "retain-original-writer-plan-only-v1"
 MAX_BYTES, ROOT_UID = 2048, 0
 MILESTONE = "Finite peer writer prepared and retired; no App or recording action selected."
 
@@ -87,6 +89,16 @@ def preparation_root(case, role):
 def baseline_root(case):
     codec.plans.base.identifier(case, case=True)
     return Path("/mnt/data/sdsctl-recording-baseline-" + case)
+
+
+def observer_plan_root(case):
+    codec.plans.base.identifier(case, case=True)
+    return Path("/mnt/data/sdsctl-recording-observer-plan-" + case)
+
+
+def writer_case_root(case):
+    codec.plans.base.identifier(case, case=True)
+    return Path("/mnt/data/sdsctl-recording-handoff-" + case)
 
 
 def handoff_root(case):
@@ -133,12 +145,24 @@ def _same_frame(observed, expected):
 
 
 class _Exchange:
-    def __init__(self, declaration, channel_owner, timer, local, role, baseline_sha256, *, sending):
+    def __init__(
+        self,
+        declaration,
+        channel_owner,
+        timer,
+        local,
+        role,
+        baseline_sha256,
+        *,
+        sending,
+        final_plan=False,
+    ):
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.domain = None
         try:
             require(type(self) is _Exchange and self.owner[2:] == (ROOT_UID, ROOT_UID))
             require(type(sending) is bool)
+            require(type(final_plan) is bool and (not final_plan or role == "observer"))
             require(
                 type(channel_owner) is (listeners.Listener if sending else connections.Connection)
             )
@@ -158,6 +182,7 @@ class _Exchange:
                 local,
             )
             self.role, self.baseline_sha256, self.sending = role, baseline_sha256, sending
+            self.final_plan = final_plan
             self.end = channel_owner.deadline
             require(time.monotonic() < self.end <= time.monotonic() + bootstrap.SECONDS)
             self.origin = timer.original
@@ -165,7 +190,14 @@ class _Exchange:
             template_value = codec.templates._read(self.template.raw)
             self.case = template_value["plan"]["case"]
             require(template_value["plan"]["boot"] == self.origin.boot)
-            require(channel_owner.root == preparation_root(self.case, role))
+            require(
+                channel_owner.root
+                == (
+                    observer_plan_root(self.case)
+                    if final_plan
+                    else preparation_root(self.case, role)
+                )
+            )
             channel_owner.recheck()
             if sending:
                 require(channel_owner.accepted is True)
@@ -177,8 +209,8 @@ class _Exchange:
             self.proof = self.domain.refresh()
             self.context = dict(
                 schema=1,
-                kind=KIND,
-                scope=SCOPE,
+                kind=PLAN_KIND if final_plan else KIND,
+                scope=PLAN_SCOPE if final_plan else SCOPE,
                 case=self.case,
                 role=role,
                 template_sha256=self.template.sha256,
@@ -187,7 +219,7 @@ class _Exchange:
                 outer=asdict(local if sending else self.remote.identity),
             )
             self.context_raw = links.base.encode(self.context)
-            self.values = role, baseline_sha256, sending, self.end, self.case
+            self.values = role, baseline_sha256, sending, self.end, self.case, final_plan
             self.originals = (
                 declaration,
                 channel_owner,
@@ -207,7 +239,10 @@ class _Exchange:
     def guard(self, *, retired=False):
         require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
         require(time.monotonic() < self.end and self.connection.deadline == self.end)
-        require((self.role, self.baseline_sha256, self.sending, self.end, self.case) == self.values)
+        require(
+            (self.role, self.baseline_sha256, self.sending, self.end, self.case, self.final_plan)
+            == self.values
+        )
         require(
             all(
                 a is b
@@ -386,6 +421,21 @@ def send_inputs(
         problem = error
     finally:
         _cleanup([exchange.close] if exchange is not None else [], problem)
+    if role == "observer" and preparation:
+        # Retain continuity only AFTER the sender completed all retirement
+        # checks. An ack or a failed send must not create this later binding.
+        exchange.guard(retired=True)
+        inputs._preparation_context = (
+            inputs.declaration,
+            timer,
+            timer.original,
+            local,
+            listener.peer,
+            counterpart,
+            baseline_sha256,
+            role,
+            preparation,
+        )
     return result
 
 
@@ -450,7 +500,196 @@ def receive_inputs(
         _peer_guard(counterpart, pin)
         require(inputs.recheck(deadline=exchange.end) is inputs.expectations)
         exchange.guard()
+        # Retain the actual local receive owners for a separately admitted
+        # later plan exchange. This receipt is continuity, not action authority.
+        inputs._preparation_context = (
+            declaration,
+            timer,
+            timer.original,
+            local,
+            connection.peer,
+            counterpart,
+            baseline_sha256,
+            role,
+            preparation,
+        )
         yield inputs, counterpart
+    except BaseException as error:
+        problem = error
+    finally:
+        _cleanup(cleanup, problem)
+
+
+def _plan_input_guard(exchange, inputs, counterpart):
+    """Borrow the original inputs and writer; never manufacture their provenance."""
+    require(type(inputs) is inputs_module.Inputs)
+    require(type(counterpart) is domains.process.ProcessWitness)
+    expected = inputs.recheck(deadline=exchange.end)
+    codec.source_profile(expected, preparation=True)
+    require(inputs.declaration is exchange.declaration)
+    pin = counterpart.identity, counterpart.fd, links._identity(counterpart.fd)
+    identities = exchange.local, exchange.remote.identity, counterpart.identity
+    require(len({item.pid for item in identities}) == 3)
+    require(len({item.container_id for item in identities}) == 3)
+    digest = inputs.expected
+    received = getattr(inputs, "_preparation_context", None)
+    require(type(received) is tuple and len(received) == 9)
+
+    def guard(*, retired=False):
+        exchange.guard(retired=retired)
+        require(inputs.recheck(deadline=exchange.end) is expected and inputs.expected == digest)
+        require(inputs._preparation_context is received)
+        objects = (
+            inputs.declaration,
+            exchange.timer,
+            exchange.origin,
+            exchange.local,
+            exchange.remote,
+            counterpart,
+        )
+        require(all(a is b for a, b in zip(objects, received[:6], strict=True)))
+        require(received[6:] == (exchange.baseline_sha256, "observer", True))
+        _peer_guard(counterpart, pin)
+        exchange.guard(retired=retired)
+
+    guard()
+    return guard
+
+
+def _plan_file_guard(exchange, inputs, counterpart, original):
+    intake = startups.acceptance.intake
+    require(type(original) is intake.CasePlan)
+    plan = original.recheck()
+    require(plan.root == writer_case_root(exchange.case))
+    inputs.expectations.check_plan(inputs.template, plan, plan.original_clock)
+    # Structural comparison uses the writer's reported Window, never creates
+    # another ClockWitness from it. Executing-writer provenance remains external.
+    require(plan.original_clock.before_ns >= exchange.origin.after_ns)
+    domain = domains.ZeroDomain(exchange.origin, counterpart)
+    try:
+        proof = domain.refresh()
+
+        def guard():
+            require(time.monotonic() < min(exchange.end, plan.lease["ready_by"]))
+            require(domain.refresh() is proof)
+            require(proof.original_clock is exchange.origin)
+            require(proof.native_time == plan.original_clock.namespace)
+            require(original.recheck() is plan)
+            inputs.expectations.check_plan(inputs.template, plan, plan.original_clock)
+            plan.check_clock(exchange.timer.read())
+            require(time.monotonic() < min(exchange.end, plan.lease["ready_by"]))
+
+        guard()
+        return plan, domain, guard
+    except BaseException:
+        domain.close()
+        raise
+
+
+def send_observer_plan(inputs, original, listener, timer, local, *, baseline_sha256, counterpart):
+    """Deliver an independently reviewed original writer plan pin, once.
+
+    The qualified outer retains its CasePlan and original process/input owners.
+    This is a NEW fixed private channel and original two-second bound, not reuse
+    of the completed input exchange. Source/publication provenance, full final
+    runtime checks, acceptance, action grants and independent termination remain
+    caller prerequisites/separate phases. This sends no plan bytes or rights.
+    """
+    cleanup, problem, result = [], None, None
+    try:
+        require(type(inputs) is inputs_module.Inputs)
+        exchange = _Exchange(
+            inputs.declaration,
+            listener,
+            timer,
+            local,
+            "observer",
+            baseline_sha256,
+            sending=True,
+            final_plan=True,
+        )
+        cleanup.append(exchange.close)
+        guard = _plan_input_guard(exchange, inputs, counterpart)
+        plan, domain, file_guard = _plan_file_guard(exchange, inputs, counterpart, original)
+        cleanup.append(domain.close)
+        fields = dict(expectations_sha256=inputs.expected, writer=asdict(counterpart.identity))
+        request = exchange.receive()
+        nonce = request.get("nonce")
+        require(type(nonce) is str)
+        codec.plans.base.digest(nonce)
+        _same_frame(request, exchange.frame("request", nonce, **fields))
+        guard()
+        file_guard()
+        result = exchange.send(exchange.frame("plan", nonce, plan_sha256=plan.sha256, **fields))
+        reply = exchange.receive()
+        _same_frame(reply, exchange.frame("retained", nonce, offer_sha256=result, **fields))
+        guard()
+        file_guard()
+        exchange.quiet()
+        exchange.close()
+        guard(retired=True)
+        file_guard()
+        domain.close()
+        guard(retired=True)
+        require(original.recheck() is plan)
+        plan.check_clock(timer.read())
+        guard(retired=True)
+    except BaseException as error:
+        problem = error
+    finally:
+        _cleanup(cleanup, problem)
+    return result
+
+
+@contextmanager
+def receive_observer_plan(inputs, connection, timer, local, *, baseline_sha256, counterpart):
+    """Retain one writer CasePlan from the SAME original outer/input/peer owners.
+
+    The pin is received over authenticated private transport, never learned by
+    hashing disk or supplied as a future-plan startup argument. The caller keeps
+    the original input/counterpart context alive around this one. Yield borrows
+    this context's CasePlan; it is not sender completion, acceptance, Ready or
+    action scope. Later phases must independently recheck all original owners.
+    No Startup, writer clock, baseline read, dispatcher or App action is created.
+    """
+    cleanup, problem = [], None
+    try:
+        require(type(inputs) is inputs_module.Inputs)
+        exchange = _Exchange(
+            inputs.declaration,
+            connection,
+            timer,
+            local,
+            "observer",
+            baseline_sha256,
+            sending=False,
+            final_plan=True,
+        )
+        cleanup.append(exchange.close)
+        guard = _plan_input_guard(exchange, inputs, counterpart)
+        fields = dict(expectations_sha256=inputs.expected, writer=asdict(counterpart.identity))
+        exchange.quiet()
+        nonce = secrets.token_hex(32)
+        exchange.send(exchange.frame("request", nonce, **fields))
+        offer = exchange.receive()
+        digest = offer.get("plan_sha256")
+        require(type(digest) is str)
+        codec.plans.base.digest(digest)
+        _same_frame(offer, exchange.frame("plan", nonce, plan_sha256=digest, **fields))
+        guard()
+        original = startups.acceptance.intake.CasePlan(writer_case_root(exchange.case), digest)
+        cleanup.append(original.close)
+        plan, domain, file_guard = _plan_file_guard(exchange, inputs, counterpart, original)
+        cleanup.append(domain.close)
+        guard()
+        file_guard()
+        exchange.send(
+            exchange.frame("retained", nonce, offer_sha256=links.base.checksum(offer), **fields)
+        )
+        exchange.quiet()
+        guard()
+        file_guard()
+        yield original
     except BaseException as error:
         problem = error
     finally:
