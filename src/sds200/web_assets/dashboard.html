@@ -10,7 +10,9 @@
   <link rel="stylesheet" href="assets/dashboard.css">
   <!-- SDSCTL_THEME_STYLES -->
   <link rel="stylesheet" href="assets/mimic-sds.css">
+  <link rel="stylesheet" href="assets/lcars-v2.css">
   <script src="assets/theme-bootstrap.js"></script>
+  <script src="assets/lcars-v2.js"></script>
   <script src="assets/mimic-sds.js" defer></script>
   <script src="assets/dashboard.js" defer></script>
 </head>
@@ -69,6 +71,28 @@
           <option value="auto">Follow device</option>
           <!-- SDSCTL_SYSTEM_PALETTE_OPTIONS -->
         </select>
+      </div>
+
+      <div id="lcars-v2-appearance-pickers" hidden>
+        <div class="system-palette-picker">
+          <label for="lcars-v2-palette-select">LCARS palette</label>
+          <select id="lcars-v2-palette-select">
+            <option value="classic">Classic</option>
+            <option value="nemesis-blue">Nemesis Blue</option>
+            <option value="lower-decks">Lower Decks</option>
+            <option value="lower-decks-padd">Lower Decks PADD</option>
+            <option value="voyager">Voyager</option>
+            <option value="picard">Picard</option>
+          </select>
+        </div>
+        <div class="system-palette-picker">
+          <label for="lcars-v2-type-select">Typography</label>
+          <select id="lcars-v2-type-select">
+            <option value="antonio">LCARS / Antonio</option>
+            <option value="mixed">Readable mix</option>
+            <option value="system">System</option>
+          </select>
+        </div>
       </div>
 
       <p id="dashboard-message" class="dashboard-message" role="status">

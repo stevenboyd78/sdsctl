@@ -64,6 +64,8 @@ _DISPLAY_READ_PATHS = frozenset({
     "/api/v1/display-frame",
     "/api/v1/display-supplemental/context", "/api/v1/display-supplemental/frame",
     "/assets/mimic-sds.css", "/assets/mimic-sds.js",
+    "/assets/lcars-v2.css", "/assets/lcars-v2.js",
+    "/assets/fonts/antonio-variable.ttf", "/assets/fonts/antonio-OFL.txt",
     "/api/v1/events", "/api/v1/waterfall", WEB_DASHBOARD_SESSION_PATH,
     "/assets/dashboard.css", "/assets/dashboard-viewport.css",
     "/assets/system-palettes.css", "/assets/theme-bootstrap.js",

@@ -658,6 +658,25 @@ def create_web_dashboard_app(
     def viewport_stylesheet() -> Response:
         return _asset_response("dashboard-viewport.css", media_type="text/css")
 
+    @app.get("/assets/lcars-v2.css", include_in_schema=False, response_class=Response)
+    def lcars_v2_stylesheet() -> Response:
+        return _asset_response("lcars-v2.css", media_type="text/css")
+
+    @app.get("/assets/lcars-v2.js", include_in_schema=False, response_class=Response)
+    def lcars_v2_script() -> Response:
+        return _asset_response("lcars-v2.js", media_type="application/javascript")
+
+    @app.get("/assets/fonts/antonio-variable.ttf", include_in_schema=False)
+    def lcars_v2_font() -> Response:
+        return Response(
+            content=files(_WEB_ASSET_PACKAGE).joinpath("fonts/antonio-variable.ttf").read_bytes(),
+            media_type="font/ttf", headers=dict(_WEB_RESPONSE_HEADERS),
+        )
+
+    @app.get("/assets/fonts/antonio-OFL.txt", include_in_schema=False)
+    def lcars_v2_font_license() -> Response:
+        return _asset_response("fonts/antonio-OFL.txt", media_type="text/plain")
+
     @app.get("/assets/mimic-sds.css", include_in_schema=False, response_class=Response)
     def mimic_stylesheet() -> Response:
         return _asset_response("mimic-sds.css", media_type="text/css")

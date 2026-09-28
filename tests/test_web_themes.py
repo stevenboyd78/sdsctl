@@ -54,10 +54,11 @@ def test_built_in_web_theme_registry_is_ordered_and_immutable() -> None:
     registry = built_in_web_theme_registry()
 
     assert registry.identifiers == BUILT_IN_WEB_THEME_IDS
-    assert tuple(theme.order for theme in registry.themes) == (0, 10, 20, 30, 40, 50)
+    assert tuple(theme.order for theme in registry.themes) == (0, 10, 11, 20, 30, 40, 50)
     assert tuple(theme.label for theme in registry.themes) == (
         "System",
         "LCARS-inspired",
+        "LCARS v2",
         "Matrix-inspired",
         "First Responder",
         "Amateur Radio",

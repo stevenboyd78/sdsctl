@@ -1,0 +1,564 @@
+/* Built-in LCARS v2 controls share the dashboard viewport contract. */
+@layer sdsctl-viewport-contract {
+  :root[data-theme="lcars-v2"] #main-content > .overview {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) !important;
+  }
+  :root[data-theme="lcars-v2"] #lcars-v2-palette-picker {
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+  }
+  :root[data-theme="lcars-v2"] #dashboard-message {
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+  }
+  @media (max-width: 44rem) and (min-height: 28rem) {
+    :root[data-theme="lcars-v2"] #main-content > .overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    :root[data-theme="lcars-v2"] #lcars-v2-palette-picker {
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+    }
+    :root[data-theme="lcars-v2"] #dashboard-message {
+      grid-column: 2 !important;
+    }
+  }
+}
+
+/* Built-in LCARS v2 geometry; all overrides are scoped to this theme. */
+/* Geometry belongs to the shared viewport layer; paint is theme-scoped. */
+:root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
+  border-radius: 2.5rem 0 0 0;
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-channel {
+  color: var(--lcars-v2-heading);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-summary {
+  border-top: 1px solid var(--lcars-v2-divider);
+  border-bottom: 1px solid var(--lcars-v2-divider);
+}
+@media (min-width: 64rem) and (min-height: 38rem) {
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .site-header {
+    border-left-width: var(--lcars-v2-nav-width);
+    border-bottom-width: 0.65rem;
+    border-bottom-left-radius: 3rem;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
+    border-left: 0;
+    border-top-width: 0.65rem;
+    border-bottom-width: 0.65rem;
+    background: var(--background);
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [aria-selected="true"] {
+    box-shadow: inset -0.55rem 0 var(--lcars-v2-apricot);
+  }
+}
+@layer sdsctl-viewport-contract {
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) {
+    --lcars-v2-nav-width: clamp(10rem, 14vw, 13rem);
+    --lcars-v2-layout-gap: clamp(0.7rem, 1.6vw, 1.35rem);
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
+    border-radius: 2.5rem 0 0 0;
+    gap: 0.8rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
+    min-height: 2.75rem !important;
+    font-size: 0.78rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .panel-header {
+    min-height: 2.8rem;
+    padding: 0.25rem 0 0.55rem !important;
+    margin: 0 0 0.2rem !important;
+    border-bottom-width: 0.35rem;
+    align-items: center !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.75rem !important;
+    padding: 0.6rem 0.8rem 1rem !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    scrollbar-gutter: stable;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel > * {
+    flex-shrink: 0;
+    grid-column: auto !important;
+    grid-row: auto !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel .scanner-display-hierarchy {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.7rem 1.25rem !important;
+    overflow: visible !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy > div {
+    grid-template-columns: 1fr !important;
+    padding: 0.6rem 0.8rem !important;
+    gap: 0.35rem !important;
+    border-left-width: 0.4rem;
+    align-content: center !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy > div:last-child {
+    grid-column: 1 / -1 !important;
+    padding-block: 0.9rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy dt {
+    font-size: 0.75rem !important;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy dd {
+    font-size: clamp(1.1rem, 2.05vw, 1.8rem) !important;
+    line-height: 1.15 !important;
+    font-weight: 600;
+    overflow-wrap: anywhere !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-channel {
+    color: var(--lcars-v2-heading);
+    font-size: clamp(1.7rem, 3.6vw, 3.25rem) !important;
+    line-height: 1.1 !important;
+    font-weight: 700;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-summary {
+    border-top: 1px solid var(--lcars-v2-divider);
+    border-bottom: 1px solid var(--lcars-v2-divider);
+    padding-block: 0.25rem;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-summary dt {
+    font-size: 0.75rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-summary dd {
+    font-size: 0.95rem !important;
+    line-height: 1.3 !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-view-controls {
+    gap: 0.75rem !important;
+    margin-top: 0.25rem;
+    padding: 0 !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-view-controls button {
+    min-height: 2.5rem !important;
+    font-size: 0.8rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-field-groups {
+    min-height: auto !important;
+    overflow: visible !important;
+    border-top-width: 0.25rem;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-field-group {
+    overflow: visible !important;
+    padding: 0.6rem 0 !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-field-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 9rem), 1fr)) !important;
+    gap: 0.55rem 1rem !important;
+  }
+
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-field-list :is(dt, dd) {
+    font-size: 0.8rem !important;
+    line-height: 1.25 !important;
+  }
+
+  @media (min-width: 64rem) and (min-height: 38rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .site-header {
+      border-left-width: var(--lcars-v2-nav-width);
+      border-bottom-width: 0.65rem;
+      border-bottom-left-radius: 3rem;
+      padding-left: var(--lcars-v2-layout-gap) !important;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-shell {
+      display: grid !important;
+      grid-template-columns: var(--lcars-v2-nav-width) minmax(0, 1fr) !important;
+      grid-template-rows: minmax(0, 1fr) !important;
+      column-gap: var(--lcars-v2-layout-gap) !important;
+      border-left: 0;
+      border-top-width: 0.65rem;
+      border-bottom-width: 0.65rem;
+      background: var(--background);
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 0.4rem !important;
+      grid-column: 1 !important;
+      grid-row: 1 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      padding: 0 !important;
+      border-radius: 1.75rem 0 0 0;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs::after {
+      content: "";
+      flex: 1 0 1rem;
+      background: var(--lcars-v2-lilac);
+      border-top: 0.7rem solid var(--background);
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
+      flex: 0 0 auto;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      min-height: 3.2rem !important;
+      padding: 0.65rem 0.9rem !important;
+      border-radius: 0 !important;
+      border: 0;
+      font-size: clamp(0.85rem, 1.15vw, 1.1rem) !important;
+      line-height: 1.2 !important;
+      text-align: right;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [aria-selected="true"] {
+      box-shadow: inset -0.55rem 0 var(--lcars-v2-apricot);
+      padding-right: 1.35rem !important;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-deck {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      grid-template-rows: auto auto auto auto minmax(6rem, 1fr) !important;
+      padding: 0.5rem 0.5rem 1rem 0 !important;
+      gap: 0.65rem !important;
+      scrollbar-gutter: auto;
+    }
+
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel .scanner-display-hierarchy {
+      padding: 0;
+      row-gap: 0.5rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy > div {
+      padding-block: 0.4rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .scanner-display-hierarchy > div:last-child {
+      padding-block: 0.45rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-field-groups {
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      scrollbar-gutter: stable;
+    }
+  }
+
+  @media (max-width: 43.99rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [role="tab"] {
+      grid-column: auto !important;
+      grid-row: auto !important;
+      min-height: 2.75rem !important;
+      font-size: 0.72rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) #radio-activity-panel .scanner-display-hierarchy {
+      grid-template-columns: 1fr !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-summary {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 0.5rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-view-controls {
+      align-items: stretch !important;
+      flex-direction: column !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-view-controls [role="group"] {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .radio-view-controls button {
+      min-height: 2.75rem !important;
+    }
+  }
+
+  @media (forced-colors: active) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"]:not([data-kiosk-compact="true"]) .workspace-tabs [aria-selected="true"] {
+      outline: 2px solid Highlight !important;
+      outline-offset: -3px !important;
+      color: HighlightText;
+      background: Highlight;
+    }
+  }
+}
+
+/* Keep shared visibility semantics, including display-only and compact kiosks.
+ * Theme layout must never resurrect a hidden tab or the standard Mimic pane. */
+@layer sdsctl-viewport-contract {
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"] #radio-activity-panel[hidden],
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"] .workspace-tabs [role="tab"][hidden],
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"][data-kiosk-compact="true"] .workspace-tabs {
+    display: none !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"][data-kiosk-compact="true"] .workspace-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-layout="v2"][data-kiosk-compact="true"] .workspace-deck {
+    grid-column: 1 !important;
+  }
+}
+
+/* A secondary Site line, scoped to the LCARS v2 layout. */
+:root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .lcars-v2-site-context,
+:root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .lcars-v2-site-list {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-site="system"] #radio-site {
+  color: var(--lcars-v2-apricot);
+}
+@layer sdsctl-viewport-contract {
+  :root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .lcars-v2-site-context {
+    margin: 0.25rem 0 0 !important;
+    padding: 0 !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .lcars-v2-site-list > div {
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+    align-items: baseline !important;
+    gap: 0.55rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .lcars-v2-site-list dt {
+    font-size: 0.7rem !important;
+    line-height: 1.3 !important;
+    letter-spacing: 0.1em;
+    white-space: nowrap !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-site="system"] #radio-site {
+    margin: 0 !important;
+    font-size: clamp(0.9rem, 1.25vw, 1.1rem) !important;
+    line-height: 1.35 !important;
+    font-weight: 500;
+    overflow-wrap: anywhere !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-site="system"] .scanner-display-hierarchy > div {
+    align-content: start !important;
+  }
+}
+
+/* Independent typography and rail styling. Antonio is an unmodified local font
+ * distributed under OFL 1.1 (fonts/antonio-OFL.txt); no remote runtime font requests. */
+@font-face {
+  font-family: "Antonio";
+  src: url("fonts/antonio-variable.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+}
+
+:root[data-theme="lcars-v2"][data-lcars-v2-type] {
+  --lcars-v2-system-font: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --lcars-v2-display-font: "Antonio", "Arial Narrow", "Liberation Sans Narrow", Arial, sans-serif;
+  --lcars-v2-content-font: var(--lcars-v2-system-font);
+  --lcars-v2-title-font: var(--lcars-v2-system-font);
+  --lcars-v2-nav-cap: 3.2rem;
+  font-family: var(--lcars-v2-content-font);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-type="antonio"] {
+  --lcars-v2-content-font: var(--lcars-v2-display-font);
+  --lcars-v2-title-font: var(--lcars-v2-display-font);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-type="mixed"] {
+  --lcars-v2-title-font: var(--lcars-v2-display-font);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-type] :is(body, button, select, input, .primary-value, .secondary-value, .technical-value, .radio-field-list dd) {
+  font-family: var(--lcars-v2-content-font);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-type] :is(h1, h2, h3, .eyebrow, .panel-kicker, .workspace-tabs button, .status-badge) {
+  font-family: var(--lcars-v2-title-font);
+}
+:root[data-theme="lcars-v2"][data-lcars-v2-type] .brand h1 {
+  letter-spacing: 0.04em;
+}
+
+/* Segment only the reserved border area; nothing covers labels or controls. */
+@media (forced-colors: none) {
+  :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"] {
+    --lcars-v2-band-gap: 6px;
+    --lcars-v2-shell-stroke: 0.65rem;
+    --lcars-v2-panel-stroke: 0.35rem;
+    --lcars-v2-header-rail: var(--lcars-v2-rail);
+    --lcars-v2-band-forward: linear-gradient(to right,
+      var(--source-frame) 0 38%,
+      var(--background) 38% calc(38% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-apricot) calc(38% + var(--lcars-v2-band-gap)) 43%,
+      var(--background) 43% calc(43% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-lilac) calc(43% + var(--lcars-v2-band-gap)) 61%,
+      var(--background) 61% calc(61% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-lilac) calc(61% + var(--lcars-v2-band-gap)) 93%,
+      var(--background) 93% calc(93% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-salmon) calc(93% + var(--lcars-v2-band-gap)) 100%);
+    --lcars-v2-band-return: linear-gradient(to right,
+      var(--lcars-v2-salmon) 0 38%,
+      var(--background) 38% calc(38% + var(--lcars-v2-band-gap)),
+      var(--source-nav-alternate) calc(38% + var(--lcars-v2-band-gap)) 43%,
+      var(--background) 43% calc(43% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-salmon) calc(43% + var(--lcars-v2-band-gap)) 61%,
+      var(--background) 61% calc(61% + var(--lcars-v2-band-gap)),
+      var(--lcars-v2-lilac) calc(61% + var(--lcars-v2-band-gap)) 93%,
+      var(--background) 93% calc(93% + var(--lcars-v2-band-gap)),
+      var(--source-nav-alternate) calc(93% + var(--lcars-v2-band-gap)) 100%);
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .site-header {
+    position: relative;
+    border-bottom: var(--lcars-v2-shell-stroke) solid var(--source-frame);
+    background: var(--background);
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .site-header::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+    left: 0;
+    right: 0;
+    bottom: calc(-1 * var(--lcars-v2-shell-stroke));
+    height: var(--lcars-v2-shell-stroke);
+    background: var(--lcars-v2-band-forward) right bottom / calc(100% + var(--lcars-v2-header-rail)) 100% no-repeat;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-shell {
+    border-top: var(--lcars-v2-shell-stroke) solid transparent;
+    border-bottom: var(--lcars-v2-shell-stroke) solid transparent;
+    background:
+      var(--lcars-v2-band-return) left top / 100% var(--lcars-v2-shell-stroke) no-repeat border-box,
+      var(--lcars-v2-band-forward) left bottom / 100% var(--lcars-v2-shell-stroke) no-repeat border-box,
+      linear-gradient(to bottom, var(--lcars-v2-salmon) 0 27%, var(--background) 27% calc(27% + 5px),
+        var(--lcars-v2-apricot) calc(27% + 5px) 57%, var(--background) 57% calc(57% + 5px),
+        var(--lcars-v2-lilac) calc(57% + 5px) 83%, var(--background) 83% calc(83% + 5px),
+        var(--lcars-v2-blue) calc(83% + 5px) 100%) left top / var(--lcars-v2-rail) 100% no-repeat border-box,
+      var(--background);
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .panel-header {
+    border-bottom-color: transparent;
+    background: var(--lcars-v2-band-forward) left bottom / 100% var(--lcars-v2-panel-stroke) no-repeat border-box,
+      var(--background);
+  }
+  @media (min-width: 64rem) and (min-height: 38rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"] {
+      --lcars-v2-header-rail: var(--lcars-v2-nav-width);
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-shell {
+      background:
+        var(--lcars-v2-band-return) left top / 100% var(--lcars-v2-shell-stroke) no-repeat border-box,
+        var(--lcars-v2-band-forward) left bottom / 100% var(--lcars-v2-shell-stroke) no-repeat border-box,
+        linear-gradient(var(--lcars-v2-salmon), var(--lcars-v2-salmon)) left top / var(--lcars-v2-nav-width) calc(var(--lcars-v2-nav-cap) + var(--lcars-v2-shell-stroke)) no-repeat border-box,
+        var(--background);
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-tabs {
+      background: transparent;
+    }
+  }
+  @media (max-width: 43.99rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"] { --lcars-v2-band-gap: 4px; }
+  }
+}
+
+/* Integrate the two pickers into the existing viewport contract. */
+@layer sdsctl-viewport-contract {
+  /* The upper elbow owns a full row. Navigation starts below the curve instead
+   * of letting the selected Scanner button become part of the frame itself.
+   * Empty generated content is decorative and adds no keyboard/ARIA target. */
+  @media (min-width: 64rem) and (min-height: 38rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-bands="segmented"][data-lcars-v2-layout="v2"] .workspace-tabs::before {
+      content: "";
+      display: block;
+      flex: 0 0 var(--lcars-v2-nav-cap) !important;
+      min-height: var(--lcars-v2-nav-cap) !important;
+      background: var(--lcars-v2-salmon);
+      pointer-events: none;
+    }
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers:not([hidden]) {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    align-items: end !important;
+    gap: 0.75rem !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    min-width: 0 !important;
+    width: clamp(20rem, 34vw, 29rem) !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers > div {
+    display: grid !important;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-width: 0 !important;
+    gap: 0.3rem !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers :is(label, select) {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers label {
+    font-size: 0.75rem !important;
+    line-height: 1.35 !important;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers select {
+    font-size: 1rem !important;
+    min-height: 2.5rem !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type] #native-menu #lcars-v2-appearance-pickers:not([hidden]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-column: auto !important;
+    grid-row: auto !important;
+    width: 100% !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type="antonio"] :is(.radio-summary dt, .radio-field-list dt, .radio-field-list dd, .scanner-display-hierarchy dt) {
+    font-size: 0.9rem !important;
+    line-height: 1.35 !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type="antonio"] .radio-summary dd {
+    font-size: 1.05rem !important;
+  }
+  :root[data-theme="lcars-v2"][data-lcars-v2-type]:not([data-lcars-v2-type="system"]) .workspace-tabs [role="tab"] {
+    font-size: 1rem !important;
+    letter-spacing: 0.025em;
+  }
+  @media (max-width: 65rem) {
+    :root[data-theme="lcars-v2"][data-lcars-v2-type] #main-content > .overview {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      row-gap: 0.5rem !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-type] #lcars-v2-appearance-pickers:not([hidden]) {
+      grid-column: 1 / -1 !important;
+      grid-row: 2 !important;
+      width: 100% !important;
+    }
+    :root[data-theme="lcars-v2"][data-lcars-v2-type] #dashboard-message {
+      grid-column: 2 !important;
+      grid-row: 1 !important;
+    }
+  }
+}

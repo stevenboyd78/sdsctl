@@ -17,6 +17,7 @@ WEB_THEME_MANIFEST_FILENAME = "manifest.json"
 BUILT_IN_WEB_THEME_IDS = (
     "system",
     "lcars",
+    "lcars-v2",
     "matrix",
     "first-responder",
     "amateur-radio",

@@ -339,12 +339,12 @@ http://127.0.0.1:8000/
 ```
 
 Theme selection is presentation-only and browser-local. The deterministic
-built-in picker order is **System**, **LCARS-inspired**, **Matrix-inspired**,
+built-in picker order is **System**, **LCARS-inspired**, **LCARS v2**, **Matrix-inspired**,
 **First Responder**, **Amateur Radio**, and **Pip-Boy-inspired**. System follows
 the browser or operating-system light/dark preference and remains the stable
 default and safe fallback. It now frames the shared workspace and prominent
 scanner pane around the established scanner-display proportions, hierarchy,
-status treatment, and adaptive screen profiles. The five custom choices are
+status treatment, and adaptive screen profiles. The six custom choices are
 more theatrical while preserving the same dashboard semantics:
 
 When **System** is active, a second browser-local selector appears in the center
@@ -370,6 +370,11 @@ message rather than compressing either one.
 - **LCARS-inspired** connects the six operational panels with asymmetric rails,
   segmented console bands, luminous command-deck surfaces, and layered display
   depth.
+- **LCARS v2** is a separate, opt-in redesign with exact TheLCARS palette colors,
+  segmented rails, a wide-screen navigation column, Site beneath System, and
+  local Antonio / readable-mix / system typography. Its palette and typography
+  preferences are saved independently. The original LCARS theme is unchanged;
+  replacement is deferred to release review. See [LCARS v2](lcars-v2.md).
 - **Matrix-inspired** turns the shared dashboard into a cinematic terminal
   workstation with varied terminal panes, technical grids, scan illumination,
   data-field staging, and perspective depth.
@@ -385,7 +390,7 @@ message rather than compressing either one.
   screenshots, sounds, proprietary fonts, copied hardware geometry, or remote
   resources.
 
-The six choices are built-in packages under the installed
+The seven choices are built-in packages under the installed
 `sds200/themes/web/<theme-name>/` resource hierarchy. Each directory contains
 only a versioned `manifest.json` and its declared `theme.css`. The manifest
 records schema version 1, the `web` interface, stable theme ID, human label,

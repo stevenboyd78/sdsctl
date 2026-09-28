@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "interface": "web",
+  "id": "lcars-v2",
+  "label": "LCARS v2",
+  "order": 11,
+  "stylesheet": "theme.css",
+  "color_scheme": "dark",
+  "theme_colors": {"light": "#000000", "dark": "#000000"}
+}
