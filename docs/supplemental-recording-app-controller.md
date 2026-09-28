@@ -165,6 +165,25 @@ pins, Engine configuration, image and installation facts remain synthetic. No
 existing source graph or passive command admits this reader or join, and these
 tests do not qualify an installed launcher.
 
+The receiving writer's explicit `writer_channel.receive_from_inputs` counterpart
+borrows the same input owner and original private `Connection`. Inputs must use
+the actual Startup's original Declaration and Template, and the connection must
+retain the exact outer witness. Its original construction cutoff narrows the
+entire writer intake, including fresh input reads, accepted-startup checks,
+transport and final checks. Neither missing inputs nor an uncertain connection
+can fall back to raw-socket intake. Received descriptors are retired on failure;
+borrowed owners remain caller-owned and may invalidate themselves on failed
+rechecks. No replacement Startup, clock, journal or retry is constructed.
+
+A three-process regression reads the real private expectations file before
+the original writer's baseline read, retains the actual first continuing service
+clock through received descriptors and Link, then assembles the passive original
+service. It also checks changed input after receipt, connection/path/peer drift,
+and missing inputs. Outer listener provisioning and runtime eligibility in this
+fixture remain synthetic; the separate supervised-pair fixture covers retained
+listeners and the original watcher. These complementary tests are not a single
+installed end-to-end launch or permission for active App operations.
+
 The external `qualify_supplemental_recording_peer_runtime.PeerRuntimeQualification`
 performs the existing complete read-only collection for **one selected role**:
 original process/pidfd, exact command, image, Engine confinement and configuration,

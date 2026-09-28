@@ -16,6 +16,8 @@ import time
 from threading import get_ident
 
 import supplemental_recording_peer_bootstrap as bootstrap
+import supplemental_recording_peer_connection as connections
+import supplemental_recording_peer_inputs as input_files
 import supplemental_recording_service_runtime_expectations as expectations
 import supplemental_recording_service_startup as startup
 
@@ -52,6 +54,38 @@ def receive(owner, declaration, expected_sha256, channel, local, outer, observer
     and clock are not closed here. Startup's own failed checks may invalidate
     its original inputs. Files are never removed and no journal is reopened.
     """
+    return _receive(
+        owner, declaration, expected_sha256, channel, local, outer, observer, deadline=deadline
+    )
+
+
+def receive_from_inputs(owner, inputs, connection, local, outer, observer, *, deadline=None):
+    """Borrow original retained inputs/connection through the SAME writer intake.
+
+    Inputs must borrow this Startup's exact original Declaration and Template;
+    Connection must retain the exact outer witness. Its original construction
+    cutoff also bounds every input read/startup check/descriptor handoff. Files
+    and connection are checked before and after transport, with no replacement
+    inputs, socket, witness or clock. Caller retains all borrowed owners; received
+    Channels alone transfer ownership. This does not authenticate installation
+    or admit App work, and no existing command selects this variant.
+    """
+    return _receive(
+        owner,
+        None,
+        None,
+        None,
+        local,
+        outer,
+        observer,
+        deadline=deadline,
+        retained=(inputs, connection),
+    )
+
+
+def _receive(
+    owner, declaration, expected_sha256, channel, local, outer, observer, *, deadline, retained=None
+):
     began = time.monotonic()
     endpoint = channels = result = problem = None
     pins = None
@@ -66,6 +100,18 @@ def receive(owner, declaration, expected_sha256, channel, local, outer, observer
         if deadline is not None:
             require(type(deadline) in (int, float) and math.isfinite(deadline))
             end = min(end, deadline)
+        if retained is not None:
+            inputs, connection = retained
+            require(
+                type(inputs) is input_files.Inputs and type(connection) is connections.Connection
+            )
+            require(inputs.declaration is owner.declaration and inputs.template is owner.template)
+            require(connection.peer is outer)
+            end = min(end, connection.deadline)
+            connection.recheck()
+            declaration = inputs.recheck(deadline=end)
+            expected_sha256, channel = inputs.expected, connection.channel
+            connection_cutoff = connection.deadline
         require(time.monotonic() < end)
         original = owner.accepted_input()
         plan, clock, template = original.plan, owner.clock, owner.template
@@ -82,6 +128,13 @@ def receive(owner, declaration, expected_sha256, channel, local, outer, observer
 
         def binding():
             require(time.monotonic() < end)
+            if retained is not None:
+                require(inputs.declaration is owner.declaration and inputs.template is template)
+                require(inputs.expectations is declaration and inputs.expected == expected_sha256)
+                require(connection.channel is channel and connection.peer is outer)
+                require(connection.deadline == connection_cutoff)
+                require(inputs.recheck(deadline=end) is declaration)
+                connection.recheck()
             require(owner.peer_channel_attempted is True)
             require(owner.original is original)
             require(owner.clock is clock and clock.original is origin)

@@ -23,6 +23,7 @@ import pytest
 
 from . import test_supplemental_recording_peer_bootstrap as transport
 from . import test_supplemental_recording_peer_connection as connections
+from . import test_supplemental_recording_peer_inputs as retained_inputs
 from . import test_supplemental_recording_service_runtime_expectations as declared
 from . import test_supplemental_recording_startup_assembly as assembly
 
@@ -35,6 +36,7 @@ sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
 
 assert m.startup is assembly.m and m.expectations is declared.m
+assert m.input_files is retained_inputs.m and m.connections is connections.m
 (
     layout,
     tree,
@@ -124,10 +126,11 @@ def connection(service_case, monkeypatch, request):
     monkeypatch.setattr(m.bootstrap.links, "ROOT_UID", os.geteuid())
     monkeypatch.setattr(connections.m, "ROOT_UID", os.geteuid())
     temporary = tempfile.TemporaryDirectory(prefix="sds-writer-")
+    input_temporary = None
     path = str(Path(temporary.name) / connections.m.NAME)
     processes, witnesses, channels = [], [], []
     accepted = None
-    retained = None
+    retained = input_owner = None
     retained_path = getattr(request, "param", False)
 
     def spawn(code):
@@ -177,13 +180,33 @@ def connection(service_case, monkeypatch, request):
         witnesses.append(outer_witness)
         observer_witness = m.bootstrap.links.processes.ProcessWitness(identities[observer.pid])
         witnesses.append(observer_witness)
-        owner = assembly.accept(s)
         values = declared.value()
-        values["template_sha256"] = owner.template.sha256
-        values["writer"]["runtime"] = json.loads(owner.template.raw)["plan"]["helper"]
+        values["template_sha256"] = s.startup.template.sha256
+        values["writer"]["runtime"] = json.loads(s.startup.template.raw)["plan"]["helper"]
         values["observer"]["runtime"]["source"] = values["writer"]["runtime"]["source"]
         declaration = m.expectations.decode(values)
         expected_sha256 = declaration.sha256
+        if retained_path == "inputs":
+            # File intake precedes the baseline read and original clock capture.
+            # Pins are synthetic; this does not supply installed provenance.
+            input_temporary = tempfile.TemporaryDirectory(prefix="sds-writer-input-")
+            input_root = Path(input_temporary.name)
+            input_path = input_root / m.input_files.NAME
+            input_path.write_bytes(declaration.raw)
+            input_path.chmod(0o600)
+            case_id = json.loads(s.startup.template.raw)["plan"]["case"]
+            root_for_case = m.input_files.inputs_root
+            monkeypatch.setattr(
+                m.input_files,
+                "inputs_root",
+                lambda case: input_root if case == case_id else root_for_case(case),
+            )
+            monkeypatch.setattr(m.input_files, "ROOT_UID", os.geteuid())
+            assert not s.clocks and not s.cached_calls
+            input_owner = m.input_files.Inputs(s.declaration, input_root, expected_sha256)
+            declaration = input_owner.recheck()
+            assert not s.clocks and not s.cached_calls
+        owner = assembly.accept(s)
         plan = owner.original.plan
         config = dict(
             plan=plan.raw.decode(),
@@ -216,16 +239,27 @@ def connection(service_case, monkeypatch, request):
             )
 
         def receive(**kwargs):
-            result = m.receive(
-                owner,
-                declaration,
-                expected_sha256,
-                accepted,
-                identities[os.getpid()],
-                outer_witness,
-                observer_witness,
-                **kwargs,
-            )
+            if input_owner is None:
+                result = m.receive(
+                    owner,
+                    declaration,
+                    expected_sha256,
+                    accepted,
+                    identities[os.getpid()],
+                    outer_witness,
+                    observer_witness,
+                    **kwargs,
+                )
+            else:
+                result = m.receive_from_inputs(
+                    owner,
+                    input_owner,
+                    retained,
+                    identities[os.getpid()],
+                    outer_witness,
+                    observer_witness,
+                    **kwargs,
+                )
             channels.append(result[0])
             return result
 
@@ -244,6 +278,7 @@ def connection(service_case, monkeypatch, request):
             observer_witness=observer_witness,
             channels=channels,
             retained=retained,
+            input_owner=input_owner,
         )
     finally:
         for bundle in channels:
@@ -260,6 +295,10 @@ def connection(service_case, monkeypatch, request):
             retained.close()
         elif accepted is not None:
             accepted.close()
+        if input_owner is not None:
+            input_owner.close()
+        if input_temporary is not None:
+            input_temporary.cleanup()
         temporary.cleanup()
 
 
@@ -307,6 +346,91 @@ def test_original_post_baseline_clock_reaches_delivered_link_then_passive_assemb
     channels.close()
     assert not owner.closed and not c.outer_witness.exited() and not c.observer_witness.exited()
     assert c.channel.fileno() >= 0
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+def test_retained_inputs_precede_actual_baseline_and_reach_original_link_and_service(
+    connection, monkeypatch
+):
+    c = connection
+    assert c.input_owner.declaration is c.owner.declaration
+    assert c.input_owner.template is c.owner.template
+    assert c.input_owner.expectations is c.declaration
+    ends, recheck, endpoint_init = [], m.input_files.Inputs.recheck, m.bootstrap.Endpoint.__init__
+
+    def read(inputs, *, deadline=None):
+        ends.append(deadline)
+        return recheck(inputs, deadline=deadline)
+
+    def endpoint(value, *args, **kwargs):
+        ends.append(kwargs["deadline"])
+        endpoint_init(value, *args, **kwargs)
+
+    monkeypatch.setattr(m.input_files.Inputs, "recheck", read)
+    monkeypatch.setattr(m.bootstrap.Endpoint, "__init__", endpoint)
+    test_original_post_baseline_clock_reaches_delivered_link_then_passive_assembly(c)
+    assert len(ends) >= 6 and set(ends) == {c.retained.deadline}
+    assert not c.input_owner.closed and not c.input_owner.declaration.closed
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize(
+    "fault", ["file", "new-template", "socket-path", "outer-witness", "cutoff"]
+)
+def test_retained_writer_input_or_connection_faults_refuse_before_transport(
+    connection, monkeypatch, fault
+):
+    c = connection
+    if fault == "file":
+        (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE")
+    elif fault == "new-template":
+        c.input_owner.template = m.startup.declaration.codec.load_bytes(
+            c.owner.template.raw, c.owner.template.sha256
+        )
+    elif fault == "socket-path":
+        (c.retained.root / "foreign").touch()
+    elif fault == "outer-witness":
+        c.retained.peer = c.observer_witness
+    else:
+        c.retained.deadline += 10
+    monkeypatch.setattr(
+        m.bootstrap, "Endpoint", lambda *_a, **_k: pytest.fail("No uncertain transport")
+    )
+    denied(c.receive)
+    assert c.owner.peer_channel_attempted and not c.owner.closed
+    assert not (c.s.root / "journal").exists()
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+def test_input_change_after_receipt_retires_descriptors_and_preserves_original_startup(
+    connection, monkeypatch
+):
+    c = connection
+    receive, captured = m.bootstrap.Endpoint.receive, []
+
+    def change(endpoint):
+        result = receive(endpoint)
+        captured.append(result[0])
+        (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE changed input")
+        return result
+
+    monkeypatch.setattr(m.bootstrap.Endpoint, "receive", change)
+    c.start()
+    denied(c.receive)
+    assert len(captured) == 1
+    assert captured[0].incoming.fileno() == captured[0].outgoing.fileno() == -1
+    assert not c.owner.closed and not c.owner.clock.closed and c.channel.fileno() >= 0
+    assert not (c.s.root / "journal").exists()
+
+
+def test_missing_retained_input_owner_cannot_select_legacy_receive(connection):
+    c = connection
+    denied(
+        lambda: m.receive_from_inputs(
+            c.owner, None, None, c.local, c.outer_witness, c.observer_witness
+        )
+    )
+    assert c.owner.peer_channel_attempted and not c.owner.closed
 
 
 @pytest.mark.parametrize("connection", [True], indirect=True)
