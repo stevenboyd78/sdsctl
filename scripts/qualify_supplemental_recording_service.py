@@ -163,8 +163,11 @@ class ServicePreparationQualification(final.StartupQualification):
 class PeerWriterPreflightQualification(preceding.PermissionProbeQualification):
     """Original outer's full read-only check before the writer owns a plan.
 
-    The retained independently pinned Inputs select ONLY the fixed passive
-    preparation command and 104-module graph. The inherited temporary plan
+    The retained independently pinned Inputs select ONLY a fixed passive
+    preparation command and 104-module graph. The retained variant additionally
+    requires explicit passive_retirement=True; it is never inferred from a
+    matching observed argv or input pin. The old default admits only the old
+    immediate command. The inherited temporary plan
     belongs to the outer's original clock, never the later accepted writer.
     Neither this comparison nor preflight permission admits an App action,
     qualifies the other peer/outer or replaces final paired qualification.
@@ -183,11 +186,14 @@ class PeerWriterPreflightQualification(preceding.PermissionProbeQualification):
         generation,
         command,
         runtime_workers=1,
+        passive_retirement=False,
     ):
         try:
             require(type(self) is PeerWriterPreflightQualification)
             require(type(inputs) is input_files.Inputs)
             require(type(observer) is launch.plans.clock.ClockWitness)
+            require(type(passive_retirement) is bool)
+            self.passive_retirement = passive_retirement
             end = min(
                 launch.time.monotonic() + self.MAX_SECONDS,
                 observer.original.after_ns / launch.plans.clock.NS
@@ -206,6 +212,7 @@ class PeerWriterPreflightQualification(preceding.PermissionProbeQualification):
                 self.expectations_raw,
                 self.expectations_sha256,
                 self.source,
+                passive_retirement,
             )
             selected = declarations._read(expected.raw)["writer"]
             super().__init__(
@@ -244,6 +251,7 @@ class PeerWriterPreflightQualification(preceding.PermissionProbeQualification):
                         self.expectations_raw,
                         self.expectations_sha256,
                         self.source,
+                        self.passive_retirement,
                     ),
                     self.input_objects,
                     strict=True,
@@ -308,7 +316,9 @@ class PeerWriterPreflightQualification(preceding.PermissionProbeQualification):
                 self.template_sha256,
                 self.baseline_sha256,
                 self.observer_argument,
-                "--prepare-idle-peer-writer",
+                "--prepare-retained-idle-peer-writer"
+                if self.passive_retirement
+                else "--prepare-idle-peer-writer",
             )
         )
         self.expectations.check_command("writer", command)

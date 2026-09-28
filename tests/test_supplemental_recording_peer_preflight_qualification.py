@@ -245,6 +245,12 @@ def test_exact_command_fields_refuse_before_engine_observation(offered, index):
     assert offered.h.reads == offered.h.images == 0
 
 
+@pytest.mark.parametrize("selection", [True, 1, 0, None, "true"])
+def test_old_command_does_not_admit_retained_mode_or_non_boolean_selection(offered, selection):
+    denied(lambda: offered.make(passive_retirement=selection))
+    assert offered.h.reads == offered.h.images == 0
+
+
 @pytest.mark.parametrize("fault", ["inputs", "expectations", "expectations_raw", "source"])
 def test_replaced_original_input_slots_are_sticky(offered, fault):
     q = offered.make()

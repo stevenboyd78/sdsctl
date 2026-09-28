@@ -50,8 +50,13 @@ def helper(supervised, image, configured, monkeypatch, request):
         if extra:
             (supplied,) = extra
             assert set(supplied) == {"plan", "baseline", "child"}
-    assert type(selection) is bool or selection in ("permission", "service", "peer-preparation")
-    peer_profile = selection == "peer-preparation"
+    assert type(selection) is bool or selection in (
+        "permission",
+        "service",
+        "peer-preparation",
+        "peer-retained",
+    )
+    peer_profile = selection in ("peer-preparation", "peer-retained")
     service_profile = selection == "service"
     permission_profile = selection == "permission"
     startup_profile = selection is True
@@ -175,7 +180,9 @@ def helper(supervised, image, configured, monkeypatch, request):
                     "/opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py",
                     plan.case,
                     *command[5:-1],
-                    "--prepare-idle-peer-writer",
+                    "--prepare-retained-idle-peer-writer"
+                    if selection == "peer-retained"
+                    else "--prepare-idle-peer-writer",
                 )
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.env.HOSTNAME)

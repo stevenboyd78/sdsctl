@@ -2052,7 +2052,7 @@ may retire immediately; the sender does not race that permission with another
 live-writer check or claim receiver success from a successful send. Actual exit
 evidence, exclusive recovery, outer lifetime, installed source/runtime provenance
 and active admission remain separate. The process fixture selects the new
-library function explicitly; no installed command selects it. Engine/runtime
+library function explicitly; it is not installed command provenance. Engine/runtime
 metadata, image and command provenance are still synthetic. Fault tests retain
 the distinction between successful transport and receiver refusal, preserve
 files, and cancel the original watcher instead of calling that recovery success.
@@ -2060,8 +2060,53 @@ files, and cancel the original watcher instead of calling that recovery success.
 This remains offline integration: paths/cgroups, Engine/kernel/argv and installed
 pin/publication provenance are synthetic. No fixed observer or outer entrypoint,
 installed platform supervision, active App grant or exclusive recovery has been
-enabled. Existing source-profile module sets and passive writer command selection
-are unchanged; adding these library operations does not select them for live use.
+enabled. Existing source-profile module sets and the original immediate writer
+selection are unchanged; these operations are not selected for live use.
+
+### Separately selected fixed passive-release writer (uninstalled)
+
+The existing fixed preparation entrypoint now has a second, exact
+`--prepare-retained-idle-peer-writer` selection. It shares the unchanged isolated
+interpreter/root/cwd/fixed-path gate and the same bounded arguments as the old
+immediate command, but explicitly retains the original accepted writer through
+its authenticated passive release. It does not infer selection from incoming
+messages, environment variables or observed input fields. The old
+`--prepare-idle-peer-writer` remains immediate and does not accept the continuing
+retirement context. Both stay action-free and return status 75 rather than
+claiming recording, restoration or installed qualification.
+
+The independent preflight collector must separately opt in with
+`passive_retirement=True` and compare the complete exact new argv against its
+already authenticated command pin. Its default still refuses the new argv, even
+when those argv bytes match the input declaration. Non-boolean selectors,
+changed selections after construction, old-command/new-selection mismatches
+and all changed argument fields refuse before qualifying the Engine. The
+original input owner, clock, baseline pin, challenge and two-second collection
+bound remain unchanged. This is still the explicit closed 104-module preparation
+profile; no source module set or legacy inventory is expanded. Changed source
+bytes require new independently authenticated source pins in any future install.
+
+An actual three-process variant now calls that fixed retained command function
+without substituting its preparation function or using a stdin completion
+message. It joins original authenticated inputs/preflight, writer-owned baseline
+and clock, final plan delivery, full paired comparisons, kernel watcher,
+descriptor handoff, original passive service/dispatcher and authenticated release
+through retirement. The fixture explicitly forbids the old immediate preparation
+function in this variant. Success, source drift, missing/bad release and late
+sender-cleanup failures all exercise these joins. Installed argv, image/kernel/
+Engine/path metadata and final publication remain synthetic; the fixture is not
+a qualified installed launcher, independent outer/platform supervisor or active
+App grant. Observer/outer selection, provenance and exclusive recovery remain
+required before a live test candidate exists.
+
+A separate actual-exit variant lets that command's original writer process exit
+with status 75 after its real ordered cleanup. The already armed watcher observes
+that exact pidfd becoming readable and stops the original observer, without a
+fixture completion message, cancellation byte, explicit parent kill or renewed
+wait. Both peer exits and the watcher's peer-loss outcome are independently
+observed within the original handoff cutoff; case files remain unchanged. This
+proves that offline lifetime join only. A passive status 75 and a peer-loss stop
+do not establish successful recording, native/App exit or exclusive recovery.
 
 ## Remaining gates before a human scanner/audio test
 

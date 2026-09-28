@@ -28,13 +28,14 @@ from threading import get_ident
 
 ENTRYPOINT = "/opt/sdsctl-recording-host/supplemental_recording_peer_preparation.py"
 MODE = "--prepare-idle-peer-writer"
+RETAINED_MODE = "--prepare-retained-idle-peer-writer"
 MESSAGE = "Recording peer preparation is unconfirmed; preserve this case and do not retry."
 
 if __name__ == "__main__":
     try:
         allowed = (
             len(sys.argv) == 6
-            and sys.argv[5] == MODE
+            and sys.argv[5] in (MODE, RETAINED_MODE)
             and sys.flags.isolated == sys.flags.dont_write_bytecode == 1
             and os.geteuid() == os.getegid() == 0
             and os.getcwd() == "/"
@@ -69,6 +70,7 @@ PLAN_KIND = "finite-recording-observer-plan-delivery-v1"
 PLAN_SCOPE = "retain-original-writer-plan-only-v1"
 MAX_BYTES, ROOT_UID = 2048, 0
 MILESTONE = "Finite peer writer prepared and retired; no App or recording action selected."
+RETAINED_MILESTONE = "Finite peer writer released and retired; no App or recording action selected."
 
 
 class UnconfirmedPreparation(ValueError):
@@ -820,7 +822,7 @@ def prepare_writer(
         _cleanup([], error)
 
 
-def _accepted_writer(owner, inputs, local, outer, counterpart, docker):
+def _accepted_writer(owner, inputs, local, outer, counterpart, docker, *, passive_retirement=False):
     """Separate acceptance -> original descriptor/dispatcher -> passive retirement."""
     import supplemental_recording_writer_channel as writer
 
@@ -861,9 +863,12 @@ def _accepted_writer(owner, inputs, local, outer, counterpart, docker):
         )
         end = connection.deadline
         guard(end)
-        writer.prepare_idle_from_inputs(
-            owner, inputs, connection, local, outer, counterpart, docker
+        prepare = (
+            writer.prepare_idle_until_released
+            if passive_retirement
+            else writer.prepare_idle_from_inputs
         )
+        prepare(owner, inputs, connection, local, outer, counterpart, docker)
         guard(end)
     finally:
         if connection is not None:
@@ -873,6 +878,28 @@ def _accepted_writer(owner, inputs, local, outer, counterpart, docker):
 
 
 def prepare_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
+    """Original immediate passive command; never waits for a retirement grant."""
+    return _prepare_idle_writer(
+        case, template_sha256, baseline_sha256, outer_identity, passive_retirement=False
+    )
+
+
+def prepare_retained_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
+    """Separate fixed passive command retaining the original final handoff.
+
+    Selected only by RETAINED_MODE, not inferred from inputs or pending messages.
+    The outer must separately opt in to its exact preflight argv pin and send
+    the original receipt-bound passive retirement message. No active action,
+    wider budget, new owner or installed/platform qualification is implied.
+    """
+    return _prepare_idle_writer(
+        case, template_sha256, baseline_sha256, outer_identity, passive_retirement=True
+    )
+
+
+def _prepare_idle_writer(
+    case, template_sha256, baseline_sha256, outer_identity, *, passive_retirement
+):
     """Fixed passive flow; no expectations pin/future plan/PID is learned from argv.
 
     The independently provisioned outer owns the private preparation, permission
@@ -956,7 +983,15 @@ def prepare_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
                     original_connection=peer,
                     preparation=True,
                 )
-                end = _accepted_writer(owner, inputs, local, outer, counterpart, docker)
+                end = _accepted_writer(
+                    owner,
+                    inputs,
+                    local,
+                    outer,
+                    counterpart,
+                    docker,
+                    passive_retirement=passive_retirement,
+                )
             except BaseException as error:
                 failure = error
             finally:
@@ -974,7 +1009,7 @@ def prepare_idle_writer(case, template_sha256, baseline_sha256, outer_identity):
             raise
     try:
         require(end is not None and time.monotonic() < end)
-        print(MILESTONE, flush=True)
+        print(RETAINED_MILESTONE if passive_retirement else MILESTONE, flush=True)
         require(time.monotonic() < end)
     except BaseException as error:
         if type(owner) is startups.Startup:
@@ -987,7 +1022,10 @@ if __name__ == "__main__":
     try:
         import supplemental_recording_permission_probe as command_peer
 
-        result = prepare_idle_writer(
+        command = (
+            prepare_retained_idle_writer if sys.argv[5] == RETAINED_MODE else prepare_idle_writer
+        )
+        result = command(
             sys.argv[1], sys.argv[2], sys.argv[3], command_peer.parse_identity(sys.argv[4])
         )
     except Exception:

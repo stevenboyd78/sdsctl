@@ -239,13 +239,15 @@ def child(root):
                     return receipt
 
                 patches.setattr(writer.m, "prepare_idle_from_inputs", retain_scope)
-            if config["authenticated_release"]:
+            if config["authenticated_release"] and not config["fixed_release"]:
                 # Explicit offline function selection, NOT installed command
                 # provenance. No stdin completion signal: actual original
                 # bootstrap credentials/receipt/deadline carry retirement.
                 patches.setattr(
                     writer.m, "prepare_idle_from_inputs", writer.m.prepare_idle_until_released
                 )
+            if config["fixed_release"]:
+                patches.setattr(writer.m, "prepare_idle_from_inputs", forbidden)
             poll = p.startups.Startup.poll
             announced = []
 
@@ -260,7 +262,12 @@ def child(root):
             original_fds = writer.preflight_probe.fds()
             result, error, locations = None, None, []
             try:
-                result = p.prepare_idle_writer(
+                command = (
+                    p.prepare_retained_idle_writer
+                    if config["fixed_release"]
+                    else p.prepare_idle_writer
+                )
+                result = command(
                     s.plan.case,
                     s.template.sha256,
                     stored.manifest_sha256,
@@ -291,7 +298,10 @@ def child(root):
                     fd_delta=len(writer.preflight_probe.fds()) - len(original_fds),
                 )
             )
-            # Keep original writer alive until outer checks and retirement finish.
+            if config["exit_after_result"]:
+                assert config["fixed_release"] and result == 75 and error is None
+                raise SystemExit(result)
+            # Other variants retain the fixture peer for explicit cancellation.
             sys.stdin.buffer.read()
         finally:
             with pytest.raises(StopIteration):
@@ -299,7 +309,7 @@ def child(root):
 
 
 @pytest.fixture
-def helper(supervised, image, configured, monkeypatch, tmp_path):
+def helper(supervised, image, configured, monkeypatch, tmp_path, request):
     root = tmp_path / "writer"
     root.mkdir(mode=0o700)
     code = (
@@ -322,12 +332,17 @@ def helper(supervised, image, configured, monkeypatch, tmp_path):
     try:
         initial = json.loads(transport.line(process))
         supplied = dict(plan=initial["base"], baseline=initial["baseline"], child=process)
+        selection = getattr(request.node, "callspec", SimpleNamespace(params={})).params.get(
+            "joined"
+        )
+        mode = selection.get("mode") if type(selection) is dict else selection
+        profile = "peer-retained" if mode == "release-command-pair" else "peer-preparation"
         generator = qualification.helper.__wrapped__(
             supervised,
             image,
             configured,
             monkeypatch,
-            SimpleNamespace(param=("peer-preparation", None, supplied)),
+            SimpleNamespace(param=(profile, None, supplied)),
         )
         h = next(generator)
         transport.command(process, dict(plan=h.plan.raw.decode(), sha256=h.plan.sha256))
@@ -609,8 +624,11 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
     retained_scope = mode == "retained-scope-pair"
-    authenticated_release = mode == "released-pair"
-    retained_delivery = mode in ("retained-plan-pair", "retained-scope-pair", "released-pair")
+    fixed_release = mode == "release-command-pair"
+    authenticated_release = mode in ("released-pair", "release-command-pair")
+    retained_delivery = (
+        mode in ("retained-plan-pair", "retained-scope-pair") or authenticated_release
+    )
     plan_delivery = mode == "plan-pair" or retained_delivery
     for module in (
         p,
@@ -767,6 +785,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 writer_cid=h.witness.identity.container_id,
                 retained_scope=retained_scope,
                 authenticated_release=authenticated_release,
+                fixed_release=fixed_release,
+                exit_after_result=options.get("exit_after_result", False),
                 **{key: str(value) for key, value in roots.items()},
             ),
         )
@@ -793,6 +813,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             baseline_sha256=h.baseline,
             generation=h.args["generation"],
             command=h.args["command"],
+            passive_retirement=fixed_release,
         )
         sender = stack.enter_context(
             closing(
@@ -875,6 +896,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             retained_delivery=retained_delivery,
             retained_scope=retained_scope,
             authenticated_release=authenticated_release,
+            fixed_release=fixed_release,
             completion=options.get("completion", True),
             writer_handoff=roots["handoff"],
             observer_handoff=observer_handoff,
@@ -1047,9 +1069,10 @@ def finish(s, monkeypatch, after_qualification=None):
         if s.completion is not True:
             return json.loads(transport.line(s.h.child))
     outcome = transport.line(s.h.child)
-    if s.authenticated_release and outcome != p.MILESTONE:
+    milestone = p.RETAINED_MILESTONE if s.fixed_release else p.MILESTONE
+    if s.authenticated_release and outcome != milestone:
         return json.loads(outcome)  # Refusal, not passive preparation completion.
-    assert outcome == p.MILESTONE
+    assert outcome == milestone
     return json.loads(transport.line(s.h.child))
 
 
@@ -1449,7 +1472,9 @@ def arm_original_watch(s):
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
 @pytest.mark.parametrize(
-    "joined", ["pair", "plan-pair", "retained-scope-pair", "released-pair"], indirect=True
+    "joined",
+    ["pair", "plan-pair", "retained-scope-pair", "released-pair", "release-command-pair"],
+    indirect=True,
 )
 def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_retirement(
     joined, monkeypatch
@@ -1488,7 +1513,59 @@ def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_reti
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
 @pytest.mark.parametrize(
-    "joined", ["plan-pair", "retained-scope-pair", "released-pair"], indirect=True
+    "joined", [dict(mode="release-command-pair", exit_after_result=True)], indirect=True
+)
+def test_fixed_passive_command_exit_triggers_original_watch_without_cancellation(
+    joined, monkeypatch
+):
+    s = joined
+
+    def arm():
+        arm_original_watch(s)
+        s.h.expected_returncode = 75
+
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch, arm)
+    assert result["result"] == 75 and result["error"] is None
+    assert result["retired"] and result["clocks_closed"] and result["fd_delta"] == 0
+    assert result["original_dispatch"] and result["input_baseline_preserved"]
+    watch = s.watch
+    assert not watch.closed and not watch.finished
+    assert s.custody.armed_watch is watch and s.plan_receipt
+    assert s.h.reads == 12 and s.comparison.counts["container"] == 10
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    # Observe actual exits under the ORIGINAL handoff cutoff. No renewed wait,
+    # cancellation byte, explicit kill, stdin completion or replacement peer.
+    end = s.writer_listener.deadline
+    for fd in (s.h.witness.fd, s.counterpart.fd, watch.fd):
+        assert time.monotonic() < end
+        assert select.select([fd], [], [], end - time.monotonic())[0] == [fd]
+    assert s.h.child.wait(timeout=0) == 75
+    assert s.observer.wait(timeout=0) == -signal.SIGKILL
+    outcome = watch.finish()
+    assert outcome.returncode == 11  # Peer loss, NOT successful recording/recovery.
+    assert outcome.writer == s.h.witness.identity
+    assert outcome.observer == s.counterpart.identity
+    assert outcome.deadline_ns == watch.deadline_ns == s.custody.deadline_ns
+    assert not watch.closed and watch.finished and time.monotonic() < end
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize(
+    "joined",
+    ["plan-pair", "retained-scope-pair", "released-pair", "release-command-pair"],
+    indirect=True,
 )
 @pytest.mark.parametrize("when", ["before-first", "after-writer", "after-observer"])
 def test_authenticated_plan_then_source_drift_cancels_original_supervised_handoff(
@@ -1641,7 +1718,7 @@ def test_retained_scope_missing_or_bad_fixture_completion_preserves_failure(join
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["released-pair"], indirect=True)
+@pytest.mark.parametrize("joined", ["released-pair", "release-command-pair"], indirect=True)
 @pytest.mark.parametrize("fault", ["message", "missing"])
 def test_authenticated_release_refusal_retires_original_passive_scope_without_retry(
     joined, monkeypatch, fault
@@ -1684,7 +1761,7 @@ def test_authenticated_release_refusal_retires_original_passive_scope_without_re
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["released-pair"], indirect=True)
+@pytest.mark.parametrize("joined", ["released-pair", "release-command-pair"], indirect=True)
 @pytest.mark.parametrize("fault", ["sender-retirement", "receipt-replacement"])
 def test_failed_final_retirement_or_changed_receipt_never_releases_writer(
     joined, monkeypatch, fault
@@ -1716,3 +1793,35 @@ def test_failed_final_retirement_or_changed_receipt_never_releases_writer(
     assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
     assert (s.case_root / "startup-claim.json").is_file()
     assert (s.case_root / "plan.json").is_file()
+
+
+@pytest.mark.parametrize("joined", ["release-command-pair"], indirect=True)
+def test_retained_command_pin_does_not_implicitly_select_new_preflight_policy(joined):
+    s = joined
+    assert s.q.passive_retirement is True and s.h.args["command"][-1] == p.RETAINED_MODE
+    with pytest.raises(m.launch.UnconfirmedHostLaunch):
+        m.PeerWriterPreflightQualification(
+            s.inputs,
+            s.h.observer_identity,
+            s.timer,
+            s.domain,
+            s.h.witness,
+            s.h.docker,
+            baseline_sha256=s.h.baseline,
+            generation=s.h.args["generation"],
+            command=s.h.args["command"],
+        )
+    assert s.h.reads == s.h.images == s.h.kernels == 0
+    assert not s.q.failed and not s.q.permission_attempted
+    assert not list(s.case_root.iterdir())
+
+
+@pytest.mark.parametrize("joined", ["release-command-pair"], indirect=True)
+def test_original_retained_preflight_selection_cannot_change_before_permission(joined):
+    s = joined
+    s.q.passive_retirement = False
+    with pytest.raises(grants.UnconfirmedDelivery):
+        s.sender.send()
+    assert s.q.failed and s.q.permission_attempted
+    assert s.h.reads == s.h.images == s.h.kernels == 0
+    assert not list(s.case_root.iterdir())

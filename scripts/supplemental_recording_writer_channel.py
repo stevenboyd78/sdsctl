@@ -101,7 +101,7 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
 
 
 def prepare_idle_until_released(owner, inputs, connection, local, outer, observer, docker):
-    """Explicit passive release join; no installed command selects this variant.
+    """Explicit release join for the separately selected, uninstalled passive command.
 
     Retain the ORIGINAL bootstrap Endpoint through passive service assembly and
     the original outer's authenticated one-way retirement frame. The complete
@@ -141,8 +141,9 @@ def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer,
     Link are not reopened. Return is only the original transport receipt. It is
     not Ready, App-action admission, recording/restore success, input provenance,
     fixed-entrypoint selection or outer/platform qualification. No existing
-    command selects a continuing scope; the old command still exits immediately.
-    Separate launcher/admission/termination gates remain mandatory.
+    command selects this arbitrary caller scope; the old command still exits
+    immediately. The separate retained command uses only the internal fixed
+    authenticated-release scope. Launcher/admission/termination gates remain.
     """
     with _retained_idle_from_inputs(
         owner, inputs, connection, local, outer, observer, docker
