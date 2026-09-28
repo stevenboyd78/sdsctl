@@ -12,7 +12,7 @@ import select
 import signal
 import socket
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 import pytest
 
@@ -56,7 +56,7 @@ def spawn_standard(binary, anchors, args, *, extra=()):
 
 
 @contextmanager
-def ingress(custody, binary, *, fault=None, after_exec=False, extra=()):
+def ingress(custody, binary, *, fault=None, after_exec=False, extra=(), launcher=None):
     channels = []
 
     def spawner(binary, handles, args, *, extra):
@@ -145,12 +145,28 @@ def ingress(custody, binary, *, fault=None, after_exec=False, extra=()):
             target = handles[0 if fault == "writer_dies" else 1]
             signal.pidfd_send_signal(target, signal.SIGKILL)
             assert select.select([target], [], [], 1)[0]
-        pid = spawn_standard(binary, anchors, args, extra=extra)
-        # Keep no receiver copy in the sender: rejected queued SCM_RIGHTS must
-        # retire with the native process, not keep its readiness pipe alive.
-        receiver.close()
-        if after_exec:
-            send_and_close()
+        spawn = spawn_standard if launcher is None else launcher
+        pid = spawn(binary, anchors, args, extra=extra)
+        try:
+            # Keep no receiver copy in the sender: rejected queued SCM_RIGHTS
+            # retire with the native process, not keep its ready pipe alive.
+            receiver.close()
+            if after_exec:
+                send_and_close()
+        except BaseException:
+            # Until this function RETURNS the original child, base.native has
+            # no native ownership to clean up. Retire our original spawn here.
+            # OriginalChild already carries its kernel-created handle; never
+            # reopen that reported PID. The int path is our own direct spawn.
+            child_pid = pid.pid if type(pid) is base.OriginalChild else pid
+            fd = pid.fd if type(pid) is base.OriginalChild else os.pidfd_open(pid)
+            try:
+                with suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+                base.collect(child_pid, fd, timeout=m.RETIRE_SECONDS)
+            finally:
+                os.close(fd)
+            raise
         return pid
 
     try:

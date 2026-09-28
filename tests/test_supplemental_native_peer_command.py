@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from . import test_supplemental_native_peer_ingress as ingress_tests
+from . import test_supplemental_native_peer_parent as parent_tests
 from . import test_supplemental_native_peer_watch as native_tests
 from . import test_supplemental_recording_qualified_peer_command as command
 
@@ -25,7 +26,15 @@ image, configured, helper, joined = (
     command.joined,
 )
 binary = native_tests.binary
+parent_launcher = parent_tests.parent_launcher
 pytestmark = native_tests.pytestmark
+
+
+def selected_watch(transport, binary, parent_launcher):
+    if transport == "clone-parent-ingress":
+        return lambda custody: parent_tests.parent_ingress(custody, binary, parent_launcher)
+    launch = native_tests.native if transport == "inherited" else ingress_tests.ingress
+    return lambda custody: launch(custody, binary)
 
 
 @pytest.mark.parametrize(
@@ -33,15 +42,14 @@ pytestmark = native_tests.pytestmark
     [dict(mode="release-command-pair", exit_after_result=True, staged_input=True)],
     indirect=True,
 )
-@pytest.mark.parametrize("transport", ["inherited", "socket-ingress"])
+@pytest.mark.parametrize("transport", ["inherited", "socket-ingress", "clone-parent-ingress"])
 def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exit(
-    joined, monkeypatch, binary, transport
+    joined, monkeypatch, binary, transport, parent_launcher
 ):
     s = joined
 
     def arm():
-        launch = native_tests.native if transport == "inherited" else ingress_tests.ingress
-        command.arm_original_watch(s, lambda custody: launch(custody, binary))
+        command.arm_original_watch(s, selected_watch(transport, binary, parent_launcher))
         s.h.expected_returncode = 75
 
     assert s.sender.send() is None
@@ -78,18 +86,17 @@ def test_native_exec_spans_original_fixed_command_handoff_release_and_actual_exi
 @pytest.mark.parametrize(
     "joined", [dict(mode="release-command-pair", staged_input=True)], indirect=True
 )
-@pytest.mark.parametrize("transport", ["inherited", "socket-ingress"])
+@pytest.mark.parametrize("transport", ["inherited", "socket-ingress", "clone-parent-ingress"])
 @pytest.mark.parametrize("after", ["writer", "observer"])
 def test_native_death_during_real_handoff_stops_originals_without_releasing_or_retrying(
-    joined, monkeypatch, binary, transport, after
+    joined, monkeypatch, binary, transport, after, parent_launcher
 ):
     s = joined
     sent, releases = [], []
     endpoint_send = command.p.bootstrap.Endpoint.deliver
 
     def arm():
-        launch = native_tests.native if transport == "inherited" else ingress_tests.ingress
-        command.arm_original_watch(s, lambda custody: launch(custody, binary))
+        command.arm_original_watch(s, selected_watch(transport, binary, parent_launcher))
 
     def endpoint(endpoint, channels):
         result = endpoint_send(endpoint, channels)

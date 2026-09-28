@@ -2230,6 +2230,19 @@ bound. Installed support and a qualified pre-readiness failure owner are still
 separate gates. A service-owned alternative would instead need its genuine
 separate child owner and exit evidence; never loosen the direct-child Watch.
 
+An actual test-only clone3 helper now preserves that direct parent through
+`CLONE_PARENT | CLONE_PIDFD`, transfers the original kernel-created handle and
+joins the existing native ingress, Custody and full passive-command flow. The
+helper is reaped separately; the original outer still reaps the native watcher
+through the unchanged Watch. A separate variant exercises direct creation into
+the fixture's retained **existing current** cgroup directory, without creating
+or moving any cgroup. That is not outside-freeze-domain placement or installed
+permission. No entrypoint/source inventory selects this test helper. Original
+child accounting if the helper dies before its report, protected independent
+cgroup provisioning, source/runtime pins and platform failure supervision remain
+gates; see the native README. No numeric-PID migration or old-clone fallback is
+introduced, and no active App/recovery authority comes from these tests.
+
 This is an **offline prototype, not an installed host supervisor**. No existing
 entrypoint or source inventory selects it. The static build is a candidate for
 a host without Python, not authenticated compiler/libc/kernel or installed

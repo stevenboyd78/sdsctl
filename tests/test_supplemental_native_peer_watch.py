@@ -14,6 +14,7 @@ import signal
 import subprocess
 import time
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -35,6 +36,18 @@ pytestmark = pytest.mark.skipif(
 )
 SOURCE = Path(__file__).parents[1] / "scripts/native/supplemental_peer_watch.c"
 MODE = "--offline-original-peer-watch-v1"
+
+
+@dataclass(frozen=True)
+class OriginalChild:
+    """Test-only original child handle, not an installed launcher receipt.
+
+    A clone3 fixture transfers the kernel-created pidfd instead of reopening a
+    reported PID. Existing production Watch still requires its direct parent.
+    """
+
+    pid: int
+    fd: int
 
 
 @pytest.fixture(scope="module", params=["dynamic", "static", "ubsan"])
@@ -186,7 +199,15 @@ def native(custody, binary, *, fault=None, outer=None, extra=(), spawner=None):
             fault(handles, args)
         committed = True
         child = (spawn if spawner is None else spawner)(binary, handles, args, extra=extra)
-        child_fd = own(os.pidfd_open(child))
+        if type(child) is OriginalChild:
+            child, child_fd = child.pid, own(child.fd)
+            assert m.deadlines._fdinfo(child_fd).get(b"Pid") == str(child).encode("ascii")
+            assert not os.get_inheritable(child_fd)
+            # This is a CHILD, not a nonchild pidfd proxy. No owner/type relaxation.
+            os.waitid(os.P_PIDFD, child_fd, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+        else:
+            assert type(child) is int
+            child_fd = own(os.pidfd_open(child))
         os.close(send)
         owned.remove(send)
         watch = m.Watch(child, child_fd, write, targets, custody.identities, custody.deadline_ns)

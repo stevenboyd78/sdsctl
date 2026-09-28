@@ -243,6 +243,53 @@ pre-readiness loss interval still require an independent platform contract.
 is calculated from a monotonic activation timestamp, not our original clock.
 [Upstream v256 scope timer](https://raw.githubusercontent.com/systemd/systemd/v256/src/core/scope.c)
 
+### Parent-preserving creation experiment (test-only)
+
+The [clone3 process fixture](../../tests/test_supplemental_native_peer_parent.py)
+and its [small C helper](../../tests/fixtures/native_parent_spawn.c) now exercise
+`CLONE_PARENT | CLONE_PIDFD`: the helper creates the native watcher as a direct
+child of the original outer, then transfers the kernel-created pidfd over its
+private authenticated socket. The helper cannot reap that child (`ECHILD`);
+the original outer independently verifies its own parenthood with `waitid`,
+and the **unchanged Watch** later reaps it exactly once. The reported PID is
+never reopened. The helper's own exit is checked and reaped separately before
+the one-shot target ingress is sent. No readiness or action is inferred from
+creation, receipt, or helper exit. All phases share the original startup cutoff.
+
+A separately compiled test variant supplies `CLONE_INTO_CGROUP` with a retained
+read-only directory descriptor for the fixture's **existing current** cgroup.
+It tests creation directly in that existing group, not migration. It does not
+create, change, freeze or delegate a cgroup. Non-cgroup directories are refused
+without falling back to unplaced creation. Environments without write authority
+in their own current group skip this particular test explicitly; a skip is not
+qualification. This variant proves neither an independent failure domain nor
+permission to provision one. Ordinary parent tests do not set that flag.
+[Linux clone3 flag semantics](https://man7.org/linux/man-pages/man2/clone.2.html)
+
+The original Custody fixture and full passive-command flow both use this actual
+clone/handle-transfer/native-ingress path. They preserve original comparisons,
+timers, owners, case files, one attempt and release/exit distinctions. Failures
+after the original child report stop and reap that child and the original peers;
+native death after each real handoff still prevents passive release. These are
+actual local kernel/process checks, with explicitly synthetic Engine/runtime
+facts. No production source profile, entrypoint, build target or App selects
+the test helper, and it is not a separately qualified native host launcher.
+
+Fault injection also checks a rejected target send between successful creation
+and returning the native handle to the caller. Until return, the ingress fixture
+itself owns that child and must stop/reap it before propagating the failure.
+Both direct-spawn and original clone-pidfd paths are tested; no handle ownership
+is lost in that interval and the consumed attempt does not release readiness.
+
+The incomplete report interval is still an important gate: losing the helper
+before the original child handle is delivered must not orphan an untracked
+child, cause discovery/reopening of a PID, or grant any peer action. The native
+ingress itself has a finite original cutoff, but that alone does not qualify
+the outer's complete child accounting and failure/reaping path. Protected
+original target-cgroup provisioning, outside-domain independence, namespace and
+binary/source/runtime authentication also remain separate requirements. Do not
+promote same-group test success into independent-platform qualification.
+
 ## Failure model and remaining gates
 
 The original qualified outer must independently stop its retained peers if the
