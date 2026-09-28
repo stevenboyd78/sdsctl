@@ -133,6 +133,23 @@ host-only resizing, short fixed rows, trusted keyboard disclosure/focus and
 two-card session cleanup are covered. Repeated updates must not grow auto rows.
 The audit writes no screenshots and removes only its temporary browser profile.
 
+### Offline visual acceptance — September 28, 2026
+
+The user reported `Mimic card layout passed` for the packaged candidate at
+development commit `89155dd`. The finite loopback-only preview used fictional
+frames and a synthetic Home Assistant context. Its checklist covered Simple
+and Detail, both 3% LED treatments, full/tablet/phone widths, the three intrinsic
+heights, readable fields and the details disclosure; short fixed rows and a
+second independent card were optional checks. The overall pass does not assert
+that every optional combination was individually exercised.
+
+The preview server was stopped and its listener confirmed closed. No Home
+Assistant resources, scanner configuration or Pi services were changed. This
+closes the candidate's offline human layout check, not installed Home Assistant,
+live-data fidelity, physical-scanner or Firefox/WPE acceptance.
+
+### Remaining acceptance boundaries
+
 Deterministic tests cover configuration, all seven layouts, malformed/oversized
 responses, source/sequence aging, late authentication and context callbacks,
 visibility, multiple leases, renewal shutdown, installer safety and existing

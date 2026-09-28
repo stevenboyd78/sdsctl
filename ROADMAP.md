@@ -106,8 +106,10 @@ for source findings, profile/privacy boundaries, layout mappings, the complete
 control inventory and staged acceptance. An offline display-only parser is the
 first foundation. The optional WebUI, daemon-backed TUI and additional HA card
 are now implemented as unreleased candidates; paired installed/live acceptance
-remains separate. Both Pi TUI geometries passed offline fictional-data visual
-checks. The complete front-panel key inventory is implemented read-only; new
+remains separate. Both Pi TUI geometries and the
+[HA card layout](docs/home-assistant-mimic-card.md#offline-visual-acceptance--september-28-2026)
+passed offline fictional-data visual checks. The complete front-panel key
+inventory is implemented read-only; new
 key dispatch and control UI remain pending. No milestone/release number is
 assigned. Waterfall-screen fidelity needs its own layout evidence and remains
 a separate slice.
