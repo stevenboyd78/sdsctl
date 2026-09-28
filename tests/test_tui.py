@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 from rich.text import Text
+from textual.pilot import Pilot
 from textual.widgets import Static
 
 from sds200 import __version__
@@ -68,6 +69,19 @@ def _plain(widget: Static) -> str:
     content = widget.content
     assert isinstance(content, (str, Text))
     return content if isinstance(content, str) else content.plain
+
+
+async def _settle_responsive_layout(app: ScannerTuiApp, pilot: Pilot[None]) -> None:
+    # on_resize queues _refresh_responsive_view AFTER a refresh; that callback
+    # can itself invalidate panel geometry and remove a temporary scrollbar.
+    # Pilot.pause drains the queue as it stood on entry, not future redraws.
+    # Wait through the public refresh barrier and its resulting layout before
+    # comparing widget regions. Keep every size/overflow assertion unchanged.
+    await pilot.pause()
+    refreshed = asyncio.Event()
+    assert app.call_after_refresh(refreshed.set)
+    await asyncio.wait_for(refreshed.wait(), timeout=5)
+    await pilot.pause()
 
 
 def test_tui_shell_renders_identity_and_semantic_snapshot() -> None:
@@ -591,8 +605,9 @@ def test_tui_restores_standard_panel_order_after_pi_layout_resize() -> None:
 
 @pytest.mark.parametrize("size", [(120, 40), (160, 45), (240, 67)])
 @pytest.mark.parametrize("with_audio", [False, True])
+@pytest.mark.parametrize("resized", [False, True])
 def test_wide_tui_packs_psi_beside_audio_and_logs_across_full_width(
-    tmp_path: Path, size: tuple[int, int], with_audio: bool
+    tmp_path: Path, size: tuple[int, int], with_audio: bool, resized: bool
 ) -> None:
     async def exercise() -> None:
         session = (
@@ -604,8 +619,10 @@ def test_wide_tui_packs_psi_beside_audio_and_logs_across_full_width(
             else None
         )
         app = _app(audio_session=session)
-        async with app.run_test(size=size) as pilot:
-            await pilot.pause()
+        async with app.run_test(size=(80, 24) if resized else size) as pilot:
+            if resized:
+                await pilot.resize_terminal(*size)
+            await _settle_responsive_layout(app, pilot)
             body = app.query_one("#body")
             state = app.query_one("#state")
             status = app.query_one("#status")

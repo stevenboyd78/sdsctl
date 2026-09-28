@@ -134,6 +134,11 @@ class MissingHelperDependency(Exception):
     pass
 class OnlyReviewedDependencies(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
+        # Python3.11 copy probes Jython's optional org.python.core and catches
+        # ImportError. Deny it as absent (never allow/load an org dependency),
+        # rather than turning an ordinary stdlib probe into our hard failure.
+        if fullname == "org":
+            raise ModuleNotFoundError("Optional Jython module is unavailable", name="org")
         top = fullname.partition(".")[0]
         if top in sys.stdlib_module_names or top == "sds200" or top.startswith(prefixes):
             return None
@@ -142,6 +147,12 @@ class OnlyReviewedDependencies(importlib.abc.MetaPathFinder):
             return None
         raise MissingHelperDependency(top)
 sys.meta_path.insert(0, OnlyReviewedDependencies())
+try:
+    importlib.import_module("org")
+except ModuleNotFoundError as error:
+    assert error.name == "org" and "org" not in sys.modules
+else:
+    raise AssertionError("Optional Jython dependency was admitted")
 def forbidden(*args, **kwargs):
     raise AssertionError("App source import attempted network/process activity")
 for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "sendto"):
@@ -192,8 +203,8 @@ print(json.dumps({"scope": scope, "dependencies": sorted(dependencies)}))
         ],
         capture_output=True,
         timeout=10,
-        check=True,
     )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
     assert not result.stderr
     expected = (
         {"missing": "serial"}

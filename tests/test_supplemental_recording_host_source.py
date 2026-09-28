@@ -235,11 +235,21 @@ repository = Path(sys.argv[1])
 sys.path[:0] = [str(repository / "scripts"), str(repository / "src")]
 class OnlyHelperAndStdlib(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
+        # Python3.11 copy catches ImportError for its optional Jython probe.
+        # Keep that module absent, without admitting an external dependency.
+        if fullname == "org":
+            raise ModuleNotFoundError("Optional Jython module is unavailable", name="org")
         top = fullname.partition(".")[0]
         allowed = top in sys.stdlib_module_names or top == "sds200"
         if not allowed and not top.startswith("supplemental_"):
             raise AssertionError("Unexpected helper dependency: " + fullname)
 sys.meta_path.insert(0, OnlyHelperAndStdlib())
+try:
+    importlib.import_module("org")
+except ModuleNotFoundError as error:
+    assert error.name == "org" and "org" not in sys.modules
+else:
+    raise AssertionError("Optional Jython dependency was admitted")
 def forbidden(*args, **kwargs):
     raise AssertionError("Source import attempted network/process activity")
 for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "sendto"):
@@ -270,8 +280,8 @@ print(json.dumps({"private": len(private)}))
         [sys.executable, "-I", "-B", "-c", script, str(native.SCRIPTS.parent), str(startup)],
         capture_output=True,
         timeout=5,
-        check=True,
     )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
     assert not result.stderr
     assert json.loads(result.stdout) == {
         "private": 65

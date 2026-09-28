@@ -140,6 +140,10 @@ class MissingDependency(Exception):
     pass
 class ReviewedDependencies(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
+        # Preserve Python3.11 copy's optional Jython probe as a DENIED import.
+        # Nothing from org is loaded or added to the allowed dependencies.
+        if fullname == "org":
+            raise ModuleNotFoundError("Optional Jython module is unavailable", name="org")
         top = fullname.partition(".")[0]
         if top in sys.stdlib_module_names or top == "sds200" or top.startswith(prefixes):
             return None
@@ -148,6 +152,12 @@ class ReviewedDependencies(importlib.abc.MetaPathFinder):
             return None
         raise MissingDependency(top)
 sys.meta_path.insert(0, ReviewedDependencies())
+try:
+    importlib.import_module("org")
+except ModuleNotFoundError as error:
+    assert error.name == "org" and "org" not in sys.modules
+else:
+    raise AssertionError("Optional Jython dependency was admitted")
 def forbidden(*args, **kwargs):
     raise AssertionError("Joint source import attempted network/process activity")
 for name in ("connect", "connect_ex", "bind", "listen", "send", "sendall", "sendto", "sendmsg"):
@@ -198,8 +208,8 @@ print(json.dumps({"scope": scope, "dependencies": sorted(dependencies)}))
         ],
         capture_output=True,
         timeout=10,
-        check=True,
     )
+    assert result.returncode == 0, result.stderr.decode("utf-8", errors="replace")
     assert not result.stderr
     expected = (
         {"missing": "serial"}

@@ -187,20 +187,27 @@ for(const invalid of ["http://192.0.2.1","https://example.com/path","https://use
 const dashboard = await readFile(new URL("../../src/sds200/web_assets/dashboard.js",import.meta.url),"utf8");
 const functions = dashboard.slice(dashboard.indexOf("function requireNativeLogin()"),
   dashboard.indexOf("function syncDisplayNavigation()"));
+const savedRecordingStop = dashboard.slice(dashboard.indexOf("function stopSavedRecording()"),
+  dashboard.indexOf("function recordingsPageCount("));
 function dashboardFixture(managed, reply) {
   const node=tag=>({tagName:tag.toUpperCase(),children:[],hidden:true,
     append(...children){this.children.push(...children);},prepend(...children){this.children.unshift(...children);},
     setAttribute(){}});
-  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,mimicStops:0}, banner=node('div');
+  const f={timers:[],navigations:[],requests:[],listeners:[],cleared:[],stops:[],closed:0,mimicStops:0,
+    savedSource:'fixture.wav',savedLoads:0,savedSyncs:0}, banner=node('div');
+  const savedPlayer={pause(){f.stops.push('recording');},
+    getAttribute(name){assert.equal(name,'src');return f.savedSource;},
+    removeAttribute(name){assert.equal(name,'src');f.savedSource=null;},load(){f.savedLoads++;}};
   const scope={managedDeviceEntry:managed,nativeAccessMode:"display",displayOnly:true,
-    authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},
+    authenticationRequired:false,nativeSessionTimer:null,currentDaemonHello:{},savedPlaybackGeneration:0,
     mimicDisplay:{stop(){f.mimicStops++;}},
     document:{documentElement:{dataset:{}},getElementById:id=>id==='native-menu'?{close(){f.closed++;}}:null,
       createElement:node},
     window:{setTimeout:(fn,ms)=>{f.timers.push({fn,ms});return 1;},clearTimeout:id=>f.cleared.push(id),
       addEventListener:(type,listener,capture)=>f.listeners.push({type,listener,capture}),
       location:{replace:url=>f.navigations.push(url)}},
-    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?{pause(){f.stops.push('recording');}}:banner,
+    webUrl:path=>origin+"/"+path, element:id=>id==="saved-recording-player"?savedPlayer:banner,
+    syncSavedPlaybackControls(){f.savedSyncs++;},
     stopEventStream(){f.stops.push('events');},stopWaterfallStream(){f.stops.push('waterfall');},
     stopAudioPlayback(){f.stops.push('audio');},setScannerControls(){f.stops.push('controls');},
     initializeDisplayNavigation:form=>{f.form=form;},setOverallStatus(){},AbortSignal,
@@ -217,8 +224,18 @@ function dashboardFixture(managed, reply) {
   f.transportIntent=(target=scope.window)=>{
     for(const {type,listener} of f.listeners)if(type==='sdsctl-device-signout-intent')listener({target});
   };
-  f.scope=scope;vm.createContext(scope);vm.runInContext(functions,scope);return f;
+  f.scope=scope;vm.createContext(scope);vm.runInContext(functions+savedRecordingStop,scope);return f;
 }
+test('session expiry retires the saved source and invalidates pending playback once',()=>{
+  const f=dashboardFixture(true,{});
+  const generation=f.scope.savedPlaybackGeneration;
+  f.scope.requireNativeLogin();
+  assert.equal(f.scope.savedPlaybackGeneration,generation+1);
+  assert.equal(f.savedSource,null);assert.equal(f.savedLoads,1);assert.equal(f.savedSyncs,1);
+  assert.deepEqual(f.stops,['events','waterfall','audio','recording','controls']);
+  f.scope.requireNativeLogin();
+  assert.equal(f.savedLoads,1);assert.equal(f.scope.savedPlaybackGeneration,generation+1);
+});
 test("managed renewal checks current session and does not replay login or stale expiry",async()=>{
   const f=dashboardFixture(true,{device_enrolled:true,display_only:true,remaining_seconds:150});
   await f.scope.refreshManagedNativeSession();
