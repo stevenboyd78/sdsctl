@@ -44,8 +44,12 @@ def configuration_pin(container, environment):
 def helper(supervised, image, configured, monkeypatch, request):
     selection = getattr(request, "param", False)
     child_code = "import sys; sys.stdin.read()"
+    supplied = {}
     if type(selection) is tuple:
-        selection, child_code = selection
+        selection, child_code, *extra = selection
+        if extra:
+            (supplied,) = extra
+            assert set(supplied) == {"plan", "baseline", "child"}
     assert type(selection) is bool or selection in ("permission", "service", "peer-preparation")
     peer_profile = selection == "peer-preparation"
     service_profile = selection == "service"
@@ -81,7 +85,7 @@ def helper(supervised, image, configured, monkeypatch, request):
             (root / name).chmod(0o644)
     clock = m.plans.clock.read()
     issued = clock.boottime_ns / m.plans.clock.NS
-    value = launch.plans.value()
+    value = copy.deepcopy(supplied["plan"]) if supplied else launch.plans.value()
     value.update(
         boot=clock.boot,
         original_clock=asdict(clock) | {"namespace": list(clock.namespace)},
@@ -156,7 +160,7 @@ def helper(supervised, image, configured, monkeypatch, request):
                 "/opt/sdsctl-recording-host/supplemental_recording_permission_probe.py",
                 command[4],
                 template.sha256,
-                "d" * 64,
+                supplied["baseline"] if supplied else "d" * 64,
                 identity_argument(observer_identity),
                 "--permission-probe",
             )
@@ -175,7 +179,7 @@ def helper(supervised, image, configured, monkeypatch, request):
                 )
     values = dict(entry.split("=", 1) for entry in configured)
     values.update(HOME="/root", HOSTNAME=env.env.HOSTNAME)
-    child = subprocess.Popen(
+    child = supplied.get("child") or subprocess.Popen(
         [sys.executable, "-I", "-B", "-c", child_code],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE if peer_profile else None,

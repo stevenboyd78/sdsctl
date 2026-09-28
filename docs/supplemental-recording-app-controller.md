@@ -1866,9 +1866,9 @@ runtime bytes, private inputs, stream credentials, clocks and pidfds are real;
 Engine/kernel metadata, root/cgroup routing, argv observation and installed
 input provenance are synthetic. Changed inputs (including after review), lost
 custody, obsolete policy, interruption or an expired shared bound refuse before
-permission delivery. Partial files remain preserved. The actual fixed writer
-fixture and this full outer-qualification fixture still need a single qualified
-outer/observer lifetime join before installation can be considered.
+permission delivery. Partial files remain preserved. These narrow fixtures remain
+useful separately; the following combined fixture now joins their actual process
+flows, without qualifying an installed outer/observer lifetime.
 
 The complete 104-module profile is also exercised by the existing two-role
 runtime pair and original pidfd/timerfd termination fixture. Both collectors
@@ -1877,6 +1877,62 @@ read cannot yield a successful pair. Explicitly scoped cancellation, original
 absolute deadline (including frozen disposable peers) and designated-parent loss
 exercise the same original targets. These are separate offline component joins,
 not qualification of an installed outer command or permission to arm one.
+
+### Combined preflight, original writer and final paired comparison fixture
+
+The offline `test_supplemental_recording_qualified_peer_command.py` fixture now
+executes the full outer preflight and actual passive writer function in separate
+processes, alongside an independent descriptor-receiving observer. Every protocol
+owner is created after exec, not inherited across a fork. The existing synthetic
+host fixture also creates an inert disposable process, which is retired before
+the command begins so watcher cancellation cannot orphan it. It is not an active
+native worker or evidence of installed App behavior.
+
+The same original outer retains its private Inputs, clock/domain and writer
+pidfd from input delivery through actual `Sender`/`Review`, full runtime
+collection and permission delivery. The writer then performs its real private
+persisted-baseline read and complete host-reader logic before creating its own
+continuing clock and publishing its plan. The outer preview is never substituted
+for that later plan. Original private input and permission descriptors remain
+passively retained until final handoff, without renewing their old exchange
+budgets. The same writer Startup receives an independently published acceptance
+message, original descriptors and Link, builds its passive dispatcher and closes
+its own original resources. There is no inbox consumption, Ready, service run,
+App action, audio, recording or recovery. The fixture checks descriptor balance,
+original dispatcher/clock/plan identity and preserved failure files.
+
+The paired variant performs **fresh full writer and observer runtime collections
+against the actual newly published writer plan before submitting acceptance**.
+Both share one unchanged two-second bound, including surrounding private input
+checks. It does not reuse either the earlier preflight success or its temporary
+clock. Post-permission writer source drift, changed observer configuration and
+loss of the original observer prevent acceptance and service construction.
+Other joined faults cover preflight source/runtime/argv/input refusal before any
+baseline host read, a changed persisted baseline after a successful permission,
+and input drift after plan publication. No failed case is replayed or cleaned up
+to appear unused.
+
+On runtimes with Linux timerfd support, the combined fixture also captures
+actual `Custody` and arms the separate kernel watcher before acceptance. Capture
+and arming each repeat the full paired comparison rather than caching the first
+success. The same original outer clock/domain and both original process handles
+remain bound through acceptance, descriptor delivery and passive writer cleanup.
+Explicit cancellation then terminates only those two disposable original peers;
+all case files remain unchanged. This is cancellation, not successful recovery
+or a disarmed deadline. Runtimes without timerfd skip this case rather than
+claiming to have exercised it.
+
+These are process-integration tests, **not installed qualification**. The fixed
+writer function executes checked-out code under explicit fixture path aliases;
+its installed command argv, image/root/cgroup/Engine/kernel metadata and input
+provenance remain synthetic. Inventoried source/runtime files are actually read
+and never imported; they are not claimed to be the executing image. The observer
+comparison argv is deliberately inert, not an admitted fixed observer command.
+Final acceptance is an explicit test decision with real file publication, not a
+claim of complete platform approval. The outer is still the test process, not an
+independently qualified installed supervisor. Independent outer/platform lifetime,
+fixed outer/observer source and interpreter provenance,
+explicit active-action admission and exclusive recovery remain separate gates.
 
 ## Remaining gates before a human scanner/audio test
 
