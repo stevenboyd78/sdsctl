@@ -4166,6 +4166,12 @@ exception messages, source text, local variables or absolute paths. It does not
 change production error handling, deadlines or retry policy; a passing rerun
 does not by itself explain or erase an earlier refusal.
 
+The actual App-service fixture additionally observes the original Start/Relay
+failure handlers before a deliberately uncertain recording phase consumes their
+exceptions. Only bounded, deduplicated source locations enter captured test
+output. Successful paths have no tracing or extra evidence reads, and original
+failure handlers still run; cleanup cannot be mistaken for the first cause.
+
 Additional integration cases keep one real PCMU Unix consumer and the recorder
 on the same RTP owner while native FQK or DTM acquisition succeeds or times out.
 The finalized WAV/sidecar pass the content verifier in each case; subsequent

@@ -16,6 +16,7 @@ from contextlib import contextmanager
 import pytest
 
 from . import test_supplemental_recording_app_actual_startup as accepted
+from ._supplemental_failure_diagnostics import failure_locations
 
 actual = accepted.actual
 startup = accepted.startup
@@ -35,6 +36,26 @@ pytestmark = accepted.pytestmark
 
 @pytest.fixture
 def service_case(launch_case, tmp_path, monkeypatch, request):
+    from supplemental_recording_app_begin import AppStart
+
+    # RecordingPhase intentionally consumes a failed begin and preserves an
+    # uncertain outcome. Observe only its failure path BEFORE that exception
+    # loses its traceback; later cleanup must not obscure the first refusal.
+    # No tracing, extra success-path reads, changed cutoffs, or private values.
+    reported = set()
+
+    def observed_failure(original):
+        def fail(owner, error):
+            locations = failure_locations(error)
+            if locations and locations not in reported and len(reported) < 4:
+                reported.add(locations)
+                print("Original native recording refusal locations (no values):\n" + locations)
+            return original(owner, error)
+
+        return fail
+
+    for policy in (AppStart, m.begin.relayed.Relay):
+        monkeypatch.setattr(policy, "_fail", observed_failure(policy._fail))
     original = (
         (launch.engine, "Endpoint", launch.engine.Endpoint),
         (launch.engine, "Client", launch.engine.Client),

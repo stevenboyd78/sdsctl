@@ -1,5 +1,6 @@
 """Failure diagnostics disclose only bounded, known-checkout source locations."""
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
@@ -106,4 +107,33 @@ def test_report_hook_is_restricted_to_failing_supplemental_tests(fault):
         ]
         if fault is None
         else []
+    )
+
+
+def test_native_service_refusal_observer_keeps_original_failure_and_only_locations(
+    tmp_path, monkeypatch, capsys
+):
+    from . import test_supplemental_recording_app_actual_service as service
+
+    # Isolate just the fixture's failure observer: no processes or native state.
+    def original_case(*args):
+        yield None
+
+    monkeypatch.setattr(service.driver, "driver_case", SimpleNamespace(__wrapped__=original_case))
+    from supplemental_recording_app_begin import AppStart, begin
+
+    original = AppStart._fail
+    error = captured(diagnostics.SCRIPTS / "supplemental_recording_fixture.py")
+    owner = SimpleNamespace(original_run=None, failed=False)
+    with (
+        monkeypatch.context() as patch,
+        contextmanager(service.service_case.__wrapped__)(None, tmp_path, patch, None),
+    ):
+        for _ in range(6):
+            with pytest.raises(begin.UnconfirmedHostBegin, match=begin.MESSAGE):
+                AppStart._fail(owner, error)
+    assert AppStart._fail is original and owner.failed
+    assert capsys.readouterr().out == (
+        "Original native recording refusal locations (no values):\n"
+        "cause 1: scripts/supplemental_recording_fixture.py:1\n"
     )
