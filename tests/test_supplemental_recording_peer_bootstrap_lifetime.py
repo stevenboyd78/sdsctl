@@ -51,12 +51,11 @@ def peer_processes(monkeypatch):
     def spawn(argv, **kwargs):
         assert argv == [sys.executable, "-I", "-B", "-c", "import sys; sys.stdin.read()"]
         assert len(children) < 2 and kwargs["stdin"] is subprocess.PIPE
+        assert kwargs.get("stdout") is kwargs.get("stderr") is None
+        assert kwargs.get("bufsize", 0) == 0
         process = original(
             [sys.executable, "-I", "-B", "-c", transport.CHILD, str(Path(m.__file__).parent), path],
-            **kwargs,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            bufsize=0,
+            **(kwargs | dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)),
         )
         children.append(process)
         channel, _ = listener.accept()

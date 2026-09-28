@@ -42,6 +42,8 @@ def peer_processes(monkeypatch):
     def spawn(argv, **kwargs):
         assert argv == [sys.executable, "-I", "-B", "-c", "import sys; sys.stdin.read()"]
         assert len(children) < 2 and kwargs["stdin"] is subprocess.PIPE
+        assert kwargs.get("stdout") is kwargs.get("stderr") is None
+        assert kwargs.get("bufsize", 0) == 0
         path = root / str(len(children))
         path.mkdir(mode=0o700)
         paths.append(path)
@@ -55,10 +57,7 @@ def peer_processes(monkeypatch):
                 str(Path(m.__file__).parent),
                 str(path / m.listeners.NAME),
             ],
-            **kwargs,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            bufsize=0,
+            **(kwargs | dict(stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0)),
         )
         children.append(child)
         assert lifetime.transport.line(child) == "waiting"
