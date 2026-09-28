@@ -854,7 +854,11 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         domain = stack.enter_context(closing(p.domains.ZeroDomain(timer.original, h.witness)))
         listener = stack.enter_context(
             closing(
-                p.listeners.Listener(roots["preparation"], h.witness, deadline=time.monotonic() + 2)
+                p.listeners.Listener.stage(roots["preparation"], deadline=time.monotonic() + 2)
+                if options.get("staged_input", False)
+                else p.listeners.Listener(
+                    roots["preparation"], h.witness, deadline=time.monotonic() + 2
+                )
             )
         )
         permission_server = stack.enter_context(
@@ -880,6 +884,13 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 **{key: str(value) for key, value in roots.items()},
             ),
         )
+        if options.get("staged_input", False):
+            # This joins staging to the full command flow. Fixture setup still
+            # uses stdin; the separate pre-exec input test proves no startup
+            # signal is needed for the real connection/authentication phase.
+            original_listener, original_cutoff = listener.listener, listener.deadline
+            listener.bind_peer(h.witness)
+            assert listener.listener is original_listener and listener.deadline == original_cutoff
         listener.accept()
         assert p.send_inputs(
             inputs,
@@ -1605,7 +1616,12 @@ def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_reti
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
 @pytest.mark.parametrize(
-    "joined", [dict(mode="release-command-pair", exit_after_result=True)], indirect=True
+    "joined",
+    [
+        dict(mode="release-command-pair", exit_after_result=True, staged_input=value)
+        for value in (False, True)
+    ],
+    indirect=True,
 )
 def test_fixed_passive_command_exit_triggers_original_watch_without_cancellation(
     joined, monkeypatch

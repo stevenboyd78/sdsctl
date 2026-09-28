@@ -2137,6 +2137,44 @@ entrypoint.** Runtime/image/Engine provenance and the outer's platform lifetime
 remain synthetic/unqualified. This reduces fixture-only owner assembly, not the
 requirements for independent supervision, active admission or exclusive recovery.
 
+### Explicit pre-exec input socket staging (uninstalled)
+
+The existing private listener has a separate `Listener.stage` selection for
+provisioning its socket **before** the intended process exists. It publishes
+only the same private socket in an independently provisioned empty leaf; it
+cannot accept a peer or authenticate inputs yet. The outer must independently
+capture the original live process witness after launch, then call `bind_peer`
+once. No expected PID is learned from a socket, and a queued unexpected process
+causes refusal, not discovery or a replacement accept.
+
+This is one continuing listener owner, not a replacement listener. The original
+two-second-or-earlier cutoff includes path provisioning, exec/startup, binding,
+accept and the authenticated input exchange. Binding keeps every original
+descriptor, pathname and deadline; it adds no wait, retry or grace period. The
+legacy constructor still requires its live peer before any path write. Invalid,
+expired, repeated or changed binding closes only owned originals and preserves
+the created socket as failure evidence. Staging cannot restart a closed case.
+
+An actual subprocess fixture now starts both writer-role and observer-role input
+receivers with stdin disabled and no startup signal. Each connects immediately
+to the already-created socket and queues before peer binding. The same original
+outer then binds its independently captured witness and performs the existing
+authenticated preparation-profile input exchange, using the original clocks,
+counterpart and pins. A separate full-command variant joins this staging owner
+to original preflight, baseline, publication, paired qualification, watcher,
+passive handoff/release and independently observed writer exit. Old command argv
+and explicit source-profile selection are unchanged; changed source bytes still
+require independently authenticated new source pins.
+
+Neither fixture is installed launch qualification. The small exec fixture uses
+synthetic private configuration/path/cgroup mappings and an explicit fixture
+retirement message **after** authentication. The full-command fixture still uses
+stdin for its earlier host setup and observer sequencing; only the small input
+fixture eliminates the launch barrier. Neither supplies a fixed outer/observer
+entrypoint, proves the complete installed startup fits two seconds, or resolves
+independent platform lifetime and active action/recovery admission. No extra wire
+permission, baseline permission reuse or new App authority is introduced.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

@@ -55,6 +55,26 @@ class Listener:
     """
 
     def __init__(self, root, peer, *, deadline):
+        self._initialize(root, peer, deadline=deadline, staged=False)
+
+    @classmethod
+    def stage(cls, root, *, deadline):
+        """Provision before exec, then bind ONE independently captured live peer.
+
+        This distinct selection publishes only a private socket. No accept,
+        message, peer discovery or input grant is allowed until bind_peer().
+        The original two-second cutoff includes provisioning AND process startup;
+        binding neither restarts that clock nor replaces any descriptor. A queued
+        connection is not authority: the usual exact peer credentials and later
+        authenticated input exchange remain mandatory. Installation, original
+        launch provenance and independent blocked-I/O termination stay external.
+        """
+        require(cls is Listener)
+        owner = cls.__new__(cls)
+        owner._initialize(root, None, deadline=deadline, staged=True)
+        return owner
+
+    def _initialize(self, root, peer, *, deadline, staged):
         began = time.monotonic()
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.closed = self.failed = self.attempted = self.accepted = False
@@ -64,18 +84,19 @@ class Listener:
         self.node = None
         try:
             require(type(self) is Listener and self.owner[2:] == (ROOT_UID, ROOT_UID))
+            require(type(staged) is bool)
             require(type(root) is type(Path()) and root.is_absolute() and root != Path("/"))
             require(root.anchor == "/" and ".." not in root.parts and len(root.parts) <= 32)
             require(len(os.fsencode(root)) <= 4096 and all(ord(c) >= 32 for c in str(root)))
             require(type(deadline) in (int, float) and math.isfinite(deadline))
-            require(type(peer) is processes.ProcessWitness)
-            require(type(peer.identity) is processes.ProcessIdentity)
-            peer.identity.__post_init__()
-            require(peer.identity.pid != self.owner[0])
+            require(peer is None if staged else type(peer) is processes.ProcessWitness)
             self.root, self.peer = root, peer
             self.deadline = min(began + SECONDS, deadline)
-            self.inputs = root, peer, self.deadline
-            self.peer_pin = peer.identity, peer.fd, connection._identity(peer.fd)
+            self.staged = staged
+            self.initial = root, self.deadline, staged
+            self.inputs = self.original_inputs = root, peer, self.deadline
+            self.bound = self.binding_attempted = not staged
+            self.peer_pin = None if staged else self._pin_peer(peer)
             self._context()
             parent = self._open("/", files.DIRECTORY)
             for name in root.parts[1:]:
@@ -123,6 +144,33 @@ class Listener:
         except BaseException as error:
             self._fail(error)
 
+    def _pin_peer(self, peer):
+        require(type(peer) is processes.ProcessWitness)
+        require(type(peer.identity) is processes.ProcessIdentity)
+        peer.identity.__post_init__()
+        require(peer.identity.pid != self.owner[0])
+        return peer.identity, peer.fd, connection._identity(peer.fd)
+
+    def bind_peer(self, peer):
+        """Consume staging once using the original caller-supplied live witness.
+
+        Never derive the expected peer from an incoming socket/PID, and never
+        adopt a replacement after failure. This returns no acceptance receipt.
+        The caller keeps the borrowed witness until all later borrowers retire.
+        """
+        try:
+            self._context()
+            require(self.staged and not self.binding_attempted and not self.bound)
+            self.binding_attempted = True  # Invalid/expired binding also consumes the attempt.
+            require(not self.attempted and not self.accepted and not self.preparation_attempted)
+            self.recheck()
+            pin = self._pin_peer(peer)
+            self.peer, self.peer_pin, self.bound = peer, pin, True
+            self.inputs = self.original_inputs = self.root, peer, self.deadline
+            self.recheck()
+        except BaseException as error:
+            self._fail(error)
+
     def _open(self, *args, **kwargs):
         fd = os.open(*args, **kwargs)
         try:
@@ -156,9 +204,18 @@ class Listener:
     def _context(self):
         require(type(self) is Listener and not self.failed and not self.closed)
         require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
-        root, peer, deadline = self.inputs
+        root, deadline, staged = self.initial
+        require(self.root is root and self.deadline == deadline and self.staged is staged)
+        require(self.inputs is self.original_inputs)
+        input_root, peer, input_deadline = self.inputs
+        require(input_root is root and input_deadline == deadline)
         require(self.root is root and self.peer is peer and self.deadline == deadline)
         require(time.monotonic() < deadline)
+        if not self.bound:
+            require(self.bound is False and staged and peer is None and self.peer_pin is None)
+            require(not self.attempted and not self.accepted and not self.preparation_attempted)
+            return  # Path/socket retention only, NEVER peer evidence or accept permission.
+        require(self.bound is True and self.binding_attempted is True)
         identity, fd, pin = self.peer_pin
         require(peer.identity is identity and peer.fd == fd and connection._identity(fd) == pin)
         require(not os.get_inheritable(fd))
@@ -241,6 +298,7 @@ class Listener:
         """One finite attempt; accepted socket stays owned here, never transferred."""
         try:
             self._context()
+            require(self.bound is True)
             require(self.attempted is False)
             self.attempted = True
             self.recheck()
