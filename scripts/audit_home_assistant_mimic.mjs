@@ -166,7 +166,7 @@ export function checkGeometry(value, treatment) {
   }
 }
 
-const geometry = `(id) => {
+export const geometry = `(id) => {
   const host=document.getElementById(id),root=host.shadowRoot;
   const panel=root.querySelector('.mimic-surround'),grid=root.querySelector('.mimic-grid');
   const box=panel.getBoundingClientRect(),bounds=grid.getBoundingClientRect(),css=getComputedStyle(grid);
@@ -188,7 +188,7 @@ const geometry = `(id) => {
     state:card.dataset.state,raw:root.querySelectorAll('[data-value-status="raw_source"]').length};
 }`;
 
-async function until(cdp, expression, timeoutMs) {
+export async function until(cdp, expression, timeoutMs) {
   const end = performance.now() + timeoutMs;
   while (performance.now() < end) {
     if (await evaluate(cdp, expression)) return;

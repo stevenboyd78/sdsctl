@@ -65,14 +65,15 @@ function harness() {
   if(input.case==='aux_legacy_owner')vm.runInContext(`globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")] = Object.freeze({
     acquire:async()=>()=>{}, invalidate(){}, resolve:async()=>{throw Error("Old owner does not support the new route.");}, get _leases(){return 0;}
   });`,ctx);
+  if(input.case==='acceptance_registration_first')vm.runInContext(input.ordinary,ctx);
   vm.runInContext(input.script,ctx);
-  const Card=definitions.get('sds200-mimic-card');
+  const Card=definitions.get(input.tag??'sds200-mimic-card');
   const owner=vm.runInContext('globalThis[Symbol.for("sdsctl.home-assistant.ingress.v1")]',ctx);
-  const card=()=>{const c=new Card({supplemental:input.supplemental??false,
+  const card=()=>{const c=input.tag?new Card():new Card({supplemental:input.supplemental??false,
     supplementalDemand:input.case.startsWith('demand_')});c.setConfig({});return c;};
   const start=async c=>{c.connectedCallback();c.contexts.hassApi(api);c.contexts.hassUi(ui,()=>{});observers.at(-1).callback([{isIntersecting:true}]);await flush();};
   const raw=c=>nodes(c.shadowRoot).filter(node=>node.dataset.valueStatus==='raw_source');
-  return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,contextResponse,defaultRequest,
+  return {Card,card,start,raw,ctx,owner,window,document,api,ui,panel,cookies,timers,response,contextResponse,defaultRequest,definitions,
     get calls(){return calls;},get sessions(){return sessions;},get frame(){return frame;},
     set ws(fn){ws=fn;},set request(fn){request=fn;},
     newer(){for(const f of Object.values(frame.display.frames))f.sequence++;if(input.supplemental)frame.supplemental.psi.sequence++;},
@@ -84,6 +85,25 @@ function harness() {
 }
 const clockShown=c=>nodes(c._surround).some(node=>node.textContent==='21:26');
 const cases={
+  async acceptance_registration(h){
+    const first=input.case==='acceptance_registration_first';
+    assert.ok(input.tag);assert.deepEqual([...h.definitions.keys()],first?['sds200-mimic-card',input.tag]:[input.tag]);
+    assert.equal(h.window.customCards.length,first?1:0);assert.equal(h.calls,0);
+    const c=h.card();assert.equal(c._supplemental,true);assert.equal(c._supplementalDemand,true);
+    c.setConfig({type:`custom:${input.tag}`,layout:'detail',led_treatment:'border'});
+    assert.throws(()=>c.setConfig({type:'custom:sds200-mimic-card'}));
+    assert.throws(()=>c.setConfig({supplemental:false}));
+    assert.throws(()=>c.setConfig({supplementalDemand:false}));
+    // Both load orders share authentication, not card constructors or opt-in.
+    const candidate=h.Card;vm.runInContext(input.ordinary,h.ctx);
+    const ordinary=h.definitions.get('sds200-mimic-card');assert.notEqual(candidate,ordinary);
+    assert.equal(new ordinary()._supplemental,false);assert.equal(new ordinary()._supplementalDemand,false);
+    vm.runInContext(input.script,h.ctx);assert.equal(h.definitions.get(input.tag),candidate);
+    assert.equal(h.window.customCards.length,1);assert.equal(h.window.customCards[0].type,'sds200-mimic-card');
+    assert.equal(h.calls,0);assert.equal(h.owner._leases,0);assert.equal(h.timers.size,0);
+    await h.start(c);assert.ok(clockShown(c));c.disconnectedCallback();assert.equal(h.owner._leases,0);
+  },
+  async acceptance_registration_first(h){await cases.acceptance_registration(h);},
   async demand_happy(h){
     const c=h.card();await h.start(c);assert.ok(clockShown(c));assert.equal(h.calls,3);
     await h.tick(250);assert.equal(h.calls,5);assert.equal(c._terminal,false);

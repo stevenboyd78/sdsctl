@@ -33,6 +33,7 @@ WEB_ENTRY = "/usr/local/bin/sdsctl-supplemental-acceptance-web"
 IMAGE_SCRIPTS = "/opt/sdsctl-supplemental-acceptance"
 RUNTIME = "src/sds200/home_assistant_app_runtime.py"
 SUPERVISOR = "src/sds200/home_assistant_app_supervisor.py"
+HA_CARD = "src/sds200/themes/home-assistant/mimic-sds/sds200-mimic-card.js"
 
 
 def validate(revision: str, case_id: str, firmware: str) -> None:
@@ -116,10 +117,39 @@ def finite_shutdown(source: str, *, directory: str, revision: str) -> str:
     return before + boundary + signature + "    ) -> None:\n" + prefix + body + delimiter + after
 
 
+def acceptance_card(source: bytes, *, case_id: str) -> tuple[str, bytes]:
+    """Derive a distinct, private custom element; never alter the ordinary card."""
+    tag = f"sds200-mimic-acceptance-{case_id}"
+    code = normal.replace_once(
+        source.decode(), 'const TAG = "sds200-mimic-card";', f'const TAG = "{tag}";'
+    )
+    code = normal.replace_once(
+        code,
+        "if (!customElements.get(TAG)) customElements.define(TAG, Sds200MimicCard);\n"
+        "window.customCards = window.customCards || [];\n"
+        "if (!window.customCards.some(card => card.type === TAG)) window.customCards.push("
+        '{type: TAG, name: "Mimic-SDS", description: "Read-only scanner profile layout '
+        'through the sdsctl App.", preview: true});',
+        "// Private finite acceptance: no picker/preview registration or YAML opt-in.\n"
+        "class Sds200MimicAcceptanceCard extends Sds200MimicCard {\n"
+        "  constructor() { super({supplemental: true, supplementalDemand: true}); }\n"
+        "}\n"
+        "if (!customElements.get(TAG)) customElements.define(TAG, Sds200MimicAcceptanceCard);",
+    )
+    return tag, code.encode()
+
+
 def render(
-    snapshot: dict[str, bytes], revision: str, *, case_id: str, firmware: str
+    snapshot: dict[str, bytes],
+    revision: str,
+    *,
+    case_id: str,
+    firmware: str,
+    ha_card: bool = False,
 ) -> dict[str, bytes]:
     validate(revision, case_id, firmware)
+    if type(ha_card) is not bool:
+        raise ValueError("HA-card selection must be an explicit boolean.")
     # No old research options are accepted by this adapter.
     result = normal.render(snapshot, revision)
     report = json.loads(result.pop("candidate-source.json"))
@@ -193,8 +223,10 @@ def render(
         "Never remove, replace, or adopt a consumed case directory. Startup and passive "
         "reads do not arm acquisition. Verify ready identity inside the exact container "
         "PID namespace, obtain fresh physical readiness, then use the reviewed one-shot "
-        "arm helper followed by one fresh authenticated WebUI consumer. "
-        "No scoped SQK/DQK, AST, automatic retry, Pi, TUI or HA-card change is selected.\n\n"
+        "arm helper followed by one fresh authenticated consumer. "
+        "No scoped SQK/DQK, AST, automatic retry, Pi or TUI change is selected. "
+        "If selected, the private HA resource is separate from the WebUI consumer; "
+        "use only the single surface admitted for the particular trial.\n\n"
         "The child guardian only proves process exit. BEFORE candidate startup install "
         "and verify a distinct host-side restoration deadline bound to this case and a "
         "freshly verified normal acceptance image/context. Stop only this candidate, "
@@ -204,6 +236,38 @@ def render(
         "profile, credential, recording and case evidence. This staging command does "
         "not install that restoration guard or prove App recovery.\n"
     ).encode()
+    if ha_card:
+        tag, resource = acceptance_card(snapshot[HA_CARD], case_id=case_id)
+        filename = f"{tag}.js"
+        result[filename] = resource
+        report["ha_card"] = {
+            "resource_file": filename,
+            "custom_type": f"custom:{tag}",
+            "resource_sha256": hashlib.sha256(resource).hexdigest(),
+            "installed": False,
+            "ordinary_resource_unchanged": True,
+        }
+        result["DOCS.md"] += (
+            "\n## Optional private HA-card resource (not installed)\n\n"
+            f"Resource: `{filename}`. Explicit custom type: `custom:{tag}`. "
+            "This is derived from the same pinned generated card with a separate "
+            "custom element selecting the internal supplemental demand constructor. "
+            "The ordinary packaged resource, YAML options and card-picker entries "
+            "are unchanged. The case-specific name distinguishes the artifact; it "
+            "is NOT a credential or proof of server/case identity. Independently "
+            "verify the exact App/source/case, single scanner owner, authenticated "
+            "Ingress and restoration guard before a fresh trial.\n\n"
+            "Staging does not publish this file, register a HA resource or edit a "
+            "dashboard. Separate reviewed installation must preserve existing "
+            "resources/views, use the unique filename and type, and verify bytes. "
+            "Close other supplemental consumers. Mount only the admitted test card "
+            "after fresh operator readiness and the one-shot arm. Passive GETs and "
+            "resource installation cannot arm the daemon. Hide/remove the test "
+            "card after the finite window and confirm the unchanged normal App "
+            "has recovered; preserve the closed case without restarting it. No "
+            "audio/recording or continuous-reader acceptance is implied. The "
+            "clock is scanner-reported DTM data, never browser/computer time.\n"
+        ).encode()
     report.update(
         purpose="local-mimic-finite-native-supplemental-acceptance-only",
         app_slug=SLUG,
@@ -229,8 +293,12 @@ def render(
     return result
 
 
-def from_revision(revision: str, *, case_id: str, firmware: str) -> dict[str, bytes]:
+def from_revision(
+    revision: str, *, case_id: str, firmware: str, ha_card: bool = False
+) -> dict[str, bytes]:
     validate(revision, case_id, firmware)
+    if type(ha_card) is not bool:
+        raise ValueError("HA-card selection must be an explicit boolean.")
     archive = normal.git(
         "archive",
         "--format=tar",
@@ -263,7 +331,7 @@ def from_revision(revision: str, *, case_id: str, firmware: str) -> dict[str, by
     for name in DRIVERS:
         if snapshot.get("scripts/" + name) != (ROOT / "scripts" / name).read_bytes():
             raise ValueError("Use the staging adapters from the selected source commit.")
-    return render(snapshot, revision, case_id=case_id, firmware=firmware)
+    return render(snapshot, revision, case_id=case_id, firmware=firmware, ha_card=ha_card)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -272,12 +340,20 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--expected-firmware", required=True)
     parser.add_argument("--destination", type=Path, required=True)
     parser.add_argument("--case-id")
+    parser.add_argument(
+        "--ha-card", action="store_true", help="Stage a separate private card; never install it."
+    )
     parser.add_argument("--verify", action="store_true")
     args = parser.parse_args(argv)
     if args.verify and args.case_id is None:
         parser.error("Verification requires the separately recorded case ID.")
     case_id = args.case_id if args.case_id is not None else uuid.uuid4().hex
-    files = from_revision(args.source_revision, case_id=case_id, firmware=args.expected_firmware)
+    files = from_revision(
+        args.source_revision,
+        case_id=case_id,
+        firmware=args.expected_firmware,
+        ha_card=args.ha_card,
+    )
     if not args.verify:
         if normal.git("rev-parse", "HEAD").decode().strip() != args.source_revision or normal.git(
             "status", "--porcelain"

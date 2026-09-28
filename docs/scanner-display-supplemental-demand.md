@@ -108,6 +108,20 @@ headers cannot grant access. No new cross-origin/CORS allowance is introduced.
 - HA card: internal constructor `supplementalDemand: true` additionally requires
   `supplemental: true`. Neither is an accepted YAML/editor option. It uses the
   existing trusted Ingress context URL and fixed sibling demand/frame routes.
+  The offline `stage_supplemental_acceptance.py --ha-card` adapter can derive a
+  separate case-named resource from the same source-pinned generated card. Its
+  private custom element selects both constructor options without changing the
+  ordinary resource or registering a card-picker preview. Staging only writes a
+  build artifact and its digest; it does not publish a resource, edit a dashboard,
+  start an App or arm acquisition. Verification must repeat `--ha-card` and the
+  original case/source pins. The name distinguishes artifacts, not server identity
+  or authorization. Any installed check still requires a freshly verified single
+  App owner, authenticated Ingress, independent restoration guard, one admitted
+  visible card, fresh human readiness and the one-shot arm. Other supplemental
+  consumers must remain closed. This narrow read-only clock check is separate
+  from recording-controller integration and does not qualify either continuous
+  acquisition or active recording/finalization. Scanner DTM values are not
+  replaced with browser/computer time.
 
 The two browser consumers use `crypto.getRandomValues`, not a secure-context-only
 UUID helper, so the candidate also supports trusted HA HTTP/IP installations.

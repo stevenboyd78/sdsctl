@@ -99,8 +99,11 @@ data, credentials or initialize a replacement profile.
 Only the default daemon, Ingress WebUI and native HTTPS WebUI executables are
 changed in the staged runtime. Arguments, media command, authentication, profile
 configuration and options/schema retain their normal contracts. Manual boot and
-unmapped ports remain the staging defaults. There are no Pi, TUI, HA-card or
-published-catalog changes. Before candidate startup, confirm every other scanner
+unmapped ports remain the staging defaults. There are no Pi, TUI or
+published-catalog changes. An explicit `--ha-card` additionally stages a separate
+private, case-named HA resource; it never installs it or alters ordinary cards.
+See the [consumer selection contract](scanner-display-supplemental-demand.md#explicit-consumer-selection).
+Before candidate startup, confirm every other scanner
 owner is stopped. Recovery stops this candidate, proves exit and starts the
 unchanged normal acceptance App; it does not rebuild that baseline. This avoids
 depending on a local-image rebuild reproducing a previously verified image.

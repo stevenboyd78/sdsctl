@@ -83,6 +83,7 @@ def test_separate_deterministic_adapter_leaves_normal_staging_unchanged(snapshot
         "supplemental-web-entry.py",
     }
     report = json.loads(result["candidate-source.json"])
+    assert "ha_card" not in report
     assert report["case_id"] == CASE and report["source_revision"] == REVISION
     assert report["app_slug"] == stager.SLUG and stager.SLUG != normal.SLUG
     assert report["normal_acceptance_slug"] == normal.SLUG
@@ -116,6 +117,89 @@ def test_separate_deterministic_adapter_leaves_normal_staging_unchanged(snapshot
     for name in stager.LAUNCHERS:
         assert result[name] == snapshot["scripts/" + name]
         assert name in dockerfile
+
+
+def test_explicit_ha_resource_is_distinct_pinned_and_does_not_change_app(snapshot):
+    before = dict(snapshot)
+    baseline = render(snapshot)
+    result = render(snapshot, ha_card=True)
+    assert snapshot == before and result == render(snapshot, ha_card=True)
+    report = json.loads(result["candidate-source.json"])
+    resource = report["ha_card"]
+    tag = f"sds200-mimic-acceptance-{CASE}"
+    filename = f"{tag}.js"
+    assert resource == {
+        "resource_file": filename,
+        "custom_type": f"custom:{tag}",
+        "resource_sha256": hashlib.sha256(result[filename]).hexdigest(),
+        "installed": False,
+        "ordinary_resource_unchanged": True,
+    }
+    assert set(result) - set(baseline) == {filename}
+    assert {name for name in baseline if result[name] != baseline[name]} == {
+        "candidate-source.json",
+        "DOCS.md",
+    }
+    assert result[stager.HA_CARD] == snapshot[stager.HA_CARD]
+    assert report["files"][filename] == resource["resource_sha256"]
+    assert filename not in result["Dockerfile"].decode()  # Separate reviewed publication.
+    assert b"window.customCards" not in result[filename]
+    other = stager.render(
+        snapshot,
+        REVISION,
+        case_id="23456789abcd4def8abc123456789abc",
+        firmware=FIRMWARE,
+        ha_card=True,
+    )
+    assert json.loads(other["candidate-source.json"])["ha_card"] != resource
+
+
+@pytest.mark.parametrize("selection", [None, 0, 1, "true", {}, []])
+def test_ha_selection_refuses_non_boolean_before_git_or_source(monkeypatch, selection):
+    monkeypatch.setattr(normal, "git", lambda *args: pytest.fail("Git invoked"))
+    with pytest.raises(ValueError, match="explicit boolean"):
+        stager.from_revision(REVISION, case_id=CASE, firmware=FIRMWARE, ha_card=selection)
+    with pytest.raises(ValueError, match="explicit boolean"):
+        render({}, ha_card=selection)
+
+
+@pytest.mark.parametrize(
+    "boundary",
+    [
+        b'const TAG = "sds200-mimic-card";',
+        b"customElements.define(TAG, Sds200MimicCard)",
+        b"preview: true",
+    ],
+)
+@pytest.mark.parametrize("change", ["missing", "duplicate"])
+def test_private_card_refuses_registration_drift(snapshot, boundary, change):
+    source = snapshot[stager.HA_CARD]
+    registration = source[source.index(b"if (!customElements.get(TAG))") :].split(b"\n\n})();")[0]
+    snapshot[stager.HA_CARD] = (
+        source.replace(boundary, b"unreviewed")
+        if change == "missing"
+        else source + (boundary if boundary.startswith(b"const TAG") else registration)
+    )
+    with pytest.raises(ValueError, match="source contract"):
+        render(snapshot, ha_card=True)
+
+
+@pytest.mark.parametrize("mismatch", ["selection", "bytes", "manifest"])
+def test_private_card_verification_uses_selected_inventory(snapshot, tmp_path, mismatch):
+    result = render(snapshot, ha_card=True)
+    target = tmp_path / "candidate"
+    normal.stage(target, result)
+    normal.verify(target, result)
+    filename = json.loads(result["candidate-source.json"])["ha_card"]["resource_file"]
+    if mismatch == "selection":
+        result = render(snapshot)
+    elif mismatch == "bytes":
+        (target / filename).write_bytes(b"modified")
+    else:
+        (target / "candidate-source.json").write_bytes(b"{}")
+    with pytest.raises(ValueError):
+        normal.verify(target, result)
+    assert target.exists()
 
 
 @pytest.mark.parametrize(
@@ -328,10 +412,13 @@ def archive(snapshot):
     return target.getvalue()
 
 
-def test_archive_is_source_pinned_and_checks_both_staging_drivers(snapshot, monkeypatch):
+@pytest.mark.parametrize("ha_card", [False, True])
+def test_archive_is_source_pinned_and_checks_both_staging_drivers(snapshot, monkeypatch, ha_card):
     calls = []
     monkeypatch.setattr(normal, "git", lambda *args: calls.append(args) or archive(snapshot))
-    assert stager.from_revision(REVISION, case_id=CASE, firmware=FIRMWARE) == render(snapshot)
+    assert stager.from_revision(
+        REVISION, case_id=CASE, firmware=FIRMWARE, ha_card=ha_card
+    ) == render(snapshot, ha_card=ha_card)
     assert calls[0][:4] == ("archive", "--format=tar", REVISION, "--")
     for name in (*stager.DRIVERS, *stager.LAUNCHERS):
         assert "scripts/" + name in calls[0]
@@ -372,7 +459,10 @@ def test_verify_recomputes_exact_inventory_and_keeps_mismatches(snapshot, tmp_pa
     assert destination.exists()
 
 
-def test_cli_generates_case_only_during_stage_requires_case_for_verify(monkeypatch, tmp_path):
+@pytest.mark.parametrize("ha_card", [False, True])
+def test_cli_generates_case_only_during_stage_requires_case_for_verify(
+    monkeypatch, tmp_path, ha_card
+):
     seen = []
     monkeypatch.setattr(stager, "from_revision", lambda rev, **kw: seen.append(kw) or {"one": b"x"})
     monkeypatch.setattr(normal, "git", lambda *a: REVISION.encode() if a[0] == "rev-parse" else b"")
@@ -384,7 +474,10 @@ def test_cli_generates_case_only_during_stage_requires_case_for_verify(monkeypat
         "--destination",
         str(tmp_path / "candidate"),
     ]
+    if ha_card:
+        args.append("--ha-card")
     stager.main(args)
+    assert seen[0]["ha_card"] is ha_card
     assert UUID(hex=seen[0]["case_id"]).version == 4
     with pytest.raises(SystemExit):
         stager.main([*args, "--verify"])
