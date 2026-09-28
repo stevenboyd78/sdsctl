@@ -136,6 +136,12 @@ collections and checks both original bindings before, between and after them.
 One unchanged two-second absolute deadline is passed through both collectors;
 the second cannot start a fresh two-second allowance after the first finishes.
 An outer deadline may narrow the ordinary collector's limit but cannot extend it.
+That same deadline now reaches both complete source reads, each underlying tree
+traversal, and both interpreter/dependency snapshots. Their standalone default
+budgets remain unchanged; an explicit outer bound can only shorten them. Expiry
+after a first snapshot refuses before another starts. A file-read timeout closes
+owned descriptors and returns no partial inventory. These cooperative checks do
+not interrupt a blocked filesystem syscall or qualify a watchdog.
 Loss, mismatch, contention or timeout consumes the paired comparison without
 closing borrowed peers or granting any recovery authority. An earlier successful
 comparison is never a cached substitute for the next full read. This remains a

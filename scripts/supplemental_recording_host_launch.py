@@ -1437,14 +1437,14 @@ class HelperQualification:
                 before = self._environment(configured, deadline)
                 source = self._source_layout(root)
                 check_root()
-                source.verify(self.runtime_pin.source)
+                source.verify(self.runtime_pin.source, deadline=deadline)
                 check_root()
                 check_proc()
                 runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
-                    self.runtime_pin.interpreter, self.timezone
+                    self.runtime_pin.interpreter, self.timezone, deadline=deadline
                 )
                 check_root()
-                source.verify(self.runtime_pin.source)
+                source.verify(self.runtime_pin.source, deadline=deadline)
                 check_root()
                 check_proc()
                 after = self._environment(configured, deadline)

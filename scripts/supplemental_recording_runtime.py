@@ -835,7 +835,7 @@ class Layout:
         except Exception:
             raise UnconfirmedRuntime(MESSAGE) from None
 
-    def observe_supervised(self, timezone):
+    def observe_supervised(self, timezone, *, deadline=None):
         """Separate full runtime profile including the complete timezone tree.
 
         Same closed image layout plus /usr/share/zoneinfo, /etc/localtime as a
@@ -845,13 +845,22 @@ class Layout:
         and metadata files too; no parser or code from the observed tree runs.
         Original observe()/verify() fingerprints and behavior remain unchanged.
         Unshadowed actual mounts and actual process environment are still separate.
+        An outer deadline narrows the complete double-read budget; it never renews
+        time between snapshots or extends the original runtime inventory limit.
         """
         try:
             _timezone_name(timezone)
             require(type(self.root) is type(Path()) and self.root.is_absolute())
             require(".." not in self.root.parts and not str(self.root).startswith("//"))
-            deadline = time.monotonic() + MAX_SECONDS
+            began = time.monotonic()
+            if deadline is not None:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                deadline = min(began + MAX_SECONDS, deadline)
+            else:
+                deadline = began + MAX_SECONDS
+            require(began < deadline)
             first, count, size = self._snapshot(deadline, timezone=timezone)
+            require(time.monotonic() < deadline)
             second, count2, size2 = self._snapshot(deadline, timezone=timezone)
             require((first, count, size) == (second, count2, size2))
             require(time.monotonic() < deadline)
@@ -872,10 +881,14 @@ class Layout:
         except Exception:
             raise UnconfirmedRuntime(MESSAGE) from None
 
-    def verify_supervised(self, expected_sha256, timezone):
+    def verify_supervised(self, expected_sha256, timezone, *, deadline=None):
         try:
             digest(expected_sha256)
-            observed = self.observe_supervised(timezone)
+            observed = (
+                self.observe_supervised(timezone)
+                if deadline is None
+                else self.observe_supervised(timezone, deadline=deadline)
+            )
             require(observed.sha256 == expected_sha256)
             return observed
         except Exception:

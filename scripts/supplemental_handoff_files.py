@@ -9,6 +9,7 @@ and bind this evidence to independently inspected image/container identities.
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import re
 import stat
@@ -59,7 +60,11 @@ class FileEvidence:
 
 
 def inventory(
-    root: Path, *, max_file_bytes: int | None = None, source_directories: bool = False
+    root: Path,
+    *,
+    max_file_bytes: int | None = None,
+    source_directories: bool = False,
+    deadline: float | None = None,
 ) -> dict[str, dict[str, int | str]]:
     """Hash one explicit tree, with no symlinks, special files or hardlinks.
 
@@ -73,6 +78,7 @@ def inventory(
     This is checked on the same held descriptors as traversal, not a separate
     path walk. It does not change the file-only inventory schema or qualify
     external ancestor permissions, image provenance or executable ownership.
+    An explicit outer deadline can narrow, never extend, the original budget.
     """
     opened: list[tuple[int, str, int, tuple[int, ...]]] = []
     anchor = -1
@@ -85,10 +91,19 @@ def inventory(
         require(type(source_directories) is bool)
         require(type(root) is type(Path()) and root.is_absolute())
         require(root != Path("/") and all(p not in (".", "..") for p in root.parts))
-        deadline = time.monotonic() + MAX_SECONDS
+        outer_bound = deadline is not None
+        began = time.monotonic()
+        if outer_bound:
+            require(type(deadline) in (int, float) and math.isfinite(deadline))
+            deadline = min(began + MAX_SECONDS, deadline)
+        else:
+            deadline = began + MAX_SECONDS
+        require(began < deadline)
         anchor = os.open("/", DIRECTORY)
         parent = anchor
         for name in root.parts[1:]:
+            if outer_bound:
+                require(time.monotonic() < deadline)
             child = os.open(name, DIRECTORY, dir_fd=parent)
             try:
                 initial = identity(os.fstat(child))
@@ -183,10 +198,14 @@ def inventory(
         # identity/mode/owner must remain stable; the selected root must match
         # its entire original stat (including mtime and ctime).
         for index, (parent, name, child, before) in enumerate(opened):
+            if outer_bound:
+                require(time.monotonic() < deadline)
             current = identity(os.fstat(child))
             entry = identity(os.stat(name, dir_fd=parent, follow_symlinks=False))
             width = len(before) if index == len(opened) - 1 else 5
             require(current[:width] == entry[:width] == before[:width])
+        if outer_bound:
+            require(time.monotonic() < deadline)
         return dict(sorted(result.items()))
     except Exception:
         raise UnconfirmedFiles("Protected filesystem evidence is unconfirmed.") from None

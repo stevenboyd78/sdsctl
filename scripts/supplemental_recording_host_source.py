@@ -10,6 +10,7 @@ mounts and the future service entrypoint remain independent qualification gates.
 
 from __future__ import annotations
 
+import math
 import os
 import stat
 import time
@@ -181,10 +182,17 @@ class Layout:
             return PERMISSION_FILES, PERMISSION_KIND
         return (STARTUP_FILES, STARTUP_KIND) if self.startup else (HELPER_FILES, KIND)
 
-    def _snapshot(self):
+    def _snapshot(self, *, deadline=None):
+        def timely():
+            require(deadline is None or time.monotonic() < deadline)
+
         expected, kind = self._profile()
-        runtime = files.inventory(self.runtime, source_directories=True)
-        helper = files.inventory(self.helper, source_directories=True)
+        timely()
+        bound = {} if deadline is None else {"deadline": deadline}
+        runtime = files.inventory(self.runtime, source_directories=True, **bound)
+        timely()
+        helper = files.inventory(self.helper, source_directories=True, **bound)
+        timely()
         require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == expected)
         # inventory() includes every file, but an extra empty namespace must
         # also fail. This helper tree is deliberately flat and closed.
@@ -193,6 +201,7 @@ class Layout:
             before, names = files.identity(os.fstat(fd)), set()
             with os.scandir(fd) as entries:
                 for entry in entries:
+                    timely()
                     require(entry.name in expected and entry.name not in names)
                     require(
                         stat.S_ISREG(os.stat(entry.name, dir_fd=fd, follow_symlinks=False).st_mode)
@@ -204,12 +213,13 @@ class Layout:
         count, size = len(runtime) + len(helper), 0
         require(count <= files.MAX_FILES)
         for item in (*runtime.values(), *helper.values()):
+            timely()
             require(item["mode"] & 0o7022 == 0)
             size += item["size"]
             require(size <= files.MAX_TOTAL_BYTES)
         return {"schema": 1, "kind": kind, "runtime": runtime, "helper": helper}, count, size
 
-    def observe(self):
+    def observe(self, *, deadline=None):
         try:
             self._profile()
             for path in (self.runtime, self.helper):
@@ -217,10 +227,18 @@ class Layout:
                 require(".." not in path.parts)
             require(not self.runtime.is_relative_to(self.helper))
             require(not self.helper.is_relative_to(self.runtime))
-            deadline = time.monotonic() + MAX_SECONDS
-            first, count, size = self._snapshot()
+            outer_bound = deadline is not None
+            began = time.monotonic()
+            if outer_bound:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                deadline = min(began + MAX_SECONDS, deadline)
+            else:
+                deadline = began + MAX_SECONDS
+            require(began < deadline)
+            bound = {"deadline": deadline} if outer_bound else {}
+            first, count, size = self._snapshot(**bound)
             require(time.monotonic() < deadline)
-            second, count2, size2 = self._snapshot()
+            second, count2, size2 = self._snapshot(**bound)
             require((first, count, size) == (second, count2, size2) and time.monotonic() < deadline)
             return Evidence(
                 checksum(first), checksum(first["runtime"]), checksum(first["helper"]), count, size
@@ -228,10 +246,10 @@ class Layout:
         except Exception:
             raise UnconfirmedSource(MESSAGE) from None
 
-    def verify(self, expected_sha256):
+    def verify(self, expected_sha256, *, deadline=None):
         try:
             digest(expected_sha256)
-            result = self.observe()
+            result = self.observe() if deadline is None else self.observe(deadline=deadline)
             require(result.sha256 == expected_sha256)
             return result
         except Exception:
