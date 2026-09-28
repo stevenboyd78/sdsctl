@@ -168,6 +168,9 @@ class PeerRuntimePair:
     def __init__(self, writer, observer):
         self.owner, self.lock = (launch.os.getpid(), launch.get_ident()), Lock()
         self.failed, self.elapsed_seconds = False, None
+        # An explicitly selected outer supervisor may retain these original
+        # peers once, before any action. Comparison itself still signals none.
+        self.termination_capture_attempted = False
         try:
             require(type(self) is PeerRuntimePair)
             require(
@@ -211,6 +214,9 @@ class PeerRuntimePair:
         self.observer._guard(deadline)
 
     def __call__(self):
+        return self._collect_before(None)
+
+    def _collect_before(self, outer_deadline):
         acquired = False
         self.elapsed_seconds = None
         try:
@@ -218,6 +224,10 @@ class PeerRuntimePair:
             acquired = True
             began = launch.time.monotonic()
             deadline = min(began + self.MAX_SECONDS, self.writer.plan.lease["ready_by"])
+            if outer_deadline is not None:
+                require(type(outer_deadline) in (int, float))
+                require(launch.math.isfinite(outer_deadline))
+                deadline = min(deadline, outer_deadline)
             self._guard(deadline)
             self.writer._collect_before(deadline)
             self._guard(deadline)

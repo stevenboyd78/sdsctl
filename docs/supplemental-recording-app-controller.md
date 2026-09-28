@@ -16,6 +16,7 @@ independent supervision and recovery integration.
 | Separate peer runtime expectations | Independently pinned `Expectations` declaration | Clock-free template digest and explicit writer/observer image, source, interpreter, environment, argv and confinement pins; pure comparison, not observed qualification or consent |
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
 | Paired runtime comparison | External `PeerRuntimePair` | Both original role collectors and distinct original init witnesses, one plan/template/declaration/Engine client, two full fresh collections in a shared two-second window; no cached success, launch or continuing-lifetime authority |
+| Original peer termination | Explicit outer `Custody` and `arm` | Both runtime comparisons and zero-offset domains, duplicate original peer handles, immutable BOOTTIME deadline and a separate kernel-only watcher; narrowly scoped peer stops, not App actions, native exits or restoration |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -173,6 +174,71 @@ privilege facts in that fixture are still synthetic. This is **not** installed
 image provenance, independent termination or an end-to-end active launch. Both
 original peers still need a reviewed, independently supervised lifetime before
 any action.
+
+### Explicit outer peer termination
+
+The uninstalled `supplemental_recording_peer_termination` library provides a
+separate, narrowly scoped termination mechanism. It is not an active launcher,
+an installed outer runtime, an App recovery owner, or a new permission codec.
+No current source inventory, passive command or existing entrypoint selects it.
+
+`Custody` consumes one capture attempt on the original `PeerRuntimePair`.
+It requires the outer owner's own continuing `ClockWitness` and two distinct
+live `ZeroDomain` witnesses for the original writer and observer. The outer
+clock is not reconstructed from, or relabeled as, the writer's decoded clock.
+Both complete runtime collections and domain checks share one two-second
+capture bound, additionally limited by the original readiness cutoff. The
+pair's optional outer cutoff can narrow but never extend its existing limit.
+Capture duplicates the original pidfds and namespace handles and arms a kernel
+`CLOCK_BOOTTIME` timer at the original `recover_by` value, without a new lease.
+Capture alone starts and signals nothing; borrowed owners are never closed.
+
+Arming is a separate one-use operation requiring the explicit
+`terminate-original-recording-peers-only-v1` scope. This string selects the
+allowed operation; it is **not authenticated user consent or an active App
+action grant**. Old preflight permission kinds, readiness words and source
+hashes are not accepted in its place. Arming rechecks both original runtimes
+and domains in another bounded original-readiness window, verifies signaling
+permission, and forks only from a single-threaded outer process with the normal
+child-reaping policy. Neither arbitrary commands nor caller-selected PIDs,
+replacement handles or deadlines can be supplied to the arming function.
+
+The child drops unrelated inherited descriptors, application signal handlers
+and signal masks before acknowledging readiness. Its fixed loop polls only
+the retained peer pidfds, outer-owner pidfd, cancellation pipe and original
+absolute timer. Either peer's exit, outer-owner loss, cancellation or timer
+expiry causes it to attempt SIGKILL independently against both original peers.
+There is no post-deadline grace, process discovery, numeric-PID signal fallback,
+Engine call, scanner command, journal write or recovery replay. Closing the
+outer copy of capture handles does not disarm the child. A failed arm after
+custody transfer stops both bound peers and preserves the case.
+
+The returned `Watch` reaps only its own watcher. It has no deadline extension or
+disarm API. Closing it means cancellation. A frozen watcher is stopped through
+its own retained pidfd; an unexpected watcher return makes the outer owner
+stop both original peers and report uncertainty. A failed signal to one must
+not skip the other. Return codes distinguish both peers already exited, original
+deadline, peer loss, outer-owner loss and cancellation; none claims successful
+recording, original native exit or restored App health. A SIGKILL request cannot
+guarantee prompt exit from uninterruptible kernel I/O.
+
+Local tests use real disposable child processes, pidfds, time namespaces,
+BOOTTIME timers and signals. Frozen writer, frozen observer, both frozen,
+cancellation, either peer's exit, watcher failure, timer changes, failed arm,
+descriptor cleanup and unchanged deadlines are covered. The core parent-loss
+test uses a separate disposable designated-parent process so the test runner
+can directly reap the watcher; public arming separately binds the real caller's
+pidfd. Engine/container/image/command/confinement facts remain synthetic.
+The test-only short plan is created before its template and expectations;
+the production 1500-second total limit is unchanged.
+
+This still does **not** independently bound a killed/frozen watcher while its
+outer owner is also blocked, qualify the outer executable/proc environment,
+select an installed fixed entrypoint, join the authenticated peer channel, or
+designate exclusive recovery custody before mutation. Those require the final
+platform-supervised topology and failure-recovery integration. Killing the
+remaining observer after writer loss does not authorize a new observer to adopt
+the journal, replay uncertain commands, or restore normal App ownership.
 
 ### Read-only service preparation
 
@@ -1131,7 +1197,10 @@ remain separate requirements before selecting any active command.
    The separate peer expectations and paired read-only collectors now provide
    explicit comparison inputs and a shared collection bound; they do not
    establish continuing peer communication/custody, qualify installed provenance
-   or admit an active entrypoint.
+   or admit an active entrypoint. The separate termination library now exercises
+   both original peer handles and an absolute kernel timer, but the qualified
+   outer lifetime, authenticated channel join, active action scope and exclusive
+   failure/recovery owner still need integration.
 3. A fresh isolated fixed-command end-to-end lifetime joining actual native
    returns, full source/runtime pins and original independent observer protocol,
    with independently bounded termination.
