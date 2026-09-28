@@ -80,7 +80,9 @@ def main():
     with ExitStack() as cleanup:
         witness = apps.processes.ProcessWitness(helper)
         cleanup.callback(witness.close)
-        clock = m.plans.clock.ClockWitness(plan.original_clock)
+        # Independent observer owns its local sample, never a reconstruction
+        # of the writer's original Startup witness from serialized plan bytes.
+        clock = m.plans.clock.ClockWitness(m.plans.clock.read())
         cleanup.callback(clock.close)
         domain = links.domains.ZeroDomain(clock.original, witness)
         cleanup.callback(domain.close)

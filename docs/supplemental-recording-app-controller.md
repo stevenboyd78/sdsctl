@@ -17,7 +17,8 @@ independent supervision and recovery integration.
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
 | Paired runtime comparison | External `PeerRuntimePair` | Both original role collectors and distinct original init witnesses, one plan/template/declaration/Engine client, two full fresh collections in a shared two-second window; no cached success, launch or continuing-lifetime authority |
 | Original peer termination | Explicit outer `Custody` and `arm` | Both runtime comparisons and zero-offset domains, duplicate original peer handles, immutable BOOTTIME deadline and a separate kernel-only watcher; narrowly scoped peer stops, not App actions, native exits or restoration |
-| One-use private descriptor delivery | Explicit bootstrap `Endpoint` and outer `deliver` | Kernel-authenticated original three-process context, separate descriptor handoff before unchanged Link, both full runtime reads before/after under one shared bound and original watcher cancellation on failure; transport receipts, not Ready or App permission |
+| One-use private descriptor delivery | Explicit bootstrap `Endpoint` and outer `deliver` | Kernel-authenticated original three-process context, separate descriptor handoff before Link evidence exchanges, both full runtime reads before/after under one shared bound and original watcher cancellation on failure; transport receipts, not Ready or App permission |
+| Original writer channel intake | Uninstalled `supplemental_recording_writer_channel.receive` | Accepted baseline-derived original Startup, same continuing writer clock and original inputs, one-use bounded descriptor intake before journal assembly; no reconstructed writer, action grant or installed launcher |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -295,7 +296,7 @@ any action gate. The existing `Link` still rejects descriptor passing in its own
 messages, and passive preparation/permission formats remain unchanged.
 
 Local tests use three actual disposable processes with connect/accept credentials,
-descriptor passing and unchanged `Link` guards, including wrong actual senders,
+descriptor passing and `Link` credential/descriptor guards, including wrong actual senders,
 bad/truncated descriptors, packet faults, missing acknowledgments, timeouts and
 leak/reused-fd checks. Joined tests run both complete runtime reads, then actual
 delivery, Link construction and independent original-peer termination in one
@@ -305,6 +306,49 @@ not the running installed image. These modules stay **outside every existing
 observed source graph**. The qualified private connection, fixed active command,
 outer/runtime/input provenance, independent platform bound, separate action scope
 and exclusive original recovery owner still require integration before live use.
+
+### Original writer startup and independent observer clock
+
+The uninstalled `supplemental_recording_writer_channel.receive` joins descriptor
+intake to the writer's **actual original accepted Startup**. It will not take a
+serialized plan or recreate a writer ClockWitness. The accepted baseline and
+projection must still be the originals from the pre-handoff read, and service
+or App publication must not already have begun. An independently authenticated
+runtime-declaration digest is an explicit comparison input; computing that digest
+from received bytes would not establish its provenance.
+
+One attempt is consumed on the original Startup. Initial checks, descriptor
+exchange and final rechecks share the same two-second/original-ready cutoff;
+an optional external deadline can only shorten it. Changed owner references,
+changed inputs, partial delivery, expired budgets and contradictory attempt state
+refuse. Owned received descriptors are retired on failure; a foreign descriptor
+reusing a numeric fd is detached from the stale wrapper, not closed. Borrowed
+clocks, witnesses and connections remain caller-owned, although a failed Startup
+check can invalidate Startup's own inputs. No journal is created by this join,
+and neither success nor a receipt admits service actions or a second attempt.
+The qualified caller must retain Startup until Link/service borrowers and the
+returned Channels have been closed. The existing passive command does not select
+this new module, and no observed source graph has been expanded to include it.
+
+`Link` now distinguishes the roles' clock ownership. The **writer** still must use
+the unchanged original startup sample (allowing its equal immutable decoded plan
+representation). The **observer** retains its own actual continuing ClockWitness,
+whose initial sample may precede or follow the writer's publication. It does not
+reconstruct or relabel the writer's clock. Both roles still require the original
+same user/time/time-for-children namespace handles, unchanged clock object and
+sample, and fresh readings valid against the original plan and recovery deadline.
+This does not enable different clock namespaces, inferred offsets or deadline
+renewal. Clock origin provenance remains a launcher responsibility.
+
+The three-process test keeps the real baseline-derived writer Startup alive
+through delivery, Link exchange and passive service/journal assembly. The outer
+and observer each retain their own locally sampled clock. Broader actual/staged
+observer tests also use an independently sampled observer clock. Private files,
+processes, namespace handles, clocks and fd transfer are real; host/Engine facts,
+cgroups, installed images and authenticated input provenance remain synthetic.
+An already established private connection and fixture stdin configuration are
+not installed provisioning. The fixed command and authenticated per-role input
+distribution, platform bound and distinct App action gate remain required.
 
 ### Read-only service preparation
 

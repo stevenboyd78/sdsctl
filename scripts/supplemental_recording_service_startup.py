@@ -89,6 +89,9 @@ class Startup:
         self.service_used = self._service_active = False
         # Separate optional App-start publication; no existing command selects it.
         self.app_idle_publication_used = False
+        # The separate, uninstalled channel join may consume this once. Neither
+        # the passive command nor any existing source profile selects that join.
+        self.peer_channel_attempted = False
         self._service_invalidate = None
         self.clock = self.offer = self.publisher = self.original = self.reader = None
         self.baseline = self.projected = self._service_inputs = None

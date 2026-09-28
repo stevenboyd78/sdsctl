@@ -458,6 +458,74 @@ def test_original_recovery_deadline_and_clock_offset_stay_authoritative(monkeypa
         assert case.link.sequence == 0
 
 
+@pytest.mark.parametrize("when", ["before-plan", "after-plan"])
+def test_observer_retains_own_original_clock_without_relabeling_writer_origin(monkeypatch, when):
+    observer_clock = m.clock.ClockWitness(m.clock.read()) if when == "before-plan" else None
+    try:
+        with protocol(monkeypatch) as case:
+            if observer_clock is None:
+                observer_clock = m.clock.ClockWitness(m.clock.read())
+            origin = observer_clock.original
+            assert not m.plans._same_plan_value(origin, case.plan.original_clock)
+            link = m.Link(case.channel, case.plan, observer_clock, case.peer, role="observer")
+            try:
+                assert link.timer is observer_clock and link._clock_origin is origin
+                assert link.plan is case.plan and link.sequence == 0
+                link._guard(time.monotonic() + 1)
+                assert link.timer.original is origin and not observer_clock.closed
+                # It is never legal to use the observer's independent sample
+                # as a replacement original writer/startup clock.
+                denied(
+                    lambda: m.Link(
+                        case.channel, case.plan, observer_clock, case.peer, role="writer"
+                    )
+                )
+                link._guard(time.monotonic() + 1)
+            finally:
+                link.close()
+            assert not observer_clock.closed
+    finally:
+        if observer_clock is not None:
+            observer_clock.close()
+
+
+@pytest.mark.parametrize("fault", ["object", "origin", "boot", "namespace", "closed", "deadline"])
+def test_independent_observer_clock_cannot_be_replaced_or_extend_plan(monkeypatch, fault):
+    with protocol(monkeypatch) as case:
+        clocks = [m.clock.ClockWitness(m.clock.read())]
+        timer = clocks[0]
+        link = m.Link(case.channel, case.plan, timer, case.peer, role="observer")
+        try:
+            if fault == "object":
+                clocks.append(m.clock.ClockWitness(m.clock.read()))
+                link.timer = clocks[-1]
+            elif fault == "origin":
+                timer.original = replace(timer.original)
+            elif fault in ("boot", "namespace"):
+                object.__setattr__(timer.original, fault, "f" * 32 if fault == "boot" else (0, 0))
+            elif fault == "closed":
+                timer.close()
+            else:
+                sample = m.clock.read()
+                later = 1600 * m.clock.NS
+                sample = replace(
+                    sample,
+                    before_ns=sample.before_ns + later,
+                    after_ns=sample.after_ns + later,
+                    boottime_ns=sample.boottime_ns + later,
+                )
+                monkeypatch.setattr(m.clock, "read", lambda: sample)
+            with pytest.raises(
+                (m.UnconfirmedExchange, m.plans.UnconfirmedPlan, m.clock.UnconfirmedClock)
+            ):
+                link._guard(time.monotonic() + 1)
+            assert link.sequence == 0
+        finally:
+            link.close()
+            for clock in clocks:
+                clock.close()
+
+
 @pytest.mark.parametrize("position", [1, 2, 4, 6])
 def test_partial_namespace_capture_closes_only_new_owned_descriptors(monkeypatch, position):
     with protocol(monkeypatch) as case:
