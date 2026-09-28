@@ -13,7 +13,7 @@ independent supervision and recovery integration.
 | --- | --- | --- |
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
-| Read-only peer library inventory | Explicit peer handoff `Layout` | Separate 101-module closure including retained inputs/listeners, supervised descriptor delivery and original writer intake; older declarations and runtime collectors do not select it |
+| Read-only peer library inventory | Explicit peer handoff `Layout` | Separate 101-module closure including retained inputs/listeners, supervised descriptor delivery and original writer intake; requires a distinct expectations kind and explicit collector opt-in, never inferred by old callers |
 | Separate peer runtime expectations | Independently pinned `Expectations` declaration | Clock-free template digest and explicit writer/observer image, source, interpreter, environment, argv and confinement pins; pure comparison, not observed qualification or consent |
 | Retained peer input files | Separate read-only `Inputs` owner | Same original startup declaration and exact canonical expectations file, retained no-symlink paths and complete fresh reads; externally authenticated pins remain required |
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
@@ -104,9 +104,10 @@ import graph; the observed files never determine which modules are accepted.
 Complete product assets, double-read drift checks, private-file rules and all
 combined read bounds remain included. Its inventory is standard-library-only.
 
-This new digest kind is deliberately **not** accepted by the existing runtime
-expectations codec or selected by its runtime collectors. All earlier source
-profiles reject the larger bundle. Local isolated import tests run the reviewed
+This digest kind is deliberately **not** accepted by the original runtime
+expectations kind or the default collector policy. A separately tagged handoff
+declaration and explicit collector selection, described below, are both required.
+All earlier source profiles reject the larger bundle. Local isolated import tests run the reviewed
 repository code, not observed image files, with process creation, signalling,
 network sends/binds and low-level file mutation blocked. They cover inventory,
 roots and complete imports with and without PySerial and timerfd APIs. The
@@ -123,7 +124,7 @@ permission/command modules that this library bundle does not contain. Source and
 dependency inventories must remain unchanged, with no bytecode generated.
 These are reviewed fixture imports with active operations blocked, not a fixed
 production entrypoint, independent installation authentication or an installed
-peer lifetime. Existing runtime collectors still reject this new inventory kind.
+peer lifetime. Default runtime comparison still rejects this new inventory kind.
 
 No library name is an admitted active entrypoint. A future fixed launcher must
 explicitly select its final reviewed graph and input contract, authenticate the
@@ -159,6 +160,33 @@ startup command must be known before observing the process; its pin cannot be
 learned from the observed cmdline, and a pre-start declaration must not depend
 on a final clock-derived plan hash or its own digest. Command equality is not an
 active-entrypoint review or action grant.
+
+The newer `finite-recording-peer-handoff-runtime-expectations-v1` kind keeps
+the same complete, closed record shape but requires the separate 101-module
+handoff source kind. `decode_peer_handoff` is its explicit constructor; the
+original `decode` still accepts only the original 90-module declaration. Neither
+constructor accepts the other's kind or mismatched graph. Authenticated byte
+loading validates either exact tagged document against its independently supplied
+digest; it never infers a new pin or changes an old declaration in place.
+
+`PeerRuntimeQualification(..., peer_handoff=True)` separately opts into the
+newer read-only graph. An exact boolean True and the newer declaration are both
+necessary. Omitting the selector, providing a truthy substitute, or supplying
+an older declaration refuses instead of widening the default policy. Each
+collector retains its original graph module and selection alongside its other
+role bindings; mutation after capture fails. Both full source reads use that
+same graph and unchanged elapsed-time limits. Command fingerprints and the fixed
+isolated Python prefix remain required, but membership in either inventory is
+still **not admission of an active entrypoint**. There is no new command,
+permission kind, runtime launch, App action or recovery authority.
+
+The newer selection is exercised through both original collectors, retained
+private input files/listeners, actual descriptor delivery, Links and the already
+armed original watcher in one offline fixture. A changed handoff source file
+after arming prevents delivery and cancels those original peers. The fixture's
+Engine/image/command/cgroup provenance is still synthetic; real process and
+file operations do not turn it into installed qualification. The older 83/90
+module inventories, passive commands and default collector behavior remain closed.
 
 The separate uninstalled `supplemental_recording_peer_inputs.Inputs` reader
 retains that expectations document from a fixed `expectations.json` in a

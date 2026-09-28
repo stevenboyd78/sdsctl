@@ -46,6 +46,7 @@ class PeerRuntimeQualification(launch.HelperQualification):
         generation,
         command,
         runtime_workers=1,
+        peer_handoff=False,
     ):
         try:
             require(type(self) is PeerRuntimeQualification)
@@ -55,6 +56,8 @@ class PeerRuntimeQualification(launch.HelperQualification):
             require(type(witness) is launch.engine.dispatch.process.ProcessWitness)
             require(witness.identity.pid != launch.os.getpid())
             declarations.load_bytes(expectations.raw, expectations_sha256)
+            self.source = declarations.source_profile(expectations, peer_handoff=peer_handoff)
+            self.peer_handoff = peer_handoff
             expectations.check_plan(template, plan, plan.original_clock)
             selected = declarations._read(expectations.raw)[role]
             self.template, self.expectations, self.role = template, expectations, role
@@ -69,6 +72,8 @@ class PeerRuntimeQualification(launch.HelperQualification):
                 self.template_raw,
                 self.expectations_raw,
                 self.role_runtime,
+                self.source,
+                self.peer_handoff,
             )
             super().__init__(
                 plan,
@@ -100,6 +105,8 @@ class PeerRuntimeQualification(launch.HelperQualification):
                         self.template_raw,
                         self.expectations_raw,
                         self.role_runtime,
+                        self.source,
+                        self.peer_handoff,
                     ),
                     self.role_objects,
                     strict=True,
@@ -141,14 +148,13 @@ class PeerRuntimeQualification(launch.HelperQualification):
         require(type(command) is tuple and len(command) >= 4)
         require(command[:3] == ("/usr/local/bin/python", "-I", "-B"))
         require(
-            command[3]
-            in {str(Path("/") / self.HELPER / name) for name in declarations.source.HELPER_FILES}
+            command[3] in {str(Path("/") / self.HELPER / name) for name in self.source.HELPER_FILES}
         )
         self.expectations.check_command(self.role, command)
 
     def _source_layout(self, root):
         self._role_binding()
-        return declarations.source.Layout(root / launch.plans.fixed.PACKAGE, root / self.HELPER)
+        return self.source.Layout(root / launch.plans.fixed.PACKAGE, root / self.HELPER)
 
 
 class PeerRuntimePair:

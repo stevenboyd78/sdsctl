@@ -32,10 +32,10 @@ assert m.declarations is declarations.m
 
 
 @pytest.fixture(params=m.declarations.ROLES)
-def peer(helper, image, monkeypatch, request):
+def peer(helper, image, monkeypatch, request, graph_mode):
     role = request.param
     root = helper.root
-    graph = m.declarations.source
+    graph = m.declarations.peer_source if graph_mode else m.declarations.source
     for name in graph.HELPER_FILES - m.launch.helper_source.HELPER_FILES:
         path = root / m.launch.HelperQualification.HELPER / name
         path.write_bytes(b"raise RuntimeError('PRIVATE_OBSERVED_CODE_MUST_NOT_RUN')\n")
@@ -71,7 +71,7 @@ def peer(helper, image, monkeypatch, request):
         "/usr/local/bin/python",
         "-I",
         "-B",
-        "/opt/sdsctl-recording-host/supplemental_recording_service_host_source.py",
+        "/opt/sdsctl-recording-host/" + graph.__name__ + ".py",
         template.sha256,
     )
     container = helper.container
@@ -96,14 +96,15 @@ def peer(helper, image, monkeypatch, request):
     )
     envelope = dict(
         schema=1,
-        kind=m.declarations.KIND,
+        kind=m.declarations.PEER_KIND if graph_mode else m.declarations.KIND,
         template_sha256=template.sha256,
         source_kind=graph.KIND,
         writer=copy.deepcopy(selected),
         observer=copy.deepcopy(selected),
     )
     envelope["observer" if role == "writer" else "writer"]["runtime"] = other
-    expected = m.declarations.decode(envelope)
+    decode = m.declarations.decode_peer_handoff if graph_mode else m.declarations.decode
+    expected = decode(envelope)
     original_open = builtins.open
 
     def open_file(path, *args, **kwargs):
@@ -132,6 +133,7 @@ def peer(helper, image, monkeypatch, request):
             container, name=name, image=observed["image"]
         ),
         command=command,
+        peer_handoff=graph_mode,
     )
     helper.make = lambda **overrides: m.PeerRuntimeQualification(
         plan, helper.witness, helper.docker, **(arguments | overrides)
@@ -145,6 +147,52 @@ def peer(helper, image, monkeypatch, request):
     helper.peer_arguments, helper.role, helper.envelope = arguments, role, envelope
     helper.obj = helper.make()
     return helper
+
+
+@pytest.fixture
+def graph_mode(request):
+    # Existing fixture consumers keep the old graph and closed codec. Only
+    # explicitly marked newer-profile tests construct the separate declaration.
+    return getattr(request, "param", False)
+
+
+@pytest.mark.parametrize("graph_mode", [True], indirect=True)
+def test_explicit_handoff_profile_uses_complete_source_and_same_original_runtime(peer):
+    test_role_uses_its_own_complete_runtime_without_replacing_original_plan(peer)
+    assert peer.obj.source is m.declarations.peer_source
+    assert peer.obj.peer_handoff is True
+    assert len(peer.obj.source.MODULES) == 101 and len(m.declarations.source.MODULES) == 90
+    assert peer.obj._source_layout(peer.root)._profile()[1] == m.declarations.peer_source.KIND
+    # New pinned declarations cannot silently select the larger graph through
+    # the old collector default, even when every other runtime pin matches.
+    with pytest.raises(m.launch.UnconfirmedHostLaunch):
+        peer.make(peer_handoff=False)
+
+
+@pytest.mark.parametrize("graph_mode", [True], indirect=True)
+@pytest.mark.parametrize("fault", ["missing-file", "changed-file", "profile", "selection"])
+def test_handoff_profile_drift_refuses_without_fallback_or_import(peer, fault):
+    if fault in ("missing-file", "changed-file"):
+        path = (
+            peer.root
+            / m.launch.HelperQualification.HELPER
+            / "supplemental_recording_writer_channel.py"
+        )
+        if fault == "missing-file":
+            path.unlink()  # Disposable source inventory only; never an installed file.
+        else:
+            path.write_bytes(b"raise RuntimeError('MUST_NOT_EXECUTE_OBSERVED_BYTES')\n")
+    elif fault == "profile":
+        peer.obj.source = m.declarations.source
+    else:
+        peer.obj.peer_handoff = False
+    original.launch.denied(peer.obj)
+
+
+@pytest.mark.parametrize("selection", [True, 1, "peer", None])
+def test_old_declaration_cannot_select_new_profile_or_coerce_selector(peer, selection):
+    with pytest.raises(m.launch.UnconfirmedHostLaunch):
+        peer.make(peer_handoff=selection)
 
 
 def test_role_uses_its_own_complete_runtime_without_replacing_original_plan(peer):

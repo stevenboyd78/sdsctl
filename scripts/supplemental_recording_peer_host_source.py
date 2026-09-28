@@ -6,10 +6,11 @@ descriptor delivery and original writer intake joins. This separately tagged
 inventory names their full static import closure without enlarging that older
 profile. Observed files are hashed, never imported or used as an allowlist.
 
-No existing expectations codec, runtime collector, permission or command selects
-this profile. In particular a matching digest cannot authenticate its own input
-pin, designate an active entrypoint, qualify the outer owner/platform bound, or
-grant App actions or exclusive recovery custody. Those remain separate gates.
+A distinct handoff expectations kind and an explicit collector opt-in can now
+select this read-only comparison. Older declarations, collector defaults,
+permissions and commands remain unchanged. A matching digest cannot authenticate
+its own input pin, designate an active entrypoint, qualify the outer owner/platform
+bound, or grant App actions or exclusive recovery custody. Those are separate gates.
 """
 
 from __future__ import annotations

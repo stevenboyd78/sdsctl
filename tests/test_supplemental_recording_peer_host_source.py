@@ -10,7 +10,6 @@ from dataclasses import replace
 import pytest
 
 from . import test_supplemental_recording_service_host_source as service
-from . import test_supplemental_recording_service_runtime_expectations as declarations
 
 original = service.original
 NAME = "supplemental_recording_peer_host_source"
@@ -62,6 +61,8 @@ def test_explicit_peer_inventory_is_distinct_and_never_runs_observed_code(layout
 
 
 def test_older_runtime_expectations_do_not_admit_the_new_source_kind():
+    from . import test_supplemental_recording_service_runtime_expectations as declarations
+
     supplied = declarations.value()
     assert supplied["source_kind"] == m.service.KIND
     supplied["source_kind"] = m.KIND

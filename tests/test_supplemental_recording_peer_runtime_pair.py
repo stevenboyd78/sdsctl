@@ -33,8 +33,11 @@ def read_peer_inputs(template, expectations):
 
 
 @pytest.fixture
-def pair(helper, image, configured, monkeypatch):
-    root, graph = helper.root, m.declarations.source
+def pair(helper, image, configured, monkeypatch, request):
+    handoff = getattr(request, "param", False)
+    assert type(handoff) is bool
+    root = helper.root
+    graph = m.declarations.peer_source if handoff else m.declarations.source
     for name in graph.HELPER_FILES - m.launch.helper_source.HELPER_FILES:
         path = root / m.launch.HelperQualification.HELPER / name
         path.write_bytes(b"raise RuntimeError('PRIVATE_OBSERVED_CODE_MUST_NOT_RUN')\n")
@@ -101,7 +104,7 @@ def pair(helper, image, configured, monkeypatch):
                 "/usr/local/bin/python",
                 "-I",
                 "-B",
-                "/opt/sdsctl-recording-host/supplemental_recording_service_host_source.py",
+                "/opt/sdsctl-recording-host/" + graph.__name__ + ".py",
                 template.sha256,
                 role,
             )
@@ -129,10 +132,11 @@ def pair(helper, image, configured, monkeypatch):
                     for key in ("image_environment_sha256", "timezone", "hostname", "architecture")
                 },
             )
-        expected = m.declarations.decode(
+        decode = m.declarations.decode_peer_handoff if handoff else m.declarations.decode
+        expected = decode(
             dict(
                 schema=1,
-                kind=m.declarations.KIND,
+                kind=m.declarations.PEER_KIND if handoff else m.declarations.KIND,
                 template_sha256=template.sha256,
                 source_kind=graph.KIND,
                 **roles,
@@ -205,6 +209,7 @@ def pair(helper, image, configured, monkeypatch):
                     container, name=container["Name"][1:], image=plan.helper.image
                 ),
                 command=commands[role],
+                peer_handoff=handoff,
             )
         result = m.PeerRuntimePair(**qualifiers)
         yield SimpleNamespace(

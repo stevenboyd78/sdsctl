@@ -98,6 +98,39 @@ def test_real_original_inputs_bound_both_collectors_and_every_handoff_guard(
     assert not owner.closed and not input_source.declaration.closed and not joined.watch.closed
 
 
+@pytest.mark.parametrize("pair", [True], indirect=True)
+def test_explicit_handoff_graph_reaches_both_original_collectors_and_supervised_delivery(
+    joined, input_source, monkeypatch
+):
+    """New graph selection is joined to existing real transport, not a receipt shim."""
+    declarations = m.termination.peers.declarations
+    assert declarations._read(input_source.owner.raw)["kind"] == declarations.PEER_KIND
+    for collector in joined.pair.qualifiers.values():
+        assert collector.source is declarations.peer_source and collector.peer_handoff is True
+        assert collector.expectations is input_source.owner.expectations
+        assert collector.template is input_source.owner.template
+    test_real_original_inputs_bound_both_collectors_and_every_handoff_guard(
+        joined, input_source, monkeypatch
+    )
+    assert all(joined.pair.counts[role]["container"] == 8 for role in ("writer", "observer"))
+    for role in ("writer", "observer"):
+        lifetime.transport.command(joined.pair.children[role], dict(mode="link"))
+        assert lifetime.transport.line(joined.pair.children[role]) == "linked"
+
+
+@pytest.mark.parametrize("pair", [True], indirect=True)
+def test_handoff_source_change_after_arm_refuses_delivery_and_cancels_originals(
+    joined, input_source, helper
+):
+    # Alter the selected inventory file, not a process expectation or timeout.
+    qualifier = joined.pair.qualifiers["writer"]
+    path = helper.root / qualifier.HELPER / "supplemental_recording_writer_channel.py"
+    path.write_bytes(b"raise RuntimeError('CHANGED_SOURCE_MUST_NOT_EXECUTE')\n")
+    original.refused(lambda: call(joined, input_source))
+    assert joined.watch.closed and joined.pair.obj.channel_delivery_attempted
+    lifetime.termination.exited(joined.pair)
+
+
 @pytest.mark.parametrize(
     "fault", ["file", "closed", "copied-value", "copied-template", "pin", "raw-value"]
 )

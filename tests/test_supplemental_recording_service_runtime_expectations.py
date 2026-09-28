@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from . import test_supplemental_recording_peer_host_source as peer_original
 from . import test_supplemental_recording_runtime as runtime_original
 from . import test_supplemental_recording_service_host_source as source_original
 from . import test_supplemental_recording_service_template as original
@@ -23,6 +24,7 @@ SPEC.loader.exec_module(m)
 
 assert m.runtime is runtime_original.m
 assert m.source is source_original.m
+assert m.peer_source is peer_original.m
 
 
 def value():
@@ -158,6 +160,32 @@ def test_old_profiles_and_different_source_graphs_cannot_be_mixed():
     supplied = value()
     supplied["observer"]["runtime"]["source"] = "f" * 64
     denied(lambda: m.decode(supplied))
+
+
+def test_handoff_declaration_requires_distinct_kind_and_explicit_profile_selection():
+    legacy = value()
+    supplied = legacy | {"kind": m.PEER_KIND, "source_kind": m.peer_source.KIND}
+    expected = m.decode_peer_handoff(supplied)
+    assert m.load_bytes(expected.raw, expected.sha256) == expected
+    assert m.source_profile(expected, peer_handoff=True) is m.peer_source
+    assert m.source_profile(m.decode(legacy)) is m.source
+    denied(lambda: m.decode(supplied))
+    denied(lambda: m.decode_peer_handoff(legacy))
+    denied(lambda: m.source_profile(expected))
+    denied(lambda: m.source_profile(m.decode(legacy), peer_handoff=True))
+    denied(lambda: m.decode_peer_handoff(supplied | {"source_kind": m.source.KIND}))
+    denied(lambda: m.decode(legacy | {"source_kind": m.peer_source.KIND}))
+    # Changing the graph tag changes the independently authenticated document
+    # digest; the old pin cannot authenticate even otherwise equal new fields.
+    denied(lambda: m.load_bytes(expected.raw, m.decode(legacy).sha256))
+
+
+@pytest.mark.parametrize("selection", [0, 1, "peer", None, [], object()])
+def test_profile_selection_is_exact_and_never_inferred_from_truthiness(selection):
+    expected = m.decode_peer_handoff(
+        value() | {"kind": m.PEER_KIND, "source_kind": m.peer_source.KIND}
+    )
+    denied(lambda: m.source_profile(expected, peer_handoff=selection))
 
 
 @pytest.mark.parametrize("field", sorted(m.plans.RuntimePin.__dataclass_fields__))

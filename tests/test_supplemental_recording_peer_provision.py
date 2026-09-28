@@ -91,6 +91,23 @@ def test_exact_inputs_reopen_with_existing_retained_readers_without_creating_run
     assert before_bytes == {p: p.read_bytes() for r in roots for p in r.iterdir()}
 
 
+def test_explicit_handoff_declaration_publishes_and_retains_its_independent_new_pin(
+    supplied, monkeypatch
+):
+    expected = m.codec.decode_peer_handoff(
+        readers.expectation_tests.value()
+        | {"kind": m.codec.PEER_KIND, "source_kind": m.codec.peer_source.KIND}
+    )
+    assert expected.sha256 != supplied[3]
+    # An old document pin cannot authenticate the newer kind, even with equal
+    # role bytes; refusal precedes any creation or clock capture.
+    denied(lambda: m.publish(*supplied[:2], expected.raw, supplied[3]))
+    assert not list(m.PARENT.iterdir())
+    test_exact_inputs_reopen_with_existing_retained_readers_without_creating_runtime(
+        (*supplied[:2], expected.raw, expected.sha256), monkeypatch
+    )
+
+
 @pytest.mark.parametrize(
     "fault",
     ["template-pin", "expectation-pin", "template-bytes", "expectation-bytes", "join", "mutable"],
