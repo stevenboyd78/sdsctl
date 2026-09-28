@@ -58,6 +58,7 @@ class Listener:
         began = time.monotonic()
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.closed = self.failed = self.attempted = self.accepted = False
+        self.preparation_attempted = False
         self.handles, self.directories, self.sockets = [], [], []
         self.listener = self.channel = None
         self.node = None

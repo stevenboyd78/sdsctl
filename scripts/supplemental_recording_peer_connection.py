@@ -65,6 +65,7 @@ class Connection:
         began = time.monotonic()
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.closed = self.failed = False
+        self.preparation_attempted = False
         self.handles, self.directories = [], []
         self.channel = self.original_channel = None
         self.channel_pin = None

@@ -1652,7 +1652,66 @@ receives separate final acceptance may the existing final descriptor handoff
 begin, under that plan's ready limit and its own original two-second cutoff.
 Keep the same original process witnesses across these phases; no reconstructed
 Startup, replacement clock, new peer incarnation or cached success is admissible.
-This is the next integration order, not implemented command or launch authority.
+The separate input exchange below now exercises part of this order. Fixed
+entrypoint selection, independent preliminary/final runtime qualification and
+launch authority remain unimplemented; the exchange is not their substitute.
+
+### Authenticated clock-free input preparation (uninstalled)
+
+`supplemental_recording_peer_preparation` uses its own
+`finite-recording-peer-input-preparation-v1` message kind and
+`authenticate-retained-peer-inputs-only-v1` scope. Its fixed private directory
+is `/mnt/data/sdsctl-recording-preparation-CASE-ROLE`, distinct from the final
+descriptor handoff. The original retained Connection/Listener has a one-use
+preparation slot, consumed even on failed validation; its original two-second
+cutoff covers the exchange and sender's final retirement checks. There is no
+reconnect, deadline extension, pathname removal, field repair or fallback.
+
+The original outer supplies its independently authenticated Expectations digest
+and counterpart process identity. They are not learned from receiver argv or
+by hashing a local observed file. Each packet binds the original requester and
+outer incarnations, case, role, template, baseline input pin and fresh nonce;
+canonical byte comparison distinguishes booleans/floats from integer fields.
+Retained pidfds, socket/path identity, per-message credentials and original
+zero-offset namespace evidence are checked. Descendant senders, extra fields,
+wrong contexts, ancillary rights and truncation are rejected. Unexpected rights
+are retired without touching caller-owned descriptors. Root credentials alone
+do not independently qualify the outer installation or platform.
+
+The receiver opens the private input file once using the digest received from
+that original outer, and retains the same Inputs and counterpart ProcessWitness
+through the caller's context. Both roles are supported, but only the explicitly
+tagged peer-handoff Expectations can be used; old passive declarations cannot
+enable this protocol. The receiver borrows its original Declaration, clock,
+Connection and outer witness. It creates no baseline read, Startup, service
+clock, plan, journal, App action or recording. Files and consumed attempt state
+are preserved on failure; owned resources are retired, including on interruption.
+
+**A receiver acknowledgment is not bilateral completion or permission.** The
+outer can still refuse because an acknowledgment is lost/invalid or a retained
+input changes during final retirement. Receiver context entry does not establish
+that outer result. Neither side's transport result supplies preflight permission,
+final Ready, App-action admission, termination rights or recovery authority.
+Later callers must independently validate those boundaries and recheck the same
+retained inputs/peers; they cannot rely on a saved preparation success.
+
+The actual three-process writer fixture now joins exclusive input publication,
+this original-outer preparation, original writer baseline/clock creation,
+separate final acceptance, final descriptor intake, exact Link dispatcher callback
+and passive service retirement. The original outer process and writer-side peer
+witnesses continue across both exchanges. The preparation socket is retired
+before baseline collection; a distinct final channel gets its own original cutoff
+instead of renewing the preparation channel. The writer's continuing service
+clock is still created only after the complete baseline read; the separate
+preparation clock is never substituted for it.
+
+These are real local sockets, credentials, pidfds, clocks and private files,
+not installed-container qualification. Baseline input provenance, Engine/runtime
+pins, cgroup routing, separate acceptance and outer supervision remain synthetic
+in this fixture. The existing 83/90/101-module inventories and installed commands
+do not select the new preparation module. A separately reviewed complete source
+selection and fixed entrypoint, independently bounded outer/platform lifetime,
+explicit App action scope and exclusive recovery owner remain required.
 
 ## Remaining gates before a human scanner/audio test
 

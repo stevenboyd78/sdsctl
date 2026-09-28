@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -24,6 +25,7 @@ import pytest
 from . import test_supplemental_recording_peer_bootstrap as transport
 from . import test_supplemental_recording_peer_connection as connections
 from . import test_supplemental_recording_peer_inputs as retained_inputs
+from . import test_supplemental_recording_peer_listener as preparation_listeners
 from . import test_supplemental_recording_service_runtime_expectations as declared
 from . import test_supplemental_recording_startup_assembly as assembly
 
@@ -34,6 +36,15 @@ SPEC = importlib.util.spec_from_file_location(
 m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
+
+PREPARATION = "supplemental_recording_peer_preparation"
+PREP_SPEC = importlib.util.spec_from_file_location(
+    PREPARATION, Path(m.__file__).with_name(PREPARATION + ".py")
+)
+prep = importlib.util.module_from_spec(PREP_SPEC)
+sys.modules[PREPARATION] = prep
+PREP_SPEC.loader.exec_module(prep)
+assert prep.listeners is preparation_listeners.m
 
 assert m.startup is assembly.m and m.expectations is declared.m
 assert m.input_files is retained_inputs.m and m.connections is connections.m
@@ -118,6 +129,49 @@ finally:
     clock.close()
 """
 
+# Same outer process authenticates clock-free inputs, then performs the final
+# handoff. Host/cgroup/runtime pins are still synthetic, not installed proof.
+PREPARING_OUTER = OUTER.replace(
+    "connections = {}",
+    r"""
+import supplemental_recording_peer_preparation as p
+p.ROOT_UID = p.listeners.ROOT_UID = p.connections.ROOT_UID = os.geteuid()
+p.inputs_module.ROOT_UID = p.domains.ROOT_UID = os.geteuid()
+config = json.loads(sys.stdin.buffer.readline())
+table = {item["pid"]: item["container_id"] for item in config["identities"]}
+def identity(pid, cid):
+    assert table[pid] == cid
+    return p.domains.process.process_identity(pid, cid, Path(f"/proc/{pid}/stat").read_text(),
+        f"0::/system.slice/docker-{cid}.scope\n")
+p.domains.process.read_identity = identity
+p.inputs_module.declarations.declaration_root = lambda case: Path(config["template_root"])
+p.inputs_module.inputs_root = lambda case: Path(config["input_root"])
+p.preparation_root = lambda case, role: Path(config["preparation_root"])
+from contextlib import ExitStack, closing
+import time
+with ExitStack() as stack:
+    original = stack.enter_context(p.inputs_module.declarations.Declaration(
+        Path(config["template_root"]), config["template_sha256"]))
+    inputs = stack.enter_context(closing(p.inputs_module.Inputs(
+        original, Path(config["input_root"]), config["expectations_sha256"])))
+    writer = stack.enter_context(p.domains.process.ProcessWitness(
+        identity(config["writer"], table[config["writer"]])))
+    observer = stack.enter_context(p.domains.process.ProcessWitness(
+        identity(config["observer"], table[config["observer"]])))
+    timer = stack.enter_context(closing(p.domains.clock.ClockWitness(p.domains.clock.read())))
+    owned = stack.enter_context(closing(p.listeners.Listener(
+        Path(config["preparation_root"]), writer, deadline=time.monotonic() + 2)))
+    print("preparation-listening", flush=True)
+    owned.accept()
+    receipt = p.send_inputs(inputs, owned, timer, identity(os.getpid(), table[os.getpid()]),
+        role="writer", baseline_sha256=config["baseline_sha256"], counterpart=observer)
+    print(json.dumps(dict(prepared=receipt, deadline=owned.deadline)), flush=True)
+    # The writer retires its preparation socket before the outer retires ours.
+    assert json.loads(sys.stdin.buffer.readline()) == {"mode": "prepared"}
+connections = {}
+""",
+)
+
 
 @pytest.fixture
 def connection(service_case, monkeypatch, request):
@@ -131,6 +185,8 @@ def connection(service_case, monkeypatch, request):
     processes, witnesses, channels = [], [], []
     accepted = None
     retained = input_owner = None
+    prep_stack = ExitStack()
+    prep_clock = prep_connection = None
     retained_path = getattr(request, "param", False)
 
     def spawn(code):
@@ -145,7 +201,7 @@ def connection(service_case, monkeypatch, request):
         return process
 
     try:
-        outer = spawn(OUTER)
+        outer = spawn(PREPARING_OUTER if retained_path == "prepared-inputs" else OUTER)
         assert transport.line(outer) == "listening"
         observer = spawn(
             transport.CHILD.replace(
@@ -178,8 +234,9 @@ def connection(service_case, monkeypatch, request):
         identities = {pid: identity(pid, cid) for pid, cid in table.items()}
         outer_witness = m.bootstrap.links.processes.ProcessWitness(identities[outer.pid])
         witnesses.append(outer_witness)
-        observer_witness = m.bootstrap.links.processes.ProcessWitness(identities[observer.pid])
-        witnesses.append(observer_witness)
+        if retained_path != "prepared-inputs":
+            observer_witness = m.bootstrap.links.processes.ProcessWitness(identities[observer.pid])
+            witnesses.append(observer_witness)
         values = declared.value()
         values["template_sha256"] = s.startup.template.sha256
         values["writer"]["runtime"] = json.loads(s.startup.template.raw)["plan"]["helper"]
@@ -194,7 +251,7 @@ def connection(service_case, monkeypatch, request):
         else:
             declaration = m.expectations.decode(values)
         expected_sha256 = declaration.sha256
-        if retained_path == "inputs":
+        if retained_path in {"inputs", "prepared-inputs"}:
             # File intake precedes the baseline read and original clock capture.
             # Pins are synthetic; this does not supply installed provenance.
             if s.input_publication is None:
@@ -218,9 +275,59 @@ def connection(service_case, monkeypatch, request):
             )
             monkeypatch.setattr(m.input_files, "ROOT_UID", os.geteuid())
             assert not s.clocks and not s.cached_calls
-            input_owner = m.input_files.Inputs(s.declaration, input_root, expected_sha256)
+            if retained_path == "prepared-inputs":
+                assert s.input_publication is not None
+                for module in (prep, prep.listeners, prep.domains):
+                    monkeypatch.setattr(module, "ROOT_UID", os.geteuid())
+                prep_root = Path(
+                    prep_stack.enter_context(tempfile.TemporaryDirectory(prefix="sds-prepare-"))
+                )
+                monkeypatch.setattr(prep, "preparation_root", lambda case, role: prep_root)
+                # This hash is a synthetic, previously authenticated baseline
+                # input pin; no production baseline provenance is claimed.
+                baseline_pin = "d" * 64
+                transport.command(
+                    outer,
+                    dict(
+                        identities=[asdict(item) for item in identities.values()],
+                        writer=os.getpid(),
+                        observer=observer.pid,
+                        template_root=str(s.declaration.root),
+                        template_sha256=s.template.sha256,
+                        input_root=str(input_root),
+                        expectations_sha256=expected_sha256,
+                        preparation_root=str(prep_root),
+                        baseline_sha256=baseline_pin,
+                    ),
+                )
+                assert transport.line(outer) == "preparation-listening"
+                prep_clock = prep.domains.clock.ClockWitness(prep.domains.clock.read())
+                prep_stack.callback(prep_clock.close)
+                prep_connection = prep.connections.Connection(
+                    prep_root, outer_witness, deadline=time.monotonic() + 2
+                )
+                prep_stack.callback(prep_connection.close)
+                input_owner, observer_witness = prep_stack.enter_context(
+                    prep.receive_inputs(
+                        s.declaration,
+                        prep_connection,
+                        prep_clock,
+                        identities[os.getpid()],
+                        role="writer",
+                        baseline_sha256=baseline_pin,
+                    )
+                )
+                prepared_receipt = json.loads(transport.line(outer))
+                assert prepared_receipt["prepared"]
+                assert prep_connection.preparation_attempted
+                assert s.startup.clock is None and not s.cached_calls and not s.preflights
+                assert s.clocks == [prep_clock]
+                prep_connection.close()
+                transport.command(outer, dict(mode="prepared"))
+            else:
+                input_owner = m.input_files.Inputs(s.declaration, input_root, expected_sha256)
             declaration = input_owner.recheck()
-            assert not s.clocks and not s.cached_calls
+            assert len(s.clocks) == int(prep_clock is not None) and not s.cached_calls
         owner = assembly.accept(s)
         plan = owner.original.plan
         config = dict(
@@ -294,6 +401,8 @@ def connection(service_case, monkeypatch, request):
             channels=channels,
             retained=retained,
             input_owner=input_owner,
+            prep_clock=prep_clock,
+            prep_connection=prep_connection,
         )
     finally:
         for bundle in channels:
@@ -310,7 +419,8 @@ def connection(service_case, monkeypatch, request):
             retained.close()
         elif accepted is not None:
             accepted.close()
-        if input_owner is not None:
+        prep_stack.close()
+        if input_owner is not None and prep_clock is None:
             input_owner.close()
         if input_temporary is not None:
             input_temporary.cleanup()
@@ -340,7 +450,7 @@ def test_original_post_baseline_clock_reaches_delivered_link_then_passive_assemb
     assert owner.original is original and owner.clock is clock and not clock.closed
     assert owner.baseline is baseline and owner.projected is projected
     assert owner.peer_channel_attempted is True and not owner.service_used
-    assert len(c.s.clocks) == 2 and len(c.s.cached_calls) == 1
+    assert len(c.s.clocks) == 2 + int(c.prep_clock is not None) and len(c.s.cached_calls) == 1
     assert not (c.s.root / "journal").exists() and not (c.s.root / "inbox").exists()
     assert receipt.context_sha256 and receipt.offer_sha256
     link = m.bootstrap.links.Link(channels, c.plan, clock, c.observer_witness, role="writer")
@@ -427,9 +537,14 @@ def prepare_idle(c):
 
 
 @pytest.mark.parametrize(
-    "service_case", ["published-inputs", "published-peer-inputs"], indirect=True
+    "service_case,connection",
+    [
+        ("published-inputs", "inputs"),
+        ("published-peer-inputs", "inputs"),
+        ("published-peer-inputs", "prepared-inputs"),
+    ],
+    indirect=True,
 )
-@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
 def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_passively(
     connection, monkeypatch
 ):
@@ -438,6 +553,14 @@ def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_
     assert c.input_owner.expectations is c.declaration
     assert c.declaration.raw == c.s.expected_inputs.raw
     assert c.input_owner.expected == c.s.expected_input_digest
+    if c.prep_clock is not None:
+        assert c.prep_connection.closed and c.prep_connection.preparation_attempted
+        assert c.prep_connection.peer is c.outer_witness
+        assert c.s.clocks == [c.prep_clock, c.s.clocks[1], clock]
+        assert c.s.clocks[1].closed and not c.prep_clock.closed
+        assert c.prep_clock.original.after_ns < clock.original.before_ns
+        assert c.retained is not c.prep_connection
+        assert c.retained.deadline > c.prep_connection.deadline
     links, services, cleanup, deadlines = [], [], [], []
     link_init, link_close = m.bootstrap.links.Link.__init__, m.bootstrap.links.Link.close
     service_init, service_close = (
@@ -498,7 +621,7 @@ def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_
     assert c.owner.peer_channel_attempted and c.owner.service_used and not c.owner.closed
     assert not c.input_owner.closed and not c.retained.closed
     assert c.outer_witness.fd >= 0 and c.observer_witness.fd >= 0
-    assert len(c.s.clocks) == 2 and len(c.s.cached_calls) == 1
+    assert len(c.s.clocks) == 2 + int(c.prep_clock is not None) and len(c.s.cached_calls) == 1
     assert all(s.fileno() == -1 for s in (links[0].channel.incoming, links[0].channel.outgoing))
     assert not services[0].used and not services[0].dispatch.used
     assert len(services[0].journal.entries) == 1
