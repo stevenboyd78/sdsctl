@@ -9,6 +9,7 @@ Its new input path/command/source still require separate installed qualification
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import math
 import os
@@ -50,7 +51,7 @@ class Declaration:
 
     def __init__(self, root, expected_sha256):
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
-        self.lock, self.handles = Lock(), []
+        self.lock, self.handles, self.handle_pins = Lock(), [], {}
         self.failed = self.closed = False
         self.startup_owner = None
         try:
@@ -97,19 +98,35 @@ class Declaration:
 
     def _open(self, *args, **kwargs):
         fd = os.open(*args, **kwargs)
+        try:
+            pin = files.identity(os.fstat(fd))[:5]
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        except BaseException:
+            os.close(fd)
+            raise
         self.handles.append(fd)
+        self.handle_pins[fd] = pin, flags
         return fd
+
+    def _handle(self, fd):
+        pin, flags = self.handle_pins[fd]
+        require(files.identity(os.fstat(fd))[:5] == pin and not os.get_inheritable(fd))
+        require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags)
+        require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_APPEND)
 
     def _context(self, end):
         require(not self.failed and not self.closed and time.monotonic() < end)
         require(self.owner == (os.getpid(), get_ident(), os.geteuid(), os.getegid()))
         require((self.root, self.expected) == self.original_inputs)
+        require(tuple(self.handles) == tuple(self.handle_pins))
 
     def _directories(self, end):
         self._context(end)
+        self._handle(self.anchor)
         require(files.identity(os.fstat(self.anchor))[:5] == self.anchor_id)
         for parent, name, child, identity in self.directories:
             self._context(end)
+            self._handle(child)
             require(files.identity(os.fstat(child))[:5] == identity)
             require(
                 files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:5] == identity
@@ -126,6 +143,8 @@ class Declaration:
 
     def _file(self, end):
         self._context(end)
+        self._handle(self.file)
+        require(fcntl.fcntl(self.file, fcntl.F_GETFL) & os.O_NONBLOCK)
         require(files.identity(os.fstat(self.file)) == self.file_id)
         require(
             files.identity(os.stat(NAME, dir_fd=self.directory, follow_symlinks=False))
@@ -199,11 +218,17 @@ class Declaration:
             return
         self.closed = True
         error = None
-        while self.handles:
+        if tuple(self.handles) != tuple(self.handle_pins):
+            error = UnconfirmedDeclaration(MESSAGE)
+        self.handles.clear()
+        while self.handle_pins:
             # Retire each descriptor before closing it. Never retry an uncertain
-            # close against a descriptor that the kernel may have reused.
-            fd = self.handles.pop()
+            # close, or close an unrelated object reusing an original number.
+            # Permission/flag drift still allows retiring an owned original.
+            fd, (pin, _) = self.handle_pins.popitem()
             try:
+                current = files.identity(os.fstat(fd))
+                require(current[:2] == pin[:2] and stat.S_IFMT(current[2]) == stat.S_IFMT(pin[2]))
                 os.close(fd)
             except BaseException as problem:
                 if (

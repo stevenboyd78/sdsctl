@@ -2558,10 +2558,14 @@ are checked around each two-second-bounded read. Changed input, a replacement
 file/ancestor, an extra entry, uncertain I/O or expiry fails without adopting a
 replacement. No file or directory is created, modified, synchronized or removed.
 
-This reader owns only its original read-only descriptors. It releases them on
-failure, attempts every original close once even after a close error, and never
-retries an uncertain close. A foreign thread cannot close the original owner's
-handles. Neither loading nor rechecking captures a clock or manufactures a
+This reader owns only its original read-only descriptors. Every read also checks
+the retained descriptor flags and non-inheritable state. Failure retires each
+owned descriptor once, even after a close error; it never retries an uncertain
+close. Cleanup checks the original device/inode/file type before closing, and
+refuses to close an unrelated object reusing an original descriptor number.
+Changed permissions or flags do not prevent cleanup of an otherwise matching
+owned original. A foreign thread cannot close the original owner's handles.
+Neither loading nor rechecking captures a clock or manufactures a
 deadline, publishes an offer, contacts Engine, prepares a journal or grants
 recording permission. It remains an uninstalled library outside the qualified
 helper graph and command allowlist.

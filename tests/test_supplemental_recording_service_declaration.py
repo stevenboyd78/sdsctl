@@ -5,6 +5,7 @@ import importlib.util
 import os
 import sys
 import time
+from contextlib import suppress
 from pathlib import Path
 from threading import Thread
 
@@ -73,6 +74,96 @@ def test_original_private_handles_bytes_and_template_retained_without_writes(cas
     assert fds() == before and original.closed
     original.close()
     denied(original.recheck)
+
+
+@pytest.mark.parametrize("which", ["anchor", "directory", "file"])
+@pytest.mark.parametrize("action", ["close", "recheck"])
+def test_reused_descriptor_is_refused_without_closing_replacement(case, which, action):
+    root, template = case
+    before = fds()
+    original = m.Declaration(root, template.sha256)
+    target = getattr(original, which)
+    replacement = os.open("/dev/null", os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        os.dup2(replacement, target, inheritable=False)
+    finally:
+        os.close(replacement)
+    try:
+        denied(getattr(original, action))
+        assert original.failed and original.closed
+        assert os.read(target, 1) == b""
+        original.close()
+        assert os.read(target, 1) == b""
+    finally:
+        original.close()
+        with suppress(OSError):
+            os.close(target)  # Only the fixture owns the replacement.
+    assert fds() == before
+
+
+@pytest.mark.parametrize("action", ["close", "recheck"])
+def test_same_type_replacement_with_different_inode_is_not_closed(case, tmp_path, action):
+    root, template = case
+    unrelated = tmp_path / "unrelated.txt"
+    unrelated.write_bytes(b"retained")
+    unrelated.chmod(0o600)
+    before = fds()
+    original = m.Declaration(root, template.sha256)
+    target = original.file
+    replacement = os.open(unrelated, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+    try:
+        os.dup2(replacement, target, inheritable=False)
+    finally:
+        os.close(replacement)
+    try:
+        denied(getattr(original, action))
+        assert original.failed and original.closed
+        original.close()
+        assert os.pread(target, 8, 0) == b"retained"
+    finally:
+        original.close()
+        with suppress(OSError):
+            os.close(target)
+    assert fds() == before
+
+
+@pytest.mark.parametrize("action", ["close", "recheck"])
+def test_foreign_handle_in_mutated_list_is_never_adopted_or_closed(case, action):
+    root, template = case
+    before = fds()
+    original = m.Declaration(root, template.sha256)
+    unrelated = os.open("/dev/null", os.O_RDONLY | os.O_CLOEXEC)
+    try:
+        original.handles.append(unrelated)
+        denied(getattr(original, action))
+        assert original.failed and original.closed and original.handle_pins == {}
+        original.close()
+        assert os.read(unrelated, 1) == b""
+    finally:
+        original.close()
+        os.close(unrelated)
+    assert fds() == before
+
+
+@pytest.mark.parametrize("which", ["anchor", "directory", "file"])
+@pytest.mark.parametrize("fault", ["inheritable", "append", "blocking"])
+def test_changed_original_descriptor_flags_refuse_without_repair(case, which, fault):
+    root, template = case
+    before = fds()
+    original = m.Declaration(root, template.sha256)
+    target = getattr(original, which)
+    flags = fcntl.fcntl(target, fcntl.F_GETFL)
+    if fault == "inheritable":
+        os.set_inheritable(target, True)
+    elif fault == "append":
+        fcntl.fcntl(target, fcntl.F_SETFL, flags | os.O_APPEND)
+    else:
+        fcntl.fcntl(target, fcntl.F_SETFL, flags ^ os.O_NONBLOCK)
+    try:
+        denied(original.recheck)
+        assert original.failed and original.closed and fds() == before
+    finally:
+        original.close()
 
 
 def test_recheck_reads_original_file_without_redecoding_unchanged_bytes(case, monkeypatch):
