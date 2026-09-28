@@ -6,6 +6,7 @@ explicitly synthetic Supervisor/Engine routes. No installed-platform claim.
 
 from dataclasses import replace
 from threading import Event, Thread, get_ident
+from time import monotonic_ns
 from types import SimpleNamespace
 
 import pytest
@@ -98,6 +99,29 @@ def host(observing, monkeypatch):
         s.reader.pending.cancelled.set()
         s.reader.pending.worker.join(3)
         assert not s.reader.pending.worker.is_alive()
+
+
+@pytest.fixture
+def coordinated_worker_clock(host, monkeypatch):
+    """Synthetic worker windows for thread-ordering tests, not clock evidence.
+
+    These two tests need to reach a deliberate blocking point. Sampling the
+    real /proc clock in that worker can correctly fail its 5 ms guard under CI
+    scheduling load before the Event is set. Use the original window's offset
+    only in this fixture; leave real elapsed deadlines and every owner-thread
+    clock read untouched. Separate tests retain actual sampling and refusal.
+    """
+    original = m.plans.clock.read
+    anchor = host.plan.original_clock
+    offset = sum(anchor.offset) // 2
+
+    def read():
+        if get_ident() == host.reader.owner[1]:
+            return original()
+        now = monotonic_ns()
+        return m.plans.clock.Window(anchor.boot, anchor.namespace, now, now + offset, now)
+
+    monkeypatch.setattr(m.plans.clock, "read", read)
 
 
 @pytest.mark.parametrize("stage", ["active", "finalizing", "finalized"])
@@ -200,6 +224,36 @@ def test_clock_refusal_consumes_sample_without_retry_or_releasing_handles(host, 
     begins.denied(s.reader)
 
 
+def test_delayed_real_worker_clock_refuses_before_entering_metadata_read(host, monkeypatch):
+    # Reproduce the pre-Event path separately from blocking/ordering fixtures.
+    # A descheduled real observation must still fail, never retry or widen the
+    # production clock's 5 ms bound merely to reach a test's blocking point.
+    clock = m.plans.clock
+    domain = clock._domain
+    worker_domains = []
+
+    def delayed_domain():
+        result = domain()
+        if get_ident() != host.reader.owner[1]:
+            worker_domains.append(result)
+            if len(worker_domains) == 2:
+                m.time.sleep(2 * clock.MAX_SKEW_NS / clock.NS)
+        return result
+
+    monkeypatch.setattr(clock, "_domain", delayed_domain)
+    host.reader.prepare()
+    pending = host.reader.pending
+    assert pending.done.wait(1)
+    pending.worker.join(1)
+    assert not pending.worker.is_alive()
+    assert type(pending.error) is clock.UnconfirmedClock and pending.snapshot is None
+    assert len(worker_domains) == 2
+    begins.denied(host.reader)
+    assert host.reader.failed and not host.file_calls
+    assert not any(name == "metadata" for name, _ in host.thread_calls)
+    assert not host.prepared.witness.exited()
+
+
 def test_changed_continuity_during_join_cannot_publish_files(host, monkeypatch):
     s = host
     original = s.continued.read
@@ -270,7 +324,9 @@ def test_entire_join_uses_the_earliest_two_second_budget(host, monkeypatch, when
     assert s.reader.failed and not s.prepared.witness.exited()
 
 
-def test_blocked_worker_is_retained_and_cannot_publish_after_discard(host, monkeypatch):
+def test_blocked_worker_is_retained_and_cannot_publish_after_discard(
+    host, coordinated_worker_clock, monkeypatch
+):
     s = host
     entered, release = Event(), Event()
     original = s.reader._observer
@@ -287,7 +343,7 @@ def test_blocked_worker_is_retained_and_cannot_publish_after_discard(host, monke
     s.reader.prepare()
     pending = s.reader.pending
     try:
-        assert entered.wait(1)
+        assert entered.wait(1), pending.error
         s.reader.discard()
         begins.denied(s.reader)
         assert s.reader.pending is pending and pending.worker.is_alive()
@@ -298,7 +354,9 @@ def test_blocked_worker_is_retained_and_cannot_publish_after_discard(host, monke
     assert not s.prepared.witness.exited()
 
 
-def test_join_waits_for_clock_sampling_before_cpu_heavy_owner_history(host, monkeypatch):
+def test_join_waits_for_clock_sampling_before_cpu_heavy_owner_history(
+    host, coordinated_worker_clock, monkeypatch
+):
     s = host
     entered, release = Event(), Event()
     original_observer = s.reader._observer
@@ -332,7 +390,7 @@ def test_join_waits_for_clock_sampling_before_cpu_heavy_owner_history(host, monk
     monkeypatch.setattr(s.reader, "_guard", checked_guard)
     monkeypatch.setattr(pending, "finish", joined)
     try:
-        assert entered.wait(1)
+        assert entered.wait(1), pending.error
         sample = s.reader()
         assert sample.observation.files.stage == "active"
         assert ordering == ["join", "history", "history"]
