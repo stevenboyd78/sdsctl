@@ -1987,8 +1987,21 @@ including both full fresh paired runtime/source collections before and after
 handoff in their original shared two-second bound. The watcher stays armed through
 the writer's passive dispatcher retirement. A source change before or during
 handoff cancels that original watcher; only its original peers are stopped and
-all case files survive. Final bootstrap sockets are still fixture-provisioned,
-not a qualification of an installed listener or outer launcher.
+all case files survive. That successful variant uses fixture-provisioned final
+bootstrap sockets, not qualified installed listeners or an outer launcher.
+
+A separate regression now joins the existing retained `Listener`/`Connection`
+owners and `deliver_from_inputs` in that same process flow. It exposes an
+**expected refusal**, not a successful retained-launcher qualification: the
+passive writer closes its bootstrap connection during its own retirement before
+the outer can finish its final paired comparison. The original listener detects
+EOF within the unchanged delivery deadline, cancels the same watcher and stops
+only the original peers. Original inputs, process witnesses and case files are
+preserved. The regression does not ignore EOF, replace owners, add a sleep or
+renew a deadline to manufacture success. The passive command is still an
+action-free preparation command; a continuing writer lifetime and its explicit
+admission/retirement protocol must be joined separately before this can become
+an installed or human-test candidate.
 
 This remains offline integration: paths/cgroups, Engine/kernel/argv and installed
 pin/publication provenance are synthetic. No fixed observer or outer entrypoint,

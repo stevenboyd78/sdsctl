@@ -323,7 +323,7 @@ def helper(supervised, image, configured, monkeypatch, tmp_path):
                 stream.close()
 
 
-def observer_child(path):
+def observer_child(path, *, retained=False):
     """Retain actual authenticated inputs and final plan before descriptor intake.
 
     Test-only sequencing, paths and cgroups; the outer's future plan/hash is NOT
@@ -334,10 +334,14 @@ def observer_child(path):
     with pytest.MonkeyPatch.context() as patch, ExitStack() as stack:
         for module in (p, p.connections, p.inputs_module, p.domains, p.bootstrap, p.links):
             patch.setattr(module, "ROOT_UID", os.geteuid())
-        channel = stack.enter_context(closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)))
-        channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-        channel.connect(path)
-        channel.setblocking(False)
+        channel = None
+        if not retained:
+            channel = stack.enter_context(
+                closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET))
+            )
+            channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            channel.connect(path)
+            channel.setblocking(False)
         timer = stack.enter_context(closing(p.domains.clock.ClockWitness(p.domains.clock.read())))
         origin = timer.original
         print("ready", flush=True)
@@ -445,6 +449,12 @@ def observer_child(path):
             assert receive() == {"handoff": True}
             plan_connection.close()
             end = min(time.monotonic() + 2, plan.lease["ready_by"])
+            if retained:
+                final_connection = stack.enter_context(
+                    closing(p.connections.Connection(Path(config["handoff"]), outer, deadline=end))
+                )
+                channel = final_connection.channel
+                end = final_connection.deadline
             assert inputs.recheck(deadline=end) is inputs.expectations
             assert original.recheck() is plan and timer.original is origin
             endpoint = stack.enter_context(
@@ -568,7 +578,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     selection = getattr(request, "param", None)
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
-    plan_delivery = mode == "plan-pair"
+    retained_delivery = mode == "retained-plan-pair"
+    plan_delivery = mode in ("plan-pair", "retained-plan-pair")
     for module in (
         p,
         p.listeners,
@@ -584,18 +595,20 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         roots = {name: short / name for name in ("preparation", "permission", "handoff")}
         for root in roots.values():
             root.mkdir(mode=0o700)
-        final_server = stack.enter_context(
-            closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET))
-        )
         path = roots["handoff"] / p.connections.NAME
-        final_server.bind(str(path))
-        path.chmod(0o600)
-        final_server.listen(2)
-        final_server.settimeout(3)
+        final_server = None
+        if not retained_delivery:
+            final_server = stack.enter_context(
+                closing(socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET))
+            )
+            final_server.bind(str(path))
+            path.chmod(0o600)
+            final_server.listen(2)
+            final_server.settimeout(3)
         observer_code = (
             "import sys; sys.path[:0] = [sys.argv[1], sys.argv[1] + '/src']; "
             "from tests.test_supplemental_recording_qualified_peer_command import observer_child; "
-            "observer_child(sys.argv[2])"
+            f"observer_child(sys.argv[2], retained={retained_delivery!r})"
             if plan_delivery
             else transport.CHILD.replace(
                 "m.links.clock.ClockWitness(plan.original_clock)",
@@ -632,9 +645,11 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 stream.close()
 
         stack.callback(stop_observer)
-        observer_channel = stack.enter_context(closing(final_server.accept()[0]))
-        observer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-        observer_channel.setblocking(False)
+        observer_channel = None
+        if not retained_delivery:
+            observer_channel = stack.enter_context(closing(final_server.accept()[0]))
+            observer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            observer_channel.setblocking(False)
         assert transport.line(observer) == "ready"
         read_identity = p.domains.process.read_identity
         observer_id = p.domains.process.process_identity(
@@ -658,7 +673,9 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         monkeypatch.setattr(p.domains.process, "read_identity", identity)
         counterpart = stack.enter_context(p.domains.process.ProcessWitness(observer_id))
         comparison = (
-            observer_runtime(h, counterpart, monkeypatch) if mode in ("pair", "plan-pair") else None
+            observer_runtime(h, counterpart, monkeypatch)
+            if mode in ("pair", "plan-pair", "retained-plan-pair")
+            else None
         )
         input_root = tmp_path / "inputs"
         input_root.mkdir(mode=0o700)
@@ -760,10 +777,12 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         )
         sender.receive()
         plan_socket = short / "observer-plan"
+        observer_handoff = short / "observer-handoff"
         if plan_delivery:
             preparation = short / "observer-inputs"
             preparation.mkdir(mode=0o700)
             plan_socket.mkdir(mode=0o700)
+            observer_handoff.mkdir(mode=0o700)
             monkeypatch.setattr(p, "preparation_root", lambda *_: preparation)
             observer_inputs = stack.enter_context(
                 closing(
@@ -779,6 +798,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                     preparation=str(preparation),
                     plan_socket=str(plan_socket),
                     case_root=str(case_root),
+                    handoff=str(observer_handoff),
                     template_sha256=h.template.sha256,
                     baseline=h.baseline,
                     receive_fault=options.get("receive_fault"),
@@ -818,6 +838,9 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             pair=None,
             plan_delivery=plan_delivery,
             plan_socket=plan_socket,
+            retained_delivery=retained_delivery,
+            writer_handoff=roots["handoff"],
+            observer_handoff=observer_handoff,
         )
 
 
@@ -894,10 +917,21 @@ def finish(s, monkeypatch, after_qualification=None):
             assert json.loads(transport.line(s.observer)) == dict(
                 plan_retained=plan.sha256, input_pin=s.inputs.expected
             )
+        if s.retained_delivery:
+            end = min(time.monotonic() + 2, plan.lease["ready_by"])
+            s.writer_listener = s.stack.enter_context(
+                closing(p.listeners.Listener(s.writer_handoff, s.h.witness, deadline=end))
+            )
+            s.observer_listener = s.stack.enter_context(
+                closing(p.listeners.Listener(s.observer_handoff, s.counterpart, deadline=end))
+            )
         submission.Submission(original, s.inputs.template.sha256, plan.sha256).submit()
-    writer_channel = s.stack.enter_context(closing(s.final_server.accept()[0]))
-    writer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
-    writer_channel.setblocking(False)
+    if s.retained_delivery:
+        writer_channel = s.writer_listener.accept()
+    else:
+        writer_channel = s.stack.enter_context(closing(s.final_server.accept()[0]))
+        writer_channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        writer_channel.setblocking(False)
     transport.command(
         s.observer,
         dict(handoff=True)
@@ -914,10 +948,22 @@ def finish(s, monkeypatch, after_qualification=None):
             peer=s.h.witness.identity.container_id,
         ),
     )
+    if s.retained_delivery:
+        s.observer_channel = s.observer_listener.accept()
     if hasattr(s, "watch"):
-        s.delivered = delivery_tests.m.deliver(
-            s.custody, s.watch, s.h.observer_identity, writer_channel, s.observer_channel
-        )
+        if s.retained_delivery:
+            s.delivered = delivery_tests.m.deliver_from_inputs(
+                s.custody,
+                s.watch,
+                s.h.observer_identity,
+                s.inputs,
+                s.writer_listener,
+                s.observer_listener,
+            )
+        else:
+            s.delivered = delivery_tests.m.deliver(
+                s.custody, s.watch, s.h.observer_identity, writer_channel, s.observer_channel
+            )
         assert s.delivered.plan_sha256 == plan.sha256
         assert s.delivered.declaration_sha256 == s.inputs.expected
     else:
@@ -1434,3 +1480,47 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
         for path in s.case_root.rglob("*")
         if path.is_file()
     }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize("joined", ["retained-plan-pair"], indirect=True)
+def test_retained_delivery_refuses_writer_connection_retiring_before_outer_completion(
+    joined, monkeypatch
+):
+    """Real command exposes its still-unjoined passive retirement boundary.
+
+    This expected REFUSAL is not a successful retained-launcher qualification.
+    The same bounded guard must reject writer EOF, never ignore it to pass.
+    """
+    s = joined
+
+    def supervise():
+        arm_original_watch(s)
+        collect = s.pair._collect_before
+        calls = []
+
+        def sampled(end):
+            calls.append(True)
+            if len(calls) == 2:
+                # Allow the ACTUAL passive writer to retire before the final
+                # comparison returns. All reads still share the original bound.
+                assert transport.line(s.h.child) == p.MILESTONE
+                s.writer_retirement = json.loads(transport.line(s.h.child))
+                assert time.monotonic() < end and s.writer_retirement["fd_delta"] == 0
+            return collect(end)
+
+        monkeypatch.setattr(s.pair, "_collect_before", sampled)
+
+    assert s.sender.send() is None
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
+        finish(s, monkeypatch, supervise)
+    assert s.plan_receipt and s.pair.channel_delivery_attempted
+    assert s.writer_listener.failed and s.watch.closed and s.watch.finished
+    assert time.monotonic() < s.writer_listener.deadline  # EOF, not an elapsed budget.
+    assert s.writer_listener.peer is s.h.witness and s.observer_listener.peer is s.counterpart
+    assert s.pair.writer.expectations is s.pair.observer.expectations is s.inputs.expectations
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert (s.case_root / "startup-claim.json").is_file()
+    assert (s.case_root / "plan.json").is_file()
