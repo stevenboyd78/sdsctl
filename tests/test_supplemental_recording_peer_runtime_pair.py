@@ -34,10 +34,17 @@ def read_peer_inputs(template, expectations):
 
 @pytest.fixture
 def pair(helper, image, configured, monkeypatch, request):
-    handoff = getattr(request, "param", False)
-    assert type(handoff) is bool
+    selection = getattr(request, "param", False)
+    assert type(selection) is bool or selection == "preparation"
+    preparation, handoff = selection == "preparation", selection is True
     root = helper.root
-    graph = m.declarations.peer_source if handoff else m.declarations.source
+    graph = (
+        m.declarations.peer_source.PreparationProfile
+        if preparation
+        else m.declarations.peer_source
+        if handoff
+        else m.declarations.source
+    )
     for name in graph.HELPER_FILES - m.launch.helper_source.HELPER_FILES:
         path = root / m.launch.HelperQualification.HELPER / name
         path.write_bytes(b"raise RuntimeError('PRIVATE_OBSERVED_CODE_MUST_NOT_RUN')\n")
@@ -104,7 +111,9 @@ def pair(helper, image, configured, monkeypatch, request):
                 "/usr/local/bin/python",
                 "-I",
                 "-B",
-                "/opt/sdsctl-recording-host/" + graph.__name__ + ".py",
+                "/opt/sdsctl-recording-host/"
+                + ("supplemental_recording_peer_host_source" if preparation else graph.__name__)
+                + ".py",
                 template.sha256,
                 role,
             )
@@ -132,11 +141,21 @@ def pair(helper, image, configured, monkeypatch, request):
                     for key in ("image_environment_sha256", "timezone", "hostname", "architecture")
                 },
             )
-        decode = m.declarations.decode_peer_handoff if handoff else m.declarations.decode
+        decode = (
+            m.declarations.decode_peer_preparation
+            if preparation
+            else m.declarations.decode_peer_handoff
+            if handoff
+            else m.declarations.decode
+        )
         expected = decode(
             dict(
                 schema=1,
-                kind=m.declarations.PEER_KIND if handoff else m.declarations.KIND,
+                kind=m.declarations.PREPARATION_KIND
+                if preparation
+                else m.declarations.PEER_KIND
+                if handoff
+                else m.declarations.KIND,
                 template_sha256=template.sha256,
                 source_kind=graph.KIND,
                 **roles,
@@ -210,6 +229,7 @@ def pair(helper, image, configured, monkeypatch, request):
                 ),
                 command=commands[role],
                 peer_handoff=handoff,
+                preparation=preparation,
             )
         result = m.PeerRuntimePair(**qualifiers)
         yield SimpleNamespace(
@@ -238,6 +258,7 @@ def denied(obj):
     original.original.launch.denied(obj)
 
 
+@pytest.mark.parametrize("pair", [False, True, "preparation"], indirect=True)
 def test_both_original_peers_get_full_fresh_collection_in_one_window(pair):
     before = pair.plan.raw, pair.expectations.raw
     assert pair.obj() is None
@@ -277,6 +298,7 @@ def test_one_sided_failure_never_becomes_pair_success(pair, role):
         assert pair.counts["observer"]["container"] == 0
 
 
+@pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 def test_loss_of_writer_during_observer_collection_is_not_hidden_by_two_results(pair, monkeypatch):
     collect = pair.obj.observer._collect_before
 
@@ -305,6 +327,7 @@ def test_pair_passes_one_absolute_deadline_to_both_collectors(pair, monkeypatch)
     assert ends[0] <= pair.plan.lease["ready_by"]
 
 
+@pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 def test_writer_cannot_renew_pair_budget_before_observer_collection(pair, monkeypatch):
     collect = pair.obj.writer._collect_before
 

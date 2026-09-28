@@ -1828,6 +1828,56 @@ not additional protocol authority. Engine/runtime/cgroup routing, outer review a
 synthetic. A fully isolated installed-command/outer lifetime and explicit active
 action/recovery admission remain separate unfinished gates.
 
+### Original outer preflight qualification for the passive peer writer
+
+`PeerWriterPreflightQualification` in the outer-only
+`qualify_supplemental_recording_service.py` connects the original outer's existing
+`Sender`/`Review` protocol to the fixed passive peer-writer command above. It
+borrows the actual retained `Inputs`, original outer clock/domain and writer
+pidfd. The declaration must explicitly select the 104-module preparation kind;
+older 90/101-module declarations and the old probe/service command policies are
+not upgraded. The independently expected writer argv fingerprint, configuration,
+image, source, interpreter, environment and effective confinement all retain
+their complete existing checks. Matching these inputs does not authenticate the
+installation that supplied them or qualify the outer itself.
+
+This is a **pre-baseline** comparison. Its private preview uses the original
+outer clock only and is never published, accepted, passed off as the later
+writer's continuing clock, or substituted for final paired runtime qualification.
+The one-attempt callback is bounded by the original outer window and one shared
+two-second allowance, including final review and private input checks. The
+existing `Sender` separately retains its own original two-second write bound.
+Neither scope is renewed after a slow collection or partial failure.
+
+Complete canonical input reads bracket the full runtime collection and follow
+the final review. Intermediate checks retain the same private descriptors,
+flags, path/inode bindings and immutable decoded objects. An initial Python 3.11
+coverage run demonstrated that repeating full canonical decoding at every proc
+guard could exhaust the finite allowance. The integration now avoids that
+redundant parsing while preserving complete boundary reads, intermediate custody
+checks and the unchanged deadline. No timeout, source/confinement check or
+coverage requirement was relaxed to make the test pass.
+
+The local process fixture joins the actual full qualifier, original `Sender`
+and independently clocked child `Permission`, including its one-use consume
+scope. The scope is empty in this fixture: this is not the complete fixed writer
+command, baseline read, accepted plan, active recording or recovery. Source and
+runtime bytes, private inputs, stream credentials, clocks and pidfds are real;
+Engine/kernel metadata, root/cgroup routing, argv observation and installed
+input provenance are synthetic. Changed inputs (including after review), lost
+custody, obsolete policy, interruption or an expired shared bound refuse before
+permission delivery. Partial files remain preserved. The actual fixed writer
+fixture and this full outer-qualification fixture still need a single qualified
+outer/observer lifetime join before installation can be considered.
+
+The complete 104-module profile is also exercised by the existing two-role
+runtime pair and original pidfd/timerfd termination fixture. Both collectors
+share one unchanged two-second window; loss of the writer during the observer's
+read cannot yield a successful pair. Explicitly scoped cancellation, original
+absolute deadline (including frozen disposable peers) and designated-parent loss
+exercise the same original targets. These are separate offline component joins,
+not qualification of an installed outer command or permission to arm one.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

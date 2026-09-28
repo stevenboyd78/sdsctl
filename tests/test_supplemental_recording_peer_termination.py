@@ -127,6 +127,7 @@ def test_no_termination_scope_inferred_from_readiness_or_permission(
     refused(lambda: m.arm(custody, scope=m.SCOPE))
 
 
+@pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 def test_arm_runs_both_full_comparisons_again_then_cancel_stops_only_original_peers(custody, pair):
     before = pair.plan.raw
     watch = m.arm(custody, scope=m.SCOPE)
@@ -173,6 +174,7 @@ def test_actual_peer_loss_stops_partner_without_reopening_any_target(
 
 @pytest.mark.parametrize("short_budget", [True], indirect=True)
 @pytest.mark.parametrize("stopped", ["writer", "observer", "both"])
+@pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 def test_original_kernel_deadline_stops_frozen_peers_without_parent_polling(custody, pair, stopped):
     watch = m.arm(custody, scope=m.SCOPE)
     try:
@@ -335,6 +337,7 @@ def kernel_child(custody, parent):
             os.close(handle)
 
 
+@pytest.mark.parametrize("pair", [False, "preparation"], indirect=True)
 def test_actual_designated_parent_loss_stops_both_without_cancel_eof(custody, pair):
     with watchdog_tests.target() as (parent, _ticks):
         fd = os.pidfd_open(parent.pid)

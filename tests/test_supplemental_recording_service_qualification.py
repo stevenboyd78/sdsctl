@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from . import test_supplemental_recording_peer_inputs as retained_inputs  # noqa: F401
 from . import test_supplemental_recording_permission_qualification as previous
 from . import test_supplemental_recording_service_command as commands  # noqa: F401
 from . import test_supplemental_recording_startup_qualification as final_tests  # noqa: F401
