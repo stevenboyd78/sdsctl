@@ -5,6 +5,14 @@ from pathlib import Path
 
 SCRIPTS = Path(__file__).parents[1] / "scripts"
 NAME = re.compile(r"(?:accept_)?supplemental_[a-z0-9_]+\.py")
+CHILD_FRAME = re.compile(
+    r'\s*File "'
+    + re.escape(str(SCRIPTS))
+    + r'/((?:accept_)?supplemental_[a-z0-9_]+\.py)", line ([0-9]{1,6})(?:,.*)?'
+)
+CHILD_NOTE = re.compile(
+    r"cause [1-8]: scripts/((?:accept_)?supplemental_[a-z0-9_]+\.py):([0-9]{1,6})"
+)
 
 
 def failure_locations(error):
@@ -28,4 +36,25 @@ def failure_locations(error):
                 rows.append(f"cause {index + 1}: scripts/{path.name}:{trace.tb_lineno}")
             trace = trace.tb_next
         error = error.__cause__ if error.__cause__ is not None else error.__context__
+    return "\n".join(rows)
+
+
+def child_failure_locations(raw):
+    """Extract bounded known-checkout locations, never arbitrary child stderr.
+
+    Only a finished disposable fixture's bounded nonblocking stderr read is
+    supplied here. Do not echo exception text, source lines, notes, PID values,
+    local variables, or arbitrary paths. Empty output is not a success claim.
+    """
+    if type(raw) is not bytes:
+        return ""
+    rows = []
+    for line in raw[:65536].decode("ascii", errors="replace").splitlines():
+        match = CHILD_FRAME.fullmatch(line) or CHILD_NOTE.fullmatch(line)
+        if match is not None:
+            row = f"child: scripts/{match[1]}:{match[2]}"
+            if row not in rows:
+                rows.append(row)
+            if len(rows) == 32:
+                break
     return "\n".join(rows)

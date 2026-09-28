@@ -4171,6 +4171,10 @@ failure handlers before a deliberately uncertain recording phase consumes their
 exceptions. Only bounded, deduplicated source locations enter captured test
 output. Successful paths have no tracing or extra evidence reads, and original
 failure handlers still run; cleanup cannot be mistaken for the first cause.
+If a disposable fixed writer exits unexpectedly, its fixture also makes one
+bounded nonblocking stderr read and extracts only known-checkout frame/location
+lines. Arbitrary child stderr is never echoed, and extracted locations are
+diagnostics, not authenticated evidence or permission to retry.
 
 Additional integration cases keep one real PCMU Unix consumer and the recorder
 on the same RTP owner while native FQK or DTM acquisition succeeds or times out.

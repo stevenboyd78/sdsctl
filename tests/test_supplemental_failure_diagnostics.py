@@ -137,3 +137,29 @@ def test_native_service_refusal_observer_keeps_original_failure_and_only_locatio
         "Original native recording refusal locations (no values):\n"
         "cause 1: scripts/supplemental_recording_fixture.py:1\n"
     )
+
+
+def test_child_stderr_only_extracts_known_frames_and_location_notes():
+    raw = (
+        f'  File "{diagnostics.SCRIPTS}/supplemental_recording_fixture.py", line 12, in private\n'
+        "    require(PRIVATE_VALUE)\n"
+        "ValueError: PRIVATE-PAYLOAD\n"
+        '  File "/private/supplemental_recording_fixture.py", line 99, in private\n'
+        "cause 1: scripts/supplemental_recording_fixture.py:12\n"
+        "cause 2: scripts/accept_supplemental_fixture.py:13\n"
+        "cause 2: scripts/ordinary.py:14\n"
+    ).encode()
+    assert diagnostics.child_failure_locations(raw) == (
+        "child: scripts/supplemental_recording_fixture.py:12\n"
+        "child: scripts/accept_supplemental_fixture.py:13"
+    )
+
+
+def test_child_stderr_limits_input_output_and_does_not_format_unknown_values():
+    raw = b"\n".join(
+        f"cause 1: scripts/supplemental_recording_fixture.py:{index}".encode()
+        for index in range(1, 80)
+    )
+    assert len(diagnostics.child_failure_locations(raw).splitlines()) == 32
+    assert diagnostics.child_failure_locations(b"X" * 65536 + b"\n" + raw) == ""
+    assert diagnostics.child_failure_locations(object()) == ""

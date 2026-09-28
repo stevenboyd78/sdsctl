@@ -32,7 +32,7 @@ from . import test_supplemental_recording_peer_command as command_tests
 from . import test_supplemental_recording_peer_delivery as delivery_tests
 from . import test_supplemental_recording_peer_preflight_qualification as qualification
 from . import test_supplemental_recording_peer_termination as termination_tests
-from ._supplemental_failure_diagnostics import failure_locations
+from ._supplemental_failure_diagnostics import child_failure_locations, failure_locations
 
 writer, p, m = command_tests.writer, command_tests.m, qualification.m
 transport, grants = writer.transport, qualification.grants
@@ -359,7 +359,21 @@ def helper(supervised, image, configured, monkeypatch, tmp_path, request):
             else:
                 process.stdin.close()
                 process.wait(timeout=3)
-            assert process.returncode == getattr(h, "expected_returncode", 0)
+            expected = getattr(h, "expected_returncode", 0)
+            if process.returncode != expected:
+                # The process has been waited; never block on a descendant's
+                # stderr or echo private traceback values from the child.
+                fd = process.stderr.fileno()
+                os.set_blocking(fd, False)
+                try:
+                    raw = os.read(fd, 65536)
+                except BlockingIOError:
+                    raw = b""
+                locations = child_failure_locations(raw)
+                raise AssertionError(
+                    f"Original fixture writer exit {process.returncode}; expected {expected}.\n"
+                    + locations
+                )
         finally:
             if process.poll() is None:
                 process.kill()
