@@ -14,6 +14,7 @@ independent supervision and recovery integration.
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
 | Separate peer runtime expectations | Independently pinned `Expectations` declaration | Clock-free template digest and explicit writer/observer image, source, interpreter, environment, argv and confinement pins; pure comparison, not observed qualification or consent |
+| Retained peer input files | Separate read-only `Inputs` owner | Same original startup declaration and exact canonical expectations file, retained no-symlink paths and complete fresh reads; externally authenticated pins remain required |
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
 | Paired runtime comparison | External `PeerRuntimePair` | Both original role collectors and distinct original init witnesses, one plan/template/declaration/Engine client, two full fresh collections in a shared two-second window; no cached success, launch or continuing-lifetime authority |
 | Original peer termination | Explicit outer `Custody` and `arm` | Both runtime comparisons and zero-offset domains, duplicate original peer handles, immutable BOOTTIME deadline and a separate kernel-only watcher; narrowly scoped peer stops, not App actions, native exits or restoration |
@@ -121,6 +122,48 @@ startup command must be known before observing the process; its pin cannot be
 learned from the observed cmdline, and a pre-start declaration must not depend
 on a final clock-derived plan hash or its own digest. Command equality is not an
 active-entrypoint review or action grant.
+
+The separate uninstalled `supplemental_recording_peer_inputs.Inputs` reader
+retains that expectations document from a fixed `expectations.json` in a
+case-specific private sibling directory. It borrows the original read-only
+startup `Declaration`; neither input is placed in the writable publication case.
+The caller must authenticate both expected digests **independently, before
+observing the peers**. The reader never learns a pin from whatever file happens
+to exist and never creates, copies, repairs, renames or deletes input files.
+
+Every ancestor is opened without following symlinks. The unchanged `0700` leaf
+must contain only a single-link `0600` regular file, bounded by the expectations
+codec's byte limit. Original descriptors, file and directory identities, flags,
+path bindings, canonical bytes, expected digest and exact template/expectations
+objects are retained. Every recheck freshly reads the complete original file
+and startup declaration. Replacement files, equal recreated objects, foreign
+descriptor reuse, changed metadata or uncertain reads refuse permanently.
+Cleanup retires only owned original descriptors; the borrowed declaration is
+not closed by this reader (it can independently fail its own read checks).
+
+Each complete input read has a two-second maximum. An explicit enclosing
+deadline narrows that budget, including nested startup declaration reads;
+standalone declaration reads retain their existing two-second default. The
+reader captures no service clock and grants no continuing runtime authority.
+Blocking filesystem calls still need the separately enforced outer/platform
+bound. Ownership and permissions do not establish installation provenance.
+
+The explicit `peer_delivery.deliver_from_inputs` variant requires this original
+owner and both retained listeners. Both already qualified collectors must use
+the **same input-owned Expectations and original Template**, not values adopted
+or re-created after qualification. Every handoff guard rereads those inputs under
+the unchanged complete delivery cutoff, before and after both full paired
+runtime comparisons and each descriptor transfer. Missing inputs cannot select
+the older listener-only path. Uncertainty after original custody binding cancels
+the same armed peer watcher. Success leaves input/listener owners with the caller;
+it is still not Ready, independent input authenticity or permission for App work.
+
+Tests join real private files to both collectors before capture, then use real
+disposable processes, sockets and descriptor transfers. They cover input changes
+before delivery, between peers and after the final runtime comparison. Expected
+pins, Engine configuration, image and installation facts remain synthetic. No
+existing source graph or passive command admits this reader or join, and these
+tests do not qualify an installed launcher.
 
 The external `qualify_supplemental_recording_peer_runtime.PeerRuntimeQualification`
 performs the existing complete read-only collection for **one selected role**:

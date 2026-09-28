@@ -17,6 +17,7 @@ from contextlib import suppress
 from dataclasses import dataclass
 
 import supplemental_recording_peer_bootstrap as bootstrap
+import supplemental_recording_peer_inputs as peer_inputs
 import supplemental_recording_peer_listener as listeners
 import supplemental_recording_peer_termination as termination
 
@@ -94,7 +95,38 @@ def deliver_retained(custody, watch, local, writer_listener, observer_listener):
     )
 
 
-def _deliver(custody, watch, local, writer_connection, observer_connection, *, retained=None):
+def deliver_from_inputs(custody, watch, local, inputs, writer_listener, observer_listener):
+    """Join retained inputs and listeners to the SAME already qualified pair.
+
+    Both collectors must already use the exact Inputs-owned Expectations and
+    borrowed original Template. Every guard freshly reads those original files
+    under the same complete handoff cutoff. No file is adopted after observing
+    the peers. Digest authentication, installation provenance, a fixed launcher
+    and App authority remain external, independent prerequisites.
+    """
+    return _deliver(
+        custody,
+        watch,
+        local,
+        None,
+        None,
+        retained=(writer_listener, observer_listener),
+        inputs=inputs,
+        inputs_required=True,
+    )
+
+
+def _deliver(
+    custody,
+    watch,
+    local,
+    writer_connection,
+    observer_connection,
+    *,
+    retained=None,
+    inputs=None,
+    inputs_required=False,
+):
     began = time.monotonic()
     accepted = False
     bundles, endpoints = [], []
@@ -146,6 +178,12 @@ def _deliver(custody, watch, local, writer_connection, observer_connection, *, r
 
         def guard():
             require(time.monotonic() < end)
+            if inputs_required:
+                require(type(inputs) is peer_inputs.Inputs)
+                require(inputs.expectations is declaration)
+                require(inputs.template is writer.template and inputs.template is observer.template)
+                require(inputs.expected == declared_sha)
+                require(inputs.recheck(deadline=end) is declaration)
             for listener, channel, peer, deadline in retained_pins:
                 require(listener.channel is channel and listener.peer is peer)
                 require(listener.deadline == deadline and listener.accepted is True)

@@ -25,6 +25,13 @@ layout, image_umask, supervised = original.layout, original.image_umask, origina
 image, configured, helper = original.image, original.configured, original.helper
 
 
+def read_peer_inputs(template, expectations):
+    # Ordinary collector tests supply synthetic immutable values as before.
+    # Separate integration tests can retain real private inputs BEFORE either
+    # original collector is built, without retrofitting qualified objects.
+    return template, expectations
+
+
 @pytest.fixture
 def pair(helper, image, configured, monkeypatch):
     root, graph = helper.root, m.declarations.source
@@ -131,6 +138,7 @@ def pair(helper, image, configured, monkeypatch):
                 **roles,
             )
         )
+        template, expected = read_peer_inputs(template, expected)
         role_by_cid = {item["Id"]: role for role, item in containers.items()}
         original_open, original_os_open, original_stat = builtins.open, os.open, os.stat
 

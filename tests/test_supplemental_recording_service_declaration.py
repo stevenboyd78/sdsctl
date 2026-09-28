@@ -4,6 +4,7 @@ import fcntl
 import importlib.util
 import os
 import sys
+import time
 from pathlib import Path
 from threading import Thread
 
@@ -97,6 +98,34 @@ def test_recheck_reads_original_file_without_redecoding_unchanged_bytes(case, mo
         (root / m.NAME).write_bytes(template.raw.replace(b'"schema":1', b'"schema":2', 1))
         denied(original.recheck)
         assert original.failed and original.closed
+
+
+@pytest.mark.parametrize("deadline", [True, "1", float("inf"), float("nan"), -1])
+def test_invalid_or_expired_outer_deadline_refuses_before_read(case, monkeypatch, deadline):
+    root, template = case
+    with m.Declaration(root, template.sha256) as original:
+        monkeypatch.setattr(m.os, "pread", lambda *_: pytest.fail("No read after invalid cutoff"))
+        denied(lambda: original.recheck(deadline=deadline))
+        assert original.failed and original.closed
+
+
+def test_outer_deadline_only_narrows_original_complete_read_budget(case, monkeypatch):
+    root, template = case
+    with m.Declaration(root, template.sha256) as original:
+        seen, context = [], m.Declaration._context
+
+        def check(value, end):
+            seen.append(end)
+            context(value, end)
+
+        monkeypatch.setattr(m.Declaration, "_context", check)
+        end = time.monotonic() + 0.5
+        assert original.recheck(deadline=end) is original.template
+        assert seen and set(seen) == {end}
+        seen.clear()
+        began = time.monotonic()
+        original.recheck(deadline=began + 100)
+        assert seen and max(seen) < began + m.MAX_SECONDS + 0.1
 
 
 @pytest.mark.parametrize("fault", ["valid", "invalid", "mutable", "retained-bytes", "pin", "root"])

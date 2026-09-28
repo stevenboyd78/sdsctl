@@ -10,6 +10,7 @@ Its new input path/command/source still require separate installed qualification
 from __future__ import annotations
 
 import hashlib
+import math
 import os
 import stat
 import time
@@ -160,12 +161,16 @@ class Declaration:
         require(hashlib.sha256(self.raw).hexdigest() == self.expected)
         self._context(end)
 
-    def recheck(self):
+    def recheck(self, *, deadline=None):
+        """Read originals again; a caller deadline can only narrow this read."""
         acquired = False
         try:
             require(self.lock.acquire(blocking=False))
             acquired = True
             end = time.monotonic() + MAX_SECONDS
+            if deadline is not None:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                end = min(end, deadline)
             self._binding(end)
             require(self._read(end) == self.raw)
             self._binding(end)
