@@ -239,6 +239,13 @@ def child(root):
                     return receipt
 
                 patches.setattr(writer.m, "prepare_idle_from_inputs", retain_scope)
+            if config["authenticated_release"]:
+                # Explicit offline function selection, NOT installed command
+                # provenance. No stdin completion signal: actual original
+                # bootstrap credentials/receipt/deadline carry retirement.
+                patches.setattr(
+                    writer.m, "prepare_idle_from_inputs", writer.m.prepare_idle_until_released
+                )
             poll = p.startups.Startup.poll
             announced = []
 
@@ -602,7 +609,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
     retained_scope = mode == "retained-scope-pair"
-    retained_delivery = mode in ("retained-plan-pair", "retained-scope-pair")
+    authenticated_release = mode == "released-pair"
+    retained_delivery = mode in ("retained-plan-pair", "retained-scope-pair", "released-pair")
     plan_delivery = mode == "plan-pair" or retained_delivery
     for module in (
         p,
@@ -758,6 +766,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 outer_cid=h.observer_identity.container_id,
                 writer_cid=h.witness.identity.container_id,
                 retained_scope=retained_scope,
+                authenticated_release=authenticated_release,
                 **{key: str(value) for key, value in roots.items()},
             ),
         )
@@ -865,6 +874,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             plan_socket=plan_socket,
             retained_delivery=retained_delivery,
             retained_scope=retained_scope,
+            authenticated_release=authenticated_release,
             completion=options.get("completion", True),
             writer_handoff=roots["handoff"],
             observer_handoff=observer_handoff,
@@ -979,7 +989,12 @@ def finish(s, monkeypatch, after_qualification=None):
         s.observer_channel = s.observer_listener.accept()
     if hasattr(s, "watch"):
         if s.retained_delivery:
-            s.delivered = delivery_tests.m.deliver_from_inputs(
+            deliver = (
+                delivery_tests.m.deliver_and_release_passive_writer
+                if s.authenticated_release
+                else delivery_tests.m.deliver_from_inputs
+            )
+            s.delivered = deliver(
                 s.custody,
                 s.watch,
                 s.h.observer_identity,
@@ -1031,7 +1046,10 @@ def finish(s, monkeypatch, after_qualification=None):
             transport.command(s.h.child, dict(handoff_complete=s.completion))
         if s.completion is not True:
             return json.loads(transport.line(s.h.child))
-    assert transport.line(s.h.child) == p.MILESTONE
+    outcome = transport.line(s.h.child)
+    if s.authenticated_release and outcome != p.MILESTONE:
+        return json.loads(outcome)  # Refusal, not passive preparation completion.
+    assert outcome == p.MILESTONE
     return json.loads(transport.line(s.h.child))
 
 
@@ -1430,7 +1448,9 @@ def arm_original_watch(s):
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["pair", "plan-pair", "retained-scope-pair"], indirect=True)
+@pytest.mark.parametrize(
+    "joined", ["pair", "plan-pair", "retained-scope-pair", "released-pair"], indirect=True
+)
 def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_retirement(
     joined, monkeypatch
 ):
@@ -1467,7 +1487,9 @@ def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_reti
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["plan-pair", "retained-scope-pair"], indirect=True)
+@pytest.mark.parametrize(
+    "joined", ["plan-pair", "retained-scope-pair", "released-pair"], indirect=True
+)
 @pytest.mark.parametrize("when", ["before-first", "after-writer", "after-observer"])
 def test_authenticated_plan_then_source_drift_cancels_original_supervised_handoff(
     joined, monkeypatch, when
@@ -1475,7 +1497,13 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
     s = joined
     source = s.h.root / s.q.HELPER / "supplemental_recording_peer_preparation.py"
     sent, changed = [], []
-    delivery_name = "deliver_from_inputs" if s.retained_delivery else "deliver"
+    delivery_name = (
+        "deliver_and_release_passive_writer"
+        if s.authenticated_release
+        else "deliver_from_inputs"
+        if s.retained_delivery
+        else "deliver"
+    )
     deliver = getattr(delivery_tests.m, delivery_name)
     endpoint_send = p.bootstrap.Endpoint.deliver
 
@@ -1608,3 +1636,83 @@ def test_retained_scope_missing_or_bad_fixture_completion_preserves_failure(join
         for path in s.case_root.rglob("*")
         if path.is_file()
     }
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize("joined", ["released-pair"], indirect=True)
+@pytest.mark.parametrize("fault", ["message", "missing"])
+def test_authenticated_release_refusal_retires_original_passive_scope_without_retry(
+    joined, monkeypatch, fault
+):
+    s = joined
+    calls = []
+
+    def corrupted(endpoint, receipt):
+        calls.append(endpoint)
+        assert endpoint.passive_retirement and receipt is endpoint.receipt
+        if fault == "message":
+            endpoint._send(
+                endpoint._frame(
+                    "retire-passive-writer",
+                    endpoint.exchange_nonce,
+                    offer_sha256=receipt.offer_sha256,
+                    scope="PRIVATE wrong release scope",
+                )
+            )
+        # Omitting the send must expire at the receiver's ORIGINAL cutoff.
+
+    monkeypatch.setattr(p.bootstrap.Endpoint, "send_retirement", corrupted)
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert len(calls) == 1 and result["result"] is None and result["error"] == "refused"
+    assert result["retired"] and result["clocks_closed"] and result["fd_delta"] == 0
+    assert result["original_dispatch"] and result["input_baseline_preserved"]
+    assert result["owners"] == result["services"] == result["links"] == 1
+    assert not s.watch.closed and s.custody.armed_watch is s.watch
+    # Outer send/transport facts are explicitly NOT a receiver-success receipt.
+    assert s.delivered.writer is calls[0].receipt
+    if fault == "missing":
+        assert time.monotonic() >= s.writer_listener.deadline
+    assert (s.case_root / "startup-claim.json").is_file()
+    assert (s.case_root / "journal/0000.json").is_file()
+    s.watch.close()
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize("joined", ["released-pair"], indirect=True)
+@pytest.mark.parametrize("fault", ["sender-retirement", "receipt-replacement"])
+def test_failed_final_retirement_or_changed_receipt_never_releases_writer(
+    joined, monkeypatch, fault
+):
+    s = joined
+    retirement, release = delivery_tests.m._retire, p.bootstrap.Endpoint.send_retirement
+    retired, released = [], []
+
+    def retire(channels, pins):
+        retirement(channels, pins)
+        retired.append(channels)
+        if fault == "sender-retirement" and len(retired) == 3:
+            raise ValueError("PRIVATE final sender retirement fault")
+
+    def send(endpoint, receipt):
+        released.append(endpoint)
+        assert len(retired) == 4  # Both original copies, then final cleanup.
+        assert endpoint.passive_retirement and receipt is endpoint.receipt
+        return release(endpoint, p.bootstrap.Receipt(receipt.context_sha256, receipt.offer_sha256))
+
+    monkeypatch.setattr(delivery_tests.m, "_retire", retire)
+    monkeypatch.setattr(p.bootstrap.Endpoint, "send_retirement", send)
+    assert s.sender.send() is None
+    with pytest.raises(delivery_tests.m.UnconfirmedDelivery) as error:
+        finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert str(error.value) == delivery_tests.m.MESSAGE and len(retired) == 4
+    assert len(released) == (0 if fault == "sender-retirement" else 1)
+    assert s.watch.closed and s.watch.finished
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert (s.case_root / "startup-claim.json").is_file()
+    assert (s.case_root / "plan.json").is_file()

@@ -119,6 +119,35 @@ def deliver_from_inputs(custody, watch, local, inputs, writer_listener, observer
     )
 
 
+def deliver_and_release_passive_writer(
+    custody, watch, local, inputs, writer_listener, observer_listener
+):
+    """Explicit final transport phase, NOT active admission or observed retirement.
+
+    Uses the same original delivery owners, both full paired collections and
+    cutoff. Only after retiring every sender-owned channel copy and the observer
+    bootstrap endpoint, and rechecking all borrowed owners, send the original
+    writer a receipt-bound passive retirement message. Its receiving Endpoint
+    must have explicitly selected this scope BEFORE the descriptor request.
+
+    This one-way message does not prove the writer received it, retired cleanly,
+    or exited. No caller may reuse the writer listener as a live borrower after
+    this release. The original watcher remains armed; actual exit and exclusive
+    recovery stay separate obligations. Old delivery paths never send a release.
+    """
+    return _deliver(
+        custody,
+        watch,
+        local,
+        None,
+        None,
+        retained=(writer_listener, observer_listener),
+        inputs=inputs,
+        inputs_required=True,
+        passive_retirement=True,
+    )
+
+
 def _deliver(
     custody,
     watch,
@@ -129,6 +158,7 @@ def _deliver(
     retained=None,
     inputs=None,
     inputs_required=False,
+    passive_retirement=False,
 ):
     began = time.monotonic()
     accepted = False
@@ -251,10 +281,12 @@ def _deliver(
                 mode="deliver",
                 declaration_sha256=declared_sha,
                 deadline=end,
+                passive_retirement=passive_retirement and role == "writer",
             )
             endpoints.append(endpoint)
             receipts.append(endpoint.deliver(channels))
-            endpoint.close()
+            if not (passive_retirement and role == "writer"):
+                endpoint.close()
             _retire(channels, socket_pins[id(channels)])
             guard()
         original_pair._collect_before(end)
@@ -265,6 +297,8 @@ def _deliver(
     finally:
         # Cleanup failures also fail closed. Do not skip the other owned side.
         for resource in reversed(endpoints):
+            if passive_retirement and resource is endpoints[0] and error is None:
+                continue  # Original writer Endpoint retained for its final phase.
             try:
                 resource.close()
             except BaseException as cause:
@@ -283,8 +317,18 @@ def _deliver(
                 # original pair/watch and unchanged complete cutoff afterward.
                 # Cleanup does not earn another window or a cached success.
                 guard()
+                if passive_retirement:
+                    endpoints[0].send_retirement(result.writer)
             except BaseException as cause:
                 error = cause
+        # After a release the writer may retire immediately. Do not run another
+        # live-writer guard or pretend this send observed successful retirement.
+        if passive_retirement and endpoints:
+            try:
+                endpoints[0].close()
+            except BaseException as cause:
+                if error is None or not isinstance(cause, Exception):
+                    error = cause
         if error is not None and accepted:
             # Remains uncertainty; never substitute/reopen any owner.
             try:

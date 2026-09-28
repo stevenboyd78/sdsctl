@@ -64,7 +64,8 @@ before = set(os.listdir("/proc/self/fd"))
 endpoint = channels = link = None
 try:
     endpoint = m.Endpoint(channel, plan, clock, local, remote, other, role=config["role"],
-        mode="receive", declaration_sha256=config["declaration"])
+        mode="receive", declaration_sha256=config["declaration"],
+        passive_retirement=config.get("passive_retirement", False))
     fault = config.get("fault")
     if fault:
         original_send = endpoint._send
@@ -91,6 +92,12 @@ try:
     for line in sys.stdin.buffer:
         command = json.loads(line)
         if command["mode"] == "finish":
+            break
+        if command["mode"] == "retire-passive":
+            if command.get("replace_receipt"):
+                receipt = m.Receipt(receipt.context_sha256, receipt.offer_sha256)
+            endpoint.receive_retirement(receipt)
+            print("passive release received", flush=True)
             break
         if command["mode"] == "link":
             endpoint.close()
@@ -242,6 +249,7 @@ def case(monkeypatch):
                 role=role,
                 mode="deliver",
                 declaration_sha256="c" * 64,
+                passive_retirement=configs[role].get("passive_retirement", False),
             )
             endpoints.append(result)
             return result
@@ -328,10 +336,148 @@ def test_three_original_processes_deliver_both_directional_channels_and_real_cre
         finish(case, role)
 
 
-@pytest.mark.parametrize("field", ["role", "declaration"])
+def passive_release(case, *, replacement=False):
+    case.configs["writer"]["passive_retirement"] = True
+    endpoint = start(case, "writer")
+    receipt = endpoint.deliver(case.bundles["writer"])
+    assert json.loads(line(case.processes["writer"]))["received"]
+    case.bundles["writer"].close()
+    command(case.processes["writer"], dict(mode="retire-passive", replace_receipt=replacement))
+    return endpoint, receipt
+
+
+def test_passive_release_retains_original_endpoint_receipt_and_cutoff(case):
+    endpoint, receipt = passive_release(case)
+    cutoff, origin, objects = endpoint.end, endpoint.clock.original, endpoint.objects
+    assert endpoint.send_retirement(receipt) is None
+    assert line(case.processes["writer"]) == "passive release received"
+    assert json.loads(line(case.processes["writer"])) == dict(
+        fd_delta=0, caller_clock_live=True, caller_witnesses_live=True
+    )
+    assert endpoint.retirement_attempted and not endpoint.failed
+    assert endpoint.end == cutoff and endpoint.objects is objects
+    assert endpoint.clock.original is origin and not endpoint.clock.closed
+    # A release is one-use, not an invitation to retry or admit any App action.
+    refused(lambda: endpoint.send_retirement(receipt))
+    assert endpoint.retirement_attempted and endpoint.failed
+
+
+@pytest.mark.parametrize(
+    ("interruption", "cleanup_error", "expected"),
+    [
+        (KeyboardInterrupt, ValueError, KeyboardInterrupt),
+        (SystemExit, ValueError, SystemExit),
+        (ValueError, ValueError, m.UnconfirmedBootstrap),
+        (ValueError, KeyboardInterrupt, KeyboardInterrupt),
+    ],
+)
+def test_passive_release_keeps_original_interruption_if_cleanup_also_fails(
+    case, monkeypatch, interruption, cleanup_error, expected
+):
+    endpoint, receipt = passive_release(case)
+    close = endpoint.close
+
+    def interrupted(*args, **kwargs):
+        raise interruption("PRIVATE interruption")
+
+    def closing():
+        close()
+        raise cleanup_error("PRIVATE cleanup uncertainty")
+
+    monkeypatch.setattr(endpoint, "_wait", interrupted)
+    with monkeypatch.context() as cleanup:
+        cleanup.setattr(endpoint, "close", closing)
+        with pytest.raises(expected) as error:
+            endpoint.send_retirement(receipt)
+        if expected is m.UnconfirmedBootstrap:
+            assert str(error.value) == m.MESSAGE and error.value.__suppress_context__
+    assert endpoint.failed and endpoint.closed and not case.clock.closed
+
+
+@pytest.mark.parametrize("fault", ["receipt", "nonce", "cutoff", "legacy", "not-delivered"])
+def test_passive_release_sender_refuses_replacement_or_unselected_context(case, fault):
+    case.configs["writer"]["passive_retirement"] = fault != "legacy"
+    endpoint = start(case, "writer")
+    if fault == "not-delivered":
+        receipt = m.Receipt(endpoint.context_sha256, "f" * 64)
+    else:
+        receipt = endpoint.deliver(case.bundles["writer"])
+        assert json.loads(line(case.processes["writer"]))["received"]
+    if fault == "receipt":
+        receipt = replace(receipt)
+    elif fault == "nonce":
+        endpoint.exchange_nonce = "e" * 64
+    elif fault == "cutoff":
+        endpoint.end += 1
+    refused(lambda: endpoint.send_retirement(receipt))
+    assert endpoint.failed and endpoint.closed and not case.clock.closed
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "scope",
+        "offer_sha256",
+        "context_sha256",
+        "nonce",
+        "phase",
+        "kind",
+        "extra",
+        "schema",
+        "rights",
+        "forwarder",
+        "eof",
+        "missing",
+        "replacement",
+    ],
+)
+def test_passive_release_receiver_rejects_unconfirmed_frame_without_fd_leaks(case, fault):
+    endpoint, receipt = passive_release(case, replacement=fault == "replacement")
+    value = endpoint._frame(
+        "retire-passive-writer",
+        endpoint.exchange_nonce,
+        offer_sha256=receipt.offer_sha256,
+        scope=m.RETIREMENT_SCOPE,
+    )
+    if fault in value or fault == "extra":
+        value[fault] = 1.0 if fault == "schema" else "private-invalid-value"
+    channel = case.connections["writer"]
+    raw = m.links.base.encode(value)
+    if fault == "forwarder":
+        descendant = os.fork()
+        if descendant == 0:
+            try:
+                channel.send(raw)
+            finally:
+                os._exit(0)
+        assert os.waitpid(descendant, 0) == (descendant, 0)
+    elif fault == "rights":
+        channel.sendmsg(
+            [raw],
+            [(socket.SOL_SOCKET, socket.SCM_RIGHTS, struct.pack("i", case.witnesses["writer"].fd))],
+        )
+    elif fault == "eof":
+        channel.shutdown(socket.SHUT_WR)
+    elif fault not in ("missing", "replacement"):
+        channel.send(raw)
+    result = json.loads(line(case.processes["writer"]))
+    assert result == dict(received=False, error=m.MESSAGE)
+    assert json.loads(line(case.processes["writer"])) == dict(
+        fd_delta=0, caller_clock_live=True, caller_witnesses_live=True
+    )
+    assert not case.clock.closed and not case.witnesses["writer"].exited()
+    if fault == "missing":
+        # The outer is constructed just before the receiver; neither deadline
+        # is renewed for the second phase.
+        assert time.monotonic() >= endpoint.end
+
+
+@pytest.mark.parametrize("field", ["role", "declaration", "passive_retirement"])
 def test_context_mismatch_refuses_before_transferring_endpoints(case, field):
     endpoint = case.endpoint("writer")
-    case.configs["writer"][field] = "observer" if field == "role" else "d" * 64
+    case.configs["writer"][field] = (
+        True if field == "passive_retirement" else "observer" if field == "role" else "d" * 64
+    )
     command(case.processes["writer"], case.configs["writer"])
     refused(lambda: endpoint.deliver(case.bundles["writer"]))
     assert endpoint.failed and endpoint.used

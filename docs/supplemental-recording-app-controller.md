@@ -2022,9 +2022,40 @@ during delivery cancels the same watcher and stops only its original peers.
 The fixture pipe is sequencing, **not authenticated installed completion or an
 App grant**, and this variant does not qualify the unchanged fixed command's
 immediate-retirement path. The earlier negative regression still proves that
-path refuses. A selected, authenticated completion/retirement protocol and
-independent outer/platform supervision remain required; keeping a fixture peer
-alive does not satisfy those gates.
+path refuses. Keeping a fixture peer alive does not qualify an installed
+retirement protocol or independent outer/platform supervision.
+
+A further separately selected **offline library join** replaces that fixture
+completion pipe with an authenticated passive retirement message. Both original
+writer bootstrap Endpoints must select
+`retire-original-passive-writer-only-v1` before descriptor delivery; the scope
+is included in the context digest, so the legacy descriptor-only exchange cannot
+be silently upgraded. The same Endpoint, namespace descriptors, receipt object,
+nonce, original clock and complete original cutoff survive the final phase.
+No new connection, replacement clock or renewed timeout supplies retirement.
+
+`deliver_and_release_passive_writer` completes both full fresh paired
+collections, retires every sender-owned channel copy and the observer bootstrap
+Endpoint, and rechecks the original input/listener/pair/watcher owners before
+sending the writer's receipt-bound release. The watcher remains armed. All
+pre-release faults, including final sender-retirement failure, cancel the same
+watcher and stop only the original two peers. `prepare_idle_until_released`
+holds its same passive service/Link/dispatcher inside the bounded scope until
+that original outer message arrives, then performs the existing ordered
+retirement and input/clock/peer checks. Missing, malformed, extra, wrong-credential,
+ancillary-rights, changed-receipt or replayed frames cannot admit work. The old
+immediate passive preparation and receipt-only caller scope are unchanged.
+
+This is deliberately a **one-way permission to retire**, not evidence that the
+writer received the message, retired cleanly or exited. Once sent, the writer
+may retire immediately; the sender does not race that permission with another
+live-writer check or claim receiver success from a successful send. Actual exit
+evidence, exclusive recovery, outer lifetime, installed source/runtime provenance
+and active admission remain separate. The process fixture selects the new
+library function explicitly; no installed command selects it. Engine/runtime
+metadata, image and command provenance are still synthetic. Fault tests retain
+the distinction between successful transport and receiver refusal, preserve
+files, and cancel the original watcher instead of calling that recovery success.
 
 This remains offline integration: paths/cgroups, Engine/kernel/argv and installed
 pin/publication provenance are synthetic. No fixed observer or outer entrypoint,

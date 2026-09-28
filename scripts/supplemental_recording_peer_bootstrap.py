@@ -25,6 +25,7 @@ from threading import Lock, get_ident
 import supplemental_recording_service_cli_channel as links
 
 KIND = "finite-recording-peer-channel-bootstrap-v1"
+RETIREMENT_SCOPE = "retire-original-passive-writer-only-v1"
 MESSAGE = "Recording peer channel delivery is unconfirmed; preserve the case and do not retry."
 MAX_BYTES, SECONDS, ROOT_UID = 2048, 2.0, 0
 
@@ -89,11 +90,15 @@ class Endpoint:
         mode,
         declaration_sha256,
         deadline=None,
+        passive_retirement=False,
     ):
         began = time.monotonic()
         self.owner = os.getpid(), get_ident(), os.geteuid(), os.getegid()
         self.lock = Lock()
         self.used = self.failed = self.closed = False
+        self.retirement_attempted = False
+        self.receipt = self.exchange_nonce = None
+        self.retirement_context = None
         self.handles = []
         try:
             require(type(self) is Endpoint and self.owner[2] == ROOT_UID)
@@ -104,6 +109,8 @@ class Endpoint:
             require(remote is not peer)
             require(type(role) is str and role in ("writer", "observer"))
             require(type(mode) is str and mode in ("deliver", "receive"))
+            require(type(passive_retirement) is bool)
+            require(not passive_retirement or role == "writer")
             require(type(declaration_sha256) is str)
             links.base.digest(declaration_sha256)
             ids = local, remote.identity, peer.identity
@@ -115,6 +122,7 @@ class Endpoint:
             self.channel, self.plan, self.clock = channel, plan, clock
             self.local, self.remote, self.peer = local, remote, peer
             self.role, self.mode, self.declaration_sha256 = role, mode, declaration_sha256
+            self.passive_retirement = passive_retirement
             self.pin = links.plans.PinnedPlan(plan)
             self.origin = clock.original
             self.context = links.base.encode(
@@ -127,6 +135,7 @@ class Endpoint:
                     outer=asdict(local if mode == "deliver" else remote.identity),
                     recipient=asdict(remote.identity if mode == "deliver" else local),
                     peer=asdict(peer.identity),
+                    **(dict(retirement_scope=RETIREMENT_SCOPE) if passive_retirement else {}),
                 )
             )
             self.context_sha256 = links.base.checksum(links._decode(self.context))
@@ -163,6 +172,7 @@ class Endpoint:
             self.context,
             self.context_sha256,
             self.end,
+            self.passive_retirement,
         )
 
     def _guard(self):
@@ -339,7 +349,10 @@ class Endpoint:
             require(_sockets(channels) == identities)
             require(not select.select([self.channel], [], [], 0)[0])
             self._guard()
-            return Receipt(self.context_sha256, digest)
+            self.receipt = Receipt(self.context_sha256, digest)
+            self.exchange_nonce = nonce
+            self.retirement_context = self.receipt, nonce
+            return self.receipt
         except BaseException as error:
             self._fail(error)
         finally:
@@ -386,11 +399,18 @@ class Endpoint:
             require(_sockets(channels) == identities)
             self._guard()
             self._send(self._frame("received", nonce, offer_sha256=digest))
-            require(not select.select([self.channel], [], [], 0)[0])
+            # Only the explicitly selected continuing passive exchange can
+            # have its next phase queued here. The next reader checks its
+            # complete frame/credentials; legacy bootstrap stays quiet-only.
+            if not self.passive_retirement:
+                require(not select.select([self.channel], [], [], 0)[0])
             require(_sockets(channels) == identities)
             self._guard()
             result, channels = channels, None
-            return result, Receipt(self.context_sha256, digest)
+            self.receipt = Receipt(self.context_sha256, digest)
+            self.exchange_nonce = nonce
+            self.retirement_context = self.receipt, nonce
+            return result, self.receipt
         except BaseException as error:
             self._fail(error)
         finally:
@@ -401,9 +421,86 @@ class Endpoint:
             if acquired:
                 self.lock.release()
 
+    def _retirement(self, receipt, mode):
+        require(self.lock.acquire(blocking=False))
+        try:
+            require(self.mode == mode and self.role == "writer" and self.passive_retirement)
+            require(self.used and not self.retirement_attempted)
+            self.retirement_attempted = True
+            self._guard()
+            require(type(receipt) is Receipt and receipt is self.receipt)
+            require(self.retirement_context[0] is receipt)
+            require(self.exchange_nonce == self.retirement_context[1])
+            require(receipt.context_sha256 == self.context_sha256)
+            links.base.digest(receipt.offer_sha256)
+            links.base.digest(self.exchange_nonce)
+            return self._frame(
+                "retire-passive-writer",
+                self.exchange_nonce,
+                offer_sha256=receipt.offer_sha256,
+                scope=RETIREMENT_SCOPE,
+            )
+        except BaseException:
+            self.lock.release()
+            raise
+
+    def send_retirement(self, receipt):
+        """Permit passive retirement once, under this ORIGINAL exchange cutoff.
+
+        Caller must first finish both full paired collections and every owned
+        sender-copy/other endpoint retirement. This is a one-way release, NOT
+        proof of writer exit, Ready, action scope or recovery. After the send,
+        the writer may immediately retire; it is no longer a live borrower for
+        a final sender guard. Original namespace handles still need close().
+        """
+        acquired = False
+        try:
+            value = self._retirement(receipt, "deliver")
+            acquired = True
+            raw = links.base.encode(value)
+            require(len(raw) <= MAX_BYTES)
+            self._wait(sending=True)
+            require(not select.select([self.channel], [], [], 0)[0])
+            require(self.channel.sendmsg([raw]) == len(raw))
+            # No peer-liveness read after release: that would race the very
+            # retirement just permitted. A late send remains unconfirmed.
+            require(time.monotonic() < self.end)
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
+    def receive_retirement(self, receipt):
+        """Read the original outer's one passive release; never renew a window.
+
+        No ancillary rights, descendant sender, changed receipt/context/nonce,
+        extra frame, EOF or replay is admitted. Caller retains its original
+        passive service/Link/inputs and checks them before and after this call.
+        """
+        acquired = False
+        try:
+            expected = self._retirement(receipt, "receive")
+            acquired = True
+            value, _ = self._receive()
+            require(links.base.encode(value) == links.base.encode(expected))
+            require(not select.select([self.channel], [], [], 0)[0])
+            self._guard()
+        except BaseException as error:
+            self._fail(error)
+        finally:
+            if acquired:
+                self.lock.release()
+
     def _fail(self, error):
         self.failed = True
-        self.close()
+        try:
+            self.close()
+        except BaseException as cleanup:
+            # Cleanup cannot turn an original interruption into ordinary
+            # uncertainty, nor leak a private ordinary cleanup exception.
+            if isinstance(error, Exception) and not isinstance(cleanup, Exception):
+                raise cleanup
         if not isinstance(error, Exception):
             raise error
         raise UnconfirmedBootstrap(MESSAGE) from None

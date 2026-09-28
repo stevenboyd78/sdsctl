@@ -100,6 +100,21 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
         return receipt
 
 
+def prepare_idle_until_released(owner, inputs, connection, local, outer, observer, docker):
+    """Explicit passive release join; no installed command selects this variant.
+
+    Retain the ORIGINAL bootstrap Endpoint through passive service assembly and
+    the original outer's authenticated one-way retirement frame. The complete
+    intake/service/release/cleanup stays within the original connection cutoff.
+    No fixture pipe, new endpoint, clock or timeout can supply this release.
+    It proves neither complete outer qualification nor exit/action/recovery.
+    """
+    with _retained_idle_from_inputs(
+        owner, inputs, connection, local, outer, observer, docker, passive_retirement=True
+    ) as receipt:
+        return receipt
+
+
 @contextmanager
 def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer, docker):
     """Retain original passive custody during a caller's bounded handoff join.
@@ -129,11 +144,37 @@ def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer,
     command selects a continuing scope; the old command still exits immediately.
     Separate launcher/admission/termination gates remain mandatory.
     """
-    channels = link = receipt = problem = None
+    with _retained_idle_from_inputs(
+        owner, inputs, connection, local, outer, observer, docker
+    ) as receipt:
+        yield receipt
+
+
+@contextmanager
+def _retained_idle_from_inputs(
+    owner, inputs, connection, local, outer, observer, docker, *, passive_retirement=False
+):
+    channels = link = receipt = endpoint = problem = None
     pins = ()
     try:
         # Intake owns the one-attempt check, including invalid retained inputs.
-        channels, receipt = receive_from_inputs(owner, inputs, connection, local, outer, observer)
+        if passive_retirement:
+            channels, receipt, endpoint = _receive(
+                owner,
+                None,
+                None,
+                None,
+                local,
+                outer,
+                observer,
+                deadline=None,
+                retained=(inputs, connection),
+                passive_retirement=True,
+            )
+        else:
+            channels, receipt = receive_from_inputs(
+                owner, inputs, connection, local, outer, observer
+            )
         pins = tuple(
             (s, s.fileno(), bootstrap.links._identity(s.fileno()))
             for s in (channels.incoming, channels.outgoing)
@@ -193,6 +234,9 @@ def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer,
             require(not service.used and not service.dispatch.used)
             require(len(service.journal.entries) == 1 and not service.processes.witnesses)
             # Deliberately no run(), consume(), dispatch, native or recording.
+            if passive_retirement:
+                endpoint.receive_retirement(receipt)
+                guard()
             yield receipt
             guard()
             require(not service.closed and not service.failed)
@@ -207,6 +251,12 @@ def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer,
     except BaseException as error:
         problem = error
     finally:
+        if endpoint is not None:
+            try:
+                endpoint.close()
+            except BaseException as error:
+                if problem is None or not isinstance(error, Exception):
+                    problem = error
         # All received copies retire even if Link retirement fails. Retire only
         # the originals; a foreign reused FD is detached, never closed here.
         if link is not None:
@@ -245,7 +295,17 @@ def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer,
 
 
 def _receive(
-    owner, declaration, expected_sha256, channel, local, outer, observer, *, deadline, retained=None
+    owner,
+    declaration,
+    expected_sha256,
+    channel,
+    local,
+    outer,
+    observer,
+    *,
+    deadline,
+    retained=None,
+    passive_retirement=False,
 ):
     began = time.monotonic()
     endpoint = channels = result = problem = None
@@ -329,6 +389,7 @@ def _receive(
             mode="receive",
             declaration_sha256=expected_sha256,
             deadline=end,
+            passive_retirement=passive_retirement,
         )
         guard()
         channels, receipt = endpoint.receive()
@@ -339,10 +400,17 @@ def _receive(
             for s in (channels.incoming, channels.outgoing)
         )
         guard()
-        endpoint.close()
-        endpoint = None  # Retired once, before the final bounded owner check.
-        guard()
-        result = channels, receipt
+        if passive_retirement:
+            # Transfer only to the internal passive scope, never a public
+            # receiver/caller. Keep the original namespace and transport owner.
+            guard()
+            result = channels, receipt, endpoint
+            endpoint = None
+        else:
+            endpoint.close()
+            endpoint = None  # Retired once, before the final bounded owner check.
+            guard()
+            result = channels, receipt
     except BaseException as error:
         problem = error
     finally:
