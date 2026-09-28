@@ -1504,6 +1504,7 @@ def test_absent_inventory_is_read_only_and_always_lists_built_ins(
     assert tuple(package.identity for package in inventory.packages) == (
         "web/system",
         "web/lcars",
+        "web/lcars-v2",
         "web/matrix",
         "web/first-responder",
         "web/amateur-radio",

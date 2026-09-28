@@ -366,6 +366,7 @@ function initializeDisplayNavigation(logout) {
   };
   relocate(document.querySelector(".theme-picker"), appearance);
   relocate(element("system-palette-picker"), appearance);
+  relocate(element("lcars-v2-appearance-pickers"), appearance);
   const details = (parent, id, selectors) => {
     const disclosure = make("details", null, "native-details");
     disclosure.id = id;
