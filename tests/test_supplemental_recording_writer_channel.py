@@ -765,6 +765,109 @@ def prepare_idle(c):
     )
 
 
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize(
+    "fault",
+    [
+        None,
+        "input",
+        "late",
+        "callback",
+        "used",
+        "dispatch-used",
+        "closed",
+        "failed",
+        "body",
+        "interrupt",
+    ],
+)
+def test_retained_passive_scope_keeps_original_borrowers_until_caller_finishes(
+    connection, monkeypatch, fault
+):
+    c = connection
+    services = []
+    construct = assembly.operator.IdleService.__init__
+
+    def capture(service, *args, **kwargs):
+        construct(service, *args, **kwargs)
+        services.append(service)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Retained passive custody attempted active work")
+
+    monkeypatch.setattr(assembly.operator.IdleService, "__init__", capture)
+    monkeypatch.setattr(assembly.operator.IdleService, "run", forbidden)
+    monkeypatch.setattr(assembly.operator.Inbox, "consume", forbidden)
+    original, clock, cutoff = c.owner.original, c.owner.clock, c.retained.deadline
+    c.start()
+
+    def trial():
+        with m.retained_idle_from_inputs(
+            c.owner,
+            c.input_owner,
+            c.retained,
+            c.local,
+            c.outer_witness,
+            c.observer_witness,
+            c.s.docker,
+        ) as receipt:
+            assert type(receipt) is m.bootstrap.Receipt
+            assert transport.line(c.outer) == "delivered"
+            assert json.loads(transport.line(c.observer))["received"]
+            assert len(services) == 1
+            service = services[0]
+            link = service._dispatch_observer.__self__
+            assert service.original is original and service.clock_witness is clock
+            assert c.owner._service_active and not service.closed and not link.closed
+            assert link.timer is clock and link.plan is original.plan
+            assert link.channel.incoming.fileno() >= 0 and link.channel.outgoing.fileno() >= 0
+            assert c.retained.deadline == cutoff and time.monotonic() < cutoff
+            assert not c.input_owner.closed and not clock.closed and not c.retained.closed
+            assert not service.used and not service.dispatch.used
+            if fault is None:
+                # A second intake cannot replace or close the still-borrowed
+                # original scope while it is held, nor renew its cutoff.
+                denied(lambda: prepare_idle(c))
+                assert c.owner._service_active and not service.closed and not link.closed
+                assert c.owner.clock is clock and not clock.closed
+                assert not c.retained.closed and c.retained.deadline == cutoff
+            elif fault == "input":
+                (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE_SCOPE_DRIFT")
+            elif fault == "late":
+                monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: cutoff))
+            elif fault == "callback":
+                service.dispatch.observe = None
+            elif fault == "used":
+                service.used = True
+            elif fault == "dispatch-used":
+                service.dispatch.used = True
+            elif fault == "closed":
+                service.close()
+            elif fault == "failed":
+                service.failed = True
+            elif fault == "body":
+                raise ValueError("PRIVATE_SCOPE_BODY")
+            elif fault == "interrupt":
+                raise KeyboardInterrupt
+
+    if fault == "interrupt":
+        with pytest.raises(KeyboardInterrupt):
+            trial()
+    elif fault is not None:
+        denied(trial)
+    else:
+        trial()
+        assert not c.owner.closed and not clock.closed and not c.retained.closed
+        assert c.owner.original is original and c.owner.clock is clock
+    service = services[0]
+    link = service._dispatch_observer.__self__
+    assert service.closed and service.journal.fd == -1 and link.closed
+    assert link.channel.incoming.fileno() == link.channel.outgoing.fileno() == -1
+    assert c.owner.peer_channel_attempted and c.owner.service_used
+    assert (c.s.root / "journal/0000.json").is_file()
+    denied(lambda: prepare_idle(c))
+
+
 @pytest.mark.parametrize(
     "service_case,connection",
     [

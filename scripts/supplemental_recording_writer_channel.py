@@ -5,8 +5,8 @@ No serialized plan, replacement clock or reconstructed Startup is accepted.
 The external launcher must authenticate the declaration pin, original peers,
 private connection, runtime/source and termination before calling this join.
 This is not input provisioning, installed qualification, Ready or App consent.
-The explicit peer source comparison can inventory this graph, but no existing
-command selects this join or admits its execution against a live App.
+The explicit peer source comparison inventories this graph for a separate
+passive preparation command. No command admits active or live App execution.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from __future__ import annotations
 import math
 import os
 import time
+from contextlib import contextmanager
 from threading import get_ident
 
 import supplemental_recording_peer_bootstrap as bootstrap
@@ -69,7 +70,8 @@ def receive_from_inputs(owner, inputs, connection, local, outer, observer, *, de
     and connection are checked before and after transport, with no replacement
     inputs, socket, witness or clock. Caller retains all borrowed owners; received
     Channels alone transfer ownership. This does not authenticate installation
-    or admit App work, and no existing command selects this variant.
+    or admit App work. The fixed passive writer uses this intake through its
+    immediate preparation/retirement variant.
     """
     return _receive(
         owner,
@@ -85,27 +87,47 @@ def receive_from_inputs(owner, inputs, connection, local, outer, observer, *, de
 
 
 def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, docker):
-    """Join original intake -> writer Link -> dispatcher -> passive retirement.
+    """Prepare and immediately retire the original passive scope.
 
-    This explicit, uninstalled preparation path does not yield an active service
-    or consume an inbox. It creates only the original preparation journal/inbox,
+    The fixed passive writer selects this immediate variant. Its return does
+    not mean an outer retained-listener delivery has completed; that outer may
+    still be checking the original connection. Do not treat the command's own
+    preparation completion as permission to retire another owner's borrower.
+    """
+    with retained_idle_from_inputs(
+        owner, inputs, connection, local, outer, observer, docker
+    ) as receipt:
+        return receipt
+
+
+@contextmanager
+def retained_idle_from_inputs(owner, inputs, connection, local, outer, observer, docker):
+    """Retain original passive custody during a caller's bounded handoff join.
+
+    Yield ONLY the transport receipt, never a service, Link, clock or dispatcher.
+    No inbox is consumed. It creates only the original preparation journal/inbox,
     wires that service's dispatcher to this exact Link.observe, then retires the
-    service before the Link and received channel copies. Startup, input readers,
-    bootstrap connection and both peer witnesses remain caller-owned. Their own
-    failed checks may invalidate their resources; this join never replaces them.
+    service AFTER the caller's scope and before the Link and received copies.
+    Startup, input readers, bootstrap connection and both peer witnesses remain
+    caller-owned. Their own failed checks may invalidate their resources; this
+    join never replaces them.
 
     The connection's ORIGINAL cutoff bounds the complete join, including input
     checks and assembly; it is not restarted after descriptor receipt. No plan,
     clock, Startup, observer, connection or callback may be supplied as a later
     replacement. An uncertain/partial result preserves files and consumes the
-    same one intake attempt. It never retries or reopens a journal.
+    same one intake attempt. It never retries or reopens a journal. The caller's
+    body and exit checks share the ORIGINAL connection deadline; yielding does
+    not grant a new window. This context does not provide the outer's completion
+    protocol, authenticated admission or independent blocked-I/O termination.
 
     Borrowed startup, inputs, connection and original peer handles are rechecked
     AFTER final channel retirement, under the SAME cutoff. Retired channels and
     Link are not reopened. Return is only the original transport receipt. It is
     not Ready, App-action admission, recording/restore success, input provenance,
     fixed-entrypoint selection or outer/platform qualification. No existing
-    command invokes this path; those separate launcher gates remain mandatory.
+    command selects a continuing scope; the old command still exits immediately.
+    Separate launcher/admission/termination gates remain mandatory.
     """
     channels = link = receipt = problem = None
     pins = ()
@@ -171,6 +193,15 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
             require(not service.used and not service.dispatch.used)
             require(len(service.journal.entries) == 1 and not service.processes.witnesses)
             # Deliberately no run(), consume(), dispatch, native or recording.
+            yield receipt
+            guard()
+            require(not service.closed and not service.failed)
+            require(service.original is original and service.clock_witness is clock)
+            require(service.dispatch.observe is dispatch_observer)
+            require(service.dispatch._original_observe is dispatch_observer)
+            require(service._dispatch_observer is dispatch_observer)
+            require(not service.used and not service.dispatch.used)
+            require(len(service.journal.entries) == 1 and not service.processes.witnesses)
         require(service.closed and service.journal.fd == -1)
         guard()
     except BaseException as error:
@@ -211,7 +242,6 @@ def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, 
         if not isinstance(problem, Exception):
             raise problem
         raise UnconfirmedWriterChannel(MESSAGE) from None
-    return receipt
 
 
 def _receive(

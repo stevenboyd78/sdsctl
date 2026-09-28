@@ -13,6 +13,7 @@ import inspect
 import io
 import json
 import os
+import select
 import signal
 import socket
 import subprocess
@@ -216,6 +217,28 @@ def child(root):
                 patches.setattr(writer.assembly.operator.IdleService, name, forbidden)
             patches.setattr(writer.assembly.operator.Inbox, "consume", forbidden)
             patches.setattr(p.bootstrap.links.Link, "_send", forbidden)
+            if config["retained_scope"]:
+                # Explicit fixture-only sequencing, NOT a selected installed
+                # command or authenticated completion/action protocol. The
+                # existing owners remain real and retain their original bound.
+                def retain_scope(*args):
+                    connection = args[2]
+                    end = connection.deadline
+                    with writer.m.retained_idle_from_inputs(*args) as receipt:
+                        emit(dict(passive_retained=True, offer=receipt.offer_sha256))
+                        packet = b""
+                        while b"\n" not in packet:
+                            assert time.monotonic() < end
+                            assert select.select([0], [], [], end - time.monotonic())[0] == [0]
+                            chunk = os.read(0, 256)
+                            assert chunk and len(packet) + len(chunk) <= 256
+                            packet += chunk
+                        assert packet.endswith(b"\n") and packet.count(b"\n") == 1
+                        assert json.loads(packet) == {"handoff_complete": True}
+                        assert time.monotonic() < end
+                    return receipt
+
+                patches.setattr(writer.m, "prepare_idle_from_inputs", retain_scope)
             poll = p.startups.Startup.poll
             announced = []
 
@@ -578,8 +601,9 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
     selection = getattr(request, "param", None)
     options = selection if type(selection) is dict else dict(mode=selection)
     mode = options["mode"]
-    retained_delivery = mode == "retained-plan-pair"
-    plan_delivery = mode in ("plan-pair", "retained-plan-pair")
+    retained_scope = mode == "retained-scope-pair"
+    retained_delivery = mode in ("retained-plan-pair", "retained-scope-pair")
+    plan_delivery = mode == "plan-pair" or retained_delivery
     for module in (
         p,
         p.listeners,
@@ -674,7 +698,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
         counterpart = stack.enter_context(p.domains.process.ProcessWitness(observer_id))
         comparison = (
             observer_runtime(h, counterpart, monkeypatch)
-            if mode in ("pair", "plan-pair", "retained-plan-pair")
+            if mode == "pair" or plan_delivery
             else None
         )
         input_root = tmp_path / "inputs"
@@ -733,6 +757,7 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
                 inputs=str(input_root),
                 outer_cid=h.observer_identity.container_id,
                 writer_cid=h.witness.identity.container_id,
+                retained_scope=retained_scope,
                 **{key: str(value) for key, value in roots.items()},
             ),
         )
@@ -839,6 +864,8 @@ def joined(helper, monkeypatch, tmp_path, configured, request):
             plan_delivery=plan_delivery,
             plan_socket=plan_socket,
             retained_delivery=retained_delivery,
+            retained_scope=retained_scope,
+            completion=options.get("completion", True),
             writer_handoff=roots["handoff"],
             observer_handoff=observer_handoff,
         )
@@ -993,6 +1020,17 @@ def finish(s, monkeypatch, after_qualification=None):
             bundle.close()
             endpoint.close()
     assert json.loads(transport.line(s.observer))["received"]
+    if s.retained_scope:
+        retained = json.loads(transport.line(s.h.child))
+        assert retained == dict(passive_retained=True, offer=s.delivered.writer.offer_sha256)
+        s.writer_listener.recheck()
+        s.observer_listener.recheck()
+        assert not s.watch.finished and s.custody.armed_watch is s.watch
+        assert time.monotonic() < s.writer_listener.deadline
+        if s.completion is not None:
+            transport.command(s.h.child, dict(handoff_complete=s.completion))
+        if s.completion is not True:
+            return json.loads(transport.line(s.h.child))
     assert transport.line(s.h.child) == p.MILESTONE
     return json.loads(transport.line(s.h.child))
 
@@ -1392,7 +1430,7 @@ def arm_original_watch(s):
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["pair", "plan-pair"], indirect=True)
+@pytest.mark.parametrize("joined", ["pair", "plan-pair", "retained-scope-pair"], indirect=True)
 def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_retirement(
     joined, monkeypatch
 ):
@@ -1429,7 +1467,7 @@ def test_original_outer_watch_spans_final_acceptance_dispatcher_and_passive_reti
 @pytest.mark.skipif(
     not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
 )
-@pytest.mark.parametrize("joined", ["plan-pair"], indirect=True)
+@pytest.mark.parametrize("joined", ["plan-pair", "retained-scope-pair"], indirect=True)
 @pytest.mark.parametrize("when", ["before-first", "after-writer", "after-observer"])
 def test_authenticated_plan_then_source_drift_cancels_original_supervised_handoff(
     joined, monkeypatch, when
@@ -1437,7 +1475,9 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
     s = joined
     source = s.h.root / s.q.HELPER / "supplemental_recording_peer_preparation.py"
     sent, changed = [], []
-    deliver, endpoint_send = delivery_tests.m.deliver, p.bootstrap.Endpoint.deliver
+    delivery_name = "deliver_from_inputs" if s.retained_delivery else "deliver"
+    deliver = getattr(delivery_tests.m, delivery_name)
+    endpoint_send = p.bootstrap.Endpoint.deliver
 
     def change():
         changed.append(True)
@@ -1455,7 +1495,7 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
             change()
         return result
 
-    monkeypatch.setattr(delivery_tests.m, "deliver", delivered)
+    monkeypatch.setattr(delivery_tests.m, delivery_name, delivered)
     monkeypatch.setattr(p.bootstrap.Endpoint, "deliver", endpoint)
     assert s.sender.send() is None
     with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
@@ -1474,7 +1514,12 @@ def test_authenticated_plan_then_source_drift_cancels_original_supervised_handof
     # No retry can replace the consumed pair, watcher or peers. Accepted startup
     # and any partial passive journal stay evidence, never action/recovery success.
     with pytest.raises(delivery_tests.m.UnconfirmedDelivery):
-        deliver(s.custody, s.watch, s.h.observer_identity, None, None)
+        deliver(
+            s.custody,
+            s.watch,
+            s.h.observer_identity,
+            *((s.inputs, None, None) if s.retained_delivery else (None, None)),
+        )
     assert files == {
         path.relative_to(s.case_root): path.read_bytes()
         for path in s.case_root.rglob("*")
@@ -1524,3 +1569,42 @@ def test_retained_delivery_refuses_writer_connection_retiring_before_outer_compl
     assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
     assert (s.case_root / "startup-claim.json").is_file()
     assert (s.case_root / "plan.json").is_file()
+
+
+@pytest.mark.skipif(
+    not termination_tests.m.deadlines.timerfd_available(), reason="Linux timerfd API required"
+)
+@pytest.mark.parametrize(
+    "joined",
+    [
+        dict(mode="retained-scope-pair", completion=None),
+        dict(mode="retained-scope-pair", completion=False),
+    ],
+    indirect=True,
+)
+def test_retained_scope_missing_or_bad_fixture_completion_preserves_failure(joined, monkeypatch):
+    """A fixture's completion signal is not an installed protocol or action grant."""
+    s = joined
+    assert s.sender.send() is None
+    result = finish(s, monkeypatch, lambda: arm_original_watch(s))
+    assert result["error"] == "refused" and result["result"] is None
+    assert result["retired"] and result["clocks_closed"] and result["fd_delta"] == 0
+    assert result["owners"] == result["services"] == result["links"] == result["host_reads"] == 1
+    assert result["input_baseline_preserved"] and result["original_dispatch"]
+    assert s.pair.channel_delivery_attempted and s.plan_receipt
+    assert not s.watch.closed and s.custody.armed_watch is s.watch
+    if s.completion is None:
+        assert time.monotonic() >= s.writer_listener.deadline
+    files = {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }
+    assert Path("startup-claim.json") in files and Path("journal/0000.json") in files
+    s.watch.close()  # Failure cancellation, not a successful recovery.
+    assert s.h.child.wait(timeout=3) == s.observer.wait(timeout=3) == -signal.SIGKILL
+    assert files == {
+        path.relative_to(s.case_root): path.read_bytes()
+        for path in s.case_root.rglob("*")
+        if path.is_file()
+    }

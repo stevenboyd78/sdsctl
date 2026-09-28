@@ -2003,6 +2003,29 @@ action-free preparation command; a continuing writer lifetime and its explicit
 admission/retirement protocol must be joined separately before this can become
 an installed or human-test candidate.
 
+`retained_idle_from_inputs` now separates that passive lifetime from immediate
+retirement. It yields only the original transport receipt, not a service, Link,
+dispatcher or clock. The same private inputs, original Startup/clock, bootstrap
+connection, observer witness and dispatcher binding stay alive through the
+caller's scope. Assembly, body, exit validation and ordered service/Link/channel
+retirement all share the original connection cutoff. Exit refuses changed input,
+callback, used/closed/failed service or expired custody; no journal is reopened
+and no action is dispatched. `prepare_idle_from_inputs` remains the immediate
+wrapper, so the fixed passive command has not gained a continuing or active path.
+
+A further actual-process variant uses this scope through an explicitly
+**fixture-only writer interposition**. The outer's real retained listeners and
+`deliver_from_inputs` complete both fresh paired collections while those same
+writer borrowers remain alive. Only afterward does the fixture send its bounded
+completion message and let the passive writer retire. Source drift before or
+during delivery cancels the same watcher and stops only its original peers.
+The fixture pipe is sequencing, **not authenticated installed completion or an
+App grant**, and this variant does not qualify the unchanged fixed command's
+immediate-retirement path. The earlier negative regression still proves that
+path refuses. A selected, authenticated completion/retirement protocol and
+independent outer/platform supervision remain required; keeping a fixture peer
+alive does not satisfy those gates.
+
 This remains offline integration: paths/cgroups, Engine/kernel/argv and installed
 pin/publication provenance are synthetic. No fixed observer or outer entrypoint,
 installed platform supervision, active App grant or exclusive recovery has been
