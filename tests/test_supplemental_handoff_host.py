@@ -141,6 +141,59 @@ def test_job_limits_and_ignored_conditions_refused():
             h.supervisor_jobs_idle(raw)
 
 
+def retained_jobs(count):
+    """Synthetic completed history; no private Supervisor metadata is copied."""
+    roots = []
+    remaining = count
+    while remaining:
+        children = min(remaining - 1, h.MAX_JOB_SIBLINGS)
+        roots.append(node(*(node() for _ in range(children))))
+        remaining -= children + 1
+    return roots
+
+
+@pytest.mark.parametrize("count", [256, 257, 562, h.MAX_JOB_NODES])
+def test_complete_retained_job_history_is_checked(count):
+    roots = retained_jobs(count)
+    assert h.supervisor_jobs_idle(jobs(*roots))
+    # Root zero's first child is visited last, after the old 256-node limit.
+    roots[0]["child_jobs"][0]["done"] = False
+    assert not h.supervisor_jobs_idle(jobs(*roots))
+
+
+@pytest.mark.parametrize("already_busy", [False, True])
+@pytest.mark.parametrize("fault", ["duplicate", "done", "errors", "children", "uuid"])
+def test_retained_job_history_never_skips_invalid_tail(already_busy, fault):
+    roots = retained_jobs(562)
+    roots[-1]["done"] = not already_busy
+    last = roots[0]["child_jobs"][0]
+    if fault == "duplicate":
+        last["uuid"] = roots[-1]["uuid"]
+    elif fault == "done":
+        last["done"] = 1
+    elif fault == "errors":
+        last["errors"] = None
+    elif fault == "children":
+        last["child_jobs"] = {}
+    else:
+        last["uuid"] = "invalid"
+    with pytest.raises(p.UnsafeHandoff):
+        h.supervisor_jobs_idle(jobs(*roots))
+
+
+def test_retained_job_history_has_independent_node_width_and_depth_limits():
+    with pytest.raises(p.UnsafeHandoff):
+        h.supervisor_jobs_idle(jobs(*retained_jobs(h.MAX_JOB_NODES + 1)))
+    with pytest.raises(p.UnsafeHandoff):
+        h.supervisor_jobs_idle(jobs(node(*(node() for _ in range(h.MAX_JOB_SIBLINGS + 1)))))
+    nested = node()
+    for _ in range(h.MAX_JOB_DEPTH):
+        nested = node(nested)
+    assert h.supervisor_jobs_idle(jobs(nested))
+    with pytest.raises(p.UnsafeHandoff):
+        h.supervisor_jobs_idle(jobs(node(nested)))
+
+
 def frame(data, stream=1):
     return bytes([stream, 0, 0, 0]) + len(data).to_bytes(4, "big") + data
 

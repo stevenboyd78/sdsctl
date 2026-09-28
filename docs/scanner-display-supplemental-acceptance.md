@@ -439,6 +439,15 @@ state, other scanner owners or live health. The distinction follows the
 [Supervisor App API](https://developers.home-assistant.io/docs/api/supervisor/endpoints/),
 which can redact options depending on caller privileges.
 
+Completed Supervisor jobs are retained history, not a reason to skip validation
+or erase evidence. The decoder permits at most 4,096 total job nodes within the
+unchanged 1 MiB response limit, 256 siblings per list and 16 child levels. Both
+visited and queued nodes count toward the total bound. Every descendant is
+validated even when its parent is complete or another job is already busy;
+oversized, duplicate or malformed history remains unconfirmed. This separates
+the total-history capacity from the root-list width without changing the
+requirement that every job must be done before a handoff can be admitted.
+
 Fresh, read-only host probes verified the jobs and normal-App configuration
 decoders against actual Docker/CLI responses, with the normal App identity
 unchanged. The probes used an SSH/curl transport adapter; the Unix HTTP transport

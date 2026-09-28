@@ -37,6 +37,11 @@ from supplemental_handoff_policy import (
 from supplemental_handoff_process import ProcessIdentity
 
 MAX_RESPONSE = 1024 * 1024
+# Supervisor retains completed job trees. Bound their complete traversal without
+# confusing the number of retained descendants with the number of root jobs.
+MAX_JOB_NODES = 4096
+MAX_JOB_SIBLINGS = 256
+MAX_JOB_DEPTH = 16
 API = "/v1.47"
 CLI = "hassio_cli"
 CORE = "homeassistant"
@@ -78,21 +83,24 @@ def supervisor_jobs_idle(raw: bytes) -> bool:
     data = supervisor_data(raw)
     require(data.get("ignore_conditions") == [])
     roots = data.get("jobs")
-    require(type(roots) is list and len(roots) <= 256)
+    require(type(roots) is list and len(roots) <= MAX_JOB_SIBLINGS)
     pending = [(node, 0) for node in cast(list[Any], roots)]
     seen: set[str] = set()
     idle = True
     while pending:
         node, depth = pending.pop()
-        require(type(node) is dict and depth <= 16 and len(seen) < 256)
+        require(type(node) is dict and depth <= MAX_JOB_DEPTH and len(seen) < MAX_JOB_NODES)
         uid = node.get("uuid")
         identifier(uid)
         require(uid not in seen and type(node.get("done")) is bool)
         require(type(node.get("errors")) is list)
         children = node.get("child_jobs")
-        require(type(children) is list and len(children) <= 256)
+        require(type(children) is list and len(children) <= MAX_JOB_SIBLINGS)
         seen.add(uid)
         idle = idle and node["done"]
+        # Bound queued work too. Never truncate history or skip descendants of
+        # completed parents: a nested child may still be running or malformed.
+        require(len(seen) + len(pending) + len(children) <= MAX_JOB_NODES)
         pending.extend((child, depth + 1) for child in children)
     return idle
 
