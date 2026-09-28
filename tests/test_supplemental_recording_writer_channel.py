@@ -186,7 +186,7 @@ def connection(service_case, monkeypatch, request):
     accepted = None
     retained = input_owner = None
     prep_stack = ExitStack()
-    prep_clock = prep_connection = None
+    prep_clock = prep_connection = prep_baseline = None
     retained_path = getattr(request, "param", False)
 
     def spawn(code):
@@ -283,9 +283,23 @@ def connection(service_case, monkeypatch, request):
                     prep_stack.enter_context(tempfile.TemporaryDirectory(prefix="sds-prepare-"))
                 )
                 monkeypatch.setattr(prep, "preparation_root", lambda case, role: prep_root)
-                # This hash is a synthetic, previously authenticated baseline
-                # input pin; no production baseline provenance is claimed.
-                baseline_pin = "d" * 64
+                # Persist the pre-existing original inventory, never capture a
+                # new snapshot or authenticate a digest learned by file readback.
+                # Inventory/host provenance is synthetic; the file read is real.
+                baseline_root = s.root.parent / "preparation-baseline"
+                baseline_root.mkdir(mode=0o700)
+                stored = s.projected.host
+                protected = m.startup.plans.projection.recording
+                baseline_raw = protected.manifest_bytes(
+                    stored.baseline,
+                    stored.writer,
+                    stored.contract.audio_endpoint_sha256,
+                    maximum_recording_seconds=stored.contract.maximum_recording_seconds,
+                )
+                prep_baseline = baseline_root / "baseline.json"
+                prep_baseline.write_bytes(baseline_raw)
+                prep_baseline.chmod(0o600)
+                baseline_pin = stored.manifest_sha256
                 transport.command(
                     outer,
                     dict(
@@ -328,7 +342,18 @@ def connection(service_case, monkeypatch, request):
                 input_owner = m.input_files.Inputs(s.declaration, input_root, expected_sha256)
             declaration = input_owner.recheck()
             assert len(s.clocks) == int(prep_clock is not None) and not s.cached_calls
-        owner = assembly.accept(s)
+        if prep_baseline is not None:
+            # Authenticated input preparation does not authorize this call.
+            # The fixture explicitly drives the passive library join; an
+            # installed entrypoint still requires separate preflight admission.
+            owner = s.startup
+            owner.prepare_service_from_baseline(prep_baseline.parent, baseline_pin, s.docker)
+            s.projected = owner.projected
+            assembly.baseline_tests.integration.startups.submit(owner)
+            assert owner.poll() is owner.original
+            assert prep_baseline.read_bytes() == baseline_raw
+        else:
+            owner = assembly.accept(s)
         plan = owner.original.plan
         config = dict(
             plan=plan.raw.decode(),
@@ -403,6 +428,8 @@ def connection(service_case, monkeypatch, request):
             input_owner=input_owner,
             prep_clock=prep_clock,
             prep_connection=prep_connection,
+            prep_baseline=prep_baseline,
+            prep_baseline_pin=baseline_pin if prep_baseline is not None else None,
         )
     finally:
         for bundle in channels:
@@ -561,6 +588,7 @@ def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_
         assert c.prep_clock.original.after_ns < clock.original.before_ns
         assert c.retained is not c.prep_connection
         assert c.retained.deadline > c.prep_connection.deadline
+        assert c.owner.projected.host.manifest_sha256 == c.prep_baseline_pin
     links, services, cleanup, deadlines = [], [], [], []
     link_init, link_close = m.bootstrap.links.Link.__init__, m.bootstrap.links.Link.close
     service_init, service_close = (

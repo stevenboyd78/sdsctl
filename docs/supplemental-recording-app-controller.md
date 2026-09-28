@@ -1696,7 +1696,8 @@ Later callers must independently validate those boundaries and recheck the same
 retained inputs/peers; they cannot rely on a saved preparation success.
 
 The actual three-process writer fixture now joins exclusive input publication,
-this original-outer preparation, original writer baseline/clock creation,
+this original-outer preparation, the real private persisted baseline reader,
+original writer baseline/clock creation,
 separate final acceptance, final descriptor intake, exact Link dispatcher callback
 and passive service retirement. The original outer process and writer-side peer
 witnesses continue across both exchanges. The preparation socket is retired
@@ -1704,6 +1705,13 @@ before baseline collection; a distinct final channel gets its own original cutof
 instead of renewing the preparation channel. The writer's continuing service
 clock is still created only after the complete baseline read; the separate
 preparation clock is never substituted for it.
+
+The baseline digest in that exchange now comes from the pre-existing sealed
+inventory, not an arbitrary fixture placeholder or a hash of observed files.
+The same digest is used by `prepare_service_from_baseline`; its read-only
+projection continues into the accepted original plan and dispatcher. Wrong
+digest and changed-file tests stop before the host reader, service clock or plan
+publication, preserving the failed file instead of resealing or replacing it.
 
 These are real local sockets, credentials, pidfds, clocks and private files,
 not installed-container qualification. Baseline input provenance, Engine/runtime

@@ -218,7 +218,7 @@ def exchange(service_case, monkeypatch):
                 peers=peers,
             )
 
-            def start(*, fault="", role="writer", **changes):
+            def start(*, fault="", role="writer", baseline_pin="d" * 64, **changes):
                 assert not hasattr(e, "connection")  # One attempt per fixture/case.
                 transport.command(
                     outer,
@@ -233,14 +233,14 @@ def exchange(service_case, monkeypatch):
                         input_root=str(s.peer_input_root),
                         expectations_sha256=s.expected_input_digest,
                         preparation_root=str(root),
-                        baseline_sha256="d" * 64,
+                        baseline_sha256=baseline_pin,
                     ),
                 )
                 assert transport.line(outer) == "listening"
                 e.connection = stack.enter_context(
                     closing(m.connections.Connection(root, witness, deadline=time.monotonic() + 2))
                 )
-                options = dict(role=role, baseline_sha256="d" * 64) | changes
+                options = dict(role=role, baseline_sha256=baseline_pin) | changes
                 return m.receive_inputs(
                     s.declaration, e.connection, timer, identities[os.getpid()], **options
                 )
@@ -446,3 +446,40 @@ def test_legacy_expectations_do_not_enable_preparation(exchange):
     refused(context.__enter__)
     assert transport.line(e.outer) == "refused"
     assert not e.s.cached_calls and e.s.startup.clock is None
+
+
+@pytest.mark.parametrize("fault", ["digest", "contents"])
+def test_authenticated_exchange_cannot_bypass_persisted_baseline_read(exchange, monkeypatch, fault):
+    e = exchange
+    stored = e.s.projected.host
+    protected = writer.m.startup.plans.projection.recording
+    raw = protected.manifest_bytes(
+        stored.baseline,
+        stored.writer,
+        stored.contract.audio_endpoint_sha256,
+        maximum_recording_seconds=stored.contract.maximum_recording_seconds,
+    )
+    root = e.s.root.parent / "preparation-baseline"
+    root.mkdir(mode=0o700)
+    path = root / "baseline.json"
+    path.write_bytes(raw)
+    path.chmod(0o600)
+    pin = "0" * 64 if fault == "digest" else stored.manifest_sha256
+    with e.start(baseline_pin=pin) as (inputs, counterpart):
+        assert json.loads(transport.line(e.outer))["prepared"]
+        assert inputs.expected == e.s.expected_input_digest and not counterpart.exited()
+        e.connection.close()  # Preparation cannot be reused for the next phase.
+        if fault == "contents":
+            path.write_bytes(b"PRIVATE changed baseline")
+        preserved = path.read_bytes()
+
+        def forbidden(*_args):
+            pytest.fail("Bad baseline reached a host read")
+
+        monkeypatch.setattr(writer.assembly.baseline_tests.launch.PreHandoffHost, "read", forbidden)
+        with pytest.raises(writer.m.startup.UnconfirmedStartup):
+            e.s.startup.prepare_service_from_baseline(root, pin, e.s.docker)
+        assert path.read_bytes() == preserved
+        assert e.s.startup.clock is None and e.s.startup.closed and e.s.startup.failed
+        assert not e.s.cached_calls and not e.s.preflights and not list(e.s.root.iterdir())
+        assert len(e.s.clocks) == 2 and e.s.clocks[-1].closed
