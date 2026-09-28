@@ -32,10 +32,14 @@ updating: an already-running older Waterfall class cannot adopt the new shared
 session manager merely because a second module was loaded beside it.
 
 Home Assistant must provide an authenticated App context and exactly one
-discoverable, running sds200 App with Ingress enabled. A missing, inaccessible or
-ambiguous App fails closed. Stop the other sds200 candidate before switching
-between test and installed Apps. No arbitrary host, URL, port, token or Ingress
-identifier is accepted in the card YAML.
+discoverable, running sds200 App with Ingress enabled. Enable **Show in sidebar**
+on that App's Info page: discovery uses Home Assistant's registered App panels,
+so a running App without a registered panel is not a card target. Reload the
+dashboard after changing this setting. This only exposes the existing
+authenticated shortcut; it does not enable native access or map another port.
+A missing, inaccessible or ambiguous App fails closed. Stop the other sds200
+candidate before switching between test and installed Apps. No arbitrary host,
+URL, port, token or Ingress identifier is accepted in the card YAML.
 
 ## Add the card
 
