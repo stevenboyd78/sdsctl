@@ -32,9 +32,17 @@ pytestmark = pytest.mark.parametrize("candidate", ["app_bridge"], indirect=True)
 
 @pytest.fixture
 def app(candidate, tmp_path, monkeypatch):
+    return setup_app(candidate, tmp_path, monkeypatch)
+
+
+def setup_app(candidate, tmp_path, monkeypatch, *, data=None):
+    """Allow original test-owned data to exist before the App publication pins."""
     s, p = candidate, candidate.plan
-    s.data = tmp_path / "app-data"
-    s.data.mkdir(mode=0o700)
+    s.data = tmp_path / "app-data" if data is None else data
+    if data is None:
+        s.data.mkdir(mode=0o700)
+    else:
+        assert data.is_dir() and data.is_relative_to(tmp_path)
     s.case_root = s.data / p.native_root.name
     s.case_root.mkdir(mode=0o700)
     for name in ("idle", "app-start"):

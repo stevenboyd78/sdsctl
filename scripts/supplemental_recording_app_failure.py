@@ -146,7 +146,7 @@ class _AppFailure:
         run.plan_pin.check(self.plan)
         require(original.original is run.input_pins is q.prelaunch_pins)
         require(original._launch_pins() == original.launch_pins)
-        require(original.launch_pins == run.input_pins[-4:])
+        require(original.launch_pins == run.input_pins[-5:])
         require(run.launch_sha256 == original.launch_inputs.sha256)
         require(run.profile_sha256 == json.loads(original.launch_inputs.raw)["profile"]["sha256"])
         require(q.expected == run.pins and q.expected.payload() == q.expected_payload)

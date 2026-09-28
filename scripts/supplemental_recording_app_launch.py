@@ -13,6 +13,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import os
+import stat
 import time
 from dataclasses import asdict, dataclass
 
@@ -101,13 +102,15 @@ class LaunchPublished:
     sha256: str
     file_identity: tuple
     directory_identity: tuple
+    guardian_identity: tuple
 
 
 class NativeLaunchQualification(qualification.NativeIdleQualification):
     """Fresh read-only phase after ONE acknowledged original launch-file write.
 
     Carry all original consumption/directory identities forward; only the
-    explicitly published launch leaf and its parent metadata may change. Output
+    explicitly published launch leaf, empty guardian directory and parent
+    metadata may change. Output
     directories still must be empty. Existing action/PostBegin gates do not
     accept this class. It cannot create a second publication or renew readiness.
     """
@@ -148,7 +151,11 @@ class NativeLaunchQualification(qualification.NativeIdleQualification):
             )
             # Retain, do not learn, the expected post-write consumption join.
             expected = tuple(
-                (name, published.directory_identity, published.file_identity)
+                (
+                    name,
+                    published.directory_identity,
+                    (published.file_identity, (published.guardian_identity, None)),
+                )
                 if name == "launch"
                 else (name, directory, leaf)
                 for name, directory, leaf in original.consumption[-1]
@@ -162,10 +169,10 @@ class NativeLaunchQualification(qualification.NativeIdleQualification):
         require(type(p) is LaunchPublished)
         require(type(p.raw) is bytes and 0 < len(p.raw) <= native.MAX_BYTES)
         require(hashlib.sha256(p.raw).hexdigest() == p.sha256)
-        for identity in (p.file_identity, p.directory_identity):
+        for identity in (p.file_identity, p.directory_identity, p.guardian_identity):
             require(type(identity) is tuple and len(identity) == 9)
             require(all(type(value) is int for value in identity))
-        return p.raw, p.sha256, p.file_identity, p.directory_identity
+        return p.raw, p.sha256, p.file_identity, p.directory_identity, p.guardian_identity
 
     def _binding(self):
         owner, original = self.startup, self.candidate
@@ -207,12 +214,35 @@ class NativeLaunchQualification(qualification.NativeIdleQualification):
     def _directory_input(self, fd, name, deadline):
         if name != "launch":
             return super()._directory_input(fd, name, deadline)
-        require(os.listdir(fd) == ["launch.json"])
+        require(sorted(os.listdir(fd)) == ["guardian", "launch.json"])
         raw, identity = qualification._file(fd, "launch.json", deadline, limit=native.MAX_BYTES)
         p = self.launch_inputs
         require(raw == p.raw and identity == p.file_identity)
         require(files.identity(os.fstat(fd)) == p.directory_identity)
-        return identity
+        child = os.open("guardian", files.DIRECTORY, dir_fd=fd)
+        try:
+            before = files.identity(os.fstat(child))
+            publication._secure(os.fstat(child))
+            require(stat.S_IMODE(before[2]) == 0o700)
+            require(before[:6] == p.guardian_identity[:6])
+            leaf = self._guardian_contents(child, before, deadline)
+            require(files.identity(os.fstat(child)) == before)
+            require(files.identity(os.stat("guardian", dir_fd=fd, follow_symlinks=False)) == before)
+            require(sorted(os.listdir(fd)) == ["guardian", "launch.json"])
+            require(files.identity(os.fstat(fd)) == p.directory_identity)
+            return identity, (before, leaf)
+        finally:
+            os.close(child)
+
+    def _directory_identity(self, name):
+        if name == "launch":
+            return self.launch_inputs.directory_identity[:6]
+        return super()._directory_identity(name)
+
+    def _guardian_contents(self, fd, identity, deadline):
+        self._guard(deadline)
+        require(identity == self.launch_inputs.guardian_identity and not os.listdir(fd))
+        return None
 
 
 def publish_launch(owner, original, *, specification, profile_sha256):
@@ -267,6 +297,13 @@ def publish_launch(owner, original, *, specification, profile_sha256):
             require(files.identity(os.fstat(fd)) == before and not os.listdir(fd))
             original._inputs(end)
             unchanged()
+            os.mkdir("guardian", mode=0o700, dir_fd=fd)
+            child = os.open("guardian", files.DIRECTORY, dir_fd=fd)
+            owned.append(child)
+            publication._secure(os.fstat(child))
+            guardian_identity = files.identity(os.fstat(child))
+            require(stat.S_IMODE(guardian_identity[2]) == 0o700 and not os.listdir(child))
+            os.fsync(child)
             output = os.open(
                 "launch.json",
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -280,12 +317,20 @@ def publish_launch(owner, original, *, specification, profile_sha256):
             observed, identity = qualification._file(fd, "launch.json", end, limit=native.MAX_BYTES)
             require(observed == raw and identity == files.identity(os.fstat(output)))
             after = files.identity(os.fstat(fd))
-            require(after[:6] == before[:6] and os.listdir(fd) == ["launch.json"])
+            require(after[:5] == before[:5] and after[5] == before[5] + 1)
+            require(sorted(os.listdir(fd)) == ["guardian", "launch.json"])
+            require(files.identity(os.fstat(child)) == guardian_identity and not os.listdir(child))
+            require(
+                files.identity(os.stat("guardian", dir_fd=fd, follow_symlinks=False))
+                == guardian_identity
+            )
             require(
                 files.identity(os.stat("launch", dir_fd=directory, follow_symlinks=False)) == after
             )
             unchanged()
-            receipt = LaunchPublished(raw, hashlib.sha256(raw).hexdigest(), identity, after)
+            receipt = LaunchPublished(
+                raw, hashlib.sha256(raw).hexdigest(), identity, after, guardian_identity
+            )
         # Close each owned fd ONCE, before claiming a successful publication.
         closing, owned = list(reversed(owned)), []
         publication._close(closing)

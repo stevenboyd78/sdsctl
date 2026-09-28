@@ -262,8 +262,6 @@ class NativeIdleQualification(AppCandidateQualification):
         return None
 
     def _additional_inputs(self, directory, deadline):
-        p = self.published
-        expected = dict(p.directory_identities)
         descriptors, observed = [], []
         try:
             for name in self.DIRECTORIES:
@@ -274,7 +272,7 @@ class NativeIdleQualification(AppCandidateQualification):
                 publication._secure(info)
                 require(stat.S_IMODE(info.st_mode) == 0o700)
                 before = files.identity(info)
-                require(before[:6] == expected[name])
+                require(before[:6] == self._directory_identity(name))
                 identity = self._directory_input(fd, name, deadline)
                 require(files.identity(os.fstat(fd)) == before)
                 require(
@@ -285,6 +283,9 @@ class NativeIdleQualification(AppCandidateQualification):
             return tuple(observed)
         finally:
             publication._close(list(reversed(descriptors)))
+
+    def _directory_identity(self, name):
+        return dict(self.published.directory_identities)[name]
 
 
 class AppRetainedQualification(_AppInputs, launch.RetainedQualification):

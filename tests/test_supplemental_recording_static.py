@@ -162,7 +162,7 @@ def test_actual_fixed_root_bundle_is_read_only_and_distinct_from_old_wrappers(tm
         (runtime, closed.m.REQUIRED_RUNTIME | {"theme.css"}),
         (native, closed.m.NATIVE_FILES),
     ):
-        root.mkdir(parents=True)
+        root.mkdir(mode=0o755, parents=True)
         for name in names:
             path = root / name
             path.write_bytes(b"raise RuntimeError('must never import candidate')\n")

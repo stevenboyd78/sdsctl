@@ -99,7 +99,8 @@ class Layout:
         require(not self.native.is_relative_to(self.runtime))
 
     def _snapshot(self):
-        runtime, native = files.inventory(self.runtime), files.inventory(self.native)
+        runtime = files.inventory(self.runtime, source_directories=True)
+        native = files.inventory(self.native, source_directories=True)
         require(set(runtime) >= REQUIRED_RUNTIME)
         require(set(native) == NATIVE_FILES)
         # No extra empty directory/namespace or bytecode directory is allowed in

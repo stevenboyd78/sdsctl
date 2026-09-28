@@ -59,14 +59,24 @@ def argv(prepared, channels, gate, *, ready_by=None):
 
 
 @contextmanager
-def launched(prepared, *, change=None, flags=("-I", "-B"), ready_by=None, extra_fds=()):
+def launched(
+    prepared,
+    *,
+    change=None,
+    flags=("-I", "-B"),
+    ready_by=None,
+    extra_fds=(),
+    staged=None,
+):
     left, right = c.pair()
     read, write = os.pipe()
     args = argv(prepared, right, read, ready_by=ready_by)
     if change:
         args = change(args)
+    python = sys.executable if staged is None else staged.python
+    source = SOURCE if staged is None else staged.layout.native / SOURCE.name
     process = subprocess.Popen(
-        [sys.executable, *flags, str(SOURCE), *args],
+        [str(python), *flags, str(source), *args],
         pass_fds=(right.incoming.fileno(), right.outgoing.fileno(), read, *extra_fds),
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -276,8 +286,27 @@ class RtspPeer:
         assert not self.thread.is_alive() and not self.errors
 
 
+@pytest.fixture
+def staged_child(tmp_path):
+    # Import lazily: the shared guardian staging fixture also uses this file's
+    # loopback peers. Isolated Python must load this checkout, not an unrelated
+    # editable installation selected by the parent interpreter's .pth files.
+    from . import test_supplemental_recording_guardian as guardian
+
+    staged = guardian.staged.__wrapped__(tmp_path)
+    result = subprocess.run(
+        [str(staged.python), "-I", "-B", "-c", "import sds200; print(sds200.__file__)"],
+        capture_output=True,
+        check=True,
+        timeout=5,
+    )
+    assert result.stdout.decode().strip() == str(staged.layout.runtime / "__init__.py")
+    assert result.stderr == b""
+    return staged
+
+
 @pytest.mark.parametrize("record", [False, True])
-def test_run(prepared, monkeypatch, record):
+def test_run(prepared, staged_child, monkeypatch, record):
     with monkeypatch.context() as patch:
         patch.setattr(Thread, "start", lambda self: None)
         scanner = construction.LoopbackScanner()
@@ -323,12 +352,17 @@ def test_run(prepared, monkeypatch, record):
         prepared.value["profile"]["sha256"] = plans.m.cached.profile_files(
             deployment, prepared.tree.root
         )[0]
+        prepared.value["source_sha256"] = staged_child.pin
         prepared.path.write_bytes(p.encode(prepared.value))
         loaded = plans.load(prepared)
         context = c.Context(loaded, time.monotonic() + 5)
         guardian = watchdog = None
         try:
-            with launched(prepared, ready_by=context.ready_by) as (process, channels, release):
+            with launched(prepared, ready_by=context.ready_by, staged=staged_child) as (
+                process,
+                channels,
+                release,
+            ):
                 ticks = c.returns._identity(process.pid)[1]
                 guardian = c.Parent(
                     channels,

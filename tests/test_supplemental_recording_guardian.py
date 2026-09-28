@@ -174,9 +174,12 @@ def staged(tmp_path):
     for name in sources.m.NATIVE_FILES:
         shutil.copyfile(sources.SCRIPTS / name, native / name)
     for root in (runtime, native):
+        root.chmod(0o755)
         for path in root.rglob("*"):
             if path.is_file():
                 path.chmod(0o644)
+            elif path.is_dir():
+                path.chmod(0o755)
     layout = sources.m.Layout(runtime, native)
     return SimpleNamespace(
         python=environment / "bin" / "python", layout=layout, pin=layout.observe().sha256

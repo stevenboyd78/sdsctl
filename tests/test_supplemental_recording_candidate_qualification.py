@@ -7,6 +7,7 @@ not qualify an installed App, independently supervised helper or scanner test.
 import copy
 import hashlib
 import os
+import shutil
 import stat
 import subprocess
 import sys
@@ -32,18 +33,43 @@ def candidate(supervised, image, configured, monkeypatch, request):
     yield from setup_candidate(supervised, image, configured, monkeypatch, request)
 
 
-def setup_candidate(supervised, image, configured, monkeypatch, request, *, decode=None):
+def setup_candidate(
+    supervised,
+    image,
+    configured,
+    monkeypatch,
+    request,
+    *,
+    decode=None,
+    source_tree=None,
+    projection_factory=None,
+):
     """Share the synthetic platform; optionally retain the plan before any owner."""
     native = m.plans.host.candidate_static
     product, helpers = supervised.root / m.plans.fixed.PACKAGE, supervised.root / native.NATIVE
-    for root, names in (
-        (product, native.source.REQUIRED_RUNTIME),
-        (helpers, native.source.NATIVE_FILES),
-    ):
-        root.mkdir(parents=True, exist_ok=True)
-        for name in names:
-            (root / name).write_bytes(b"raise RuntimeError('PRIVATE-NEVER-IMPORT-CANDIDATE')\n")
-            (root / name).chmod(0o644)
+    if source_tree is None:
+        for root, names in (
+            (product, native.source.REQUIRED_RUNTIME),
+            (helpers, native.source.NATIVE_FILES),
+        ):
+            root.mkdir(parents=True, exist_ok=True)
+            for name in names:
+                (root / name).write_bytes(b"raise RuntimeError('PRIVATE-NEVER-IMPORT-CANDIDATE')\n")
+                (root / name).chmod(0o644)
+    else:
+        # Reviewed local staged bytes only. This test-only route joins the
+        # recorder's complete source graph to App inventories before any owner
+        # or plan pin exists. It does not import the observed trees.
+        shutil.copytree(source_tree.runtime, product, dirs_exist_ok=True)
+        shutil.copytree(source_tree.native, helpers, dirs_exist_ok=True)
+        # copytree preserves the developer checkout's directory permissions.
+        # Prepare only this fixture image to the same non-writable-by-others
+        # policy as its runtime inventory, before either original pin exists.
+        for root in (product, helpers):
+            root.chmod(0o755)
+            for path in root.rglob("*"):
+                if path.is_dir():
+                    path.chmod(0o755)
     source_pin = native.source.Layout(product, helpers).observe().sha256
     app_profile = getattr(request, "param", None) in ("app_bridge", "app_native")
     native_baseline = b'{"synthetic_original_baseline":true}'
@@ -106,7 +132,12 @@ def setup_candidate(supervised, image, configured, monkeypatch, request, *, deco
             recording.monitor.Writer(os.geteuid(), os.getegid(), 0o600),
             hashlib.sha256(b"rtsp://192.0.2.25/au:scanner.au").hexdigest(),
         )
-        projected = m.plans.projection.project(protected, recording._decode(manifest))
+        projected = (
+            m.plans.projection.project(protected, recording._decode(manifest))
+            if projection_factory is None
+            else projection_factory(protected, value["case"])
+        )
+        assert projected.layout == protected
         native_baseline = projected.native_manifest
         value["native_baseline_sha256"] = hashlib.sha256(native_baseline).hexdigest()
         value["projection_sha256"] = projected.sha256

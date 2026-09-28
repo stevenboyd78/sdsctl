@@ -76,7 +76,11 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
         s.dispatch_notices.append(notice)
         return notice.receipt
 
-    observer = observe if getattr(request, "param", None) == "observed" else None
+    observer = getattr(
+        s,
+        "driver_dispatch_observer",
+        observe if getattr(request, "param", None) == "observed" else None,
+    )
 
     def observe_candidate(notice):
         # Synthetic receipt at the real pre-publication phase, not an actual
@@ -133,8 +137,14 @@ def driver_case(launch_case, tmp_path, monkeypatch, request):
             s.driver = m.AppService(
                 s.startup,
                 s.service,
-                candidate_observer=observe_candidate if observer is not None else None,
-                native_observer=observe_native if observer is not None else None,
+                candidate_observer=getattr(
+                    s,
+                    "driver_candidate_observer",
+                    observe_candidate if observer is not None else None,
+                ),
+                native_observer=getattr(
+                    s, "driver_native_observer", observe_native if observer is not None else None
+                ),
             )
             s.session = s.service.session
             s.original_owners = (

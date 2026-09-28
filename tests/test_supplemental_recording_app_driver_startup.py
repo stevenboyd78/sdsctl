@@ -30,6 +30,20 @@ pytestmark = pytest.mark.parametrize("candidate", ["app_native"], indirect=True)
 
 @pytest.fixture
 def candidate(supervised, image, configured, monkeypatch, request, tmp_path):
+    yield from setup_candidate(supervised, image, configured, monkeypatch, request, tmp_path)
+
+
+def setup_candidate(
+    supervised,
+    image,
+    configured,
+    monkeypatch,
+    request,
+    tmp_path,
+    *,
+    source_tree=None,
+    projection_factory=None,
+):
     startup = m.inputs.publication.startup
     root, source = tmp_path / "host-execution", tmp_path / "declaration"
     root.mkdir(mode=0o700)
@@ -88,7 +102,14 @@ def candidate(supervised, image, configured, monkeypatch, request, tmp_path):
             return owner.original.plan
 
         for s in driver.candidates.setup_candidate(
-            supervised, image, configured, monkeypatch, request, decode=decode
+            supervised,
+            image,
+            configured,
+            monkeypatch,
+            request,
+            decode=decode,
+            source_tree=source_tree,
+            projection_factory=projection_factory,
         ):
             s.accepted_startup, s.accepted_owner = True, decode.owner
             s.case_plan = decode.owner.original

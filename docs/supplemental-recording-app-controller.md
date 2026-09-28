@@ -45,8 +45,18 @@ deferred until native construction; the whole product tree is also inventoried.
 It retains the original complete double-read metadata/content checks, file and
 byte limits, time bound, private-file rules and exact inventory requirements.
 Observed source is hashed, never imported. Legacy selectors, subclasses and a
-digest made under another profile kind are refused. Existing source profiles
+digest made under another profile kind are refused. Existing source module sets
 and the passive preparation command remain unchanged.
+
+All recording source profiles also reject special permission bits or group/other
+write access on the selected source roots and every descendant directory,
+including empty directories. Read-only files are insufficient when their parent
+directory permits replacement. This policy is checked during the same
+descriptor-based traversal as file hashing, on both complete reads; nothing is
+chmodded or repaired by the observer. File-only digest schemas and generic data/
+recording inventories are unchanged. External ancestor permissions, directory
+ownership provenance and immutable-image qualification remain the outer owner's
+responsibility; this check is not a new trust grant.
 
 An isolated import smoke test runs only reviewed repository code, with network
 connection operations and subprocess launches blocked. The inventory remains standard-library
@@ -60,7 +70,7 @@ controller/observer graph under a different digest kind. The closed 90-module
 bundle adds the deadline watch, original App/native/CLI custody, private evidence
 channel and its control dependency. Its inventory is also standard-library-only
 and hashes the complete product tree without executing observed source. The
-older 83-module controller profile and all four legacy profiles remain unchanged
+older 83-module controller profile and all four legacy module sets remain unchanged
 and refuse this larger bundle. It does not include the passive permission or
 preparation commands and cannot turn their consent into active action scope.
 
@@ -232,12 +242,28 @@ not on a replaceable passive wrapper. Its command hashes and profile pin come
 from the already published original launch input. Construction does not dispatch
 anything. The only supported action is the combined launch/confirmation path.
 
+The sole input publication also creates `launch/guardian` as an empty private
+directory, while retaining its original inode/ownership/mode identity in the
+publication receipt. Only the explicit one-child link-count change is admitted
+for its parent; preexisting directories, uncertain creation, extra entries or a
+second publication are refused without deleting residue. The actual guardian
+requires this directory before it can write its one-use `launch-claimed.json`.
+
 Original durable launch permission precedes Engine create/attach. Once the
 actual Ready returns, the controller transitions to the socket-aware reader
 before confirming Ready under a fresh complete source/runtime/host/probe
 bracket. It never reuses the pre-launch assumption that the sockets directory
 is empty. The original readiness timestamp and two-second confirmation bound
 are not extended.
+
+That same one-way readiness transition admits exactly the guardian claim. Its
+canonical context, source pin, guardian PID/start ticks and watchdog deadline
+must match the original authenticated Ready and plan. Component source metadata
+in that file does not replace the independent full source/runtime inventories.
+The original directory and claim bytes/inode are then retained. Post-begin
+checks reread those exact bytes and identities without reacquiring the claim or
+polling an expired readiness window. A claim alone is never readiness,
+authorization, recording success or restoration evidence.
 
 `AppStart` then consumes a distinct one-use slot on that original AppLaunch.
 Fresh checks precede the durable recording authorization and ledger intent.
@@ -323,6 +349,15 @@ by a private **test-only** stdin/stdout harness, not the authenticated service
 AppService/journal/peer protocol and recovery lifetime or qualify installed
 source/runtime provenance. Those remaining joins must not be inferred from the
 successful isolated recorder and independent-handle evidence.
+
+The original App qualification pipeline is additionally tested with a complete
+copy of that executable native/product source rather than sentinel source files.
+Both source and interpreter inventories are pinned only after test-image setup,
+before any original plan or owner. The same original AppLaunch/AppStart succeeds
+with those bytes and refuses post-Ready product/helper changes or unsafe helper
+directory permissions before authorization, ledger start intent or Relay begin.
+Its native Ready/Relay/platform facts remain synthetic; this does not yet prove
+that the App-published inputs execute the native recorder in one full lifetime.
 
 ### Continuing observations
 
@@ -523,6 +558,105 @@ not evidence that an installed App has completed that entire lifetime.
 Neither kind of test alone proves an installed end-to-end App lifetime or
 real-hardware performance. No test permits extending deadlines or reducing
 full source/runtime checks to make a run pass.
+
+Additional unprivileged namespace tests consume the original App-published
+launch bytes at the exact `/data`, `/media`, `/opt` and `/usr/local` paths, with
+no path or digest rewriting. Actual accepted profile files and old-recording
+baseline accompany the complete staged source. All mounts are read-only except
+the original private guardian directory in the claim test. Actual guardian
+claim creation succeeds once; a second attempt preserves the original and
+refuses. Profile, recording, launch or source-permission drift is refused.
+These tests exercise native preflight/claim consumption, not an authenticated
+Engine/Ready, installed image provenance or permission to begin a recording.
+
+A further namespace composition runs the exact fixed operator command with
+that original App publication and actual native children. Only original private
+guardian/socket/receipt directories are writable; media remains read-only.
+Owned loopback scanner/RTSP peers replace hardware. The actual readiness frame,
+native return context, claim and watchdog cutoff match the original plan; all
+three worker pidfds report exit after deliberate pre-begin pipe withdrawal.
+No recording begins and no supplemental command runs. This proves fixed-path
+native consumption, not the remaining authenticated AppService/Engine/observer
+and recovery lifetime or installed interpreter qualification.
+
+The original App readiness reader is also exercised with actual native frames
+received by the existing Ready parser over a private Unix-HTTP Engine fixture.
+It retains real worker pidfds and original dispatch inputs; complete source
+checks bracket the App claim/socket inventories. Changed claims or unsafe helper
+directory permissions refuse subsequent qualification before begin. Engine
+responses, container/cgroup/root-credential mapping and Startup/image provenance
+remain synthetic. No recorded audio, full service/recovery lifetime or live
+scanner acceptance is claimed by these readiness-only tests.
+
+The original `AppLaunch` is then tested through that actual Engine transport and
+Ready parser, retaining its sole durable dispatch claim and real journal. A
+changed guardian claim, unsafe helper directory, or premature recording receipt
+refuses readiness publication and consumes the attempt. The original `AppStart`
+also refuses recording authorization when its selected observer acknowledgment
+is lost. These failures do not authorize a retry or discard the original worker
+handles.
+
+A recording variant makes only the fixture's predeclared recording directory
+writable, keeping all other media, profile, source and launch inputs read-only.
+Original App authorization and ledger intent drive the real native recorder via
+the existing Relay. Synthetic RTP produces a checked 1,280-sample WAV and actual
+start/completion/exit returns. A separately captured original `Operator` retains
+duplicate worker pidfds; `AppAuthorizedFinalized` joins those returns and files,
+then publishes the real worker-exit evidence to the original journal. The
+candidate init stays alive: this is not App restoration or a full service/
+independent-observer/recovery lifetime. Dropping the completion return leaves
+the host result unconfirmed despite a finalized WAV and exited workers. The
+host-health/probe, initial handoff, Engine platform and image metadata in this
+composition remain explicitly synthetic.
+
+The accepted-startup composition now retains the original `CasePlan`, clock,
+session and journal through this actual native recording chain. Its service-loop
+variant starts the original native phase inside the running service, finalizes
+the recording, and exercises hard-deadline refusal without a replacement writer
+or renewed lease. A real completed WAV and worker exit still leave the host
+outcome unconfirmed while candidate init remains live.
+
+A further offline composition starts from the original request publisher and
+initial fixed dispatches. Owned harmless normal/candidate processes provide
+actual retained init-exit evidence, and the same original service drives the
+real native recording and finalized-file recovery reader. Fresh terminal Engine
+inspections bracket each immutable file read, including the pre-dispatch recheck.
+When both the original candidate pidfd and synthetic App metadata say stopped,
+the existing policy issues only the fixed normal-start command; it does not stop
+an already exited original candidate again. Contradictory running metadata or
+unexpected recording output withholds restoration and expires the original case.
+These are test-only App/CLI and restored-health responses, not live restoration.
+An additional composition retains a separate read-only observer process before
+the first request. Its original `AppCustody`, `CliCustody`, clock/deadline watch,
+private journal reader and separately authenticated fixture Engine endpoint
+remain owned by that process. Actual kernel-authenticated `Link` exchanges
+bracket both initial CLI commands, candidate capture, native capture and the
+one restoration command. No notice history is supplied over the fixture control
+pipe: the observer reconstructs it from its own held journal. It retains the
+actual worker/init handles through finalized recording and recovery. Dropping
+only its native acknowledgment after successful capture leaves those facts
+available but prevents recording authorization, ledger intent and begin; the
+original writer expires without retrying or inferring restoration. This is
+still a test-only process launcher with synthetic platform and image facts,
+not qualified installed supervision or permission for a live test.
+
+The original service also exercises the two non-success recovery entrances with
+actual native processes and file reads. Pre-begin cancellation produces real
+transport EOF and worker/init exits, then verifies the unchanged recordings
+through `NeverAuthorized`; no recording authorization or receipt is created.
+Confirmed-start abandonment closes the original ledger without a completion
+acknowledgment. The isolated native fixture can still finalize a WAV while its
+completion return is dropped: `Preserved` retains those bytes but the result
+stays **unconfirmed**, never a successful recording. A still-live original init
+or an unexpected additional file withholds restoration on both routes. The
+caller prepares the private progress directory even if no active sample runs.
+
+The separate authenticated observer also joins the abandoned-recording route,
+including retained worker handles and the above refusal cases. Pristine
+cancellation has no `AppStart` pre-begin exchange, so its independent native
+observer join is **not** claimed: the same-writer `Operator` test is not a
+substitute. This distinction must be resolved before an active launcher can
+select pristine recovery under independent native supervision.
 
 ## Independent observer deadline prerequisite (uninstalled)
 
@@ -796,6 +930,13 @@ domain is refused, not inferred from similar clock readings. Borrowed channels,
 clock and process witness remain caller-owned. Closing the link releases only
 its duplicate pidfd and namespace descriptors.
 
+Accepted startup keeps its original `ClockWitness`; decoding the acknowledged
+case plan produces an equal immutable clock value, not the same Python object.
+The link accepts that canonical value equality once and pins the exact original
+borrowed clock and its original value object thereafter. Replacing either object
+or changing even one clock value is refused. This does not reconstruct a clock,
+extend a deadline, or relax the peer/namespace and fresh clock checks.
+
 Requests contain a bounded canonical notice description and receipt, the exact
 plan digest, an incrementing sequence, a fresh challenge and a short absolute
 BOOTTIME interval. They do **not** carry journal paths, journal content, arbitrary
@@ -843,19 +984,23 @@ remain separate requirements before selecting any active command.
 
 ## Remaining gates before a human scanner/audio test
 
-1. Complete real platform/publication and native-I/O lifetime qualification.
-   Accepted startup, request/initial dispatch, outer service, native/recording
-   handoffs and all three recovery routes are joined in local tests. App
-   publication provenance, platform responses and native transport/file results
-   remain explicit synthetic boundaries. Active checkpoint/file/native-I/O tests
-   also remain complementary rather than proof of one complete installed lifetime.
+1. Complete real platform/publication and independent-observer lifetime
+   qualification. Accepted startup, request/initial dispatch, original service,
+   actual isolated native recording/WAV/worker exits and finalized recovery now
+   join in one offline fixture. App publication provenance, platform/CLI replies
+   and restored health remain synthetic. A separate authenticated observer now
+   joins finalized and abandoned-recording paths with real Link, journal, clock
+   and worker handles. Pristine cancellation is tested with the original writer's
+   retained Operator but does not yet have its separate native-observer exchange.
+   Installed evidence remains separate; do not infer the missing joins.
 2. Bind the joint controller/observer source inventory to a reviewed, independently
    supervised entrypoint with interpreter/dependency provenance for **both** peers
    and a distinct explicit action-scope grant. Passive preparation must remain
    passive; neither its old permission nor a CLI evidence receipt is that grant.
    The read-only inventory and service callback hook alone do not enable this.
-3. A fresh isolated fixed-command end-to-end lifetime with actual native
-   returns, full source/runtime pins, and independently bounded termination.
+3. A fresh isolated fixed-command end-to-end lifetime joining actual native
+   returns, full source/runtime pins and original independent observer protocol,
+   with independently bounded termination.
 4. Installed provenance and measured collection timing, plus a reviewed
    fresh-case staging procedure that preserves historical containers/evidence.
 5. Fresh human readiness for a finite scanner/audio trial. Historical readiness

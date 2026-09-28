@@ -8,6 +8,7 @@ remain; no expired readiness poll, new baseline, returned success or recovery.
 
 from __future__ import annotations
 
+import os
 import time
 
 import qualify_supplemental_recording_app_ready as readiness
@@ -188,6 +189,18 @@ class NativeActiveQualification(inputs.NativeLaunchQualification, launch.Retaine
             self.receipts.read(fd, deadline=deadline)
             return None
         return super()._directory_input(fd, name, deadline)
+
+    def _guardian_contents(self, fd, identity, deadline):
+        # Original claim custody, not a second acquisition or an expired Ready
+        # poll. No new claim/worker identity or extra output is accepted here.
+        expected = next(leaf[1] for name, _, leaf in self.consumption[-1] if name == "launch")
+        self._guard(deadline)
+        require(identity == expected[0] and os.listdir(fd) == ["launch-claimed.json"])
+        raw, leaf = readiness.q._file(fd, "launch-claimed.json", deadline, limit=8192)
+        require((raw.decode("ascii"), leaf) == expected[1])
+        require(os.listdir(fd) == ["launch-claimed.json"])
+        self._guard(deadline)
+        return expected[1]
 
     def _additional_inputs(self, directory, deadline):
         observed = super()._additional_inputs(directory, deadline)

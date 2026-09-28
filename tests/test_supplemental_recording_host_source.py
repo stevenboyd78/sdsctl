@@ -37,7 +37,7 @@ def layout(tmp_path, request):
             else (m.STARTUP_FILES if request.param else m.HELPER_FILES),
         ),
     ):
-        root.mkdir()
+        root.mkdir(mode=0o755)
         for name in names:
             path = root / name
             path.write_bytes(b"raise RuntimeError('PRIVATE_UNTRUSTED_SOURCE')\n")
@@ -55,6 +55,25 @@ def denied(callback):
     with pytest.raises(m.UnconfirmedSource) as caught:
         callback()
     assert str(caught.value) == m.MESSAGE and caught.value.__suppress_context__
+
+
+@pytest.mark.parametrize("location", ["runtime", "helper", "nested", "empty"])
+@pytest.mark.parametrize("mode", [0o775, 0o757, 0o2755, 0o1755])
+def test_source_directories_reject_unsafe_permissions(layout, location, mode):
+    if location in ("runtime", "helper"):
+        directory = getattr(layout, location)
+    else:
+        directory = layout.runtime / location
+        directory.mkdir(mode=0o755)
+        if location == "nested":
+            (directory / "source.py").write_bytes(b"PRIVATE_NEVER_IMPORT\n")
+            (directory / "source.py").chmod(0o644)
+    original = layout.observe()
+    directory.chmod(mode)
+    descriptors = len(os.listdir("/proc/self/fd"))
+    denied(lambda: layout.verify(original.sha256))
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+    assert directory.stat().st_mode & 0o7777 == mode
 
 
 def test_whole_package_and_closed_helper_inventory_without_candidate_import(layout):
@@ -268,7 +287,7 @@ print(json.dumps({"private": len(private)}))
 )
 def test_no_product_asset_or_bytecode_exclusion(layout, name):
     path = layout.runtime / name
-    path.parent.mkdir(exist_ok=True)
+    path.parent.mkdir(mode=0o755, exist_ok=True)
     path.write_bytes(b"before")
     path.chmod(0o644)
     result = layout.observe()

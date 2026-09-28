@@ -104,6 +104,60 @@ def denied(callback):
     native_tests.candidates.launch.denied(callback)
 
 
+def test_publication_prepares_original_empty_guardian_directory(launch_case):
+    s = launch_case
+    q = s.publish()
+    directory = s.case_root / "launch/guardian"
+    assert directory.is_dir()
+    assert directory.stat().st_mode & 0o7777 == 0o700
+    assert not tuple(directory.iterdir())
+    assert q.launch_inputs.guardian_identity == m.files.identity(directory.stat())
+    assert q() is None
+
+
+@pytest.mark.parametrize("fault", ["mode", "replaced", "symlink", "early_claim", "extra"])
+def test_prepared_guardian_directory_cannot_be_replaced_or_consumed_early(launch_case, fault):
+    s = launch_case
+    q = s.publish()
+    directory = s.case_root / "launch/guardian"
+    if fault == "mode":
+        directory.chmod(0o755)
+    elif fault in ("replaced", "symlink"):
+        preserved = directory.with_name("preserved-guardian")
+        directory.rename(preserved)
+        if fault == "replaced":
+            directory.mkdir(mode=0o700)
+        else:
+            directory.symlink_to(preserved, target_is_directory=True)
+    else:
+        (directory / ("launch-claimed.json" if fault == "early_claim" else "extra")).write_bytes(
+            b"PRIVATE"
+        )
+    descriptors = len(os.listdir("/proc/self/fd"))
+    denied(q)
+    assert q.failed and q.elapsed_seconds is None
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+    denied(s.publish)
+
+
+def test_guardian_creation_failure_preserves_consumed_publication(launch_case, monkeypatch):
+    s, mkdir = launch_case, os.mkdir
+
+    def uncertain(path, *args, **kwargs):
+        mkdir(path, *args, **kwargs)
+        if path == "guardian":
+            raise OSError("PRIVATE lost directory acknowledgment")
+
+    monkeypatch.setattr(os, "mkdir", uncertain)
+    descriptors = len(os.listdir("/proc/self/fd"))
+    denied(s.publish)
+    assert s.original.failed and s.original.native_launch_used
+    assert (s.case_root / "launch/guardian").is_dir()
+    assert not (s.case_root / "launch/launch.json").exists()
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+    denied(s.publish)
+
+
 def test_one_native_input_write_preserves_all_original_pins_without_actions(
     launch_case, monkeypatch
 ):

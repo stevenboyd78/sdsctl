@@ -6,6 +6,7 @@ loopback/owned-child tests. This tests the explicit App input-phase join only.
 """
 
 import importlib.util
+import json
 import os
 import sys
 import time
@@ -155,6 +156,33 @@ def active(ready_case, monkeypatch):
 
     s.append = append
     return s
+
+
+@pytest.mark.parametrize("fault", ["content", "replacement", "missing", "extra", "directory"])
+def test_post_begin_guardian_claim_is_original_not_reacquired(active, fault):
+    s = active
+    q = s.make_active()
+    assert q() is None
+    target = s.case_root / "launch/guardian/launch-claimed.json"
+    if fault == "content":
+        value = json.loads(target.read_bytes())
+        value["source"]["total_bytes"] += 1
+        target.write_bytes(m.inputs.base.encode(value))
+    elif fault == "replacement":
+        raw = target.read_bytes()
+        target.rename(s.case_root.parent / "preserved-claim")
+        target.write_bytes(raw)
+        target.chmod(0o600)
+    elif fault == "missing":
+        target.unlink()
+    elif fault == "extra":
+        (target.parent / "extra").write_bytes(b"PRIVATE")
+    else:
+        target.parent.chmod(0o755)
+    descriptors = len(os.listdir("/proc/self/fd"))
+    r.launches.denied(q)
+    assert q.failed and q.elapsed_seconds is None
+    assert len(os.listdir("/proc/self/fd")) == descriptors
 
 
 def test_original_input_custody_survives_ready_expiry_without_expanding_authority(

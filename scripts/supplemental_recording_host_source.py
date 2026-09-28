@@ -183,7 +183,8 @@ class Layout:
 
     def _snapshot(self):
         expected, kind = self._profile()
-        runtime, helper = files.inventory(self.runtime), files.inventory(self.helper)
+        runtime = files.inventory(self.runtime, source_directories=True)
+        helper = files.inventory(self.helper, source_directories=True)
         require(set(runtime) >= REQUIRED_RUNTIME and set(helper) == expected)
         # inventory() includes every file, but an extra empty namespace must
         # also fail. This helper tree is deliberately flat and closed.

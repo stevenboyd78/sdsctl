@@ -63,7 +63,7 @@ def reply(value, status=200):
 
 
 @contextmanager
-def engine(prepared, monkeypatch, handlers, *, sender_credentials=False):
+def engine(prepared, monkeypatch, handlers, *, sender_credentials=False, make_client=True):
     endpoint = client = None
     path = prepared.directory.parent / "PRIVATE_engine.sock"
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -114,10 +114,10 @@ def engine(prepared, monkeypatch, handlers, *, sender_credentials=False):
     worker = Thread(target=serve)
     worker.start()
     try:
-        claim = intents.create(prepared)
+        claim = intents.create(prepared) if make_client else None
         endpoint = m.Endpoint(sender_credentials=sender_credentials)
-        client = m.Client(endpoint, claim)
-        yield client, requests
+        client = m.Client(endpoint, claim) if make_client else None
+        yield client if make_client else endpoint, requests
     finally:
         if client is not None:
             client.close()

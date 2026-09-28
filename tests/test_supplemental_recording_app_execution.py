@@ -174,6 +174,7 @@ def _execution_boundaries(launch_case, tmp_path, monkeypatch, *, prepared, publi
         ready.watch_deadline = ready.ready_by + p.candidate.contract.maximum_recording_seconds
         ready.ready_raw = b"synthetic original ready, not native authentication"
         ready.context_raw = b.encode(launch.received._context(client.claim.pins, profile_sha256))
+        readers.synthetic_guardian_claim(s, ready)
         for name in m.readiness.SOCKETS:
             bind(name)
         if s.fault == "extra_socket":

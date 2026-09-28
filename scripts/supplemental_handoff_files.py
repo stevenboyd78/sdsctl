@@ -58,7 +58,9 @@ class FileEvidence:
     gid: int
 
 
-def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dict[str, int | str]]:
+def inventory(
+    root: Path, *, max_file_bytes: int | None = None, source_directories: bool = False
+) -> dict[str, dict[str, int | str]]:
     """Hash one explicit tree, with no symlinks, special files or hardlinks.
 
     Every parent is opened without following links. Both open descriptors and
@@ -66,6 +68,11 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
     failure yields a fixed error, not a partial inventory. This is bounded local
     disk I/O, not a filesystem snapshot or protection against a trusted root user.
     Kernel I/O stalls still require the independent outer service deadline.
+    Source callers can additionally require that the selected root and every
+    descendant directory have no special bits or group/other write access.
+    This is checked on the same held descriptors as traversal, not a separate
+    path walk. It does not change the file-only inventory schema or qualify
+    external ancestor permissions, image provenance or executable ownership.
     """
     opened: list[tuple[int, str, int, tuple[int, ...]]] = []
     anchor = -1
@@ -75,6 +82,7 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
         # 64 MiB total, entry/depth and elapsed-time bounds. No metadata-only proof.
         limit = MAX_FILE_BYTES if max_file_bytes is None else max_file_bytes
         require(type(limit) is int and 0 < limit <= 16 * 1024 * 1024)
+        require(type(source_directories) is bool)
         require(type(root) is type(Path()) and root.is_absolute())
         require(root != Path("/") and all(p not in (".", "..") for p in root.parts))
         deadline = time.monotonic() + MAX_SECONDS
@@ -100,6 +108,8 @@ def inventory(root: Path, *, max_file_bytes: int | None = None) -> dict[str, dic
             timely()
             require(depth <= MAX_DEPTH)
             before = identity(os.fstat(directory))
+            if source_directories:
+                require(stat.S_IMODE(before[2]) & 0o7022 == 0)
             # scandir is incremental so a huge directory cannot allocate an
             # unbounded list before its entry budget is checked.
             with os.scandir(directory) as children:

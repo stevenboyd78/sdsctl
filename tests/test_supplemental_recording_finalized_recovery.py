@@ -36,7 +36,7 @@ def cycling(host, monkeypatch):
     yield from setup_cycling(host, monkeypatch)
 
 
-def setup_cycling(c, monkeypatch, *, read_clock=None, session=None):
+def setup_cycling(c, monkeypatch, *, read_clock=None, session=None, cli_container=None):
     """Explicit synthetic platform adapter; caller may retain a pre-begin clock."""
     clock = c.operator._clock if read_clock is None else read_clock
     c.normal = m.base.App(c.s.plan.normal.pin, "stopped")
@@ -65,7 +65,7 @@ def setup_cycling(c, monkeypatch, *, read_clock=None, session=None):
         ),
     )
     docker = c.s.run.read.docker
-    cli = {"Id": "a" * 64}
+    cli = {"Id": "a" * 64} if cli_container is None else cli_container.copy()
     monkeypatch.setattr(
         docker, "container", lambda name: cli if name == h.CLI else c.candidate_container
     )

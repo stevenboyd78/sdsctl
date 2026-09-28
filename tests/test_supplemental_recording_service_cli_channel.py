@@ -222,18 +222,24 @@ def fixture_identity(pid, cid):
 
 
 @contextmanager
-def protocol(monkeypatch):
-    original = m.clock.read()
-    value = old.plan_tests.value()
-    issued = original.boottime_ns / m.clock.NS
-    value.update(
-        boot=original.boot,
-        original_clock=asdict(original) | {"namespace": list(original.namespace)},
-        deadlines=dict(
-            issued_at=issued, ready_by=issued + 60, stop_by=issued + 300, recover_by=issued + 1500
-        ),
-    )
-    plan = m.plans.decode(value)
+def protocol(monkeypatch, *, plan=None, timer=None):
+    borrowed_timer = timer is not None
+    if plan is None:
+        assert not borrowed_timer
+        original = m.clock.read()
+        value = old.plan_tests.value()
+        issued = original.boottime_ns / m.clock.NS
+        value.update(
+            boot=original.boot,
+            original_clock=asdict(original) | {"namespace": list(original.namespace)},
+            deadlines=dict(
+                issued_at=issued,
+                ready_by=issued + 60,
+                stop_by=issued + 300,
+                recover_by=issued + 1500,
+            ),
+        )
+        plan = m.plans.decode(value)
     left, right = m.pair()
     child = subprocess.Popen(
         args(right),
@@ -242,13 +248,14 @@ def protocol(monkeypatch):
         stdout=subprocess.PIPE,
     )
     right.close()
-    peer = timer = link = None
+    peer = link = None
     try:
         assert line(child) == b"ready"
         monkeypatch.setattr(m, "ROOT_UID", os.geteuid())
         monkeypatch.setattr(m.processes, "read_identity", fixture_identity)
         peer = m.processes.ProcessWitness(fixture_identity(child.pid, "a" * 64))
-        timer = m.clock.ClockWitness(plan.original_clock)
+        if timer is None:
+            timer = m.clock.ClockWitness(plan.original_clock)
         bind(child, plan, "observer")
         link = m.Link(left, plan, timer, peer, role="writer")
         yield SimpleNamespace(
@@ -261,7 +268,7 @@ def protocol(monkeypatch):
         child.stdin.close()
         child.wait(timeout=5)
         child.stdout.close()
-        if timer:
+        if timer and not borrowed_timer:
             timer.close()
         if peer:
             peer.close()

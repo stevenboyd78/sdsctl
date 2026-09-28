@@ -53,6 +53,31 @@ def test_empty_file_and_directory(tree):
     assert f.inventory(tree)["zero"]["sha256"] == hashlib.sha256(b"").hexdigest()
 
 
+@pytest.mark.parametrize("location", ["root", "nested", "empty"])
+@pytest.mark.parametrize("mode", [0o775, 0o757, 0o4755, 0o2755, 0o1755])
+def test_opt_in_source_directory_policy_preserves_generic_inventory(tree, location, mode):
+    (tree / "empty").mkdir(mode=0o755)
+    for directory in (tree, tree / "nested", tree / "empty"):
+        directory.chmod(0o755)
+    expected = f.inventory(tree)
+    assert f.inventory(tree, source_directories=True) == expected
+    directory = tree if location == "root" else tree / location
+    directory.chmod(mode)
+    # Generic recording/data inventories keep their existing schema/policy.
+    assert f.inventory(tree) == expected
+    descriptors = len(os.listdir("/proc/self/fd"))
+    with pytest.raises(f.UnconfirmedFiles, match="^Protected filesystem evidence is unconfirmed.$"):
+        f.inventory(tree, source_directories=True)
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+    assert directory.stat().st_mode & 0o7777 == mode
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true", [], {}])
+def test_source_directory_policy_requires_explicit_boolean(tree, value):
+    with pytest.raises(f.UnconfirmedFiles):
+        f.inventory(tree, source_directories=value)
+
+
 @pytest.mark.parametrize("name", ["ordinary", "é漢字", "space name", "del-\x7f"])
 @pytest.mark.parametrize("mode", [0o600, 0o644, 0o755])
 @pytest.mark.parametrize("content", [b"", b"unchanged\0bytes\xff"])

@@ -2,8 +2,9 @@
 """Read-only original App/native-ready join; no begin or service selection.
 
 This is a distinct, uninstalled phase. The exact authenticated Ready object
-permits observation of the four declared native socket leaves, not arbitrary
-output or an already started recording. Existing action gates remain unchanged.
+permits observation of the four declared native socket leaves and original
+guardian claim, not arbitrary output or an already started recording. Existing
+action gates remain unchanged.
 """
 
 from __future__ import annotations
@@ -42,9 +43,10 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
     """Fresh inventories plus original readiness, never a serialized substitute.
 
     All launch/lease/baseline/App identities remain original. Only the socket
-    directory metadata and exactly four private socket entries can differ from
-    the acknowledged launch phase. Their first qualified identities are then
-    retained; replacement, extra output or any recording receipt is refused.
+    directory metadata, exactly four private socket entries and the guardian's
+    single claim can differ from the acknowledged launch phase. Their first
+    qualified identities are then retained; replacement, extra output or any
+    recording receipt is refused.
     No socket is opened or connected by this reader. It cannot prove recording
     success or authorize begin, and it never extends the original ready bound.
     """
@@ -159,6 +161,10 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
         )
         require(ready.clock is original.plan.original_clock)
         require(ready.ready_by == original.plan.lease["ready_by"])
+        require(
+            ready.watch_deadline
+            == ready.ready_by + original.plan.candidate.contract.maximum_recording_seconds
+        )
         require(ready.context_raw == self.expected_context)
         require(self.expected.payload() == self.expected_payload)
         require(ready.client.claim.pins.payload() == self.expected_payload)
@@ -175,6 +181,55 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
             return super()._directory_input(fd, name, deadline)
         return _socket_inputs(fd, deadline, self._guard)
 
+    def _guardian_contents(self, fd, identity, deadline):
+        """Join the sole claim to original authenticated Ready, not file authority.
+
+        Source/runtime are independently checked around the whole collection.
+        The claim's informational component hashes/counts are NOT a replacement
+        source inventory. Only its original source pin participates in this join;
+        all bytes and inode identities are retained after this one transition.
+        """
+        self._guard(deadline)
+        require(os.listdir(fd) == ["launch-claimed.json"])
+        raw, leaf = q._file(fd, "launch-claimed.json", deadline, limit=8192)
+        decoder = inputs.native.protected.evidence
+        value = json.loads(
+            raw, object_pairs_hook=decoder.unique, parse_constant=decoder.reject_constant
+        )
+        require(type(value) is dict)
+        evidence = value.get("source")
+        require(
+            type(evidence) is dict
+            and set(evidence)
+            == {"sha256", "runtime_sha256", "native_sha256", "file_count", "total_bytes"}
+        )
+        for field in ("sha256", "runtime_sha256", "native_sha256"):
+            inputs.base.digest(evidence[field])
+        require(evidence["sha256"] == self.plan.candidate_runtime.source)
+        limits = (("file_count", files.MAX_FILES), ("total_bytes", files.MAX_TOTAL_BYTES))
+        for field, limit in limits:
+            require(type(evidence[field]) is int and 0 < evidence[field] <= limit)
+        processes = self.ready.processes
+        require(type(processes) is launch.engine.namespace.Witness)
+        require(type(processes.actors) is tuple and len(processes.actors) == 4)
+        guardian = processes.actors[1]
+        require(type(guardian) is launch.engine.namespace.Actor)
+        guardian.__post_init__()
+        expected = dict(
+            schema=1,
+            kind="finite-recording-guardian-claim",
+            context=json.loads(self.expected_context),
+            source=evidence,
+            guardian_pid=guardian.local_pid,
+            guardian_start_ticks=guardian.start_ticks,
+            hard_deadline=self.ready.watch_deadline,
+            grace_seconds=launch.received.GRACE_SECONDS,
+        )
+        require(raw == inputs.base.encode(expected))
+        require(os.listdir(fd) == ["launch-claimed.json"])
+        self._guard(deadline)
+        return raw.decode("ascii"), leaf
+
     def _additional_inputs(self, directory, deadline):
         observed = super()._additional_inputs(directory, deadline)
         original = {
@@ -185,6 +240,10 @@ class NativeReadyQualification(inputs.NativeLaunchQualification):
             previous, previous_leaf = original[name]
             if name == "sockets":
                 require(identity[:6] == previous[:6] and previous_leaf is None)
+            elif name == "launch":
+                require(identity == previous and leaf[0] == previous_leaf[0])
+                require(leaf[1][0][:6] == previous_leaf[1][0][:6])
+                require(previous_leaf[1][1] is None)
             else:
                 require((identity, leaf) == (previous, previous_leaf))
         return observed

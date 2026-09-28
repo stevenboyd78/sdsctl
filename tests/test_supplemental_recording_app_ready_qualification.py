@@ -5,10 +5,12 @@ Actual Ready's authenticated transport/process semantics have separate tests.
 """
 
 import importlib.util
+import json
 import os
 import socket
 import sys
 import time
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,6 +35,48 @@ SPEC = importlib.util.spec_from_file_location(
 m = importlib.util.module_from_spec(SPEC)
 sys.modules[NAME] = m
 SPEC.loader.exec_module(m)
+
+
+def synthetic_actors(ready, init):
+    ready.processes = object.__new__(m.launch.engine.namespace.Witness)
+    ready.processes.closed = False
+    domains = tuple((1, index + 1) for index in range(len(m.launch.engine.namespace.NAMESPACES)))
+    ready.processes.actors = tuple(
+        m.launch.engine.namespace.Actor(
+            init.pid if index == 0 else 1_000_000 + index,
+            index + 1,
+            0 if index == 0 else init.pid,
+            init.start_ticks + index,
+            init.container_id,
+            domains,
+        )
+        for index in range(4)
+    )
+
+
+def synthetic_guardian_claim(s, ready):
+    """Explicit fixture transport/actor boundary; actual source, private inode."""
+    static = m.launch.plans.host.candidate_static
+    evidence = static.source.Layout(
+        s.root / m.launch.plans.fixed.PACKAGE, s.root / static.NATIVE
+    ).observe()
+    actor = ready.processes.actors[1]
+    raw = m.inputs.base.encode(
+        dict(
+            schema=1,
+            kind="finite-recording-guardian-claim",
+            context=json.loads(ready.context_raw),
+            source=asdict(evidence),
+            guardian_pid=actor.local_pid,
+            guardian_start_ticks=actor.start_ticks,
+            hard_deadline=ready.watch_deadline,
+            grace_seconds=m.launch.received.GRACE_SECONDS,
+        )
+    )
+    target = s.case_root / "launch/guardian/launch-claimed.json"
+    with target.open("xb") as stream:
+        stream.write(raw)
+    target.chmod(0o600)
 
 
 @pytest.fixture
@@ -60,13 +104,16 @@ def ready_case(launch_case, monkeypatch):
     )
     s.ready = object.__new__(m.launch.received.Ready)
     s.ready.client = SimpleNamespace(claim=SimpleNamespace(pins=s.expected), begun=False)
-    s.ready.processes, s.ready.zero_domain = object(), object()
+    synthetic_actors(s.ready, s.prelaunch.init)
+    s.ready.zero_domain = object()
     s.ready.clock = p.original_clock
     s.ready.ready_by = p.lease["ready_by"]
+    s.ready.watch_deadline = s.ready.ready_by + p.candidate.contract.maximum_recording_seconds
     s.ready.received_at = time.monotonic()
     s.ready.context_raw = m.inputs.base.encode(m.launch.received._context(s.expected, "a" * 64))
     s.ready.ready_raw = b"explicitly synthetic Ready, not native evidence"
     s.ready.closed = s.ready.failed = False
+    synthetic_guardian_claim(s, s.ready)
     s.ready_checks = 0
 
     def checking(ready):
@@ -117,6 +164,96 @@ def test_explicit_ready_allows_only_native_sockets_before_begin(ready_case):
     assert type(q) is not m.inputs.NativeLaunchQualification
     assert not tuple((s.case_root / "receipts").iterdir())
     assert not s.witness.exited()
+
+
+@pytest.mark.parametrize(
+    "acquired,fault",
+    [
+        (acquired, fault)
+        for acquired in (False, True)
+        for fault in (
+            "missing",
+            "mode",
+            "extra",
+            "replacement",
+            "symlink",
+            "directory",
+            "duplicate_json",
+            "context",
+            "pid",
+            "ticks",
+            "deadline",
+            "grace",
+            "source",
+            "count",
+            "extra_field",
+        )
+        if acquired or fault != "replacement"
+    ],
+)
+def test_guardian_claim_requires_original_ready_and_immutable_custody(ready_case, acquired, fault):
+    s = ready_case
+    q = s.make_ready()
+    if acquired:
+        assert q() is None
+    target = s.case_root / "launch/guardian/launch-claimed.json"
+    if fault == "missing":
+        target.unlink()
+    elif fault == "mode":
+        target.chmod(0o644)
+    elif fault == "extra":
+        (target.parent / "extra").write_bytes(b"PRIVATE")
+    elif fault == "directory":
+        target.parent.chmod(0o755)
+    elif fault in ("replacement", "symlink"):
+        original = target.read_bytes()
+        preserved = s.case_root.parent / "preserved-claim"
+        target.rename(preserved)
+        if fault == "replacement":
+            target.write_bytes(original)
+            target.chmod(0o600)
+        else:
+            target.symlink_to(preserved)
+    elif fault == "duplicate_json":
+        target.write_bytes(target.read_bytes().replace(b'"schema":1', b'"schema":1,"schema":1'))
+    else:
+        value = json.loads(target.read_bytes())
+        if fault == "context":
+            value["context"]["generation"] = "0" * 64
+        elif fault == "source":
+            value["source"]["sha256"] = "0" * 64
+        elif fault == "count":
+            value["source"]["file_count"] = True
+        elif fault == "extra_field":
+            value["extra"] = 1
+        else:
+            field = {
+                "pid": "guardian_pid",
+                "ticks": "guardian_start_ticks",
+                "deadline": "hard_deadline",
+                "grace": "grace_seconds",
+            }[fault]
+            value[field] += 1
+        target.write_bytes(m.inputs.base.encode(value))
+    descriptors = len(os.listdir("/proc/self/fd"))
+    launches.denied(q)
+    assert q.failed and q.elapsed_seconds is None
+    assert len(os.listdir("/proc/self/fd")) == descriptors
+
+
+def test_claim_change_during_original_ready_collection_is_refused(ready_case):
+    s = ready_case
+    q = s.make_ready()
+
+    def change():
+        target = s.case_root / "launch/guardian/launch-claimed.json"
+        value = json.loads(target.read_bytes())
+        value["source"]["total_bytes"] += 1
+        target.write_bytes(m.inputs.base.encode(value))
+        return "not verified"
+
+    launches.denied(lambda: q.during(change))
+    assert q.failed and q.elapsed_seconds is None
 
 
 @pytest.mark.parametrize(

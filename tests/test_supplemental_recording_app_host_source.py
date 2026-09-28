@@ -22,7 +22,7 @@ SPEC.loader.exec_module(m)
 def layout(tmp_path):
     runtime, helper = tmp_path / "sds200", tmp_path / "helper"
     for root, names in ((runtime, m.source.REQUIRED_RUNTIME), (helper, m.HELPER_FILES)):
-        root.mkdir()
+        root.mkdir(mode=0o755)
         for name in names:
             path = root / name
             path.write_bytes(b"raise RuntimeError('PRIVATE_SOURCE_MUST_NOT_EXECUTE')\\n")
@@ -53,6 +53,11 @@ def test_distinct_closed_bundle_is_read_only_and_legacy_profiles_refuse_it(layou
     ):
         foreign = m.source.checksum(dict(schema=1, kind=kind, runtime=runtime, helper=helper))
         original.denied(lambda foreign=foreign: layout.verify(foreign))
+
+
+@pytest.mark.parametrize("location", ["runtime", "helper", "nested", "empty"])
+def test_app_source_does_not_admit_writable_directories(layout, location):
+    original.test_source_directories_reject_unsafe_permissions(layout, location, 0o775)
 
 
 @pytest.mark.parametrize("flag", ["startup", "permission_probe", "service_preparation"])

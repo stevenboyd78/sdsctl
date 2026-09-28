@@ -75,7 +75,9 @@ def app_shell(c):
     startup.projected = run.projected
     original.startup, original.candidate, original.plan = startup, holder, run.plan
     original.idle, original.witness, original.docker = run.idle, run.witness, run.read.docker
-    original.launch_inputs = f.execution.inputs.LaunchPublished(RAW, SHA, (1,) * 9, (2,) * 9)
+    original.launch_inputs = f.execution.inputs.LaunchPublished(
+        RAW, SHA, (1,) * 9, (2,) * 9, (3,) * 9
+    )
     original.launch_pins = original._launch_pins()
     original.original = run.input_pins = ("synthetic source inventory", *original.launch_pins)
     original.consumption = ("synthetic App qualification, not installed proof",)

@@ -137,11 +137,15 @@ class Link:
             require(role in ("writer", "observer") and type(role) is str)
             require(type(channel) is Channels and channel.incoming is not channel.outgoing)
             require(type(plan) is plans.Plan and type(timer) is clock.ClockWitness)
-            require(timer.original is plan.original_clock)
+            # Accepted Startup retains its first ClockWitness while CasePlan
+            # decodes the acknowledged bytes into an equal immutable Window.
+            # Borrow that exact witness; do not construct or renew another one.
+            require(plans._same_plan_value(timer.original, plan.original_clock))
             require(type(peer) is processes.ProcessWitness and peer.identity.pid != self.owner[0])
             self.channel, self.plan, self.timer, self.role = channel, plan, timer, role
             self.pin = plans.PinnedPlan(plan)
-            self._originals = channel, plan, timer, role, self.pin
+            self._clock_origin = timer.original
+            self._originals = channel, plan, timer, role, self.pin, self._clock_origin
             self.plan_sha256 = plan.sha256
             self._peer = processes.ProcessWitness(peer.identity, retained_fd=peer.fd)
             self._peer_object = self._peer
@@ -190,7 +194,7 @@ class Link:
             all(
                 a is b
                 for a, b in zip(
-                    (self.channel, self.plan, self.timer, self.role, self.pin),
+                    (self.channel, self.plan, self.timer, self.role, self.pin, self._clock_origin),
                     self._originals,
                     strict=True,
                 )
@@ -207,9 +211,9 @@ class Link:
         if hasattr(self, "_pins"):
             require(self._values() == self._pins)
         self.pin.check(self.plan)
-        require(
-            self.plan.sha256 == self.plan_sha256 and self.timer.original is self.plan.original_clock
-        )
+        require(self.plan.sha256 == self.plan_sha256)
+        require(self.timer.original is self._clock_origin)
+        require(plans._same_plan_value(self._clock_origin, self.plan.original_clock))
         require(self._peer is self._peer_object and self._peer.fd == self.peer_fd)
         require(base.encode(asdict(self._peer.identity)) == self.peer_pin)
         require(

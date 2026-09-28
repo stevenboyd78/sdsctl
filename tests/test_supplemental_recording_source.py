@@ -25,8 +25,8 @@ SPEC.loader.exec_module(m)
 @pytest.fixture
 def layout(tmp_path):
     runtime, native = tmp_path / "sds200", tmp_path / "native"
-    runtime.mkdir()
-    native.mkdir()
+    runtime.mkdir(mode=0o755)
+    native.mkdir(mode=0o755)
     # Importing even one of these files would fail this test. No sys.path or
     # import mechanism is pointed at either candidate directory.
     for root, names in ((runtime, m.REQUIRED_RUNTIME), (native, m.NATIVE_FILES)):
@@ -123,7 +123,7 @@ def test_bracket_rejects_invalid_absolute_deadline_before_callback(layout, end):
 def test_package_assets_and_bytecode_are_not_filtered(layout, name):
     original = layout.observe()
     path = layout.runtime / name
-    path.parent.mkdir(exist_ok=True)
+    path.parent.mkdir(mode=0o755, exist_ok=True)
     path.write_bytes(b"first")
     path.chmod(0o644)
     first = layout.observe()
@@ -183,6 +183,44 @@ def test_unsafe_or_open_source_graph_refused(layout, fault):
     else:
         path.chmod({"group_write": 0o664, "other_write": 0o646, "setuid": 0o4644}[fault])
     denied(layout.observe)
+
+
+@pytest.mark.parametrize("location", ["runtime", "native", "nested", "empty"])
+@pytest.mark.parametrize("mode", [0o775, 0o757, 0o2755, 0o1755])
+def test_source_directories_cannot_allow_replacement_of_read_only_files(layout, location, mode):
+    for root in (layout.runtime, layout.native):
+        root.chmod(0o755)
+    if location in ("runtime", "native"):
+        directory = getattr(layout, location)
+    else:
+        directory = layout.runtime / location
+        directory.mkdir(mode=0o755)
+        if location == "nested":
+            (directory / "component.py").write_bytes(b"PRIVATE_NEVER_IMPORT\n")
+            (directory / "component.py").chmod(0o644)
+    original = layout.observe()
+    directory.chmod(mode)
+    before = len(os.listdir("/proc/self/fd"))
+    denied(lambda: layout.verify(original.sha256))
+    assert len(os.listdir("/proc/self/fd")) == before
+    assert directory.stat().st_mode & 0o7777 == mode  # Never repairs observed input.
+
+
+@pytest.mark.parametrize("stage", ["before", "during"])
+def test_directory_policy_is_checked_in_both_sides_of_source_bracket(layout, stage):
+    expected, calls = layout.observe(), []
+    before = len(os.listdir("/proc/self/fd"))
+    if stage == "before":
+        layout.native.chmod(0o775)
+
+    def observe():
+        calls.append(True)
+        layout.native.chmod(0o775)
+        return "not admitted"
+
+    denied(lambda: layout.verify_during(expected.sha256, observe, deadline=time.monotonic() + 2))
+    assert len(calls) == (stage == "during")
+    assert len(os.listdir("/proc/self/fd")) == before
 
 
 @pytest.mark.parametrize("field", ["runtime", "native"])
