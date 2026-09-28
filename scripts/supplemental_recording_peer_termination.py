@@ -122,6 +122,7 @@ class Custody:
     def __init__(self, pair, clock, writer_domain, observer_domain):
         self.owner = os.getpid(), get_ident()
         self.closed = self.attempted = False
+        self.armed_watch = None
         self._owned = []
         self._resources = None
         try:
@@ -471,6 +472,7 @@ def arm(custody, *, scope):
         custody._guard()
         require(not deadlines._readable(watch_fd) and time.monotonic() < end)
         result = Watch(pid, watch_fd, write, targets, custody.identities, custody.deadline_ns)
+        custody.armed_watch = result
         for fd in (watch_fd, write, *targets):
             owned.remove(fd)
         return result

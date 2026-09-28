@@ -171,6 +171,7 @@ class PeerRuntimePair:
         # An explicitly selected outer supervisor may retain these original
         # peers once, before any action. Comparison itself still signals none.
         self.termination_capture_attempted = False
+        self.channel_delivery_attempted = False
         try:
             require(type(self) is PeerRuntimePair)
             require(

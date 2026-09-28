@@ -17,6 +17,7 @@ independent supervision and recovery integration.
 | Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
 | Paired runtime comparison | External `PeerRuntimePair` | Both original role collectors and distinct original init witnesses, one plan/template/declaration/Engine client, two full fresh collections in a shared two-second window; no cached success, launch or continuing-lifetime authority |
 | Original peer termination | Explicit outer `Custody` and `arm` | Both runtime comparisons and zero-offset domains, duplicate original peer handles, immutable BOOTTIME deadline and a separate kernel-only watcher; narrowly scoped peer stops, not App actions, native exits or restoration |
+| One-use private descriptor delivery | Explicit bootstrap `Endpoint` and outer `deliver` | Kernel-authenticated original three-process context, separate descriptor handoff before unchanged Link, both full runtime reads before/after under one shared bound and original watcher cancellation on failure; transport receipts, not Ready or App permission |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -234,11 +235,76 @@ the production 1500-second total limit is unchanged.
 
 This still does **not** independently bound a killed/frozen watcher while its
 outer owner is also blocked, qualify the outer executable/proc environment,
-select an installed fixed entrypoint, join the authenticated peer channel, or
+select an installed fixed entrypoint, qualify installed peer communication, or
 designate exclusive recovery custody before mutation. Those require the final
 platform-supervised topology and failure-recovery integration. Killing the
 remaining observer after writer loss does not authorize a new observer to adopt
 the journal, replay uncertain commands, or restore normal App ownership.
+
+### Separate private descriptor delivery
+
+The uninstalled `supplemental_recording_peer_bootstrap` library addresses a
+specific topology gap: two separately launched container init processes cannot
+receive an outer process's anonymous sockets through ordinary Docker start.
+Its one-use `Endpoint` borrows an **already connected** private Unix SEQPACKET
+socket. It neither creates a listener/path nor qualifies that path's installation.
+Both connected-peer credentials and per-message `SCM_CREDENTIALS` must match
+the original remote process. Forwarding through a different process on the same
+connected socket is refused. Three distinct original process/container identities,
+the final plan, independently authenticated runtime-declaration digest and
+recipient role are bound to the canonical message context.
+
+The recipient creates a fresh challenge. The outer process delivers exactly two
+anonymous directional SEQPACKET descriptors using a separate `SCM_RIGHTS`
+exchange, and requires an acknowledgment of the exact offer. Received handles
+must already have the expected nonblocking, close-on-exec and direction-specific
+credential options. Flags and socket types are not repaired into eligibility.
+Malformed, extra, truncated, noncanonical, stale-context or wrong-sender messages
+refuse; every installed descriptor is closed on rejection. Extra queued work or
+EOF is checked before acknowledgment. A receipt is **not** a bilateral commit:
+lost acknowledgment or a subsequent contradiction still makes delivery uncertain.
+Neither receipt is a Ready, original evidence-custody acknowledgment, App action
+grant, or authorization to retry.
+
+Original borrowed clock/process/socket objects and namespace handles are checked
+throughout. All three processes must have the same user/time/time-for-children
+namespaces required by `Link`; coincident numeric clocks or two zero-offset proofs
+do not relax that restriction. The original two-second handshake and readiness
+cutoff cannot be renewed. An optional outer deadline may only narrow them.
+Cleanup retires owned namespace handles/received descriptor copies, not borrowed
+processes, clocks or connections. No new peer is discovered after loss.
+
+The outer-only `supplemental_recording_peer_delivery.deliver` joins this transport
+to the original `PeerRuntimePair`, original `Custody`, and the **exact Watch object
+returned by its successful arm**. A reconstructed equal watcher is refused.
+There is one delivery-attempt slot on the original pair. Both complete runtime
+collections bracket both handoffs within one shared two-second/original-ready
+window, which is also passed into each endpoint. The original owners, live
+namespace proofs, watcher and immutable recovery deadline remain bound between
+steps. Original sender copies are retired before success; a foreign descriptor
+reusing an owned numeric fd is detached from its stale socket wrapper, not closed.
+
+Once that exact original pair/watcher binding has been accepted, any failure
+cancels the already armed watcher and stops both original peers. This includes
+one-sided delivery, lost/wrong acknowledgment, changed runtime, peer loss, expired
+budget and owned-resource cleanup failure. It never creates a replacement peer,
+reopens a journal, repeats a delivery, sends an App command or claims restoration.
+Unrelated input objects are refused without adopting or closing them. On success
+the same watcher remains armed and caller-owned; transport success does not release
+any action gate. The existing `Link` still rejects descriptor passing in its own
+messages, and passive preparation/permission formats remain unchanged.
+
+Local tests use three actual disposable processes with connect/accept credentials,
+descriptor passing and unchanged `Link` guards, including wrong actual senders,
+bad/truncated descriptors, packet faults, missing acknowledgments, timeouts and
+leak/reused-fd checks. Joined tests run both complete runtime reads, then actual
+delivery, Link construction and independent original-peer termination in one
+lifetime. File/environment reads are real; Engine, image, cgroup, root, command
+and kernel-privilege eligibility remain explicitly synthetic. Fixture source is
+not the running installed image. These modules stay **outside every existing
+observed source graph**. The qualified private connection, fixed active command,
+outer/runtime/input provenance, independent platform bound, separate action scope
+and exclusive original recovery owner still require integration before live use.
 
 ### Read-only service preparation
 
