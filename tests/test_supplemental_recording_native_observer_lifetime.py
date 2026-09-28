@@ -38,6 +38,33 @@ tree, configured, cached, prepared, staged = (
 pytestmark = apps.pytestmark
 
 
+def fixture_deadlines(original, maximum):
+    issued = original.boottime_ns / plans.clock.NS
+    return dict(
+        issued_at=issued,
+        ready_by=issued + 8,
+        # Each host deadline is conservatively converted independently. Exact
+        # equality at ready + maximum + 3 can lose one float ULP when the two
+        # values straddle an exponent boundary. Reserve margin in the ORIGINAL
+        # fixture plan, not by extending an accepted lease or relaxing Ready.
+        stop_by=issued + 8 + maximum + 4,
+        recover_by=issued + 1500,
+    )
+
+
+def test_fixture_original_budget_retains_native_grace_across_float_boundary():
+    original = plans.clock.Window("a" * 32, (4, 100), 3915106974238, 3915106974619, 3915106974819)
+    limits = fixture_deadlines(original, 180)
+    ready = original.native_deadline(limits["ready_by"])
+    # Deterministically reproduce the CI-only former zero-margin fixture.
+    exact_host_stop = limits["ready_by"] + 180 + 3
+    assert ready + 180 + 3 > original.native_deadline(exact_host_stop)
+    assert ready + 180 + 3 < original.native_deadline(limits["stop_by"])
+    assert limits["stop_by"] == exact_host_stop + 1
+    assert limits["ready_by"] == limits["issued_at"] + 8
+    assert limits["recover_by"] == limits["issued_at"] + 1500
+
+
 def record(value):
     if type(value) is dict:
         return SimpleNamespace(**{key: record(item) for key, item in value.items()})
@@ -160,16 +187,12 @@ def joined(staged, prepared, tmp_path, monkeypatch, fault, *, separate=False):
                 slug: m.apps.platform.generation(value, name="app_" + slug, image=value["Image"])
                 for slug, value in values.items()
             }
-            issued = original.boottime_ns / plans.clock.NS
             raw.update(
                 boot=original.boot,
                 original_clock=asdict(original) | {"namespace": list(original.namespace)},
                 normal_generation=generations[m.apps.NORMAL],
-                deadlines=dict(
-                    issued_at=issued,
-                    ready_by=issued + 8,
-                    stop_by=issued + 8 + projection.native.contract.maximum_recording_seconds + 3,
-                    recover_by=issued + 1500,
+                deadlines=fixture_deadlines(
+                    original, projection.native.contract.maximum_recording_seconds
                 ),
             )
             state.plan = plans.decode(raw)
