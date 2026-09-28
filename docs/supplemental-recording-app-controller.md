@@ -13,6 +13,9 @@ independent supervision and recovery integration.
 | --- | --- | --- |
 | Read-only controller source inventory | Explicit App `Layout` | Distinct 83-module private bundle, complete product inventory and unchanged double-read filesystem bounds; no source execution or installed dependency qualification |
 | Read-only joint source inventory | Explicit service `Layout` | Distinct 90-module controller/observer bundle; includes original deadline/App/native/CLI custody and private channel, without changing any command or granting active authority |
+| Separate peer runtime expectations | Independently pinned `Expectations` declaration | Clock-free template digest and explicit writer/observer image, source, interpreter, environment, argv and confinement pins; pure comparison, not observed qualification or consent |
+| Per-role runtime comparison | External `PeerRuntimeQualification` | Original plan and selected original init/pidfd, full existing two-second runtime/confinement collection against that role's pins; no fabricated observer plan, launch, action grant or paired continuing-lifetime claim |
+| Paired runtime comparison | External `PeerRuntimePair` | Both original role collectors and distinct original init witnesses, one plan/template/declaration/Engine client, two full fresh collections in a shared two-second window; no cached success, launch or continuing-lifetime authority |
 | Explicit CLI evidence hook | Original Startup/IdleService/TrackedDispatch | Callback selected at construction and pinned across create/start, phase handoffs and recovery; no callback during assembly, new owner, peer authentication or action grant implied |
 | Explicit pre-native candidate custody | Original AppService and original peer Link/CliCustody | Separate one-use exchange before launch publication; independently retained candidate init agrees with original journal and two observed CLI exits; no Ready or action grant implied |
 | Read-only candidate assembly | `AppIdleCandidate` and explicit App `prepare_candidate` | Original running idle service, accepted Startup, borrowed clock and init witness; native App publication pins retained without dispatch or full qualification |
@@ -84,6 +87,86 @@ Python interpreter. The planned installed runtime still requires an independentl
 authenticated complete interpreter/loader/package inventory, a supported kernel,
 original process binding and separately measured bounds; source hashes and local
 imports do not establish any of those facts.
+
+### Separate writer and observer runtime comparison
+
+The uninstalled `supplemental_recording_service_runtime_expectations` codec
+defines a distinct, bounded, canonical declaration. It pins the clock-free
+startup template and the joint source-profile kind, plus **two explicit** role
+records. Each record supplies image, source, interpreter and environment hashes,
+an exact argv fingerprint, complete Engine configuration fingerprint, base-image
+environment hash, architecture, timezone and hostname. Both roles use the same
+reviewed joint source graph; their other pins may differ. Identical expected
+images still require two records and do not prove two original processes.
+
+The declaration's digest must be independently authenticated before observing
+either peer. Its writer runtime must exactly match the original template's helper
+runtime. A final-plan comparison checks the entire original template/plan/clock
+join without reading a clock, resealing a plan or changing the original helper
+pin to describe the observer. Strict fields and native types, canonical JSON,
+duplicate-key rejection and byte limits apply. No defaults, file paths, live
+process IDs or observed facts are inferred. No old plan, permission or template
+decoder accepts this new document as its own format.
+
+Argv fingerprints use the canonical object with schema `1`, kind
+`finite-recording-peer-argv-v1`, and an `argv` list containing the exact argument
+strings. They are not hashes of shell command text. The supplied tuple is bounded
+to 32 printable ASCII arguments and 8192 bytes including terminators. An expected
+startup command must be known before observing the process; its pin cannot be
+learned from the observed cmdline, and a pre-start declaration must not depend
+on a final clock-derived plan hash or its own digest. Command equality is not an
+active-entrypoint review or action grant.
+
+The external `qualify_supplemental_recording_peer_runtime.PeerRuntimeQualification`
+performs the existing complete read-only collection for **one selected role**:
+original process/pidfd, exact command, image, Engine confinement and configuration,
+root/proc/namespace bindings, actual kernel privileges/environment, joint source,
+and supervised interpreter/dependencies. It retains the two-second collection
+limit and original readiness cutoff. The same caller-owned plan remains unchanged.
+The writer and observer records cannot be swapped, silently refreshed, or replaced
+by an equal new declaration after capture. Failed comparisons consume the collector.
+It neither launches nor terminates a process, sends an App command, or closes the
+caller's borrowed process handle.
+
+`PeerRuntimePair` can retain these two original collectors together. It requires
+distinct original PIDs, container IDs and witnesses; one original plan, template,
+declaration and Engine client; and the exact writer/observer role order. Neither
+observed role may be the external verifier itself. Every call performs both full
+collections and checks both original bindings before, between and after them.
+One unchanged two-second absolute deadline is passed through both collectors;
+the second cannot start a fresh two-second allowance after the first finishes.
+An outer deadline may narrow the ordinary collector's limit but cannot extend it.
+Loss, mismatch, contention or timeout consumes the paired comparison without
+closing borrowed peers or granting any recovery authority. An earlier successful
+comparison is never a cached substitute for the next full read. This remains a
+bounded observation interval, not an atomic filesystem snapshot or an independent
+mechanism for terminating blocked kernel I/O.
+
+This narrow adapter currently describes separately observed container **init**
+processes under the fixed writer name and its `-observer` counterpart. It does not
+qualify an arbitrary descendant as that init, choose how the future peers launch
+or communicate, or qualify the outer observer's own runtime. Its argv must use
+the fixed isolated Python prefix and an explicitly inventoried joint helper file,
+but a match alone does not make that file an admitted active entrypoint. No active
+entrypoint is selected here. The ordinary helper collector retains its original
+plan-helper/name/command/source policies, and passive preparation remains passive.
+The new declaration and outer adapter are outside all existing observed source
+module sets; this does not silently add two modules to a qualified image.
+
+Local tests exercise each role with a real disposable child pidfd, source/runtime
+fixture files and actual process environment. Engine data, cmdline, root routing,
+confinement facts and kernel-privilege evidence are explicitly synthetic. The
+observer's image/interpreter/environment pins intentionally differ from the plan's
+writer pins, exposing accidental reuse. Tests cover role swaps, declaration/plan
+replacement, changed source/runtime/configuration/command, actual child exit,
+expired collection, and refusal to invoke Engine mutations. Additional paired
+tests retain two real child pidfds and exercise both full file/environment reads,
+actual loss of either child, loss between collections, one-sided failure, changed
+owner objects and the shared non-renewable deadline. Engine/root/command/kernel
+privilege facts in that fixture are still synthetic. This is **not** installed
+image provenance, independent termination or an end-to-end active launch. Both
+original peers still need a reviewed, independently supervised lifetime before
+any action.
 
 ### Read-only service preparation
 
@@ -1039,7 +1122,10 @@ remain separate requirements before selecting any active command.
    supervised entrypoint with interpreter/dependency provenance for **both** peers
    and a distinct explicit action-scope grant. Passive preparation must remain
    passive; neither its old permission nor a CLI evidence receipt is that grant.
-   The read-only inventory and service callback hook alone do not enable this.
+   The separate peer expectations and paired read-only collectors now provide
+   explicit comparison inputs and a shared collection bound; they do not
+   establish continuing peer communication/custody, qualify installed provenance
+   or admit an active entrypoint.
 3. A fresh isolated fixed-command end-to-end lifetime joining actual native
    returns, full source/runtime pins and original independent observer protocol,
    with independently bounded termination.

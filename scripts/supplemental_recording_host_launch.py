@@ -972,6 +972,10 @@ class HelperQualification:
             require(architecture in ("amd64", "arm64"))
             require(type(runtime_workers) is int and runtime_workers in (1, 2))
             require(zero_domain is None or type(zero_domain) is time_domain.ZeroDomain)
+            self.runtime_pin = self._runtime_expectation(plan)
+            require(type(self.runtime_pin) is plans.RuntimePin)
+            self.runtime_pin.__post_init__()
+            self.container_name = self._container_name(plan)
             self._command_policy(plan, command, zero_domain)
             self.plan, self.witness, self.docker = plan, witness, docker
             self.zero_domain = zero_domain
@@ -1002,7 +1006,19 @@ class HelperQualification:
             self.architecture,
             (type(self.runtime_workers), self.runtime_workers),
             self.domain_sha256,
+            self.runtime_pin.image,
+            self.runtime_pin.source,
+            self.runtime_pin.interpreter,
+            self.runtime_pin.environment,
+            self.container_name,
         )
+
+    def _runtime_expectation(self, plan):
+        """Legacy default stays the ORIGINAL plan helper, never a rebuilt plan."""
+        return plan.helper
+
+    def _container_name(self, plan):
+        return "sdsctl-recording-handoff-" + plan.case
 
     def _command_policy(self, plan, command, zero_domain):
         """Original policy; explicit external adapters must define their own."""
@@ -1042,6 +1058,9 @@ class HelperQualification:
             )
         )
         self.plan_pin.check(self.plan)
+        require(type(self.runtime_pin) is plans.RuntimePin)
+        require(self.runtime_pin is self._runtime_expectation(self.plan))
+        require(self.container_name == self._container_name(self.plan))
         require(self._pins() == self.original)
         require(
             type(self.docker) is plans.ordinary.Docker
@@ -1126,9 +1145,10 @@ class HelperQualification:
         self._guard(deadline)
         container = self.docker.container(self.init.container_id)
         require(type(container) is dict and container.get("Id") == self.init.container_id)
-        name = "sdsctl-recording-handoff-" + self.plan.case
         require(
-            plans.ordinary.generation(container, name=name, image=self.plan.helper.image)
+            plans.ordinary.generation(
+                container, name=self.container_name, image=self.runtime_pin.image
+            )
             == self.generation
         )
         require(container["State"]["Pid"] == self.init.pid)
@@ -1155,7 +1175,7 @@ class HelperQualification:
                 image_environment_sha256=self.image_environment_sha256,
                 timezone=self.timezone,
             )
-            == self.plan.helper.environment
+            == self.runtime_pin.environment
         )
         required = {
             "ReadonlyRootfs": True,
@@ -1212,7 +1232,7 @@ class HelperQualification:
             {
                 "schema": 2,
                 "kind": "finite-recording-helper-configuration-v2",
-                "config": config | {"Env": self.plan.helper.environment},
+                "config": config | {"Env": self.runtime_pin.environment},
                 "host": host,
                 # Engine's observed mount list is unordered and can change
                 # ordering at startup. _mounts already requires unique exact
@@ -1228,8 +1248,8 @@ class HelperQualification:
         merged = data.get("MergedDir")
         plans.text(merged, r"/mnt/data/docker/overlay2/[a-z0-9]{1,128}/merged")
         self._guard(deadline)
-        image = self.docker.image(self.plan.helper.image)
-        require(image.get("Id") == self.plan.helper.image and image.get("Os") == "linux")
+        image = self.docker.image(self.runtime_pin.image)
+        require(image.get("Id") == self.runtime_pin.image and image.get("Os") == "linux")
         require(
             image.get("Architecture") == self.architecture and type(image.get("Config")) is dict
         )
@@ -1243,7 +1263,7 @@ class HelperQualification:
             self.witness,
             deadline=min(deadline, time.monotonic() + 1),
             configured=configured,
-            configured_sha256=self.plan.helper.environment,
+            configured_sha256=self.runtime_pin.environment,
             image_environment_sha256=self.image_environment_sha256,
             timezone=self.timezone,
             hostname=self.hostname,
@@ -1392,6 +1412,10 @@ class HelperQualification:
 
     def __call__(self):
         """No cached report or action authority; every successful call is fresh."""
+        return self._collect_before(None)
+
+    def _collect_before(self, outer_deadline):
+        """An explicit outer read-only join may narrow, never extend, the bound."""
         acquired = False
         self.elapsed_seconds = None
         try:
@@ -1399,6 +1423,9 @@ class HelperQualification:
             acquired = True
             began = time.monotonic()
             deadline = min(began + self.MAX_SECONDS, self.plan.lease["ready_by"])
+            if outer_deadline is not None:
+                base.clock(outer_deadline)
+                deadline = min(deadline, outer_deadline)
             self._guard(deadline)
             root, driver, configured = self._metadata(deadline)
             with (
@@ -1410,14 +1437,14 @@ class HelperQualification:
                 before = self._environment(configured, deadline)
                 source = self._source_layout(root)
                 check_root()
-                source.verify(self.plan.helper.source)
+                source.verify(self.runtime_pin.source)
                 check_root()
                 check_proc()
                 runtime.Layout(root, workers=self.runtime_workers).verify_supervised(
-                    self.plan.helper.interpreter, self.timezone
+                    self.runtime_pin.interpreter, self.timezone
                 )
                 check_root()
-                source.verify(self.plan.helper.source)
+                source.verify(self.runtime_pin.source)
                 check_root()
                 check_proc()
                 after = self._environment(configured, deadline)
