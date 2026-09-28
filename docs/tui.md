@@ -77,6 +77,33 @@ version and endpoint alongside the separate client and scanner identities.
 Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
 changes and resizing; this candidate still needs installed physical acceptance.
 
+## Unreleased read-only scanner details
+
+From the ordinary dashboard, press **X** or choose **Scanner details** in the
+command palette. This opens a separate scrollable view of the existing shared
+scanner snapshot: mode, channel, talkgroup ID, unit ID, reported P25 status and
+raw battery telemetry. **Esc** or **X** returns to the dashboard without adding
+rows to its compact layout. Inside Mimic-SDS, **X** keeps its existing runtime/help
+meaning; it does not open this drawer.
+
+These values require no additional scanner command, daemon request or connection.
+IDs retain their reported prefixes and leading zeroes. Missing fields show
+`Unavailable`; battery values have no inferred volts/percent label, and unknown
+P25 text does not imply encryption or reception quality. Controls/formatting
+characters are replaced and long text is ellipsized at 128 terminal cells without
+changing the underlying snapshot. This is raw reported telemetry, not new
+model/firmware support.
+
+The drawer clears values during disconnection, stale data or a degraded
+connection. Reconnection alone does not restore the preceding channel's values:
+it waits for a fresh snapshot. Normal incoming updates continue while it is open.
+Scanner and audio action keys are inactive in this read-only view; existing audio
+and recording sessions continue unchanged. Return to the dashboard for controls.
+Quit remains available. The command palette contains only Back and Quit here.
+Automated checks cover direct/shared-daemon fields, both Pi sizes, the narrower
+fallback, light/dark, resizing and clearing; physical display acceptance remains
+pending.
+
 ## Unreleased Mimic-SDS candidate
 
 Mimic-SDS is a separate, read-only screen in the local development candidate.
@@ -368,6 +395,8 @@ Keyboard shortcuts:
 - `A`: toggle live scanner playback without stopping the RTSP/RTP stream
 - `L`: show or hide the newest compatible recordings
 - `G`: show or hide the operational log panel without discarding buffered records
+- `X`: open read-only Scanner details from the ordinary dashboard (development
+  candidate); inside Mimic-SDS it retains the runtime/help meaning
 - `Up` / `Down`: select a saved recording
 - `Enter`: play the selected recording and temporarily suspend live playback
 - `Space`: pause or resume saved playback

@@ -8,6 +8,10 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ### Added
 
+- Add a read-only TUI Scanner details drawer (X / command palette) for existing
+  talkgroup/unit IDs, reported P25 status and raw battery telemetry, without
+  adding compact dashboard rows or issuing scanner commands. Clear unconfirmed
+  values through stale/disconnected states and wait for new data after reconnect.
 - Show the connected daemon's reported application version in the TUI Connection
   panel, separately from the local client version and scanner firmware. Reuse
   existing authenticated snapshots, show unavailable for older daemons, and

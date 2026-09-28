@@ -7,7 +7,27 @@ guide. It supplements the historical
 `ffb3e101de7014d7513daef49d454c81bdc7c59b` on `main`. Recheck the selected
 implementation commit before starting. No physical scanner acceptance is added.
 
-## Four concrete TUI omissions
+## Development update — read-only scanner details
+
+The local development candidate implements the four fields below in an **X** /
+**Scanner details** command-palette drawer, not four additional dashboard rows.
+It reuses existing shared snapshots in direct and daemon sessions, preserves
+literal ID prefixes/zeroes and unknown P25 text, labels battery as raw and clears
+unconfirmed values. It waits for a fresh snapshot after reconnect. Action keys
+are isolated while this read-only view is open; returning restores the ordinary
+dashboard. Mimic-SDS keeps its separate X/runtime behavior.
+
+Parser-to-snapshot/daemon-to-renderer, missing/malformed fields, bounded literal
+text, mode transitions, loss/reconnect, scroll/resize and compact/wide light/dark
+tests are implemented. This does not add a new command, observation subscription,
+telemetry interpretation, TUI waterfall or physical/model qualification. Both Pi
+visual checks and any field-specific hardware evidence remain pending. See the
+[TUI candidate guide](tui.md#unreleased-read-only-scanner-details).
+
+The following findings record the earlier baseline and motivation, not outstanding
+requests to add these same values again.
+
+## Four TUI omissions at the inspection baseline
 
 These values already cross the shared state boundary. Adding a renderer does
 not require a new scanner command, a second transport, or a new daemon poll.

@@ -50,6 +50,7 @@ from .tui_controls import (
     HoldScope,
     channel_navigation,
 )
+from .tui_details import ScannerDetailsScreen, scanner_details
 from .tui_logging import (
     TUI_LOG_VISIBLE_LINES,
     TUI_SHORT_LOG_DRAWER_VISIBLE_LINES,
@@ -81,6 +82,7 @@ R        Start / stop audio recording
 A        Toggle live scanner playback
 L        Show or hide saved recordings
 G        Show or hide operational logs
+X        Open read-only scanner details
 ↑ / ↓    Select a saved recording
 Enter    Play the selected recording
 Space    Pause / resume saved playback
@@ -101,6 +103,7 @@ Q        Quit
 T        Toggle dark/light theme
 C        Reconnect scanner
 G        Show or hide operational logs
+X        Open read-only scanner details
 H        Hold current channel
 S / D    Hold current system / department
 I        Hold current site
@@ -415,6 +418,7 @@ class ScannerTuiApp(App[None]):
         Binding("q", "quit", "Quit"),
         Binding("t", "toggle_theme", "Theme"),
         Binding("m", "mimic", "Mimic-SDS", show=False),
+        Binding("x", "scanner_details", "Scanner details", show=False),
         Binding(
             "ctrl+p",
             "command_palette",
@@ -571,6 +575,8 @@ class ScannerTuiApp(App[None]):
             else None
         )
         self._mimic_screen: MimicScreen | None = None
+        self._details_screen: ScannerDetailsScreen | None = None
+        self._details_current = connected is True
         self._mimic_style = "preferred"
         self._mimic_treatment = "strips"
         self._clock = clock
@@ -683,9 +689,11 @@ class ScannerTuiApp(App[None]):
         )
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        """Hide audio-only commands when this transport exposes no audio service."""
+        """Isolate read-only screens and hide unavailable audio commands."""
 
         del parameters
+        if self._details_screen is not None:
+            return action in {"quit", "command_palette"}
         if action == "mimic":
             return self._mimic_reader is not None and self._mimic_screen is None
         if self._mimic_screen is not None:
@@ -741,7 +749,7 @@ class ScannerTuiApp(App[None]):
         """Refresh size-dependent summaries after terminal resizing."""
 
         del event
-        if self._mimic_screen is not None:
+        if self._mimic_screen is not None or self._details_screen is not None:
             return
         self.call_after_refresh(self._refresh_responsive_view)
 
@@ -757,6 +765,12 @@ class ScannerTuiApp(App[None]):
         self.stop_controls()
 
     def get_system_commands(self, screen: Screen[None]) -> Iterable[SystemCommand]:
+        if self._details_screen is not None:
+            yield SystemCommand(
+                "Back to dashboard", "Close scanner details", self._details_screen.action_back
+            )
+            yield SystemCommand("Quit", "Quit the TUI", self.action_quit)
+            return
         if self._mimic_screen is not None:
             mimic = self._mimic_screen
             yield SystemCommand(
@@ -767,18 +781,47 @@ class ScannerTuiApp(App[None]):
             yield SystemCommand("Quit", "Quit the TUI", self.action_quit)
             return
         yield from super().get_system_commands(screen)
+        yield SystemCommand(
+            "Scanner details", "Read-only IDs, P25 status and raw battery telemetry (X)",
+            self.action_scanner_details,
+        )
         if self._mimic_reader is not None:
             yield SystemCommand(
                 "Mimic-SDS", "Open the read-only scanner display (M)", self.action_mimic
             )
 
     def action_mimic(self) -> None:
-        if self._mimic_reader is None or self._mimic_screen is not None:
+        if (
+            self._mimic_reader is None
+            or self._mimic_screen is not None
+            or self._details_screen is not None
+        ):
             return
         mimic = MimicScreen(self._mimic_reader, self._mimic_runtime, self._now)
         mimic.style, mimic.treatment = self._mimic_style, self._mimic_treatment
         self._mimic_screen = mimic
         self.push_screen(mimic, self._mimic_closed)
+
+    def _scanner_details(self) -> Text:
+        return scanner_details(
+            self._snapshot, connected=self._connected, current=self._details_current,
+            stale=self._stale, degraded=self._degraded,
+        )
+
+    def action_scanner_details(self) -> None:
+        if self._details_screen is not None or self._mimic_screen is not None:
+            return
+        details = ScannerDetailsScreen(
+            self._scanner_details, screen_class=self._theme_screen_class
+        )
+        self._details_screen = details
+        self.push_screen(details, self._details_closed)
+
+    def _details_closed(self, result: None) -> None:
+        del result
+        self._details_screen = None
+        self._pi_dashboard_layout = None
+        self._refresh_view()
 
     def _mimic_closed(self, result: None) -> None:
         del result
@@ -867,7 +910,7 @@ class ScannerTuiApp(App[None]):
             self.screen.remove_class("show-logs")
 
     def _refresh_responsive_view(self) -> None:
-        if self._mimic_screen is not None:
+        if self._mimic_screen is not None or self._details_screen is not None:
             return
         self._apply_responsive_panel_layout()
         self._refresh_view()
@@ -1251,6 +1294,7 @@ class ScannerTuiApp(App[None]):
         self._psi_recovery_started_at = None
         self._psi_recovery_in_progress = False
         self._snapshot = snapshot
+        self._details_current = connected is True
         if self._tui_audio_session is not None:
             self._tui_audio_session.update_radio_state(snapshot)
         self._connected = connected
@@ -1692,6 +1736,7 @@ class ScannerTuiApp(App[None]):
         self._submit_audio(ControlRequest("Start live playback", session.start_live_playback))
 
     def _apply_connection(self, connected: bool) -> None:
+        self._details_current = False
         self._connected = connected
         self._degraded = False
         self._stale = False
@@ -1722,6 +1767,10 @@ class ScannerTuiApp(App[None]):
 
     def _refresh_view(self) -> None:
         if self._shutdown_started.is_set() or self._mimic_screen is not None:
+            return
+        if self._details_screen is not None:
+            if self._details_screen.is_mounted:
+                self._details_screen.update_details(self._scanner_details())
             return
         self._apply_responsive_panel_layout()
         presentation = present_radio_state(

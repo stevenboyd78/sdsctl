@@ -88,12 +88,12 @@ These are merged development changes, not a claim that a new release is publishe
 
 ### Remaining implementation slices
 
-1. **Endpoint version:** introduce optional, bounded application-version
-   metadata on an authenticated daemon response, with compatibility tests for
-   old clients and old daemons. Render it only for a remote daemon, with an
-   explicit unavailable value when missing. Refresh or invalidate it when the
-   selected connection changes; do not retain an old daemon version after an
-   upgrade or use a second scanner connection to discover it.
+1. **Endpoint version:** implemented in the local development candidate through
+   optional bounded `application_version` metadata on the existing authenticated
+   snapshot. The Connection panel shares its Endpoint row with the daemon build;
+   direct scanner sessions stay unchanged. Compatibility, loss/reconnect and
+   Pi geometry tests pass; installed physical acceptance is still pending.
+   See the [TUI candidate details](tui.md#unreleased-connected-daemon-version-follow-up).
 2. **Connection duration, if implemented:** first add an explicit owner for the
    selected link's successful connection/reconnection events. Use monotonic
    time for elapsed duration and aware wall time for `Connected since`.
