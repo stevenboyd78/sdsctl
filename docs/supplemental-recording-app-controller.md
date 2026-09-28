@@ -193,6 +193,50 @@ reader captures no service clock and grants no continuing runtime authority.
 Blocking filesystem calls still need the separately enforced outer/platform
 bound. Ownership and permissions do not establish installation provenance.
 
+### Exclusive pre-start input publication
+
+The uninstalled `supplemental_recording_peer_provision.publish` library now
+provides the corresponding creation step. A trusted provisioning caller supplies
+both complete canonical documents and their **independently authenticated**
+digests. The publisher validates both documents and their exact template/runtime
+join before any filesystem write. It never obtains expected pins from installed
+files, running peers or Engine, and it does not create a clock-derived plan.
+
+Only the fixed startup and peer-input sibling directories can be created. Both
+must be absent, as must the corresponding writable handoff case. An existing
+empty directory, file, symlink, FIFO or historical case is a refusal, not an
+opportunity to adopt or repair it. Parent traversal retains no-follow directory
+descriptors; the selected parent must have the caller's root ownership, no
+special mode bits and no group/other write access. The new leaves must be exactly
+`0700`, with a single exclusively created `0600` file each. The publisher neither
+changes umask nor chmods an existing path. Each file and directory is fsynced,
+then both original files are read back with their identities and contents
+rechecked before returning a receipt. Short writes are handled explicitly.
+
+The entire operation, including cleanup, shares a two-second elapsed-time budget;
+an earlier enclosing deadline can only shorten it. All partial/complete files
+are **left in place** after an error, interruption, late completion or lost
+acknowledgment. There is no rollback, deletion or retry mechanism. Publication
+of two directories is not atomic, so no peer may start before the independent
+owner verifies the completed pair. The receipt describes what was published;
+it does not retain file custody or prove that files stayed unchanged afterward.
+The existing `Declaration` and `Inputs` readers must still retain and recheck
+the originals using the caller's independent pins.
+
+Local tests exercise real filesystem creation and reopening with those readers,
+canonical/digest/join rejection before mutation, either target already existing,
+historical-case preservation, symlinks and shared parent modes, short/failed
+writes, fsync failure, interruption, deadline expiry, altered content, extra files,
+hardlinks, path replacement and descriptor reuse. They use synthetic documents
+and temporary directories, not authenticated installed runtime evidence.
+
+This module is **not** added to any selected source profile or command. Direct
+execution refuses. It does not authenticate its caller, source installation,
+ancestor trust or expected digests; it does not qualify the newer handoff graph,
+provision a listener, select an entrypoint, grant App actions, bound blocked
+kernel I/O or designate recovery custody. Those remaining integration gates
+still apply before a new scanner/audio trial or enabling the Mimic clock.
+
 The explicit `peer_delivery.deliver_from_inputs` variant requires this original
 owner and both retained listeners. Both already qualified collectors must use
 the **same input-owned Expectations and original Template**, not values adopted
