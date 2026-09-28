@@ -4,6 +4,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import asdict
+from itertools import count
 
 import pytest
 
@@ -273,7 +274,20 @@ def test_identity_mismatch_never_dispatches_selected_get(scanner, field, value):
 
 
 @pytest.mark.parametrize("stage", ["MDL", "VER", "DTM"])
-def test_disconnect_reconnect_is_terminal_even_if_a_reply_arrives(scanner, stage):
+def test_disconnect_reconnect_is_terminal_even_if_a_reply_arrives(scanner, stage, monkeypatch):
+    # This checks terminal connection state, not thread scheduling or elapsed
+    # I/O. Reach the selected fault deterministically without spending its 0.1s
+    # test budget on starting an unrelated background PSI producer.
+    ticks = count(10.0, 0.001)
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: next(ticks))
+
+    def model(*, timeout):
+        scanner._stage("MDL", timeout)
+        scanner.bus.emit("psi", scanner.frame)
+        return scanner.model
+
+    monkeypatch.setattr(scanner, "get_model", model)
+
     def cycle(name):
         if name == stage:
             scanner.bus.emit("connection", False)
@@ -283,6 +297,35 @@ def test_disconnect_reconnect_is_terminal_even_if_a_reply_arrives(scanner, stage
     result = attempt().run(scanner, operator_ready=True, timeout=0.1)
     assert result.status == "connection_changed" and result.sample is None
     assert len(scanner.commands) == (1 if stage == "DTM" else 0)
+    assert scanner.stages == ["scope", "MDL", "VER", "DTM"][: {"MDL": 2, "VER": 3, "DTM": 4}[stage]]
+    assert scanner.scope_depth == scanner.hooks == 0 and scanner.producer is None
+    assert result.elapsed_seconds < 0.1 and all(0 < value <= 0.1 for value in scanner.timeouts)
+
+
+def test_deadline_before_disconnect_injection_is_not_a_connection_change(scanner, monkeypatch):
+    now = [10.0]
+    monkeypatch.setattr("sds200.daemon_display_read_research.monotonic", lambda: now[0])
+
+    def model(*, timeout):
+        scanner._stage("MDL", timeout)
+        now[0] += 0.11  # Expires the whole 0.1s budget, not the 0.25s per-read cap.
+        return scanner.model
+
+    def disconnected(name):
+        if name == "VER":
+            scanner.bus.emit("connection", False)
+            scanner.bus.emit("connection", True)
+
+    monkeypatch.setattr(scanner, "get_model", model)
+    scanner.after_stage = disconnected
+    probe = attempt()
+    result = probe.run(scanner, operator_ready=True, timeout=0.1)
+    assert result.status == "not_started" and result.failure == "timeout"
+    assert result.sample is None and not result.connection_changed and not result.read_reserved
+    assert scanner.stages == ["scope", "MDL"] and scanner.commands == []
+    assert scanner.scope_depth == scanner.hooks == 0 and scanner.producer is None
+    with pytest.raises(DisplayReadRefused, match="already attempted"):
+        probe.run(scanner, operator_ready=True, timeout=0.1)
 
 
 def test_no_post_reply_psi_is_not_a_continuity_pass(scanner):
