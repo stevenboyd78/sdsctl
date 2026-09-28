@@ -1721,6 +1721,44 @@ do not select the new preparation module. A separately reviewed complete source
 selection and fixed entrypoint, independently bounded outer/platform lifetime,
 explicit App action scope and exclusive recovery owner remain required.
 
+### Separate preflight admission on the original preparation owners (uninstalled)
+
+`peer_preparation.prepare_writer` now joins those retained inputs to the existing
+`Permission` baseline/startup scope. The original outer must issue that permission
+separately, over its distinct private preflight channel. The input acknowledgment
+does not substitute for it. The adapter requires the same original preparation
+clock, outer witness, counterpart witness, Declaration, Template and input owner;
+it will not adopt replacement objects or a renewed deadline. The independently
+pinned manifest is read from the fixed baseline directory, not an input-provided
+path. The permission channel and its retained private path are rechecked as well.
+
+This consumes only the existing preflight permission's unchanged operation:
+one complete baseline/host read followed by the original Startup's post-read clock
+and publication. The permission's original two-second-or-earlier consume bound
+covers input/path/peer checks, the read, publication and final scope retirement.
+The separate continuing service clock does not renew that allowance. Changed
+inputs, lost peers, path replacement, expiration or interruption poison the
+original owners, preserve any partial files and do not permit another attempt.
+Borrowed preparation resources remain caller-owned. Return is the same
+**unaccepted** Startup input, not final acceptance, a service, Ready or an App grant.
+
+The real three-process fixture additionally performs input authentication, a
+separate actual Sender/Permission exchange, guarded original writer preparation,
+independent final acceptance, descriptor/Link dispatch and passive retirement.
+The original outer, writer and counterpart processes span all phases. The
+preflight channel has its own original deadline derived from the retained
+preparation clock, rather than extending the retired two-second input socket.
+Fault tests distinguish refused permission before the first host read, input or
+peer loss during the read, and drift after permission-scope retirement; even a
+late result cannot return an apparently usable Startup.
+
+The fixture's outer qualification callback, Engine/runtime and acceptance inputs
+are still synthetic. This is not installed qualification or a completed launcher.
+The new adapter and its imports remain outside the older source selections and
+commands. A fixed entrypoint must explicitly cover their complete source closure
+and preserve the independent outer/platform, action and recovery boundaries;
+neither this library join nor the old preflight permission supplies those gates.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

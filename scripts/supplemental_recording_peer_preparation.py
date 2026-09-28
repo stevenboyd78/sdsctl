@@ -6,7 +6,9 @@ hash learned from observed peer files/argv. Original private connection/listener
 pidfd and zero-offset domain checks authenticate this exchange's local sender.
 They do not authenticate the outer's installation or make it an App authority.
 No existing source inventory or command selects this new preparation protocol.
-No plan, service clock, baseline read, App action, recording or recovery is begun.
+The exchange begins no baseline or service. A separate prepare_writer adapter
+requires the existing independently obtained one-use preflight permission before
+joining retained inputs to original Startup. Neither path grants App actions.
 """
 
 from __future__ import annotations
@@ -48,6 +50,11 @@ def preparation_root(case, role):
     codec.plans.base.identifier(case, case=True)
     require(type(role) is str and role in codec.ROLES)
     return Path("/mnt/data/sdsctl-recording-preparation-" + case + "-" + role)
+
+
+def baseline_root(case):
+    codec.plans.base.identifier(case, case=True)
+    return Path("/mnt/data/sdsctl-recording-baseline-" + case)
 
 
 def _cleanup(callbacks, problem):
@@ -405,6 +412,132 @@ def receive_inputs(declaration, connection, timer, local, *, role, baseline_sha2
         problem = error
     finally:
         _cleanup(cleanup, problem)
+
+
+def prepare_writer(
+    inputs,
+    owner,
+    permission,
+    counterpart,
+    directory,
+    docker,
+    *,
+    original_timer,
+    original_outer,
+    original_connection,
+):
+    """Join retained inputs to ONE independently admitted original baseline read.
+
+    Input authentication/acknowledgment is NOT this permission. The caller must
+    obtain the existing exact preflight Permission separately from the original
+    qualified outer and retain the SAME preparation clock and outer/counterpart
+    witnesses. Its unchanged kind/scope admits ONLY the existing original
+    manifest/host read and post-read Startup clock/publication, not an App action.
+
+    Original inputs and both peers are freshly checked throughout that one
+    consume scope, with the same original two-second-or-earlier cutoff. No new
+    clock renews permission; no final acceptance, handoff or service runs here.
+    Return is the original UNACCEPTED startup input, not Ready or command admission.
+    Complete/partial files survive failure and both original owners are poisoned.
+    This module remains outside every command-selected source inventory.
+    """
+    import supplemental_recording_permission_probe as preflight_channel
+    import supplemental_recording_service_permission as preflight
+    import supplemental_recording_service_startup as startups
+
+    try:
+        require(type(inputs) is inputs_module.Inputs and type(owner) is startups.Startup)
+        require(type(permission) is preflight.Permission)
+        require(type(counterpart) is domains.process.ProcessWitness)
+        require(type(original_outer) is domains.process.ProcessWitness)
+        require(type(original_timer) is domains.clock.ClockWitness)
+        require(type(original_connection) is preflight_channel.PeerConnection)
+        require(permission.timer is original_timer and permission.observer is original_outer)
+        template, declaration = inputs.template, inputs.declaration
+        require(owner.declaration is declaration and owner.template is template)
+        require(permission.template is template and permission.template_sha256 == owner.expected)
+        require(owner.clock is None and not owner.used and not owner.accepted)
+        case = codec.templates._read(template.raw)["plan"]["case"]
+        require(directory == baseline_root(case))
+        require(type(directory) is type(Path()))
+        require(original_connection.root == preflight_channel.peer_root(case))
+        require(original_connection.channel is permission.channel)
+        require(original_connection.deadline == permission.deadline)
+        expected = inputs.expectations
+        codec.source_profile(expected, peer_handoff=True)
+        target = permission.target
+        require(len({target.pid, original_outer.identity.pid, counterpart.identity.pid}) == 3)
+        require(
+            len(
+                {
+                    target.container_id,
+                    original_outer.identity.container_id,
+                    counterpart.identity.container_id,
+                }
+            )
+            == 3
+        )
+        peers = [
+            (peer, (peer.identity, peer.fd, links._identity(peer.fd)))
+            for peer in (original_outer, counterpart)
+        ]
+        origin, baseline_pin = original_timer.original, permission.baseline_sha256
+        with permission.consume():
+            end = permission.consume_end
+
+            def guard(*, retired=False):
+                require(time.monotonic() < end and permission.consume_end == end)
+                require(permission.timer is original_timer and original_timer.original is origin)
+                require(permission.observer is original_outer and permission.target is target)
+                require(original_connection.channel is permission.channel)
+                require(original_connection.deadline == permission.deadline)
+                original_connection.recheck()
+                require(
+                    permission.template is template and permission.baseline_sha256 == baseline_pin
+                )
+                if retired:
+                    require(permission.used and permission.approved and not permission.active)
+                    permission._check(end)
+                    permission._quiet()
+                else:
+                    permission.guard()
+                require(inputs.declaration is declaration and owner.declaration is declaration)
+                require(inputs.template is template and owner.template is template)
+                require(
+                    inputs.expectations is expected and inputs.recheck(deadline=end) is expected
+                )
+                for peer, pin in peers:
+                    _peer_guard(peer, pin)
+                original_connection.recheck()
+                if retired:
+                    permission._check(end)
+                else:
+                    permission.guard()
+
+            guard()
+            original = owner._prepare(
+                (None, docker, (directory, baseline_pin)), preflight_guard=guard
+            )
+            guard()
+        # Retiring the permission scope cannot hide original input/peer drift.
+        # This final read grants no new scope and stays inside its original end.
+        guard(retired=True)
+        require(owner.original is original and not owner.accepted)
+        owner._guard()
+        require(
+            owner.clock is not original_timer and owner.clock.original.before_ns >= origin.after_ns
+        )
+        guard(retired=True)
+        return original
+    except BaseException as error:
+        if type(permission) is preflight.Permission:
+            permission.failed = True
+        if type(owner) is startups.Startup:
+            try:
+                owner._fail(error)
+            except BaseException as failure:
+                error = failure
+        _cleanup([], error)
 
 
 if __name__ == "__main__":

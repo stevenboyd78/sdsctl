@@ -15,7 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -26,6 +26,7 @@ from . import test_supplemental_recording_peer_bootstrap as transport
 from . import test_supplemental_recording_peer_connection as connections
 from . import test_supplemental_recording_peer_inputs as retained_inputs
 from . import test_supplemental_recording_peer_listener as preparation_listeners
+from . import test_supplemental_recording_permission_probe as preflight_probe
 from . import test_supplemental_recording_service_runtime_expectations as declared
 from . import test_supplemental_recording_startup_assembly as assembly
 
@@ -168,6 +169,34 @@ with ExitStack() as stack:
     print(json.dumps(dict(prepared=receipt, deadline=owned.deadline)), flush=True)
     # The writer retires its preparation socket before the outer retires ours.
     assert json.loads(sys.stdin.buffer.readline()) == {"mode": "prepared"}
+    owned.close()  # Its original two-second bound is NOT the next phase's lease.
+    if config.get("permission_root"):
+        import supplemental_recording_permission_sender as grants
+        gate = grants.permission
+        gate.ROOT_UID = os.geteuid()
+        path = Path(config["permission_root"]) / "observer.sock"
+        server = stack.enter_context(closing(socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)))
+        server.bind(str(path))
+        path.chmod(0o600)
+        server.listen(1)
+        server.settimeout(2)
+        print("permission-listening", flush=True)
+        channel = stack.enter_context(closing(server.accept()[0]))
+        channel.setblocking(False)
+        domain = stack.enter_context(closing(p.domains.ZeroDomain(timer.original, writer)))
+        def qualify(review):
+            # Deliberately synthetic command/runtime review, NOT installed authority.
+            assert review.baseline_sha256 == config["baseline_sha256"]
+            assert review.template_sha256 == config["template_sha256"]
+            inputs.recheck()
+            assert not writer.exited() and not observer.exited()
+        sender = stack.enter_context(closing(grants.Sender(
+            original.template, config["template_sha256"], config["baseline_sha256"],
+            identity(os.getpid(), table[os.getpid()]), writer, domain, timer, channel, qualify)))
+        sender.receive()
+        sender.send()
+        print("permission-sent", flush=True)
+        assert json.loads(sys.stdin.buffer.readline()) == {"mode": "baseline-prepared"}
 connections = {}
 """,
 )
@@ -187,7 +216,10 @@ def connection(service_case, monkeypatch, request):
     retained = input_owner = None
     prep_stack = ExitStack()
     prep_clock = prep_connection = prep_baseline = None
+    permission = permission_connection = None
     retained_path = getattr(request, "param", False)
+    preparation_path = retained_path in {"prepared-inputs", "permitted-inputs", "permission-only"}
+    permission_path = retained_path in {"permitted-inputs", "permission-only"}
 
     def spawn(code):
         process = subprocess.Popen(
@@ -201,7 +233,7 @@ def connection(service_case, monkeypatch, request):
         return process
 
     try:
-        outer = spawn(PREPARING_OUTER if retained_path == "prepared-inputs" else OUTER)
+        outer = spawn(PREPARING_OUTER if preparation_path else OUTER)
         assert transport.line(outer) == "listening"
         observer = spawn(
             transport.CHILD.replace(
@@ -234,7 +266,7 @@ def connection(service_case, monkeypatch, request):
         identities = {pid: identity(pid, cid) for pid, cid in table.items()}
         outer_witness = m.bootstrap.links.processes.ProcessWitness(identities[outer.pid])
         witnesses.append(outer_witness)
-        if retained_path != "prepared-inputs":
+        if not preparation_path:
             observer_witness = m.bootstrap.links.processes.ProcessWitness(identities[observer.pid])
             witnesses.append(observer_witness)
         values = declared.value()
@@ -251,7 +283,7 @@ def connection(service_case, monkeypatch, request):
         else:
             declaration = m.expectations.decode(values)
         expected_sha256 = declaration.sha256
-        if retained_path in {"inputs", "prepared-inputs"}:
+        if retained_path == "inputs" or preparation_path:
             # File intake precedes the baseline read and original clock capture.
             # Pins are synthetic; this does not supply installed provenance.
             if s.input_publication is None:
@@ -275,7 +307,7 @@ def connection(service_case, monkeypatch, request):
             )
             monkeypatch.setattr(m.input_files, "ROOT_UID", os.geteuid())
             assert not s.clocks and not s.cached_calls
-            if retained_path == "prepared-inputs":
+            if preparation_path:
                 assert s.input_publication is not None
                 for module in (prep, prep.listeners, prep.domains):
                     monkeypatch.setattr(module, "ROOT_UID", os.geteuid())
@@ -300,6 +332,13 @@ def connection(service_case, monkeypatch, request):
                 prep_baseline.write_bytes(baseline_raw)
                 prep_baseline.chmod(0o600)
                 baseline_pin = stored.manifest_sha256
+                permission_root = None
+                if permission_path:
+                    permission_root = Path(
+                        prep_stack.enter_context(
+                            tempfile.TemporaryDirectory(prefix="sds-preflight-")
+                        )
+                    )
                 transport.command(
                     outer,
                     dict(
@@ -312,6 +351,7 @@ def connection(service_case, monkeypatch, request):
                         expectations_sha256=expected_sha256,
                         preparation_root=str(prep_root),
                         baseline_sha256=baseline_pin,
+                        permission_root=str(permission_root) if permission_root else None,
                     ),
                 )
                 assert transport.line(outer) == "preparation-listening"
@@ -338,6 +378,36 @@ def connection(service_case, monkeypatch, request):
                 assert s.clocks == [prep_clock]
                 prep_connection.close()
                 transport.command(outer, dict(mode="prepared"))
+                if permission_path:
+                    gate = preflight_probe.m.permission
+                    monkeypatch.setattr(gate, "ROOT_UID", os.geteuid())
+                    monkeypatch.setattr(prep, "baseline_root", lambda case: prep_baseline.parent)
+                    monkeypatch.setattr(
+                        preflight_probe.m, "peer_root", lambda case: permission_root
+                    )
+                    assert transport.line(outer) == "permission-listening"
+                    domain = prep.domains.ZeroDomain(prep_clock.original, outer_witness)
+                    prep_stack.callback(domain.close)
+                    permission_connection = preflight_probe.m.PeerConnection(
+                        permission_root,
+                        prep_clock.original.after_ns / gate.clock.NS + gate.WAIT_SECONDS,
+                    )
+                    prep_stack.callback(permission_connection.close)
+                    permission = gate.Permission(
+                        s.startup.template,
+                        s.template.sha256,
+                        baseline_pin,
+                        identities[os.getpid()],
+                        outer_witness,
+                        domain,
+                        prep_clock,
+                        permission_connection.channel,
+                    )
+                    prep_stack.callback(permission.close)
+                    permission.wait()
+                    assert transport.line(outer) == "permission-sent"
+                    assert permission.approved and not permission.used
+                    assert s.startup.clock is None and s.clocks == [prep_clock]
             else:
                 input_owner = m.input_files.Inputs(s.declaration, input_root, expected_sha256)
             declaration = input_owner.recheck()
@@ -347,7 +417,41 @@ def connection(service_case, monkeypatch, request):
             # The fixture explicitly drives the passive library join; an
             # installed entrypoint still requires separate preflight admission.
             owner = s.startup
-            owner.prepare_service_from_baseline(prep_baseline.parent, baseline_pin, s.docker)
+            if permission is not None:
+
+                def permitted_prepare():
+                    return prep.prepare_writer(
+                        input_owner,
+                        owner,
+                        permission,
+                        observer_witness,
+                        prep_baseline.parent,
+                        s.docker,
+                        original_timer=prep_clock,
+                        original_outer=outer_witness,
+                        original_connection=permission_connection,
+                    )
+
+                if retained_path == "permission-only":
+                    yield SimpleNamespace(
+                        s=s,
+                        owner=owner,
+                        input_owner=input_owner,
+                        permission=permission,
+                        prepare=permitted_prepare,
+                        prep_clock=prep_clock,
+                        prep_connection=prep_connection,
+                        outer=outer,
+                        observer=observer,
+                        outer_witness=outer_witness,
+                        observer_witness=observer_witness,
+                        permission_connection=permission_connection,
+                    )
+                    return
+                permitted_prepare()
+                transport.command(outer, dict(mode="baseline-prepared"))
+            else:
+                owner.prepare_service_from_baseline(prep_baseline.parent, baseline_pin, s.docker)
             s.projected = owner.projected
             assembly.baseline_tests.integration.startups.submit(owner)
             assert owner.poll() is owner.original
@@ -430,6 +534,8 @@ def connection(service_case, monkeypatch, request):
             prep_connection=prep_connection,
             prep_baseline=prep_baseline,
             prep_baseline_pin=baseline_pin if prep_baseline is not None else None,
+            permission=permission,
+            permission_connection=permission_connection,
         )
     finally:
         for bundle in channels:
@@ -569,6 +675,7 @@ def prepare_idle(c):
         ("published-inputs", "inputs"),
         ("published-peer-inputs", "inputs"),
         ("published-peer-inputs", "prepared-inputs"),
+        ("published-peer-inputs", "permitted-inputs"),
     ],
     indirect=True,
 )
@@ -589,6 +696,11 @@ def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_
         assert c.retained is not c.prep_connection
         assert c.retained.deadline > c.prep_connection.deadline
         assert c.owner.projected.host.manifest_sha256 == c.prep_baseline_pin
+    if c.permission is not None:
+        assert c.permission.used and not c.permission.active and not c.permission.failed
+        assert c.permission.timer is c.prep_clock and c.permission.observer is c.outer_witness
+        assert c.permission.consume_end <= c.permission.deadline
+        assert c.permission.deadline == c.prep_clock.original.after_ns / prep.domains.clock.NS + 15
     links, services, cleanup, deadlines = [], [], [], []
     link_init, link_close = m.bootstrap.links.Link.__init__, m.bootstrap.links.Link.close
     service_init, service_close = (
@@ -1107,3 +1219,107 @@ def test_outer_loss_refuses_without_adopting_another_sender(connection):
     assert c.owner.peer_channel_attempted is True and not c.owner.clock.closed
     assert not (c.s.root / "journal").exists()
     denied(c.receive)
+
+
+def preparation_denied(c, call=None):
+    with pytest.raises(prep.UnconfirmedPreparation) as error:
+        (call or c.prepare)()
+    assert str(error.value) == prep.MESSAGE and error.value.__suppress_context__
+    assert c.permission.failed and c.owner.failed and c.owner.closed
+    assert not c.prep_clock.closed and not c.s.declaration.closed
+    assert not (c.s.root / "journal").exists() and not (c.s.root / "inbox").exists()
+
+
+@pytest.mark.parametrize("service_case", ["published-peer-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["permission-only"], indirect=True)
+@pytest.mark.parametrize("fault", ["unapproved", "closed", "used", "path", "outer"])
+def test_input_authentication_cannot_bypass_separate_preflight_admission(connection, fault):
+    c = connection
+    assert c.input_owner.expected == c.s.expected_input_digest
+    if fault == "unapproved":
+        c.permission.approved = False
+    elif fault == "closed":
+        c.permission.close()
+    elif fault == "used":
+        c.permission.used = True
+    elif fault == "path":
+        c.permission_connection.root.chmod(0o755)
+    else:
+        c.outer.kill()
+        c.outer.wait(timeout=3)
+    preparation_denied(c)
+    assert c.s.clocks == [c.prep_clock] and not c.s.cached_calls and not list(c.s.root.iterdir())
+
+
+@pytest.mark.parametrize("service_case", ["published-peer-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["permission-only"], indirect=True)
+@pytest.mark.parametrize("fault", ["inputs", "counterpart", "scope", "interrupt"])
+def test_original_inputs_and_counterpart_stay_guarded_during_baseline(connection, fault):
+    c = connection
+
+    def drift():
+        if fault == "inputs":
+            (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE changed inputs")
+        elif fault == "counterpart":
+            c.observer.kill()
+            c.observer.wait(timeout=3)
+        elif fault == "scope":
+            c.permission.consume_end += 1  # A renewed allowance is never adopted.
+        else:
+            raise KeyboardInterrupt
+
+    c.s.after_cached = drift
+    if fault == "interrupt":
+        with pytest.raises(KeyboardInterrupt):
+            c.prepare()
+        assert c.permission.failed and c.owner.closed and c.owner.failed
+    else:
+        preparation_denied(c)
+    assert len(c.s.cached_calls) == 1 and len(c.s.clocks) == 2 and c.s.clocks[-1].closed
+    assert c.owner.clock is None and not list(c.s.root.iterdir())
+    assert not c.prep_clock.closed and c.permission.used and not c.permission.active
+
+
+@pytest.mark.parametrize("service_case", ["published-peer-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["permission-only"], indirect=True)
+@pytest.mark.parametrize("fault", ["inputs", "counterpart", "path"])
+def test_permission_scope_retirement_cannot_return_stale_startup(connection, monkeypatch, fault):
+    c = connection
+    consume = preflight_probe.m.permission.Permission.consume
+
+    @contextmanager
+    def retired(value):
+        with consume(value) as guard:
+            yield guard
+        if fault == "inputs":
+            (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE retirement drift")
+        elif fault == "counterpart":
+            c.observer.kill()
+            c.observer.wait(timeout=3)
+        else:
+            c.permission_connection.root.chmod(0o755)
+
+    monkeypatch.setattr(preflight_probe.m.permission.Permission, "consume", retired)
+    preparation_denied(c)
+    assert c.owner.clock.closed and len(c.s.clocks) == 3 and len(c.s.cached_calls) == 1
+    files = {p.name: p.read_bytes() for p in c.s.root.iterdir()}
+    assert set(files) == {"startup-claim.json", "plan.json"}
+    preparation_denied(c)
+    assert {p.name: p.read_bytes() for p in c.s.root.iterdir()} == files
+
+
+@pytest.mark.parametrize("service_case", ["published-peer-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["permission-only"], indirect=True)
+def test_preflight_prepares_original_without_acceptance_or_another_attempt(connection):
+    c = connection
+    original = c.prepare()
+    assert original is c.owner.original and not c.owner.accepted
+    assert c.permission.used and not c.permission.active and not c.permission.failed
+    assert c.owner.clock is not c.prep_clock and len(c.s.clocks) == 3
+    assert c.permission.origin is c.prep_clock.original and len(c.s.cached_calls) == 1
+    assert not c.owner.service_used and not c.owner.peer_channel_attempted
+    files = {p.name: p.read_bytes() for p in c.s.root.iterdir()}
+    preparation_denied(c)
+    assert len(c.s.cached_calls) == 1 and len(c.s.clocks) == 3
+    assert {p.name: p.read_bytes() for p in c.s.root.iterdir()} == files
+    assert not c.owner.peer_channel_attempted and c.owner.clock.closed
