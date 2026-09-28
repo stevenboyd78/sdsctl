@@ -2177,6 +2177,26 @@ permission, baseline permission reuse or new App authority is introduced.
 
 ## Remaining gates before a human scanner/audio test
 
+### Offline host-side native prototype
+
+The separately built [original-peer native watcher](../scripts/native/README.md)
+now provides an actual exec-based, kernel-handle-only join to original Custody
+in disposable local process fixtures. A private absolute BOOTTIME timer keeps
+the original cutoff even if the caller disarms its own duplicate timer. The
+fixtures cover original full comparisons, peer/outer loss, stopped peers,
+cancellation, descriptor closure and malformed handoffs. Native target stops
+are checked before caller fallback cleanup where that distinction matters.
+
+This is an **offline prototype, not an installed host supervisor**. No existing
+entrypoint or source inventory selects it. The static build is a candidate for
+a host without Python, not authenticated compiler/libc/kernel or installed
+placement evidence. Original independent runtime/publication checks, outside-
+freeze-domain placement, qualified outer loss/failure handling, active action
+admission and exclusive recovery remain required below. Building locally does
+not authorize installation or any App/scanner trial.
+
+### Outstanding qualification
+
 1. Complete real platform/publication and independent-observer lifetime
    qualification. Accepted startup, request/initial dispatch, original service,
    actual isolated native recording/WAV/worker exits and finalized recovery now

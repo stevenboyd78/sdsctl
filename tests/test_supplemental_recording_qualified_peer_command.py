@@ -1554,7 +1554,7 @@ def test_final_pair_refusal_never_submits_acceptance_or_constructs_service(
     assert original == {path.name: path.read_bytes() for path in s.case_root.iterdir()}
 
 
-def arm_original_watch(s):
+def arm_original_watch(s, native_watch=None):
     stops = termination_tests.m
     observer_domain = s.stack.enter_context(
         closing(p.domains.ZeroDomain(s.timer.original, s.counterpart))
@@ -1562,8 +1562,13 @@ def arm_original_watch(s):
     custody = s.stack.enter_context(
         closing(stops.Custody(s.pair, s.timer, s.domain, observer_domain))
     )
-    watch = stops.arm(custody, scope=stops.SCOPE)
-    s.stack.callback(watch.close)
+    if native_watch is None:
+        watch = stops.arm(custody, scope=stops.SCOPE)
+        s.stack.callback(watch.close)
+    else:
+        # Explicit OFFLINE fixture selection, never an installed command or
+        # inferred active grant. Same original Custody/Watch/clock/cutoffs.
+        watch = s.stack.enter_context(native_watch(custody))
     s.custody, s.watch = custody, watch
     assert custody.clock is s.timer and custody.origin is s.timer.original
     assert custody.plan is s.pair.writer.plan and custody.plan is not s.q.plan
