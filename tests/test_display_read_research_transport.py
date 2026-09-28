@@ -6,6 +6,7 @@ import pytest
 
 from sds200.daemon_display_read_research import (
     DisplayReadKind,
+    DisplayReadRefused,
     DisplayReadResearchAttempt,
     DisplayReadResearchPolicy,
 )
@@ -18,28 +19,40 @@ from .test_daemon_display_read_research import FIRMWARE, STATES
 
 
 class ReplySocket(FakeDatagramSocket):
-    def __init__(self, *, timeout=False):
+    def __init__(self, *, timeout=False, initial_psi=True):
         super().__init__()
         self.no_reply = timeout
+        self.initial_psi = initial_psi
         self.clock_fields = ("0", "2026", "09", "17", "09", "45", "02", "1")
         self.quit = threading.Event()
         self.producer = None
 
+    def feed_psi(self):
+        self.feed(
+            b'PSI,<XML>,<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">'
+            b'<MonitorList Index="700" Q_Key="01"/><System Index="120" Q_Key="23"/>'
+            b'<Site Index="240"/><Footer No="1" EOT="1"/></ScannerInfo>'
+        )
+
     def send(self, data):
         size = super().send(data)
         if data == b"MDL\r":
+            # The real UDP reader decodes these FIFO packets. Establish the
+            # selected-read precondition before releasing the model reply;
+            # starting a periodic producer is not that precondition.
+            if self.initial_psi:
+                self.feed_psi()
             self.feed(b"MDL,SDS200\r")
 
             def publish():
                 while not self.quit.wait(0.003):
-                    self.feed(
-                        b'PSI,<XML>,<ScannerInfo Mode="Trunk Scan" V_Screen="trunk_scan">'
-                        b'<MonitorList Index="700" Q_Key="01"/><System Index="120" Q_Key="23"/>'
-                        b'<Site Index="240"/><Footer No="1" EOT="1"/></ScannerInfo>'
-                    )
+                    self.feed_psi()
 
-            self.producer = threading.Thread(target=publish, daemon=True)
-            self.producer.start()
+            # Only successful replies need subsequent continuity frames. The
+            # no-reply test must reach the GET without a scheduled PSI thread.
+            if not self.no_reply:
+                self.producer = threading.Thread(target=publish, daemon=True)
+                self.producer.start()
         elif data == b"VER\r":
             self.feed(f"VER,{FIRMWARE}\r".encode())
         elif not self.no_reply:
@@ -81,10 +94,35 @@ def test_one_selected_get_uses_only_existing_udp_socket_and_never_retries(kind, 
         result = probe.run(radio, operator_ready=True, timeout=0.15)
         assert result.status == ("read_unconfirmed" if timeout else "reply_and_psi_observed")
         assert result.response_validated is not timeout
+        assert result.read_reserved
         assert socket.sent == [b"MDL\r", b"VER\r", wire]
         assert len(factory.calls) == 1
+        assert (socket.producer is None) is timeout
         for event in ("psi", "packet", "connection"):
             assert len(radio.events._callbacks[event]) == 0
+    assert socket.closed
+
+
+@pytest.mark.parametrize("initial_psi", [False, True])
+def test_pre_read_expiry_and_selected_timeout_without_periodic_psi_are_distinct(initial_psi):
+    socket = ReplySocket(timeout=True, initial_psi=initial_psi)
+    factory = FakeDatagramSocketFactory(socket)
+    with SDS200.network("192.0.2.10", reconnect=False, socket_factory=factory) as radio:
+        probe = DisplayReadResearchAttempt(
+            DisplayReadResearchPolicy(FIRMWARE, DisplayReadKind.FAVORITES)
+        )
+        result = probe.run(radio, operator_ready=True, timeout=0.15)
+        assert result.status == ("read_unconfirmed" if initial_psi else "not_started")
+        assert result.read_reserved is initial_psi
+        assert not result.response_validated and result.failure == "timeout"
+        assert result.sample is None and result.normal_psi_after_response == 0
+        assert socket.sent == [b"MDL\r", b"VER\r"] + ([b"FQK\r"] if initial_psi else [])
+        assert socket.producer is None and len(factory.calls) == 1
+        for event in ("psi", "packet", "connection"):
+            assert len(radio.events._callbacks[event]) == 0
+        with pytest.raises(DisplayReadRefused, match="already attempted"):
+            probe.run(radio, operator_ready=True, timeout=0.15)
+        assert socket.sent == [b"MDL\r", b"VER\r"] + ([b"FQK\r"] if initial_psi else [])
     assert socket.closed
 
 
