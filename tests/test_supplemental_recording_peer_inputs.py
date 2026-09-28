@@ -229,6 +229,25 @@ def test_post_capture_changes_permanently_refuse_without_reopening(provisioned, 
     denied(owner.recheck)
 
 
+@pytest.mark.parametrize(
+    ("target", "flag"),
+    [("file", os.O_NOATIME), ("directory", os.O_NOATIME), ("directory", os.O_NONBLOCK)],
+)
+def test_complete_original_status_flags_are_retained(provisioned, target, flag):
+    before = fds()
+    owner = construct(provisioned)
+    fd = getattr(owner, target)
+    original = fcntl.fcntl(fd, fcntl.F_GETFL)
+    try:
+        fcntl.fcntl(fd, fcntl.F_SETFL, original ^ flag)
+        assert fcntl.fcntl(fd, fcntl.F_GETFL) != original
+        denied(owner.recheck)
+        assert owner.failed and owner.closed and not provisioned.original.closed
+        assert fds() == before
+    finally:
+        owner.close()
+
+
 def test_original_startup_file_change_is_not_replaced(provisioned):
     p = provisioned
     owner = construct(p)
@@ -350,4 +369,4 @@ def test_interrupt_retires_owned_handles_without_closing_original_declaration(
 def test_uninstalled_module_has_no_direct_launch_or_observed_profile_admission():
     result = subprocess.run([sys.executable, m.__file__], capture_output=True, timeout=10)
     assert result.returncode != 0 and b"no active launch enabled" in result.stderr
-    assert NAME + ".py" not in m.codec.source.MODULES
+    assert NAME not in m.codec.source.MODULES

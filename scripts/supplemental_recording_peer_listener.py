@@ -89,8 +89,6 @@ class Listener:
             self.listener = self._own(
                 socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_NONBLOCK)
             )
-            self.listener.setblocking(False)
-            self.listener.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
             self._paths(empty=True)
             self.listener.bind(f"/proc/self/fd/{parent}/{NAME}")
             # Pin the newly created inode BEFORE chmod. Never chmod through a
@@ -110,7 +108,7 @@ class Listener:
             os.chmod(f"/proc/self/fd/{self.node}", 0o600)
             info = os.fstat(self.node)
             require(stat.S_IMODE(info.st_mode) == 0o600)
-            self.handles[-1] = self.node, connection._identity(self.node)
+            self.handles[-1] = self.node, connection._identity(self.node), self.handles[-1][2]
             self.node_pin = files.identity(info)
             # Binding is the only allowed directory change. The original leaf
             # inode/owner/mode must remain, and the final entry set is exact.
@@ -128,15 +126,26 @@ class Listener:
         fd = os.open(*args, **kwargs)
         try:
             pin = connection._identity(fd)
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         except BaseException:
             os.close(fd)
             raise
-        self.handles.append((fd, pin))
+        self.handles.append((fd, pin, flags))
         return fd
 
     def _own(self, channel):
         try:
-            pin = channel, channel.fileno(), connection._identity(channel.fileno())
+            # Configure only our newly created/accepted socket, then retain its
+            # complete original status. Rechecks never repair changed flags.
+            channel.setblocking(False)
+            channel.set_inheritable(False)
+            channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+            pin = (
+                channel,
+                channel.fileno(),
+                connection._identity(channel.fileno()),
+                fcntl.fcntl(channel.fileno(), fcntl.F_GETFL),
+            )
         except BaseException:
             channel.close()
             raise
@@ -160,8 +169,9 @@ class Listener:
     def _paths(self, *, empty=False):
         self._context()
         require(tuple(self.directories) == self.path_pins)
-        for fd, pin in self.handles:
+        for fd, pin, flags in self.handles:
             require(not os.get_inheritable(fd) and connection._identity(fd) == pin)
+            require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags)
         for parent, name, child, pin in self.path_pins:
             require(files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:5] == pin)
             require(connection._identity(child) == pin)
@@ -185,11 +195,11 @@ class Listener:
         self._context()
 
     def _socket(self, index, channel, *, listening):
-        original, fd, pin = self.sockets[index]
+        original, fd, pin, flags = self.sockets[index]
         require(channel is original and type(channel) is socket.socket)
         require(channel.fileno() == fd and connection._identity(fd) == pin)
         require(not channel.get_inheritable() and channel.gettimeout() == 0.0)
-        require(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_NONBLOCK)
+        require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags and flags & os.O_NONBLOCK)
         require(channel.family == socket.AF_UNIX)
         require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_SEQPACKET)
         require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) == int(listening))
@@ -242,9 +252,6 @@ class Listener:
             require(events == [(fd, select.POLLIN)])
             channel, _ = self.listener.accept()
             self.channel = self._own(channel)
-            channel.setblocking(False)
-            channel.set_inheritable(False)
-            channel.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
             self._socket(0, self.listener, listening=True)
             self.listener.close()  # No further backlog admission, even on success.
             self.accepted = True
@@ -272,7 +279,7 @@ class Listener:
         self.closed = True
         problem = None
         while self.sockets:
-            channel, fd, pin = self.sockets.pop()
+            channel, fd, pin, _ = self.sockets.pop()
             try:
                 if channel.fileno() != -1:
                     require(channel.fileno() == fd and connection._identity(fd) == pin)
@@ -282,7 +289,7 @@ class Listener:
                 if problem is None or not isinstance(error, Exception):
                     problem = error
         while self.handles:
-            fd, pin = self.handles.pop()
+            fd, pin, _ = self.handles.pop()
             try:
                 current = connection._identity(fd)
                 require(current[:2] == pin[:2] and stat.S_IFMT(current[2]) == stat.S_IFMT(pin[2]))

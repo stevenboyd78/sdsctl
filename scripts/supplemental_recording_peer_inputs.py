@@ -121,10 +121,11 @@ class Inputs:
         fd = os.open(*args, **kwargs)
         try:
             pin = files.identity(os.fstat(fd))[:5]
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         except BaseException:
             os.close(fd)
             raise
-        self.handles.append((fd, pin))
+        self.handles.append((fd, pin, flags))
         return fd
 
     def _state(self, end):
@@ -141,9 +142,10 @@ class Inputs:
         require(tuple(self.handles) == self.handle_pins)
         require(tuple(self.directories) == self.path_pins)
         require(self.file == self.handle_pins[-1][0] and self.directory == self.path_pins[-1][2])
-        for fd, pin in self.handle_pins:
+        for fd, pin, original_flags in self.handle_pins:
             require(files.identity(os.fstat(fd))[:5] == pin and not os.get_inheritable(fd))
             flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            require(flags == original_flags)
             require(flags & os.O_ACCMODE == os.O_RDONLY and not flags & os.O_APPEND)
         require(fcntl.fcntl(self.file, fcntl.F_GETFL) & os.O_NONBLOCK)
         for parent, name, child, pin in self.path_pins:
@@ -218,7 +220,7 @@ class Inputs:
         self.closed = True
         problem = None
         while self.handles:
-            fd, pin = self.handles.pop()
+            fd, pin, _ = self.handles.pop()
             try:
                 current = files.identity(os.fstat(fd))
                 require(current[:2] == pin[:2] and stat.S_IFMT(current[2]) == stat.S_IFMT(pin[2]))

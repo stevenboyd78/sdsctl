@@ -105,7 +105,11 @@ class Connection:
             self._paths()
             channel = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET | socket.SOCK_NONBLOCK)
             try:
-                self.channel_pin = channel.fileno(), _identity(channel.fileno())
+                self.channel_pin = (
+                    channel.fileno(),
+                    _identity(channel.fileno()),
+                    fcntl.fcntl(channel.fileno(), fcntl.F_GETFL),
+                )
             except BaseException:
                 channel.close()
                 raise
@@ -132,10 +136,11 @@ class Connection:
         fd = os.open(*args, **kwargs)
         try:
             pin = _identity(fd)
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         except BaseException:
             os.close(fd)
             raise
-        self.handles.append((fd, pin))
+        self.handles.append((fd, pin, flags))
         return fd
 
     def _context(self):
@@ -156,8 +161,9 @@ class Connection:
         self._context()
         require(tuple(self.directories) == self.path_pins)
         require(tuple(self.handles) == self.handle_pins)
-        for fd, pin in self.handles:
+        for fd, pin, flags in self.handles:
             require(not os.get_inheritable(fd) and _identity(fd) == pin)
+            require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags)
         for parent, name, child, pin in self.path_pins:
             require(_identity(child) == pin)
             require(files.identity(os.stat(name, dir_fd=parent, follow_symlinks=False))[:5] == pin)
@@ -181,10 +187,10 @@ class Connection:
             self._paths()
             channel = self.original_channel
             require(self.channel is channel and type(channel) is socket.socket)
-            fd, pin = self.channel_pin
+            fd, pin, flags = self.channel_pin
             require(channel.fileno() == fd and _identity(fd) == pin)
             require(not channel.get_inheritable() and channel.gettimeout() == 0.0)
-            require(fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_NONBLOCK)
+            require(fcntl.fcntl(fd, fcntl.F_GETFL) == flags and flags & os.O_NONBLOCK)
             require(channel.family == socket.AF_UNIX)
             require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) == socket.SOCK_SEQPACKET)
             require(channel.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) == 0)
@@ -229,14 +235,14 @@ class Connection:
         if channel is not None:
             try:
                 if channel.fileno() != -1:
-                    fd, pin = self.channel_pin
+                    fd, pin, _ = self.channel_pin
                     require(channel.fileno() == fd and _identity(fd) == pin)
                     channel.close()
             except BaseException as error:
                 channel.detach()
                 problem = error
         while self.handles:
-            fd, pin = self.handles.pop()
+            fd, pin, _ = self.handles.pop()
             try:
                 # Changed permissions invalidate evidence, not ownership of the
                 # still-original directory inode. A foreign reused fd must not

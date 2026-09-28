@@ -5,6 +5,7 @@ qualify installed input provenance, a listener launcher, or any live service.
 """
 
 import errno
+import fcntl
 import importlib.util
 import os
 import socket
@@ -243,6 +244,20 @@ def test_changed_original_channel_or_witness_is_not_adopted(server, fault):
     assert connection.closed
 
 
+@pytest.mark.parametrize("target", ["directory", "channel"])
+def test_changed_status_flags_retire_owned_originals(server, target):
+    before = fds()
+    connection = server.connect()
+    fd = connection.directory if target == "directory" else connection.channel.fileno()
+    flag = os.O_NONBLOCK if target == "directory" else os.O_APPEND
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags ^ flag)
+    assert fcntl.fcntl(fd, fcntl.F_GETFL) != flags
+    denied(connection.recheck)
+    assert connection.closed and connection.failed and fds() == before
+    assert not server.witness.exited() and (server.root / m.NAME).is_socket()
+
+
 @pytest.mark.parametrize("fault", ["exit", "closed-channel"])
 def test_original_peer_loss_is_not_reconnected(server, fault):
     connection = server.connect()
@@ -383,7 +398,7 @@ def test_interruption_after_socket_creation_cleans_originals_and_propagates(serv
 def test_cleanup_continues_after_uncertain_close_and_never_retries(server, monkeypatch):
     before = fds()
     connection = server.connect()
-    originals = [fd for fd, _ in connection.handles]
+    originals = [fd for fd, _, _ in connection.handles]
     close, seen = os.close, []
 
     def uncertain(fd):

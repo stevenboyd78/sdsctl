@@ -1,6 +1,7 @@
 """Owned disposable processes and real kernel paths/sockets, not installed authority."""
 
 import errno
+import fcntl
 import importlib.util
 import json
 import os
@@ -171,6 +172,23 @@ def test_private_listener_joins_real_retained_connection_without_consuming_messa
     assert path.stat() == pin  # No unlink/rebind/metadata repair on retirement.
     refused(owner.recheck)
     refused(private.listen)  # A fresh object cannot adopt an earlier case socket.
+
+
+@pytest.mark.parametrize("target", ["directory", "listener", "channel"])
+def test_changed_status_flags_retire_owned_originals(private, target):
+    before = connections.fds()
+    owner = private.listen()
+    if target == "channel":
+        assert private.client("connect") == "connected"
+        owner.accept()
+    fd = owner.directory if target == "directory" else getattr(owner, target).fileno()
+    flag = os.O_NONBLOCK if target == "directory" else os.O_APPEND
+    flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+    fcntl.fcntl(fd, fcntl.F_SETFL, flags ^ flag)
+    assert fcntl.fcntl(fd, fcntl.F_GETFL) != flags
+    refused(owner.recheck)
+    assert owner.closed and owner.failed and connections.fds() == before
+    assert not private.witness.exited() and (private.root / m.NAME).is_socket()
 
 
 @pytest.mark.parametrize("fault", ["mode", "file", "socket", "symlink", "entry", "parent-link"])
@@ -533,7 +551,7 @@ def test_permission_change_uses_original_retained_socket_inode(private, monkeypa
 def test_uncertain_directory_close_retires_all_handles_once(private, monkeypatch):
     before = connections.fds()
     owner = private.listen()
-    originals = [fd for fd, _ in owner.handles]
+    originals = [fd for fd, _, _ in owner.handles]
     close, seen = os.close, []
 
     def uncertain(fd):
