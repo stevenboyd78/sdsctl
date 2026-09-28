@@ -1,6 +1,7 @@
 """Complete native process with localhost RTP/Unix PCMU, synthetic RTSP and PSI."""
 
 import socket
+import time
 import wave
 from types import SimpleNamespace
 from uuid import uuid4
@@ -25,10 +26,18 @@ from .test_supplemental_acceptance_launcher import native as native
 from .test_supplemental_recording_assembly import native_bundle, query, run_observed
 
 
-@pytest.mark.parametrize("command", ("FQK", "DTM"))
-@pytest.mark.parametrize("reply", (True, False))
+@pytest.mark.parametrize(
+    "command,reply,post_read_delay",
+    [
+        ("FQK", True, 0),
+        ("DTM", True, 0),
+        ("FQK", False, 0),
+        ("DTM", False, 0),
+        pytest.param("DTM", True, 1.0, id="delayed-worker-wake"),
+    ],
+)
 def test_one_native_rtp_owner_serves_pcmu_and_recording_through_shutdown(
-    native, tmp_path, command, reply
+    native, tmp_path, monkeypatch, command, reply, post_read_delay
 ):
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sender:
         sender.bind(("127.0.0.1", 0))
@@ -55,8 +64,25 @@ def test_one_native_rtp_owner_serves_pcmu_and_recording_through_shutdown(
             router=router,
             audio=AudioFanoutSession(AudioStream(transport), (router,)),
         )
-        policy = SupplementalAcquisitionPolicy("Version 1.26.01", 1.5, 2)
+        # This is an audio coexistence test, not a scheduler-latency test. Give
+        # two production-cadence GETs room inside the finite synthetic case;
+        # the previous 1.5s window could expire before DTM on a busy CI worker.
+        policy = SupplementalAcquisitionPolicy("Version 1.26.01", 3, 2)
         with native_bundle(source, tmp_path, pcmu=True, policy=policy) as rig:
+            # Exercise delayed scheduling between real GETs, not a slow UDP
+            # response. The 250ms native write/reply budgets remain unchanged.
+            original_poll = rig.acquisition._cache.poll_once
+            delayed = False
+
+            def poll_once():
+                nonlocal delayed
+                result = original_poll()
+                if post_read_delay and result and not delayed:
+                    delayed = True
+                    time.sleep(post_read_delay)
+                return result
+
+            monkeypatch.setattr(rig.acquisition._cache, "poll_once", poll_once)
             trial = rig.build()
             location = resolve_daemon_socket_location(rig.socket.with_name("pcmu"))
             client = DaemonPcmuClient(location, timeout=1)
@@ -75,7 +101,11 @@ def test_one_native_rtp_owner_serves_pcmu_and_recording_through_shutdown(
                         Op.DISPLAY_SUPPLEMENTAL_DEMAND,
                         {"context": context, "renewal_id": str(uuid4())},
                     )["ok"]
-                    assert gate.entered.wait(2)
+                    assert gate.entered.wait(4), {
+                        "reads": rig.peer.reads,
+                        "acquisition": rig.acquisition.status(),
+                        "worker": rig.acquisition.frames.quick_key_worker_status(),
+                    }
                     psi_before = rig.peer.psi_sent
                     for index in range(8):
                         sender.sendto(
