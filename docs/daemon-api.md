@@ -292,6 +292,15 @@ probe fails. Version 1 clients continue accepting older snapshots that omit
 these additive fields. A failed identity probe does not stop daemon-owned
 scanner control, PSI, or audio.
 
+The unreleased candidate also includes optional `application_version` in runtime
+snapshots and initial event-stream snapshots. This identifies the daemon's own
+installed sds200 build, not the client build, scanner firmware, or protocol
+version. It is additive metadata: older daemons may omit it, and clients must
+not infer compatibility or substitute their own version when it is unavailable.
+The TUI reads it from the existing authenticated daemon session without another
+scanner command or network request. Missing or malformed display metadata is
+shown as unavailable without rejecting an otherwise valid older session.
+
 ## Recording operations
 
 Milestone 20.5 adds four parameterless recording operations when the daemon owns

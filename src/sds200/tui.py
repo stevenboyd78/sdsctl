@@ -19,6 +19,7 @@ from textual.timer import Timer
 from textual.widgets import Footer, Static
 
 from . import __version__
+from .application_metadata import reported_application_version
 from .audio_session import (
     AudioRecordingSession,
     AudioSessionSnapshot,
@@ -491,6 +492,7 @@ class ScannerTuiApp(App[None]):
         terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
         display_source: DisplayFrameSource | None = None,
         supplemental_display_source: SupplementalFrameSource | None = None,
+        daemon_version_source: Callable[[], str | None] | None = None,
         clock: Clock = monotonic,
         now: WallClock = _local_now,
     ) -> None:
@@ -504,6 +506,8 @@ class ScannerTuiApp(App[None]):
             raise ValueError("PSI recovery cooldown must not be negative")
         if display_source is not None and supplemental_display_source is not None:
             raise ValueError("Choose one Mimic-SDS display source.")
+        if daemon_version_source is not None and not callable(daemon_version_source):
+            raise TypeError("Daemon version source must be a non-blocking callable or None.")
 
         if managed_stylesheet is not None:
             object.__setattr__(
@@ -519,6 +523,7 @@ class ScannerTuiApp(App[None]):
         self._snapshot = snapshot
         self._capabilities = capabilities_for_model(identity.model)
         self._radio = radio
+        self._daemon_version_source = daemon_version_source
         self._audio_session = audio_session
         self._tui_audio_session = (
             audio_session if isinstance(audio_session, TuiAudioSession) else None
@@ -795,12 +800,21 @@ class ScannerTuiApp(App[None]):
             f"Connected: {self._connected} | TUI state stale: {self._stale}",
             f"Stream: {self._stream_mode} | Status: {self._status_message}",
         ]
+        if self._daemon_version_source is not None:
+            rows.insert(2, f"Daemon: {self._daemon_version_text()}")
         if self._audio_snapshot is not None:
             rows.append(f"Client audio/recording: {self._audio_snapshot.status.value}")
             rows.append(self._audio_message)
         rows.append("\nOperational logs — latest 20 lines, newest last")
         rows.extend(line[:512] for line in self._log_buffer.snapshot().lines[-20:])
         return Text(safe_terminal_text("\n".join(rows)))
+
+    def _daemon_version_text(self) -> str:
+        # The explicit source is an in-memory, lock-protected daemon snapshot
+        # getter. Never fetch a hello/snapshot on the Textual rendering thread.
+        source = self._daemon_version_source
+        value = reported_application_version(source()) if source is not None else None
+        return value or "Unavailable"
 
     def action_toggle_theme(self) -> None:
         """Toggle between the built-in semantic light and dark palettes."""
@@ -1734,7 +1748,17 @@ class ScannerTuiApp(App[None]):
         ]
         if not self._uses_short_layout():
             connection_rows.append(("Status since", connection_stamp, ThemeRole.TEXT_PRIMARY))
-        connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
+        if self._daemon_version_source is not None:
+            # Keep the same row budget on both Pi displays. The endpoint stays
+            # beside the reported build; direct scanner identities are unchanged.
+            description = Text(f"{self._daemon_version_text()} | {self._identity.endpoint}")
+            description.truncate(
+                max(1, connection.content_region.width - len("Daemon: ")),
+                overflow="ellipsis",
+            )
+            connection_rows.append(("Daemon", description.plain, ThemeRole.TEXT_PRIMARY))
+        else:
+            connection_rows.append(("Endpoint", self._identity.endpoint, ThemeRole.TEXT_PRIMARY))
         if self._identity.connection_target is not None:
             connection_rows.append(
                 (
@@ -2450,6 +2474,7 @@ def run_tui(
     terminal_failure_subscribe: TerminalFailureSubscribe | None = None,
     display_source: DisplayFrameSource | None = None,
     supplemental_display_source: SupplementalFrameSource | None = None,
+    daemon_version_source: Callable[[], str | None] | None = None,
     log_buffer: TuiLogBuffer | None = None,
 ) -> None:
     """Launch the Textual interface from one renderer-neutral initial snapshot."""
@@ -2463,6 +2488,7 @@ def run_tui(
         ),
         snapshot,
         radio=radio,
+        daemon_version_source=daemon_version_source,
         audio_session=audio_session,
         log_buffer=log_buffer,
         interval_ms=interval_ms,

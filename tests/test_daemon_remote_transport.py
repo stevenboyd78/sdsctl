@@ -486,10 +486,11 @@ def _serve_one_api_result(
 
 
 def test_remote_api_and_tui_accept_only_the_documented_sanitized_snapshot() -> None:
+    reported = _sanitized_runtime_snapshot() | {"application_version": "99.2.3"}
     client_socket, server_socket = socket.socketpair()
     thread = threading.Thread(
         target=_serve_one_api_result,
-        args=(server_socket, _sanitized_runtime_snapshot()),
+        args=(server_socket, reported),
         daemon=True,
     )
     thread.start()
@@ -501,6 +502,7 @@ def test_remote_api_and_tui_accept_only_the_documented_sanitized_snapshot() -> N
 
     assert bootstrap.endpoint == DAEMON_REMOTE_CLIENT_ENDPOINT
     assert bootstrap.connected is True
+    assert bootstrap.application_version == "99.2.3"
     assert "scanner_endpoint" not in snapshot
 
     leaking_client, leaking_server = socket.socketpair()

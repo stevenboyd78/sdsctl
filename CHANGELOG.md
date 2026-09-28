@@ -6,6 +6,13 @@ to follow [Semantic Versioning](https://semver.org/) as the public API matures.
 
 ## [Unreleased]
 
+### Added
+
+- Show the connected daemon's reported application version in the TUI Connection
+  panel, separately from the local client version and scanner firmware. Reuse
+  existing authenticated snapshots, show unavailable for older daemons, and
+  clear stale metadata on daemon disconnection without adding a Pi layout row.
+
 ### Fixed
 
 - Let phone-width recording capture panels size to their content so LCARS saved

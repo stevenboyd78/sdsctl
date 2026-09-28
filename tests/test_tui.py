@@ -127,9 +127,7 @@ def test_tui_header_identifies_app_and_scanner_panel_retains_hardware(
             assert identity.border_title == "Scanner"
             assert f"Model: {model}" in _plain(identity)
             assert "Firmware: Version 1.26.01" in _plain(identity)
-            assert "Target: 192.0.2.25:50443" in _plain(
-                app.query_one("#connection", Static)
-            )
+            assert "Target: 192.0.2.25:50443" in _plain(app.query_one("#connection", Static))
             assert ("\n" not in _plain(identity)) == (size[1] < 32)
 
     asyncio.run(exercise())
@@ -176,11 +174,10 @@ def test_tui_connection_panel_renders_optional_remote_target() -> None:
     async def exercise() -> None:
         direct_app = _app()
         async with direct_app.run_test(size=(100, 30)):
-            direct_connection = _plain(
-                direct_app.query_one("#connection", Static)
-            )
+            direct_connection = _plain(direct_app.query_one("#connection", Static))
             assert "Endpoint: udp://192.168.0.251:50536" in direct_connection
             assert "Target:" not in direct_connection
+            assert "Daemon:" not in direct_connection
 
         remote_app = ScannerTuiApp(
             ScannerIdentity(
@@ -193,9 +190,7 @@ def test_tui_connection_panel_renders_optional_remote_target() -> None:
             palette=DEFAULT_DARK_THEME,
         )
         async with remote_app.run_test(size=(100, 30)) as pilot:
-            remote_connection = _plain(
-                remote_app.query_one("#connection", Static)
-            )
+            remote_connection = _plain(remote_app.query_one("#connection", Static))
             assert "Endpoint: sdsctl-remote-daemon" in remote_connection
             assert "Target: 192.168.0.18:50443" in remote_connection
             assert remote_app.screen.has_class("-connection-target")
@@ -203,6 +198,80 @@ def test_tui_connection_panel_renders_optional_remote_target() -> None:
             await pilot.resize_terminal(120, 40)
             await pilot.pause()
             assert remote_app.query_one("#connection", Static).region.height >= 5
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("size", [(100, 30), (160, 45)])
+@pytest.mark.parametrize("palette", [DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME])
+@pytest.mark.parametrize("audio", [False, True])
+def test_daemon_version_remains_visible_on_both_pi_layouts(tmp_path, size, palette, audio):
+    async def exercise() -> None:
+        value = ["99.1.2"]
+        app = ScannerTuiApp(
+            ScannerIdentity(
+                "sdsctl-remote-daemon", "SDS200", "Version 1.26.01", "192.0.2.18:50443"
+            ),
+            snapshot_from_scanner_info(ScannerInfoParser().parse("GSI", XML)),
+            daemon_version_source=lambda: value[0],
+            audio_session=(
+                TuiAudioSession(
+                    AudioStream(FakeAudioTransport()), RecordingPathPolicy(directory=tmp_path)
+                )
+                if audio
+                else None
+            ),
+            palette=palette,
+        )
+        async with app.run_test(size=size) as pilot:
+            await _settle_responsive_layout(app, pilot)
+            assert "Daemon: 99.1.2" in _plain(app.query_one("#connection", Static))
+            for reported, expected in [
+                ("99.1.2", "99.1.2"),
+                (None, "Unavailable"),
+                ("[bold]99.1.2[/bold]", "Unavailable"),
+                ("99.1.2\x1b[31m", "Unavailable"),
+                ("99.2.3rc1", "99.2.3rc1"),
+            ]:
+                value[0] = reported
+                app._refresh_view()
+                await _settle_responsive_layout(app, pilot)
+                connection = app.query_one("#connection", Static)
+                text = _plain(connection)
+                assert f"Daemon: {expected}" in text
+                assert "Target: 192.0.2.18:50443" in text
+                assert connection.content_region.height >= len(text.splitlines())
+                assert all(
+                    len(line) <= connection.content_region.width for line in text.splitlines()
+                )
+                assert app.query_one("#body").max_scroll_y == 0
+                assert (
+                    app.query_one("#identity").region.bottom <= app.query_one("#body").region.bottom
+                )
+                drawer = app._mimic_runtime().plain
+                assert f"Application: sdsctl v{__version__}" in drawer
+                assert f"Daemon: {expected}" in drawer
+                assert "Firmware: Version 1.26.01" in drawer
+                assert app.title == f"sdsctl v{__version__}"
+            resized = (160, 45) if size == (100, 30) else (100, 30)
+            await pilot.resize_terminal(*resized)
+            await _settle_responsive_layout(app, pilot)
+            assert "Daemon: 99.2.3rc1" in _plain(app.query_one("#connection", Static))
+            assert app.query_one("#body").max_scroll_y == 0
+            # Long but valid endpoint metadata cannot create a hidden row.
+            # The full token remains accessible in the runtime drawer.
+            value[0] = "99.1.2+" + "a" * 57
+            app._refresh_view()
+            await _settle_responsive_layout(app, pilot)
+            connection = app.query_one("#connection", Static)
+            text = _plain(connection)
+            assert "Daemon: 99.1.2+" in text
+            assert "…" in text
+            assert f"Daemon: {value[0]}" in app._mimic_runtime().plain
+            assert all(len(line) <= connection.content_region.width for line in text.splitlines())
+            assert connection.content_region.height >= len(text.splitlines())
+            assert "Target: 192.0.2.18:50443" in text
+            assert app.query_one("#body").max_scroll_y == 0
 
     asyncio.run(exercise())
 
@@ -285,9 +354,7 @@ def test_tui_renders_mode_aware_quick_search_and_close_call_details() -> None:
 
                 assert system_widget.border_title == "Screen Mode"
                 assert channel_widget.border_title == (
-                    "Quick Search"
-                    if fixture_name == "synthetic-quick-search.xml"
-                    else "Close Call"
+                    "Quick Search" if fixture_name == "synthetic-quick-search.xml" else "Close Call"
                 )
                 for value in system_values:
                     assert value in system
@@ -752,8 +819,7 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
         buffer = TuiLogBuffer(limit=10)
         for index in range(6):
             buffer.append(
-                f"2026-09-03 WARNING sds200.test: event {index} "
-                + "long diagnostic context " * 8
+                f"2026-09-03 WARNING sds200.test: event {index} " + "long diagnostic context " * 8
             )
         app = _app(buffer)
 
@@ -779,8 +845,7 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
             assert body.max_scroll_y == 0
 
             buffer.append(
-                "2026-09-03 WARNING sds200.test: event 6 "
-                + "newest diagnostic context " * 8
+                "2026-09-03 WARNING sds200.test: event 6 " + "newest diagnostic context " * 8
             )
             app._poll_log_buffer()
             await pilot.pause()
@@ -799,6 +864,7 @@ def test_short_tui_log_panel_keeps_only_newest_rows_without_body_scroll() -> Non
 def test_tui_status_transitions_include_local_since_timestamps(local_timezone_utc) -> None:
     async def exercise() -> None:
         from datetime import UTC
+
         now = [datetime(2026, 7, 28, 4, 18, 32, tzinfo=UTC)]
         app = ScannerTuiApp(
             ScannerIdentity(

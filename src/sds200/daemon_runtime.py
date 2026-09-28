@@ -12,6 +12,7 @@ from math import isfinite
 from time import monotonic
 from typing import Protocol, Self, cast
 
+from . import __version__
 from .audio_sinks import (
     AudioFanoutSession,
     AudioFanoutSnapshot,
@@ -239,6 +240,7 @@ class DaemonRuntimeSnapshot:
 
     def as_dict(self) -> dict[str, object]:
         return {
+            "application_version": __version__,
             "state": self.state.value,
             "scanner_endpoint": self.scanner_endpoint,
             "scanner_model": self.scanner_model,

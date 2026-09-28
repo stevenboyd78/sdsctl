@@ -95,7 +95,7 @@ DAEMON_API_RECORDING_OPERATIONS = (
     DaemonApiOperation.RECORDING_STOP,
     DaemonApiOperation.RECORDINGS_LIST,
 )
-DAEMON_API_CONTROL_OPERATIONS = (
+DAEMON_API_CONTROL_OPERATIONS: tuple[DaemonApiOperation, ...] = (
     DaemonApiOperation.SCANNER_HOLD,
     DaemonApiOperation.SCANNER_HOLD_STATE,
     DaemonApiOperation.SCANNER_NEXT,

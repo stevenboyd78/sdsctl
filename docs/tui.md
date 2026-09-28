@@ -56,6 +56,27 @@ including the remote target and scanner-reported recording status beside the
 taller Network Audio panel. These fields must not be present only in hidden,
 clipped panel content.
 
+## Unreleased connected-daemon version follow-up
+
+Daemon-backed sessions show the endpoint's reported application version in the
+Connection panel, for example `Daemon: 0.30.0 | sdsctl-remote-daemon`. This shares
+the former Endpoint row to preserve room at both 100×30 and 160×45; the Target
+row is retained. The local TUI version remains in the header and physical scanner
+firmware remains in the Scanner panel. Direct scanner sessions are unchanged.
+
+The value comes from the existing daemon snapshot, not an assumption that client
+and daemon were upgraded together. Older daemons or malformed/missing metadata
+show `Daemon: Unavailable`. Losing the daemon event connection clears the cached
+version; a fresh reconnect snapshot supplies the replacement. A scanner outage
+alone does not erase the version of a still-connected daemon. No additional
+scanner command, polling request, credential, or capability is added.
+
+Long versions/endpoints are ellipsized to the Connection panel width, not wrapped
+into a hidden row. The Mimic-SDS runtime drawer retains the full bounded daemon
+version and endpoint alongside the separate client and scanner identities.
+Local geometry tests cover both Pi sizes and themes, audio/no-audio, metadata
+changes and resizing; this candidate still needs installed physical acceptance.
+
 ## Unreleased Mimic-SDS candidate
 
 Mimic-SDS is a separate, read-only screen in the local development candidate.

@@ -78,6 +78,7 @@ def test_tui_cli_uses_replay_radio_and_selected_theme(
     assert captured["firmware"] == "Version 1.26.01"
     assert captured["connected"] is True
     assert captured.get("connection_target") is None
+    assert captured.get("daemon_version_source") is None
     assert captured["palette"] is DEFAULT_LIGHT_THEME
     assert captured["interval_ms"] == 250
     assert captured["stale_after"] == 1.5
@@ -197,6 +198,7 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
         def runtime_snapshot(self) -> dict[str, object]:
             self.snapshot_calls += 1
             return {
+                "application_version": "99.1.2",
                 "scanner_endpoint": "udp://192.0.2.25:50536",
                 "scanner_model": "SDS200",
                 "scanner_firmware": "Version 1.26.01",
@@ -282,6 +284,8 @@ def test_tui_cli_uses_daemon_without_opening_scanner_or_rtsp(
 
     def fake_run_tui(**kwargs: object) -> None:
         captured.update(kwargs)
+        version_source = kwargs["daemon_version_source"]
+        assert callable(version_source) and version_source() == "99.1.2"
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)
@@ -428,6 +432,7 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
 
         def runtime_snapshot(self) -> dict[str, object]:
             return {
+                "application_version": "99.2.3",
                 "scanner_model": "SDS200",
                 "scanner_firmware": "Version 1.26.01",
                 "scanner_connected": True,
@@ -469,6 +474,8 @@ def test_tui_cli_remote_profile_builds_independent_authenticated_services(
 
     def fake_run_tui(**kwargs: object) -> None:
         captured.update(kwargs)
+        version_source = kwargs["daemon_version_source"]
+        assert callable(version_source) and version_source() == "99.2.3"
 
     monkeypatch.setattr(cli, "DaemonApiClient", FakeApiClient)
     monkeypatch.setattr(cli, "DaemonEventClient", FakeEventClient)

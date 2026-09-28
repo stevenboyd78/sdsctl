@@ -800,6 +800,9 @@ def test_client_rejects_malformed_runtime_snapshot(tmp_path: Path) -> None:
     [
         {},
         {"scanner_model": None, "scanner_firmware": None},
+        {"application_version": "99.2.3"},
+        {"application_version": None},
+        {"application_version": "not a safe version"},
     ],
 )
 def test_client_accepts_optional_runtime_identity(

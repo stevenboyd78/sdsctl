@@ -115,9 +115,7 @@ class FakeApiClient:
         count: int = 1,
         timeout: float = 2.0,
     ) -> Mapping[str, object]:
-        self.calls.append(
-            ("next", target, first, second, count, timeout)
-        )
+        self.calls.append(("next", target, first, second, count, timeout))
         return self._result(channel="Next Dispatch")
 
     def previous(
@@ -129,9 +127,7 @@ class FakeApiClient:
         count: int = 1,
         timeout: float = 2.0,
     ) -> Mapping[str, object]:
-        self.calls.append(
-            ("previous", target, first, second, count, timeout)
-        )
+        self.calls.append(("previous", target, first, second, count, timeout))
         return self._result(channel="Previous Dispatch")
 
     def reconnect(
@@ -285,6 +281,7 @@ def test_daemon_tui_radio_delegates_safe_controls_and_applies_snapshots() -> Non
     ]
     assert connections == [True]
 
+
 def test_daemon_tui_radio_reports_event_stream_failure_as_diagnostic() -> None:
     radio, _, events = make_radio()
     diagnostics: list[TransportDiagnostic] = []
@@ -312,8 +309,10 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
 
         def __init__(self) -> None:
             initial = runtime_snapshot(channel="Initial Remote Dispatch")
+            initial["application_version"] = "0.31.0"
             initial.pop("scanner_endpoint")
             replacement = runtime_snapshot(channel="Recovered Dispatch")
+            replacement["application_version"] = "0.31.1"
             replacement.pop("scanner_endpoint")
             self.items: list[DaemonEvent | Exception] = [
                 event(0, DaemonEventKind.SNAPSHOT, initial),
@@ -350,8 +349,10 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
     )
     states: list[RadioStateSnapshot] = []
     diagnostics: list[TransportDiagnostic] = []
+    version_changes: list[str | None] = []
     radio.on_state(states.append)
     radio.on_diagnostic(diagnostics.append)
+    radio.on_connection(lambda _connected: version_changes.append(radio.application_version))
 
     with radio.radio_state_push() as first:
         assert first.channel == "Initial Remote Dispatch"
@@ -369,6 +370,8 @@ def test_remote_daemon_tui_reconnect_requires_fresh_authoritative_snapshot() -> 
     rendered = " ".join(diagnostic.message for diagnostic in diagnostics)
     assert "private endpoint detail" not in rendered
     assert "stop after recovered state" not in rendered
+    assert version_changes == ["0.31.0", None, "0.31.1", None]
+    assert radio.application_version is None
 
 
 def test_remote_daemon_tui_reports_exhausted_reconnect_as_terminal_failure() -> None:
@@ -564,3 +567,57 @@ def test_daemon_tui_radio_uses_identity_fallbacks_for_older_daemons() -> None:
 
     assert initial.model == "Unknown model"
     assert initial.firmware == "Unknown firmware"
+    assert initial.application_version is None
+    assert radio.application_version is None
+
+
+@pytest.mark.parametrize("version", ["0.30.0", "1.2.3rc1", "2!1.0.dev4+gabcdef", "1" * 64])
+def test_daemon_version_is_reported_metadata_independent_of_client_and_scanner(version):
+    radio, api, _ = make_radio()
+    initial = radio.initialize(runtime_snapshot() | {"application_version": version})
+    assert initial.application_version == radio.application_version == version
+    assert initial.firmware == "Version 1.26.01"
+    assert api.calls == []  # No separate metadata request or scanner command.
+    radio._apply_event(event(1, DaemonEventKind.SCANNER_CONNECTION, {"connected": False}))
+    assert radio.application_version == version  # Scanner loss is not daemon loss.
+    radio.initialize(runtime_snapshot() | {"application_version": "4.5.6"})
+    assert radio.application_version == "4.5.6"
+    radio.close()
+    assert radio.application_version is None
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        None,
+        True,
+        31,
+        [],
+        {},
+        "",
+        " 0.30.0",
+        "0.30.0\n",
+        "v0.30.0",
+        "1" * 65,
+        "0.3\x1b[31m",
+        "0.3\u202e",
+        "0.3\t",
+        "[red]0.3",
+        "３.１",
+    ],
+)
+def test_bad_optional_version_never_breaks_scanning_or_uses_local_build(bad):
+    radio, api, _ = make_radio()
+    radio.initialize(runtime_snapshot() | {"application_version": "99.1.2"})
+    initial = radio.initialize(runtime_snapshot() | {"application_version": bad})
+    assert initial.application_version is None and radio.application_version is None
+    assert initial.snapshot.channel == "Initial Dispatch" and radio.connected
+    assert api.calls == []
+
+
+def test_reconnecting_to_older_daemon_clears_previous_version():
+    radio, _, _ = make_radio()
+    radio.initialize(runtime_snapshot() | {"application_version": "99.1.2"})
+    assert radio.application_version == "99.1.2"
+    radio.initialize(runtime_snapshot())
+    assert radio.application_version is None

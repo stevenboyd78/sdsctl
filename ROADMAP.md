@@ -115,7 +115,9 @@ fidelity needs its own layout evidence and remains a separate slice.
   header and scanner model/firmware in the Scanner panel. Use authenticated
   endpoint metadata rather than assuming the daemon matches the client version;
   handle unavailable version information explicitly. Direct USB connections
-  should not gain this remote-only field. This is a future improvement, not part
+  should not gain this remote-only field. Implemented in the unreleased local
+  candidate with additive snapshot metadata, reconnect clearing and both Pi
+  layout tests; installed physical acceptance is still pending. This is not part
   of v0.30.0 or the active browser-device qualification.
 - **Released in [v0.30.0](https://github.com/stevenboyd78/sdsctl/releases/tag/v0.30.0):**
   PR #253 added the user-selected local RFC

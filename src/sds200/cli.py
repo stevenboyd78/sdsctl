@@ -5800,6 +5800,7 @@ def _run_tui(
                 ),
                 snapshot=initial.snapshot,
                 radio=radio,
+                daemon_version_source=lambda: radio.application_version,
                 audio_session=daemon_audio_session,
                 interval_ms=args.interval,
                 stale_after=args.stale_after,
