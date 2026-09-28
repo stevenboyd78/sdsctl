@@ -219,8 +219,12 @@ def setup(staged, prepared, tmp_path, monkeypatch, *, configure=None):
         )
         scanner.thread.start()
         rtsp.thread.start()
+        original_error = None
         try:
             yield state
+        except BaseException as error:
+            original_error = error
+            raise
         finally:
             if state.ready is not None:
                 state.ready.close()
@@ -240,8 +244,32 @@ def setup(staged, prepared, tmp_path, monkeypatch, *, configure=None):
             if state.operator is not None:
                 # The relay thread is the sole stdout reader until it exits.
                 # Do not race communicate() with its framed reads during cleanup.
-                state.operator.communicate(timeout=1)
-            assert not scanner.reads and not scanner.errors and not state.errors, state.errors
+                out, err = state.operator.communicate(timeout=1)
+                state.operator_outcome = {
+                    "code": state.operator.returncode,
+                    "unread_stdout": bool(out),
+                    "stderr": "refusal" if err == operator.MESSAGE else "other" if err else "empty",
+                }
+            report_fixture_errors(state, scanner, original_error)
+
+
+def report_fixture_errors(state, scanner, original_error):
+    """Keep the first failure and only fixed diagnostic fields, never wire data."""
+    problems = [*scanner.errors, *state.errors]
+    report = {
+        "scanner_reads": len(scanner.reads),
+        "errors": [type(error).__name__ for error in problems],
+        "operator": getattr(state, "operator_outcome", None),
+        "wire": [
+            error._relay_diagnostic for error in problems if hasattr(error, "_relay_diagnostic")
+        ],
+    }
+    if original_error is not None:
+        original_error.add_note(f"Native relay fixture outcome: {report}")
+    elif scanner.reads or problems:
+        # An explicit exception avoids pytest's assertion rewriting adding
+        # representations of the original private exception payloads.
+        raise AssertionError(report)
 
 
 def wire_message(state):
@@ -252,7 +280,20 @@ def wire_message(state):
         while len(value) < size:
             assert select.select([source], [], [], max(0, end - time.monotonic()))[0]
             raw = os.read(source, size - len(value))
-            assert raw
+            if not raw:
+                error = AssertionError("Native operator stream ended before its next frame")
+                phases = ("ready", "started", "completed", "exited")
+                error._relay_diagnostic = {
+                    "received_phases": [
+                        item["phase"] if item["phase"] in phases else "other"
+                        for item in state.envelopes
+                    ],
+                    "operator_code": state.operator.poll(),
+                    "ready_remaining": round(state.pins.command.ready_by - time.monotonic(), 6),
+                    "partial_frame_bytes": len(value),
+                }
+                error.add_note(str(error._relay_diagnostic))
+                raise error
             value.extend(raw)
         return bytes(value)
 
@@ -370,6 +411,53 @@ def handlers(state, staged, prepared, monkeypatch, fault):
         lambda peer, _: peer.sendall(engine.reply(metadata())),
         lambda peer, _: peer.sendall(engine.reply(metadata(exited=True))),
     ]
+
+
+@pytest.mark.parametrize("partial", [b"", b"\x00\x00"])
+def test_unexpected_operator_eof_reports_phase_and_original_budget_without_raw_data(partial):
+    # Actual closed private pipe, not a timeout extension, retry or valid return.
+    process = subprocess.Popen(
+        [sys.executable, "-I", "-B", "-c", f"import os; os.write(1, {partial!r})"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        assert process.wait(timeout=3) == 0
+        deadline = time.monotonic() + 8
+        state = SimpleNamespace(
+            operator=process,
+            pins=SimpleNamespace(command=SimpleNamespace(ready_by=deadline)),
+            envelopes=[{"phase": "ready", "body": "PRIVATE_PAYLOAD"}],
+        )
+        with pytest.raises(AssertionError, match="ended before its next frame") as caught:
+            wire_message(state)
+        evidence = caught.value._relay_diagnostic
+        assert evidence["received_phases"] == ["ready"] and evidence["operator_code"] == 0
+        assert 0 < evidence["ready_remaining"] <= 8
+        assert evidence["partial_frame_bytes"] == len(partial)
+        assert state.pins.command.ready_by == deadline
+        assert "PRIVATE_PAYLOAD" not in str(caught.value.__notes__)
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=3)
+        process.stdout.close()
+        process.stderr.close()
+
+
+def test_fixture_cleanup_preserves_original_failure_and_does_not_accept_forward_failure():
+    original = RuntimeError("original failure")
+    forward = AssertionError("PRIVATE_PAYLOAD")
+    state = SimpleNamespace(errors=[forward])
+    scanner = SimpleNamespace(reads=[], errors=[])
+    report_fixture_errors(state, scanner, original)
+    assert len(original.__notes__) == 1 and "AssertionError" in original.__notes__[0]
+    assert "PRIVATE_PAYLOAD" not in original.__notes__[0]
+    with pytest.raises(AssertionError) as caught:
+        report_fixture_errors(state, scanner, None)
+    assert "PRIVATE_PAYLOAD" not in str(caught.value)
+    state.errors.clear()
+    report_fixture_errors(state, scanner, None)
 
 
 @pytest.mark.parametrize("fault", [None, "lost_completed", "lost_exited", "engine_exit"])
