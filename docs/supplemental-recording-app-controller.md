@@ -1537,6 +1537,44 @@ Source/runtime qualification, explicit action scope, independent
 execution bounds, authenticated native Ready, and exclusive failure handoff
 remain separate requirements before selecting any active command.
 
+## Original writer intake and passive dispatcher assembly (uninstalled)
+
+The explicit `supplemental_recording_writer_channel.prepare_idle_from_inputs`
+path now joins the previously separate preparation pieces in one call:
+
+1. Read the same retained, independently pinned startup and peer inputs.
+2. Receive channel descriptors through the original private connection, using
+   the actual baseline-derived, accepted `Startup` and its original clock.
+3. Construct the writer's `Link` to the original observer and wire that exact
+   `Link.observe` method into the original service dispatcher.
+4. Assemble only the preparation journal/inbox, then retire the service and
+   journal before the Link and received channel copies.
+
+The original connection cutoff bounds the complete join. Passive assembly can
+accept an enclosing deadline only to **shorten** its existing two-second budget;
+it cannot renew an expired channel or extend the accepted offer. Blocking kernel
+I/O still needs independent outer supervision. Both input files, the original
+connection, clock/plan bindings and peer liveness are rechecked around assembly.
+The join neither yields an active service nor calls `run`, consumes an inbox,
+sends a CLI evidence request or performs an App/scanner/recording action.
+
+The original transport receipt is returned only after passive retirement. It is
+not Ready, action permission, a recording result, restoration, or proof of an
+installed launcher. Failure preserves complete and partial preparation files;
+the original intake slot stays consumed. There is no retry, replacement clock,
+reopened journal or alternate observer. Caller-owned startup/input/connection
+owners remain with the caller, though their own failed validation can invalidate
+their resources. Cleanup never closes a foreign descriptor that reused one of
+the received descriptor numbers.
+
+The integrated test starts with the exclusively published input pair, uses
+three actual local processes and kernel descriptor delivery, and checks the
+same dispatcher callback and ordered retirement. Host/Engine/runtime facts are
+still synthetic. Fault tests cover input changes, peer exit, expiration before
+or during assembly, changed callbacks, partial assembly, interruptions, cleanup
+failure and descriptor reuse. No older source inventory or permission format is
+enlarged, and no installed command selects this preparation function.
+
 ## Remaining gates before a human scanner/audio test
 
 1. Complete real platform/publication and independent-observer lifetime

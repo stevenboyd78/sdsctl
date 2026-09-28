@@ -3,6 +3,7 @@
 import fcntl
 import os
 import stat
+import time
 from threading import Thread
 
 import pytest
@@ -179,6 +180,41 @@ def test_successful_assembly_is_not_reusable(service_case):
         pytest.fail("Assembled the same startup twice")
     assert (s.root / "journal/0000.json").read_bytes() == entry
     assert service.closed and owner.closed and owner.clock.closed
+
+
+@pytest.mark.parametrize("deadline", [True, "later", float("nan"), float("inf"), -1])
+def test_invalid_or_expired_enclosing_assembly_deadline_refuses_before_writing(
+    service_case, deadline
+):
+    s = service_case
+    owner = accept(s)
+    before = preserved(s)
+    with pytest.raises(m.UnconfirmedStartup), owner.idle_service(s.docker, deadline=deadline):
+        pytest.fail("Invalid enclosing deadline admitted assembly")
+    assert owner.service_used and owner.closed
+    assert preserved(s) == before
+    assert not (s.root / "journal").exists() and not (s.root / "inbox").exists()
+
+
+def test_enclosing_deadline_only_narrows_original_assembly_budget(service_case, monkeypatch):
+    s = service_case
+    owner = accept(s)
+    original = owner._service_directories
+    clock = m.time
+    entered = time.monotonic()
+
+    def directories(case, guard):
+        # A later enclosing limit cannot replace the existing two-second cap.
+        monkeypatch.setattr(m, "time", type("Expired", (), {"monotonic": lambda: entered + 3}))
+        guard()
+        pytest.fail("Enclosing limit extended assembly budget")
+
+    monkeypatch.setattr(owner, "_service_directories", directories)
+    with pytest.raises(m.UnconfirmedStartup), owner.idle_service(s.docker, deadline=entered + 60):
+        pytest.fail("Renewed assembly deadline")
+    assert not (s.root / "journal").exists()
+    monkeypatch.setattr(m, "time", clock)
+    monkeypatch.setattr(owner, "_service_directories", original)
 
 
 @pytest.mark.parametrize("interrupt", [False, True])

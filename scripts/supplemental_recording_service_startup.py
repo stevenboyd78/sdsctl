@@ -13,6 +13,7 @@ alive until later borrowers release its plan and clock.
 from __future__ import annotations
 
 import fcntl
+import math
 import os
 import stat
 import sys
@@ -403,7 +404,7 @@ class Startup:
                         raise
 
     @contextmanager
-    def idle_service(self, docker, *, dispatch_observer=None):
+    def idle_service(self, docker, *, dispatch_observer=None, deadline=None):
         """One passive service assembly, keeping startup custody until cleanup.
 
         Requires this owner's accepted template-derived baseline. Creates only
@@ -424,6 +425,12 @@ class Startup:
         qualified caller must authenticate its peer and separately grant action
         scope. Neither this optional callback nor passive preparation consent
         authorizes running the service or a native recording.
+
+        An optional enclosing monotonic deadline only NARROWS assembly's
+        original two-second budget. It is checked before creating directories,
+        throughout assembly and before yielding. It never extends the offer or
+        renews a preceding channel handoff. Blocking kernel I/O still requires
+        an independently enforced outer bound.
         """
         import supplemental_recording_service_operator as operator
 
@@ -441,6 +448,9 @@ class Startup:
             require(dispatch_observer is None or callable(dispatch_observer))
             require(type(docker) is plans.ordinary.Docker and docker.path == "/var/run/docker.sock")
             end = time.monotonic() + publication.MAX_SECONDS
+            if deadline is not None:
+                require(type(deadline) in (int, float) and math.isfinite(deadline))
+                end = min(end, deadline)
             original, plan, clock = self.original, self.original.plan, self.clock
             baseline, projected = self.baseline, self.projected
 

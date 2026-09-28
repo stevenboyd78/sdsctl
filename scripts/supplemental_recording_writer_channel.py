@@ -83,6 +83,110 @@ def receive_from_inputs(owner, inputs, connection, local, outer, observer, *, de
     )
 
 
+def prepare_idle_from_inputs(owner, inputs, connection, local, outer, observer, docker):
+    """Join original intake -> writer Link -> dispatcher -> passive retirement.
+
+    This explicit, uninstalled preparation path does not yield an active service
+    or consume an inbox. It creates only the original preparation journal/inbox,
+    wires that service's dispatcher to this exact Link.observe, then retires the
+    service before the Link and received channel copies. Startup, input readers,
+    bootstrap connection and both peer witnesses remain caller-owned. Their own
+    failed checks may invalidate their resources; this join never replaces them.
+
+    The connection's ORIGINAL cutoff bounds the complete join, including input
+    checks and assembly; it is not restarted after descriptor receipt. No plan,
+    clock, Startup, observer, connection or callback may be supplied as a later
+    replacement. An uncertain/partial result preserves files and consumes the
+    same one intake attempt. It never retries or reopens a journal.
+
+    Return is only the original transport receipt AFTER passive cleanup. It is
+    not Ready, App-action admission, recording/restore success, input provenance,
+    fixed-entrypoint selection or outer/platform qualification. No existing
+    command invokes this path; those separate launcher gates remain mandatory.
+    """
+    channels = link = receipt = problem = None
+    pins = ()
+    try:
+        # Intake owns the one-attempt check, including invalid retained inputs.
+        channels, receipt = receive_from_inputs(owner, inputs, connection, local, outer, observer)
+        pins = tuple(
+            (s, s.fileno(), bootstrap.links._identity(s.fileno()))
+            for s in (channels.incoming, channels.outgoing)
+        )
+        original, clock = owner.original, owner.clock
+        plan, template = original.plan, owner.template
+        expected, cutoff = inputs.expectations, connection.deadline
+        end = min(cutoff, plan.lease["ready_by"])
+
+        def guard():
+            require(time.monotonic() < end)
+            require(owner.original is original and owner.clock is clock)
+            require(owner.template is template and original.plan is plan)
+            require(inputs.declaration is owner.declaration and inputs.template is template)
+            require(inputs.expectations is expected and inputs.recheck(deadline=end) is expected)
+            require(connection.peer is outer and connection.deadline == cutoff)
+            connection.recheck()
+            require(all(s.fileno() == fd for s, fd, _ in pins))
+            require(all(bootstrap.links._identity(fd) == pin for _, fd, pin in pins))
+            if link is not None:
+                require(link.channel is channels and link.plan is plan and link.timer is clock)
+                link._guard(end)
+            require(time.monotonic() < end)
+
+        guard()
+        link = bootstrap.links.Link(channels, plan, clock, observer, role="writer")
+        dispatch_observer = link.observe
+        guard()
+        with owner.idle_service(
+            docker, dispatch_observer=dispatch_observer, deadline=end
+        ) as service:
+            guard()
+            require(service.original is original and service.clock_witness is clock)
+            require(service.dispatch.observe is dispatch_observer)
+            require(service.dispatch._original_observe is dispatch_observer)
+            require(service._dispatch_observer is dispatch_observer)
+            require(not service.used and not service.dispatch.used)
+            require(len(service.journal.entries) == 1 and not service.processes.witnesses)
+            # Deliberately no run(), consume(), dispatch, native or recording.
+        require(service.closed and service.journal.fd == -1)
+        guard()
+    except BaseException as error:
+        problem = error
+    finally:
+        # All received copies retire even if Link retirement fails. Retire only
+        # the originals; a foreign reused FD is detached, never closed here.
+        if link is not None:
+            try:
+                link.close()
+            except BaseException as error:
+                if problem is None or not isinstance(error, Exception):
+                    problem = error
+        if channels is not None:
+            for channel, fd, pin in pins or (
+                (s, s.fileno(), None) for s in (channels.incoming, channels.outgoing)
+            ):
+                try:
+                    if channel.fileno() == -1:
+                        continue
+                    require(channel.fileno() == fd)
+                    require(pin is None or bootstrap.links._identity(fd) == pin)
+                    channel.close()
+                except BaseException as error:
+                    channel.detach()
+                    if problem is None or not isinstance(error, Exception):
+                        problem = error
+    if problem is None:
+        try:
+            require(time.monotonic() < end)
+        except BaseException as error:
+            problem = error
+    if problem is not None:
+        if not isinstance(problem, Exception):
+            raise problem
+        raise UnconfirmedWriterChannel(MESSAGE) from None
+    return receipt
+
+
 def _receive(
     owner, declaration, expected_sha256, channel, local, outer, observer, *, deadline, retained=None
 ):

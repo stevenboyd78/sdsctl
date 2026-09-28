@@ -404,6 +404,223 @@ def test_exclusive_publication_reaches_original_startup_handoff_and_idle_assembl
     } == before
 
 
+def prepare_idle(c):
+    return m.prepare_idle_from_inputs(
+        c.owner,
+        c.input_owner,
+        c.retained,
+        c.local,
+        c.outer_witness,
+        c.observer_witness,
+        c.s.docker,
+    )
+
+
+@pytest.mark.parametrize("service_case", ["published-inputs"], indirect=True)
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+def test_published_original_inputs_wire_received_link_to_dispatcher_then_retire_passively(
+    connection, monkeypatch
+):
+    c = connection
+    original, clock = c.owner.original, c.owner.clock
+    links, services, cleanup, deadlines = [], [], [], []
+    link_init, link_close = m.bootstrap.links.Link.__init__, m.bootstrap.links.Link.close
+    service_init, service_close = (
+        assembly.operator.IdleService.__init__,
+        assembly.operator.IdleService.close,
+    )
+    idle_service = m.startup.Startup.idle_service
+
+    def construct_link(link, *args, **kwargs):
+        link_init(link, *args, **kwargs)
+        links.append(link)
+
+    def construct_service(service, *args, **kwargs):
+        service_init(service, *args, **kwargs)
+        services.append(service)
+        callback = service.dispatch.observe
+        assert callback.__self__ is links[0]
+        assert callback.__func__ is m.bootstrap.links.Link.observe
+        assert service.dispatch._original_observe is callback
+        assert service.clock_witness is clock and service.original is original
+
+    def close_service(service):
+        if service in services and not service.closed:
+            cleanup.append("service")
+            assert not links[0].closed and not clock.closed
+        return service_close(service)
+
+    def close_link(link):
+        if link in links and not link.closed:
+            cleanup.append("link")
+            assert services[0].closed and services[0].journal.fd == -1
+            assert not clock.closed and link.channel.incoming.fileno() >= 0
+        return link_close(link)
+
+    def idle(owner, docker, **kwargs):
+        deadlines.append(kwargs["deadline"])
+        return idle_service(owner, docker, **kwargs)
+
+    monkeypatch.setattr(m.bootstrap.links.Link, "__init__", construct_link)
+    monkeypatch.setattr(m.bootstrap.links.Link, "close", close_link)
+    monkeypatch.setattr(assembly.operator.IdleService, "__init__", construct_service)
+    monkeypatch.setattr(assembly.operator.IdleService, "close", close_service)
+    monkeypatch.setattr(m.startup.Startup, "idle_service", idle)
+
+    def forbidden(*_args, **_kwargs):
+        pytest.fail("Passive integration attempted active service or peer evidence")
+
+    monkeypatch.setattr(assembly.operator.IdleService, "run", forbidden)
+    monkeypatch.setattr(m.bootstrap.links.Link, "_send", forbidden)
+    c.start()
+    receipt = prepare_idle(c)
+    assert transport.line(c.outer) == "delivered"
+    assert json.loads(transport.line(c.observer))["received"]
+    assert receipt.context_sha256 and receipt.offer_sha256
+    assert len(links) == len(services) == 1 and cleanup == ["service", "link"]
+    assert deadlines == [c.retained.deadline]
+    assert c.owner.original is original and c.owner.clock is clock and not clock.closed
+    assert c.owner.peer_channel_attempted and c.owner.service_used and not c.owner.closed
+    assert not c.input_owner.closed and not c.retained.closed
+    assert c.outer_witness.fd >= 0 and c.observer_witness.fd >= 0
+    assert len(c.s.clocks) == 2 and len(c.s.cached_calls) == 1
+    assert all(s.fileno() == -1 for s in (links[0].channel.incoming, links[0].channel.outgoing))
+    assert not services[0].used and not services[0].dispatch.used
+    assert len(services[0].journal.entries) == 1
+    journal = (c.s.root / "journal/0000.json").read_bytes()
+    denied(lambda: prepare_idle(c))
+    assert (c.s.root / "journal/0000.json").read_bytes() == journal
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize("fault", ["input", "late", "peer-exit"])
+def test_idle_join_fault_after_intake_refuses_before_service_and_retires_channels(
+    connection, monkeypatch, fault
+):
+    c = connection
+    receive = m.receive_from_inputs
+    captured = []
+
+    def changed(*args, **kwargs):
+        result = receive(*args, **kwargs)
+        captured.append(result[0])
+        if fault == "input":
+            (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE changed input")
+        elif fault == "late":
+            monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: c.retained.deadline))
+        else:
+            c.observer.kill()
+            c.observer.wait(timeout=3)
+        return result
+
+    monkeypatch.setattr(m, "receive_from_inputs", changed)
+    c.start()
+    denied(lambda: prepare_idle(c))
+    assert len(captured) == 1
+    assert captured[0].incoming.fileno() == captured[0].outgoing.fileno() == -1
+    assert not c.owner.service_used and not (c.s.root / "journal").exists()
+    assert not c.owner.clock.closed and not c.retained.closed
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize("interrupt", [False, True])
+def test_idle_join_assembly_failure_preserves_partial_case_and_retires_link(
+    connection, monkeypatch, interrupt
+):
+    c = connection
+    links = []
+    construct_link = m.bootstrap.links.Link.__init__
+
+    def link(value, *args, **kwargs):
+        construct_link(value, *args, **kwargs)
+        links.append(value)
+
+    def fail(*_args, **_kwargs):
+        raise (KeyboardInterrupt if interrupt else OSError)("PRIVATE failed assembly")
+
+    monkeypatch.setattr(m.bootstrap.links.Link, "__init__", link)
+    monkeypatch.setattr(assembly.operator.IdleService, "__init__", fail)
+    c.start()
+    if interrupt:
+        with pytest.raises(KeyboardInterrupt):
+            prepare_idle(c)
+    else:
+        denied(lambda: prepare_idle(c))
+    assert len(links) == 1 and links[0].closed
+    assert links[0].channel.incoming.fileno() == links[0].channel.outgoing.fileno() == -1
+    assert (c.s.root / "journal/0000.json").is_file()
+    assert c.owner.closed and c.owner.clock.closed  # Startup invalidates its own failed assembly.
+    assert not c.input_owner.closed and not c.retained.closed
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize("fault", ["callback", "input", "late"])
+def test_idle_join_rechecks_same_inputs_and_deadline_during_assembly(
+    connection, monkeypatch, fault
+):
+    c = connection
+    construct, services = assembly.operator.IdleService.__init__, []
+
+    def changed(service, *args, **kwargs):
+        construct(service, *args, **kwargs)
+        services.append(service)
+        if fault == "callback":
+            service.dispatch.observe = None
+        elif fault == "input":
+            (c.input_owner.root / m.input_files.NAME).write_bytes(b"PRIVATE changed input")
+        else:
+            monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: c.retained.deadline))
+
+    monkeypatch.setattr(assembly.operator.IdleService, "__init__", changed)
+    c.start()
+    denied(lambda: prepare_idle(c))
+    assert len(services) == 1 and services[0].closed
+    link = services[0]._dispatch_observer.__self__
+    assert link.closed and link.channel.incoming.fileno() == link.channel.outgoing.fileno() == -1
+    assert (c.s.root / "journal/0000.json").is_file() and not services[0].dispatch.used
+
+
+@pytest.mark.parametrize("connection", ["inputs"], indirect=True)
+@pytest.mark.parametrize("fault", ["cleanup-error", "late-cleanup", "reused-fd"])
+def test_idle_join_cleanup_failure_still_retires_other_owned_channels(
+    connection, monkeypatch, fault
+):
+    c = connection
+    close, links, foreign = m.bootstrap.links.Link.close, [], []
+
+    def changed(link):
+        if link in links:
+            return close(link)
+        links.append(link)
+        close(link)
+        if fault == "cleanup-error":
+            raise OSError("PRIVATE cleanup acknowledgment")
+        if fault == "late-cleanup":
+            monkeypatch.setattr(m, "time", SimpleNamespace(monotonic=lambda: c.retained.deadline))
+        else:
+            fd = link.channel.incoming.fileno()
+            replacement = os.open("/dev/null", os.O_RDONLY | os.O_CLOEXEC)
+            try:
+                os.dup2(replacement, fd, inheritable=False)
+                foreign.append((fd, m.bootstrap.links._identity(fd)))
+            finally:
+                os.close(replacement)
+
+    monkeypatch.setattr(m.bootstrap.links.Link, "close", changed)
+    try:
+        c.start()
+        denied(lambda: prepare_idle(c))
+        assert len(links) == 1 and links[0].closed
+        assert links[0].channel.incoming.fileno() == links[0].channel.outgoing.fileno() == -1
+        assert (c.s.root / "journal/0000.json").is_file()
+        assert not c.owner.closed and not c.owner.clock.closed and not c.retained.closed
+        for fd, identity in foreign:
+            assert m.bootstrap.links._identity(fd) == identity
+    finally:
+        for fd, _ in foreign:
+            os.close(fd)
+
+
 @pytest.mark.parametrize("connection", ["inputs"], indirect=True)
 @pytest.mark.parametrize(
     "fault", ["file", "new-template", "socket-path", "outer-witness", "cutoff"]
